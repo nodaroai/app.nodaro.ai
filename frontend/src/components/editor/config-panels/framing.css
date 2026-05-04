@@ -386,3 +386,396 @@
 
 .fr-leading-lines .fr-subject                 { left: 50%; }
 .fr-leading-lines .fr-leading-lines-overlay   { display: block; }
+
+/* =================== Shot size (additional) =================== */
+/* Big close-up — between close-up and ECU */
+.fr-big-close-up .fr-subject { width: 42cqw; height: 60cqw; bottom: -12%; }
+.fr-big-close-up .fr-subject .fr-head { width: 60%; }
+
+/* Choker — neck-up, slightly bigger than close-up */
+.fr-choker .fr-subject { width: 38cqw; height: 54cqw; bottom: -14%; }
+.fr-choker .fr-subject .fr-head { width: 70%; }
+
+/* Cowboy shot — mid-thigh up */
+.fr-cowboy-shot .fr-subject { width: 13cqw; height: 24cqw; bottom: 22%; }
+
+/* ECU: Eye — head huge, body off-screen, pupil dot */
+.fr-ecu-eye .fr-subject .fr-body,
+.fr-ecu-eye .fr-subject .fr-shadow { display: none; }
+.fr-ecu-eye .fr-subject { width: 90cqw; height: 90cqw; bottom: 0; left: 50%; }
+.fr-ecu-eye .fr-subject .fr-head { width: 100%; height: 100%; }
+.fr-ecu-eye::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18cqw;
+  height: 18cqw;
+  background: radial-gradient(circle at 40% 35%, #ffffff 0%, #1e293b 35%, #000 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+}
+
+/* ECU: Hands — hide head/body, draw a hand silhouette */
+.fr-ecu-hands .fr-subject { display: none; }
+.fr-ecu-hands::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8%;
+  width: 60cqw;
+  height: 60cqw;
+  background:
+    radial-gradient(circle at 30% 25%, #ff8fc2 0%, #ff2a89 50%, #780040 100%);
+  border-radius: 40% 60% 30% 70% / 50% 50% 40% 50%;
+  transform: translateX(-50%) rotate(-12deg);
+  box-shadow: inset -4px -6px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* ECU: Mouth — head only, mouth highlight */
+.fr-ecu-mouth .fr-subject .fr-body,
+.fr-ecu-mouth .fr-subject .fr-shadow { display: none; }
+.fr-ecu-mouth .fr-subject { width: 90cqw; height: 90cqw; bottom: 0; }
+.fr-ecu-mouth .fr-subject .fr-head { width: 100%; height: 100%; }
+.fr-ecu-mouth::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: 30cqw;
+  height: 8cqw;
+  background: linear-gradient(to bottom, #b50058 0%, #780040 50%, #4d0028 100%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  transform: translate(-50%, -50%);
+  box-shadow: inset 0 -2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Establishing shot — subject tiny against environment, more horizon */
+.fr-establishing-shot .fr-subject { width: 3cqw; height: 4.5cqw; bottom: 30%; }
+.fr-establishing-shot .fr-horizon,
+.fr-establishing-shot .fr-ground { top: 50%; }
+
+/* Half body — waist up */
+.fr-half-body .fr-subject { width: 22cqw; height: 32cqw; bottom: 8%; }
+
+/* Head-to-hip — chest-to-hip, bigger than half-body */
+.fr-head-to-hip .fr-subject { width: 24cqw; height: 36cqw; bottom: 4%; }
+
+/* Head-to-knees — head down to knees, body cut at frame edge */
+.fr-head-to-knees .fr-subject { width: 16cqw; height: 30cqw; bottom: -2%; }
+
+/* Italian shot — head to ankles, full body very tall */
+.fr-italian-shot .fr-subject { width: 11cqw; height: 38cqw; bottom: 6%; }
+
+/* Single — one subject, mid-shot (no overlay) */
+.fr-single .fr-subject { width: 14cqw; height: 22cqw; bottom: 18%; }
+
+/* =================== Angle (additional) =================== */
+/* Eye level — default; explicit no-op rule keeps the id documented */
+.fr-eye-level .fr-subject { left: 50%; }
+
+/* Slightly downward — subject below center, horizon raised */
+.fr-slightly-downward .fr-horizon,
+.fr-slightly-downward .fr-ground { top: 65%; }
+.fr-slightly-downward .fr-subject {
+  bottom: 28%;
+  transform: translate(-50%, 0) perspective(280px) rotateX(8deg) scaleY(0.96);
+  transform-origin: 50% 100%;
+}
+
+/* =================== Coverage / Vantage (additional) =================== */
+/* Front-on — default facing camera, no override */
+.fr-front-on .fr-subject { left: 50%; }
+
+/* Behind — rear view, head darker (no face), narrower body */
+.fr-behind .fr-subject .fr-head { background: radial-gradient(circle at 50% 30%, #5a002a 0%, #2a0014 70%, #0e0007 100%); box-shadow: inset 2px -3px 6px rgba(0, 0, 0, 0.5); }
+.fr-behind .fr-subject .fr-body { background: linear-gradient(to right, #4d0028 0%, #780040 50%, #4d0028 100%); }
+
+/* Profile left — flip horizontally */
+.fr-profile-left .fr-subject { transform: translate(-50%, 0) scaleX(-1); }
+.fr-profile-left .fr-subject .fr-head { background: radial-gradient(circle at 70% 35%, #ff8fc2 0%, #ff2a89 50%, #b50058 100%); }
+
+/* Profile right — default-direction profile silhouette */
+.fr-profile-right .fr-subject .fr-head { background: radial-gradient(circle at 30% 35%, #ff8fc2 0%, #ff2a89 50%, #b50058 100%); }
+
+/* Three-quarter front — slight off-axis turn */
+.fr-three-quarter-front .fr-subject { transform: translate(-50%, 0) rotateY(-22deg); transform-origin: 50% 50%; }
+
+/* Three-quarter back — off-axis from rear, dimmed face */
+.fr-three-quarter-back .fr-subject { transform: translate(-50%, 0) rotateY(160deg); transform-origin: 50% 50%; }
+.fr-three-quarter-back .fr-subject .fr-head { background: radial-gradient(circle at 50% 30%, #5a002a 0%, #2a0014 70%); }
+
+/* Side-back angle — 3/4 from back-left, slight rotation + offset */
+.fr-side-back-angle .fr-subject { left: 56%; transform: translate(-50%, 0) rotateY(140deg); transform-origin: 50% 50%; }
+.fr-side-back-angle .fr-subject .fr-head { background: radial-gradient(circle at 50% 30%, #5a002a 0%, #2a0014 70%); }
+
+/* Dirty single — main subject + edge-clipped foreground silhouette on right */
+.fr-dirty-single .fr-subject { left: 42%; }
+.fr-dirty-single::after {
+  content: "";
+  position: absolute;
+  right: -8%;
+  bottom: -10%;
+  width: 28cqw;
+  height: 50cqw;
+  background: linear-gradient(to left, #020617 60%, transparent 100%);
+  border-radius: 30% 0 0 0 / 18% 0 0 0;
+  filter: blur(0.5px);
+  pointer-events: none;
+}
+
+/* =================== Composition (additional) =================== */
+/* Diagonal composition — strong diagonal sheen across frame */
+.fr-diagonal-composition::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 46%, rgba(255, 255, 255, 0.35) 49%, rgba(255, 255, 255, 0.35) 51%, transparent 54%);
+  pointer-events: none;
+}
+
+/* Frame within frame — thin inner border */
+.fr-frame-within-frame::after {
+  content: "";
+  position: absolute;
+  inset: 12% 12%;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Golden spiral — subject at phi point + faint spiral arc */
+.fr-golden-spiral .fr-subject { left: 62%; bottom: 28%; }
+.fr-golden-spiral::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 62% 38%, transparent 4cqw, rgba(255, 255, 255, 0.18) 4cqw, rgba(255, 255, 255, 0.18) 4.4cqw, transparent 4.4cqw),
+    radial-gradient(circle at 38% 62%, transparent 12cqw, rgba(255, 255, 255, 0.14) 12cqw, rgba(255, 255, 255, 0.14) 12.4cqw, transparent 12.4cqw);
+  pointer-events: none;
+}
+
+/* S-curve — sinuous diagonal flow overlay */
+.fr-s-curve::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 35% 18% at 25% 25%, rgba(255, 255, 255, 0.22), transparent 60%),
+    radial-gradient(ellipse 35% 18% at 75% 75%, rgba(255, 255, 255, 0.22), transparent 60%),
+    linear-gradient(160deg, transparent 38%, rgba(255, 255, 255, 0.18) 49%, rgba(255, 255, 255, 0.18) 51%, transparent 62%);
+  pointer-events: none;
+}
+
+/* Symmetrical / mirror — duplicate subject mirrored horizontally */
+.fr-symmetrical-mirror .fr-subject { left: 32%; width: 10cqw; height: 16cqw; }
+.fr-symmetrical-mirror::after {
+  content: "";
+  position: absolute;
+  left: 68%;
+  bottom: 40%;
+  width: 10cqw;
+  height: 16cqw;
+  background:
+    radial-gradient(circle at 50% 12%, #ff8fc2 0%, #ff2a89 14%, #b50058 22%, transparent 22%),
+    linear-gradient(to right, #780040 0%, #c00064 22%, #ff2a89 50%, #c00064 78%, #780040 100%);
+  background-size: 100% 32%, 100% 60%;
+  background-position: top center, bottom center;
+  background-repeat: no-repeat;
+  border-radius: 14% 14% 0 0 / 18% 18% 0 0;
+  transform: translateX(-50%) scaleX(-1);
+}
+
+/* Triangular composition — 3 silhouettes in a triangle */
+.fr-triangular-composition .fr-subject { left: 50%; bottom: 56%; width: 8cqw; height: 12cqw; }
+.fr-triangular-composition::before,
+.fr-triangular-composition::after {
+  content: "";
+  position: absolute;
+  bottom: 22%;
+  width: 8cqw;
+  height: 12cqw;
+  background:
+    radial-gradient(circle at 50% 18%, #7dd3fc 0%, #0ea5e9 22%, #0c4a6e 30%, transparent 30%),
+    linear-gradient(to right, #0c4a6e 0%, #0369a1 50%, #0c4a6e 100%);
+  background-size: 100% 36%, 100% 60%;
+  background-position: top center, bottom center;
+  background-repeat: no-repeat;
+  border-radius: 14% 14% 0 0 / 18% 18% 0 0;
+}
+.fr-triangular-composition::before { left: 28%; }
+.fr-triangular-composition::after  { right: 28%; }
+
+/* Vignette composition — heavy peripheral darkening */
+.fr-vignette-composition::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 70% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.7) 95%);
+  pointer-events: none;
+}
+
+/* =================== Vantage (additional) =================== */
+/* Gym mirror selfie — reflective rectangle frame, cool blue tint */
+.fr-gym-mirror-selfie .fr-subject { width: 28cqw; height: 42cqw; bottom: 12%; }
+.fr-gym-mirror-selfie::after {
+  content: "";
+  position: absolute;
+  inset: 8% 18%;
+  border: 2px solid rgba(180, 220, 255, 0.55);
+  border-radius: 3px;
+  background: linear-gradient(160deg, rgba(160, 200, 255, 0.12), rgba(80, 130, 200, 0.05));
+  pointer-events: none;
+}
+
+/* Mirror selfie — reflective frame with warm tint */
+.fr-mirror-selfie .fr-subject { width: 28cqw; height: 42cqw; bottom: 12%; }
+.fr-mirror-selfie::after {
+  content: "";
+  position: absolute;
+  inset: 6% 14%;
+  border: 2px solid rgba(255, 220, 180, 0.6);
+  border-radius: 6px;
+  background: linear-gradient(160deg, rgba(255, 200, 150, 0.14), rgba(180, 100, 60, 0.05));
+  pointer-events: none;
+}
+
+/* Through glass — diagonal sheen + subtle blur tint */
+.fr-through-glass .fr-viewport { filter: blur(0.4px); }
+.fr-through-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(200, 230, 255, 0.18) 45%, rgba(200, 230, 255, 0.32) 50%, rgba(200, 230, 255, 0.18) 55%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Top-down flat lay — overhead view, square subject from above */
+.fr-top-down-flat-lay .fr-horizon,
+.fr-top-down-flat-lay .fr-ground { display: none; }
+.fr-top-down-flat-lay .fr-subject { display: none; }
+.fr-top-down-flat-lay .fr-viewport {
+  background:
+    repeating-linear-gradient(0deg,  rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 20%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 20%),
+    linear-gradient(135deg, #3b2a1a 0%, #1a1208 100%);
+}
+.fr-top-down-flat-lay::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 38cqw;
+  height: 38cqw;
+  background: linear-gradient(135deg, #ff8fc2 0%, #ff2a89 60%, #780040 100%);
+  border-radius: 4px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.55), inset -3px -3px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* =================== Multi-frame compositions =================== */
+/* 3x3 grid collage — 3x3 grid of cells */
+.fr-3x3-grid-collage .fr-subject { display: none; }
+.fr-3x3-grid-collage .fr-horizon,
+.fr-3x3-grid-collage .fr-ground { display: none; }
+.fr-3x3-grid-collage .fr-viewport {
+  background:
+    linear-gradient(90deg, transparent 32%, rgba(255, 255, 255, 0.7) 32%, rgba(255, 255, 255, 0.7) 34%, transparent 34%, transparent 66%, rgba(255, 255, 255, 0.7) 66%, rgba(255, 255, 255, 0.7) 68%, transparent 68%),
+    linear-gradient(0deg,  transparent 32%, rgba(255, 255, 255, 0.7) 32%, rgba(255, 255, 255, 0.7) 34%, transparent 34%, transparent 66%, rgba(255, 255, 255, 0.7) 66%, rgba(255, 255, 255, 0.7) 68%, transparent 68%),
+    linear-gradient(135deg, #5b1d3d 0%, #2a0e1d 100%);
+}
+
+/* Contact sheet — multiple horizontal film strips */
+.fr-contact-sheet .fr-subject { display: none; }
+.fr-contact-sheet .fr-horizon,
+.fr-contact-sheet .fr-ground { display: none; }
+.fr-contact-sheet .fr-viewport {
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(0, 0, 0, 0.85) 0 8%,
+      #6b1f44 8% 28%,
+      rgba(0, 0, 0, 0.85) 28% 33%
+    ),
+    #0a0a0a;
+}
+
+/* Diptych — two vertical panels with a hard edge at 50% */
+.fr-diptych .fr-viewport {
+  background:
+    linear-gradient(90deg, #5b1d3d 0%, #5b1d3d 49.5%, rgba(255, 255, 255, 0.85) 49.5%, rgba(255, 255, 255, 0.85) 50.5%, #1d3d5b 50.5%, #1d3d5b 100%);
+}
+.fr-diptych .fr-subject { display: none; }
+.fr-diptych .fr-horizon,
+.fr-diptych .fr-ground { display: none; }
+
+/* Triptych — three vertical panels with hard edges at 33% and 66% */
+.fr-triptych .fr-viewport {
+  background:
+    linear-gradient(90deg,
+      #5b1d3d 0%, #5b1d3d 32.5%,
+      rgba(255, 255, 255, 0.85) 32.5%, rgba(255, 255, 255, 0.85) 33.8%,
+      #3d5b1d 33.8%, #3d5b1d 65.8%,
+      rgba(255, 255, 255, 0.85) 65.8%, rgba(255, 255, 255, 0.85) 67.1%,
+      #1d3d5b 67.1%, #1d3d5b 100%
+    );
+}
+.fr-triptych .fr-subject { display: none; }
+.fr-triptych .fr-horizon,
+.fr-triptych .fr-ground { display: none; }
+
+/* Multi-frame mosaic — irregular grid via varied repeating gradients */
+.fr-multi-frame-mosaic .fr-subject { display: none; }
+.fr-multi-frame-mosaic .fr-horizon,
+.fr-multi-frame-mosaic .fr-ground { display: none; }
+.fr-multi-frame-mosaic .fr-viewport {
+  background:
+    repeating-linear-gradient(15deg,  transparent 0 18%, rgba(255, 255, 255, 0.18) 18% 19%),
+    repeating-linear-gradient(-30deg, transparent 0 22%, rgba(255, 255, 255, 0.18) 22% 23%),
+    repeating-linear-gradient(75deg,  transparent 0 28%, rgba(255, 255, 255, 0.12) 28% 29%),
+    linear-gradient(135deg, #4a1a36 0%, #1a3a4a 50%, #3a4a1a 100%);
+}
+
+/* Magazine spread — two-page spread with vertical center fold */
+.fr-magazine-spread .fr-subject { display: none; }
+.fr-magazine-spread .fr-horizon,
+.fr-magazine-spread .fr-ground { display: none; }
+.fr-magazine-spread .fr-viewport {
+  background:
+    linear-gradient(90deg,
+      #f4ecd8 0%, #f4ecd8 49%,
+      rgba(0, 0, 0, 0.45) 49%, rgba(0, 0, 0, 0.45) 49.6%,
+      rgba(0, 0, 0, 0.18) 49.6%, rgba(0, 0, 0, 0.18) 50.4%,
+      rgba(0, 0, 0, 0.45) 50.4%, rgba(0, 0, 0, 0.45) 51%,
+      #f4ecd8 51%, #f4ecd8 100%
+    );
+}
+.fr-magazine-spread::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  top: 22%;
+  width: 30%;
+  height: 14%;
+  background:
+    linear-gradient(to bottom, #1a1a1a 0 18%, transparent 18% 38%, #1a1a1a 38% 48%, transparent 48% 68%, #1a1a1a 68% 78%);
+}
+
+/* Cutaway / cross-section — translucent subject revealing concentric inner shells */
+.fr-cutaway-cross-section .fr-subject { width: 22cqw; height: 32cqw; bottom: 6%; }
+.fr-cutaway-cross-section .fr-subject .fr-body,
+.fr-cutaway-cross-section .fr-subject .fr-head { opacity: 0.55; }
+.fr-cutaway-cross-section::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  width: 14cqw;
+  height: 20cqw;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 12% 12% / 60% 60% 12% 12%;
+  background:
+    radial-gradient(ellipse at 50% 35%, transparent 0 18%, rgba(255,255,255,0.55) 19% 21%, transparent 21% 35%, rgba(255,255,255,0.45) 36% 38%, transparent 38% 100%);
+  pointer-events: none;
+}

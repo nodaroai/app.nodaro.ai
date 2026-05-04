@@ -27,20 +27,20 @@ interface HeldPropPickerProps {
  */
 const HELD_PROP_EMOJI: Record<string, string> = {
   // device
-  smartphone: "📱", "smartphone-raised": "📱", "polaroid-camera": "📷",
-  "vintage-camera": "📷", "dslr-camera": "📸", "video-camera": "📹",
+  smartphone: "📱", "smartphone-raised": "📱🤳", "polaroid-camera": "📷",
+  "vintage-camera": "📷🎞️", "dslr-camera": "📸", "video-camera": "📹",
   microphone: "🎤", megaphone: "📢", smartwatch: "⌚",
   // drink
   "coffee-cup": "☕", "takeaway-coffee": "🥤", "wine-glass": "🍷",
   "champagne-flute": "🥂", "martini-glass": "🍸", "cocktail-glass": "🥃",
   "beer-bottle": "🍺", "water-bottle": "💧",
   // smoking
-  cigarette: "🚬", cigar: "🚬", "vape-pen": "💨", joint: "🌿",
+  cigarette: "🚬", cigar: "🚬💼", "vape-pen": "💨", joint: "🌿",
   // reading-writing
   book: "📖", magazine: "📰", newspaper: "🗞️", notebook: "📓",
   pen: "🖊️", marker: "🖍️", paintbrush: "🖌️", chalk: "✏️",
   // bag-accessory
-  handbag: "👜", "tote-bag": "👜", briefcase: "💼",
+  handbag: "👜", "tote-bag": "🛍️", briefcase: "💼",
   umbrella: "☂️", "fan-folding": "🪭",
   // floral-nature
   bouquet: "💐", "single-rose": "🌹", sunflower: "🌻",

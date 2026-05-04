@@ -2,43 +2,43 @@ import { getVehicle, type VehicleSubcategory } from "@nodaro/shared"
 
 const VEHICLE_EMOJI: Record<string, string> = {
   // classic
-  "muscle-car": "🏎️", "car-57-chevy": "🚗", "hot-rod": "🏎️", "vintage-roadster": "🚗",
-  "model-t": "🚗", "vw-beetle": "🚙", "checker-cab": "🚕", "woody-wagon": "🚙", lowrider: "🚗",
+  "muscle-car": "🏎️", "car-57-chevy": "🚗💎", "hot-rod": "🚗🔥", "vintage-roadster": "🚗🎩",
+  "model-t": "🚗⚙️", "vw-beetle": "🪲🚗", "checker-cab": "🚕", "woody-wagon": "🚙🌴", lowrider: "🚗⬇️",
   // everyday
-  sedan: "🚗", suv: "🚙", hatchback: "🚗", minivan: "🚐", "station-wagon": "🚙",
-  crossover: "🚙", "electric-car": "🚗", "hatchback-econobox": "🚗",
+  sedan: "🚗", suv: "🚙", hatchback: "🚗📦", minivan: "🚐", "station-wagon": "🚙📦",
+  crossover: "🚙🛣️", "electric-car": "🚗⚡", "hatchback-econobox": "🚗💰",
   // performance
-  "sports-car": "🏎️", supercar: "🏎️", convertible: "🚗", "grand-tourer": "🏎️",
-  roadster: "🚗", "racing-car": "🏎️", "rally-car": "🚗", "drift-car": "🏎️",
+  "sports-car": "🏎️🔥", supercar: "🏎️💎", convertible: "🚗☀️", "grand-tourer": "🏎️🛣️",
+  roadster: "🚗💨", "racing-car": "🏁🏎️", "rally-car": "🏎️🌲", "drift-car": "🏎️💨",
   // motorcycles
-  sportbike: "🏍️", cruiser: "🏍️", chopper: "🏍️", "dirt-bike": "🏍️",
-  scooter: "🛵", moped: "🛵", "cafe-racer": "🏍️",
+  sportbike: "🏍️", cruiser: "🏍️🛣️", chopper: "🏍️🔥", "dirt-bike": "🏍️⛰️",
+  scooter: "🛵", moped: "🛵💨", "cafe-racer": "🏍️☕",
   // bicycles
-  "road-bike": "🚴", "mountain-bike": "🚵", bmx: "🚲", "cruiser-bike": "🚲",
-  "penny-farthing": "🚲", unicycle: "🎪", skateboard: "🛹", "kick-scooter": "🛴",
+  "road-bike": "🚴", "mountain-bike": "🚵", bmx: "🚲", "cruiser-bike": "🚲🌴",
+  "penny-farthing": "🚲🎩", unicycle: "🎪", skateboard: "🛹", "kick-scooter": "🛴",
   // trucks
-  "pickup-truck": "🛻", "semi-truck": "🚛", "dump-truck": "🚚", "tow-truck": "🚛",
-  "delivery-van": "🚐", "ice-cream-truck": "🍦", "food-truck": "🌮", "box-truck": "🚚",
+  "pickup-truck": "🛻", "semi-truck": "🚛", "dump-truck": "🚚", "tow-truck": "🚛🪝",
+  "delivery-van": "🚐📦", "ice-cream-truck": "🍦", "food-truck": "🌮", "box-truck": "🚚📦",
   // transit
-  "city-bus": "🚌", "school-bus": "🚌", "double-decker": "🚌", "coach-bus": "🚌",
+  "city-bus": "🚌", "school-bus": "🚌🎒", "double-decker": "🚌🇬🇧", "coach-bus": "🚌🛣️",
   train: "🚆", "steam-locomotive": "🚂", "bullet-train": "🚄", subway: "🚇",
-  tram: "🚋", stagecoach: "🐎", "horse-carriage": "🐎",
+  tram: "🚋", stagecoach: "🐎🚪", "horse-carriage": "🐎🎩",
   // aircraft
-  airliner: "✈️", biplane: "🛩️", "propeller-plane": "🛩️", helicopter: "🚁",
-  seaplane: "🛩️", "hot-air-balloon": "🎈", blimp: "🛩️", glider: "🛩️", drone: "🚁",
+  airliner: "✈️", biplane: "🛩️", "propeller-plane": "🛩️💨", helicopter: "🚁",
+  seaplane: "🛩️🌊", "hot-air-balloon": "🎈", blimp: "🎈✈️", glider: "🛩️🪶", drone: "🚁🔋",
   // watercraft
   yacht: "🛥️", sailboat: "⛵", speedboat: "🚤", "cruise-ship": "🛳️",
-  "cargo-ship": "🚢", canoe: "🛶", kayak: "🛶", rowboat: "🛶", "jet-ski": "🚤",
-  submarine: "🚢", "pirate-ship": "🏴‍☠️",
+  "cargo-ship": "🚢", canoe: "🛶", kayak: "🛶🌊", rowboat: "🛶🪵", "jet-ski": "🚤💨",
+  submarine: "🚢🌊", "pirate-ship": "🏴‍☠️",
   // military
-  tank: "🪖", humvee: "🚙", "armored-personnel-carrier": "🪖",
-  "fighter-jet": "✈️", "stealth-bomber": "✈️", destroyer: "🚢", "aircraft-carrier": "🚢",
+  tank: "🪖", humvee: "🚙🪖", "armored-personnel-carrier": "🪖🚛",
+  "fighter-jet": "✈️🪖", "stealth-bomber": "✈️🌑", destroyer: "🚢🪖", "aircraft-carrier": "🚢✈️",
   // construction
-  bulldozer: "🚜", excavator: "🚜", "crane-truck": "🏗️", "cement-mixer": "🚚",
-  forklift: "🚜", backhoe: "🚜", tractor: "🚜",
+  bulldozer: "🚜", excavator: "🚜⛏️", "crane-truck": "🏗️", "cement-mixer": "🚚🏗️",
+  forklift: "🚜📦", backhoe: "🚜🪣", tractor: "🚜🌾",
   // sci-fi
-  spaceship: "🚀", starfighter: "🚀", hovercar: "🛸", mech: "🤖",
-  "flying-saucer": "🛸", "space-shuttle": "🚀", rocket: "🚀", hoverboard: "🛹",
+  spaceship: "🚀", starfighter: "🚀⭐", hovercar: "🛸🚗", mech: "🤖",
+  "flying-saucer": "🛸", "space-shuttle": "🚀🌌", rocket: "🚀🔥", hoverboard: "🛹✨",
 }
 
 const SUBCATEGORY_FALLBACK_EMOJI: Record<VehicleSubcategory, string> = {

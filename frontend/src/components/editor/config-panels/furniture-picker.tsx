@@ -21,36 +21,36 @@ interface FurniturePickerProps {
 
 const FURNITURE_EMOJI: Record<string, string> = {
   // seating
-  sofa: "🛋️", "sectional-sofa": "🛋️", loveseat: "🛋️", armchair: "🪑",
-  recliner: "🛋️", "office-chair": "🪑", "rocking-chair": "🪑", throne: "👑",
-  "bean-bag": "🪑", stool: "🪑", bench: "🪑", "chaise-lounge": "🛋️", "dining-chair": "🪑",
+  sofa: "🛋️", "sectional-sofa": "🛋️📐", loveseat: "🛋️💕", armchair: "🪑",
+  recliner: "🛋️😌", "office-chair": "🪑💼", "rocking-chair": "🪑🌙", throne: "👑",
+  "bean-bag": "🫘", stool: "🪑📏", bench: "🪑🌳", "chaise-lounge": "🛋️🌅", "dining-chair": "🪑🍽️",
   // tables
-  "dining-table": "🍽️", "coffee-table": "☕", "side-table": "🪑",
-  "console-table": "🪑", desk: "🪑", workbench: "🔨", "vanity-table": "🪞",
-  nightstand: "🛏️", "picnic-table": "🧺",
+  "dining-table": "🍽️", "coffee-table": "☕", "side-table": "🪑📍",
+  "console-table": "🪑🖼️", desk: "🪑💻", workbench: "🔨", "vanity-table": "💄",
+  nightstand: "🛏️🪔", "picnic-table": "🧺🌳",
   // beds
-  "bed-single": "🛏️", "bed-queen": "🛏️", "bed-king": "🛏️",
-  "bunk-bed": "🛏️", "canopy-bed": "🛏️", "four-poster-bed": "🛏️",
-  daybed: "🛏️", crib: "🍼", futon: "🛏️", hammock: "🌴",
+  "bed-single": "🛏️", "bed-queen": "🛏️👸", "bed-king": "🛏️👑",
+  "bunk-bed": "🛏️⬆️", "canopy-bed": "🛏️⛺", "four-poster-bed": "🛏️🏛️",
+  daybed: "🛏️☀️", crib: "🍼", futon: "🛏️🎌", hammock: "🌴",
   // storage
-  bookshelf: "📚", wardrobe: "🚪", dresser: "🗄️", cabinet: "🗄️",
-  chest: "🧰", trunk: "🧳", "filing-cabinet": "🗄️", "tv-stand": "📺",
-  "display-case": "🏺", hutch: "🍽️", "toy-chest": "🧸",
+  bookshelf: "📚", wardrobe: "🚪", dresser: "🗄️", cabinet: "🗄️🔑",
+  chest: "🧰", trunk: "🧳", "filing-cabinet": "🗄️📁", "tv-stand": "📺",
+  "display-case": "🏺💎", hutch: "🍽️🪵", "toy-chest": "🧸",
   // lighting
-  "floor-lamp": "💡", "table-lamp": "💡", "desk-lamp": "💡",
-  chandelier: "✨", "pendant-light": "💡", sconce: "🕯️",
-  lantern: "🏮", candelabra: "🕯️", "neon-sign": "💡",
+  "floor-lamp": "💡", "table-lamp": "💡🪑", "desk-lamp": "💡💻",
+  chandelier: "✨", "pendant-light": "💡⬇️", sconce: "🕯️",
+  lantern: "🏮", candelabra: "🕯️✨", "neon-sign": "💡🎆",
   // kitchen
-  "kitchen-island": "🍳", "bar-counter": "🍸", "bar-stool": "🪑",
-  "pot-rack": "🍳", "spice-rack": "🧂", buffet: "🍽️",
+  "kitchen-island": "🍳", "bar-counter": "🍸", "bar-stool": "🪑🍸",
+  "pot-rack": "🍳🪝", "spice-rack": "🧂", buffet: "🍽️🥂",
   // outdoor
-  "patio-chair": "🪑", "adirondack-chair": "🪑", "porch-swing": "🪑",
-  gazebo: "🏡", "bistro-set": "☕", "sun-lounger": "🏖️", "fire-pit": "🔥",
+  "patio-chair": "🪑🌞", "adirondack-chair": "🪑🌲", "porch-swing": "🪑🪡",
+  gazebo: "🏡", "bistro-set": "☕🌿", "sun-lounger": "🏖️", "fire-pit": "🔥",
   // decorative
   mirror: "🪞", rug: "🧺", vase: "🏺", "grandfather-clock": "🕰️",
-  "wall-art": "🖼️", pillow: "🛏️", curtains: "🪟", sculpture: "🗿",
+  "wall-art": "🖼️", pillow: "🛏️💤", curtains: "🪟", sculpture: "🗿",
   // bath
-  bathtub: "🛁", shower: "🚿", toilet: "🚽", "sink-vanity": "🪞", "towel-rack": "🧺",
+  bathtub: "🛁", shower: "🚿", toilet: "🚽", "sink-vanity": "🪞🚰", "towel-rack": "🧺🚿",
 }
 
 const SUBCATEGORY_FALLBACK_EMOJI: Record<FurnitureSubcategory, string> = {

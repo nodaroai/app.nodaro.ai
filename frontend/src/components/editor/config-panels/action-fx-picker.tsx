@@ -10,7 +10,6 @@ import {
   type ActionFxCategory,
 } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
@@ -139,26 +138,55 @@ export const ActionFxPicker = memo(function ActionFxPicker({
           )}
         </>
       ) : (
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ActionFxCategory)}>
-          <TabsList className="grid w-full grid-cols-3 gap-0.5 h-auto">
-            {ACTION_FX_CATEGORY_ORDER.map((cat) => (
-              <TabsTrigger key={cat} value={cat} className="text-[10px] py-1.5 px-1">
-                {ACTION_FX_CATEGORY_LABELS[cat]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {ACTION_FX_CATEGORY_ORDER.map((cat) => (
-            <TabsContent key={cat} value={cat} className="mt-2">
-              <div
-                role={maxSelected > 1 ? "group" : "radiogroup"}
-                aria-label={ACTION_FX_CATEGORY_LABELS[cat]}
-                className="grid grid-cols-2 gap-1.5"
-              >
-                {(byCategory.get(cat) ?? []).map(renderTile)}
-              </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+        <div className="flex flex-col gap-2">
+          <div
+            role="tablist"
+            aria-label="Action FX categories"
+            className="flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D]"
+          >
+            {ACTION_FX_CATEGORY_ORDER.map((cat) => {
+              const active = cat === activeTab
+              const count = (byCategory.get(cat) ?? []).filter((fx) =>
+                selectedIds.includes(fx.id),
+              ).length
+              const hasPick = count > 0
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setActiveTab(cat)}
+                  className={cn(
+                    "relative -mb-px inline-flex items-center gap-1.5 px-1 pt-1 pb-1.5 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap",
+                    active
+                      ? "border-[#ff0073] text-[#ff0073]"
+                      : hasPick
+                      ? "border-transparent text-[#ff0073]/80 hover:border-[#ff0073]/40 hover:text-[#ff0073]"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
+                  )}
+                >
+                  <span>{ACTION_FX_CATEGORY_LABELS[cat]}</span>
+                  {hasPick && (
+                    <span
+                      className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
+                      aria-label={`${count} selected`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <div
+            role={maxSelected > 1 ? "group" : "radiogroup"}
+            aria-label={ACTION_FX_CATEGORY_LABELS[activeTab]}
+            className="grid grid-cols-2 gap-1.5"
+          >
+            {(byCategory.get(activeTab) ?? []).map(renderTile)}
+          </div>
+        </div>
       )}
     </div>
   )
