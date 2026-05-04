@@ -45,7 +45,6 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" _site
           cd docs
           find . -type f -name '*.md' \
-            ! -path './superpowers/*' \
             ! -path './_layouts/*' \
             ! -path './_includes/*' \
             -print0 \
@@ -55,6 +54,19 @@ jobs:
               cp "$f" "$dest"
             done
           echo "Copied $(find ../_site -type f -name '*.md' | wc -l) raw markdown files."
+
+      - name: Debug — list _site/*.md sample (top + nested)
+        run: |
+          echo "Total .md in _site: $(find _site -type f -name '*.md' | wc -l)"
+          echo "Total .html in _site: $(find _site -type f -name '*.html' | wc -l)"
+          echo "--- sample .md (root):"
+          ls _site/*.md 2>/dev/null | head -10 || echo "(none at root)"
+          echo "--- sample .html (root):"
+          ls _site/*.html 2>/dev/null | head -10 || echo "(none at root)"
+          echo "--- specific files of interest:"
+          for f in contributing.md contributing.html architecture.md architecture.html sdk-quickstart.md sdk-quickstart.html nodes/README.md nodes/index.html nodes/ai-image/edit-image.md nodes/ai-image/edit-image.html; do
+            if [ -e "_site/$f" ]; then echo "  EXISTS: _site/$f ($(stat -c %s "_site/$f" 2>/dev/null || stat -f %z "_site/$f") bytes)"; else echo "  MISSING: _site/$f"; fi
+          done
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
