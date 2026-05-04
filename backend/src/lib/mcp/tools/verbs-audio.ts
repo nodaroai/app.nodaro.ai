@@ -788,6 +788,89 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── suno_music_video ──
+  // Generates an MP4 music video clip for a Suno-generated track. The KIE
+  // endpoint is input-only (no style / prompt control) — it derives visuals
+  // from the source audio. Resolves Suno taskId/audioId server-side from
+  // the source Nodaro job's output_data.
+  server.registerTool(
+    "suno_music_video",
+    {
+      title: "Suno Music Video",
+      description:
+        "Generate an MP4 music video for a Suno track. Pass the Nodaro " +
+        "audio_asset_id of a Suno generation — non-Suno tracks (minimax, " +
+        "ElevenLabs, etc.) cannot be turned into music videos this way. " +
+        "The visuals are derived from the audio; there are no style or " +
+        "prompt controls.",
+      inputSchema: {
+        audio_asset_id: z
+          .string()
+          .min(1)
+          .describe("Nodaro audio job id of a Suno generation (sunoTaskId/sunoTrackId are looked up server-side)."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
+      if (!ids) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "Could not find Suno taskId/audioId for asset " +
+                args.audio_asset_id +
+                ". Pass a Nodaro audio job id from a Suno generation.",
+            },
+          ],
+          isError: true,
+        }
+      }
+      const payload = {
+        taskId: ids.sunoTaskId,
+        audioId: ids.sunoTrackId,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/music-video",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "Suno music video",
+        session,
+        widgetKind: "video",
+        widgetData: { prompt: "(music video)", model: "suno-music-video" },
+      })
+    },
+  )
+
   // ── suno_extend ──
   server.registerTool(
     "suno_extend",
