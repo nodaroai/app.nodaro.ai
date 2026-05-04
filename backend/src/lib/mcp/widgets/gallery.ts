@@ -565,22 +565,46 @@ ${uiProtocolShim()}
       var card = document.createElement('div');
       card.className = 'card';
 
-      // Header row: "Gallery" title + item-count subtitle. Establishes
-      // the widget identity inside the host chat ([redacted-reference] uses the
-      // same pattern with a "Generations" title).
+      // Header row: title + item-count subtitle. The title flips to
+      // "Uploads" when the host signalled this widget is rendering the
+      // upload list (via loadMoreTool=browse_uploads); otherwise it's
+      // "Gallery" — same widget HTML, two distinct surfaces.
       var header = document.createElement('div');
       header.className = 'header';
       var title = document.createElement('div');
       title.className = 'title';
-      title.textContent = 'Gallery';
+      title.textContent = data.loadMoreTool === 'browse_uploads' ? 'Uploads' : 'Gallery';
       var count = document.createElement('div');
       count.className = 'count';
-      count.textContent =
-        data.items.length +
-        (data.nextCursor ? ' shown · ' + data.totalCount + '+ total' : ' total');
+      // Count text — when the server sent a real totalCount and there
+      // are still more pages cached, show "X of Y". When everything is
+      // loaded, just show the total. No more "Y+ total" hack.
+      var total = (typeof data.totalCount === 'number' && data.totalCount > 0)
+        ? data.totalCount
+        : data.items.length;
+      count.textContent = data.items.length < total
+        ? data.items.length + ' of ' + total
+        : total + ' total';
       header.appendChild(title);
       header.appendChild(count);
       card.appendChild(header);
+
+      // Auto-prefetch: when the user paginates onto the last loaded
+      // page AND there's a server cursor for older items, trigger a
+      // background fetch instead of forcing them to click "next" once
+      // more. The user still sees the current page (no UI hop) — fresh
+      // items append silently and the next-button enables once they
+      // arrive. loadingMore guard prevents the same fetch from firing
+      // multiple times across re-renders.
+      if (
+        data.nextCursor &&
+        !loadingMore &&
+        state.page >= totalPages - 1
+      ) {
+        // setTimeout 0 keeps the prefetch out of the render's
+        // critical path so the grid paints immediately.
+        setTimeout(loadMoreItems, 0);
+      }
 
       var grid = document.createElement('div');
       grid.className = 'grid';
