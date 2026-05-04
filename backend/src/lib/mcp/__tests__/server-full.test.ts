@@ -136,9 +136,11 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("upload_video")).toBe(false)
 
     // Sanity: ping + verbs + jobs + workflows + gallery + 9 upload tools.
-    // Down from 18 after the chunked + inline base64 cull.
+    // Bound bumped to 60 after adding voice_changer, dubbing, voice_clone,
+    // voice_design, suno_separate_stems, suno_extend, suno_cover,
+    // modify_video, motion_transfer (was 50, now ~54).
     expect(tools.length).toBeGreaterThanOrEqual(28)
-    expect(tools.length).toBeLessThanOrEqual(50)
+    expect(tools.length).toBeLessThanOrEqual(60)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {

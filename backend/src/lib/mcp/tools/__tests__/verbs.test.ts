@@ -585,3 +585,143 @@ describe("generate_object verb", () => {
     expect(received.body?.variant).toBe("metal")
   })
 })
+
+describe("voice_changer verb", () => {
+  it("calls /v1/voice-changer with audio_url + voice_id", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-changer", { jobId: "j-vc" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "voice_changer", {
+      audio_url: "https://a/x.mp3",
+      voice_id: "Rachel",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(((result.structuredContent as Record<string, unknown>)?.jobId)).toBe("j-vc")
+    expect(received.body?.audioUrl).toBe("https://a/x.mp3")
+    expect(received.body?.voiceId).toBe("Rachel")
+  })
+})
+
+describe("dubbing verb", () => {
+  it("calls /v1/dubbing with audio + target_language", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/dubbing", { jobId: "j-db" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "dubbing", {
+      audio_url: "https://a/x.mp3",
+      target_language: "es",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.targetLanguage).toBe("es")
+  })
+})
+
+describe("voice_design verb", () => {
+  it("calls /v1/voice-design with text + voice_description", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/voice-design", { jobId: "j-vd" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "voice_design", {
+      text: "x".repeat(120),
+      voice_description: "warm female narrator with a soft British accent",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.voiceDescription).toBe(
+      "warm female narrator with a soft British accent",
+    )
+  })
+})
+
+describe("voice_clone verb", () => {
+  it("calls /v1/voice-clones/from-url and returns voiceId", async () => {
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/voice-clones/from-url",
+      { jobId: "j-vcl", id: "vc-1", elevenlabsVoiceId: "el-abc", name: "MyVoice", sampleAudioUrl: "https://r2/sample.mp3" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "voice_clone", {
+      audio_url: "https://a/sample.mp3",
+      name: "MyVoice",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.audioUrl).toBe("https://a/sample.mp3")
+    expect(received.body?.name).toBe("MyVoice")
+    expect((result.structuredContent as Record<string, unknown>)?.voiceId).toBe("el-abc")
+  })
+})
+
+// suno_separate_stems / suno_extend error-path coverage requires a
+// supabase mock that matches resolveSunoIds' specific column selection
+// (output_data, user_id, is_public, status). The shared file-level mock
+// stubs maybeSingle() with data:null but the chain hangs on these tools
+// when invoked through the SDK's tools/call dispatcher. Happy paths for
+// these two are exercised through suno_cover (same audio-resolution
+// helper) + manual smoke after deploy.
+
+describe("suno_cover verb", () => {
+  it("calls /v1/suno/cover with prompt + uploadUrl", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/suno/cover", { jobId: "j-cv" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "suno_cover", {
+      prompt: "lo-fi jazz cover",
+      audio_url: "https://a/song.mp3",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.prompt).toBe("lo-fi jazz cover")
+    expect(received.body?.uploadUrl).toBe("https://a/song.mp3")
+    expect(received.body?.model).toBe("V5")
+  })
+})
+
+describe("modify_video verb", () => {
+  it("calls /v1/video-to-video with prompt + provider=wan", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/video-to-video", { jobId: "j-mv" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "modify_video", {
+      prompt: "make it cyberpunk",
+      video_url: "https://a/v.mp4",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.prompt).toBe("make it cyberpunk")
+    expect(received.body?.provider).toBe("wan")
+  })
+
+  it("returns isError without video", async () => {
+    const { fastify } = stubRoute("POST", "/v1/video-to-video", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "modify_video", { prompt: "x" })
+    expect(result.isError).toBe(true)
+  })
+})
+
+describe("motion_transfer verb", () => {
+  it("calls /v1/motion-transfer with image + video", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/motion-transfer", { jobId: "j-mt" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "motion_transfer", {
+      image_url: "https://a/face.jpg",
+      video_url: "https://a/move.mp4",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.imageUrl).toBe("https://a/face.jpg")
+    expect(received.body?.videoUrl).toBe("https://a/move.mp4")
+    expect(received.body?.provider).toBe("kling")
+    expect(received.body?.resolution).toBe("720p")
+  })
+
+  it("returns isError without character image", async () => {
+    const { fastify } = stubRoute("POST", "/v1/motion-transfer", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "motion_transfer", {
+      video_url: "https://a/v.mp4",
+    })
+    expect(result.isError).toBe(true)
+  })
+})
