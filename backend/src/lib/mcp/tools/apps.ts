@@ -206,35 +206,48 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
               "Flat input map keyed by schema key (from get_app_inputs). Omit to use defaults.",
             ),
         },
+        outputSchema: {
+          executionId: z.string(),
+          slug: z.string().optional(),
+          name: z.string().optional(),
+          status: z.string().optional(),
+        },
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
           openWorldHint: true,
         },
+        _meta: {
+          "ui/resourceUri": "ui://nodaro/widget/v3/app-run",
+          ui: {
+            resourceUri: "ui://nodaro/widget/v3/app-run",
+            visibility: ["model", "app"],
+          },
+        },
       },
       async (args) => {
-        // Re-derive the schema so we can translate flat → nested overrides.
-        // This is one DB read per run; acceptable for the simplification it
-        // buys (no cache invalidation / no schema-drift bugs).
+        // Single DB read for the app row covers BOTH the input-translation
+        // schema (when args.inputs is provided) AND the widget header's
+        // app name. Cheaper than two reads, and the widget's name is
+        // important enough to justify always fetching it.
+        const { data: appRow } = await supabase
+          .from("published_apps")
+          .select("name, snapshot_settings, snapshot_nodes")
+          .eq("slug", args.slug)
+          .eq("publish_type", "app")
+          .eq("is_active", true)
+          .limit(1)
+          .single()
+
         let inputOverrides: Record<string, Record<string, unknown>> | undefined
-        if (args.inputs && Object.keys(args.inputs).length) {
-          const { data: appRow } = await supabase
-            .from("published_apps")
-            .select("snapshot_settings, snapshot_nodes")
-            .eq("slug", args.slug)
-            .eq("publish_type", "app")
-            .eq("is_active", true)
-            .limit(1)
-            .single()
-          if (appRow) {
-            const schema = extractAppInputSchema({
-              snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
-              snapshotNodes: appRow.snapshot_nodes as
-                | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
-                | null,
-            })
-            inputOverrides = flatInputsToOverrides(args.inputs, schema.keyMap)
-          }
+        if (appRow && args.inputs && Object.keys(args.inputs).length) {
+          const schema = extractAppInputSchema({
+            snapshotSettings: appRow.snapshot_settings as Record<string, unknown> | null,
+            snapshotNodes: appRow.snapshot_nodes as
+              | Array<{ id: string; type?: string; data?: Record<string, unknown> }>
+              | null,
+          })
+          inputOverrides = flatInputsToOverrides(args.inputs, schema.keyMap)
         }
 
         const payload = {
@@ -276,6 +289,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
             isError: true,
           }
         }
+        const appName = (appRow?.name as string | undefined) ?? args.slug
         return {
           content: [
             {
@@ -283,7 +297,12 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
               text: `Started app '${args.slug}' (id ${executionId}). It will appear at the top of your Nodaro library when ready: https://app.nodaro.ai/gallery`,
             },
           ],
-          structuredContent: { executionId, slug: args.slug },
+          structuredContent: {
+            executionId,
+            slug: args.slug,
+            name: appName,
+            status: "queued",
+          },
         }
       },
     )

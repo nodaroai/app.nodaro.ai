@@ -665,10 +665,10 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
 
     // ── get_app_run ──
     // Workflow / app runs live in `workflow_executions` (not `jobs`). The
-    // workflow widget polls this every 2s to update its node-status pill
-    // list and surface output URLs once available, since stateless HTTP
-    // MCP can't deliver the orchestrator's executionEvents asynchronously
-    // (server tears down after the tool call returns).
+    // workflow + app-run widgets poll this every 2s to update node-status
+    // pill lists and surface output URLs once available, since stateless
+    // HTTP MCP can't deliver the orchestrator's executionEvents
+    // asynchronously (server tears down after the tool call returns).
     server.registerTool(
       "get_app_run",
       {
@@ -676,8 +676,8 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         description:
           "Fetch status of a workflow / published-app execution by id. " +
           "Returns the execution's status, per-node states, and any output " +
-          "URLs the run has produced so far. Used by the workflow widget to " +
-          "poll progress.",
+          "URLs (with prompt/model/jobId metadata) the run has produced so " +
+          "far. Used by the workflow + app-run widgets to poll progress.",
         inputSchema: {
           execution_id: z.string().min(1),
         },
@@ -693,8 +693,20 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
               }),
             )
             .optional(),
+          // Outputs are enriched with the source job's metadata (jobId,
+          // prompt, model, createdAt) so widgets can drive a gallery-style
+          // grid + Use-as-reference button without an extra round-trip.
           outputs: z
-            .array(z.object({ kind: z.string(), url: z.string() }))
+            .array(
+              z.object({
+                kind: z.string(),
+                url: z.string(),
+                jobId: z.string().optional(),
+                prompt: z.string().optional(),
+                model: z.string().optional(),
+                createdAt: z.string().optional(),
+              }),
+            )
             .optional(),
         },
         annotations: { readOnlyHint: true },
@@ -720,20 +732,22 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
         }
 
         // node_states is JSONB keyed by node id with at least
-        // `{ status, output?: { imageUrl?|videoUrl?|audioUrl? }, nodeType? }`.
+        // `{ status, jobId?, output?: { imageUrl?|videoUrl?|audioUrl? }, nodeType? }`.
         // We flatten into the widget-friendly shapes — { id, label, status }
-        // for the pill list, plus a separate { kind, url } array for
-        // outputs grid rendering.
+        // for the pill list, plus an enriched { kind, url, jobId?, prompt?,
+        // model?, createdAt? } array for gallery-style grid rendering.
         const ns = (data.node_states ?? {}) as Record<
           string,
           {
             status?: string
+            jobId?: string
             output?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; outputUrl?: string }
             nodeType?: string
           }
         >
         const nodeStates: Array<{ id: string; label?: string; status: string }> = []
-        const outputs: Array<{ kind: string; url: string }> = []
+        type RawOutput = { kind: string; url: string; jobId?: string }
+        const rawOutputs: RawOutput[] = []
         for (const [nodeId, state] of Object.entries(ns)) {
           nodeStates.push({
             id: nodeId,
@@ -753,9 +767,51 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
                 : state.output.audioUrl
                   ? "audio"
                   : null
-            if (url && kind) outputs.push({ kind, url })
+            if (url && kind) rawOutputs.push({ kind, url, jobId: state.jobId })
           }
         }
+
+        // Batch-fetch the source jobs for prompt/model/createdAt enrichment.
+        // Skip cleanly if no jobIds (e.g. inline-only nodes produced the
+        // outputs); the widget falls back to URL-only tiles in that case.
+        const jobIds = rawOutputs
+          .map((o) => o.jobId)
+          .filter((id): id is string => Boolean(id))
+        const jobMeta = new Map<
+          string,
+          { prompt?: string; provider?: string; createdAt?: string }
+        >()
+        if (jobIds.length) {
+          const { data: jobs } = await supabase
+            .from("jobs")
+            .select("id, input_data, provider, completed_at, created_at")
+            .in("id", jobIds)
+          for (const j of jobs ?? []) {
+            const input = (j.input_data ?? {}) as Record<string, unknown>
+            jobMeta.set(j.id as string, {
+              prompt: (input.prompt as string | undefined) ?? undefined,
+              provider:
+                (j.provider as string | undefined) ??
+                (input.provider as string | undefined) ??
+                (input.model as string | undefined),
+              createdAt:
+                (j.completed_at as string | undefined) ??
+                (j.created_at as string | undefined),
+            })
+          }
+        }
+
+        const outputs = rawOutputs.map((o) => {
+          const meta = o.jobId ? jobMeta.get(o.jobId) : undefined
+          return {
+            kind: o.kind,
+            url: o.url,
+            jobId: o.jobId,
+            prompt: meta?.prompt,
+            model: meta?.provider,
+            createdAt: meta?.createdAt,
+          }
+        })
 
         return {
           content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, status: data.status, nodeStates, outputs } }, null, 2) }],
