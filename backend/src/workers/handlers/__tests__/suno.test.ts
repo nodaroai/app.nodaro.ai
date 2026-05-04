@@ -60,6 +60,7 @@ vi.mock("../../shared.js", () => ({
   downloadAudioToR2: mocks.mockDownloadAudioToR2,
   setJobProgress: vi.fn().mockResolvedValue(undefined),
   startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
+  withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
 import { sunoHandlers } from "../suno.js"

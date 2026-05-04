@@ -54,7 +54,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "`pricing` array of the chosen model so cost matches what the user " +
         "expects.",
       inputSchema: {
-        prompt: z.string().min(1).max(2500),
+        prompt: z.string().min(1).max(8000),
         // Schemas are permissive — handler normalizes to closest valid value.
         // Description carries the recommended set for Claude's guidance.
         model: z
@@ -73,8 +73,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe("Aspect ratio (16:9, 9:16, 1:1, etc.). Variations and unsupported values fall back."),
+        resolution: z
+          .string()
+          .optional()
+          .describe("Output resolution. Provider-dependent — common values: 480p, 720p, 1080p."),
         sound: z.boolean().optional(),
-        negative_prompt: z.string().max(2500).optional(),
+        negative_prompt: z.string().max(8000).optional(),
         seed: z.number().int().min(10000).max(99999).optional(),
         structured: StructuredFields.optional(),
       },
@@ -114,7 +118,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         {
           model: args.model,
           aspect_ratio: args.aspect_ratio,
-          resolution: undefined,
+          resolution: args.resolution,
           duration: args.duration,
         },
         {
@@ -179,7 +183,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
         "Default `veo3.1` is the best price/quality balance with native audio.",
       inputSchema: {
-        prompt: z.string().max(2500).optional(),
+        prompt: z.string().max(8000).optional(),
         image_url: z.string().url().optional(),
         image_asset_id: z.string().optional(),
         model: z
@@ -192,8 +196,28 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           ),
         duration: z.number().optional().describe("Duration (seconds). Snaps to nearest supported."),
         aspect_ratio: z.string().optional().describe("Aspect ratio. Variations / unsupported fall back."),
+        resolution: z
+          .string()
+          .optional()
+          .describe(
+            "Output resolution. Provider-dependent — common values: 480p, 720p, 1080p. " +
+            "Unknown values fall back to the model's default.",
+          ),
         sound: z.boolean().optional(),
+        // End-frame face source. Pass ONE of:
+        //   - end_frame_url: a public HTTPS URL to an image
+        //   - end_frame_asset_id: a Nodaro job id or upload asset id
+        // The asset id form is the safe path — Claude.ai constructed
+        // invalid URLs like /jobs/.../output before this existed.
         end_frame_url: z.string().url().optional(),
+        end_frame_asset_id: z
+          .string()
+          .optional()
+          .describe(
+            "Nodaro job id or upload asset id whose image is used as the END frame. " +
+            "Use this instead of end_frame_url when you have a Nodaro asset — never " +
+            "construct /jobs/.../output URLs manually, those don't exist.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -256,14 +280,32 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true,
         }
       }
+      // End frame — resolve asset id to a real CDN URL (never trust a
+      // hand-constructed /jobs/.../output URL; that endpoint doesn't exist).
+      const endFrameUrl =
+        args.end_frame_url ??
+        (args.end_frame_asset_id
+          ? await resolveAssetId({
+              assetId: args.end_frame_asset_id,
+              userId: session.userId,
+              expectedKind: "image",
+            })
+          : undefined)
+      // Resolution: caller's explicit value wins; otherwise inherit the
+      // user's saved MCP video preference; otherwise leave undefined and
+      // let the route handler / provider default kick in.
+      const callResolution =
+        args.resolution ??
+        (userVid.resolution as string | undefined) ??
+        resolution
       const payload = {
         imageUrl,
-        endFrameUrl: args.end_frame_url,
+        endFrameUrl,
         prompt: args.prompt,
         provider: model,
         duration,
         aspectRatio,
-        resolution,
+        resolution: callResolution,
         sound: args.sound,
         mcp_client: session.clientName,
         userId: session.userId,
@@ -302,7 +344,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       description:
         "Extend a previously-generated VEO or Runway video. Requires the kie_task_id from the prior video generation job (NOT the URL).",
       inputSchema: {
-        prompt: z.string().min(1).max(2000),
+        prompt: z.string().min(1).max(8000),
         kie_task_id: z.string().min(1).describe("KIE task id from prior video generation"),
         model: z.enum(["veo-extend", "runway-extend"]),
         veo_quality: z.enum(["fast", "quality"]).optional(),
@@ -873,7 +915,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "`reference_image_url`. More aspect-ratio options (16:9, 9:16, 4:3, " +
         "3:4, 1:1, 21:9).",
       inputSchema: {
-        prompt: z.string().min(1).max(2000),
+        prompt: z.string().min(1).max(8000),
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
         model: z
@@ -1138,7 +1180,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         image_asset_id: z.string().optional(),
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
-        prompt: z.string().max(2500).optional(),
+        prompt: z.string().max(8000).optional(),
         character_orientation: z
           .enum(["image", "video"])
           .optional()

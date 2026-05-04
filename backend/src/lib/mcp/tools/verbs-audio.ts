@@ -65,7 +65,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.",
       inputSchema: {
-        prompt: z.string().min(1).max(2000),
+        prompt: z.string().min(1).max(8000),
         model: z
           .enum(["suno-v5", "suno", "minimax"])
           .default("suno-v5")

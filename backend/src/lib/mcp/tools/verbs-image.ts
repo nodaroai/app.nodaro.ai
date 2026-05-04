@@ -312,7 +312,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "Claude.ai web (egress proxy blocks all object-storage hosts), " +
           "use Path A or B there.",
         inputSchema: {
-          prompt: z.string().min(1).max(2000),
+          prompt: z.string().min(1).max(8000),
           image_url: z.string().url().optional(),
           image_asset_id: z.string().optional(),
           model: z

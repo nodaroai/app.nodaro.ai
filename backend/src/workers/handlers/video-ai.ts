@@ -56,6 +56,7 @@ import {
   generateAndUploadThumbnail,
   setJobProgress,
   startProgressRamp,
+  withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
 
@@ -201,15 +202,20 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
   }
   console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${provider ?? "wan"})`)
 
-  const result = await videoToVideo(videoUrl, provider ?? "wan", prompt, {
-    duration,
-    resolution,
-    audio,
-    multiShots,
-    aspectRatio,
-    seed,
-    referenceImageUrl,
-  })
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => videoToVideo(videoUrl, provider ?? "wan", prompt, {
+      duration,
+      resolution,
+      audio,
+      multiShots,
+      aspectRatio,
+      seed,
+      referenceImageUrl,
+    }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -344,10 +350,19 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   const resolvedProvider = provider ?? "kling-avatar"
   console.log(`[worker] lip-sync ${ctx.jobId} (provider: ${resolvedProvider})`)
 
+  // Lip-sync providers (KIE Kling Avatar / InfiniTalk, Replicate models,
+  // Seedance i2v with audio ref) all run long KIE/Replicate tasks. Wrap
+  // in a single ramp so the widget bar moves regardless of which branch
+  // we take.
+  await setJobProgress(job, ctx.jobId, 5)
+  const lipSyncRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 45 })
+
   let resultUrl: string
   let resultCost: number | null = null
   let resultDisplayCost: number | null = null
   let resultProviderUsed: string = resolvedProvider
+
+  try {
 
   if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // Replicate path
@@ -400,6 +415,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
   }
+  } finally {
+    lipSyncRamp.stop()
+  }
 
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -441,15 +459,20 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
 
   const { KieVideoProvider } = await import("../../providers/kie/video.js")
   const kieVideo = new KieVideoProvider()
-  const result = await kieVideo.speechToVideo(imageUrl, audioUrl, prompt, resolution, {
-    negativePrompt,
-    seed,
-    numFrames,
-    fps,
-    inferenceSteps,
-    guidanceScale,
-    shift,
-  })
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => kieVideo.speechToVideo(imageUrl, audioUrl, prompt, resolution, {
+      negativePrompt,
+      seed,
+      numFrames,
+      fps,
+      inferenceSteps,
+      guidanceScale,
+      shift,
+    }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -489,18 +512,23 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
   }
 
-  const result = await motionTransfer(
-    imageUrl,
-    videoUrl,
-    mtProvider,
-    prompt,
-    {
-      onProgress,
-      characterOrientation: characterOrientation ?? "image",
-      resolution: resolution ?? "720p",
-      provider: mtProvider,
-      backgroundSource,
-    }
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => motionTransfer(
+      imageUrl,
+      videoUrl,
+      mtProvider,
+      prompt,
+      {
+        onProgress,
+        characterOrientation: characterOrientation ?? "image",
+        resolution: resolution ?? "720p",
+        provider: mtProvider,
+        backgroundSource,
+      }
+    ),
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -534,26 +562,33 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
   const upscaleProvider = provider ?? "topaz"
   console.log(`[worker] video-upscale ${ctx.jobId} (provider: ${upscaleProvider})`)
 
-  let outputUrl: string
-
-  if (upscaleProvider === "veo-1080p" && kieTaskId) {
-    const result = await runVeo1080pTask(kieTaskId)
-    outputUrl = result.url
-  } else if (upscaleProvider === "veo-4k" && kieTaskId) {
-    const { resultJson } = await runVeo4kTask(kieTaskId)
-    const url = resultJson.resultUrls?.[0]
-    if (!url) throw new Error("VEO 4K succeeded but no URL found")
-    outputUrl = url
-  } else {
-    // Topaz upscale (original path)
-    if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
-    const onProgress: ProgressCallback = async (progress: number) => {
-      console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
-      await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
-    }
-    const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
-    outputUrl = result.url
-  }
+  // Wrap each branch in a progress ramp — none of these (VEO upscale,
+  // Topaz, etc.) reliably surface live progress; without the ramp the
+  // bar pins for the whole upscale duration.
+  const outputUrl: string = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    async () => {
+      if (upscaleProvider === "veo-1080p" && kieTaskId) {
+        const result = await runVeo1080pTask(kieTaskId)
+        return result.url
+      } else if (upscaleProvider === "veo-4k" && kieTaskId) {
+        const { resultJson } = await runVeo4kTask(kieTaskId)
+        const url = resultJson.resultUrls?.[0]
+        if (!url) throw new Error("VEO 4K succeeded but no URL found")
+        return url
+      } else {
+        if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
+        const onProgress: ProgressCallback = async (progress: number) => {
+          console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
+          await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+        }
+        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
+        return result.url
+      }
+    },
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -586,23 +621,28 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   }
   console.log(`[worker] extend-video ${ctx.jobId} (provider: ${provider})`)
 
-  let videoUrl: string
-  let newTaskId: string | undefined
-
-  if (provider === "veo-extend") {
-    const { resultJson, taskId } = await runVeoExtendTask(kieTaskId, prompt, model, seeds)
-    const url = resultJson.resultUrls?.[0]
-    if (!url) throw new Error("VEO extend succeeded but no URL found")
-    videoUrl = url
-    newTaskId = taskId
-  } else {
-    // runway-extend
-    const { resultJson, taskId } = await runRunwayExtendTask(kieTaskId, prompt, quality ?? "720p")
-    const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
-    if (!url) throw new Error("Runway extend succeeded but no URL found")
-    videoUrl = url
-    newTaskId = taskId
-  }
+  // Both extend providers run a long KIE task — wrap in a ramp so the
+  // widget bar moves while we wait.
+  const extendResult = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    async (): Promise<{ url: string; taskId: string | undefined }> => {
+      if (provider === "veo-extend") {
+        const { resultJson, taskId } = await runVeoExtendTask(kieTaskId, prompt, model, seeds)
+        const url = resultJson.resultUrls?.[0]
+        if (!url) throw new Error("VEO extend succeeded but no URL found")
+        return { url, taskId }
+      } else {
+        const { resultJson, taskId } = await runRunwayExtendTask(kieTaskId, prompt, quality ?? "720p")
+        const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+        if (!url) throw new Error("Runway extend succeeded but no URL found")
+        return { url, taskId }
+      }
+    },
+  )
+  const videoUrl: string = extendResult.url
+  const newTaskId: string | undefined = extendResult.taskId
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(videoUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
