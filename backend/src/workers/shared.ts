@@ -525,3 +525,31 @@ export function startProgressRamp(
     },
   }
 }
+
+/**
+ * Wrap a long-running provider call so the widget bar moves while the
+ * call is in flight. Sets `start` immediately, ramps toward `cap` while
+ * `fn` runs, stops on resolve or throw. Use this for every provider call
+ * the widget polls (KIE, Replicate, ElevenLabs) — without it the bar
+ * pins at 0% (or whatever was set at credit reservation) for the entire
+ * 30s–2min generation, then jumps to the post-call value.
+ *
+ * Provider-side onProgress callbacks (where supported) still write live
+ * values to the same DB column; they outrun the ramp because the ramp
+ * caps below the typical real-progress range. Net: real progress when
+ * available, smooth fallback when not.
+ */
+export async function withProgressRamp<T>(
+  job: { updateProgress: (p: number) => Promise<void> },
+  jobId: string,
+  opts: { start: number; cap: number; tickMs?: number; tickStep?: number },
+  fn: () => Promise<T>,
+): Promise<T> {
+  await setJobProgress(job, jobId, opts.start)
+  const ramp = startProgressRamp(job, jobId, opts)
+  try {
+    return await fn()
+  } finally {
+    ramp.stop()
+  }
+}

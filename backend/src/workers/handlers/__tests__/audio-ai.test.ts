@@ -83,6 +83,8 @@ vi.mock("../../shared.js", () => ({
   // mocks just absorb the calls without doing anything.
   setJobProgress: vi.fn().mockResolvedValue(undefined),
   startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
+  // withProgressRamp wraps a provider call; in tests just invoke `fn()`.
+  withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
 import { audioAIHandlers } from "../audio-ai.js"

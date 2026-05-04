@@ -17,6 +17,7 @@ import {
   shouldSaveJobResult,
   markJobCompleted,
   setJobProgress,
+  withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
 
@@ -67,7 +68,12 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     return
   }
 
-  const result = await routedTextToSpeech(processedText, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined)
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => routedTextToSpeech(processedText, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined),
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
@@ -90,7 +96,12 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
 const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, ctx) {
   const { prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl } = job.data as { jobId: string; prompt: string; provider?: MusicProvider; duration?: number; modelVersion?: string; lyrics?: string; referenceAudioUrl?: string }
   console.log(`[worker] generate-music ${ctx.jobId} (provider: ${provider ?? "musicgen"})`)
-  const replicateUrl = await generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl)
+  const replicateUrl = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => generateMusic(prompt, provider, duration, modelVersion, lyrics, referenceAudioUrl),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(replicateUrl, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
@@ -108,18 +119,23 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   }
   console.log(`[worker] text-to-audio ${ctx.jobId} (provider: ${provider ?? "tangoflux"})`)
 
-  let audioUrl: string
-  if (provider === "elevenlabs-sfx") {
-    const kieAudio = new KieAudioProvider()
-    const result = await kieAudio.generateSoundEffect(prompt, {
-      duration,
-      loop,
-      promptInfluence,
-    })
-    audioUrl = result.url
-  } else {
-    audioUrl = await textToAudio(prompt, provider as AudioProvider | undefined, duration)
-  }
+  const audioUrl: string = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    async () => {
+      if (provider === "elevenlabs-sfx") {
+        const kieAudio = new KieAudioProvider()
+        const result = await kieAudio.generateSoundEffect(prompt, {
+          duration,
+          loop,
+          promptInfluence,
+        })
+        return result.url
+      }
+      return await textToAudio(prompt, provider as AudioProvider | undefined, duration)
+    },
+  )
 
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(audioUrl, ctx.jobId, "audio", ctx.jobUserId)
@@ -149,7 +165,12 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
     await setJobProgress(job, ctx.jobId, 20)
   }
 
-  const result = await transcribe(audioUrl, provider, language, { diarize, tagAudioEvents })
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 25, cap: 90 },
+    () => transcribe(audioUrl, provider, language, { diarize, tagAudioEvents }),
+  )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
@@ -163,7 +184,12 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
 const handleExtractYoutubeAudio: HandlerFn = async function handleExtractYoutubeAudio(job, ctx) {
   const { youtubeUrl } = job.data as { jobId: string; youtubeUrl: string }
   console.log(`[worker] extract-youtube-audio ${ctx.jobId}`)
-  const audioUrl = await extractYouTubeAudio(youtubeUrl)
+  const audioUrl = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 80 },
+    () => extractYouTubeAudio(youtubeUrl),
+  )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl } })
@@ -176,7 +202,12 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   const { audioUrl } = job.data as { jobId: string; audioUrl: string }
   console.log(`[worker] audio-isolation ${ctx.jobId}`)
   const kieAudio = new KieAudioProvider()
-  const result = await kieAudio.isolateAudio(audioUrl)
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => kieAudio.isolateAudio(audioUrl),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
@@ -199,10 +230,15 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   }
   console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines)`)
   const kieAudio = new KieAudioProvider()
-  const result = await kieAudio.generateDialogue(dialogue, {
-    stability,
-    languageCode,
-  })
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => kieAudio.generateDialogue(dialogue, {
+      stability,
+      languageCode,
+    }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
@@ -222,7 +258,12 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
     stability?: number; similarityBoost?: number; removeBackgroundNoise?: boolean
   }
   console.log(`[worker] voice-changer ${ctx.jobId}`)
-  const audioBuffer = await voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise })
+  const audioBuffer = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => voiceChangerFromUrl(audioUrl, voiceId, { stability, similarityBoost, removeBackgroundNoise }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
@@ -267,7 +308,12 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
 const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   const { text, voiceDescription } = job.data as { jobId: string; text: string; voiceDescription: string }
   console.log(`[worker] voice-remix ${ctx.jobId}`)
-  const audioBuffer = await remixVoice(text, voiceDescription)
+  const audioBuffer = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => remixVoice(text, voiceDescription),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
@@ -288,7 +334,12 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
     seed?: number; quality?: number; shouldEnhance?: boolean
   }
   console.log(`[worker] voice-design ${ctx.jobId}`)
-  const result = await designVoice(text, voiceDescription, { model, loudness, guidanceScale, seed, quality, shouldEnhance })
+  const result = await withProgressRamp(
+    job,
+    ctx.jobId,
+    { start: 5, cap: 45 },
+    () => designVoice(text, voiceDescription, { model, loudness, guidanceScale, seed, quality, shouldEnhance }),
+  )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)

@@ -91,6 +91,8 @@ vi.mock("../../shared.js", () => ({
   setJobProgress: vi.fn(async () => {}),
   // startProgressRamp returns a stop handle; tests don't care about ticks.
   startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
+  // withProgressRamp wraps a provider call; in tests just invoke `fn()`.
+  withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
 }))
 
 vi.mock("@/providers/kie/video.js", () => ({
