@@ -35,11 +35,9 @@ include:
   - llms.txt
 
 exclude:
-  - superpowers/        # internal design specs/plans, not for public docs
   - .github/
   - node_modules/
   - vendor/
   - Gemfile
   - Gemfile.lock
   - "*.gemspec"
-  - README-internal.md
