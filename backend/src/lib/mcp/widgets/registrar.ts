@@ -14,6 +14,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { buildSingleJobWidget } from "./single-job.js"
 import { buildWorkflowWidgetTemplate } from "./workflow.js"
 import { buildGalleryWidgetTemplate } from "./gallery.js"
+import { buildAppRunWidgetTemplate } from "./app-run.js"
 import { buildUploadWidget } from "./upload.js"
 import { config } from "../../config.js"
 
@@ -24,6 +25,7 @@ export const WIDGET_URI = {
   jobGeneric: "ui://nodaro/widget/v3/job-generic",
   workflow: "ui://nodaro/widget/v3/workflow",
   gallery: "ui://nodaro/widget/v3/gallery",
+  appRun: "ui://nodaro/widget/v3/app-run",
   uploadImage: "ui://nodaro/widget/v3/upload-image",
   uploadAudio: "ui://nodaro/widget/v3/upload-audio",
   uploadVideo: "ui://nodaro/widget/v3/upload-video",
@@ -70,6 +72,12 @@ const WIDGETS: Array<{
     uri: WIDGET_URI.gallery,
     description: "Asset gallery: paginated grid + detail view + Use button",
     build: () => buildGalleryWidgetTemplate(),
+  },
+  {
+    name: "widget-app-run",
+    uri: WIDGET_URI.appRun,
+    description: "App run: live status header + gallery-style outputs grid + fullscreen detail",
+    build: () => buildAppRunWidgetTemplate(),
   },
   {
     name: "widget-upload-image",
@@ -142,6 +150,7 @@ const KIND_OF = {
   jobGeneric: "job-generic",
   workflow: "workflow",
   gallery: "gallery",
+  appRun: "app-run",
 } as const
 
 export function registerWidgetResources(server: McpServer): void {
