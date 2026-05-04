@@ -180,7 +180,7 @@ function rowToGalleryItem(row: GalleryRow): GalleryItem | null {
  * a `buildGalleryWidget`-built UI resource so Claude.ai renders an inline
  * grid with fullscreen detail view + Use buttons.
  */
-export function registerGallery({ server, session }: RegisterGalleryOpts): void {
+export function registerGallery({ server, session, fastify }: RegisterGalleryOpts): void {
   if (passesGate(session, readGate)) {
     server.registerTool(
       "browse_gallery",
@@ -338,6 +338,162 @@ export function registerGallery({ server, session }: RegisterGalleryOpts): void 
             items: items as unknown as Record<string, unknown>[],
             nextCursor,
             totalCount: items.length,
+          },
+        }
+      },
+    )
+
+    // ── browse_uploads ──
+    // Lists the user's uploaded source assets (images, videos, audio they
+    // dropped into the upload widget or saved-to-library), distinct from
+    // browse_gallery which lists generation outputs. Reuses the gallery
+    // widget — passes `loadMoreTool: "browse_uploads"` so the widget polls
+    // THIS tool (not browse_gallery) when the user pages forward.
+    server.registerTool(
+      "browse_uploads",
+      {
+        title: "Browse My Uploads",
+        description:
+          "PRIMARY tool when the user asks to see what they've UPLOADED — " +
+          "\"my uploads\", \"my source images\", \"the photos I uploaded\", " +
+          "\"my reference videos\", or any synonym. DISTINCT from " +
+          "`browse_gallery`, which shows the OUTPUT of generations. Use " +
+          "this when the user wants to PICK an existing upload to feed " +
+          "into a new generation (modify_image, animate_image, " +
+          "lip_sync, etc.).\n\n" +
+          "Renders the same interactive grid widget as the gallery; tile " +
+          "click → fullscreen detail; the Use button hands the asset id " +
+          "back to chat so Claude can pipe it into the next call.",
+        inputSchema: {
+          kind: z
+            .enum(["image", "video", "audio"])
+            .optional()
+            .describe("Filter by media kind. Omit for all uploads."),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe("Max items to return (default 40, max 100)."),
+          cursor: z
+            .string()
+            .uuid()
+            .optional()
+            .describe("Asset id from a prior result's nextCursor for pagination."),
+          search: z
+            .string()
+            .max(200)
+            .optional()
+            .describe("Optional filename substring search."),
+        },
+        outputSchema: {
+          items: z.array(z.object({}).passthrough()).optional(),
+          nextCursor: z.string().nullable().optional(),
+          totalCount: z.number().optional(),
+          loadMoreTool: z.string().optional(),
+        },
+        annotations: { readOnlyHint: true },
+        _meta: {
+          "ui/resourceUri": "ui://nodaro/widget/v3/gallery",
+          ui: {
+            resourceUri: "ui://nodaro/widget/v3/gallery",
+            visibility: ["model", "app"],
+          },
+        },
+      },
+      async (args) => {
+        const limit = args.limit ?? 40
+
+        // Resolve cursor → created_at upper bound (cursor is an asset id;
+        // we want assets older than the one with that id). Mirrors the
+        // /v1/library route's cursor-resolution step.
+        let cursorTimestamp: string | null = null
+        if (args.cursor) {
+          const { data: cursorRow } = await supabase
+            .from("assets")
+            .select("created_at")
+            .eq("id", args.cursor)
+            .eq("user_id", session.userId)
+            .maybeSingle()
+          cursorTimestamp = (cursorRow?.created_at as string | undefined) ?? null
+        }
+
+        let query = supabase
+          .from("assets")
+          .select(
+            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at",
+          )
+          .eq("user_id", session.userId)
+          .order("created_at", { ascending: false })
+          .limit(limit + 1) // +1 to detect hasMore
+
+        if (args.kind) query = query.eq("type", args.kind)
+        if (args.search) query = query.ilike("filename", `%${args.search}%`)
+        if (cursorTimestamp) query = query.lt("created_at", cursorTimestamp)
+
+        const { data, error } = await query
+        if (error) {
+          return {
+            content: [{ type: "text", text: `Error: ${error.message}` }],
+            isError: true,
+          }
+        }
+        const rows = data ?? []
+        const hasMore = rows.length > limit
+        const pageRows = hasMore ? rows.slice(0, limit) : rows
+        const nextCursor = hasMore ? (pageRows[pageRows.length - 1]?.id as string | undefined) ?? null : null
+
+        // Total count on first page only (matches /v1/library's behaviour).
+        let totalCount: number | null = null
+        if (!args.cursor) {
+          let countQuery = supabase
+            .from("assets")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", session.userId)
+          if (args.kind) countQuery = countQuery.eq("type", args.kind)
+          if (args.search) countQuery = countQuery.ilike("filename", `%${args.search}%`)
+          const { count } = await countQuery
+          totalCount = count ?? null
+        }
+
+        // Map asset rows into the gallery widget's item shape. `jobId` is
+        // overloaded to carry the asset id — resolveAssetId now accepts
+        // both jobs and assets, so the Use button still wires up correctly.
+        const items = pageRows.map((a) => {
+          const meta = (a.metadata ?? {}) as Record<string, unknown>
+          return {
+            jobId: a.id as string,
+            kind: a.type as "image" | "video" | "audio",
+            prompt: (a.filename as string | null) ?? "",
+            model: "upload",
+            thumbnailUrl:
+              (meta.thumbnail_url as string | undefined) ??
+              (a.r2_url as string),
+            assetUrl: a.r2_url as string,
+            createdAt: a.created_at as string,
+            favorited: false,
+          }
+        })
+
+        const lines = items.length > 0
+          ? items
+              .map((it) => `- ${it.kind} ${it.jobId} ${it.prompt ? `(${it.prompt})` : ""}`)
+              .join("\n")
+          : "(no uploads)"
+        const cursorLine = nextCursor
+          ? `\n(next_cursor: ${nextCursor})`
+          : ""
+
+        return {
+          content: [{ type: "text" as const, text: lines + cursorLine }],
+          structuredContent: {
+            items: items as unknown as Record<string, unknown>[],
+            nextCursor,
+            totalCount: totalCount ?? items.length,
+            // Hint to the gallery widget: poll this tool (not
+            // browse_gallery) when the user pages forward.
+            loadMoreTool: "browse_uploads",
           },
         }
       },

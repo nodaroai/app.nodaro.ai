@@ -426,7 +426,12 @@ ${uiProtocolShim()}
 <script>
   (function() {
     var ITEMS_PER_PAGE = 12;
-    var data = { items: [], nextCursor: null, totalCount: 0 };
+    // loadMoreTool is the tool name the widget calls when the user pages
+    // past the locally-cached items. Defaults to browse_gallery (the
+    // original use case); browse_uploads sets it to its own name via
+    // tool-result so paging stays inside the uploads list instead of
+    // hopping over to the gallery.
+    var data = { items: [], nextCursor: null, totalCount: 0, loadMoreTool: 'browse_gallery' };
     // displayMode tracks the host iframe's current size mode (inline vs
     // fullscreen). The detail view is FULLSCREEN-ONLY (matches [redacted-reference]
     // and our single-job widget). When the host returns the iframe to
@@ -483,7 +488,7 @@ ${uiProtocolShim()}
       window.parent.postMessage({
         jsonrpc: '2.0', id: reqId,
         method: 'tools/call',
-        params: { name: 'browse_gallery', arguments: { cursor: data.nextCursor } }
+        params: { name: data.loadMoreTool || 'browse_gallery', arguments: { cursor: data.nextCursor } }
       }, '*');
       render(); // re-render to show "loading" disabled state
     }
@@ -1144,6 +1149,7 @@ ${uiProtocolShim()}
       if (Array.isArray(sc.items)) data.items = sc.items;
       if (typeof sc.nextCursor !== 'undefined') data.nextCursor = sc.nextCursor;
       if (typeof sc.totalCount === 'number') data.totalCount = sc.totalCount;
+      if (typeof sc.loadMoreTool === 'string') data.loadMoreTool = sc.loadMoreTool;
       state.page = 0;
       state.view = 'grid';
       state.selectedId = null;
