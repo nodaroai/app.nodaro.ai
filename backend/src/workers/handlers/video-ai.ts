@@ -55,6 +55,7 @@ import {
   watermarkLocalVideoAndUpload,
   generateAndUploadThumbnail,
   setJobProgress,
+  startProgressRamp,
   type HandlerFn,
 } from "../shared.js"
 
@@ -105,7 +106,20 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
   }
 
-  const result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType })
+  // Fallback ramp for providers that DON'T expose live progress through
+  // KIE's progress field (Seedance, some Wan / Hailuo variants). Without
+  // this the bar pinned at 0% for the entire 30s–2min generation, then
+  // jumped to 40 only at completion. When onProgress fires real values,
+  // they'll outrun the ramp anyway since the ramp caps at 35.
+  await setJobProgress(job, ctx.jobId, 5)
+  const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 35 })
+
+  let result
+  try {
+    result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType })
+  } finally {
+    ramp.stop()
+  }
 
   await setJobProgress(job, ctx.jobId, 40)
 
@@ -252,7 +266,17 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
   }))
 
-  const result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker })
+  // Same fallback ramp as i2v — covers t2v providers that don't expose
+  // KIE progress (Seedance, some Wan / Hailuo) so the widget shows
+  // movement instead of pinning at 0%.
+  await setJobProgress(job, ctx.jobId, 5)
+  const t2vRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 40 })
+  let result
+  try {
+    result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker })
+  } finally {
+    t2vRamp.stop()
+  }
 
   await setJobProgress(job, ctx.jobId, 50)
 

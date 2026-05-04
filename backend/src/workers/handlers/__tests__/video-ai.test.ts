@@ -89,6 +89,8 @@ vi.mock("../../shared.js", () => ({
   // DB column. Tests don't care about the side-effects, so a no-op
   // mock is fine.
   setJobProgress: vi.fn(async () => {}),
+  // startProgressRamp returns a stop handle; tests don't care about ticks.
+  startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
 }))
 
 vi.mock("@/providers/kie/video.js", () => ({
