@@ -332,12 +332,42 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           .map(rowToGalleryItem)
           .filter((item): item is GalleryItem => item !== null)
 
+        // Real total count on the FIRST page only — same column filters as
+        // the paged query above. We skip on subsequent pages because the
+        // widget caches totalCount across renders, and the count query
+        // costs an extra round-trip we don't need to pay 5x while paging.
+        let totalCount: number | null = null
+        if (!args.cursor) {
+          let countQuery =
+            scope === "mine"
+              ? supabase
+                  .from("jobs")
+                  .select("id", { count: "exact", head: true })
+                  .eq("user_id", session.userId)
+              : supabase
+                  .from("jobs")
+                  .select("id", { count: "exact", head: true })
+                  .eq("is_public", true)
+                  .eq("status", "completed")
+                  .neq("user_id", session.userId)
+          countQuery = countQuery.not("output_data", "is", null)
+          if (args.query) {
+            const safe = args.query.replace(/[%_\\]/g, (c) => "\\" + c).trim()
+            if (safe.length > 0) {
+              countQuery = countQuery.ilike("input_data->>prompt", `%${safe}%`)
+            }
+          }
+          countQuery = countQuery.in("job_type", allowedJobTypes)
+          const { count } = await countQuery
+          totalCount = count ?? null
+        }
+
         return {
           content: [{ type: "text" as const, text }],
           structuredContent: {
             items: items as unknown as Record<string, unknown>[],
             nextCursor,
-            totalCount: items.length,
+            totalCount: totalCount ?? items.length,
           },
         }
       },
