@@ -15,7 +15,8 @@ const lipSyncBody = z.object({
   prompt: z.string().max(500).optional(),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
-  resolution: z.enum(["480p", "720p"]).optional(),
+  // 1080p only valid for seedance-2 / seedance-2-fast; infinitalk caps at 720p.
+  resolution: z.enum(["480p", "720p", "1080p"]).optional(),
   // LatentSync params
   guidanceScale: z.number().min(1).max(3).optional(),
   inferenceSteps: z.number().int().min(20).max(50).optional(),
@@ -42,6 +43,14 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       if (provider === "infinitalk") {
         const res = (body?.resolution as string) ?? "720p"
         return `infinitalk:${res}`
+      }
+      // Seedance 2 / 2 Fast — billed per-second × resolution × ref. We
+      // ALWAYS pass the audio as a reference, so the identifier always
+      // ends in -ref. Default to the 8s tier for credit reservation; the
+      // actual duration is decided by the worker (≤ audio length).
+      if (provider === "seedance-2" || provider === "seedance-2-fast") {
+        const res = (body?.resolution as string) ?? "720p"
+        return `${provider}:8s:${res}-ref`
       }
       return provider
     }),
@@ -98,7 +107,9 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     const baseProvider = provider ?? "kling-avatar"
     const modelIdentifier = baseProvider === "infinitalk"
       ? `infinitalk:${resolution ?? "720p"}`
-      : baseProvider
+      : baseProvider === "seedance-2" || baseProvider === "seedance-2-fast"
+        ? `${baseProvider}:8s:${resolution ?? "720p"}-ref`
+        : baseProvider
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId

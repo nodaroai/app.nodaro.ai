@@ -661,11 +661,21 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "OR video_url / video_asset_id (an existing clip whose mouth gets " +
         "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
         "**Picking a model** (sorted by quality, with cost as tiebreaker):\n" +
+        "  • **`seedance-2`** (~50 cr @ 720p / 82 cr @ 1080p) — ByteDance " +
+        "multimodal video model with **native phoneme-level lip sync in " +
+        "8+ languages**. Cinematic full-body output (not just talking " +
+        "heads), strong identity preservation, premium quality. Pick this " +
+        "for hero scenes, multi-language dubs, or when the user wants the " +
+        "absolute best quality.\n" +
+        "  • **`seedance-2-fast`** (~40 cr @ 720p / 66 cr @ 1080p) — same " +
+        "Seedance 2 phoneme lip sync, cheaper / faster tier. Pick when the " +
+        "user wants Seedance quality on a budget.\n" +
         "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +
-        "speech-optimized. Best balance of quality + cost; use for most cases.\n" +
-        "  • **`kling-avatar-pro`** (56 cr) — KIE premium talking head, 1080p. " +
-        "Sharper mouth sync + better micro-expressions. Pick when the user " +
-        "explicitly asks for top quality or a hero shot.\n" +
+        "speech-optimized. Best balance of cost and quality for plain " +
+        "talking-head shots.\n" +
+        "  • **`kling-avatar-pro`** (56 cr) — KIE premium talking head, " +
+        "1080p. Sharper mouth sync + better micro-expressions than the " +
+        "standard Kling avatar.\n" +
         "  • **`infinitalk`** (11 cr @ 480p / 42 cr @ 720p) — KIE flexible " +
         "resolution lever via the `resolution` param. Cheapest KIE option at 480p.\n" +
         "  • **`latentsync`** (5 cr) — diffusion-based; **best for singing** " +
@@ -677,9 +687,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "small / blurry and you want sharpening on top of the lip sync.\n" +
         "  • **`sadtalker`** (9 cr) — talking avatar from a SINGLE image. Good " +
         "for animating a portrait into a speaking head when no video exists.\n\n" +
-        "**Input requirements by model**: kling-avatar(-pro), infinitalk, " +
-        "sadtalker → image input only. latentsync, video-retalking → video " +
-        "input only. wav2lip → image OR video.\n\n" +
+        "**Input requirements by model**: seedance-2(-fast), kling-avatar(-pro), " +
+        "infinitalk, sadtalker → image input only. latentsync, video-retalking → " +
+        "video input only. wav2lip → image OR video.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
       inputSchema: {
         image_url: z
@@ -705,7 +715,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. All 7 options: " +
+            "Lip-sync model. Default kling-avatar. All 9 options: " +
+            "seedance-2 (~50/82 cr, image, native phoneme lip-sync 8+ languages, premium), " +
+            "seedance-2-fast (~40/66 cr, image, same lip-sync cheaper), " +
             "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
             "infinitalk (11/42 cr, image, 480p|720p), latentsync (5 cr, video, singing), " +
             "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
@@ -713,9 +725,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Unknown values fall back to kling-avatar.",
           ),
         resolution: z
-          .enum(["480p", "720p"])
+          .enum(["480p", "720p", "1080p"])
           .optional()
-          .describe("InfiniTalk-only resolution lever. 720p costs ~4x more than 480p."),
+          .describe(
+            "Resolution lever. infinitalk: 480p|720p. seedance-2(-fast): 480p|720p|1080p. " +
+            "Other models ignore this.",
+          ),
       },
       outputSchema: {
         jobId: z.string(),

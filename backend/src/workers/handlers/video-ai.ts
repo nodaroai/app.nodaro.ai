@@ -14,7 +14,7 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
-import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
 import {
@@ -284,6 +284,34 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultCost = cost
     resultDisplayCost = cost
     resultProviderUsed = `replicate:${resolvedProvider}`
+  } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    // Seedance 2 / 2 Fast — ByteDance's multimodal video models do native
+    // phoneme-level lip sync (8+ languages) when fed reference_audio_urls
+    // alongside a first_frame_url image. We route through the i2v provider
+    // and pass the audio as a reference; the model produces a cinematic
+    // talking-head video synced to the voice line.
+    if (!imageUrl) {
+      throw new Error("Seedance lip-sync requires an image (face/portrait)")
+    }
+    const result = await imageToVideo(
+      imageUrl,
+      resolvedProvider,
+      prompt || "A person speaking naturally",
+      8, // duration — seedance can pick 4-15s; we reserve credits at 8s
+      undefined, // endFrameUrl — not used in lip-sync mode
+      {
+        referenceAudioUrls: [audioUrl],
+        resolution: resolution ?? "720p",
+        // generateAudio: false — we already have the audio track; let
+        // seedance use OUR audio as the soundtrack rather than synthesise
+        // a new one. (KIE merges reference_audio_urls into output by default.)
+        generateAudio: false,
+      },
+    )
+    resultUrl = result.url
+    resultCost = result.cost
+    resultDisplayCost = result.displayCost
+    resultProviderUsed = result.providerUsed
   } else {
     // KIE path (existing)
     const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution)

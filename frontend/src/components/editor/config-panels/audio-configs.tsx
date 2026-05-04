@@ -873,17 +873,23 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
 export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
+  // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
+  // cap at 720p. Toggling between them adds/removes the 1080p option.
+  const supports1080p = provider === "seedance-2" || provider === "seedance-2-fast"
 
   // Fail-safe: only KIE providers expose the resolution lever. When the user
   // switches to a Replicate provider (or the cached resolution isn't in the
-  // valid set 480p/720p), clear/snap so the lip-sync route's Zod enum doesn't
-  // see a stale value.
+  // current provider's valid set), clear/snap so the lip-sync route's Zod
+  // enum doesn't see a stale value.
   useEffect(() => {
     if (!isKie) {
       if (data.resolution !== undefined) onUpdate({ resolution: undefined })
       return
     }
-    if (data.resolution && data.resolution !== "480p" && data.resolution !== "720p") {
+    const valid = supports1080p
+      ? new Set(["480p", "720p", "1080p"])
+      : new Set(["480p", "720p"])
+    if (data.resolution && !valid.has(data.resolution)) {
       onUpdate({ resolution: "720p" })
     }
   }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -910,6 +916,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
             <SelectContent>
               <SelectItem value="480p">480p</SelectItem>
               <SelectItem value="720p">720p (default)</SelectItem>
+              {supports1080p && <SelectItem value="1080p">1080p</SelectItem>}
             </SelectContent>
           </Select>
         </MappableField>
