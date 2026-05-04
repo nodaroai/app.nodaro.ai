@@ -171,6 +171,23 @@ export async function cleanupWorkDir(workDir: string): Promise<void> {
   await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
 }
 
+/**
+ * Strip the audio track from a video, leaving the video stream untouched.
+ * Stream-copies the video (`-c:v copy -an`) so this is essentially free —
+ * no re-encode. Used to honour `sound: false` for providers that don't
+ * expose a native audio toggle (e.g. VEO3 / VEO3.1, which always ship with
+ * background audio per KIE's docs).
+ */
+export async function stripAudio(inputPath: string, outputPath: string): Promise<string> {
+  await runFfmpeg([
+    "-y", "-i", inputPath,
+    "-c:v", "copy",
+    "-an",
+    outputPath,
+  ])
+  return outputPath
+}
+
 export async function normalizeVideoForCombine(inputPath: string, outputPath: string): Promise<string> {
   await runFfmpeg([
     "-y", "-i", inputPath,

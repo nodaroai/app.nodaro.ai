@@ -16,7 +16,37 @@ import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
-import { cleanupWorkDir } from "../../providers/video/ffmpeg-utils.js"
+import {
+  cleanupWorkDir,
+  createWorkDir,
+  downloadFile,
+  stripAudio,
+} from "../../providers/video/ffmpeg-utils.js"
+import { join } from "node:path"
+import { readFile } from "node:fs/promises"
+import { uploadBufferToR2 } from "../../lib/storage.js"
+
+/**
+ * VEO3 / VEO3.1 always produce a video with background audio per KIE's
+ * docs (no native sound-off flag). When the user passes `sound: false`,
+ * we honour intent by stream-copying the video and dropping the audio
+ * track, then re-uploading. Cheap (no re-encode).
+ */
+async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<string> {
+  let workDir: string | undefined
+  try {
+    workDir = await createWorkDir("veo3-strip-audio")
+    const inputPath = join(workDir, "in.mp4")
+    const outputPath = join(workDir, "out.mp4")
+    await downloadFile(videoUrl, inputPath)
+    await stripAudio(inputPath, outputPath)
+    const buffer = await readFile(outputPath)
+    const key = `videos/${jobId}-silent.mp4`
+    return await uploadBufferToR2(buffer, key, "video/mp4")
+  } finally {
+    if (workDir) await cleanupWorkDir(workDir)
+  }
+}
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -79,11 +109,27 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   await setJobProgress(job, ctx.jobId, 40)
 
+  // VEO3 / VEO3.1 ignore the `sound: false` request (KIE has no audio
+  // toggle for VEO). Honour user intent post-hoc: strip the audio track
+  // from the result before R2 upload. Skipped when an explicit audioUrl
+  // was provided (the merge step downstream handles that case).
+  let providerOutputUrl = result.url
+  if (
+    sound === false &&
+    !audioUrl &&
+    (provider === "veo3" || provider === "veo3.1")
+  ) {
+    console.log(
+      `[worker] VEO sound=false — stripping audio from output for job ${ctx.jobId}`,
+    )
+    providerOutputUrl = await stripAudioFromR2Url(result.url, ctx.jobId)
+  }
+
   // Upload the generated video to R2
   // If audio merge follows, upload without watermark (watermark applied to final)
   let finalVideoUrl = audioUrl
-    ? await uploadToR2(result.url, ctx.jobId, "video", ctx.jobUserId)
-    : await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+    ? await uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId)
+    : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 70)
 
   // If audio URL is provided, merge it with the video
@@ -210,7 +256,17 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 
   await setJobProgress(job, ctx.jobId, 50)
 
-  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  // VEO3 / VEO3.1: KIE has no native audio toggle, so honour `sound: false`
+  // by stripping the audio track post-generation (cheap stream copy).
+  let providerOutputUrl = result.url
+  if (sound === false && (provider === "veo3" || provider === "veo3.1")) {
+    console.log(
+      `[worker] VEO sound=false — stripping audio from t2v output for job ${ctx.jobId}`,
+    )
+    providerOutputUrl = await stripAudioFromR2Url(result.url, ctx.jobId)
+  }
+
+  const r2Url = await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
   await setJobProgress(job, ctx.jobId, 100)
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
