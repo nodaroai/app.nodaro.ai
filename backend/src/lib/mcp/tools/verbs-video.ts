@@ -660,14 +660,26 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "Provide ONE face source — image_url / image_asset_id (a portrait), " +
         "OR video_url / video_asset_id (an existing clip whose mouth gets " +
         "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
-        "**Picking a model**:\n" +
-        "  • **`kling-avatar`** (default, ~28 credits) — best balance of " +
-        "quality + cost. Use for most cases.\n" +
-        "  • **`kling-avatar-pro`** (~56 credits) — sharper mouth sync + " +
-        "better facial micro-expressions. Use when the user explicitly " +
-        "asks for top quality or a hero shot.\n" +
-        "  • **`infinitalk`** (~11 credits at 480p, ~42 at 720p) — cheapest, " +
-        "tunable resolution. Good for batch / iterating.\n\n" +
+        "**Picking a model** (sorted by quality, with cost as tiebreaker):\n" +
+        "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +
+        "speech-optimized. Best balance of quality + cost; use for most cases.\n" +
+        "  • **`kling-avatar-pro`** (56 cr) — KIE premium talking head, 1080p. " +
+        "Sharper mouth sync + better micro-expressions. Pick when the user " +
+        "explicitly asks for top quality or a hero shot.\n" +
+        "  • **`infinitalk`** (11 cr @ 480p / 42 cr @ 720p) — KIE flexible " +
+        "resolution lever via the `resolution` param. Cheapest KIE option at 480p.\n" +
+        "  • **`latentsync`** (5 cr) — diffusion-based; **best for singing** " +
+        "or strong vocal performance. Requires video input.\n" +
+        "  • **`wav2lip`** (1 cr) — fastest and cheapest. Accepts image OR video. " +
+        "Pick when the user wants a quick draft or many iterations on a budget.\n" +
+        "  • **`video-retalking`** (20 cr) — built-in face enhancement, clean " +
+        "output. Requires video input. Good when the source clip's face is " +
+        "small / blurry and you want sharpening on top of the lip sync.\n" +
+        "  • **`sadtalker`** (9 cr) — talking avatar from a SINGLE image. Good " +
+        "for animating a portrait into a speaking head when no video exists.\n\n" +
+        "**Input requirements by model**: kling-avatar(-pro), infinitalk, " +
+        "sadtalker → image input only. latentsync, video-retalking → video " +
+        "input only. wav2lip → image OR video.\n\n" +
         "Returns a job_id. The widget renders the resulting video inline.",
       inputSchema: {
         image_url: z
@@ -693,9 +705,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Lip-sync model. Default kling-avatar. Options: " +
-            "kling-avatar, kling-avatar-pro, infinitalk, latentsync, " +
-            "wav2lip, video-retalking, sadtalker. Unknown values fall back.",
+            "Lip-sync model. Default kling-avatar. All 7 options: " +
+            "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
+            "infinitalk (11/42 cr, image, 480p|720p), latentsync (5 cr, video, singing), " +
+            "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
+            "(20 cr, video, face enhancement), sadtalker (9 cr, single image). " +
+            "Unknown values fall back to kling-avatar.",
           ),
         resolution: z
           .enum(["480p", "720p"])
