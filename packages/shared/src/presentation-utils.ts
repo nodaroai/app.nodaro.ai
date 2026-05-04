@@ -29,6 +29,7 @@ export const INPUT_NODE_TYPES = new Set([
   "lighting",
   "color-look",
   "atmosphere",
+  "action-fx",
   "temporal",
   "reference-audio",
 ])
@@ -70,6 +71,7 @@ const NON_OUTPUT_TYPES = new Set([
   "lighting",
   "color-look",
   "atmosphere",
+  "action-fx",
   "temporal",
   "sticky-note",
   "sub-workflow-input",
@@ -289,6 +291,7 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "lighting": { key: "timeOfDay", type: "select" },
   "color-look": { key: "colorLook", type: "select" },
   "atmosphere": { key: "atmosphere", type: "select" },
+  "action-fx": { key: "actionFx", type: "select" },
   "temporal": { key: "temporalSpeed", type: "select" },
   "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
 }

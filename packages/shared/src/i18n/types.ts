@@ -114,6 +114,7 @@ export type LocaleCatalogMap = Readonly<Record<string, LocalizedEntry>>
  * shared catalog file (e.g. "mood" → `packages/shared/src/mood.ts`).
  */
 export const I18N_CATALOGS = [
+  "action-fx",
   "aesthetic",
   "animals",
   "atmosphere",

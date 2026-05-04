@@ -57,6 +57,7 @@ describe("INPUT_NODE_TYPES", () => {
     "lighting",
     "color-look",
     "atmosphere",
+    "action-fx",
     "temporal",
   ]
 
@@ -1115,5 +1116,19 @@ describe("cleanOrphanedItems", () => {
     expect(items).toHaveLength(2)
     const group = items[0] as Extract<PresentationItem, { type: "group" }>
     expect(group.items).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// presentation-utils — action-fx
+// ---------------------------------------------------------------------------
+
+describe("presentation-utils — action-fx", () => {
+  it("includes action-fx in INPUT_NODE_TYPES", () => {
+    expect(INPUT_NODE_TYPES.has("action-fx")).toBe(true)
+  })
+
+  it("getInputFieldSchema('action-fx') returns the actionFx select schema", () => {
+    expect(getInputFieldSchema("action-fx")).toEqual({ key: "actionFx", type: "select" })
   })
 })

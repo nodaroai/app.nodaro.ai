@@ -33,6 +33,7 @@ import type {
   LightingData,
   ColorLookData,
   AtmosphereData,
+  ActionFxData,
   StyleData,
   SettingData,
   PersonData,
@@ -62,6 +63,7 @@ import { CameraFormatPicker } from "./camera-format-picker"
 import { LightingPicker } from "./lighting-picker"
 import { ColorLookPicker } from "./color-look-picker"
 import { AtmospherePicker } from "./atmosphere-picker"
+import { ActionFxPicker } from "./action-fx-picker"
 import { StylePicker } from "./style-picker"
 import { SettingPicker } from "./setting-picker"
 import { PersonPicker } from "./person-picker"
@@ -94,6 +96,7 @@ import { getCameraFormatPromptHint } from "@nodaro/shared"
 import { buildLightingHints } from "@nodaro/shared"
 import { getColorLookPromptHint } from "@nodaro/shared"
 import { buildAtmosphereHints } from "@nodaro/shared"
+import { buildActionFxHints } from "@nodaro/shared"
 import { getStylePromptHint } from "@nodaro/shared"
 import { getSettingPromptHint } from "@nodaro/shared"
 import { buildPersonHints } from "@nodaro/shared"
@@ -466,6 +469,22 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
       <AtmospherePicker
         value={data.atmosphere}
         onValueChange={(v) => onUpdate({ atmosphere: v })}
+        maxSelected={2}
+      />
+    </div>
+  )
+}
+
+export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
+  const dir = useLocaleDir()
+  return (
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
+      <PromptInjectionPreview hints={buildActionFxHints(data.actionFx)} />
+      <Label>Action FX (pick up to 2)</Label>
+      <ActionFxPicker
+        value={data.actionFx}
+        onValueChange={(v) => onUpdate({ actionFx: v })}
         maxSelected={2}
       />
     </div>

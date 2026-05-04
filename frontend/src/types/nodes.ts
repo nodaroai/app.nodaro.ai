@@ -419,6 +419,17 @@ export interface AtmosphereData {
   atmosphere: string | ReadonlyArray<string> | undefined
 }
 
+/** Standalone Action FX parameter node data. Multi-pick 1–2 ids — string for
+ *  single pick, ReadonlyArray<string> for two picks (mirrors AtmosphereData). */
+export interface ActionFxData {
+  [key: string]: unknown
+  label: string
+  /** Action FX id from ACTION_FX catalog. Single id or up to 2 for layered
+   *  effects (e.g. ["explosion","sparks"], ["splash","ripples"]).
+   *  Undefined = user cleared all picks; the node emits no action-fx hint. */
+  actionFx: string | ReadonlyArray<string> | undefined
+}
+
 /** Standalone Style parameter node data. */
 export interface StyleData {
   [key: string]: unknown
@@ -3070,6 +3081,7 @@ export type SceneNodeData =
   | LightingData
   | ColorLookData
   | AtmosphereData
+  | ActionFxData
   | StyleData
   | SettingData
   | PersonData
@@ -3213,6 +3225,7 @@ export type SceneNodeType =
   | "lighting"
   | "color-look"
   | "atmosphere"
+  | "action-fx"
   | "style"
   | "setting"
   | "person"
@@ -3589,6 +3602,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Atmosphere", atmosphere: "clear" },
+  },
+  {
+    type: "action-fx",
+    label: "Action FX",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Action FX", actionFx: undefined },
   },
   {
     type: "style",

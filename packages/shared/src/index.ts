@@ -325,6 +325,18 @@ export {
 export type { Atmosphere } from "./atmosphere.js"
 
 export {
+  ACTION_FX,
+  ACTION_FX_IDS,
+  ACTION_FX_CATEGORY_LABELS,
+  ACTION_FX_CATEGORY_ORDER,
+  getActionFx,
+  getActionFxLabel,
+  getActionFxPromptHint,
+  buildActionFxHints,
+} from "./action-fx.js"
+export type { ActionFx, ActionFxCategory } from "./action-fx.js"
+
+export {
   STYLES,
   STYLE_IDS,
   getStyle,

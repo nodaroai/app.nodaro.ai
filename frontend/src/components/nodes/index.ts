@@ -20,6 +20,7 @@ import { CameraFormatNode } from "./camera-format-node";
 import { LightingNode } from "./lighting-node";
 import { ColorLookNode } from "./color-look-node";
 import { AtmosphereNode } from "./atmosphere-node";
+import { ActionFxNode } from "./action-fx-node";
 import { StyleNode } from "./style-node";
 import { SettingNode } from "./setting-node";
 import { PersonNode } from "./person-node";
@@ -164,6 +165,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "lighting": LightingNode,
   "color-look": ColorLookNode,
   "atmosphere": AtmosphereNode,
+  "action-fx": ActionFxNode,
   "style": StyleNode,
   "setting": SettingNode,
   "person": PersonNode,

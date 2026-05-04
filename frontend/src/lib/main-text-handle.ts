@@ -78,6 +78,7 @@ export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "lighting",
   "color-look",
   "atmosphere",
+  "action-fx",
   "style",
   "setting",
   "person",

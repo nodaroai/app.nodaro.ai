@@ -98,6 +98,7 @@ import {
   Cpu,
   LayoutDashboard,
   HandMetal,
+  Zap,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -322,6 +323,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <CloudFog className="h-4 w-4" />,
     category: "Look",
     keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"],
+  },
+  {
+    type: "action-fx",
+    label: "Action FX",
+    icon: <Zap className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"],
   },
   {
     type: "style",

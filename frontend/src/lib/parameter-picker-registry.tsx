@@ -38,6 +38,7 @@ import { HELD_PROPS, HELD_PROP_CATEGORY_LABELS, HELD_PROP_CATEGORY_ORDER } from 
 import { RENDER_QUALITIES } from "@nodaro/shared"
 import { COMPOSITION_EFFECTS } from "@nodaro/shared"
 import { POST_PROCESS_EFFECTS } from "@nodaro/shared"
+import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER } from "@nodaro/shared"
 import { FRAMINGS } from "@nodaro/shared"
 import { LIGHTINGS } from "@nodaro/shared"
 import { PEOPLE } from "@nodaro/shared"
@@ -259,6 +260,17 @@ const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     defaultValue: "bursting-through-frame",
     catalogId: "composition-effects",
     entries: mapCat(COMPOSITION_EFFECTS),
+  },
+  {
+    kind: "single",
+    nodeType: "action-fx",
+    label: "Action FX",
+    valueField: "actionFx",
+    defaultValue: "earthquake-tremor",
+    catalogId: "action-fx",
+    entries: mapCat(ACTION_FX, "category"),
+    groupOrder: ACTION_FX_CATEGORY_ORDER as ReadonlyArray<string>,
+    groupLabels: ACTION_FX_CATEGORY_LABELS as Record<string, string>,
   },
   {
     kind: "single",
