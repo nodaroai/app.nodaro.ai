@@ -93,7 +93,13 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   const hasExtraParams = Object.keys(extraParams).length > 0
 
   await setJobProgress(job, ctx.jobId, 10)
-  const result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
+  const editRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 55 })
+  let result
+  try {
+    result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
+  } finally {
+    editRamp.stop()
+  }
   await setJobProgress(job, ctx.jobId, 60)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -148,7 +154,17 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
   await setJobProgress(job, ctx.jobId, 10)
-  const result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)
+  // Ramp progress while the KIE / Replicate call is in flight — providers
+  // don't expose incremental progress, so without this the widget shows
+  // 10% for the full 30s–2min the call can take (especially nano-banana-pro
+  // 4K). Match the T2I handler's ramp shape; cap below the post-call jump.
+  const i2iRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 55 })
+  let result
+  try {
+    result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)
+  } finally {
+    i2iRamp.stop()
+  }
   await setJobProgress(job, ctx.jobId, 60)
 
   const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
