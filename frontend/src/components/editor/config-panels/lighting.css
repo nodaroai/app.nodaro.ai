@@ -374,3 +374,395 @@
   );
   pointer-events: none;
 }
+
+/* ============================================================================
+   ADDITIONAL TIME OF DAY
+   ========================================================================== */
+
+/* Harsh midday — bleached zenith sun, short shadow pooled directly under subject */
+.lighting-preview--harsh-midday {
+  background: linear-gradient(180deg, #f0f8ff 0%, #c8d8e8 60%, #88a0b8 100%);
+}
+.lighting-preview--harsh-midday .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 8%, #ffffff 0%, #d8d0c0 35%, #2a2418 100%);
+  box-shadow: 0 8px 0 -2px rgba(0, 0, 0, 0.7);
+}
+
+/* Twilight — deep indigo with faint horizon glow at bottom */
+.lighting-preview--twilight {
+  background: linear-gradient(180deg, #1a1840 0%, #281c50 60%, #58304a 100%);
+}
+.lighting-preview--twilight .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 35%, #6878a0 0%, #2a2848 55%, #08081a 100%);
+  box-shadow: 0 10px 14px rgba(120, 60, 100, 0.4);
+}
+
+/* Candlelight — warm orange flicker, deep falloff with close key */
+.lighting-preview--candlelight {
+  background: radial-gradient(ellipse at 30% 60%, #b86028 0%, #381808 50%, #08040a 100%);
+}
+.lighting-preview--candlelight .lighting-preview__subject {
+  background: radial-gradient(ellipse at 25% 45%, #ffd078 0%, #a04818 45%, #100408 100%);
+  box-shadow: -10px 4px 16px rgba(255, 140, 40, 0.5);
+}
+
+/* Bioluminescence — cool teal-cyan rim glow on subject in deep blue ambient */
+.lighting-preview--bioluminescence {
+  background: linear-gradient(160deg, #061a28 0%, #02101c 60%, #02060f 100%);
+}
+.lighting-preview--bioluminescence .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 50%, #0a1018 0%, #050810 70%, #02040a 100%);
+  box-shadow:
+    0 0 0 2px rgba(80, 240, 220, 0.7),
+    0 0 18px rgba(60, 220, 200, 0.55),
+    inset 0 0 12px rgba(40, 200, 180, 0.3);
+}
+
+/* Dappled light — speckled foliage shadow patches over warm daylight */
+.lighting-preview--dappled-light {
+  background:
+    repeating-radial-gradient(circle at 20% 30%, rgba(0, 0, 0, 0.32) 0px, transparent 18px, transparent 28px),
+    repeating-radial-gradient(circle at 75% 60%, rgba(0, 0, 0, 0.28) 0px, transparent 14px, transparent 26px),
+    linear-gradient(160deg, #d8c088 0%, #806844 60%, #2a2010 100%);
+}
+.lighting-preview--dappled-light .lighting-preview__subject {
+  background: radial-gradient(ellipse at 30% 30%, #fff0c8 0%, #b0905c 50%, #2a1c08 100%);
+  box-shadow: -6px 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Underwater caustics — cool blue with rippling refracted light pattern */
+.lighting-preview--underwater-caustics {
+  background:
+    repeating-linear-gradient(110deg, transparent 0px, transparent 8px, rgba(180, 240, 255, 0.18) 9px, transparent 11px, transparent 18px),
+    repeating-linear-gradient(70deg, transparent 0px, transparent 12px, rgba(160, 230, 255, 0.14) 13px, transparent 16px, transparent 24px),
+    linear-gradient(180deg, #1a4878 0%, #0a2848 60%, #04101c 100%);
+}
+.lighting-preview--underwater-caustics .lighting-preview__subject {
+  background: radial-gradient(ellipse at 40% 30%, #b8d8e8 0%, #4878a0 50%, #0c2038 100%);
+  box-shadow: 0 0 18px rgba(100, 200, 240, 0.4);
+}
+
+/* ============================================================================
+   ADDITIONAL STYLE — CLASSICAL PORTRAIT SETUPS
+   ========================================================================== */
+
+/* Broad — key on far side of face turned toward camera, larger lit cheek dominates */
+.lighting-preview--broad {
+  background: linear-gradient(135deg, #1c1a22 0%, #0c0a14 60%, #02020a 100%);
+}
+.lighting-preview--broad .lighting-preview__subject {
+  background: linear-gradient(85deg, #281a08 0%, #4a3420 18%, #b89868 35%, #fff0d0 70%, #f0d8a8 100%);
+  box-shadow: 14px 0 16px rgba(255, 220, 160, 0.4);
+}
+
+/* Short — key on near side, larger plane of face falls into shadow */
+.lighting-preview--short {
+  background: linear-gradient(135deg, #1c1a22 0%, #0c0a14 60%, #02020a 100%);
+}
+.lighting-preview--short .lighting-preview__subject {
+  background: linear-gradient(95deg, #fff0d0 0%, #d8b078 22%, #4a3420 55%, #1a1208 80%, #050208 100%);
+  box-shadow: -14px 0 16px rgba(255, 220, 160, 0.4);
+}
+
+/* Butterfly — paramount lighting, small symmetric shadow under nose, top key */
+.lighting-preview--butterfly {
+  background: linear-gradient(180deg, #2a2630 0%, #14111c 60%, #04020a 100%);
+}
+.lighting-preview--butterfly .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 50% 55%, rgba(0, 0, 0, 0.55) 0%, transparent 22%),
+    radial-gradient(ellipse at 50% 18%, #fff5d8 0%, #c8a878 45%, #2a1c10 100%);
+  box-shadow: 0 -8px 14px rgba(255, 240, 200, 0.45);
+}
+
+/* Loop — slight loop-shaped nose shadow on cheek, soft asymmetry */
+.lighting-preview--loop {
+  background: linear-gradient(135deg, #2a2630 0%, #16121c 60%, #04020a 100%);
+}
+.lighting-preview--loop .lighting-preview__subject {
+  background:
+    radial-gradient(circle at 58% 45%, rgba(0, 0, 0, 0.4) 0%, transparent 10%),
+    radial-gradient(ellipse at 32% 28%, #fff0d0 0%, #b89868 55%, #2a1c0a 100%);
+  box-shadow: -8px 0 12px rgba(255, 220, 160, 0.3);
+}
+
+/* Clamshell — soft top + bottom fill, beauty look with twin catchlights */
+.lighting-preview--clamshell {
+  background: linear-gradient(180deg, #d8d4cc 0%, #707078 50%, #d8d4cc 100%);
+}
+.lighting-preview--clamshell .lighting-preview__subject {
+  background:
+    linear-gradient(180deg, #fff5e0 0%, #d8c8a8 30%, #b09878 55%, #d8c8a8 80%, #fff0d8 100%);
+  box-shadow:
+    0 -8px 14px rgba(255, 240, 200, 0.5),
+    0 8px 14px rgba(255, 240, 200, 0.5);
+}
+
+/* Hatchet — harsh overhead skim, deep unrelieved shadow on opposite side */
+.lighting-preview--hatchet {
+  background: linear-gradient(180deg, #1a1a20 0%, #08080c 50%, #000000 100%);
+}
+.lighting-preview--hatchet .lighting-preview__subject {
+  background:
+    linear-gradient(165deg, #ffffff 0%, #d8b878 20%, #181008 35%, #050208 100%);
+  box-shadow:
+    -2px -10px 0 -2px rgba(255, 240, 200, 0.55),
+    8px 6px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* Silhouette backlight — pure dark subject, bright halo radial behind */
+.lighting-preview--silhouette-backlight {
+  background: radial-gradient(circle at 50% 45%, #fff5d8 0%, #d8a850 28%, #5a2818 55%, #02010a 100%);
+}
+.lighting-preview--silhouette-backlight .lighting-preview__subject {
+  background: #02010a;
+  box-shadow:
+    0 0 0 2px rgba(255, 240, 200, 0.85),
+    0 0 28px rgba(255, 220, 160, 0.6);
+}
+
+/* Raking sidelight — extreme grazing side, deep shadow on opposite half */
+.lighting-preview--raking-sidelight {
+  background: linear-gradient(90deg, #2a2418 0%, #0a0608 40%, #020108 100%);
+}
+.lighting-preview--raking-sidelight .lighting-preview__subject {
+  background: linear-gradient(90deg, #fff5d0 0%, #b89460 18%, #1a1008 30%, #02010a 100%);
+  box-shadow: -18px 0 22px rgba(255, 220, 150, 0.55);
+}
+
+/* ============================================================================
+   ADDITIONAL DIRECTION
+   ========================================================================== */
+
+/* Kicker / rim accent — bright narrow rim on one edge for separation */
+.lighting-preview--kicker-rim {
+  background: linear-gradient(135deg, #1a1820 0%, #0a0810 60%, #02020a 100%);
+}
+.lighting-preview--kicker-rim .lighting-preview__subject {
+  background: radial-gradient(ellipse at 30% 35%, #786048 0%, #382818 55%, #100808 100%);
+  box-shadow:
+    14px 6px 0 -8px rgba(255, 220, 160, 0.85),
+    16px 6px 14px rgba(255, 200, 120, 0.5);
+}
+
+/* Silk diffusion — soft, even, low-contrast wraparound, no harsh shadow */
+.lighting-preview--silk-diffusion {
+  background: linear-gradient(135deg, #e8e0d0 0%, #b0a89c 60%, #585048 100%);
+}
+.lighting-preview--silk-diffusion .lighting-preview__subject {
+  background: radial-gradient(ellipse at 45% 40%, #fff5e0 0%, #d8c8b0 60%, #786858 100%);
+  box-shadow: 0 0 24px rgba(255, 245, 220, 0.55);
+}
+
+/* ============================================================================
+   LIGHTING RATIOS — vary contrast between key and fill
+   ========================================================================== */
+
+/* 1:1 — almost flat, fill matches key, very low contrast */
+.lighting-preview--ratio-1-1 {
+  background: linear-gradient(135deg, #c8c4bc 0%, #a09c94 60%, #585448 100%);
+}
+.lighting-preview--ratio-1-1 .lighting-preview__subject {
+  background: linear-gradient(90deg, #f0e4cc 0%, #e0d4bc 50%, #d0c4ac 100%);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 1:2 — slight one-stop falloff, fill ~50% of key */
+.lighting-preview--ratio-1-2 {
+  background: linear-gradient(135deg, #6c6860 0%, #38342c 60%, #181410 100%);
+}
+.lighting-preview--ratio-1-2 .lighting-preview__subject {
+  background: linear-gradient(90deg, #f0d8a8 0%, #b89868 60%, #685844 100%);
+  box-shadow: -8px 0 10px rgba(255, 220, 160, 0.25);
+}
+
+/* 1:3 — moderate two-stop contrast */
+.lighting-preview--ratio-1-3 {
+  background: linear-gradient(135deg, #4c4840 0%, #1c1814 60%, #08060a 100%);
+}
+.lighting-preview--ratio-1-3 .lighting-preview__subject {
+  background: linear-gradient(90deg, #f0d8a8 0%, #a08458 55%, #382818 100%);
+  box-shadow: -10px 0 12px rgba(255, 220, 160, 0.3);
+}
+
+/* 1:4 — clear strong shadow on unlit side */
+.lighting-preview--ratio-1-4 {
+  background: linear-gradient(135deg, #2a2620 0%, #0a0808 60%, #020208 100%);
+}
+.lighting-preview--ratio-1-4 .lighting-preview__subject {
+  background: linear-gradient(90deg, #f0d8a8 0%, #806848 50%, #181008 100%);
+  box-shadow: -10px 0 14px rgba(255, 220, 160, 0.35);
+}
+
+/* 1:8 — deep shadow, extreme low-key chiaroscuro */
+.lighting-preview--ratio-1-8 {
+  background: linear-gradient(135deg, #14110c 0%, #050408 60%, #000000 100%);
+}
+.lighting-preview--ratio-1-8 .lighting-preview__subject {
+  background: linear-gradient(90deg, #fff0c8 0%, #58442c 35%, #0a0608 100%);
+  box-shadow: -12px 0 14px rgba(255, 220, 160, 0.4);
+}
+
+/* 1:16 — extreme single-source falloff, shadow side near pitch black */
+.lighting-preview--ratio-1-16 {
+  background: linear-gradient(135deg, #08060a 0%, #02020a 60%, #000000 100%);
+}
+.lighting-preview--ratio-1-16 .lighting-preview__subject {
+  background: linear-gradient(90deg, #fff0c8 0%, #382814 22%, #02010a 60%, #000000 100%);
+  box-shadow: -14px 0 16px rgba(255, 220, 160, 0.45);
+}
+
+/* ============================================================================
+   COLOR TEMPERATURE — global tint Kelvin scale
+   ========================================================================== */
+
+/* 2700K — very warm orange, candle / deep tungsten */
+.lighting-preview--temp-2700k {
+  background: linear-gradient(135deg, #d87830 0%, #88340a 60%, #2a0c02 100%);
+}
+.lighting-preview--temp-2700k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #ffd088 0%, #b06028 55%, #381808 100%);
+  box-shadow: 0 8px 14px rgba(180, 80, 30, 0.5);
+}
+
+/* 3200K — warm tungsten orange-yellow */
+.lighting-preview--temp-3200k {
+  background: linear-gradient(135deg, #d8a058 0%, #885828 60%, #2a1808 100%);
+}
+.lighting-preview--temp-3200k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #ffe0a0 0%, #b88848 55%, #382010 100%);
+  box-shadow: 0 6px 12px rgba(200, 130, 60, 0.45);
+}
+
+/* 4000K — neutral warm-white */
+.lighting-preview--temp-4000k {
+  background: linear-gradient(135deg, #d8d0b8 0%, #888070 60%, #2c2820 100%);
+}
+.lighting-preview--temp-4000k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #fff0d8 0%, #c8b898 55%, #4a4034 100%);
+  box-shadow: 0 6px 10px rgba(140, 128, 100, 0.35);
+}
+
+/* 5600K — daylight neutral, slight cool */
+.lighting-preview--temp-5600k {
+  background: linear-gradient(135deg, #d4d8e0 0%, #788090 60%, #28303c 100%);
+}
+.lighting-preview--temp-5600k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #f0f0f0 0%, #b8b8b8 55%, #383838 100%);
+  box-shadow: 0 6px 10px rgba(120, 130, 150, 0.35);
+}
+
+/* 6500K — cool daylight, slight blue cast */
+.lighting-preview--temp-6500k {
+  background: linear-gradient(135deg, #b8c8d8 0%, #506880 60%, #182838 100%);
+}
+.lighting-preview--temp-6500k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #d8e0e8 0%, #88a0b0 55%, #283848 100%);
+  box-shadow: 0 6px 12px rgba(80, 110, 140, 0.4);
+}
+
+/* 9000K — very cold blue, open shade / overcast deep */
+.lighting-preview--temp-9000k {
+  background: linear-gradient(135deg, #6890c8 0%, #284878 60%, #08182a 100%);
+}
+.lighting-preview--temp-9000k .lighting-preview__subject {
+  background: radial-gradient(ellipse at 35% 30%, #b8d0e8 0%, #4878a8 55%, #102038 100%);
+  box-shadow: 0 6px 14px rgba(40, 80, 140, 0.5);
+}
+
+/* ============================================================================
+   LIGHT SOURCE / FIXTURE
+   ========================================================================== */
+
+/* Bounced flash — soft top-down with gentle from-below softness */
+.lighting-preview--bounced-flash {
+  background: linear-gradient(180deg, #b8b0a0 0%, #585048 60%, #1a1610 100%);
+}
+.lighting-preview--bounced-flash .lighting-preview__subject {
+  background:
+    linear-gradient(180deg, #fff5dc 0%, #d8c4a0 30%, #886c50 70%, #b09878 100%);
+  box-shadow:
+    0 -6px 12px rgba(255, 240, 210, 0.45),
+    0 6px 10px rgba(255, 230, 190, 0.2);
+}
+
+/* On-camera flash — flat front blast, hard nuclear shadow directly behind */
+.lighting-preview--on-camera-flash {
+  background: linear-gradient(180deg, #1c1a18 0%, #0a0a08 60%, #020202 100%);
+}
+.lighting-preview--on-camera-flash .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 35%, #ffffff 0%, #e0d8c8 50%, #685a48 100%);
+  box-shadow:
+    8px 8px 0 rgba(0, 0, 0, 0.78),
+    0 0 0 2px rgba(255, 250, 240, 0.5);
+}
+
+/* Gridded snoot — tight pool of light, dark vignetted edges */
+.lighting-preview--gridded-snoot {
+  background: radial-gradient(circle at 50% 45%, #d8b888 0%, #382410 22%, #050208 55%, #000000 100%);
+}
+.lighting-preview--gridded-snoot .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 35%, #fff0c8 0%, #b08858 50%, #1a1008 100%);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.7);
+}
+
+/* Mirror-bounce flash — yellowish soft warm bounce with hot flare spot */
+.lighting-preview--mirror-bounce-flash {
+  background: radial-gradient(circle at 70% 30%, #fff5b0 0%, #c89858 25%, #4a3018 55%, #100808 100%);
+}
+.lighting-preview--mirror-bounce-flash .lighting-preview__subject {
+  background: radial-gradient(ellipse at 60% 30%, #fff8d0 0%, #c8a070 50%, #382818 100%);
+  box-shadow: 12px -6px 18px rgba(255, 230, 150, 0.6);
+}
+
+/* Softbox key — soft, broad, even key with smooth shadow gradient */
+.lighting-preview--softbox-key {
+  background: linear-gradient(135deg, #383640 0%, #181820 60%, #060608 100%);
+}
+.lighting-preview--softbox-key .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 30% 30%, #fff5e0 0%, #d8c0a0 50%, #585040 100%);
+  box-shadow: -16px 4px 22px rgba(255, 240, 220, 0.55);
+}
+
+/* Stage spotlight — single hot spot with vignetted black edges */
+.lighting-preview--stage-spotlight {
+  background: radial-gradient(circle at 50% 45%, #f0c878 0%, #5a3818 18%, #000000 50%);
+}
+.lighting-preview--stage-spotlight .lighting-preview__subject {
+  background: radial-gradient(ellipse at 50% 30%, #fff0c8 0%, #d8a868 45%, #281808 100%);
+  box-shadow:
+    0 0 28px rgba(255, 220, 150, 0.7),
+    0 0 0 80px rgba(0, 0, 0, 0.4);
+}
+
+/* Edison tungsten — warm yellow tungsten with orange globe-bulb hot-spot */
+.lighting-preview--edison-tungsten {
+  background:
+    radial-gradient(circle at 78% 22%, #ffb858 0%, #a05810 22%, #2a1408 55%, #08040a 100%);
+}
+.lighting-preview--edison-tungsten .lighting-preview__subject {
+  background: radial-gradient(ellipse at 60% 25%, #ffd890 0%, #b07840 55%, #2a1808 100%);
+  box-shadow: 12px -4px 18px rgba(255, 180, 80, 0.55);
+}
+
+/* Beauty dish — broad even soft bright key with subtle hot center */
+.lighting-preview--beauty-dish {
+  background: radial-gradient(circle at 50% 35%, #c0b8a8 0%, #585048 60%, #181410 100%);
+}
+.lighting-preview--beauty-dish .lighting-preview__subject {
+  background:
+    radial-gradient(ellipse at 50% 28%, #ffffff 0%, #f0e0c0 25%, #c8a878 60%, #58442c 100%);
+  box-shadow:
+    0 -8px 18px rgba(255, 245, 220, 0.6),
+    0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+/* 3/4 light — classic portrait key from 45deg, sculpts far-cheek shadow */
+.lighting-preview--three-quarter {
+  background: linear-gradient(135deg, #1f2433 0%, #141826 60%, #08090f 100%);
+}
+.lighting-preview--three-quarter .lighting-preview__subject {
+  background: radial-gradient(ellipse at 28% 32%, #fff0d0 0%, #c89868 40%, #2a1810 100%);
+  box-shadow: -10px 0 14px rgba(255, 220, 170, 0.42);
+}
