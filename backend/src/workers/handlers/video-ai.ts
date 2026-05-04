@@ -21,6 +21,7 @@ import {
   createWorkDir,
   downloadFile,
   stripAudio,
+  trimLastFrames,
 } from "../../providers/video/ffmpeg-utils.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
@@ -47,6 +48,37 @@ async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<str
     if (workDir) await cleanupWorkDir(workDir)
   }
 }
+
+/**
+ * VEO3.1 first+last-frame mode adds a ~333ms cross-fade dissolve at the
+ * tail. That breaks loop seamlessness — the last frame of the rendered
+ * clip isn't actually identical to the supplied last_frame_url, it's
+ * blended. Stripping the last 8 frames @ 24fps recovers a clean
+ * frame-perfect loop. Default-on for VEO3.1 + endFrame; the route
+ * accepts an `autoLoopTrim: false` opt-out for users who actually want
+ * the dissolve. MCP doesn't expose the toggle (always trim).
+ */
+const VEO_LOOP_TRIM_FRAMES = 8
+const VEO_FPS = 24
+
+async function trimVeoLoopTailFromR2Url(
+  videoUrl: string,
+  jobId: string,
+): Promise<string> {
+  let workDir: string | undefined
+  try {
+    workDir = await createWorkDir("veo3-loop-trim")
+    const inputPath = join(workDir, "in.mp4")
+    const outputPath = join(workDir, "out.mp4")
+    await downloadFile(videoUrl, inputPath)
+    await trimLastFrames(inputPath, outputPath, VEO_LOOP_TRIM_FRAMES, VEO_FPS)
+    const buffer = await readFile(outputPath)
+    const key = `videos/${jobId}-loop.mp4`
+    return await uploadBufferToR2(buffer, key, "video/mp4")
+  } finally {
+    if (workDir) await cleanupWorkDir(workDir)
+  }
+}
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -61,7 +93,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -90,6 +122,10 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     webSearch?: boolean
     nsfwChecker?: boolean
     generationType?: string
+    /** VEO3.1 first+last-frame mode adds a tail dissolve that breaks
+     *  loop seams. Default true: strip the last 8 frames so the rendered
+     *  end matches the supplied last_frame_url frame-perfectly. */
+    autoLoopTrim?: boolean
   }
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
@@ -124,11 +160,28 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   await setJobProgress(job, ctx.jobId, 40)
 
+  let providerOutputUrl = result.url
+
+  // VEO3.1 loop trim — first+last-frame renders include a ~333ms tail
+  // dissolve that breaks loop seamlessness. Strip the last 8 frames @
+  // 24fps when both frames are supplied AND the user didn't opt out.
+  // Default-on; autoLoopTrim=false disables. Only veo3.1 — VEO3 (no
+  // .1) hasn't been tested for the same artefact.
+  if (
+    provider === "veo3.1" &&
+    endFrameUrl &&
+    autoLoopTrim !== false
+  ) {
+    console.log(
+      `[worker] VEO3.1 loop trim — removing last 8 frames for job ${ctx.jobId}`,
+    )
+    providerOutputUrl = await trimVeoLoopTailFromR2Url(providerOutputUrl, ctx.jobId)
+  }
+
   // VEO3 / VEO3.1 ignore the `sound: false` request (KIE has no audio
   // toggle for VEO). Honour user intent post-hoc: strip the audio track
   // from the result before R2 upload. Skipped when an explicit audioUrl
   // was provided (the merge step downstream handles that case).
-  let providerOutputUrl = result.url
   if (
     sound === false &&
     !audioUrl &&
@@ -137,7 +190,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     console.log(
       `[worker] VEO sound=false — stripping audio from output for job ${ctx.jobId}`,
     )
-    providerOutputUrl = await stripAudioFromR2Url(result.url, ctx.jobId)
+    providerOutputUrl = await stripAudioFromR2Url(providerOutputUrl, ctx.jobId)
   }
 
   // Upload the generated video to R2
