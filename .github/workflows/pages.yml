@@ -39,6 +39,10 @@ jobs:
       - name: Mirror raw markdown into site output (LLM-friendly)
         run: |
           set -euo pipefail
+          # jekyll-build-pages runs Jekyll inside a Docker container under a
+          # different uid, so _site/ is not writable by the runner user. Take
+          # ownership before copying additional files in.
+          sudo chown -R "$(id -u):$(id -g)" _site
           cd docs
           find . -type f -name '*.md' \
             ! -path './superpowers/*' \
