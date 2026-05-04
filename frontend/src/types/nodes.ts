@@ -1208,6 +1208,11 @@ export type ImageToVideoData = {
   // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
   webSearch?: boolean
   nsfwChecker?: boolean
+  // VEO3.1 first+last-frame mode adds a ~333ms tail dissolve that breaks
+  // loop seams. Default true: backend trims the last 8 frames @ 24fps so
+  // the rendered end matches `endFrame` exactly. Set false to keep the
+  // soft cross-fade. Only meaningful for veo3.1 + start AND end frames.
+  autoLoopTrim?: boolean
   // Multi-input selection fields
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)

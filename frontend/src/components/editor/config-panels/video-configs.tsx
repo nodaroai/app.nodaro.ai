@@ -227,6 +227,28 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             </div>
             <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
           </div>
+          {/* VEO3.1 loop trim — only relevant in frame-to-frame mode WITH
+              an end frame connected. The 8-frame tail dissolve is what
+              breaks loop seams; trimming it gets a frame-perfect loop. */}
+          {data.provider === "veo3.1" &&
+            data.veoMode !== "reference" &&
+            connectedImages.some((img) => img.targetHandle === "endFrame") && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  type="checkbox"
+                  id="autoLoopTrim"
+                  checked={data.autoLoopTrim !== false}
+                  onChange={(e) => onUpdate({ autoLoopTrim: e.target.checked })}
+                  className="rounded border-muted-foreground/40"
+                />
+                <label htmlFor="autoLoopTrim" className="text-xs">Trim tail dissolve (perfect loop)</label>
+              </div>
+              <p className="text-xs text-muted-foreground px-1">
+                VEO 3.1 adds a ~333ms cross-fade at the end. Removing the last 8 frames @ 24fps recovers a frame-perfect seamless loop. Disable to keep the dissolve.
+              </p>
+            </div>
+          )}
         </>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

@@ -40,6 +40,11 @@ const generateVideoBody = z.object({
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
   generationType: z.enum(["TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO"]).optional(),
+  // VEO3.1 first+last-frame mode adds a ~333ms tail dissolve that
+  // breaks loop seamlessness. Default true: strip the last 8 frames
+  // post-render so the rendered last frame matches the supplied
+  // `last_frame_url` exactly. Set false to keep the dissolve.
+  autoLoopTrim: z.boolean().optional().default(true),
   userId: z.string().uuid().optional(),
 })
 
@@ -69,7 +74,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -152,6 +157,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       webSearch,
       nsfwChecker,
       generationType,
+      autoLoopTrim,
       usageLogId,
     })
 

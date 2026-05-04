@@ -172,6 +172,49 @@ export async function cleanupWorkDir(workDir: string): Promise<void> {
 }
 
 /**
+ * Trim the last N frames off a video. Used to remove the tail dissolve
+ * VEO3.1 adds when rendering first+last-frame loops — the final ~333ms
+ * (8 frames @ 24fps) is a soft cross-fade that breaks the loop seam.
+ *
+ * Uses `-t` with a computed target duration (totalDuration - frames/fps),
+ * which trims BOTH video and audio streams to the same length and keeps
+ * existing codecs intact when stream-copy is safe. We force re-encode
+ * to land on an exact frame boundary because `-t` + stream-copy cuts at
+ * the next keyframe, which can land before our target and shave too much.
+ */
+export async function trimLastFrames(
+  inputPath: string,
+  outputPath: string,
+  framesToTrim: number,
+  fps: number,
+): Promise<string> {
+  const sourceDuration = await getVideoDuration(inputPath)
+  const trimSeconds = framesToTrim / fps
+  const targetDuration = sourceDuration - trimSeconds
+  if (targetDuration <= 0) {
+    throw new Error(
+      `Source video too short to trim ${framesToTrim} frames at ${fps}fps ` +
+      `(duration=${sourceDuration.toFixed(3)}s, trim=${trimSeconds.toFixed(3)}s)`,
+    )
+  }
+  await runFfmpeg([
+    "-y", "-i", inputPath,
+    "-t", targetDuration.toFixed(3),
+    // Re-encode video so the cut lands on exact frame N-8, not the
+    // previous keyframe. Audio can stream-copy safely since we only
+    // shorten the duration.
+    "-c:v", "libx264",
+    "-pix_fmt", "yuv420p",
+    "-preset", "fast",
+    "-crf", "20",
+    "-c:a", "copy",
+    "-movflags", "+faststart",
+    outputPath,
+  ])
+  return outputPath
+}
+
+/**
  * Strip the audio track from a video, leaving the video stream untouched.
  * Stream-copies the video (`-c:v copy -an`) so this is essentially free —
  * no re-encode. Used to honour `sound: false` for providers that don't
