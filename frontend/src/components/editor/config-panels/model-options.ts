@@ -295,6 +295,8 @@ export const KIE_T2V_DURATIONS: Record<string, number[]> = {
 // =============================================================================
 
 export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; desc: string }[] = [
+  { value: "seedance-2", label: "Seedance 2", desc: "Native phoneme lip sync, 8+ languages, cinematic. Premium quality." },
+  { value: "seedance-2-fast", label: "Seedance 2 Fast", desc: "Same lip sync, cheaper / quicker tier" },
   { value: "kling-avatar", label: "Kling Avatar", desc: "KIE talking head, 720p, speech-optimized" },
   { value: "kling-avatar-pro", label: "Kling Avatar Pro", desc: "KIE premium talking head, 1080p" },
   { value: "infinitalk", label: "Infinitalk", desc: "KIE flexible resolution, 480p\u2013720p" },

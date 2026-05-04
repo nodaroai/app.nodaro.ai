@@ -330,8 +330,22 @@ export const LIP_SYNC_PROVIDERS = [
   "wav2lip",
   "video-retalking",
   "sadtalker",
+  // Seedance 2 / 2 Fast — not "lip-sync models" per se, but ByteDance's
+  // multimodal video models do native phoneme-level lip sync in 8+
+  // languages when fed `reference_audio_urls` alongside a `first_frame_url`.
+  // Routed through the i2v provider with the audio passed as a reference,
+  // not the dedicated lip-sync flow.
+  "seedance-2",
+  "seedance-2-fast",
 ] as const
 export type LipSyncProvider = typeof LIP_SYNC_PROVIDERS[number]
+
+/** Seedance variants exposed via the lip-sync surface. They go through
+ *  the i2v provider with the audio plumbed as `reference_audio_urls`. */
+export const SEEDANCE_LIP_SYNC_PROVIDERS = new Set([
+  "seedance-2",
+  "seedance-2-fast",
+] as const)
 
 /** Replicate-based lip-sync providers (video or image+audio via Replicate SDK) */
 export const REPLICATE_LIP_SYNC_PROVIDERS = new Set([
