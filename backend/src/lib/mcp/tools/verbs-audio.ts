@@ -978,4 +978,133 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       })
     },
   )
+
+  // ── trim_audio ──
+  // FFmpeg-based audio trim. The underlying route uses `-vn` so the input
+  // can be either an audio file OR a video file (it strips video and
+  // returns audio either way). Hence both audio_url/audio_asset_id AND
+  // video_url/video_asset_id are accepted — the same endpoint handles
+  // both flows.
+  server.registerTool(
+    "trim_audio",
+    {
+      title: "Trim Audio",
+      description:
+        "Trim audio to a time window, or extract+trim audio from a video. " +
+        "Pass ONE source — audio_url / audio_asset_id (audio file) OR " +
+        "video_url / video_asset_id (extract audio from video). " +
+        "Optional start_time / end_time in seconds; omitting both keeps " +
+        "the full track. Output format defaults to mp3 (also accepts wav, aac).",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional(),
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        start_time: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Start of the trim window in seconds. Omit to keep the start of the source."),
+        end_time: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("End of the trim window in seconds. Omit to keep the end of the source."),
+        audio_format: z
+          .enum(["mp3", "wav", "aac"])
+          .optional()
+          .describe("Output audio format. Default mp3."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-audio",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      // Resolve audio source first; fall back to video source. The route
+      // expects a `videoUrl` field but FFmpeg's -vn flag handles both.
+      const sourceUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({
+              assetId: args.audio_asset_id,
+              userId: session.userId,
+              expectedKind: "audio",
+            })
+          : null) ??
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!sourceUrl) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Pass audio_url / audio_asset_id (audio source) or video_url / video_asset_id (extract from video).",
+            },
+          ],
+          isError: true,
+        }
+      }
+      if (
+        args.start_time !== undefined &&
+        args.end_time !== undefined &&
+        args.end_time <= args.start_time
+      ) {
+        return {
+          content: [{ type: "text", text: "end_time must be greater than start_time." }],
+          isError: true,
+        }
+      }
+      const payload = {
+        videoUrl: sourceUrl,
+        audioFormat: args.audio_format ?? "mp3",
+        ...(args.start_time !== undefined ? { startTime: args.start_time } : {}),
+        ...(args.end_time !== undefined ? { endTime: args.end_time } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/trim-audio",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      const promptHint =
+        args.start_time !== undefined || args.end_time !== undefined
+          ? `trim ${args.start_time ?? 0}s → ${args.end_time ?? "end"}`
+          : "extract audio"
+      return jobResultWithWidget({
+        jobId,
+        label: "trim audio",
+        session,
+        widgetKind: "audio",
+        widgetData: { prompt: promptHint, model: "trim-audio" },
+      })
+    },
+  )
 }
