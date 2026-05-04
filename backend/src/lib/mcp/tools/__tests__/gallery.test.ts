@@ -103,6 +103,48 @@ describe("browse_gallery tool", () => {
   })
 })
 
+describe("browse_uploads tool", () => {
+  it("returns uploaded assets mapped into the gallery widget shape", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable([
+        {
+          id: "asset-1",
+          type: "image",
+          filename: "cat.jpg",
+          mime_type: "image/jpeg",
+          size_bytes: 1234,
+          r2_url: "https://cdn/cat.jpg",
+          metadata: { thumbnail_url: "https://cdn/thumb-cat.jpg" },
+          created_at: "2026-05-04T10:00:00Z",
+        },
+      ]),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_uploads", { limit: 10 })
+    expect(result.isError).toBeUndefined()
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(Array.isArray(sc?.items)).toBe(true)
+    const items = sc?.items as Array<Record<string, unknown>>
+    expect(items[0]?.jobId).toBe("asset-1")
+    expect(items[0]?.kind).toBe("image")
+    expect(items[0]?.assetUrl).toBe("https://cdn/cat.jpg")
+    expect(items[0]?.thumbnailUrl).toBe("https://cdn/thumb-cat.jpg")
+    expect(sc?.loadMoreTool).toBe("browse_uploads")
+  })
+
+  it("hands a loadMoreTool hint to the gallery widget", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable([]),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_uploads", { kind: "image" })
+    const sc = (result as { structuredContent?: Record<string, unknown> }).structuredContent
+    expect(sc?.loadMoreTool).toBe("browse_uploads")
+  })
+})
+
 describe("list_favorites tool", () => {
   it("returns favorited job_ids", async () => {
     // Two from() calls: first hits gallery_favorites, second hydrates jobs.

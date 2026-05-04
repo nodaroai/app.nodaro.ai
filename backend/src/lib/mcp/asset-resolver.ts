@@ -72,55 +72,82 @@ const AUDIO_TYPES = new Set<string>([
 ])
 
 /**
- * Resolve a Nodaro `jobs.id` to the URL of its output media.
+ * Resolve a Nodaro asset id to the URL of its media.
  *
- * v1.1 MCP verbs accept either a direct URL (`image_url` / `video_url`)
- * OR a Nodaro asset id (`image_asset_id` / `video_asset_id`). When given
- * an asset id we look up the job, enforce per-user ownership, validate
- * the media kind matches what the verb expects, and return the output URL.
+ * Looks up `jobs` first (generations) and falls back to `assets` (uploads)
+ * — this lets MCP verbs accept BOTH a generated job's id and an uploaded
+ * asset's id under the same `*_asset_id` parameter, so users can pipe a
+ * `browse_uploads` result straight into modify_image / animate_image / etc.
  *
- * Returns `null` for null/empty input so callers can `??` the URL field.
+ * v1.1 MCP verbs also accept a direct URL (`image_url` / `video_url`); the
+ * resolver returns null for null/empty input so callers can `??` the URL.
  *
- * Schema notes (matches actual `jobs` table, not the spec stub):
- * - `job_type` is set by the worker when it picks up the job (BullMQ job
- *   name). For completed jobs it's always populated.
- * - `output_data` is JSONB keyed by media kind: `imageUrl` / `videoUrl` /
- *   `audioUrl`. There is no scalar `output_url` column.
+ * Per-user enforcement: jobs and assets are both scoped by `user_id`;
+ * caller can only resolve their own ids. Media-kind validation: jobs use
+ * `job_type` (mapped via the type sets above) and assets use `type`
+ * (`image|video|audio` directly).
  */
 export async function resolveAssetId(opts: ResolveOpts): Promise<string | null> {
   const { assetId, userId, expectedKind } = opts
   if (!assetId || assetId.length === 0) return null
 
-  const { data, error } = await supabase
+  // 1. Try jobs (generations) first — most common case for v1.1 verbs.
+  const jobResult = await supabase
     .from("jobs")
     .select("id, user_id, job_type, output_data")
     .eq("id", assetId)
     .maybeSingle()
+  if (jobResult.error) throw new Error(`Failed to resolve asset: ${jobResult.error.message}`)
+  if (jobResult.data) {
+    const job = jobResult.data
+    if (job.user_id !== userId) {
+      throw new Error("forbidden: asset belongs to a different user")
+    }
+    const expected =
+      expectedKind === "image"
+        ? IMAGE_TYPES
+        : expectedKind === "video"
+          ? VIDEO_TYPES
+          : AUDIO_TYPES
+    const jobType = job.job_type as string | null
+    if (!jobType || !expected.has(jobType)) {
+      throw new Error(`expected ${expectedKind}, got job of type ${jobType ?? "unknown"}`)
+    }
+    const outputData = (job.output_data ?? {}) as Record<string, unknown>
+    const urlField =
+      expectedKind === "image" ? "imageUrl" : expectedKind === "video" ? "videoUrl" : "audioUrl"
+    const url = outputData[urlField]
+    if (typeof url !== "string" || url.length === 0) {
+      throw new Error(`Asset ${assetId} has no ${urlField} yet`)
+    }
+    return url
+  }
 
-  if (error) throw new Error(`Failed to resolve asset: ${error.message}`)
-  if (!data) throw new Error(`Asset ${assetId} not found`)
-  if (data.user_id !== userId) {
+  // 2. Fall back to assets (uploads). The `assets.type` column stores the
+  // media kind directly (image / video / audio) — no job_type mapping
+  // needed. The R2 url is on `r2_url`.
+  const assetResult = await supabase
+    .from("assets")
+    .select("id, user_id, type, r2_url")
+    .eq("id", assetId)
+    .maybeSingle()
+  if (assetResult.error) {
+    throw new Error(`Failed to resolve asset: ${assetResult.error.message}`)
+  }
+  if (!assetResult.data) {
+    throw new Error(`Asset ${assetId} not found`)
+  }
+  const asset = assetResult.data
+  if (asset.user_id !== userId) {
     throw new Error("forbidden: asset belongs to a different user")
   }
-
-  const expected =
-    expectedKind === "image"
-      ? IMAGE_TYPES
-      : expectedKind === "video"
-        ? VIDEO_TYPES
-        : AUDIO_TYPES
-
-  const jobType = data.job_type as string | null
-  if (!jobType || !expected.has(jobType)) {
-    throw new Error(`expected ${expectedKind}, got job of type ${jobType ?? "unknown"}`)
+  const assetKind = asset.type as string | null
+  if (assetKind !== expectedKind) {
+    throw new Error(`expected ${expectedKind}, got upload of type ${assetKind ?? "unknown"}`)
   }
-
-  const outputData = (data.output_data ?? {}) as Record<string, unknown>
-  const urlField =
-    expectedKind === "image" ? "imageUrl" : expectedKind === "video" ? "videoUrl" : "audioUrl"
-  const url = outputData[urlField]
-  if (typeof url !== "string" || url.length === 0) {
-    throw new Error(`Asset ${assetId} has no ${urlField} yet`)
+  const r2Url = asset.r2_url as string | null
+  if (!r2Url) {
+    throw new Error(`Asset ${assetId} has no url`)
   }
-  return url
+  return r2Url
 }
