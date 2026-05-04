@@ -1017,6 +1017,107 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     },
   )
 
+  // ── trim_video ──
+  // Cuts a clip out of a longer video — start/end seconds. Optional flag
+  // strips audio entirely (silent output).
+  server.registerTool(
+    "trim_video",
+    {
+      title: "Trim Video",
+      description:
+        "Trim a video to a specific time window via FFmpeg. Provide ONE " +
+        "video source — video_url OR video_asset_id (a Nodaro video job " +
+        "id or upload asset id) — plus start_time and end_time in seconds.\n\n" +
+        "Set `silent: true` to strip the audio track from the trimmed clip.",
+      inputSchema: {
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        start_time: z
+          .number()
+          .min(0)
+          .describe("Start of the trim window, in seconds (0 = clip start)."),
+        end_time: z
+          .number()
+          .min(0)
+          .describe("End of the trim window, in seconds. Must be > start_time."),
+        silent: z
+          .boolean()
+          .optional()
+          .describe("Strip audio from the output. Default false."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [{ type: "text", text: "Pass video_url or video_asset_id." }],
+          isError: true,
+        }
+      }
+      if (args.end_time <= args.start_time) {
+        return {
+          content: [{ type: "text", text: "end_time must be greater than start_time." }],
+          isError: true,
+        }
+      }
+      const payload = {
+        videoUrl,
+        startTime: args.start_time,
+        endTime: args.end_time,
+        outputSilentVideo: args.silent ?? false,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/trim-video",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({
+        jobId,
+        label: "trim video",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: `trim ${args.start_time}s → ${args.end_time}s` + (args.silent ? " (silent)" : ""),
+          model: "trim-video",
+        },
+      })
+    },
+  )
+
   // ── merge_video_audio ──
   // FFmpeg compose: take a video + one or more audio sources, mix them,
   // and produce a new video. PRIMARY tool for "add this voiceover to my
