@@ -1,0 +1,45 @@
+title: Nodaro Documentation
+description: AI workflow editor — REST-first, source-available
+url: https://nodaroai.github.io
+baseurl: /app.nodaro.ai
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+  hard_wrap: false
+
+plugins:
+  - jekyll-relative-links
+  - jekyll-optional-front-matter
+  - jekyll-seo-tag
+
+# Apply default layout to every page (so .md files without frontmatter render with our layout)
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+# Treat .md files without YAML frontmatter as Jekyll content (otherwise they're served raw)
+optional_front_matter:
+  remove_originals: true
+
+# Rewrite [label](./other.md) inside markdown to [label](./other.html) for human navigation.
+# (LLMs reading raw markdown still see .md links, which our Action keeps reachable.)
+relative_links:
+  enabled: true
+  collections: true
+
+include:
+  - llms.txt
+
+exclude:
+  - superpowers/        # internal design specs/plans, not for public docs
+  - .github/
+  - node_modules/
+  - vendor/
+  - Gemfile
+  - Gemfile.lock
+  - "*.gemspec"
+  - README-internal.md

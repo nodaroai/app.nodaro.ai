@@ -1,0 +1,67 @@
+name: Deploy docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one in-progress deploy; queue follow-ups so production isn't half-deployed.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      # Keep raw markdown reachable at the same paths so /contributing.md, /nodes/README.md, etc.
+      # serve as text/markdown for LLM consumers (llms.txt entries continue to work).
+      - name: Mirror raw markdown into site output (LLM-friendly)
+        run: |
+          set -euo pipefail
+          cd docs
+          find . -type f -name '*.md' \
+            ! -path './superpowers/*' \
+            ! -path './_layouts/*' \
+            ! -path './_includes/*' \
+            -print0 \
+          | while IFS= read -r -d '' f; do
+              dest="../_site/${f#./}"
+              mkdir -p "$(dirname "$dest")"
+              cp "$f" "$dest"
+            done
+          echo "Copied $(find ../_site -type f -name '*.md' | wc -l) raw markdown files."
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
