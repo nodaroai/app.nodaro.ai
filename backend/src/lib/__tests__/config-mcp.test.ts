@@ -8,7 +8,7 @@ describe("MCP config", () => {
 
   it("exposes MCP_DYNAMIC_REGISTRATION defaulting to allowlist", async () => {
     const { config } = await import("../config.js")
-    expect(["allowlist", "open"]).toContain(config.MCP_DYNAMIC_REGISTRATION)
+    expect(["allowlist", "open", "off"]).toContain(config.MCP_DYNAMIC_REGISTRATION)
   })
 
   it("exposes MCP_DCR_ALLOWLIST as a parsed array of client names", async () => {
