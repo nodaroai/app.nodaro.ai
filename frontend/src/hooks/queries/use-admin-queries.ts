@@ -60,14 +60,40 @@ export interface AdminJob {
   readonly workflow_project_id: string | null
 }
 
-interface AdminUsageLog {
+export type UsageGroupBy =
+  | "none"
+  | "user"
+  | "action"
+  | "day"
+  | "user-action"
+  | "user-day"
+  | "action-day"
+
+export type UsageSortBy = "created_at" | "credits_used" | "log_count"
+
+export type SortDir = "asc" | "desc"
+
+export interface AdminUsageLog {
   readonly id: string
-  readonly action: string
-  readonly provider: string
+  readonly user_id: string | null
+  readonly user_email: string | null
+  readonly action: string | null
+  readonly provider: string | null
+  readonly day: string | null
   readonly credits_used: number
-  readonly created_at: string
-  readonly user_email: string
+  readonly log_count: number
+  readonly created_at: string | null
 }
+
+export type UserSortBy =
+  | "email"
+  | "tier"
+  | "subscription_credits"
+  | "topup_credits"
+  | "total_credits"
+  | "daily_spent_credits"
+  | "role"
+  | "created_at"
 
 // --- Queries ---
 
@@ -100,17 +126,54 @@ export function useAdminStats() {
   })
 }
 
-export function useAdminUsers(page: number, pageSize = 50) {
+// Map UI sort keys to actual profile column names. Keep at module scope so it
+// doesn't allocate per render.
+const USER_SORT_COLUMN: Record<UserSortBy, string> = {
+  email: "email",
+  tier: "subscription_tier",
+  subscription_credits: "subscription_credits",
+  topup_credits: "topup_credits",
+  total_credits: "total_credits",
+  daily_spent_credits: "daily_spent_credits",
+  role: "role",
+  created_at: "created_at",
+}
+
+// Default direction when activating each sort: text fields ascend, numbers/dates descend.
+export const USER_SORT_DEFAULT_DIR: Record<UserSortBy, SortDir> = {
+  email: "asc",
+  tier: "asc",
+  role: "asc",
+  subscription_credits: "desc",
+  topup_credits: "desc",
+  total_credits: "desc",
+  daily_spent_credits: "desc",
+  created_at: "desc",
+}
+
+export function useAdminUsers(
+  page: number,
+  pageSize = 50,
+  sortBy: UserSortBy = "created_at",
+  sortDir: SortDir = "desc",
+) {
   return useQuery({
-    queryKey: queryKeys.admin.users(page, pageSize),
+    queryKey: queryKeys.admin.users(page, pageSize, sortBy, sortDir),
     queryFn: async (): Promise<AdminUser[]> => {
       const supabase = createClient()
+      const sortColumn = USER_SORT_COLUMN[sortBy] ?? "created_at"
+      const ascending = sortDir === "asc"
+      // total_credits is a generated column added in migration 099 — Supabase's
+      // generated TS types don't see it, so cast through unknown to keep the
+      // typed response shape we use below.
       const { data, error } = await supabase
         .from("profiles")
         .select(
           "id, email, full_name, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, created_at",
         )
-        .order("created_at", { ascending: false })
+        .order(sortColumn, { ascending, nullsFirst: false })
+        // Stable secondary sort so paginated rows don't shift around between pages.
+        .order("id", { ascending: true })
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (error) throw error
       return (data ?? []).map((row) => ({
@@ -286,31 +349,56 @@ export function useAdminApps(page: number, pageSize = 50) {
   })
 }
 
-export function useAdminUsageLogs(page: number, pageSize = 50) {
+// Shape returned by the get_admin_usage_logs RPC (migration 099).
+interface UsageLogRpcRow {
+  id: string
+  user_id: string | null
+  user_email: string | null
+  action: string | null
+  provider: string | null
+  day: string | null
+  credits_used: number | string
+  log_count: number | string
+  created_at: string | null
+}
+
+export function useAdminUsageLogs(
+  page: number,
+  pageSize = 50,
+  groupBy: UsageGroupBy = "none",
+  sortBy: UsageSortBy = "created_at",
+  sortDir: SortDir = "desc",
+) {
   return useQuery({
-    queryKey: queryKeys.admin.usageLogs(page, pageSize),
+    queryKey: queryKeys.admin.usageLogs(page, pageSize, groupBy, sortBy, sortDir),
     queryFn: async (): Promise<AdminUsageLog[]> => {
       const supabase = createClient()
-      const { data: logs, error } = await supabase
-        .from("usage_logs")
-        .select("id, action, provider, credits_used, created_at, user_id")
-        .order("created_at", { ascending: false })
-        .range(page * pageSize, (page + 1) * pageSize - 1)
+      // get_admin_usage_logs is added by migration 099 — generated types lag
+      // behind the migration, so cast the RPC name (and result) through unknown.
+      const { data, error } = await supabase.rpc(
+        "get_admin_usage_logs" as unknown as "get_admin_stats",
+        {
+          p_group_by: groupBy,
+          p_sort_by: sortBy,
+          p_sort_dir: sortDir,
+          p_limit: pageSize,
+          p_offset: page * pageSize,
+        } as unknown as Record<string, never>,
+      )
       if (error) throw error
-      if (!logs || logs.length === 0) return []
-      const userIds = [...new Set(logs.map((l) => l.user_id))]
-      const { data: users } = await supabase
-        .from("profiles")
-        .select("id, email")
-        .in("id", userIds)
-      const userMap = new Map((users ?? []).map((u) => [u.id, u.email]))
-      return logs.map((l) => ({
-        id: l.id,
-        action: l.action,
-        provider: l.provider,
-        credits_used: l.credits_used,
-        created_at: l.created_at,
-        user_email: userMap.get(l.user_id) ?? "Unknown",
+      const rows = (data ?? []) as unknown as UsageLogRpcRow[]
+      // Postgres BIGINT comes back as a string in the JSON payload; coerce to
+      // number once at the boundary so consumers don't have to.
+      return rows.map((r) => ({
+        id: r.id,
+        user_id: r.user_id,
+        user_email: r.user_email,
+        action: r.action,
+        provider: r.provider,
+        day: r.day,
+        credits_used: typeof r.credits_used === "string" ? Number(r.credits_used) : r.credits_used,
+        log_count: typeof r.log_count === "string" ? Number(r.log_count) : r.log_count,
+        created_at: r.created_at,
       }))
     },
     enabled: hasAdmin(),
