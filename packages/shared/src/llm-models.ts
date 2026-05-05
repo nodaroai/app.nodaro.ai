@@ -168,6 +168,31 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "translate": "gemini-3-flash",
 }
 
+/**
+ * Per-model multimodal input capabilities. Drives both frontend UI gating
+ * and backend route-level filtering for the LLM Chat node references.
+ *
+ * As of 2026-05: Claude Messages API supports text + image only (no audio,
+ * no video). Gemini 2/3 family supports image + video + audio natively.
+ * GPT-5.x via KIE chat-completions / responses supports image only — audio
+ * input requires a separate audio-capable model we don't route to today.
+ */
+export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean; audio: boolean }> = {
+  "gemini-3-flash":    { image: true,  video: true,  audio: true  },
+  "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
+  "claude-haiku-4.5":  { image: true,  video: false, audio: false },
+  "claude-sonnet-4.6": { image: true,  video: false, audio: false },
+  "claude-opus-4.6":   { image: true,  video: false, audio: false },
+  "gpt-5.2":           { image: true,  video: false, audio: false },
+  "gpt-5.4":           { image: true,  video: false, audio: false },
+}
+
+/** Capability lookup with safe default — unknown models get image-only. */
+export function getLlmModalityCaps(modelId: string | undefined): { image: boolean; video: boolean; audio: boolean } {
+  if (!modelId) return { image: true, video: false, audio: false }
+  return LLM_MODALITY_CAPS[modelId] ?? { image: true, video: false, audio: false }
+}
+
 export function getLlmModel(id: string): LlmModelDef | undefined {
   return LLM_MODELS.find((m) => m.id === id)
 }

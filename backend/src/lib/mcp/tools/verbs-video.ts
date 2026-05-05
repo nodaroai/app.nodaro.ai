@@ -10,7 +10,11 @@ import {
   parseFailure,
   jobResultWithWidget,
 } from "./_verb-helpers.js"
-import { modelIdsByKindMode } from "@nodaro/shared"
+import {
+  modelIdsByKindMode,
+  SEEDANCE_2_REF_LIMITS,
+  isSeedance2Provider,
+} from "@nodaro/shared"
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 
@@ -170,6 +174,28 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── animate_image (image-to-video) ──
+  /**
+   * Resolve a mixed array where each item is either a public URL or a Nodaro
+   * asset id. Asset ids are resolved via `resolveAssetId` (kind-typed). Returns
+   * the URL list, dropping any unresolvable entries.
+   */
+  async function resolveRefArray(
+    items: string[] | undefined,
+    userId: string,
+    expectedKind: "image" | "video" | "audio",
+  ): Promise<string[]> {
+    if (!items?.length) return []
+    const out: string[] = []
+    for (const item of items) {
+      if (/^https?:\/\//.test(item)) {
+        out.push(item)
+        continue
+      }
+      const resolved = await resolveAssetId({ assetId: item, userId, expectedKind })
+      if (resolved) out.push(resolved)
+    }
+    return out
+  }
   server.registerTool(
     "animate_image",
     {
@@ -181,7 +207,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "for capability sheets and recommendations. If the user supplied a start " +
         "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
         "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
-        "Default `veo3.1` is the best price/quality balance with native audio.",
+        "Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
+        "**Seedance 2 only**: pass `reference_video_urls` / `reference_audio_urls` " +
+        "for style transfer or soundtrack-driven motion (max 3 each), or " +
+        "`reference_image_urls` for extra reference images beyond `image_url` " +
+        "(max 9). Multimodal refs cannot be combined with `end_frame_url` — " +
+        "choose one mode.",
       inputSchema: {
         prompt: z.string().max(8000).optional(),
         image_url: z.string().url().optional(),
@@ -217,6 +248,30 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Nodaro job id or upload asset id whose image is used as the END frame. " +
             "Use this instead of end_frame_url when you have a Nodaro asset — never " +
             "construct /jobs/.../output URLs manually, those don't exist.",
+          ),
+        reference_image_urls: z
+          .array(z.string())
+          .max(SEEDANCE_2_REF_LIMITS.images)
+          .optional()
+          .describe(
+            "Seedance 2 only: extra reference images (URLs or Nodaro asset IDs) " +
+            "beyond `image_url`. Resolved server-side. Silently ignored on other providers.",
+          ),
+        reference_video_urls: z
+          .array(z.string())
+          .max(SEEDANCE_2_REF_LIMITS.videos)
+          .optional()
+          .describe(
+            "Seedance 2 only: reference videos for style/motion transfer (URLs or " +
+            "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
+          ),
+        reference_audio_urls: z
+          .array(z.string())
+          .max(SEEDANCE_2_REF_LIMITS.audio)
+          .optional()
+          .describe(
+            "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
+            "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
           ),
       },
               outputSchema: {
@@ -291,6 +346,24 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
               expectedKind: "image",
             })
           : undefined)
+      // Seedance 2 multimodal refs — resolve per-item URL/asset_id, then
+      // gate by provider. Other providers silently drop these args.
+      const isSd2 = isSeedance2Provider(model)
+      const refImageUrls = isSd2 ? await resolveRefArray(args.reference_image_urls, session.userId, "image") : []
+      const refVideoUrls = isSd2 ? await resolveRefArray(args.reference_video_urls, session.userId, "video") : []
+      const refAudioUrls = isSd2 ? await resolveRefArray(args.reference_audio_urls, session.userId, "audio") : []
+
+      // KIE forbids combining multimodal-ref mode with start+end frame mode.
+      // Fail fast with a clear MCP error rather than letting the route 400.
+      if ((refVideoUrls.length || refAudioUrls.length) && endFrameUrl) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: "Seedance 2: reference videos/audio cannot be combined with end_frame_url / end_frame_asset_id. Pass one or the other.",
+          }],
+          isError: true,
+        }
+      }
       // Resolution: caller's explicit value wins; otherwise inherit the
       // user's saved MCP video preference; otherwise leave undefined and
       // let the route handler / provider default kick in.
@@ -307,6 +380,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         aspectRatio,
         resolution: callResolution,
         sound: args.sound,
+        ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
+        ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
+        ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

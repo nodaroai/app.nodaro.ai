@@ -371,6 +371,44 @@ const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-separate",
 ]);
 
+/** Node types whose primary output is an image URL — used to route media into
+ *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts. */
+const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
+  "generate-image", "modify-image", "upscale-image", "remove-background",
+  "upload-image", "extract-frame",
+]);
+/** Node types whose primary output is a video URL. (Disjoint from
+ *  VIDEO_OUTPUT_NODE_TYPES above, which is also used for kieTaskId routing —
+ *  this set is purposefully scoped to llm-chat reference routing.) */
+const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
+  "image-to-video", "text-to-video", "video-to-video",
+  "extend-video", "trim-video", "combine-videos", "upload-video",
+  "render-video", "after-effects", "motion-graphics", "lip-sync",
+  "motion-transfer", "suno-music-video", "speech-to-video",
+  "video-upscale", "video-composer", "merge-video-audio",
+  "resize-video", "social-media-format", "speed-ramp", "loop-video",
+  "fade-video", "transcode-video", "add-captions", "manual-edit",
+]);
+/** Node types whose primary output is an audio URL. */
+const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
+  "generate-music", "text-to-speech", "text-to-audio",
+  "voice-changer", "voice-design", "voice-remix", "dubbing",
+  "trim-audio", "combine-audio", "mix-audio", "audio-isolation",
+  "text-to-dialogue",
+  "suno-generate", "suno-cover", "suno-extend", "suno-separate",
+  "suno-mashup", "suno-replace-section", "suno-add-instrumental",
+  "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
+  "upload-audio",
+]);
+
+function nodeOutputKind(nodeType: string | undefined): "image" | "video" | "audio" | null {
+  if (!nodeType) return null;
+  if (LLM_REF_IMAGE_NODE_TYPES.has(nodeType)) return "image";
+  if (LLM_REF_VIDEO_NODE_TYPES.has(nodeType)) return "video";
+  if (LLM_REF_AUDIO_NODE_TYPES.has(nodeType)) return "audio";
+  return null;
+}
+
 export function extractNodeOutputAsList(
   node: WorkflowNode,
 ): string[] | undefined {
@@ -784,6 +822,31 @@ export function resolveNodeInputs(
         if (selectedUrl) inputs.videoUrl = selectedUrl;
       }
       continue;
+    }
+
+    // LLM Chat target: route upstream image/video/audio outputs to the
+    // corresponding reference array. This MUST come before the per-source
+    // chain below so generate-image / image-to-video / generate-music / etc.
+    // don't set imageUrl/videoUrl/audioUrl (which the llm-chat route ignores).
+    // Non-media upstream sources (text-prompt, ai-writer, combine-text, …)
+    // fall through to the existing prompt-routing branches and land on
+    // `inputs.prompt`, so the LLM can receive both refs and text via sibling
+    // edges.
+    if (node.type === "llm-chat" && typeof output === "string" && output) {
+      const kind = nodeOutputKind(src.type);
+      if (kind === "image") {
+        inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output];
+        continue;
+      }
+      if (kind === "video") {
+        inputs.referenceVideoUrls = [...(inputs.referenceVideoUrls ?? []), output];
+        continue;
+      }
+      if (kind === "audio") {
+        inputs.referenceAudioUrls = [...(inputs.referenceAudioUrls ?? []), output];
+        continue;
+      }
+      // Non-media upstream — fall through to existing chain.
     }
 
     if (src.type === "component") {

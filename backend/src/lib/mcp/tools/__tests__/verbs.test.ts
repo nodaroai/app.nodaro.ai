@@ -211,6 +211,45 @@ describe("animate_image verb", () => {
     const result = await callTool(server, "animate_image", { prompt: "x" })
     expect(result.isError).toBe(true)
   })
+
+  it("forwards reference_audio_urls when provider is seedance-2", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-video", { jobId: "j-sd2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "animate_image", {
+      image_url: "https://x/y.png",
+      model: "seedance-2",
+      reference_audio_urls: ["https://cdn/x.mp3"],
+    })
+    expect(received.body?.referenceAudioUrls).toEqual(["https://cdn/x.mp3"])
+    expect(received.body?.provider).toBe("seedance-2")
+  })
+
+  it("drops reference_audio_urls when provider is veo3 (silent ignore)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-video", { jobId: "j-veo" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "animate_image", {
+      image_url: "https://x/y.png",
+      model: "veo3",
+      reference_audio_urls: ["https://cdn/x.mp3"],
+    })
+    expect(received.body?.referenceAudioUrls).toBeUndefined()
+  })
+
+  it("rejects reference_video_urls + end_frame_url combination with isError", async () => {
+    const { fastify } = stubRoute("POST", "/v1/generate-video", { jobId: "j-conflict" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "animate_image", {
+      image_url: "https://x/y.png",
+      end_frame_url: "https://x/end.png",
+      model: "seedance-2",
+      reference_video_urls: ["https://cdn/v.mp4"],
+    })
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/cannot be combined/)
+  })
 })
 
 describe("extend_video verb", () => {

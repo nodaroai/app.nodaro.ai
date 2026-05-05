@@ -1,9 +1,11 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
+import { useEffect } from "react"
+import { Loader2, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, X } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import {
   Accordion,
   AccordionContent,
@@ -15,10 +17,69 @@ import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
 import type { ConfigProps } from "./types"
+import { getLlmModalityCaps, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+
+function MediaRefRow({
+  label, icon, urls, max, onAdd, onRemove,
+}: {
+  label: string
+  icon: React.ReactNode
+  urls: readonly string[]
+  max: number
+  onAdd: (url: string) => void
+  onRemove: (idx: number) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{label}</span>
+        <span className="text-[10px] text-muted-foreground ml-auto">{urls.length}/{max}</span>
+      </div>
+      {urls.length > 0 && (
+        <ul className="space-y-1">
+          {urls.map((url, idx) => (
+            <li key={`${url}-${idx}`} className="flex items-center gap-2 text-xs bg-[#F8FAFC] dark:bg-[#121212] rounded px-2 py-1">
+              <span className="truncate flex-1" title={url}>{url.split("/").slice(-1)[0]}</span>
+              <button onClick={() => onRemove(idx)} className="text-gray-400 hover:text-red-500" aria-label="Remove">
+                <X className="w-3 h-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {urls.length < max && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs w-full"
+          onClick={() => {
+            const url = window.prompt(`Paste a public ${label.toLowerCase()} URL:`)
+            if (url && /^https?:\/\//.test(url)) onAdd(url)
+          }}
+        >
+          + Add {label.toLowerCase()}
+        </Button>
+      )}
+    </div>
+  )
+}
 
 export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LLMChatData>) {
   const activeIdx = data.activeResultIndex ?? 0
   const results = data.generatedResults ?? []
+
+  const currentModel = data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
+  const caps = getLlmModalityCaps(currentModel)
+
+  useEffect(() => {
+    const updates: Partial<LLMChatData> = {}
+    if (!caps.video && data.referenceVideoUrls?.length) updates.referenceVideoUrls = undefined
+    if (!caps.audio && data.referenceAudioUrls?.length) updates.referenceAudioUrls = undefined
+    if (Object.keys(updates).length) onUpdate(updates)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.llmModel])
 
   return (
     <>
@@ -84,6 +145,50 @@ export function LLMChatConfig({ data, onUpdate, sources, fieldMappings, onMapFie
                 className="mt-1 bg-[#F8FAFC] dark:bg-[#121212] border-gray-200 dark:border-[#2D2D2D]"
               />
             </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* References */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="refs" className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] shadow-sm">
+          <AccordionTrigger className="px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
+            References
+          </AccordionTrigger>
+          <AccordionContent className="px-3 pb-3 space-y-4">
+            <MediaRefRow
+              label="Images"
+              icon={<ImageIcon className="w-3.5 h-3.5 text-gray-500" />}
+              urls={data.referenceImageUrls ?? []}
+              max={5}
+              onAdd={(url) => onUpdate({ referenceImageUrls: [...(data.referenceImageUrls ?? []), url] })}
+              onRemove={(idx) => onUpdate({ referenceImageUrls: (data.referenceImageUrls ?? []).filter((_, i) => i !== idx) })}
+            />
+            {caps.video && (
+              <MediaRefRow
+                label="Videos"
+                icon={<VideoIcon className="w-3.5 h-3.5 text-gray-500" />}
+                urls={data.referenceVideoUrls ?? []}
+                max={3}
+                onAdd={(url) => onUpdate({ referenceVideoUrls: [...(data.referenceVideoUrls ?? []), url] })}
+                onRemove={(idx) => onUpdate({ referenceVideoUrls: (data.referenceVideoUrls ?? []).filter((_, i) => i !== idx) })}
+              />
+            )}
+            {caps.audio && (
+              <MediaRefRow
+                label="Audio"
+                icon={<MusicIcon className="w-3.5 h-3.5 text-gray-500" />}
+                urls={data.referenceAudioUrls ?? []}
+                max={3}
+                onAdd={(url) => onUpdate({ referenceAudioUrls: [...(data.referenceAudioUrls ?? []), url] })}
+                onRemove={(idx) => onUpdate({ referenceAudioUrls: (data.referenceAudioUrls ?? []).filter((_, i) => i !== idx) })}
+              />
+            )}
+            {!caps.video && !caps.audio && (
+              <p className="text-[11px] text-muted-foreground">
+                Switch to a Gemini model to attach video or audio references.
+              </p>
+            )}
           </AccordionContent>
         </AccordionItem>
       </Accordion>

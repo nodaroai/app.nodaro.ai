@@ -2782,6 +2782,8 @@ export async function llmChatStream(params: {
   systemPrompt: string
   userInput: string
   referenceImageUrls?: string[]
+  referenceVideoUrls?: string[]
+  referenceAudioUrls?: string[]
   temperature: number
   maxTokens: number
   userId: string
