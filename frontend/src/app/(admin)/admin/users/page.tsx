@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { SortHeader } from "@/components/ui/sort-header"
 import {
   useAdminUsers,
   useAdminUserTransactions,
@@ -29,7 +30,10 @@ import {
   useAdminChangeTierMutation,
   useAdminChangeStorageMutation,
   useAdminChangeRoleMutation,
+  USER_SORT_DEFAULT_DIR,
   type AdminUser,
+  type SortDir,
+  type UserSortBy,
 } from "@/hooks/queries/use-admin-queries"
 import { useAuth } from "@/hooks/use-auth"
 
@@ -461,7 +465,24 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
-  const { data: users = [], isLoading: loading, refetch: loadUsers } = useAdminUsers(page)
+  const [sortBy, setSortBy] = useState<UserSortBy>("created_at")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const { data: users = [], isLoading: loading, refetch: loadUsers } = useAdminUsers(
+    page,
+    50,
+    sortBy,
+    sortDir,
+  )
+
+  const handleSort = (field: UserSortBy) => {
+    if (field === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortBy(field)
+      setSortDir(USER_SORT_DEFAULT_DIR[field])
+    }
+    setPage(0)
+  }
 
   const filteredUsers = searchQuery.trim()
     ? users.filter(
@@ -503,16 +524,68 @@ export default function AdminUsersPage() {
           <thead className="bg-muted/50">
             <tr>
               <th className="w-8 px-2 py-2" />
-              <th className="text-left px-4 py-2 font-medium">Email</th>
+              <SortHeader
+                label="Email"
+                field="email"
+                active={sortBy === "email"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
               <th className="text-left px-4 py-2 font-medium">Name</th>
-              <th className="text-left px-4 py-2 font-medium">Tier</th>
-              <th className="text-right px-4 py-2 font-medium">Sub CR</th>
-              <th className="text-right px-4 py-2 font-medium">Topup CR</th>
-              <th className="text-right px-4 py-2 font-medium">Total</th>
-              <th className="text-right px-4 py-2 font-medium">Daily Spent</th>
+              <SortHeader
+                label="Tier"
+                field="tier"
+                active={sortBy === "tier"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label="Sub CR"
+                field="subscription_credits"
+                align="right"
+                active={sortBy === "subscription_credits"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label="Topup CR"
+                field="topup_credits"
+                align="right"
+                active={sortBy === "topup_credits"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label="Total"
+                field="total_credits"
+                align="right"
+                active={sortBy === "total_credits"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label="Daily Spent"
+                field="daily_spent_credits"
+                align="right"
+                active={sortBy === "daily_spent_credits"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
               <th className="text-right px-4 py-2 font-medium">Storage</th>
-              <th className="text-left px-4 py-2 font-medium">Role</th>
-              <th className="text-left px-4 py-2 font-medium">Joined</th>
+              <SortHeader
+                label="Role"
+                field="role"
+                active={sortBy === "role"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
+              <SortHeader
+                label="Joined"
+                field="created_at"
+                active={sortBy === "created_at"}
+                dir={sortDir}
+                onSort={handleSort}
+              />
             </tr>
           </thead>
           <tbody>

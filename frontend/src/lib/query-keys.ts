@@ -142,13 +142,27 @@ export const queryKeys = {
   admin: {
     all: ["admin"] as const,
     stats: () => ["admin", "stats"] as const,
-    users: (page: number, pageSize: number) =>
-      ["admin", "users", page, pageSize] as const,
+    users: (page: number, pageSize: number, sortBy?: string, sortDir?: string) =>
+      ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc"] as const,
     jobs: (page: number, pageSize: number, status?: string, userId?: string) =>
       ["admin", "jobs", page, pageSize, status ?? "", userId ?? ""] as const,
     usersLite: () => ["admin", "users-lite"] as const,
-    usageLogs: (page: number, pageSize: number) =>
-      ["admin", "usage-logs", page, pageSize] as const,
+    usageLogs: (
+      page: number,
+      pageSize: number,
+      groupBy?: string,
+      sortBy?: string,
+      sortDir?: string,
+    ) =>
+      [
+        "admin",
+        "usage-logs",
+        page,
+        pageSize,
+        groupBy ?? "none",
+        sortBy ?? "created_at",
+        sortDir ?? "desc",
+      ] as const,
     models: () => ["admin", "models"] as const,
     reports: (page: number, status?: string) =>
       ["admin", "reports", page, status ?? ""] as const,
