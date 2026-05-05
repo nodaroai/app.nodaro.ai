@@ -100,6 +100,15 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
       }
       const meta = parsed.data
 
+      // Kill-switch: operator can disable DCR entirely without taking down /mcp.
+      if (config.MCP_DYNAMIC_REGISTRATION === "off") {
+        return reply.status(403).send({
+          error: {
+            code: "dcr_disabled",
+            message: "Dynamic client registration is disabled on this server. Contact the operator for a static client_id/client_secret.",
+          },
+        })
+      }
       // Allowlist gate (operator-controlled set of acceptable client_names).
       if (config.MCP_DYNAMIC_REGISTRATION === "allowlist") {
         const allowed = config.MCP_DCR_ALLOWLIST_PARSED
