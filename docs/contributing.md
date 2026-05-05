@@ -321,18 +321,32 @@ In practice this means:
 
 ## 11. License
 
-Nodaro is licensed under the [Sustainable Use License](../LICENSE)
-(source-available, allows personal + internal-business use +
-self-hosting; prohibits commercial hosted-service offerings to third
-parties). By contributing, you agree that your contributions are
-licensed under the same terms — the standard "inbound = outbound"
-model. No CLA required.
+Nodaro is fair-code with three license tiers (see [`LICENSE.md`](../LICENSE.md)
+for the full overview):
+
+- Community code (default): [Sustainable Use License](../LICENSE) —
+  source-available; permits personal + internal-business use +
+  self-hosting; prohibits commercial hosted-service offerings to third
+  parties.
+- Enterprise code (`backend/src/ee/`, `frontend/src/ee/`,
+  `*.ee.{ts,tsx,sql,md}`): [Enterprise License](../backend/src/ee/LICENSE) —
+  same terms plus a paid subscription requirement for production use,
+  with carve-outs for development, testing, and evaluation.
+- SDK packages (`packages/client/`, `packages/shared/`):
+  [Apache License 2.0](../packages/shared/LICENSE) — embed in
+  commercial applications freely.
+
+By submitting a contribution, you agree to the [Nodaro Contributor
+License Agreement](../CLA.md) (or the
+[Corporate CLA](../CLA-CORPORATE.md) if contributing on behalf of an
+employer). The cla-assistant bot will prompt for signature
+automatically on your first pull request.
 
 If you're contributing on behalf of an employer, double-check that
-your employer's IP policy allows you to do so. The
-[Developer Certificate of Origin](https://developercertificate.org/)
-is a useful reference even though we don't formally require a
-sign-off in commits.
+your employer's IP policy allows you to do so before signing.
+Contributions to `ee/` directories or `*.ee.{ext}` files are subject
+to the Enterprise License; the CLA grants Nodaro the right to relicense
+all contributions across the full dual-licensing model.
 
 ---
 

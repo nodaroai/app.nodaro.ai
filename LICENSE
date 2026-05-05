@@ -1,32 +1,120 @@
-Nodaro.ai Sustainable Use License
+Nodaro Sustainable Use License
 
 Copyright (c) 2026 Nodaro
 
-Permission is hereby granted to any person obtaining a copy of this
-software and associated documentation files (the "Software"):
+This license governs the use of files in this repository EXCEPT those
+covered by `ee/LICENSE` (the "Enterprise License") and EXCEPT the npm
+SDK packages under `packages/client/` and `packages/shared/` which are
+licensed under Apache License 2.0. For the dual-license overview, see
+`LICENSE.md`.
 
-1. PERMITTED USES:
-   - Use the Software for personal projects
-   - Use the Software for internal business purposes
-   - Modify the Software for your own use
-   - Self-host the Software on your own infrastructure
+1. PERMITTED USES
+   You may, at no cost:
+   (a) use the Software for personal, educational, or research purposes;
+   (b) use the Software for internal business purposes within your
+       organization, including entities that you directly or indirectly
+       control, are controlled by you, or are under common control with
+       you (collectively, "your organization"). You may NOT use the
+       Software as a component or dependency in products, services, or
+       platforms that you sell, license, or distribute to third parties,
+       except under a separate commercial license from Nodaro;
+   (c) modify the Software and create derivative works for any of the
+       above purposes;
+   (d) self-host the Software on infrastructure you control;
+   (e) copy, modify, run, and study the Software for development,
+       testing, and evaluation purposes on non-production infrastructure,
+       provided that:
+       (i)   the deployment is not accessible to end users beyond the
+             developer's own evaluation team;
+       (ii)  no real customer data, real revenue, or real production
+             workloads are processed; and
+       (iii) the deployment uses only synthetic test accounts and data.
 
-2. PROHIBITED USES:
-   - Offering the Software as a commercial hosted service to third parties
-   - Selling, licensing, or sublicensing the Software
-   - Removing or modifying license/attribution notices
+2. GRANT OF PATENT LICENSE
+   Subject to the terms and conditions of this License, each Contributor
+   hereby grants to You a perpetual, worldwide, non-exclusive,
+   no-charge, royalty-free, irrevocable patent license to make, have
+   made, use, offer to sell, sell, import, and otherwise transfer the
+   Software, where such license applies only to those patent claims
+   licensable by such Contributor that are necessarily infringed by
+   their Contribution(s) alone or by combination of their Contribution(s)
+   with the Software to which such Contribution(s) was submitted. If You
+   institute patent litigation against any entity (including a
+   cross-claim or counterclaim in a lawsuit) alleging that the Software
+   or a Contribution embodied within the Software constitutes direct or
+   contributory patent infringement, then any patent licenses granted to
+   You under this License for that Software shall terminate as of the
+   date such litigation is filed.
 
-3. ATTRIBUTION:
-   - You must retain all copyright and license notices
-   - If you modify the Software, you must indicate changes made
+3. PROHIBITED USES
+   Without a separate written agreement with Nodaro, you may NOT:
+   (a) sell, offer for sale, or commercially distribute the Software or
+       derivative works as a managed service, SaaS, or hosted platform
+       to any party beyond your own organization;
+   (b) distribute, sublicense, or sell the Software or derivative works
+       to third parties for a fee;
+   (c) remove, alter, or obscure copyright, attribution, or license
+       notices in the Software;
+   (d) use Nodaro trademarks, logos, or product names in any way that
+       implies endorsement or sponsorship without written permission.
 
-4. NO WARRANTY:
+4. ATTRIBUTION
+   (a) You must retain all copyright and license notices in source files
+       and accompanying documentation.
+   (b) If you modify the Software, you must clearly indicate that the
+       files have been modified and the date of modification.
+
+5. BRANCH SCOPE
+   Only the contents of the `main` branch of the official Nodaro
+   repository at github.com/nodaroai/app.nodaro.ai are licensed under
+   these terms. Code on `dev`, feature branches, forks before merge, or
+   any other branch is provided AS-IS without any license grant. This
+   branch-scope restriction applies only to files governed by this
+   License and does not affect the Apache License 2.0 grant for the
+   SDK packages in `packages/client/` and `packages/shared/`, which
+   stand on their own per-package LICENSE files independent of branch.
+
+6. COMBINED BUILDS
+   When you combine community-licensed files with files governed by
+   `ee/LICENSE` into a binary, container, package, or other
+   distribution, that distribution as a whole is governed by
+   `ee/LICENSE`. The community files retain their license terms in
+   source form. Files in the Apache 2.0 SDK packages
+   (`packages/client/` and `packages/shared/`) retain Apache 2.0 terms
+   when distributed independently as npm packages.
+
+7. THIRD-PARTY COMPONENTS
+   This Software incorporates third-party open source components, each
+   licensed under their own terms. Those components remain governed by
+   their respective licenses.
+
+8. NO WARRANTY
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-   IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-   TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-   SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+9. TERMINATION
+   Any material breach of these terms automatically terminates Your
+   rights under this License, provided that the licensor provides You
+   written notice and a thirty (30) day period to cure the breach. If
+   You cure the breach within thirty (30) days, this License remains in
+   effect. If You do not cure within that period, Your rights terminate
+   and You must cease all use and destroy all copies of the Software in
+   Your possession. Rights are automatically reinstated if the licensor
+   accepts Your cure in writing.
+
+10. GOVERNING LAW
+    This License shall be governed by and construed in accordance with
+    the laws of the State of Israel, without regard to conflict-of-law
+    principles. Any legal proceeding arising under or relating to this
+    License shall be subject to the exclusive jurisdiction of the
+    competent courts in Tel Aviv-Jaffa, Israel. If You are a consumer,
+    You may also benefit from any mandatory provisions of the law of
+    the country in which You reside.
 
 For commercial hosting licenses, contact: license@nodaro.ai
