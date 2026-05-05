@@ -12,6 +12,7 @@ import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-querie
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
+import { UserFilter } from "@/components/user-filter"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCard } from "@/lib/api"
@@ -178,10 +179,12 @@ export default function ProjectsPage() {
     if (!isAdmin) return false
     return localStorage.getItem("nodaro-admin-view-all-projects") === "true"
   })
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
 
   const handleViewAllChange = (checked: boolean) => {
     setViewAll(checked)
     localStorage.setItem("nodaro-admin-view-all-projects", String(checked))
+    if (!checked) setSelectedUserId(null)
   }
 
   const { data: myProjects = [], isLoading: myLoading } = useProjects()
@@ -212,12 +215,29 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState("")
 
   const filteredProjects = useMemo(() => {
-    if (!search) return projects
-    return projects.filter((p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (showAll && p.ownerEmail?.toLowerCase().includes(search.toLowerCase())),
-    )
-  }, [projects, search, showAll])
+    return projects.filter((p) => {
+      const matchesUser = selectedUserId === null || p.userId === selectedUserId
+      if (!matchesUser) return false
+      if (!search) return true
+      return (
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (showAll && p.ownerEmail?.toLowerCase().includes(search.toLowerCase()))
+      )
+    })
+  }, [projects, search, showAll, selectedUserId])
+
+  const userOptions = useMemo(() => {
+    if (!showAll) return []
+    const map = new Map<string, string>()
+    for (const p of projects) {
+      if (p.userId && p.ownerEmail && p.ownerEmail !== "Unknown") {
+        map.set(p.userId, p.ownerEmail)
+      }
+    }
+    return [...map.entries()]
+      .map(([id, email]) => ({ id, email }))
+      .sort((a, b) => a.email.localeCompare(b.email, undefined, { sensitivity: "base" }))
+  }, [projects, showAll])
 
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
   const { results: workflowResults, loading: workflowSearchLoading } = useWorkflowSearch(search, projectMap)
@@ -547,6 +567,13 @@ export default function ProjectsPage() {
               <List className="h-5 w-5" />
             </button>
           </div>
+          {showAll && userOptions.length > 0 && (
+            <UserFilter
+              users={userOptions}
+              value={selectedUserId}
+              onChange={setSelectedUserId}
+            />
+          )}
           <div className="relative w-48">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input

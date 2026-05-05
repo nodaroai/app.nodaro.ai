@@ -147,9 +147,14 @@ interface JobRow {
   workflow_execution_id: string | null
 }
 
-export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string) {
+export function useAdminJobs(
+  page: number,
+  pageSize = 50,
+  statusFilter?: string,
+  userIdFilter?: string,
+) {
   return useQuery({
-    queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter),
+    queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter),
     queryFn: async (): Promise<AdminJob[]> => {
       const supabase = createClient()
       let query = supabase
@@ -164,6 +169,7 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (statusFilter) query = query.eq("status", statusFilter)
+      if (userIdFilter) query = query.eq("user_id", userIdFilter)
       const { data: jobs, error } = await (query as unknown as PromiseLike<{ data: JobRow[] | null; error: Error | null }>)
       if (error) throw error
       if (!jobs || jobs.length === 0) return []
@@ -199,6 +205,26 @@ export function useAdminJobs(page: number, pageSize = 50, statusFilter?: string)
     },
     enabled: hasAdmin(),
     staleTime: 15_000,
+  })
+}
+
+const ADMIN_USER_FILTER_LIMIT = 1000
+
+export function useAllAdminUsersLite() {
+  return useQuery({
+    queryKey: queryKeys.admin.usersLite(),
+    queryFn: async (): Promise<ReadonlyArray<{ id: string; email: string }>> => {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, email")
+        .order("email", { ascending: true })
+        .limit(ADMIN_USER_FILTER_LIMIT)
+      if (error) throw error
+      return (data ?? []) as ReadonlyArray<{ id: string; email: string }>
+    },
+    enabled: hasAdmin(),
+    staleTime: 60_000,
   })
 }
 

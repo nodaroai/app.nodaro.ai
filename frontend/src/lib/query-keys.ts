@@ -144,8 +144,9 @@ export const queryKeys = {
     stats: () => ["admin", "stats"] as const,
     users: (page: number, pageSize: number) =>
       ["admin", "users", page, pageSize] as const,
-    jobs: (page: number, pageSize: number, status?: string) =>
-      ["admin", "jobs", page, pageSize, status ?? ""] as const,
+    jobs: (page: number, pageSize: number, status?: string, userId?: string) =>
+      ["admin", "jobs", page, pageSize, status ?? "", userId ?? ""] as const,
+    usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (page: number, pageSize: number) =>
       ["admin", "usage-logs", page, pageSize] as const,
     models: () => ["admin", "models"] as const,

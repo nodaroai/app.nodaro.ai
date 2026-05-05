@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useAdminJobs, type AdminJob } from "@/hooks/queries/use-admin-queries"
+import { UserFilter } from "@/components/user-filter"
+import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/hooks/queries/use-admin-queries"
 
 const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
 
@@ -174,9 +175,11 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
 export default function AdminJobsPage() {
   const [page, setPage] = useState(0)
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const { data: users = [] } = useAllAdminUsersLite()
   const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null)
   const filter = statusFilter === "all" ? undefined : statusFilter
-  const { data: jobs = [], isLoading: loading } = useAdminJobs(page, 50, filter)
+  const { data: jobs = [], isLoading: loading } = useAdminJobs(page, 50, filter, selectedUserId ?? undefined)
 
   if (loading && jobs.length === 0) {
     return (
@@ -188,19 +191,28 @@ export default function AdminJobsPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-4">
         <h1 className="text-xl font-bold">Jobs</h1>
-        <div className="flex gap-1">
-          {STATUS_OPTIONS.map((s) => (
-            <Button
-              key={s}
-              variant={statusFilter === s ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setPage(0); setStatusFilter(s) }}
-            >
-              {s === "all" ? "All" : s}
-            </Button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          {users.length > 0 && (
+            <UserFilter
+              users={users}
+              value={selectedUserId}
+              onChange={(id) => { setPage(0); setSelectedUserId(id) }}
+            />
+          )}
+          <div className="flex gap-1">
+            {STATUS_OPTIONS.map((s) => (
+              <Button
+                key={s}
+                variant={statusFilter === s ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setPage(0); setStatusFilter(s) }}
+              >
+                {s === "all" ? "All" : s}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
