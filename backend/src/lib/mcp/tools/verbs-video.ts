@@ -213,7 +213,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "for style transfer or soundtrack-driven motion (max 3 each), or " +
         "`reference_image_urls` for extra reference images beyond `image_url` " +
         "(max 9). Multimodal refs cannot be combined with `end_frame_url` — " +
-        "choose one mode.",
+        "choose one mode.\n\n" +
+        "**Perfect loop** (the canonical recipe — three calls):\n" +
+        "  1. `animate_image` with `model: \"veo3.1\"`, `sound: false`, and the " +
+        "**same image** as both `image_url` (start) and `end_frame_url` (or the " +
+        "same `image_asset_id` and `end_frame_asset_id`). VEO3.1's first+last-" +
+        "frame mode + Nodaro's auto tail-trim produces a frame-perfect VISUAL " +
+        "loop. `sound: false` is important — VEO3.1's generated audio does NOT " +
+        "loop seamlessly (start and end audio differ even when frames match), " +
+        "so leaving it on creates audible seams when copies are stitched.\n" +
+        "  2. `combine_videos` with N copies of that single clip's `asset_id` " +
+        "(`transition: \"cut\"`, `audio_mode: \"remove\"`) to extend the loop to " +
+        "the desired duration. The visual seam is invisible because the last " +
+        "frame of clip K equals the first frame of clip K+1.\n" +
+        "  3. `merge_video_audio` to attach a pre-made looping audio track to " +
+        "the FINAL stitched video (not to the individual loop clip). The " +
+        "user-supplied audio should match the total stitched duration.",
       inputSchema: {
         prompt: z.string().max(8000).optional(),
         image_url: z.string().url().optional(),
