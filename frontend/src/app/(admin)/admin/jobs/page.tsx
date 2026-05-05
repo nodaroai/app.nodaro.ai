@@ -1,11 +1,11 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Link } from "react-router-dom"
 import { Loader2, Info, Copy, Check, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { UserFilter } from "@/components/user-filter"
+import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { JobAssetView } from "@/components/admin/job-asset-view"
 import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/hooks/queries/use-admin-queries"
 
@@ -172,11 +172,28 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
 export default function AdminJobsPage() {
   const [page, setPage] = useState(0)
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [userFilter, setUserFilter] = useState<UserFilterValue>({ kind: "all" })
   const { data: users = [] } = useAllAdminUsersLite()
+
+  const adminIds = useMemo(
+    () => users.filter((u) => u.role !== "user").map((u) => u.id),
+    [users],
+  )
+
+  const userIdFilter =
+    userFilter.kind === "user" ? userFilter.id : undefined
+  const excludeUserIds =
+    userFilter.kind === "exclude_admins" ? adminIds : undefined
+
   const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null)
   const filter = statusFilter === "all" ? undefined : statusFilter
-  const { data: jobs = [], isLoading: loading } = useAdminJobs(page, 50, filter, selectedUserId ?? undefined)
+  const { data: jobs = [], isLoading: loading } = useAdminJobs(
+    page,
+    50,
+    filter,
+    userIdFilter,
+    excludeUserIds,
+  )
 
   if (loading && jobs.length === 0) {
     return (
@@ -194,8 +211,11 @@ export default function AdminJobsPage() {
           {users.length > 0 && (
             <UserFilter
               users={users}
-              value={selectedUserId}
-              onChange={(id) => { setPage(0); setSelectedUserId(id) }}
+              value={userFilter}
+              onChange={(next) => {
+                setPage(0)
+                setUserFilter(next)
+              }}
             />
           )}
           <div className="flex gap-1">

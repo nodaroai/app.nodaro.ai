@@ -144,8 +144,22 @@ export const queryKeys = {
     stats: () => ["admin", "stats"] as const,
     users: (page: number, pageSize: number, sortBy?: string, sortDir?: string) =>
       ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc"] as const,
-    jobs: (page: number, pageSize: number, status?: string, userId?: string) =>
-      ["admin", "jobs", page, pageSize, status ?? "", userId ?? ""] as const,
+    jobs: (
+      page: number,
+      pageSize: number,
+      status?: string,
+      userId?: string,
+      excludeUserIds?: ReadonlyArray<string>,
+    ) =>
+      [
+        "admin",
+        "jobs",
+        page,
+        pageSize,
+        status ?? "",
+        userId ?? "",
+        [...(excludeUserIds ?? [])].sort().join(","),
+      ] as const,
     usersLite: () => ["admin", "users-lite"] as const,
     usageLogs: (
       page: number,

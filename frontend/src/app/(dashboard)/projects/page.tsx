@@ -12,11 +12,12 @@ import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-querie
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
-import { UserFilter } from "@/components/user-filter"
+import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCard } from "@/lib/api"
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
+import { useAllAdminUsersLite } from "@/hooks/queries/use-admin-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
 import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
@@ -179,16 +180,21 @@ export default function ProjectsPage() {
     if (!isAdmin) return false
     return localStorage.getItem("nodaro-admin-view-all-projects") === "true"
   })
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [userFilter, setUserFilter] = useState<UserFilterValue>({ kind: "all" })
 
   const handleViewAllChange = (checked: boolean) => {
     setViewAll(checked)
     localStorage.setItem("nodaro-admin-view-all-projects", String(checked))
-    if (!checked) setSelectedUserId(null)
+    if (!checked) setUserFilter({ kind: "all" })
   }
 
   const { data: myProjects = [], isLoading: myLoading } = useProjects()
   const { data: allData, isLoading: allLoading } = useAllProjects(isAdmin && viewAll)
+  const { data: liteUsers = [] } = useAllAdminUsersLite({ enabled: isAdmin && viewAll })
+  const userById = useMemo(
+    () => new Map(liteUsers.map((u) => [u.id, u])),
+    [liteUsers],
+  )
 
   const showAll = isAdmin && viewAll
   const projects = showAll ? (allData?.projects ?? []) : myProjects
@@ -216,7 +222,14 @@ export default function ProjectsPage() {
 
   const filteredProjects = useMemo(() => {
     return projects.filter((p) => {
-      const matchesUser = selectedUserId === null || p.userId === selectedUserId
+      const matchesUser = (() => {
+        if (userFilter.kind === "all") return true
+        if (userFilter.kind === "exclude_admins") {
+          const role = userById.get(p.userId ?? "")?.role
+          return role !== "admin" && role !== "super_admin"
+        }
+        return p.userId === userFilter.id
+      })()
       if (!matchesUser) return false
       if (!search) return true
       return (
@@ -224,20 +237,13 @@ export default function ProjectsPage() {
         (showAll && p.ownerEmail?.toLowerCase().includes(search.toLowerCase()))
       )
     })
-  }, [projects, search, showAll, selectedUserId])
+  }, [projects, search, showAll, userFilter, userById])
 
   const userOptions = useMemo(() => {
     if (!showAll) return []
-    const map = new Map<string, string>()
-    for (const p of projects) {
-      if (p.userId && p.ownerEmail && p.ownerEmail !== "Unknown") {
-        map.set(p.userId, p.ownerEmail)
-      }
-    }
-    return [...map.entries()]
-      .map(([id, email]) => ({ id, email }))
-      .sort((a, b) => a.email.localeCompare(b.email, undefined, { sensitivity: "base" }))
-  }, [projects, showAll])
+    const ownerIds = new Set(projects.map((p) => p.userId).filter(Boolean) as string[])
+    return liteUsers.filter((u) => ownerIds.has(u.id))
+  }, [projects, showAll, liteUsers])
 
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects])
   const { results: workflowResults, loading: workflowSearchLoading } = useWorkflowSearch(search, projectMap)
@@ -570,8 +576,8 @@ export default function ProjectsPage() {
           {showAll && userOptions.length > 0 && (
             <UserFilter
               users={userOptions}
-              value={selectedUserId}
-              onChange={setSelectedUserId}
+              value={userFilter}
+              onChange={setUserFilter}
             />
           )}
           <div className="relative w-48">

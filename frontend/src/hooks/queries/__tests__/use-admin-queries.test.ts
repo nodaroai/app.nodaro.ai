@@ -31,8 +31,22 @@ vi.mock("@/lib/query-keys", () => ({
     admin: {
       stats: () => ["admin", "stats"],
       users: (page: number, pageSize: number) => ["admin", "users", page, pageSize],
-      jobs: (page: number, pageSize: number, status?: string, userId?: string) =>
-        ["admin", "jobs", page, pageSize, status ?? "", userId ?? ""],
+      jobs: (
+        page: number,
+        pageSize: number,
+        status?: string,
+        userId?: string,
+        excludeUserIds?: ReadonlyArray<string>,
+      ) =>
+        [
+          "admin",
+          "jobs",
+          page,
+          pageSize,
+          status ?? "",
+          userId ?? "",
+          [...(excludeUserIds ?? [])].sort().join(","),
+        ],
       usersLite: () => ["admin", "users-lite"],
       usageLogs: (page: number, pageSize: number) => ["admin", "usage-logs", page, pageSize],
       models: () => ["admin", "models"],
@@ -113,7 +127,7 @@ describe("admin query hooks — shared hasAdmin() gating", () => {
     {
       name: "useAdminJobs",
       call: () => useAdminJobs(1, 50),
-      expectedKey: ["admin", "jobs", 1, 50, "", ""],
+      expectedKey: ["admin", "jobs", 1, 50, "", "", ""],
       expectedStaleTime: 15_000,
     },
     {
@@ -199,7 +213,7 @@ describe("useAdminJobs with statusFilter", () => {
     useAdminJobs(0, 50, "completed")
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "completed", ""],
+        queryKey: ["admin", "jobs", 0, 50, "completed", "", ""],
       })
     )
   })
@@ -216,7 +230,7 @@ describe("useAdminJobs with userIdFilter", () => {
     useAdminJobs(0, 50, undefined, "u1")
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "", "u1"],
+        queryKey: ["admin", "jobs", 0, 50, "", "u1", ""],
       })
     )
   })
@@ -225,9 +239,63 @@ describe("useAdminJobs with userIdFilter", () => {
     useAdminJobs(2, 50, "failed", "u1")
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["admin", "jobs", 2, 50, "failed", "u1"],
+        queryKey: ["admin", "jobs", 2, 50, "failed", "u1", ""],
       })
     )
+  })
+})
+
+describe("useAdminJobs with excludeUserIds", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+  })
+
+  it("includes sorted excludeUserIds in queryKey", () => {
+    useAdminJobs(0, 50, undefined, undefined, ["u3", "u1", "u2"])
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["admin", "jobs", 0, 50, "", "", "u1,u2,u3"],
+      }),
+    )
+  })
+
+  it("treats empty excludeUserIds as no filter", () => {
+    useAdminJobs(0, 50, undefined, undefined, [])
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["admin", "jobs", 0, 50, "", "", ""],
+      }),
+    )
+  })
+})
+
+describe("useAllAdminUsersLite options.enabled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseQuery.mockReturnValue({ data: null })
+  })
+
+  it("respects options.enabled = false even when hasAdmin() is true", () => {
+    mockHasAdmin.mockReturnValue(true)
+    useAllAdminUsersLite({ enabled: false })
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.enabled).toBe(false)
+  })
+
+  it("defaults options.enabled to true (keeps hasAdmin gate behavior)", () => {
+    mockHasAdmin.mockReturnValue(true)
+    useAllAdminUsersLite()
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.enabled).toBe(true)
+  })
+
+  it("stays disabled when hasAdmin() is false even with enabled=true", () => {
+    mockHasAdmin.mockReturnValue(false)
+    useAllAdminUsersLite({ enabled: true })
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.enabled).toBe(false)
   })
 })
 

@@ -194,28 +194,54 @@ describe("queryKeys", () => {
       expect(queryKeys.admin.stats()).toEqual(["admin", "stats"])
     })
 
-    it("builds users key with pagination", () => {
-      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20])
+    it("builds users key with pagination (default sort)", () => {
+      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20, "created_at", "desc"])
+    })
+
+    it("builds users key with custom sort", () => {
+      expect(queryKeys.admin.users(0, 50, "email", "asc"))
+        .toEqual(["admin", "users", 0, 50, "email", "asc"])
     })
 
     it("builds jobs key with pagination and status", () => {
-      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", ""])
+      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", "", ""])
     })
 
     it("builds jobs key without status (defaults to empty string)", () => {
-      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", ""])
+      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", "", ""])
     })
 
     it("builds jobs key with userId", () => {
-      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1"])
+      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1", ""])
+    })
+
+    it("builds jobs key with excludeUserIds (sorted)", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["u3", "u1", "u2"]))
+        .toEqual(["admin", "jobs", 0, 50, "", "", "u1,u2,u3"])
+    })
+
+    it("normalizes empty excludeUserIds to empty string", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, []))
+        .toEqual(["admin", "jobs", 0, 50, "", "", ""])
+    })
+
+    it("returns same key for excludeUserIds in different orders", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["a", "b"]))
+        .toEqual(queryKeys.admin.jobs(0, 50, undefined, undefined, ["b", "a"]))
     })
 
     it("builds usersLite key", () => {
       expect(queryKeys.admin.usersLite()).toEqual(["admin", "users-lite"])
     })
 
-    it("builds usageLogs key", () => {
-      expect(queryKeys.admin.usageLogs(0, 25)).toEqual(["admin", "usage-logs", 0, 25])
+    it("builds usageLogs key with defaults", () => {
+      expect(queryKeys.admin.usageLogs(0, 25))
+        .toEqual(["admin", "usage-logs", 0, 25, "none", "created_at", "desc"])
+    })
+
+    it("builds usageLogs key with custom group/sort", () => {
+      expect(queryKeys.admin.usageLogs(2, 50, "user", "credits_used", "asc"))
+        .toEqual(["admin", "usage-logs", 2, 50, "user", "credits_used", "asc"])
     })
 
     it("builds models key", () => {
