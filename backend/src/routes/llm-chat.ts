@@ -7,7 +7,7 @@ import { CreditsService } from "../billing/credits.js"
 import { createSSEStream } from "../lib/sse.js"
 import { llmComplete, llmStream } from "../lib/llm-client.js"
 import type { LlmContentBlock } from "../lib/llm-client.js"
-import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS, getLlmModalityCaps } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 
@@ -16,18 +16,44 @@ const llmChatBody = z.object({
   userInput: z.string().min(1).max(10000),
   userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(z.string().url()).max(5).optional(),
+  referenceVideoUrls: z.array(z.string().url()).max(3).optional(),
+  referenceAudioUrls: z.array(z.string().url()).max(3).optional(),
   temperature: z.number().min(0).max(2).default(0.7),
   maxTokens: z.number().min(1).max(16384).default(2048),
   userId: z.string().uuid().optional(),
   llmModel: z.enum(LLM_MODEL_IDS as [string, ...string[]]).optional(),
 })
 
-function buildUserContent(userInput: string, referenceImageUrls?: string[]): string | LlmContentBlock[] {
-  if (!referenceImageUrls?.length) return userInput
-  return [
-    ...referenceImageUrls.map((url) => ({ type: "image" as const, url })),
-    { type: "text" as const, text: userInput },
-  ]
+function buildUserContent(
+  userInput: string,
+  refs: { images?: string[]; videos?: string[]; audios?: string[] },
+): string | LlmContentBlock[] {
+  const hasMedia = ((refs.images?.length ?? 0) + (refs.videos?.length ?? 0) + (refs.audios?.length ?? 0)) > 0
+  if (!hasMedia) return userInput
+  const blocks: LlmContentBlock[] = []
+  for (const url of refs.images ?? []) blocks.push({ type: "image", url })
+  for (const url of refs.videos ?? []) blocks.push({ type: "video", url })
+  for (const url of refs.audios ?? []) blocks.push({ type: "audio", url })
+  blocks.push({ type: "text", text: userInput })
+  return blocks
+}
+
+/**
+ * Return null if refs are valid for the model, or an error payload when the
+ * caller passed video/audio refs to a model that doesn't support them.
+ */
+function checkModalityOrError(
+  llmModel: string,
+  refs: { videos?: string[]; audios?: string[] },
+): { code: string; message: string } | null {
+  const caps = getLlmModalityCaps(llmModel)
+  if (refs.videos?.length && !caps.video) {
+    return { code: "modality_not_supported", message: `Model ${llmModel} does not support video references. Switch to a Gemini model.` }
+  }
+  if (refs.audios?.length && !caps.audio) {
+    return { code: "modality_not_supported", message: `Model ${llmModel} does not support audio references. Switch to a Gemini model.` }
+  }
+  return null
 }
 
 export async function llmChatRoutes(app: FastifyInstance) {
@@ -55,7 +81,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -74,6 +100,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
+      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls })
+      if (modalityError) {
+        return reply.status(400).send({ error: modalityError })
+      }
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel)
 
       const { data: job, error: jobError } = await supabase
@@ -102,7 +132,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         const response = await llmComplete({
           modelId: llmModel,
           system: systemPrompt,
-          messages: [{ role: "user", content: buildUserContent(userInput, referenceImageUrls) }],
+          messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
           maxTokens,
           temperature,
         })
@@ -170,7 +200,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
         })
       }
 
-      const { systemPrompt, userInput, referenceImageUrls, temperature, maxTokens } = parsed.data
+      const { systemPrompt, userInput, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, temperature, maxTokens } = parsed.data
       const userId = req.userId
 
       if (!userId) {
@@ -189,6 +219,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
       }
 
       const llmModel = parsed.data.llmModel ?? LLM_FEATURE_DEFAULTS["llm-chat"]
+      const modalityError = checkModalityOrError(llmModel, { videos: referenceVideoUrls, audios: referenceAudioUrls })
+      if (modalityError) {
+        return reply.status(400).send({ error: modalityError })
+      }
       const modelIdentifier = buildLlmCreditIdentifier("llm-chat", llmModel)
 
       const { data: job, error: jobError } = await supabase
@@ -230,7 +264,7 @@ export async function llmChatRoutes(app: FastifyInstance) {
           {
             modelId: llmModel,
             system: systemPrompt,
-            messages: [{ role: "user", content: buildUserContent(userInput, referenceImageUrls) }],
+            messages: [{ role: "user", content: buildUserContent(userInput, { images: referenceImageUrls, videos: referenceVideoUrls, audios: referenceAudioUrls }) }],
             maxTokens,
             temperature,
           },

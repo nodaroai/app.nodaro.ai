@@ -2551,6 +2551,12 @@ export type LLMChatData = {
   activeResultIndex?: number
   lastSystemPrompt?: string
   lastUserPrompt?: string
+  /** Image reference URLs (manual + DAG-resolved). Always allowed. */
+  referenceImageUrls?: readonly string[]
+  /** Video reference URLs. Only used when llmModel supports video (Gemini family). */
+  referenceVideoUrls?: readonly string[]
+  /** Audio reference URLs. Only used when llmModel supports audio (Gemini family). */
+  referenceAudioUrls?: readonly string[]
 }
 
 // --- AI Writer Node Data ---

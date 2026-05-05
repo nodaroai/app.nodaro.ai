@@ -2441,6 +2441,8 @@ export function executeNode(
       systemPrompt: systemPrompt || "",
       userInput,
       referenceImageUrls: inputs.referenceImageUrls,
+      referenceVideoUrls: inputs.referenceVideoUrls,
+      referenceAudioUrls: inputs.referenceAudioUrls,
       temperature: chatData.temperature ?? 0.7,
       maxTokens: chatData.maxTokens ?? 2048,
       llmModel: chatData.llmModel,
