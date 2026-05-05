@@ -199,15 +199,30 @@ describe("queryKeys", () => {
     })
 
     it("builds jobs key with pagination and status", () => {
-      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", ""])
+      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", "", ""])
     })
 
     it("builds jobs key without status (defaults to empty string)", () => {
-      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", ""])
+      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", "", ""])
     })
 
     it("builds jobs key with userId", () => {
-      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1"])
+      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1", ""])
+    })
+
+    it("builds jobs key with excludeUserIds (sorted)", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["u3", "u1", "u2"]))
+        .toEqual(["admin", "jobs", 0, 50, "", "", "u1,u2,u3"])
+    })
+
+    it("normalizes empty excludeUserIds to empty string", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, []))
+        .toEqual(["admin", "jobs", 0, 50, "", "", ""])
+    })
+
+    it("returns same key for excludeUserIds in different orders", () => {
+      expect(queryKeys.admin.jobs(0, 50, undefined, undefined, ["a", "b"]))
+        .toEqual(queryKeys.admin.jobs(0, 50, undefined, undefined, ["b", "a"]))
     })
 
     it("builds usersLite key", () => {

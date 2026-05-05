@@ -215,9 +215,10 @@ export function useAdminJobs(
   pageSize = 50,
   statusFilter?: string,
   userIdFilter?: string,
+  excludeUserIds?: ReadonlyArray<string>,
 ) {
   return useQuery({
-    queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter),
+    queryKey: queryKeys.admin.jobs(page, pageSize, statusFilter, userIdFilter, excludeUserIds),
     queryFn: async (): Promise<AdminJob[]> => {
       const supabase = createClient()
       let query = supabase
@@ -226,6 +227,7 @@ export function useAdminJobs(
           order: (col: string, opts: { ascending: boolean }) => typeof query
           range: (from: number, to: number) => typeof query
           eq: (col: string, val: string) => typeof query
+          not: (col: string, op: string, val: string) => typeof query
           then: Promise<{ data: JobRow[] | null; error: Error | null }>["then"]
         }
       query = query
@@ -233,6 +235,9 @@ export function useAdminJobs(
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (statusFilter) query = query.eq("status", statusFilter)
       if (userIdFilter) query = query.eq("user_id", userIdFilter)
+      if (excludeUserIds && excludeUserIds.length > 0) {
+        query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
+      }
       const { data: jobs, error } = await (query as unknown as PromiseLike<{ data: JobRow[] | null; error: Error | null }>)
       if (error) throw error
       if (!jobs || jobs.length === 0) return []
@@ -273,20 +278,34 @@ export function useAdminJobs(
 
 const ADMIN_USER_FILTER_LIMIT = 1000
 
-export function useAllAdminUsersLite() {
+export interface AdminUserLite {
+  readonly id: string
+  readonly email: string
+  readonly fullName: string | null
+  readonly role: "user" | "admin" | "super_admin"
+}
+
+export function useAllAdminUsersLite(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.admin.usersLite(),
-    queryFn: async (): Promise<ReadonlyArray<{ id: string; email: string }>> => {
+    queryFn: async (): Promise<ReadonlyArray<AdminUserLite>> => {
       const supabase = createClient()
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email")
-        .order("email", { ascending: true })
+        .select("id, email, full_name, role")
         .limit(ADMIN_USER_FILTER_LIMIT)
       if (error) throw error
-      return (data ?? []) as ReadonlyArray<{ id: string; email: string }>
+      const users = (data ?? []).map((row) => ({
+        id: row.id as string,
+        email: row.email as string,
+        fullName: (row.full_name as string | null) ?? null,
+        role: (row.role as "user" | "admin" | "super_admin") ?? "user",
+      }))
+      return [...users].sort((a, b) =>
+        a.email.localeCompare(b.email, undefined, { sensitivity: "base" }),
+      )
     },
-    enabled: hasAdmin(),
+    enabled: hasAdmin() && (options.enabled ?? true),
     staleTime: 60_000,
   })
 }
