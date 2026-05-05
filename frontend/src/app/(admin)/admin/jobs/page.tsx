@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserFilter } from "@/components/user-filter"
+import { JobAssetView } from "@/components/admin/job-asset-view"
 import { useAdminJobs, useAllAdminUsersLite, type AdminJob } from "@/hooks/queries/use-admin-queries"
 
 const STATUS_OPTIONS = ["all", "pending", "queued", "processing", "completed", "failed", "cancelled"] as const
@@ -150,14 +151,10 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
             {hasError && <TabsTrigger value="error">Error</TabsTrigger>}
           </TabsList>
           <TabsContent value="input">
-            <pre className="text-xs bg-muted/50 rounded-lg p-4 overflow-auto max-h-64 whitespace-pre-wrap">
-              {job.input_data ? JSON.stringify(job.input_data, null, 2) : "No input data"}
-            </pre>
+            <JobAssetView data={job.input_data} />
           </TabsContent>
           <TabsContent value="output">
-            <pre className="text-xs bg-muted/50 rounded-lg p-4 overflow-auto max-h-64 whitespace-pre-wrap">
-              {job.output_data ? JSON.stringify(job.output_data, null, 2) : "No output data"}
-            </pre>
+            <JobAssetView data={job.output_data} />
           </TabsContent>
           {hasError && (
             <TabsContent value="error">
