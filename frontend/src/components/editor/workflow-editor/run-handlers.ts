@@ -7,7 +7,7 @@ import { hasCredits } from "@/lib/edition";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
-import { getCachedCredits } from "@/hooks/use-model-credits";
+import { getCachedCredits } from "@/ee/hooks/use-model-credits";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import type { GeneratedResult, WorkflowNode } from "@/types/nodes";
 import {

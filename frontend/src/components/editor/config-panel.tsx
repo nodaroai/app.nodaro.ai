@@ -11,8 +11,8 @@ import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
 const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
-import { GenerateButton } from "@/components/credits/GenerateButton"
-import { useProvidersCreditsSum } from "@/hooks/use-providers-credits-sum"
+import { GenerateButton } from "@/ee/components/credits/GenerateButton"
+import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import {
   NODE_DEFINITIONS,

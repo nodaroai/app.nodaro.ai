@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
-import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { Button } from "@/components/ui/button"
 import { X, Plus, Wand2 } from "lucide-react"
 import { toast } from "sonner"

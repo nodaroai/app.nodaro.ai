@@ -20,7 +20,7 @@ vi.mock("sonner", () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }))
 
-vi.mock("@/hooks/queries/use-credits-queries", () => ({
+vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
   prefetchModelCredits: vi.fn().mockResolvedValue(undefined),
 }))
 

@@ -40,7 +40,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   }),
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
+vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 0 }))
 vi.mock("@/hooks/use-full-resolution", () => ({ useFullResolution: () => false }))
 vi.mock("@/components/editor/media-preview-modal", () => ({ MediaPreviewModal: () => null }))
 vi.mock("@/components/ui/delete-confirmation-dialog", () => ({ DeleteConfirmationDialog: () => null }))

@@ -22,7 +22,7 @@ import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { useVoices } from "@/hooks/use-voices"
 import { useVoiceLibrary } from "@/hooks/use-voices"
 import { useVoiceClones, useCreateVoiceClone, useDeleteVoiceClone } from "@/hooks/use-voice-clones"
-import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
 
 interface VoiceBrowserProps {

@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { ArrowLeft, Braces, ChevronRight, Save, CheckCircle, Loader2, RefreshCw, Play, Pause, MoreVertical, Download, Upload, Package, FileJson, FileText, ClipboardPaste } from "lucide-react"
-import { CreditBalance } from "@/components/credits/CreditBalance"
+import { CreditBalance } from "@/ee/components/credits/CreditBalance"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {

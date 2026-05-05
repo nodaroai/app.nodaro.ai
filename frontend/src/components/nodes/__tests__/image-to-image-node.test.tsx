@@ -71,7 +71,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({
+vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 

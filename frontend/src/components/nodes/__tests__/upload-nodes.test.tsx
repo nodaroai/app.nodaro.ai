@@ -89,7 +89,7 @@ vi.mock("@/components/ui/image-lightbox", () => ({
   ImageLightbox: () => null,
 }))
 
-vi.mock("@/components/credits/StorageExceededModal", () => ({
+vi.mock("@/ee/components/credits/StorageExceededModal", () => ({
   StorageExceededModal: () => null,
 }))
 
