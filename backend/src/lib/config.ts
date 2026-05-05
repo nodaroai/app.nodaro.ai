@@ -53,7 +53,7 @@ const envSchema = z.object({
   /** Dynamic Client Registration mode. "allowlist" = only allow known MCP clients (Claude/Cursor/etc); "open" = allow any client_name. */
   MCP_DYNAMIC_REGISTRATION: z.enum(["allowlist", "open"]).default("allowlist"),
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */
-  MCP_DCR_ALLOWLIST: z.string().default("Claude,Cursor,Cline,Continue,Goose"),
+  MCP_DCR_ALLOWLIST: z.string().default("Claude,Claude Code,Cursor,Cline,Continue,Goose,ChatGPT,OpenAI,Lovable,Gemini,Gemini CLI,Codex,MCP Inspector,mcp-inspector"),
 })
 
 export type Edition = "community" | "business" | "cloud"
