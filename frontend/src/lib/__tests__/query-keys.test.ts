@@ -199,11 +199,19 @@ describe("queryKeys", () => {
     })
 
     it("builds jobs key with pagination and status", () => {
-      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error"])
+      expect(queryKeys.admin.jobs(0, 50, "error")).toEqual(["admin", "jobs", 0, 50, "error", ""])
     })
 
     it("builds jobs key without status (defaults to empty string)", () => {
-      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, ""])
+      expect(queryKeys.admin.jobs(0, 50)).toEqual(["admin", "jobs", 0, 50, "", ""])
+    })
+
+    it("builds jobs key with userId", () => {
+      expect(queryKeys.admin.jobs(0, 50, "completed", "u1")).toEqual(["admin", "jobs", 0, 50, "completed", "u1"])
+    })
+
+    it("builds usersLite key", () => {
+      expect(queryKeys.admin.usersLite()).toEqual(["admin", "users-lite"])
     })
 
     it("builds usageLogs key", () => {

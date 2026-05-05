@@ -31,7 +31,9 @@ vi.mock("@/lib/query-keys", () => ({
     admin: {
       stats: () => ["admin", "stats"],
       users: (page: number, pageSize: number) => ["admin", "users", page, pageSize],
-      jobs: (page: number, pageSize: number, status?: string) => ["admin", "jobs", page, pageSize, status ?? ""],
+      jobs: (page: number, pageSize: number, status?: string, userId?: string) =>
+        ["admin", "jobs", page, pageSize, status ?? "", userId ?? ""],
+      usersLite: () => ["admin", "users-lite"],
       usageLogs: (page: number, pageSize: number) => ["admin", "usage-logs", page, pageSize],
       models: () => ["admin", "models"],
       reports: (page: number, status?: string) => ["admin", "reports", page, status ?? ""],
@@ -53,6 +55,7 @@ import {
   useAdminStats,
   useAdminUsers,
   useAdminJobs,
+  useAllAdminUsersLite,
   useAdminUsageLogs,
   useAdminModels,
   useAdminReports,
@@ -102,9 +105,15 @@ describe("admin query hooks — shared hasAdmin() gating", () => {
       expectedStaleTime: 30_000,
     },
     {
+      name: "useAllAdminUsersLite",
+      call: () => useAllAdminUsersLite(),
+      expectedKey: ["admin", "users-lite"],
+      expectedStaleTime: 60_000,
+    },
+    {
       name: "useAdminJobs",
       call: () => useAdminJobs(1, 50),
-      expectedKey: ["admin", "jobs", 1, 50, ""],
+      expectedKey: ["admin", "jobs", 1, 50, "", ""],
       expectedStaleTime: 15_000,
     },
     {
@@ -190,7 +199,33 @@ describe("useAdminJobs with statusFilter", () => {
     useAdminJobs(0, 50, "completed")
     expect(mockUseQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        queryKey: ["admin", "jobs", 0, 50, "completed"],
+        queryKey: ["admin", "jobs", 0, 50, "completed", ""],
+      })
+    )
+  })
+})
+
+describe("useAdminJobs with userIdFilter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+  })
+
+  it("includes userId filter in queryKey", () => {
+    useAdminJobs(0, 50, undefined, "u1")
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["admin", "jobs", 0, 50, "", "u1"],
+      })
+    )
+  })
+
+  it("combines status and userId in queryKey", () => {
+    useAdminJobs(2, 50, "failed", "u1")
+    expect(mockUseQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ["admin", "jobs", 2, 50, "failed", "u1"],
       })
     )
   })
