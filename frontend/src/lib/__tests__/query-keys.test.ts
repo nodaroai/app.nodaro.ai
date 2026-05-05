@@ -194,8 +194,13 @@ describe("queryKeys", () => {
       expect(queryKeys.admin.stats()).toEqual(["admin", "stats"])
     })
 
-    it("builds users key with pagination", () => {
-      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20])
+    it("builds users key with pagination (default sort)", () => {
+      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20, "created_at", "desc"])
+    })
+
+    it("builds users key with custom sort", () => {
+      expect(queryKeys.admin.users(0, 50, "email", "asc"))
+        .toEqual(["admin", "users", 0, 50, "email", "asc"])
     })
 
     it("builds jobs key with pagination and status", () => {
@@ -229,8 +234,14 @@ describe("queryKeys", () => {
       expect(queryKeys.admin.usersLite()).toEqual(["admin", "users-lite"])
     })
 
-    it("builds usageLogs key", () => {
-      expect(queryKeys.admin.usageLogs(0, 25)).toEqual(["admin", "usage-logs", 0, 25])
+    it("builds usageLogs key with defaults", () => {
+      expect(queryKeys.admin.usageLogs(0, 25))
+        .toEqual(["admin", "usage-logs", 0, 25, "none", "created_at", "desc"])
+    })
+
+    it("builds usageLogs key with custom group/sort", () => {
+      expect(queryKeys.admin.usageLogs(2, 50, "user", "credits_used", "asc"))
+        .toEqual(["admin", "usage-logs", 2, 50, "user", "credits_used", "asc"])
     })
 
     it("builds models key", () => {
