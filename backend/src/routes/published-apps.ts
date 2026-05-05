@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { estimateWorkflowCredits } from "../billing/credits.js"
+import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType } from "@nodaro/shared"
 import { calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"

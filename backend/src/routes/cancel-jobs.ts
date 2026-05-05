@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
-import { CreditsService } from "../billing/credits.js"
-import { invalidateBalanceCache } from "./credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
+import { invalidateBalanceCache } from "../ee/routes/credits.js"
 
 /**
  * Refund any reserved credit holds for the given job IDs. Best-effort —

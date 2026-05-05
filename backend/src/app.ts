@@ -1,6 +1,7 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
+import { hasAdmin, hasCredits } from "./lib/config.js"
 import { healthRoutes } from "./routes/health.js"
 import { projectRoutes } from "./routes/projects.js"
 import { workflowRoutes } from "./routes/workflows.js"
@@ -53,28 +54,28 @@ import { generateObjectRoutes } from "./routes/generate-object.js"
 import { locationRoutes } from "./routes/locations.js"
 import { generateLocationRoutes } from "./routes/generate-location.js"
 import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
-import { adminSettingsRoutes } from "./routes/admin-settings.js"
+import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
-import { creditsRoutes } from "./routes/credits.js"
-import { registerCreditsBalanceRoutes } from "./routes/credits-balance.js"
-import { adminRoutes } from "./routes/admin.js"
+import { creditsRoutes } from "./ee/routes/credits.js"
+import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
+import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
-import { adminCreditsRoutes } from "./routes/admin-credits.js"
+import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
 import { sunoRoutes } from "./routes/suno.js"
-import { stripeWebhookRoutes } from "./routes/stripe-webhook.js"
-import { billingRoutes } from "./routes/billing.js"
+import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
+import { billingRoutes } from "./ee/routes/billing.js"
 import { galleryRoutes } from "./routes/gallery.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
-import { adminGalleryReportsRoutes } from "./routes/admin-gallery-reports.js"
-import { adminCreditAuditRoutes } from "./routes/admin-credit-audit.js"
-import { adminCreditAnomalyRoutes } from "./routes/admin-credit-anomalies.js"
-import { adminKieCreditsRoutes } from "./routes/admin-kie-credits.js"
-import { adminSubscriptionHealthRoutes } from "./routes/admin-subscription-health.js"
+import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
+import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
+import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
+import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
+import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { llmChatRoutes } from "./routes/llm-chat.js"
 import { webScrapeRoutes } from "./routes/web-scrape.js"
@@ -113,21 +114,21 @@ import { appRunnerRoutes } from "./routes/app-runner.js"
 import { componentExecuteRoutes } from "./routes/component-execute.js"
 import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
-import { monetizationRoutes } from "./routes/monetization.js"
+import { monetizationRoutes } from "./ee/routes/monetization.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
-import { adminLlmModelsRoutes } from "./routes/admin-llm-models.js"
+import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
 import { nodeDefaultsRoutes } from "./routes/node-defaults.js"
 import { nodesRoutes } from "./routes/nodes.js"
 import { oauthRoutes } from "./routes/oauth.js"
 import { registerOauthRegister } from "./routes/oauth-register.js"
 import { registerWellKnown } from "./routes/well-known.js"
 import { registerMcpRoute } from "./routes/mcp.js"
-import { adminNodeDefaultsRoutes } from "./routes/admin-node-defaults.js"
+import { adminNodeDefaultsRoutes } from "./ee/routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
-import { adminTutorialsRoutes } from "./routes/admin-tutorials.js"
+import { adminTutorialsRoutes } from "./ee/routes/admin-tutorials.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
@@ -256,29 +257,29 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(generateLocationRoutes)
   await app.register(generateLocationAssetRoutes)
-  await app.register(adminSettingsRoutes)
+  if (hasAdmin()) await app.register(adminSettingsRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
-  await app.register(creditsRoutes)
-  await registerCreditsBalanceRoutes(app)
-  await app.register(adminRoutes)
+  if (hasCredits()) await app.register(creditsRoutes)
+  if (hasCredits()) await registerCreditsBalanceRoutes(app)
+  if (hasAdmin()) await app.register(adminRoutes)
   await app.register(libraryRoutes)
   await app.register(transcribeRoutes)
-  await app.register(adminCreditsRoutes)
+  if (hasCredits()) await app.register(adminCreditsRoutes)  // CreditsService + TIER_CREDITS
   await app.register(workflowCostRoutes)
   await app.register(sunoRoutes)
-  await app.register(stripeWebhookRoutes)
-  await app.register(billingRoutes)
+  if (hasCredits()) await app.register(stripeWebhookRoutes)
+  if (hasCredits()) await app.register(billingRoutes)
   await app.register(galleryRoutes)
   await app.register(userSettingsRoutes)
-  await app.register(adminGalleryReportsRoutes)
-  await app.register(adminCreditAuditRoutes)
-  await app.register(adminCreditAnomalyRoutes)
-  await app.register(adminKieCreditsRoutes)
-  await app.register(adminSubscriptionHealthRoutes)
+  if (hasAdmin()) await app.register(adminGalleryReportsRoutes)
+  if (hasAdmin()) await app.register(adminCreditAuditRoutes)
+  if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
+  if (hasAdmin()) await app.register(adminKieCreditsRoutes)
+  if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
   await app.register(webScrapeRoutes)
@@ -317,21 +318,21 @@ export async function buildApp() {
   await app.register(componentExecuteRoutes)
   await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)
-  await app.register(monetizationRoutes)
+  if (hasCredits()) await app.register(monetizationRoutes)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
   await app.register(saveToStorageRoutes)
   await app.register(promptHelperRoutes)
-  await app.register(adminLlmModelsRoutes)
+  if (hasAdmin()) await app.register(adminLlmModelsRoutes)
   await app.register(nodeDefaultsRoutes)
   await app.register(nodesRoutes)
   await app.register(oauthRoutes)
   await registerOauthRegister(app)
   await registerWellKnown(app)
   await registerMcpRoute(app)
-  await app.register(adminNodeDefaultsRoutes)
+  if (hasAdmin()) await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
-  await app.register(adminTutorialsRoutes)
+  if (hasAdmin()) await app.register(adminTutorialsRoutes)
   await app.register(openapiRoutes)
 
   return app

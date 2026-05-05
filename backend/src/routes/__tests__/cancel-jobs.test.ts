@@ -52,11 +52,11 @@ vi.mock("@/lib/admin-check.js", () => ({
 const mockRefundCredits = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const mockInvalidateBalanceCache = vi.hoisted(() => vi.fn())
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { refundCredits: mockRefundCredits },
 }))
 
-vi.mock("@/routes/credits.js", () => ({
+vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
 

@@ -5,7 +5,7 @@ import { executeAppRun } from "../services/app-execution.js"
 import { OUTPUT_FIELD_MAP } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
+import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 

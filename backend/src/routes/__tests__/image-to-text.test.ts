@@ -48,7 +48,7 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: {
     commitCredits: vi.fn().mockResolvedValue(undefined),
     refundCredits: vi.fn().mockResolvedValue(undefined),
@@ -72,7 +72,7 @@ import { imageToTextRoutes } from "../image-to-text.js"
 import { supabase } from "../../lib/supabase.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { llmComplete } from "../../lib/llm-client.js"
-import { CreditsService } from "../../billing/credits.js"
+import { CreditsService } from "../../ee/billing/credits.js"
 
 // ---------------------------------------------------------------------------
 // Constants

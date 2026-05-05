@@ -8,7 +8,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SUNO_MODELS } from "@nodaro/shared"
 import { sunoStyleBoost } from "../providers/kie/suno-client.js"
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
 
 const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5")
 const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5"]).optional().default("V5")

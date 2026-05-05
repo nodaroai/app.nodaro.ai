@@ -5,7 +5,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
-import { CreditsService } from "../../../billing/credits.js"
+import { CreditsService } from "../../../ee/billing/credits.js"
 import {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,

@@ -1,6 +1,6 @@
 import { config, hasCredits } from "./lib/config.js"
 import { buildApp } from "./app.js"
-import { startCleanupCron } from "./billing/cleanup-cron.js"
+import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
