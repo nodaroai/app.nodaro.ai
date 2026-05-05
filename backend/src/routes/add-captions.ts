@@ -7,20 +7,49 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { ALL_CAPTION_STYLES, isKineticCaptionStyle } from "@nodaro/shared"
+
+const captionInputSchema = z.object({
+  text: z.string(),
+  startMs: z.number().min(0),
+  endMs: z.number().min(0),
+  timestampMs: z.number().min(0).nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+})
+
+function buildAddCaptionsCreditId(body: unknown): string {
+  if (!body || typeof body !== "object") return "add-captions"
+  const style = (body as Record<string, unknown>).style
+  if (typeof style === "string" && isKineticCaptionStyle(style)) return "add-captions:kinetic"
+  return "add-captions"
+}
 
 const addCaptionsBody = z.object({
   videoUrl: safeUrlSchema,
-  text: z.string().min(1),
-  style: z.enum(["subtitle", "word-highlight", "karaoke"]).optional().default("subtitle"),
+  text: z.string().min(1).optional(),
+  captions: z.array(captionInputSchema).optional(),
+  auto_transcribe: z.boolean().optional(),
+  transcribe_provider: z.enum(["whisper", "incredibly-fast-whisper", "elevenlabs-stt"]).optional(),
+  style: z.enum(ALL_CAPTION_STYLES).optional().default("subtitle"),
   position: z.enum(["bottom", "top", "center"]).optional().default("bottom"),
-  fontSize: z.number().min(12).max(72).optional().default(24),
+  fontSize: z.number().min(12).max(200).optional().default(32),
   color: z.string().optional().default("white"),
   backgroundColor: z.string().optional(),
   userId: z.string().uuid().optional(),
+}).superRefine((v, ctx) => {
+  // Need at least one caption source. auto_transcribe defaults to undefined,
+  // which the worker treats as true — so absent flag = transcribe attempted.
+  const hasSource = v.text || (v.captions && v.captions.length > 0) || v.auto_transcribe !== false
+  if (!hasSource) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide text, captions, or set auto_transcribe (default true for kinetic styles)",
+    })
+  }
 })
 
 export async function addCaptionsRoutes(app: FastifyInstance) {
-  app.post("/v1/add-captions", { preHandler: creditGuard(() => "add-captions") }, async (req, reply) => {
+  app.post("/v1/add-captions", { preHandler: creditGuard((req) => buildAddCaptionsCreditId(req.body)) }, async (req, reply) => {
     const parsed = addCaptionsBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -37,7 +66,7 @@ export async function addCaptionsRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "add-captions"
+    const modelIdentifier = buildAddCaptionsCreditId(parsed.data)
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase

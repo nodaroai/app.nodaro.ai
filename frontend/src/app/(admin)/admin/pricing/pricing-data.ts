@@ -242,4 +242,6 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "ffmpeg":            { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "render-video":      { provider: "Self",      providerCostUsd: 0,     markupPct: 0  },
   "video-composer":    { provider: "Anthropic", providerCostUsd: 0.010, markupPct: 25 },
+  "add-captions":         { provider: "FFmpeg",   providerCostUsd: 0,     markupPct: 0  },
+  "add-captions:kinetic": { provider: "Remotion", providerCostUsd: 0.08,  markupPct: 25 },
 }

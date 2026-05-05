@@ -14,6 +14,7 @@ const transcribeBody = z.object({
   language: z.string().max(10).optional(),
   diarize: z.boolean().optional(),
   tagAudioEvents: z.boolean().optional(),
+  wordTimestamps: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -76,6 +77,7 @@ export async function transcribeRoutes(app: FastifyInstance) {
       language,
       diarize,
       tagAudioEvents,
+      wordTimestamps: parsed.data.wordTimestamps,
       usageLogId,
     })
 

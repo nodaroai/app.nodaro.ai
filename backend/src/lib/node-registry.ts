@@ -164,7 +164,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },
   { type: "resize-video", label: "Resize Video", category: "processing", description: "Resize a video.", outputType: "video" },
   { type: "extract-frame", label: "Extract Frame", category: "processing", description: "Extract a single frame as an image.", outputType: "image" },
-  { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video.", outputType: "video" },
+  { type: "add-captions", label: "Add Captions", category: "processing", description: "Burn captions into a video. Static (subtitle) is FFmpeg/free; kinetic styles (word-highlight, karaoke, tiktok-words, word-pop, bouncy) render via Remotion at 5 credits.", outputType: "video", creditCost: "0-5" },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },

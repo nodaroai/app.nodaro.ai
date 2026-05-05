@@ -7,11 +7,16 @@
   "scripts": {
     "studio": "remotion studio",
     "build": "tsc",
-    "render": "remotion render"
+    "render": "remotion render",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@nodaro/shared": "*",
     "@react-three/fiber": "^8.0.0",
+    "@remotion/captions": "^4.0.0",
     "@remotion/cli": "^4.0.0",
+    "@remotion/elevenlabs": "^4.0.0",
     "@remotion/gif": "^4.0.0",
     "@remotion/lottie": "^4.0.0",
     "@remotion/google-fonts": "^4.0.0",

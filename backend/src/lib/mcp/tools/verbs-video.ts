@@ -14,6 +14,7 @@ import {
   modelIdsByKindMode,
   SEEDANCE_2_REF_LIMITS,
   isSeedance2Provider,
+  ALL_CAPTION_STYLES,
 } from "@nodaro/shared"
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -592,14 +593,23 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
     {
       title: "Add Captions",
       description:
-        "Burn captions into a video. Provide either video_url OR video_asset_id, plus the caption text.",
+        "Burn captions into a video. Provide either video_url OR video_asset_id, plus captions data. Static styles (subtitle) accept `text`. Kinetic styles (word-highlight, karaoke, tiktok-words, word-pop, bouncy) need word-timed `captions[]` OR set `auto_transcribe: true` (default) to transcribe the input video's audio.",
       inputSchema: {
-        text: z.string().min(1),
+        text: z.string().min(1).optional(),
+        captions: z.array(z.object({
+          text: z.string(),
+          startMs: z.number().min(0),
+          endMs: z.number().min(0),
+          timestampMs: z.number().min(0).nullable(),
+          confidence: z.number().min(0).max(1).nullable(),
+        })).optional(),
+        auto_transcribe: z.boolean().optional(),
+        transcribe_provider: z.enum(["whisper", "incredibly-fast-whisper", "elevenlabs-stt"]).optional(),
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
-        style: z.enum(["subtitle", "word-highlight", "karaoke"]).optional(),
+        style: z.enum(ALL_CAPTION_STYLES).optional(),
         position: z.enum(["bottom", "top", "center"]).optional(),
-        font_size: z.number().int().min(12).max(72).optional(),
+        font_size: z.number().int().min(12).max(200).optional(),
         color: z.string().optional(),
         background_color: z.string().optional(),
       },
@@ -646,6 +656,9 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const payload = {
         videoUrl,
         text: args.text,
+        captions: args.captions,
+        auto_transcribe: args.auto_transcribe,
+        transcribe_provider: args.transcribe_provider,
         style: args.style,
         position: args.position,
         fontSize: args.font_size,

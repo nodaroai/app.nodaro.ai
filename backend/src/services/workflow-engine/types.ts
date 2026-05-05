@@ -3,6 +3,7 @@
  */
 
 import type { MediaItem } from "../social/platforms/index.js"
+import type { Caption } from "@remotion/captions"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -65,6 +66,8 @@ export interface NodeOutput {
   webhookStatusCode?: number
   /** Webhook-output: first 2000 chars of the response body */
   webhookResponseBody?: string
+  /** Word-timed captions output (transcribe node when wordTimestamps enabled). */
+  captions?: Caption[]
 }
 
 export type NodeExecutionStatus =
@@ -189,6 +192,8 @@ export interface ResolvedInputs {
   componentInputMap?: Record<string, string>
   /** Lottie asset URLs from upstream nodes connected to the "lottie" handle */
   lottieAssets?: Array<{ id?: string; url: string; name?: string }>
+  /** Word-timed captions wired from upstream transcribe.words for kinetic captions. */
+  captions?: Caption[]
 }
 
 // ---------------------------------------------------------------------------

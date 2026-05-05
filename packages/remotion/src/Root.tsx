@@ -1,6 +1,6 @@
 import React from "react"
 import { Composition, registerRoot } from "remotion"
-import type { RenderVideoInputProps, TemplateId } from "./types"
+import type { RenderVideoInputProps, TemplateId, BurnCaptionsInputProps } from "./types"
 import type { SceneGraphInputProps } from "./scene-graph"
 import { Slideshow } from "./compositions/slideshow"
 import { Explainer } from "./compositions/explainer"
@@ -11,6 +11,7 @@ import { AfterEffectsRenderer } from "./compositions/after-effects-renderer"
 import { LottieOverlayRenderer } from "./compositions/lottie-overlay-renderer"
 import { MotionGraphicsRenderer } from "./compositions/motion-graphics-renderer"
 import { CompositeRenderer } from "./compositions/composite-renderer"
+import { BurnCaptions } from "./compositions/burn-captions"
 import type { AfterEffectsPlan, LottieOverlayPlan, MotionGraphicsPlan, CompositePlan } from "./plan-types"
 
 /**
@@ -121,6 +122,22 @@ const COMPOSITE_DEFAULT_PROPS: { plan: CompositePlan } = {
   },
 }
 
+const BURN_CAPTIONS_DEFAULT_PROPS: BurnCaptionsInputProps = {
+  plan: {
+    planType: "burn-captions",
+    sourceVideo: "",
+    captions: [{ text: "preview", startMs: 0, endMs: 1000, timestampMs: 0, confidence: null }],
+    style: "tiktok-words",
+    position: "bottom",
+    fontSize: 64,
+    color: "#ffffff",
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    durationInFrames: 90,
+  },
+}
+
 function RemotionRoot() {
   return (
     <>
@@ -180,6 +197,15 @@ function RemotionRoot() {
         width={1920}
         height={1080}
         defaultProps={COMPOSITE_DEFAULT_PROPS}
+      />
+      <Composition
+        id="burn-captions"
+        component={asRemotionComponent(BurnCaptions)}
+        defaultProps={BURN_CAPTIONS_DEFAULT_PROPS}
+        width={1920}
+        height={1080}
+        fps={30}
+        durationInFrames={90}
       />
     </>
   )

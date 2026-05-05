@@ -1786,11 +1786,16 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "add-captions":
+    case "add-captions": {
+      const captionsValue = data.captions
+      const isCaptionArray = Array.isArray(captionsValue) && captionsValue.length > 0 && typeof (captionsValue[0] as { startMs?: number })?.startMs === "number"
       return ffmpegResult("add-captions", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        text: resolvedInputs.prompt || resolveRefs(data.captions as string | undefined, refMap) || resolveRefs(data.text as string | undefined, refMap),
+        text: !isCaptionArray ? (resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap)) : undefined,
+        captions: isCaptionArray ? captionsValue : (resolvedInputs.captions ?? undefined),
+        auto_transcribe: data.auto_transcribe as boolean | undefined,
+        transcribe_provider: data.transcribe_provider as string | undefined,
         style: data.captionStyle ?? data.style,
         position: data.captionPosition ?? data.position,
         fontSize: data.fontSize,
@@ -1798,6 +1803,7 @@ export function buildPayload(
         backgroundColor: data.backgroundColor,
         usageLogId,
       })
+    }
 
     case "mix-audio": {
       // Build ordered [{nodeId, url}] so we can key trackVolumes by nodeId and

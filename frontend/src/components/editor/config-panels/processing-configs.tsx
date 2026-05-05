@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,10 @@ import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
+import { CaptionsStylePreview } from "../captions-style-preview"
+
+const KINETIC_STYLE_FONT_DEFAULT = 64
+const STATIC_STYLE_FONT_DEFAULT = 32
 
 export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<CombineVideosData>) {
   return (
@@ -134,28 +138,48 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
 }
 
 export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsData>) {
+  function handleStyleChange(next: AddCaptionsData["style"]) {
+    const isKineticNext = next !== "subtitle"
+    const update: Partial<AddCaptionsData> = { style: next }
+    if (isKineticNext && data.fontSize === STATIC_STYLE_FONT_DEFAULT) {
+      update.fontSize = KINETIC_STYLE_FONT_DEFAULT
+    } else if (!isKineticNext && data.fontSize === KINETIC_STYLE_FONT_DEFAULT) {
+      update.fontSize = STATIC_STYLE_FONT_DEFAULT
+    }
+    onUpdate(update)
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label>Style</Label>
         <Select
           value={data.style}
-          onValueChange={(v) => onUpdate({ style: v as AddCaptionsData["style"] })}
+          onValueChange={(v) => handleStyleChange(v as AddCaptionsData["style"])}
         >
           <SelectTrigger aria-label="Style"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="subtitle">Subtitle</SelectItem>
-            <SelectItem value="word-highlight">Word Highlight</SelectItem>
-            <SelectItem value="karaoke">Karaoke</SelectItem>
+            <SelectItem value="subtitle">Subtitle (static)</SelectItem>
+            <SelectItem value="word-highlight">Word Highlight (kinetic)</SelectItem>
+            <SelectItem value="karaoke">Karaoke (kinetic)</SelectItem>
+            <SelectItem value="tiktok-words">TikTok Words (kinetic)</SelectItem>
+            <SelectItem value="word-pop">Word Pop (kinetic)</SelectItem>
+            <SelectItem value="bouncy">Bouncy (kinetic)</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      <CaptionsStylePreview
+        style={data.style}
+        position={data.position}
+        fontSize={data.fontSize}
+        color={data.color}
+        backgroundColor={data.backgroundColor as string | undefined}
+      />
+
       <div>
         <Label>Position</Label>
-        <Select
-          value={data.position}
-          onValueChange={(v) => onUpdate({ position: v as AddCaptionsData["position"] })}
-        >
+        <Select value={data.position} onValueChange={(v) => onUpdate({ position: v as AddCaptionsData["position"] })}>
           <SelectTrigger aria-label="Position"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="bottom">Bottom</SelectItem>
@@ -166,24 +190,20 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
       </div>
       <div>
         <Label htmlFor="font-size">Font Size</Label>
-        <Input
-          id="font-size"
-          type="number"
-          min={8}
-          max={72}
+        <Input id="font-size" type="number" min={8} max={200}
           value={data.fontSize ?? ""}
           onChange={(e) => onUpdate({ fontSize: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
         />
       </div>
       <div>
         <Label htmlFor="caption-color">Color</Label>
-        <Input
-          id="caption-color"
-          type="color"
-          value={data.color}
-          onChange={(e) => onUpdate({ color: e.target.value })}
-        />
+        <Input id="caption-color" type="color" value={data.color} onChange={(e) => onUpdate({ color: e.target.value })} />
       </div>
+      {data.style !== "subtitle" && (
+        <div className="text-xs text-muted-foreground">
+          Kinetic styles render via Remotion (5 credits). Captions are auto-transcribed from the input video unless you wire a Transcribe node to this node's <code>captions</code> input.
+        </div>
+      )}
     </div>
   )
 }

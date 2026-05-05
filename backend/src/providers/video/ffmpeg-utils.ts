@@ -96,6 +96,50 @@ export async function getVideoDuration(filePath: string): Promise<number> {
 }
 
 /**
+ * Probe a video URL for dimensions + duration in a single ffprobe call.
+ * Accepts a local path OR a remote http(s) URL — ffprobe reads both.
+ */
+export async function probeVideoSource(srcUrlOrPath: string): Promise<{
+  width: number
+  height: number
+  durationSeconds: number
+}> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=width,height:format=duration",
+    "-of", "csv=p=0",
+    srcUrlOrPath,
+  ])
+  const lines = output.trim().split(/\r?\n/)
+  // ffprobe outputs lines: stream first ("W,H"), format second (duration).
+  // Order can vary by ffprobe version; parse both.
+  let width = 0, height = 0, durationSeconds = 0
+  for (const line of lines) {
+    const parts = line.split(",").map((p) => p.trim())
+    if (parts.length === 2) {
+      // stream line: "W,H"
+      const w = parseInt(parts[0]!, 10)
+      const h = parseInt(parts[1]!, 10)
+      if (!Number.isNaN(w) && !Number.isNaN(h)) {
+        width = w
+        height = h
+      }
+    } else if (parts.length === 1) {
+      // format line: "duration"
+      const d = parseFloat(parts[0]!)
+      if (!Number.isNaN(d) && d > 0) {
+        durationSeconds = d
+      }
+    }
+  }
+  if (width === 0 || height === 0 || durationSeconds === 0) {
+    throw new Error(`probeVideoSource failed to parse: "${output.trim()}"`)
+  }
+  return { width, height, durationSeconds }
+}
+
+/**
  * Probe the video codec and pixel format in a single ffprobe call.
  * Returns e.g. { codec: "h264", pixFmt: "yuv420p" }.
  */

@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { safeUrlSchema } from "./url-validator.js"
+import { KINETIC_CAPTION_STYLES } from "@nodaro/shared"
 
 // ── Plan Types ──────────────────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ export const PLAN_TYPES = [
   "3d-title",
   "motion-graphics",
   "composite",
+  "burn-captions",
 ] as const
 
 export type PlanType = (typeof PLAN_TYPES)[number]
@@ -357,6 +359,33 @@ export const compositePlanSchema = z
   })
   .passthrough()
 
+// ── Burn Captions Plan ──────────────────────────────────────────────────
+
+const captionSchema = z.object({
+  text: z.string(),
+  startMs: z.number().min(0),
+  endMs: z.number().min(0),
+  timestampMs: z.number().min(0).nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+})
+
+export const burnCaptionsPlanSchema = z
+  .object({
+    planType: z.literal("burn-captions"),
+    sourceVideo: safeUrlSchema,
+    captions: z.array(captionSchema).min(1),
+    style: z.enum(KINETIC_CAPTION_STYLES),
+    position: z.enum(["top", "center", "bottom"]),
+    fontSize: z.number().min(12).max(200),
+    color: z.string(),
+    backgroundColor: z.string().optional(),
+    fps: z.number().min(15).max(60),
+    width: z.number().min(100).max(3840),
+    height: z.number().min(100).max(3840),
+    durationInFrames: z.number().min(1).max(108000),
+  })
+  .passthrough()
+
 // ── Scene Graph Plan (for plan-based render pipeline) ──────────────────
 
 const sgTransitionSchema = z.object({
@@ -452,6 +481,7 @@ export const renderPlanSchema = z.discriminatedUnion("planType", [
   threeDTitlePlanSchema,
   motionGraphicsPlanSchema,
   compositePlanSchema,
+  burnCaptionsPlanSchema,
 ])
 
 // ── Plan type → schema lookup ───────────────────────────────────────────
@@ -463,6 +493,7 @@ const planSchemaMap: Record<string, z.ZodType> = {
   "3d-title": threeDTitlePlanSchema,
   "motion-graphics": motionGraphicsPlanSchema,
   "composite": compositePlanSchema,
+  "burn-captions": burnCaptionsPlanSchema,
 }
 
 /**

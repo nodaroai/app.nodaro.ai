@@ -153,7 +153,7 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
 const SOCIAL_VIDEO_URL_RE = /(?:youtube\.com|youtu\.be|tiktok\.com|instagram\.com|twitter\.com|x\.com)/i
 
 const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
-  const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean }
+  const { audioUrl: rawAudioUrl, provider, language, diarize, tagAudioEvents, wordTimestamps } = job.data as { jobId: string; audioUrl: string; provider?: TranscribeProvider; language?: string; diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean }
   console.log(`[worker] transcribe ${ctx.jobId} (provider: ${provider ?? "whisper"}, language: ${language ?? "auto"})`)
 
   // If the caller passed a social-platform video URL, extract audio first.
@@ -169,13 +169,13 @@ const handleTranscribe: HandlerFn = async function handleTranscribe(job, ctx) {
     job,
     ctx.jobId,
     { start: 25, cap: 90 },
-    () => transcribe(audioUrl, provider, language, { diarize, tagAudioEvents }),
+    () => transcribe(audioUrl, provider, language, { diarize, tagAudioEvents, wordTimestamps }),
   )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { text: result.text, language: result.language, segments: result.segments },
-  })
+  const outputData: Record<string, unknown> = { text: result.text, language: result.language, segments: result.segments }
+  if (result.words) outputData.words = result.words
+  const ok = await markJobCompleted(ctx.jobId, { output_data: outputData })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: transcribed ${result.text.length} chars (language: ${result.language})`)
