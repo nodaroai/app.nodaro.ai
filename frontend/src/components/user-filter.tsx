@@ -75,12 +75,7 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                   setOpen(false)
                 }}
               >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    value.kind === "all" ? "opacity-100" : "opacity-0",
-                  )}
-                />
+                <CheckMark active={value.kind === "all"} />
                 All users
               </CommandItem>
               <CommandItem
@@ -90,20 +85,14 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                   setOpen(false)
                 }}
               >
-                <Check
-                  className={cn(
-                    "mr-2 h-4 w-4",
-                    value.kind === "exclude_admins" ? "opacity-100" : "opacity-0",
-                  )}
-                />
+                <CheckMark active={value.kind === "exclude_admins"} />
                 All users (excl. admins)
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup>
               {users.map((u) => {
-                const trimmed = u.fullName?.trim()
-                const display = trimmed ? `${trimmed} (${u.email})` : u.email
+                const display = formatUserFull(u)
                 return (
                   <CommandItem
                     key={u.id}
@@ -113,14 +102,7 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
                       setOpen(false)
                     }}
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value.kind === "user" && value.id === u.id
-                          ? "opacity-100"
-                          : "opacity-0",
-                      )}
-                    />
+                    <CheckMark active={value.kind === "user" && value.id === u.id} />
                     <span className="truncate">{display}</span>
                   </CommandItem>
                 )
@@ -133,6 +115,23 @@ export function UserFilter({ users, value, onChange, className }: UserFilterProp
   )
 }
 
+function CheckMark({ active }: { readonly active: boolean }) {
+  return (
+    <Check
+      className={cn("mr-2 h-4 w-4", active ? "opacity-100" : "opacity-0")}
+    />
+  )
+}
+
+function formatUserShort(u: UserFilterUser): string {
+  return u.fullName?.trim() || u.email
+}
+
+function formatUserFull(u: UserFilterUser): string {
+  const trimmed = u.fullName?.trim()
+  return trimmed ? `${trimmed} (${u.email})` : u.email
+}
+
 function getTriggerLabel(
   value: UserFilterValue,
   users: ReadonlyArray<UserFilterUser>,
@@ -141,6 +140,5 @@ function getTriggerLabel(
   if (value.kind === "exclude_admins") return "Excluding admins"
   const u = users.find((x) => x.id === value.id)
   if (!u) return "Unknown user"
-  const trimmed = u.fullName?.trim()
-  return trimmed || u.email
+  return formatUserShort(u)
 }

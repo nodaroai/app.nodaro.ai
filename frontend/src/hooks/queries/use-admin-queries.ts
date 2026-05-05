@@ -236,6 +236,10 @@ export function useAdminJobs(
       if (statusFilter) query = query.eq("status", statusFilter)
       if (userIdFilter) query = query.eq("user_id", userIdFilter)
       if (excludeUserIds && excludeUserIds.length > 0) {
+        // Direct interpolation is safe because excludeUserIds always comes from
+        // useAllAdminUsersLite (UUIDs only — no commas, no parens, no quotes).
+        // PostgREST URL length caps this at ~200 admin user-ids; not a concern
+        // at our scale (single-digit admin count).
         query = query.not("user_id", "in", `(${excludeUserIds.join(",")})`)
       }
       const { data: jobs, error } = await (query as unknown as PromiseLike<{ data: JobRow[] | null; error: Error | null }>)
