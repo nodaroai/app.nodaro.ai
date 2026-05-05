@@ -810,6 +810,13 @@ export function buildNodeOutputFromJobData(
     }
   }
 
+  // Transcribe (and other word-timestamp emitters): expose words[] as
+  // typed captions so downstream add-captions nodes can pick them up via
+  // the orchestrator wiring rule.
+  if (Array.isArray(outputData.words) && outputData.words.length > 0) {
+    output.captions = outputData.words as NodeOutput["captions"]
+  }
+
   // Normalize save-to-storage: worker stores { url, filename, type } where
   // `type` is "image" | "video" | "audio" and `url` is the R2 URL. Route those
   // to the matching media URL field so downstream nodes see a typed URL rather

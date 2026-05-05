@@ -6,7 +6,7 @@ import type {
   VideoUpscaleProvider, ExtendVideoProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
-  SunoModel, VoiceDesignModel,
+  SunoModel, VoiceDesignModel, CaptionStyle,
 } from "@nodaro/shared"
 import type { ScraperActorId } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
@@ -1935,7 +1935,7 @@ export type AddCaptionsData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
-  style: "subtitle" | "word-highlight" | "karaoke"
+  style: CaptionStyle
   position: "bottom" | "top" | "center"
   fontSize: number
   color: string
@@ -1945,6 +1945,9 @@ export type AddCaptionsData = {
   generatedVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
+  // NEW
+  autoTranscribe?: boolean
+  transcribeProvider?: "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
 }
 
 export type ResizeVideoData = {

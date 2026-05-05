@@ -256,12 +256,41 @@ describe("buildPayload", () => {
       expect(result.payload.codec).toBe("h265")
     })
 
-    it("add-captions", () => {
-      const n = node("n1", "add-captions", { captions: "hello" })
+    it("add-captions forwards data.text as payload.text (static path)", () => {
+      const n = node("n1", "add-captions", { text: "hello" })
       const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }
       const result = buildPayload(n, jobId, inputs)
       expect(result.jobName).toBe("add-captions")
       expect(result.payload.text).toBe("hello")
+      expect(result.payload.captions).toBeUndefined()
+    })
+
+    it("add-captions forwards structured captions[] as payload.captions (kinetic path)", () => {
+      const captionsArr = [
+        { text: "hi", startMs: 0, endMs: 500, timestampMs: 0, confidence: null },
+        { text: "world", startMs: 500, endMs: 1000, timestampMs: 500, confidence: null },
+      ]
+      const n = node("n1", "add-captions", { captions: captionsArr, style: "tiktok-words" })
+      const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.jobName).toBe("add-captions")
+      // structured captions[] flow: payload.captions is the array, payload.text is undefined
+      expect(result.payload.captions).toEqual(captionsArr)
+      expect(result.payload.text).toBeUndefined()
+      expect(result.payload.style).toBe("tiktok-words")
+    })
+
+    it("add-captions forwards auto_transcribe + transcribe_provider", () => {
+      const n = node("n1", "add-captions", {
+        auto_transcribe: true,
+        transcribe_provider: "whisper",
+        style: "word-pop",
+      })
+      const inputs: ResolvedInputs = { videoUrl: "https://v.mp4" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.auto_transcribe).toBe(true)
+      expect(result.payload.transcribe_provider).toBe("whisper")
+      expect(result.payload.style).toBe("word-pop")
     })
 
     it("mix-audio", () => {

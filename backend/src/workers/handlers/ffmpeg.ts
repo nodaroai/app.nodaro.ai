@@ -1,7 +1,10 @@
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
+import type { Job } from "bullmq"
+import type { Caption } from "@remotion/captions"
 import { uploadFileToR2 } from "../../lib/storage.js"
-import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS } from "../../providers/video/ffmpeg-utils.js"
+import { renderQueue } from "../../lib/render-queue.js"
+import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
@@ -17,6 +20,8 @@ import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
 import { fadeVideo } from "../../providers/video/fade-video.js"
+import { transcribe, type TranscribeProvider } from "../../providers/audio/transcribe.js"
+import { syntheticCaptionsFromText } from "../../providers/audio/captions-mappers.js"
 import {
   commitJobCredits,
   shouldSaveJobResult,
@@ -26,7 +31,9 @@ import {
   completeFfmpegAudioJob,
   setJobProgress,
   type HandlerFn,
+  type JobContext,
 } from "../shared.js"
+import { isKineticCaptionStyle } from "@nodaro/shared"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
   const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = job.data as {
@@ -198,13 +205,142 @@ const handleAdjustVolume: HandlerFn = async function handleAdjustVolume(job, ctx
 }
 
 const handleAddCaptions: HandlerFn = async function handleAddCaptions(job, ctx) {
-  const { videoUrl, text, style, position, fontSize, color, backgroundColor } = job.data as {
-    jobId: string; videoUrl: string; text: string; style?: string; position?: string; fontSize?: number; color?: string; backgroundColor?: string
+  const data = job.data as {
+    jobId: string
+    videoUrl: string
+    text?: string
+    captions?: Caption[]
+    auto_transcribe?: boolean
+    transcribe_provider?: TranscribeProvider
+    style?: string
+    position?: string
+    fontSize?: number
+    color?: string
+    backgroundColor?: string
   }
-  console.log(`[worker] add-captions ${ctx.jobId}`)
-  const outputPath = await addCaptions({ videoUrl, text, style: style as "subtitle" | "word-highlight" | "karaoke" | undefined, position: position as "bottom" | "top" | "center" | undefined, fontSize, color, backgroundColor })
+  const style = data.style ?? "subtitle"
+  console.log(`[worker] add-captions ${ctx.jobId} style=${style}`)
+
+  if (isKineticCaptionStyle(style)) {
+    return dispatchKineticCaptions(job, ctx, data)
+  }
+  if (style !== "subtitle") {
+    throw new Error(`Unknown add-captions style: ${style}`)
+  }
+
+  // Static path (existing FFmpeg drawtext)
+  if (!data.text) throw new Error("text is required for static subtitle style")
+  const outputPath = await addCaptions({
+    videoUrl: data.videoUrl,
+    text: data.text,
+    style: style as "subtitle",
+    position: data.position as "bottom" | "top" | "center" | undefined,
+    fontSize: data.fontSize,
+    color: data.color,
+    backgroundColor: data.backgroundColor,
+  })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
+}
+
+async function dispatchKineticCaptions(
+  job: Job,
+  ctx: JobContext,
+  data: {
+    videoUrl: string
+    text?: string
+    captions?: Caption[]
+    auto_transcribe?: boolean
+    transcribe_provider?: TranscribeProvider
+    style?: string
+    position?: string
+    fontSize?: number
+    color?: string
+    backgroundColor?: string
+  },
+): Promise<void> {
+  const fps = 30
+  let width = 1920
+  let height = 1080
+  let videoDurationSeconds = 0
+
+  // Probe + transcribe in parallel — both depend only on data.videoUrl
+  const needTranscribe = !data.captions?.length && data.auto_transcribe !== false
+  const [probeResult, transcribeResult] = await Promise.allSettled([
+    probeVideoSource(data.videoUrl),
+    needTranscribe
+      ? transcribe(
+          data.videoUrl,
+          data.transcribe_provider ?? "incredibly-fast-whisper",
+          undefined,
+          { wordTimestamps: true },
+        )
+      : Promise.resolve(null),
+  ])
+
+  if (probeResult.status === "fulfilled") {
+    width = probeResult.value.width
+    height = probeResult.value.height
+    videoDurationSeconds = probeResult.value.durationSeconds
+  } else {
+    console.warn(
+      `[add-captions kinetic] ffprobe failed for ${data.videoUrl}; falling back to 1920x1080. Error: ${probeResult.reason instanceof Error ? probeResult.reason.message : String(probeResult.reason)}`,
+    )
+  }
+
+  let captions: Caption[]
+  if (data.captions && data.captions.length > 0) {
+    captions = data.captions
+  } else if (needTranscribe) {
+    if (transcribeResult.status === "rejected") {
+      throw new Error(
+        `transcribe failed: ${transcribeResult.reason instanceof Error ? transcribeResult.reason.message : String(transcribeResult.reason)}`,
+      )
+    }
+    const result = transcribeResult.value
+    if (!result || !result.words || result.words.length === 0) {
+      if (!data.text) {
+        throw new Error("transcribe returned no words and no text fallback was provided")
+      }
+      const fallbackEndMs = videoDurationSeconds > 0 ? videoDurationSeconds * 1000 : 5000
+      captions = syntheticCaptionsFromText(data.text, { startMs: 0, endMs: fallbackEndMs })
+    } else {
+      captions = result.words
+    }
+  } else if (data.text) {
+    const fallbackEndMs = videoDurationSeconds > 0 ? videoDurationSeconds * 1000 : 5000
+    captions = syntheticCaptionsFromText(data.text, { startMs: 0, endMs: fallbackEndMs })
+  } else {
+    throw new Error("Kinetic style requires captions, text, or auto_transcribe")
+  }
+
+  await setJobProgress(job, ctx.jobId, 30)
+
+  const lastCaptionEndMs = captions[captions.length - 1]?.endMs ?? 0
+  const captionsDurationSeconds = lastCaptionEndMs / 1000
+  const targetDurationSeconds = Math.max(captionsDurationSeconds, videoDurationSeconds)
+  const durationInFrames = Math.max(30, Math.ceil(targetDurationSeconds * fps))
+
+  await renderQueue.add("render", {
+    jobId: ctx.jobId,
+    planType: "burn-captions",
+    plan: {
+      planType: "burn-captions",
+      sourceVideo: data.videoUrl,
+      captions,
+      style: data.style,
+      position: data.position ?? "bottom",
+      fontSize: data.fontSize ?? 32,
+      color: data.color ?? "#ffffff",
+      backgroundColor: data.backgroundColor,
+      fps,
+      width,
+      height,
+      durationInFrames,
+    },
+    usageLogId: ctx.usageLogId,
+  })
+  // Ownership: render-worker now owns this jobs.id — don't call commit/refund here.
 }
 
 const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx) {

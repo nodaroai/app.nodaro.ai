@@ -4,6 +4,7 @@ import { buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVi
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 import { buildScraperCreditId, isScraperActor } from "@nodaro/shared"
+import { isKineticCaptionStyle } from "@nodaro/shared"
 
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -240,6 +241,14 @@ export function getModelIdentifier(node: WorkflowNode): string {
     const actor = isScraperActor(rawActor) ? rawActor : "google-search"
     const mode = data.mode === "site" ? "site" : "page"
     return buildScraperCreditId({ actor, mode })
+  }
+
+  if (nodeType === "add-captions") {
+    const style = data.style as string | undefined
+    if (isKineticCaptionStyle(style)) {
+      return "add-captions:kinetic"
+    }
+    return "add-captions"
   }
 
   const provider = data.provider as string | undefined

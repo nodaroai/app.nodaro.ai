@@ -4,7 +4,7 @@ export type {
   TextOverlay,
   CaptionSettings,
   CaptionPosition,
-  CaptionStyle,
+  LegacyCaptionStyle,
   TransitionStyle,
   TemplateId,
   CompositionId,

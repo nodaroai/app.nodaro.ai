@@ -166,8 +166,8 @@ function makeSceneGraphPlan(overrides: Record<string, unknown> = {}) {
 // ── PLAN_TYPES ───────────────────────────────────────────────────────────
 
 describe("PLAN_TYPES", () => {
-  it("has exactly 6 entries", () => {
-    expect(PLAN_TYPES).toHaveLength(6)
+  it("has exactly 7 entries", () => {
+    expect(PLAN_TYPES).toHaveLength(7)
   })
 
   it("contains all expected types", () => {
@@ -177,6 +177,7 @@ describe("PLAN_TYPES", () => {
     expect(PLAN_TYPES).toContain("3d-title")
     expect(PLAN_TYPES).toContain("motion-graphics")
     expect(PLAN_TYPES).toContain("composite")
+    expect(PLAN_TYPES).toContain("burn-captions")
   })
 })
 

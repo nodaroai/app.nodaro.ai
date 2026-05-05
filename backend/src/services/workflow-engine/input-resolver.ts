@@ -1034,6 +1034,15 @@ function routeOutput(
 
   // --- Text/prompt sources ---
   if (TEXT_SOURCE_NODE_TYPES.has(srcType)) {
+    // Transcribe → add-captions: wire word-timed captions through alongside the
+    // text fallback. The kinetic-captions worker prefers `captions` when present
+    // and falls back to `text` only for static styles.
+    if (srcType === "transcribe" && targetType === "add-captions") {
+      const state = nodeStates[src.id]
+      if (state?.output?.captions && state.output.captions.length > 0) {
+        inputs.captions = state.output.captions
+      }
+    }
     inputs.prompt = output
     return
   }

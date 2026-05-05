@@ -1,5 +1,15 @@
-import { replicate } from "../replicate/client.js"
+import type { Caption } from "@remotion/captions"
+import { replicate, extractCost } from "../replicate/client.js"
 import { KieAudioProvider } from "../kie/audio.js"
+import { fastWhisperWordsToCaptions, whisperWordsToCaptions } from "./captions-mappers.js"
+
+function extractVersion(modelString: string): string {
+  const parts = modelString.split(":")
+  if (parts.length < 2 || !parts[1]) {
+    throw new Error(`transcribe model "${modelString}" missing version hash (expected "owner/name:hash")`)
+  }
+  return parts[1]
+}
 
 export type TranscribeProvider = "whisper" | "incredibly-fast-whisper" | "elevenlabs-stt"
 
@@ -31,6 +41,7 @@ interface TranscribeResult {
     end: number
     text: string
   }>
+  words?: Caption[]
 }
 
 const TRANSCRIBE_MODELS: Record<string, string> = {
@@ -42,13 +53,15 @@ export async function transcribe(
   audioUrl: string,
   provider?: TranscribeProvider,
   language?: string,
-  options?: { diarize?: boolean; tagAudioEvents?: boolean },
+  options?: { diarize?: boolean; tagAudioEvents?: boolean; wordTimestamps?: boolean },
 ): Promise<TranscribeResult> {
   const resolvedProvider = provider ?? "whisper"
   console.log(`[transcribe] Provider: ${resolvedProvider}`)
   console.log(`[transcribe] Audio URL: "${audioUrl}", Language: ${language ?? "auto"}`)
 
   if (resolvedProvider === "elevenlabs-stt") {
+    // TODO(kinetic-captions): pipe wordTimestamps through KieAudioProvider.speechToText
+    // and use @remotion/elevenlabs::elevenLabsTranscriptToCaptions to populate `words`.
     const kieAudio = new KieAudioProvider()
     const result = await kieAudio.speechToText(audioUrl, {
       languageCode: language && language !== "auto" ? language : undefined,
@@ -68,7 +81,7 @@ export async function transcribe(
     const input: Record<string, unknown> = {
       audio: audioUrl,
       task: "transcribe",
-      timestamp: "chunk",
+      timestamp: options?.wordTimestamps ? "word" : "chunk",
       batch_size: 24,
     }
     if (language && language !== "auto") {
@@ -77,10 +90,13 @@ export async function transcribe(
       input.language = "None"
     }
 
-    const output = await replicate.run(
-      model as `${string}/${string}`,
-      { input },
-    ) as FastWhisperOutput
+    const prediction = await replicate.predictions.create({
+      version: extractVersion(model),
+      input,
+    })
+    const completed = await replicate.wait(prediction)
+    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+    const output = completed.output as FastWhisperOutput
 
     const segments = output.chunks?.map((chunk) => ({
       start: chunk.timestamp[0],
@@ -89,11 +105,16 @@ export async function transcribe(
     }))
 
     console.log(`[transcribe] Output text length: ${output.text?.length ?? 0}`)
-    return {
+    const result: TranscribeResult = {
       text: output.text ?? "",
       language: language && language !== "auto" ? language : "auto",
+      cost: cost ?? undefined,
       segments,
     }
+    if (options?.wordTimestamps) {
+      result.words = fastWhisperWordsToCaptions(output)
+    }
+    return result
   }
 
   // Default: openai/whisper
@@ -101,14 +122,20 @@ export async function transcribe(
     audio: audioUrl,
     transcription: "plain text",
   }
+  if (options?.wordTimestamps) {
+    input.word_timestamps = true
+  }
   if (language && language !== "auto") {
     input.language = language
   }
 
-  const output = await replicate.run(
-    model as `${string}/${string}`,
-    { input },
-  ) as WhisperOutput
+  const prediction = await replicate.predictions.create({
+    version: extractVersion(model),
+    input,
+  })
+  const completed = await replicate.wait(prediction)
+  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+  const output = completed.output as WhisperOutput
 
   const segments = output.segments?.map((seg) => ({
     start: seg.start,
@@ -118,9 +145,14 @@ export async function transcribe(
 
   console.log(`[transcribe] Detected language: ${output.detected_language}`)
   console.log(`[transcribe] Output text length: ${output.transcription?.length ?? 0}`)
-  return {
+  const result: TranscribeResult = {
     text: output.transcription ?? "",
     language: output.detected_language ?? "unknown",
+    cost: cost ?? undefined,
     segments,
   }
+  if (options?.wordTimestamps) {
+    result.words = whisperWordsToCaptions(output)
+  }
+  return result
 }

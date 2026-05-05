@@ -689,6 +689,14 @@ export type {
   LabeledOption,
 } from "./model-catalog.js"
 
+export {
+  STATIC_CAPTION_STYLES,
+  KINETIC_CAPTION_STYLES,
+  ALL_CAPTION_STYLES,
+  isKineticCaptionStyle,
+} from "./caption-styles.js"
+export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle } from "./caption-styles.js"
+
 // i18n
 export {
   LANGUAGES,

@@ -237,8 +237,11 @@ const FFMPEG_ROUTES: FFmpegRouteConfig[] = [
     name: "add-captions",
     path: "/v1/add-captions",
     routeFn: addCaptionsRoutes,
-    requiredField: "text",
-    invalidPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL },
+    // text is optional (kinetic styles can use captions[] or auto_transcribe).
+    // The schema's superRefine rejects only when ALL caption sources are absent
+    // AND auto_transcribe is explicitly disabled — represent that as the missing-field case.
+    requiredField: "any caption source",
+    invalidPayload: { userId: VALID_UUID, videoUrl: EXAMPLE_VIDEO_URL, auto_transcribe: false },
     validPayload: {
       userId: VALID_UUID,
       videoUrl: EXAMPLE_VIDEO_URL,
