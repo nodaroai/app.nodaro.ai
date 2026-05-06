@@ -482,41 +482,115 @@ export async function createAssetFromJob(
 // the bar appears stuck at 0% (or whatever the last DB write was) for the
 // entire run.
 //
-// `startProgressRamp` complements the manual writes for long-running
-// provider calls that don't expose an `onProgress` callback (image / Suno
-// / TTS APIs that return a result directly). It ramps progress every
-// `tickMs` by `tickStep`, capped at `cap`, while the call is in flight.
+// Two design properties that callers rely on:
+//
+//  1. Monotonic-within-a-job: when the ramp writes 30 and a provider's
+//     onProgress callback then reports 10 (KIE sometimes lags or briefly
+//     reports stale values), we drop the backwards write so the widget bar
+//     never visibly regresses. Implemented via an in-memory map + a
+//     time/magnitude window so legitimate retry resets still pass through.
+//
+//  2. Always-moving ramp: `startProgressRamp` runs in two phases — a fast
+//     linear climb to `cap` (preserves the existing tuning), then an
+//     asymptotic creep toward `softCeiling` (defaults to ~95). Without the
+//     phase-2 creep, providers that don't surface incremental progress
+//     (Seedance, Wan-Turbo, some Hailuo variants) freeze the bar at `cap`
+//     for the entire generation, then snap to the post-call value — what
+//     users see as "stuck at 35%".
+
+interface JobProgressEntry { value: number; ts: number }
+const lastProgressByJob = new Map<string, JobProgressEntry>()
+
+// Suppress backwards writes only within this short window. Longer than the
+// jitter between a ramp tick and a provider onProgress callback, but well
+// below typical retry backoffs — so a legitimate retry that calls
+// setJobProgress(..., 5) after a previous run reached 50 still goes through.
+const REGRESSION_GUARD_MS = 10_000
+// And: backwards writes larger than this are always accepted (likely a
+// retry/reset, not provider jitter).
+const REGRESSION_GUARD_MAX_DROP = 25
+
+/** Test helper — clears the in-memory monotonic-guard map. */
+export function _resetJobProgressMap(): void {
+  lastProgressByJob.clear()
+}
 
 export async function setJobProgress(
   job: { updateProgress: (p: number) => Promise<void> },
   jobId: string,
   progress: number,
 ): Promise<void> {
+  const last = lastProgressByJob.get(jobId)
+  const now = Date.now()
+  if (last !== undefined && progress < last.value) {
+    const drop = last.value - progress
+    const elapsed = now - last.ts
+    if (drop < REGRESSION_GUARD_MAX_DROP && elapsed < REGRESSION_GUARD_MS) {
+      // Tiny, recent backwards write — drop to keep the widget bar smooth.
+      return
+    }
+  }
+  // Coalesce repeated identical writes too (cheap and avoids DB churn).
+  if (last !== undefined && last.value === progress) return
+
+  lastProgressByJob.set(jobId, { value: progress, ts: now })
+
   await job.updateProgress(progress)
   // Best-effort DB write — failures shouldn't fail the generation.
-  await supabase
-    .from("jobs")
-    .update({ progress })
-    .eq("id", jobId)
-    .then(() => undefined, (err) => {
-      // eslint-disable-next-line no-console
-      console.warn(`[worker] progress DB update failed for ${jobId}:`, err)
-    })
+  try {
+    await supabase.from("jobs").update({ progress }).eq("id", jobId)
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[worker] progress DB update failed for ${jobId}:`, err)
+  }
+
+  // Free the map once the job has reported terminal progress.
+  if (progress >= 100) lastProgressByJob.delete(jobId)
 }
 
 export function startProgressRamp(
   job: { updateProgress: (p: number) => Promise<void> },
   jobId: string,
-  opts: { start: number; cap: number; tickMs?: number; tickStep?: number },
+  opts: {
+    start: number
+    cap: number
+    tickMs?: number
+    tickStep?: number
+    /** Soft ceiling the asymptotic phase 2 approaches. Defaults to a value
+     *  slightly above `cap` so the bar keeps creeping forward during long
+     *  provider calls instead of pinning at `cap`. */
+    softCeiling?: number
+    /** Per-tick approach factor for phase 2. 0.04 ≈ ~3pt/min near `cap=35`
+     *  with `tickMs=1500`. */
+    asymptoteFactor?: number
+  },
 ): { stop: () => void } {
   const tickMs = opts.tickMs ?? 1500
   const tickStep = opts.tickStep ?? 4
+  const softCeiling = Math.min(95, Math.max(opts.cap + 5, opts.softCeiling ?? 95))
+  const factor = opts.asymptoteFactor ?? 0.04
+
   let current = opts.start
   let stopped = false
   const handle = setInterval(() => {
-    if (stopped || current >= opts.cap) return
-    current = Math.min(current + tickStep, opts.cap)
-    void setJobProgress(job, jobId, current)
+    if (stopped) return
+    let next = current
+    if (current < opts.cap) {
+      // Phase 1 — fast linear climb to `cap` (preserves prior tuning).
+      next = Math.min(current + tickStep, opts.cap)
+    } else if (current < softCeiling - 0.5) {
+      // Phase 2 — asymptotic creep toward `softCeiling`. Each tick adds
+      // `(softCeiling - current) * factor`, so the bar always moves but
+      // visibly slows, never freezing.
+      next = Math.min(current + (softCeiling - current) * factor, softCeiling - 0.5)
+    } else {
+      // Reached the soft ceiling; nothing more to do until the call
+      // returns and the handler bumps progress past the ceiling.
+      return
+    }
+    if (next === current) return
+    current = next
+    void setJobProgress(job, jobId, Math.floor(current))
   }, tickMs)
   return {
     stop() {
@@ -529,20 +603,27 @@ export function startProgressRamp(
 /**
  * Wrap a long-running provider call so the widget bar moves while the
  * call is in flight. Sets `start` immediately, ramps toward `cap` while
- * `fn` runs, stops on resolve or throw. Use this for every provider call
- * the widget polls (KIE, Replicate, ElevenLabs) — without it the bar
- * pins at 0% (or whatever was set at credit reservation) for the entire
- * 30s–2min generation, then jumps to the post-call value.
+ * `fn` runs (then asymptotically toward `softCeiling`), stops on resolve
+ * or throw. Use this for every provider call the widget polls (KIE,
+ * Replicate, ElevenLabs) — without it the bar pins at 0% (or whatever
+ * was set at credit reservation) for the entire 30s–2min generation,
+ * then jumps to the post-call value.
  *
  * Provider-side onProgress callbacks (where supported) still write live
- * values to the same DB column; they outrun the ramp because the ramp
- * caps below the typical real-progress range. Net: real progress when
- * available, smooth fallback when not.
+ * values to the same DB column; the monotonic guard in `setJobProgress`
+ * keeps the bar from regressing when they race the ramp.
  */
 export async function withProgressRamp<T>(
   job: { updateProgress: (p: number) => Promise<void> },
   jobId: string,
-  opts: { start: number; cap: number; tickMs?: number; tickStep?: number },
+  opts: {
+    start: number
+    cap: number
+    tickMs?: number
+    tickStep?: number
+    softCeiling?: number
+    asymptoteFactor?: number
+  },
   fn: () => Promise<T>,
 ): Promise<T> {
   await setJobProgress(job, jobId, opts.start)

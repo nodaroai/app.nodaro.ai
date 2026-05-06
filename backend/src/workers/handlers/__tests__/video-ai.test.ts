@@ -30,6 +30,11 @@ const mocks = vi.hoisted(() => {
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
 
+  // setJobProgress is now the canonical path for provider onProgress
+  // callbacks (was raw supabase.from("jobs").update() before). Hoisted so
+  // tests can assert which progress values flowed through it.
+  const mockSetJobProgress = vi.fn(async () => {})
+
   return {
     mockImageToVideo,
     mockTextToVideo,
@@ -50,6 +55,7 @@ const mocks = vi.hoisted(() => {
     mockFrom,
     mockUpdate,
     mockEq,
+    mockSetJobProgress,
   }
 })
 
@@ -85,10 +91,9 @@ vi.mock("../../shared.js", () => ({
   uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
   generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
-  // setJobProgress writes progress to BOTH BullMQ + the jobs.progress
-  // DB column. Tests don't care about the side-effects, so a no-op
-  // mock is fine.
-  setJobProgress: vi.fn(async () => {}),
+  // setJobProgress is the canonical progress writer. Tests assert it was
+  // called with the right value via mocks.mockSetJobProgress.
+  setJobProgress: mocks.mockSetJobProgress,
   // startProgressRamp returns a stop handle; tests don't care about ticks.
   startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
   // withProgressRamp wraps a provider call; in tests just invoke `fn()`.
@@ -235,8 +240,9 @@ describe("image-to-video handler", () => {
     const opts = mocks.mockImageToVideo.mock.calls[0][5]
     await opts.onProgress(42)
 
-    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
-    expect(mocks.mockUpdate).toHaveBeenCalledWith({ progress: 42 })
+    // onProgress now routes through setJobProgress so the monotonic
+    // guard suppresses any racing backwards writes from the ramp.
+    expect(mocks.mockSetJobProgress).toHaveBeenCalledWith(expect.anything(), "job-1", 42)
   })
 
   it("maps shots to multiPrompt format", async () => {
@@ -478,7 +484,7 @@ describe("motion-transfer handler", () => {
     const opts = mocks.mockMotionTransfer.mock.calls[0][4]
     await opts.onProgress(55)
 
-    expect(mocks.mockUpdate).toHaveBeenCalledWith({ progress: 55 })
+    expect(mocks.mockSetJobProgress).toHaveBeenCalledWith(expect.anything(), "job-1", 55)
   })
 
   it("uses custom orientation and resolution when provided", async () => {
@@ -543,7 +549,7 @@ describe("video-upscale handler", () => {
     const opts = mocks.mockVideoUpscale.mock.calls[0][3]
     await opts.onProgress(75)
 
-    expect(mocks.mockUpdate).toHaveBeenCalledWith({ progress: 75 })
+    expect(mocks.mockSetJobProgress).toHaveBeenCalledWith(expect.anything(), "job-1", 75)
   })
 
   it("defaults to upscaleFactor '2' when not specified", async () => {

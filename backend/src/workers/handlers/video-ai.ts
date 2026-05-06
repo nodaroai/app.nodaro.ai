@@ -1,5 +1,4 @@
 import { dirname } from "node:path"
-import { supabase } from "../../lib/supabase.js"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
   imageToVideo,
@@ -137,17 +136,20 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     ...(el.type === "image" ? { element_input_urls: el.urls } : { element_input_video_urls: el.urls }),
   }))
 
-  // Create progress callback that updates the job record in the database
+  // Create progress callback that updates the job record in the database.
+  // Routed through setJobProgress so the monotonic guard suppresses the
+  // brief backwards jitter when KIE briefly reports a value below where
+  // the ramp has already pushed the bar.
   const onProgress: ProgressCallback = async (progress: number) => {
     console.log(`[worker] Job ${ctx.jobId} progress: ${progress}%`)
-    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+    await setJobProgress(job, ctx.jobId, progress)
   }
 
   // Fallback ramp for providers that DON'T expose live progress through
-  // KIE's progress field (Seedance, some Wan / Hailuo variants). Without
-  // this the bar pinned at 0% for the entire 30s–2min generation, then
-  // jumped to 40 only at completion. When onProgress fires real values,
-  // they'll outrun the ramp anyway since the ramp caps at 35.
+  // KIE's progress field (Seedance, some Wan / Hailuo variants). The
+  // ramp climbs linearly to `cap`, then asymptotically toward ~95 — so
+  // the bar keeps moving for the full provider duration instead of
+  // freezing at `cap` and snapping at the end.
   await setJobProgress(job, ctx.jobId, 5)
   const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 35 })
 
@@ -562,7 +564,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 
   const onProgress: ProgressCallback = async (progress: number) => {
     console.log(`[worker] Job ${ctx.jobId} motion-transfer progress: ${progress}%`)
-    await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+    await setJobProgress(job, ctx.jobId, progress)
   }
 
   const result = await withProgressRamp(
@@ -635,7 +637,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
         if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
         const onProgress: ProgressCallback = async (progress: number) => {
           console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
-          await supabase.from("jobs").update({ progress }).eq("id", ctx.jobId)
+          await setJobProgress(job, ctx.jobId, progress)
         }
         const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
         return result.url
