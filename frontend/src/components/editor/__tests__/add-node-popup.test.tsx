@@ -84,10 +84,16 @@ describe("NODE_OPTIONS", () => {
   })
 
   it("all category values used by options are defined in CATEGORIES", () => {
+    // The "Parameter" category is intentionally orphaned right now — its
+    // CATEGORIES entry was removed (the section was an empty pane in the UI
+    // because all Parameter-typed options are filtered out of `visibleNodes`).
+    // The Parameter-typed options are kept in NODE_OPTIONS so re-enabling is
+    // a one-line change. Treat as a known-orphan in this invariant.
+    const KNOWN_ORPHAN_CATEGORIES = new Set(["Parameter"])
     const categoryIds = new Set(CATEGORIES.map((c) => c.id))
     const missingCategories: string[] = []
     for (const opt of NODE_OPTIONS) {
-      if (!categoryIds.has(opt.category)) {
+      if (!categoryIds.has(opt.category) && !KNOWN_ORPHAN_CATEGORIES.has(opt.category)) {
         missingCategories.push(`${opt.type} -> ${opt.category}`)
       }
     }
@@ -171,7 +177,9 @@ describe("CATEGORIES", () => {
   it("has the expected category ids", () => {
     const ids = CATEGORIES.map((c) => c.id)
     expect(ids).toContain("Input")
-    expect(ids).toContain("Parameter")
+    // "Parameter" is intentionally absent — see the orphan-category note in
+    // the NODE_OPTIONS test above.
+    expect(ids).not.toContain("Parameter")
     expect(ids).toContain("AI")
     expect(ids).toContain("Processing")
     expect(ids).toContain("Assets")
