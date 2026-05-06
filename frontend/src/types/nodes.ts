@@ -3658,7 +3658,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
-    defaultData: { label: "Person", type: "woman", age: "age-early-20s", maxItemsPerRow: 2 },
+    defaultData: { label: "Person", type: "stylish-influencer", age: "age-early-20s", maxItemsPerRow: 2 },
   },
   {
     type: "mood",

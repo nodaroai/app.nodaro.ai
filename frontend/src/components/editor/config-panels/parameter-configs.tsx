@@ -418,6 +418,8 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
           timeOfDay: data.timeOfDay,
           lightingStyle: data.lightingStyle,
           lightingDirection: data.lightingDirection,
+          lightingRatio: data.lightingRatio,
+          colorTemperature: data.colorTemperature,
         }}
         onChange={(patch) => onUpdate(patch)}
       />
@@ -561,6 +563,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
           age: data.age,
           customAge: data.customAge,
           ethnicity: data.ethnicity,
+          regionalAesthetic: data.regionalAesthetic,
           build: data.build,
           bodyProportions: data.bodyProportions,
           faceShape: data.faceShape,
@@ -789,10 +792,18 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
           headwear: data.headwear,
           hairCut: data.hairCut,
           hairTreatment: data.hairTreatment,
+          hairState: data.hairState,
           jewelry: data.jewelry,
           nails: data.nails,
           facePaint: data.facePaint,
+          outfit: data.outfit,
+          top: data.top,
+          bottom: data.bottom,
+          outerwear: data.outerwear,
+          legwear: data.legwear,
+          footwear: data.footwear,
           fabric: data.fabric,
+          wardrobeState: data.wardrobeState,
         }}
         onChange={(patch) => onUpdate(patch)}
       />

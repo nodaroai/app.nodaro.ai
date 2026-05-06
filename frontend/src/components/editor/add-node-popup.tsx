@@ -1129,12 +1129,16 @@ export const CATEGORIES = [
     icon: <Filter className="h-4 w-4" />,
     description: "Scrape, Filter, Dedupe, Extract",
   },
-  {
-    id: "Parameter",
-    label: "PARAMETER",
-    icon: <SlidersHorizontal className="h-4 w-4" />,
-    description: "Tone, Style, Duration",
-  },
+  // Parameter category section is hidden — all Parameter-typed nodes are
+  // already filtered out of `visibleNodes` (search for `n.category !== "Parameter"`),
+  // so the section header was showing as an empty pane. Re-enable by restoring
+  // the entry below alongside dropping the `visibleNodes` filter.
+  // {
+  //   id: "Parameter",
+  //   label: "PARAMETER",
+  //   icon: <SlidersHorizontal className="h-4 w-4" />,
+  //   description: "Tone, Style, Duration",
+  // },
   {
     id: "Camera",
     label: "CAMERA",
