@@ -135,6 +135,7 @@ const map: LocaleCatalogMap = {
   "eye-round": { label: "Rund", description: "Weite, runde Augen" },
   "eye-hooded": { label: "Verdeckt", description: "Oberlid bedeckt teilweise die Falte" },
   "eye-monolid": { label: "Monolid", description: "Keine sichtbare Falte, glattes Lid" },
+  "eye-double-eyelid": { label: "Doppellid", description: "Klar definierte Falte am Oberlid" },
   "eye-deep-set": { label: "Tiefliegend", description: "Tiefer in der Augenhöhle gesetzt" },
   "eye-downturned": { label: "Abfallend", description: "Äußere Ecken zeigen nach unten" },
   "eye-upturned": { label: "Aufsteigend", description: "Äußere Ecken zeigen nach oben" },

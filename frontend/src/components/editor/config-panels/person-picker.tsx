@@ -36,6 +36,7 @@ const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
 
 /** Per-dimension multi-select cap.
  *  - ethnicity: 2 (mixed heritage)
+ *  - regional-aesthetic: 2 (hybrid look — e.g. nyc-fashion + parisienne)
  *  - hair-color: 2 (two-tone, ombre, highlights, balayage)
  *  - eye-color: 2 (heterochromia)
  *  - distinctive-features: 3 (combined features — freckles + glasses + tattoo)
@@ -45,6 +46,7 @@ const compactGroupLabel = (g: string): string => COMPACT_GROUP_LABELS[g] ?? g
  *  All other dims are single-select. */
 const MAX_SELECTED_BY_DIMENSION: Partial<Record<PersonDimension, number>> = {
   ethnicity: 2,
+  "regional-aesthetic": 2,
   "hair-color": 2,
   "eye-color": 2,
   "distinctive-features": 3,

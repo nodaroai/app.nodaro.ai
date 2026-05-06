@@ -453,11 +453,11 @@ export interface SettingData {
 }
 
 /** Standalone Person parameter node data. Subject-appearance compound hint
- * appended to downstream gen prompts. Multi-dimension: each of 9 orthogonal
- * fields is optional. Non-empty fields are joined as comma-separated
- * fragments ("a beautiful woman, in their 30s, East Asian, slim build,
- * long wavy hair, brown hair, fair skin, green eyes"). Applies to both
- * image and video consumers. See `packages/shared/src/person.ts`. */
+ * appended to downstream gen prompts. Multi-dimension: each orthogonal field
+ * is optional. Non-empty fields are joined as comma-separated fragments
+ * ("a beautiful woman, in their 30s, East Asian, Parisienne aesthetic, slim
+ * build, long wavy hair, brown hair, fair skin, green eyes"). Applies to
+ * both image and video consumers. See `packages/shared/src/person.ts`. */
 export interface PersonData {
   [key: string]: unknown
   label: string
@@ -471,6 +471,12 @@ export interface PersonData {
   /** Ethnicity / cultural descriptor. Single id or up to 2 ids for mixed
    *  heritage (e.g. ["slavic","mediterranean"]). */
   ethnicity?: string | ReadonlyArray<string>
+  /** Regional / cultural aesthetic vibe — California Beach, Parisienne,
+   *  Tokyo Harajuku, Lagos Afro-Glam, etc. Composes with ethnicity, skin
+   *  tone, hair, and styling (vibe-only promptHints, no hard-coded
+   *  visuals). Single id or up to 2 ids for hybrid looks (e.g.
+   *  ["nyc-fashion","parisienne"]). */
+  regionalAesthetic?: string | ReadonlyArray<string>
   /** Body silhouette + height combined (slim, athletic, tall-lean). */
   build?: string
   /** Body shape ratio (long-legged, hourglass, pear). Independent from Build. */
