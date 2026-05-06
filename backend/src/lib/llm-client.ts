@@ -214,6 +214,26 @@ function buildResponse(model: LlmModelDef, text: string, usage?: { inputTokens: 
   }
 }
 
+/**
+ * KIE returns HTTP 200 with a `{code: <non-zero>, msg: "..."}` envelope for
+ * service errors (e.g. "maintenance") and validation errors (e.g. unsupported
+ * model). Without this guard the downstream parser silently produces empty
+ * text, the job is marked completed, and credits are committed.
+ *
+ * Success bodies have no `code` field (chat-completions / responses) or use
+ * `code: 0|200` (legacy task client).
+ */
+function assertKieEnvelope(data: unknown, modelId: string, context: string): void {
+  if (!data || typeof data !== "object") return
+  const code = (data as { code?: number }).code
+  if (code === undefined || code === 0 || code === 200) return
+  const msg =
+    (data as { msg?: string }).msg ??
+    (data as { message?: string }).message ??
+    JSON.stringify(data)
+  throw new Error(`KIE.ai ${context} ${modelId} failed (code ${code}): ${msg}`)
+}
+
 // ---------------------------------------------------------------------------
 // KIE.ai adapters
 // ---------------------------------------------------------------------------
@@ -269,6 +289,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   }
 
   const data = await response.json() as Record<string, unknown>
+  assertKieEnvelope(data, model.id, "chat-completions")
   const choices = data.choices as Array<Record<string, unknown>> | undefined
   const text = (choices?.[0]?.message as Record<string, unknown>)?.content as string ?? ""
   const usage = data.usage as Record<string, number> | undefined
@@ -323,6 +344,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
   }
 
   const data = await response.json() as Record<string, unknown>
+  assertKieEnvelope(data, model.id, "messages")
   const content = data.content as Array<Record<string, unknown>> | undefined
   const textBlock = content?.find((b) => b.type === "text")
   const text = (textBlock?.text as string) ?? ""
@@ -355,7 +377,7 @@ async function streamKieMessages(
 // -- Responses format (GPT-5.4) --
 
 async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<LlmResponse> {
-  const url = `${KIE_API_BASE}/api/v1/responses`
+  const url = `${KIE_API_BASE}/codex/v1/responses`
   // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
@@ -377,6 +399,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   }
 
   const data = await response.json() as Record<string, unknown>
+  assertKieEnvelope(data, model.id, "responses")
   const output = data.output as Array<Record<string, unknown>> | undefined
   const textItem = output?.find((o) => o.type === "message")
   const contentArr = (textItem?.content as Array<Record<string, unknown>>) ?? []
@@ -390,7 +413,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
 async function streamKieResponses(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  const url = `${KIE_API_BASE}/api/v1/responses`
+  const url = `${KIE_API_BASE}/codex/v1/responses`
   // Responses API models (GPT-5.4) are reasoning models — temperature is unsupported
   const body: Record<string, unknown> = {
     model: model.kieSlugOrModel,
@@ -484,6 +507,7 @@ async function parseSseStream(
   let fullText = ""
   let usage: { inputTokens: number; outputTokens: number } | undefined
   let buffer = ""
+  let firstChunk = true
 
   try {
     while (true) {
@@ -491,6 +515,25 @@ async function parseSseStream(
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
+
+      // KIE returns 200 + `{"code":N,"msg":"..."}` JSON envelope (not SSE) for
+      // service errors. Detect on the first chunk: SSE always begins with
+      // `data:`/`event:`/comment, never `{`.
+      if (firstChunk) {
+        firstChunk = false
+        if (buffer.trimStart().startsWith("{")) {
+          while (true) {
+            const r = await reader.read()
+            if (r.done) break
+            buffer += decoder.decode(r.value, { stream: true })
+          }
+          let envelope: unknown = null
+          try { envelope = JSON.parse(buffer) } catch { /* not JSON */ }
+          assertKieEnvelope(envelope, modelId, `${format} stream`)
+          throw new Error(`KIE.ai ${format} stream ${modelId}: expected SSE, got JSON: ${buffer.slice(0, 200)}`)
+        }
+      }
+
       const lines = buffer.split("\n")
       buffer = lines.pop() ?? ""
 

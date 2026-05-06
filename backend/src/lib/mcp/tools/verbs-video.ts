@@ -228,7 +228,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "frame of clip K equals the first frame of clip K+1.\n" +
         "  3. `merge_video_audio` to attach a pre-made looping audio track to " +
         "the FINAL stitched video (not to the individual loop clip). The " +
-        "user-supplied audio should match the total stitched duration.",
+        "user-supplied audio should match the total stitched duration.\n\n" +
+        "**Prompt phrasing tip for step 1**: describe the loop as a *frame-" +
+        "match constraint*, not a *motion-reversal command*. Use \"motion " +
+        "begins and ends in the exact same composition and lighting so the " +
+        "first and last frames match perfectly\" — NOT \"all elements return " +
+        "to their starting positions\". The first phrasing aligns with VEO's " +
+        "end-frame interpolation; the second tends to conflict with any " +
+        "directional motion in the same prompt (e.g. \"clouds drifting left " +
+        "to right\") and gets ignored, leaving a video that doesn't actually " +
+        "loop.",
       inputSchema: {
         prompt: z.string().max(8000).optional(),
         image_url: z.string().url().optional(),
