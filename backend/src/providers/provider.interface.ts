@@ -3,6 +3,19 @@ export interface ProviderResult {
   url: string
   cost: number | null // null if cost unknown
   kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
+  /** Provider-reported seed VEO actually used. Captured even when no seed
+   *  was supplied — KIE returns it. Used by perfect-loop component to pin
+   *  a winning roll for reruns. Currently only VEO surfaces this. */
+  seed?: number
+  /** Whether KIE silently swapped to its deprecated fallback model.
+   *  When true, output is forced to 720p / 16:9 and cannot be upgraded
+   *  via /get-1080p-video. VEO only. */
+  fallbackFlag?: boolean
+  /** Provider-side generation duration in milliseconds. For VEO this is
+   *  KIE's completeTime − createTime; for standard KIE it's `costTime`
+   *  (which is in seconds, converted to ms). Useful for telemetry and
+   *  separating provider time from our orchestration overhead. */
+  providerMs?: number
 }
 
 // Capabilities a provider can support
@@ -52,6 +65,10 @@ export interface ProviderOptions {
   webSearch?: boolean      // Enable online search capability (Seedance 2, required field)
   nsfwChecker?: boolean    // Toggle NSFW content filter (Seedance 2)
   generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")
+  // VEO 3.x: opt out of KIE's auto-translate-to-English. Default upstream
+  // is true; set false to keep prompts (e.g. the perfect-loop seal phrase)
+  // verbatim. Has no effect on non-VEO providers.
+  enableTranslation?: boolean
   // V2V-specific
   referenceImageUrl?: string // Runway Aleph style reference image
   audio?: boolean            // Wan Flash: generate with audio (affects pricing)

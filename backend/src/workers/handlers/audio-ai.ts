@@ -16,6 +16,7 @@ import {
   commitJobCredits,
   shouldSaveJobResult,
   markJobCompleted,
+  buildProviderMeta,
   setJobProgress,
   withProgressRamp,
   type HandlerFn,
@@ -82,7 +83,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
+    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -213,7 +214,7 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
+    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
     provider_cost: result.cost,
   })
   if (!ok) return
@@ -244,7 +245,7 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
+    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
     provider_cost: result.cost,
   })
   if (!ok) return

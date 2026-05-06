@@ -235,6 +235,8 @@ export function runVideoGeneration(
     referenceAudioUrls?: string[];
     webSearch?: boolean;
     nsfwChecker?: boolean;
+    /** VEO 3.x: opt out of KIE's auto-translate-to-English. */
+    enableTranslation?: boolean;
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -267,6 +269,7 @@ export function runVideoGeneration(
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
         generationType,
+        enableTranslation: extras?.enableTranslation,
         userId: ctx.userId,
       }),
     "generatedVideoUrl",
@@ -333,6 +336,8 @@ export function runTextToVideoGeneration(
     referenceAudioUrls?: string[];
     webSearch?: boolean;
     nsfwChecker?: boolean;
+    /** VEO 3.x: opt out of KIE's auto-translate-to-English. */
+    enableTranslation?: boolean;
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(

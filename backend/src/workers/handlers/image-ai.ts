@@ -3,6 +3,7 @@ import {
   commitJobCredits,
   shouldSaveJobResult,
   markJobCompleted,
+  buildProviderMeta,
   uploadImageMaybeWatermark,
   setJobProgress,
   startProgressRamp,
@@ -56,7 +57,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url },
+    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -108,7 +109,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url },
+    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -173,7 +174,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url },
+    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,

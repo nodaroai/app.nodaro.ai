@@ -74,18 +74,18 @@ vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mo
 vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({ forcedAlignment: mocks.mockForcedAlignment }))
 vi.mock("@/providers/audio/transcribe.js", () => ({ transcribe: mocks.mockTranscribe }))
 vi.mock("@/providers/audio/youtube-extractor.js", () => ({ extractYouTubeAudio: mocks.mockExtractYouTubeAudio }))
-vi.mock("../../shared.js", () => ({
-  commitJobCredits: mocks.mockCommitJobCredits,
-  shouldSaveJobResult: mocks.mockShouldSaveJobResult,
-  markJobCompleted: mocks.mockMarkJobCompleted,
-  // No-op stubs — handlers call setJobProgress / startProgressRamp now;
-  // the test only cares about credit + result side-effects, so these
-  // mocks just absorb the calls without doing anything.
-  setJobProgress: vi.fn().mockResolvedValue(undefined),
-  startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
-  // withProgressRamp wraps a provider call; in tests just invoke `fn()`.
-  withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
-}))
+vi.mock("../../shared.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../shared.js")>()
+  return {
+    ...actual,
+    commitJobCredits: mocks.mockCommitJobCredits,
+    shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+    markJobCompleted: mocks.mockMarkJobCompleted,
+    setJobProgress: vi.fn().mockResolvedValue(undefined),
+    startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
+    withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
+  }
+})
 
 import { audioAIHandlers } from "../audio-ai.js"
 

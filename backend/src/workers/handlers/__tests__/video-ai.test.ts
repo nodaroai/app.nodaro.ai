@@ -84,21 +84,21 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
 }))
 
-vi.mock("../../shared.js", () => ({
-  commitJobCredits: mocks.mockCommitJobCredits,
-  shouldSaveJobResult: mocks.mockShouldSaveJobResult,
-  markJobCompleted: mocks.mockMarkJobCompleted,
-  uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
-  watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
-  generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
-  // setJobProgress is the canonical progress writer. Tests assert it was
-  // called with the right value via mocks.mockSetJobProgress.
-  setJobProgress: mocks.mockSetJobProgress,
-  // startProgressRamp returns a stop handle; tests don't care about ticks.
-  startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
-  // withProgressRamp wraps a provider call; in tests just invoke `fn()`.
-  withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
-}))
+vi.mock("../../shared.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../shared.js")>()
+  return {
+    ...actual,
+    commitJobCredits: mocks.mockCommitJobCredits,
+    shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+    markJobCompleted: mocks.mockMarkJobCompleted,
+    uploadVideoMaybeWatermark: mocks.mockUploadVideoMaybeWatermark,
+    watermarkLocalVideoAndUpload: mocks.mockWatermarkLocalVideoAndUpload,
+    generateAndUploadThumbnail: mocks.mockGenerateAndUploadThumbnail,
+    setJobProgress: mocks.mockSetJobProgress,
+    startProgressRamp: vi.fn(() => ({ stop: vi.fn() })),
+    withProgressRamp: vi.fn(async (_job: unknown, _id: unknown, _opts: unknown, fn: () => Promise<unknown>) => fn()),
+  }
+})
 
 vi.mock("@/providers/kie/video.js", () => ({
   KieVideoProvider: class {

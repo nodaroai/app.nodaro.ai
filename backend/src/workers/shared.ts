@@ -8,6 +8,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { CreditsService } from "../services/credits.js"
 import { computeActualCredits, checkAndLogAnomaly } from "../billing/credit-anomaly.js"
+import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
@@ -115,6 +116,38 @@ export async function shouldSaveJobResult(jobId: string): Promise<boolean> {
     return false
   }
   return true
+}
+
+/**
+ * Spread-into-output_data sidecar fields derived from a ProviderResult.
+ * Centralises the seed/fallbackUsed/providerMs/kieTaskId capture so every
+ * AI handler that lands a ProviderResult persists the same metadata in
+ * the same shape.
+ *
+ * Usage:
+ *   output_data: {
+ *     videoUrl: r2Url,
+ *     thumbnailUrl: thumbUrl,
+ *     ...buildProviderMeta(result),
+ *   }
+ *
+ * Each field is omitted when absent, so existing rows stay clean.
+ */
+export type ProviderMetaSource = Pick<
+  ProviderResult,
+  "kieTaskId" | "seed" | "fallbackFlag" | "providerMs"
+>
+
+export function buildProviderMeta(
+  result: ProviderMetaSource | undefined | null,
+): Record<string, unknown> {
+  if (!result) return {}
+  const meta: Record<string, unknown> = {}
+  if (result.kieTaskId) meta.kieTaskId = result.kieTaskId
+  if (result.seed !== undefined) meta.seed = result.seed
+  if (result.fallbackFlag === true) meta.fallbackUsed = true
+  if (result.providerMs !== undefined) meta.providerMs = result.providerMs
+  return meta
 }
 
 /**

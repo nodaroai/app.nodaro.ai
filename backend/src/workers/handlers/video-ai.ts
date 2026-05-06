@@ -84,6 +84,7 @@ import {
   commitJobCredits,
   shouldSaveJobResult,
   markJobCompleted,
+  buildProviderMeta,
   uploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload,
   generateAndUploadThumbnail,
@@ -94,7 +95,7 @@ import {
 } from "../shared.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim, enableTranslation } = job.data as {
     jobId: string
     imageUrl: string
     endFrameUrl?: string
@@ -127,6 +128,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
      *  loop seams. Default true: strip the last 8 frames so the rendered
      *  end matches the supplied last_frame_url frame-perfectly. */
     autoLoopTrim?: boolean
+    enableTranslation?: boolean
   }
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
@@ -157,7 +159,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   let result
   try {
-    result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType })
+    result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation })
   } finally {
     ramp.stop()
   }
@@ -231,7 +233,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     output_data: {
       videoUrl: finalVideoUrl,
       thumbnailUrl: thumbUrl,
-      ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+      ...buildProviderMeta(result),
     },
     provider: result.providerUsed,
     provider_cost: result.cost,
@@ -283,7 +285,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -295,7 +297,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = job.data as {
     jobId: string
     prompt: string
     provider?: string
@@ -318,6 +320,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     referenceAudioUrls?: string[]
     webSearch?: boolean
     nsfwChecker?: boolean
+    enableTranslation?: boolean
   }
   console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
 
@@ -336,7 +339,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   const t2vRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 40 })
   let result
   try {
-    result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker })
+    result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation })
   } finally {
     t2vRamp.stop()
   }
@@ -364,7 +367,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     output_data: {
       videoUrl: r2Url,
       thumbnailUrl: thumbUrl,
-      ...(result.kieTaskId && { kieTaskId: result.kieTaskId }),
+      ...buildProviderMeta(result),
     },
     provider: result.providerUsed,
     provider_cost: result.cost,
@@ -418,6 +421,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   let resultCost: number | null = null
   let resultDisplayCost: number | null = null
   let resultProviderUsed: string = resolvedProvider
+  let resultMeta: Parameters<typeof buildProviderMeta>[0] = undefined
 
   try {
 
@@ -464,6 +468,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultCost = result.cost
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
+    resultMeta = result
   } else {
     // KIE path (existing)
     const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution)
@@ -471,6 +476,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultCost = result.cost
     resultDisplayCost = result.displayCost
     resultProviderUsed = result.providerUsed
+    resultMeta = result
   }
   } finally {
     lipSyncRamp.stop()
@@ -486,7 +492,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta) },
     provider: resultProviderUsed,
     provider_cost: resultCost,
     display_cost: resultDisplayCost,
@@ -540,7 +546,7 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
     provider: "kie",
     provider_cost: result.cost,
   })
@@ -597,7 +603,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,

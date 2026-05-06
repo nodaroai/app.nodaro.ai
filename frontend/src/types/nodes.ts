@@ -1219,6 +1219,10 @@ export type ImageToVideoData = {
   // the rendered end matches `endFrame` exactly. Set false to keep the
   // soft cross-fade. Only meaningful for veo3.1 + start AND end frames.
   autoLoopTrim?: boolean
+  // VEO 3.x only. KIE auto-translates prompts to English by default. Set
+  // false to keep prompts (e.g. the perfect-loop seal phrase) verbatim.
+  // Default true (matches KIE behaviour) — undefined means "send default".
+  enableTranslation?: boolean
   // Multi-input selection fields
   selectedStartFrameNodeId?: string  // ID of node selected for start frame
   selectedEndFrameNodeId?: string    // ID of node selected for end frame (optional)
@@ -1273,6 +1277,9 @@ export type TextToVideoData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   seed?: number                      // VEO 3.1: reproducible generation (10000-99999)
+  // VEO 3.x: opt out of KIE's auto-translate-to-English. Same semantics
+  // as on ImageToVideoData.
+  enableTranslation?: boolean
   // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
   resolution?: string
   generateAudio?: boolean

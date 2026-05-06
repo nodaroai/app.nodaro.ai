@@ -463,15 +463,21 @@ export class KieVideoProvider
           ? [imageUrl, endFrameUrl]
           : [imageUrl]
       }
-      const { resultJson, taskId: veoTaskId } = await runVeoTask(
+      const veoResult = await runVeoTask(
         modelConfig.model,
         prompt ?? "smooth cinematic motion",
         imageUrls,
-        { aspectRatio: options?.aspectRatio, seed: options?.seed, generationType: options?.generationType }
+        {
+          aspectRatio: options?.aspectRatio,
+          seed: options?.seed,
+          generationType: options?.generationType,
+          resolution: options?.resolution,
+          enableTranslation: options?.enableTranslation,
+        }
       )
 
       const videoUrl =
-        resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+        veoResult.resultJson.resultUrls?.[0] ?? veoResult.resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
           "VEO video task succeeded but no URL found",
@@ -482,7 +488,14 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] VEO Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: veoTaskId }
+      return {
+        url: videoUrl,
+        cost: modelConfig.cost,
+        kieTaskId: veoResult.taskId,
+        seed: veoResult.seed,
+        fallbackFlag: veoResult.fallbackFlag,
+        providerMs: veoResult.providerMs,
+      }
     }
 
     // Runway KIE uses a special API endpoint
@@ -639,7 +652,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, rawRecordInfo, taskId: kieTaskId } = await runKieTask(
+    const { resultJson, rawRecordInfo, taskId: kieTaskId, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -669,7 +682,7 @@ export class KieVideoProvider
       notes: `i2v-standard ${provider}`,
     })
 
-    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }) }
+    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
   }
 
   async textToVideo(
@@ -709,15 +722,20 @@ export class KieVideoProvider
 
     // VEO3/VEO3.1 uses a special API endpoint
     if (provider === "veo3" || provider === "veo3.1") {
-      const { resultJson, taskId: veoTaskId } = await runVeoTask(
+      const veoResult = await runVeoTask(
         modelConfig.model,
         prompt,
         undefined,
-        { aspectRatio: aspectRatio ?? options?.aspectRatio, seed: options?.seed }
+        {
+          aspectRatio: aspectRatio ?? options?.aspectRatio,
+          seed: options?.seed,
+          resolution: options?.resolution,
+          enableTranslation: options?.enableTranslation,
+        }
       )
 
       const videoUrl =
-        resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+        veoResult.resultJson.resultUrls?.[0] ?? veoResult.resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
           "VEO text-to-video task succeeded but no URL found",
@@ -728,7 +746,14 @@ export class KieVideoProvider
       console.log(
         `[KIE.ai] VEO Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
-      return { url: videoUrl, cost: modelConfig.cost, kieTaskId: veoTaskId }
+      return {
+        url: videoUrl,
+        cost: modelConfig.cost,
+        kieTaskId: veoResult.taskId,
+        seed: veoResult.seed,
+        fallbackFlag: veoResult.fallbackFlag,
+        providerMs: veoResult.providerMs,
+      }
     }
 
     // Runway KIE uses a special API endpoint
@@ -801,7 +826,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, taskId: kieTaskId } = await runKieTask(
+    const { resultJson, taskId: kieTaskId, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -821,7 +846,7 @@ export class KieVideoProvider
       `[KIE.ai] Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }) }
+    return { url: videoUrl, cost: modelConfig.cost, ...(kieTaskId && { kieTaskId }), ...(providerMs !== undefined && { providerMs }) }
   }
 
   async videoToVideo(
@@ -932,7 +957,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -952,7 +977,7 @@ export class KieVideoProvider
       `[KIE.ai] V2V completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost }
+    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async motionTransfer(
@@ -1039,7 +1064,7 @@ export class KieVideoProvider
         JSON.stringify(input, null, 2)
       )
 
-      const { resultJson } = await runKieTask(
+      const { resultJson, providerMs } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -1059,7 +1084,7 @@ export class KieVideoProvider
         `[KIE.ai] Kling 3.0 Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
 
-      return { url: outputUrl, cost: modelConfig.cost }
+      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Wan 2.2 Animate (Move/Replace) — standard createTask
@@ -1077,7 +1102,7 @@ export class KieVideoProvider
         JSON.stringify(input, null, 2)
       )
 
-      const { resultJson } = await runKieTask(
+      const { resultJson, providerMs } = await runKieTask(
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
@@ -1097,7 +1122,7 @@ export class KieVideoProvider
         `[KIE.ai] Wan Animate completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
 
-      return { url: outputUrl, cost: modelConfig.cost }
+      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
     // Kling 2.6 Motion Control — original behavior
@@ -1122,7 +1147,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -1142,7 +1167,7 @@ export class KieVideoProvider
       `[KIE.ai] Motion transfer completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost }
+    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async videoUpscale(
@@ -1183,7 +1208,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -1203,7 +1228,7 @@ export class KieVideoProvider
       `[KIE.ai] Video upscale completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost }
+    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async lipSync(
@@ -1247,7 +1272,7 @@ export class KieVideoProvider
       input.resolution = resolution
     }
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -1266,7 +1291,7 @@ export class KieVideoProvider
       `[KIE.ai] Lip sync completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost }
+    return { url: videoUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async speechToVideo(
@@ -1345,7 +1370,7 @@ export class KieVideoProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
@@ -1365,6 +1390,6 @@ export class KieVideoProvider
       `[KIE.ai] Speech-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: videoUrl, cost: modelConfig.cost }
+    return { url: videoUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 }

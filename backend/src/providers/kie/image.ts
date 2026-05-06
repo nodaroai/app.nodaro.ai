@@ -258,7 +258,10 @@ export class KieImageProvider
       notes: "image-generation",
     })
 
-    return { url: imageUrl, cost: modelConfig.cost }
+    const providerMs = ("providerMs" in result && typeof result.providerMs === "number")
+      ? result.providerMs
+      : undefined
+    return { url: imageUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async editImage(
@@ -325,7 +328,7 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson } = await runKieTask(modelConfig.model, input)
+    const { resultJson, providerMs } = await runKieTask(modelConfig.model, input)
 
     const outputUrl = resultJson.resultUrls?.[0]
     if (!outputUrl) {
@@ -339,6 +342,6 @@ export class KieImageProvider
       `[KIE.ai] Edit image completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost }
+    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 }
