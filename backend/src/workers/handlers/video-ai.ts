@@ -55,7 +55,9 @@ async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<str
  * blended. Stripping the last 8 frames @ 24fps recovers a clean
  * frame-perfect loop. Default-on for VEO3.1 + endFrame; the route
  * accepts an `autoLoopTrim: false` opt-out for users who actually want
- * the dissolve. MCP doesn't expose the toggle (always trim).
+ * the dissolve. The MCP `animate_image` tool exposes `auto_loop_trim`
+ * for chat-driven callers; non-veo3.1 providers ignore the flag at this
+ * gate.
  */
 const VEO_LOOP_TRIM_FRAMES = 8
 const VEO_FPS = 24

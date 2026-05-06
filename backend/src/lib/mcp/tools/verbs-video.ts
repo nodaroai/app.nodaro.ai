@@ -289,6 +289,18 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
             "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
           ),
+        auto_loop_trim: z
+          .boolean()
+          .optional()
+          .describe(
+            "VEO 3.1 only, applies when start AND end frames are supplied. VEO 3.1's " +
+            "first+last-frame mode adds a ~333ms tail dissolve that breaks loop seams. " +
+            "Default true: Nodaro strips the last 8 frames @ 24fps so the rendered last " +
+            "frame matches the supplied end frame exactly. Set false to keep the dissolve " +
+            "(useful for inspecting the raw provider output, or when the end frame differs " +
+            "from the start frame and you want the soft transition). Silently ignored on " +
+            "non-veo3.1 providers — those models never receive the trim.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -399,6 +411,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
+        // Pass through only when explicitly set so the route's default (true)
+        // applies when the caller doesn't specify. Worker still gates on
+        // `provider === "veo3.1"` — non-veo3.1 jobs ignore this flag.
+        ...(args.auto_loop_trim !== undefined ? { autoLoopTrim: args.auto_loop_trim } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
