@@ -301,8 +301,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "وحمة", description: "وحمة مرئية على الوجه أو الكتف" },
   "feature-mole": { label: "شامة / علامة جمال", description: "شامة بارزة واحدة، غالبا قرب الشفة العلوية" },
   "feature-gap-teeth": { label: "فجوة بين الأسنان", description: "فجوة بين الأسنان الأمامية" },
-  "feature-monolids": { label: "Monolids", description: "جفن أحادي الطية" },
-  "feature-double-eyelid": { label: "جفن مزدوج", description: "تجعد جفن علوي محدد" },
   "feature-aegyo-sal": { label: "Aegyo Sal", description: "طية تحت العين منتفخة في جمال K-beauty" },
   "feature-eye-bags": { label: "أكياس عين", description: "هالات داكنة خفيفة تحت العين" },
   "feature-dimpled-chin": { label: "ذقن بغمازة", description: "غمازة ناعمة في الذقن" },
@@ -588,6 +586,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "الأوت باك", description: "جمالية الأوت باك الأسترالي الريفي (أنثوي)" },
   "outback-stockman": { label: "راعي الأوت باك", description: "جمالية الأوت باك الأسترالي الريفي (ذكوري)" },
   "auckland-coastal": { label: "أوكلاند الساحلية", description: "جمالية مدينة الميناء الباسيفيكية في أوكلاند بنيوزيلندا" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "مزيج الجنسين", description: "مزج متعمد بين الملامح الذكورية والأنثوية" },
+  "goth": { label: "Goth", description: "جمالية ثقافة Goth الفرعية — داكنة، رومانسية، درامية" },
+  "proportions-athletic-muscular": { label: "رياضي / عضلي", description: "عضلات نحيلة، أكتاف عريضة، خصر ضيق (شكل V للرياضي)" },
+  "eye-droopy": { label: "متهدلة", description: "جفون منخفضة — نظرة ناعمة نعسانة / حزينة (وضع الجفن، لا زاوية الزوايا)" },
+  "lip-state-bold-black": { label: "أسود جريء", description: "أحمر شفاه أسود مشبع جريء (Goth / طليعي)" },
+  "lip-state-burgundy": { label: "Burgundy", description: "أحمر شفاه أحمر نبيذي عميق" },
+  "lip-state-plum": { label: "برقوقي", description: "أحمر شفاه بنغمة بنفسجية داكنة" },
+  "lip-state-mauve": { label: "موف", description: "أحمر شفاه موف باهت / وردي مغبر" },
+  "eyes-black": { label: "سوداء", description: "قزحية سوداء حقيقية (أعمق من البني)" },
+  "skin-very-dark": { label: "داكن جدا / آبنوس", description: "بشرة داكنة جدا، بلون الآبنوس (أعمق طرف من السلم)" },
+  "texture-acne-scarred": { label: "بآثار حب الشباب", description: "آثار حب شباب مرئية (مختلفة عن البقع — نمط ندوب ملتئمة)" },
+  "face-five-oclock-shadow": { label: "Five-O'Clock Shadow", description: "نمو يومي أكثف — أكثف من Stubble خفيف" },
+  "feature-under-eye-circles": { label: "هالات تحت العين", description: "هالات داكنة خفيفة تحت العين (مختلفة عن أكياس العين المنتفخة)" },
+  "feature-fangs": { label: "أنياب", description: "أنياب مرئية (مصاص دماء / نموذج شخصية)" },
 }
 
 export default map

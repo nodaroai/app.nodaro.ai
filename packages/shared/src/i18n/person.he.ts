@@ -322,8 +322,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "כתם לידה", description: "כתם לידה גלוי בפנים או בכתף" },
   "feature-mole": { label: "שומה / נקודת חן", description: "שומה אחת בולטת, לעתים קרובות ליד השפה העליונה" },
   "feature-gap-teeth": { label: "מרווח בשיניים", description: "מרווח בין השיניים הקדמיות" },
-  "feature-monolids": { label: "Monolids", description: "עפעף בקפל יחיד" },
-  "feature-double-eyelid": { label: "עפעף כפול", description: "קפל עפעף עליון מוגדר" },
   "feature-aegyo-sal": { label: "Aegyo Sal", description: "קפל מתחת לעין מוערך ב-K-beauty" },
   "feature-eye-bags": { label: "שקיות מתחת לעיניים", description: "מעגלים כהים קלים מתחת לעיניים" },
   "feature-dimpled-chin": { label: "סנטר עם גומה", description: "גומה רכה בסנטר" },
@@ -608,6 +606,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "Outback", description: "אסתטיקה אוסטרלית כפרית של ה-Outback (נשי)" },
   "outback-stockman": { label: "Stockman מה-Outback", description: "אסתטיקה אוסטרלית כפרית של ה-Outback (גברי)" },
   "auckland-coastal": { label: "אוקלנד חופית", description: "אסתטיקה פסיפית של עיר נמל בניו זילנד באוקלנד" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "אנדרוגיני", description: "שילוב מכוון של מאפיינים גבריים ונשיים" },
+  "goth": { label: "גות'י", description: "אסתטיקת תת-תרבות גות'ית — אפלה, רומנטית, דרמטית" },
+  "proportions-athletic-muscular": { label: "אתלטי / שרירי", description: "שריר רזה, כתפיים רחבות, מותניים צרים (V-taper של ספורטאי)" },
+  "eye-droopy": { label: "צונחות", description: "עפעפיים נמוכים — מבט רך, מנומנם / עצוב (מיקום עפעף, לא זווית פינה)" },
+  "lip-state-bold-black": { label: "שחור נועז", description: "שפתון שחור רווי כהצהרה (גות' / אוונגרד)" },
+  "lip-state-burgundy": { label: "בורגונדי", description: "שפתון אדום-יין עמוק" },
+  "lip-state-plum": { label: "שזיף", description: "שפתון בגוון סגול כהה" },
+  "lip-state-mauve": { label: "מוב", description: "שפתון מוב עמום / ורוד אבק" },
+  "eyes-black": { label: "שחור", description: "קשתית שחורה ממש (כהה יותר מחום)" },
+  "skin-very-dark": { label: "כהה מאוד / שחום", description: "גוון עור כהה מאוד, שחום (הקצה הכהה ביותר בסקאלה)" },
+  "texture-acne-scarred": { label: "צלקות אקנה", description: "צלקות אקנה גלויות (שונה מפגום — דפוס צלקות מוחלמות)" },
+  "face-five-oclock-shadow": { label: "זיפי חמש אחר הצהריים", description: "צמיחה יומית כבדה יותר — צפופה מזיפים קלים" },
+  "feature-under-eye-circles": { label: "עיגולים מתחת לעיניים", description: "עיגולים כהים עדינים מתחת לעיניים (שונה משקיות נפוחות)" },
+  "feature-fangs": { label: "ניבים", description: "ניבים גלויים (ערפד / ארכיטיפ דמות)" },
 
 }
 

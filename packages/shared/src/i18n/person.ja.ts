@@ -315,8 +315,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "あざ", description: "顔または肩に目に見えるあざ" },
   "feature-mole": { label: "ほくろ／チャームポイント", description: "上唇付近によく見られる目立つ1つのほくろ" },
   "feature-gap-teeth": { label: "すきっ歯", description: "前歯の間にすき間" },
-  "feature-monolids": { label: "一重まぶた", description: "一重まぶた" },
-  "feature-double-eyelid": { label: "二重まぶた", description: "はっきりした上瞼の二重ライン" },
   "feature-aegyo-sal": { label: "涙袋", description: "韓国美容で重視される涙袋" },
   "feature-eye-bags": { label: "目の下のクマ", description: "軽い目の下のダークサークルとクマ" },
   "feature-dimpled-chin": { label: "えくぼのある顎", description: "顎に柔らかいえくぼ" },
@@ -615,6 +613,21 @@ const map: LocaleCatalogMap = {
   "outback-stockman": { label: "アウトバック・ストックマン", description: "オーストラリア奥地アウトバックの美意識（マスキュリン）" },
   "auckland-coastal": { label: "オークランド・コースタル", description: "オークランド・ニュージーランドの港湾都市的パシフィック美意識" },
 
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "アンドロジナス", description: "男性的・女性的要素を意図的にブレンドした風貌" },
+  "goth": { label: "ゴシック", description: "ゴスのサブカルチャー美意識 — ダーク、ロマンティック、劇的" },
+  "proportions-athletic-muscular": { label: "アスレチック／筋肉質", description: "引き締まった筋肉、広い肩、細いウエスト（アスリートのVテーパー）" },
+  "eye-droopy": { label: "たれ目", description: "瞼が低く下がり、柔らかく眠そうな視線（瞼の位置、目尻の角度ではない）" },
+  "lip-state-bold-black": { label: "ボールドブラック", description: "彩度の高い黒い口紅のステートメント（ゴシック／アヴァンギャルド）" },
+  "lip-state-burgundy": { label: "バーガンディ", description: "深いワインレッドの口紅" },
+  "lip-state-plum": { label: "プラム", description: "ダークパープル調の口紅" },
+  "lip-state-mauve": { label: "モーヴ", description: "くすんだモーヴ／ダスティピンクの口紅" },
+  "eyes-black": { label: "ブラック", description: "真の黒い虹彩（茶色より深い）" },
+  "skin-very-dark": { label: "とても濃い／エボニー", description: "とても濃いエボニーの肌色（スケールで最も深い)" },
+  "texture-acne-scarred": { label: "ニキビ跡", description: "目に見えるニキビ跡（シミとは別 — 治癒した傷跡のパターン）" },
+  "face-five-oclock-shadow": { label: "夕方のひげ", description: "薄い無精ひげより濃い、日中に伸びたひげ" },
+  "feature-under-eye-circles": { label: "目の下のクマ", description: "目の下の控えめなダークサークル（腫れぼったい目袋とは別)" },
+  "feature-fangs": { label: "牙", description: "目に見える牙（ヴァンパイア／キャラクター原型）" },
 }
 
 export default map

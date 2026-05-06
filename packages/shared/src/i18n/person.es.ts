@@ -315,8 +315,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Marca de Nacimiento", description: "Marca de nacimiento visible en la cara o el hombro" },
   "feature-mole": { label: "Lunar / Marca de Belleza", description: "Un lunar prominente, a menudo cerca del labio superior" },
   "feature-gap-teeth": { label: "Dientes Separados", description: "Espacio entre los dientes frontales" },
-  "feature-monolids": { label: "Monolids", description: "Párpado de un solo pliegue" },
-  "feature-double-eyelid": { label: "Doble Párpado", description: "Pliegue definido del párpado superior" },
   "feature-aegyo-sal": { description: "Pliegue mullido bajo el ojo apreciado en la belleza coreana" },
   "feature-eye-bags": { label: "Bolsas en los Ojos", description: "Ojeras leves bajo los ojos" },
   "feature-dimpled-chin": { label: "Mentón con Hoyuelo", description: "Hoyuelo suave en el mentón" },
@@ -597,6 +595,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "Outback", description: "Estética rural del Outback australiano (femenina)" },
   "outback-stockman": { label: "Stockman del Outback", description: "Estética rural del Outback australiano (masculina)" },
   "auckland-coastal": { label: "Auckland Costera", description: "Estética del Pacífico de la ciudad portuaria de Auckland, Nueva Zelanda" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Andrógino", description: "Rasgos masculinos y femeninos mezclados de forma deliberada" },
+  "goth": { description: "Estética de la subcultura gótica — oscura, romántica, dramática" },
+  "proportions-athletic-muscular": { label: "Atlético / Musculoso", description: "Músculo definido, hombros anchos, cintura estrecha (forma de V atlética)" },
+  "eye-droopy": { label: "Caídos", description: "Párpados bajos — mirada suave, adormilada (posición del párpado, no del ángulo)" },
+  "lip-state-bold-black": { label: "Negro Intenso", description: "Lápiz labial negro saturado de declaración (gótico / vanguardia)" },
+  "lip-state-burgundy": { label: "Burdeos", description: "Lápiz labial rojo vino oscuro" },
+  "lip-state-plum": { label: "Ciruela", description: "Lápiz labial de tono morado oscuro" },
+  "lip-state-mauve": { label: "Malva", description: "Lápiz labial malva apagado / rosa empolvado" },
+  "eyes-black": { label: "Negros", description: "Iris realmente negro (más oscuro que marrón)" },
+  "skin-very-dark": { label: "Muy Oscura / Ébano", description: "Piel muy oscura, tono ébano (extremo más profundo de la escala)" },
+  "texture-acne-scarred": { label: "Con Cicatrices de Acné", description: "Cicatrices de acné visibles (distintas de imperfecciones — patrón de cicatrices ya curadas)" },
+  "face-five-oclock-shadow": { label: "Sombra de las Cinco", description: "Crecimiento diario más denso que la barba incipiente ligera" },
+  "feature-under-eye-circles": { label: "Ojeras", description: "Ojeras sutiles bajo los ojos (distintas de las bolsas hinchadas)" },
+  "feature-fangs": { label: "Colmillos", description: "Colmillos visibles (vampiro / arquetipo de personaje)" },
 }
 
 export default map

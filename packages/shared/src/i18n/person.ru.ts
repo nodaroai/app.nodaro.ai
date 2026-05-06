@@ -315,8 +315,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Родимое пятно", description: "Видимое родимое пятно на лице или плече" },
   "feature-mole": { label: "Родинка / Мушка", description: "Одна заметная родинка, часто у верхней губы" },
   "feature-gap-teeth": { label: "Щель между зубами", description: "Щель между передними зубами" },
-  "feature-monolids": { label: "Монолиды", description: "Однослойное веко" },
-  "feature-double-eyelid": { label: "Двойное веко", description: "Чёткая складка верхнего века" },
   "feature-aegyo-sal": { label: "Aegyo Sal", description: "Пухлая складка под глазами, ценимая в K-beauty" },
   "feature-eye-bags": { label: "Мешки под глазами", description: "Лёгкие тёмные круги под глазами" },
   "feature-dimpled-chin": { label: "Ямочка на подбородке", description: "Мягкая ямочка на подбородке" },
@@ -609,6 +607,21 @@ const map: LocaleCatalogMap = {
   "outback-stockman": { label: "Outback Stockman", description: "Сельская эстетика австралийского аутбэка (мужская)" },
   "auckland-coastal": { label: "Окленд прибрежный", description: "Эстетика тихоокеанского портового города Окленд, Новая Зеландия" },
 
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Андрогинный", description: "Намеренно сочетающий маскулинные и фемининные черты" },
+  "goth": { label: "Гот", description: "Эстетика готической субкультуры — тёмная, романтичная, драматичная" },
+  "proportions-athletic-muscular": { label: "Атлетически-мускулистые", description: "Сухие мышцы, широкие плечи, узкая талия (V-образный силуэт атлета)" },
+  "eye-droopy": { label: "Опущенные веки", description: "Низко посаженные веки — мягкий, сонный / печальный взгляд (положение века, не угол уголков)" },
+  "lip-state-bold-black": { label: "Ярко-чёрные", description: "Насыщенно-чёрная помада как заявление (готика / авангард)" },
+  "lip-state-burgundy": { label: "Бордовые", description: "Глубокая винно-красная помада" },
+  "lip-state-plum": { label: "Сливовые", description: "Тёмная помада с пурпурным оттенком" },
+  "lip-state-mauve": { label: "Лиловые", description: "Приглушённая лиловая / пыльно-розовая помада" },
+  "eyes-black": { label: "Чёрные", description: "По-настоящему чёрная радужка (темнее карих)" },
+  "skin-very-dark": { label: "Очень тёмная / Эбеновая", description: "Очень тёмная, эбеновая кожа (самый глубокий тон шкалы)" },
+  "texture-acne-scarred": { label: "Со следами акне", description: "Видимые рубцы постакне (отличаются от высыпаний — зажившие шрамы)" },
+  "face-five-oclock-shadow": { label: "Дневная щетина", description: "Более плотная дневная щетина — гуще лёгкой щетины" },
+  "feature-under-eye-circles": { label: "Круги под глазами", description: "Лёгкие тёмные круги под глазами (отличаются от мешков)" },
+  "feature-fangs": { label: "Клыки", description: "Видимые клыки (вампир / персонажный архетип)" },
 }
 
 export default map

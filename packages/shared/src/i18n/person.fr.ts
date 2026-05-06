@@ -302,8 +302,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Tache de naissance", description: "Tache de naissance visible sur le visage ou l'épaule" },
   "feature-mole": { label: "Grain de beauté", description: "Un grain de beauté proéminent, souvent près de la lèvre supérieure" },
   "feature-gap-teeth": { label: "Dents écartées", description: "Espace entre les dents de devant" },
-  "feature-monolids": { label: "Monolids", description: "Paupière à pli unique" },
-  "feature-double-eyelid": { label: "Double paupière", description: "Pli supérieur de paupière défini" },
   "feature-aegyo-sal": { description: "Pli sous l'œil, prisé en K-beauté" },
   "feature-eye-bags": { label: "Cernes", description: "Légers cernes sombres sous les yeux" },
   "feature-dimpled-chin": { label: "Menton à fossette", description: "Légère fossette dans le menton" },
@@ -572,6 +570,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "Outback", description: "Esthétique de l'Outback australien rural (féminin)" },
   "outback-stockman": { label: "Stockman de l'Outback", description: "Esthétique de l'Outback australien rural (masculin)" },
   "auckland-coastal": { label: "Auckland côtière", description: "Esthétique pacifique de la ville-port d'Auckland en Nouvelle-Zélande" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Androgyne", description: "Mélange délibéré de codes masculins et féminins" },
+  "goth": { description: "Esthétique de la sous-culture goth — sombre, romantique, dramatique" },
+  "proportions-athletic-muscular": { label: "Athlétique / Musclée", description: "Muscle sec, épaules larges, taille étroite (taille en V de l'athlète)" },
+  "eye-droopy": { label: "Affaissés", description: "Paupières basses — regard doux, somnolent / triste (position de la paupière, pas l'angle des coins)" },
+  "lip-state-bold-black": { label: "Noir audacieux", description: "Statement de rouge à lèvres noir saturé (goth / avant-garde)" },
+  "lip-state-burgundy": { label: "Bordeaux", description: "Rouge à lèvres rouge vin profond" },
+  "lip-state-plum": { label: "Prune", description: "Rouge à lèvres aux tons violets foncés" },
+  "lip-state-mauve": { description: "Rouge à lèvres mauve adouci / rose poudré" },
+  "eyes-black": { label: "Noirs", description: "Iris véritablement noir (plus profond que marron)" },
+  "skin-very-dark": { label: "Très foncée / Ébène", description: "Peau très foncée, ébène (extrémité la plus profonde de la palette)" },
+  "texture-acne-scarred": { label: "Cicatrices d'acné", description: "Cicatrices d'acné visibles (distinct de marquée — motif de cicatrices guéries)" },
+  "face-five-oclock-shadow": { label: "Barbe de fin de journée", description: "Repousse quotidienne plus dense — plus fournie qu'une barbe naissante légère" },
+  "feature-under-eye-circles": { label: "Cernes sous les yeux", description: "Légers cernes sombres sous les yeux (distinct des poches gonflées)" },
+  "feature-fangs": { label: "Crocs", description: "Crocs visibles (archétype vampire / personnage)" },
 }
 
 export default map

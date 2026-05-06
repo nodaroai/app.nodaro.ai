@@ -315,8 +315,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "모반", description: "얼굴이나 어깨에 보이는 모반입니다" },
   "feature-mole": { label: "점 / 뷰티 마크", description: "주로 윗입술 근처에 두드러진 점이 있습니다" },
   "feature-gap-teeth": { label: "벌어진 앞니", description: "앞니 사이가 벌어졌습니다" },
-  "feature-monolids": { label: "외꺼풀", description: "외꺼풀입니다" },
-  "feature-double-eyelid": { label: "쌍꺼풀", description: "또렷한 쌍꺼풀 라인이 있습니다" },
   "feature-aegyo-sal": { label: "애교살", description: "K-뷰티에서 사랑받는 통통한 애교살입니다" },
   "feature-eye-bags": { label: "다크서클", description: "약간의 다크서클입니다" },
   "feature-dimpled-chin": { label: "보조개 턱", description: "턱에 부드러운 보조개가 있습니다" },
@@ -614,6 +612,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "아웃백", description: "오스트레일리아 시골 아웃백 미감 (여성)" },
   "outback-stockman": { label: "아웃백 스톡맨", description: "오스트레일리아 시골 아웃백 미감 (남성)" },
   "auckland-coastal": { label: "오클랜드 코스탈", description: "오클랜드 뉴질랜드 항구 도시 태평양 미감" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "앤드로지너스", description: "남성성과 여성성을 의도적으로 섞은 외형입니다" },
+  "goth": { label: "고스", description: "고스 서브컬처 미감 — 어둡고 로맨틱하며 드라마틱합니다" },
+  "proportions-athletic-muscular": { label: "운동선수형 / 근육질", description: "탄탄한 근육, 넓은 어깨, 좁은 허리의 V라인 체형입니다" },
+  "eye-droopy": { label: "처진 눈꺼풀", description: "눈꺼풀이 낮게 자리해 부드럽고 졸린 듯한 시선입니다" },
+  "lip-state-bold-black": { label: "볼드 블랙", description: "채도 높은 검정 립스틱 스테이트먼트 (고스 / 아방가르드)입니다" },
+  "lip-state-burgundy": { label: "버건디", description: "깊은 와인 레드 립스틱입니다" },
+  "lip-state-plum": { label: "플럼", description: "어두운 자줏빛 립스틱입니다" },
+  "lip-state-mauve": { label: "모브", description: "차분한 모브 / 더스티 핑크 립스틱입니다" },
+  "eyes-black": { label: "블랙", description: "갈색보다 더 짙은, 진정한 검은 홍채입니다" },
+  "skin-very-dark": { label: "매우 어두운 / 에보니", description: "스케일에서 가장 짙은, 매우 어두운 에보니 피부톤입니다" },
+  "texture-acne-scarred": { label: "여드름 흉터", description: "보이는 여드름 흉터 (블레미시와 구분 — 아문 흉터 패턴)입니다" },
+  "face-five-oclock-shadow": { label: "오후의 수염", description: "옅은 수염 자국보다 짙은 하루치 수염입니다" },
+  "feature-under-eye-circles": { label: "다크서클", description: "눈 아래의 은은한 다크서클 (부은 다크서클과 구분)입니다" },
+  "feature-fangs": { label: "송곳니", description: "보이는 송곳니 (뱀파이어 / 캐릭터 원형)입니다" },
 }
 
 export default map

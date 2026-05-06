@@ -303,8 +303,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Muttermal", description: "Sichtbares Muttermal an Gesicht oder Schulter" },
   "feature-mole": { label: "Schönheitsfleck", description: "Ein markanter Leberfleck, oft nahe der Oberlippe" },
   "feature-gap-teeth": { label: "Zahnlücke", description: "Lücke zwischen den Vorderzähnen" },
-  "feature-monolids": { label: "Monolid", description: "Einfaltlid" },
-  "feature-double-eyelid": { label: "Doppellid", description: "Definierte Oberlidfalte" },
   "feature-aegyo-sal": { description: "Pralle Tränensäcke, geschätzt in der K-Beauty" },
   "feature-eye-bags": { label: "Augenringe", description: "Leichte dunkle Schatten unter den Augen" },
   "feature-dimpled-chin": { label: "Kinngrübchen", description: "Sanftes Grübchen im Kinn" },
@@ -581,6 +579,21 @@ const map: LocaleCatalogMap = {
   "outback-stockman": { label: "Outback Stockman", description: "Ländliche australische Outback-Ästhetik (maskulin)" },
   "auckland-coastal": { label: "Auckland Küste", description: "Pazifische Hafenstadt-Ästhetik aus Auckland in Neuseeland" },
 
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Androgyn", description: "Bewusst gemischte maskuline und feminine Merkmale" },
+  "goth": { description: "Goth-Subkultur-Ästhetik — dunkel, romantisch, dramatisch" },
+  "proportions-athletic-muscular": { label: "Athletisch / Muskulös", description: "Schlanke Muskeln, breite Schultern, schmale Taille (athletische V-Form)" },
+  "eye-droopy": { label: "Hängend", description: "Tief sitzende Lider — weicher, müder / trauriger Blick (Lidposition, nicht Eckenwinkel)" },
+  "lip-state-bold-black": { label: "Knallschwarz", description: "Gesättigtes schwarzes Lippenstift-Statement (Goth / Avantgarde)" },
+  "lip-state-burgundy": { label: "Burgund", description: "Tiefroter Weinroter Lippenstift" },
+  "lip-state-plum": { label: "Pflaume", description: "Dunkler lila-getönter Lippenstift" },
+  "lip-state-mauve": { description: "Gedämpfter mauve / staubiger rosa Lippenstift" },
+  "eyes-black": { label: "Schwarz", description: "Wirklich schwarze Iris (tiefer als braun)" },
+  "skin-very-dark": { label: "Sehr Dunkel / Ebenholz", description: "Sehr dunkler Ebenholz-Hautton (am tiefsten Ende der Skala)" },
+  "texture-acne-scarred": { label: "Aknenarbig", description: "Sichtbare Aknenarben (anders als Makel — verheiltes Narbenmuster)" },
+  "face-five-oclock-shadow": { label: "Drei-Tage-Bart", description: "Stärkerer Bartwuchs — dichter als leichte Stoppeln" },
+  "feature-under-eye-circles": { label: "Augenringe", description: "Dezente dunkle Schatten unter den Augen (anders als geschwollene Tränensäcke)" },
+  "feature-fangs": { label: "Reißzähne", description: "Sichtbare Reißzähne (Vampir- / Charakter-Archetyp)" },
 }
 
 export default map

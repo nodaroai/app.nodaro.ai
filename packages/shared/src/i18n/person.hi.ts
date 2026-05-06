@@ -315,8 +315,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Birthmark", description: "चेहरे या कंधे पर दिखाई देता birthmark" },
   "feature-mole": { label: "तिल / Beauty Mark", description: "एक प्रमुख तिल, अक्सर ऊपरी होंठ के पास" },
   "feature-gap-teeth": { label: "Gap Teeth", description: "आगे के दाँतों के बीच gap" },
-  "feature-monolids": { label: "Monolids", description: "एकल-तह वाली पलक" },
-  "feature-double-eyelid": { label: "Double Eyelid", description: "परिभाषित ऊपरी पलक crease" },
   "feature-aegyo-sal": { label: "Aegyo Sal", description: "K-beauty में सराहा जाने वाला under-eye fold" },
   "feature-eye-bags": { label: "Eye Bags", description: "हल्के गहरे under-eye circles" },
   "feature-dimpled-chin": { label: "Dimpled ठुड्डी", description: "ठुड्डी में मुलायम dimple" },
@@ -607,6 +605,21 @@ const map: LocaleCatalogMap = {
   "outback-stockman": { label: "Outback Stockman", description: "ग्रामीण ऑस्ट्रेलियाई Outback सौंदर्य (पुरुष)" },
   "auckland-coastal": { label: "Auckland Coastal", description: "Auckland न्यूज़ीलैंड harbor-city Pacific सौंदर्य" },
 
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Androgynous", description: "जानबूझकर मिश्रित मर्दाना और स्त्रैण cues" },
+  "goth": { label: "Goth", description: "Goth उपसंस्कृति सौंदर्य — गहरा, रोमांटिक, नाटकीय" },
+  "proportions-athletic-muscular": { label: "Athletic / मांसल", description: "दुबली मांसपेशियाँ, चौड़े कंधे, संकरी कमर (athlete का V-taper)" },
+  "eye-droopy": { label: "Droopy", description: "पलकें नीचे झुकी हुई — मुलायम, नींदभरी / उदास नज़र" },
+  "lip-state-bold-black": { label: "Bold Black", description: "संतृप्त काली lipstick statement (goth / avant-garde)" },
+  "lip-state-burgundy": { label: "Burgundy", description: "गहरी wine-red lipstick" },
+  "lip-state-plum": { label: "Plum", description: "गहरी बैंगनी-toned lipstick" },
+  "lip-state-mauve": { label: "Mauve", description: "हल्की mauve / dusty-pink lipstick" },
+  "eyes-black": { label: "काली", description: "सच में काली पुतली (भूरी से भी गहरी)" },
+  "skin-very-dark": { label: "बहुत गहरी / Ebony", description: "बहुत गहरी, ebony त्वचा का tone (पैमाने का सबसे गहरा छोर)" },
+  "texture-acne-scarred": { label: "Acne-scarred", description: "दिखाई देते acne scars (blemished से अलग — भरे हुए scar pattern)" },
+  "face-five-oclock-shadow": { label: "Five-O'Clock Shadow", description: "भारी दैनिक growth — हल्की stubble से घनी" },
+  "feature-under-eye-circles": { label: "Under-Eye Circles", description: "आँखों के नीचे हल्के काले घेरे (puffy eye-bags से अलग)" },
+  "feature-fangs": { label: "Fangs", description: "दिखाई देते fangs (vampire / character archetype)" },
 }
 
 export default map

@@ -322,8 +322,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark": { label: "Marca de Nascença", description: "Marca de nascença visível no rosto ou ombro" },
   "feature-mole": { label: "Pinta / Sinal de Beleza", description: "Uma pinta marcante, em geral perto do lábio superior" },
   "feature-gap-teeth": { label: "Diastema", description: "Espaço entre os dentes da frente" },
-  "feature-monolids": { label: "Pálpebras Únicas", description: "Pálpebra de dobra única" },
-  "feature-double-eyelid": { label: "Pálpebra Dupla", description: "Dobra superior da pálpebra bem definida" },
   "feature-aegyo-sal": { description: "Dobrinha fofa abaixo do olho, valorizada na K-beauty" },
   "feature-eye-bags": { label: "Olheiras", description: "Leves olheiras escuras sob os olhos" },
   "feature-dimpled-chin": { label: "Queixo com Covinha", description: "Covinha suave no queixo" },
@@ -608,6 +606,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "Outback", description: "Estética rural do Outback australiano (feminino)" },
   "outback-stockman": { label: "Stockman do Outback", description: "Estética rural do Outback australiano (masculino)" },
   "auckland-coastal": { label: "Auckland Litorânea", description: "Estética pacífica da cidade portuária de Auckland, Nova Zelândia" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous": { label: "Andrógino", description: "Traços masculinos e femininos misturados de forma deliberada" },
+  "goth": { description: "Estética da subcultura gótica — sombria, romântica, dramática" },
+  "proportions-athletic-muscular": { label: "Atlético / Musculoso", description: "Músculos definidos, ombros largos, cintura estreita (silhueta em V de atleta)" },
+  "eye-droopy": { label: "Caídos", description: "Pálpebras baixas — olhar suave, sonolento (posição da pálpebra, não do canto)" },
+  "lip-state-bold-black": { label: "Preto Marcante", description: "Batom preto saturado em destaque (gótico / vanguarda)" },
+  "lip-state-burgundy": { label: "Bordô", description: "Batom vermelho-vinho escuro" },
+  "lip-state-plum": { label: "Ameixa", description: "Batom de tom roxo escuro" },
+  "lip-state-mauve": { label: "Malva", description: "Batom malva suave / rosa empoeirado" },
+  "eyes-black": { label: "Pretos", description: "Íris verdadeiramente preta (mais escura que castanha)" },
+  "skin-very-dark": { label: "Muito Escura / Ébano", description: "Pele muito escura, tom ébano (extremo mais profundo da escala)" },
+  "texture-acne-scarred": { label: "Marcada por Acne", description: "Cicatrizes de acne visíveis (diferente de pele com marcas — padrão de cicatrizes já curadas)" },
+  "face-five-oclock-shadow": { label: "Barba do Fim do Dia", description: "Crescimento diário mais denso que barba por fazer leve" },
+  "feature-under-eye-circles": { label: "Olheiras", description: "Olheiras escuras sutis sob os olhos (distinto de papos inchados)" },
+  "feature-fangs": { label: "Presas", description: "Presas visíveis (arquétipo vampiro / personagem)" },
 }
 
 export default map

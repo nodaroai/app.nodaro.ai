@@ -121,6 +121,8 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "soft-butch",        label: "Soft Butch",         group: "Realistic — Style",    dimension: "type", description: "Gentle masculine-of-center woman", promptHint: "a soft-butch woman — gentle masculine-of-center styling and energy" },
   { id: "tomboy",            label: "Tomboy",             group: "Realistic — Style",    dimension: "type", description: "Boyish styling and energy on a feminine body", promptHint: "a tomboy — boyish styling and energy on a feminine body" },
   { id: "thick",             label: "Thick",              group: "Realistic — Style",    dimension: "type", description: "Voluptuous body-positive figure with curves", promptHint: "a thick, voluptuous body-positive figure with full curves" },
+  { id: "androgynous",       label: "Androgynous",        group: "Realistic — Style",    dimension: "type", description: "Deliberately blended masculine + feminine cues", promptHint: "an androgynous figure with deliberately blended masculine and feminine cues" },
+  { id: "goth",              label: "Goth",               group: "Realistic — Style",    dimension: "type", description: "Goth subculture aesthetic — dark, romantic, dramatic", promptHint: "a goth figure with a dark romantic dramatic subculture aesthetic" },
   { id: "bear",              label: "Bear",               group: "Realistic — Style",    dimension: "type", description: "Big, bearded, hairy masculine type", promptHint: "a bear — a big, bearded, hairy man with a warm masculine presence" },
 
   // ----- Primitive / Wild -----
@@ -388,6 +390,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "proportions-pear",         label: "Pear",           dimension: "body-proportions", description: "Wider hips than shoulders",   promptHint: "a pear-shaped figure with hips wider than shoulders" },
   { id: "proportions-apple",        label: "Apple",          dimension: "body-proportions", description: "Fuller midsection",           promptHint: "an apple-shaped figure carrying weight in the midsection" },
   { id: "proportions-inverted",     label: "Inverted Triangle", dimension: "body-proportions", description: "Broad shoulders, narrow hips", promptHint: "an inverted triangle figure with broad shoulders and narrow hips" },
+  { id: "proportions-athletic-muscular", label: "Athletic / Muscular", dimension: "body-proportions", description: "Lean muscle, broad shoulders, narrow waist (athlete's V-taper)", promptHint: "an athletic muscular figure with a lean V-taper, broad shoulders, narrow waist, and visible muscle definition" },
 
   // -------------------- Face Shape --------------------
   { id: "face-oval",       label: "Oval",       dimension: "face-shape", description: "Slightly longer than wide, soft curves",     promptHint: "an oval face shape" },
@@ -416,6 +419,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "eye-upturned",    label: "Upturned",   dimension: "eye-shape", description: "Outer corners lift up",             promptHint: "upturned eyes with outer corners lifted" },
   { id: "eye-wide-set",    label: "Wide-set",   dimension: "eye-shape", description: "Eyes spaced widely apart",          promptHint: "wide-set eyes" },
   { id: "eye-close-set",   label: "Close-set",  dimension: "eye-shape", description: "Eyes set close together",           promptHint: "close-set eyes" },
+  { id: "eye-droopy",      label: "Droopy",     dimension: "eye-shape", description: "Lids sit low — soft, sleepy / sad gaze (lid position, not corner angle)", promptHint: "droopy eyes with lids sitting low for a soft, sleepy gaze" },
 
   // -------------------- Nose --------------------
   { id: "nose-straight",  label: "Straight",  dimension: "nose", description: "Straight bridge",                 promptHint: "a straight nose" },
@@ -443,6 +447,10 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "lip-state-bitten",    label: "Bitten",    dimension: "lip-state", description: "Slight playful lip-bite, lower lip caught", promptHint: "playfully biting the lower lip" },
   { id: "lip-state-parted",    label: "Parted",    dimension: "lip-state", description: "Lips slightly parted, breath of air", promptHint: "with lips slightly parted, taking a soft breath" },
   { id: "lip-state-pursed",    label: "Pursed",    dimension: "lip-state", description: "Lips pressed and pushed forward", promptHint: "with lips pursed, pressed and pushed forward" },
+  { id: "lip-state-bold-black", label: "Bold Black", dimension: "lip-state", description: "Saturated black lipstick statement (goth / avant-garde)", promptHint: "with a bold, saturated black lipstick statement, goth / avant-garde" },
+  { id: "lip-state-burgundy",   label: "Burgundy",   dimension: "lip-state", description: "Deep wine-red lipstick", promptHint: "with deep wine-red burgundy lipstick" },
+  { id: "lip-state-plum",       label: "Plum",       dimension: "lip-state", description: "Dark purple-toned lipstick", promptHint: "with dark purple-toned plum lipstick" },
+  { id: "lip-state-mauve",      label: "Mauve",      dimension: "lip-state", description: "Muted mauve / dusty-pink lipstick", promptHint: "with muted mauve, dusty-pink lipstick" },
   { id: "lip-state-pouting",   label: "Pouting",   dimension: "lip-state", description: "Full pout",                       promptHint: "with a full pouting expression" },
 
   // -------------------- Hair Color --------------------
@@ -537,6 +545,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "skin-tan",       label: "Tan",       dimension: "skin-tone", description: "Tan skin",              promptHint: "tan skin" },
   { id: "skin-brown",     label: "Brown",     dimension: "skin-tone", description: "Brown skin",            promptHint: "brown skin" },
   { id: "skin-dark",      label: "Dark",      dimension: "skin-tone", description: "Dark skin",             promptHint: "dark skin" },
+  { id: "skin-very-dark", label: "Very Dark / Ebony", dimension: "skin-tone", description: "Very dark, ebony skin tone (deepest end of the scale)", promptHint: "very dark ebony skin, the deepest skin tone" },
 
   // -------------------- Eye Color --------------------
   { id: "eyes-brown",  label: "Brown",  dimension: "eye-color", description: "Brown eyes",  promptHint: "brown eyes" },
@@ -551,6 +560,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "eyes-red",       label: "Red",       dimension: "eye-color", description: "Red iris (albinism / fantasy)",       promptHint: "red eyes, albinism or fantasy red iris" },
   { id: "eyes-pink",      label: "Pink",      dimension: "eye-color", description: "Soft pink iris (albino / fantasy)",   promptHint: "soft pink eyes, albino or fantasy pink iris" },
   { id: "eyes-turquoise", label: "Turquoise", dimension: "eye-color", description: "Vivid turquoise blue-green iris",     promptHint: "vivid turquoise blue-green eyes" },
+  { id: "eyes-black",     label: "Black",     dimension: "eye-color", description: "Truly black iris (deeper than brown)", promptHint: "jet-black eyes with a truly black iris, deeper than brown" },
 
   // -------------------- Eye State (what the eyes are doing / where they look) --------------------
   { id: "eye-state-closed",         label: "Closed",            dimension: "eye-state", description: "Eyes fully closed, peaceful",       promptHint: "with eyes fully closed in a peaceful expression" },
@@ -569,6 +579,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "face-goatee",       label: "Goatee",       dimension: "facial-hair", description: "Goatee",            promptHint: "a goatee" },
   { id: "face-short-beard",  label: "Short Beard",  dimension: "facial-hair", description: "Short trimmed beard", promptHint: "a short trimmed beard" },
   { id: "face-full-beard",   label: "Full Beard",   dimension: "facial-hair", description: "Thick full beard",  promptHint: "a full beard" },
+  { id: "face-five-oclock-shadow", label: "Five-O'Clock Shadow", dimension: "facial-hair", description: "Heavier daily growth — denser than light stubble", promptHint: "a five-o'clock shadow, daily growth heavier than light stubble" },
 
   // -------------------- Skin Texture --------------------
   { id: "texture-smooth",     label: "Smooth",      dimension: "skin-texture", description: "Flawless, silky smooth skin", promptHint: "with flawless, silky smooth skin" },
@@ -589,6 +600,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "texture-blemished",  label: "Blemished",   dimension: "skin-texture", description: "Visible blemishes, real-skin imperfections", promptHint: "with visible blemishes and natural real-skin imperfections" },
   { id: "texture-baby-soft",  label: "Baby-soft",   dimension: "skin-texture", description: "Smooth, fine-pored youthful skin", promptHint: "with baby-soft, fine-pored, youthful smooth skin" },
   { id: "texture-shower-fresh-wet", label: "Shower-Fresh Wet", dimension: "skin-texture", description: "Just-out-of-shower wet skin with water beads", promptHint: "with just-out-of-the-shower wet skin, water beading on the surface and rolling in slow droplets down the curves of the body" },
+  { id: "texture-acne-scarred", label: "Acne-scarred", dimension: "skin-texture", description: "Visible acne scarring (distinct from blemished — healed scar pattern)", promptHint: "with visible acne scarring, healed pitted-skin texture and uneven surface from past breakouts" },
 
   // -------------------- Distinctive Features --------------------
   { id: "feature-glasses",   label: "Glasses",      dimension: "distinctive-features", description: "Wears glasses",        promptHint: "wearing glasses" },
@@ -622,6 +634,8 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with the midriff exposed, a strip of bare stomach visible between the top and the bottom" },
   { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with a visible navel on a bare stomach" },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended" },
+  { id: "feature-under-eye-circles", label: "Under-Eye Circles", dimension: "distinctive-features", description: "Subtle dark circles under the eyes (distinct from puffy eye-bags)", promptHint: "with subtle dark circles under the eyes" },
+  { id: "feature-fangs",          label: "Fangs",            dimension: "distinctive-features", description: "Visible fangs (vampire / character archetype)", promptHint: "with visible fangs at the canines, character / vampire archetype" },
 
   // -------------------- Regional Aesthetic --------------------
   // Vibe layer (composes with Ethnicity, Skin Tone, Hair, Styling — never

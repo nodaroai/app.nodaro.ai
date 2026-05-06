@@ -322,8 +322,6 @@ const map: LocaleCatalogMap = {
   "feature-birthmark":        { label: "胎记",             description: "脸部或肩部可见胎记" },
   "feature-mole":             { label: "美人痣",           description: "上唇附近一颗醒目的痣" },
   "feature-gap-teeth":        { label: "缝牙",             description: "门牙之间有缝隙" },
-  "feature-monolids":         { label: "单眼皮",           description: "单褶眼睑" },
-  "feature-double-eyelid":    { label: "双眼皮",           description: "上眼睑有清晰的双眼皮褶" },
   "feature-aegyo-sal":        { label: "卧蚕",             description: "K-beauty 钟爱的眼下饱满卧蚕" },
   "feature-eye-bags":         { label: "眼袋",             description: "轻微的眼下黑眼圈" },
   "feature-dimpled-chin":     { label: "下巴酒窝",         description: "下巴上柔和的小酒窝" },
@@ -608,6 +606,22 @@ const map: LocaleCatalogMap = {
   "australian-outback": { label: "澳洲内陆", description: "乡村澳洲内陆美学(女性)" },
   "outback-stockman": { label: "内陆牧人", description: "乡村澳洲内陆美学(男性)" },
   "auckland-coastal": { label: "奥克兰海滨", description: "奥克兰新西兰港口城市太平洋美学" },
+
+  // Audit follow-up gaps (2026-05-06)
+  "androgynous":                    { label: "中性",                 description: "刻意融合男性与女性特征" },
+  "goth":                           { label: "哥特",                 description: "哥特亚文化美学 — 暗黑、浪漫、戏剧性" },
+  "proportions-athletic-muscular":  { label: "运动 / 肌肉",          description: "精瘦肌肉、宽肩、细腰(运动员的 V 形)" },
+  "eye-droopy":                     { label: "下垂眼睑",             description: "眼睑低垂 — 慵懒 / 忧郁的目光(眼睑位置,非眼角角度)" },
+  "lip-state-bold-black":           { label: "醒目黑唇",             description: "饱和黑色口红宣言(哥特 / 前卫)" },
+  "lip-state-burgundy":             { label: "酒红唇",               description: "深酒红色口红" },
+  "lip-state-plum":                 { label: "梅紫唇",               description: "深紫调口红" },
+  "lip-state-mauve":                { label: "藕荷唇",               description: "柔和藕荷 / 灰粉色口红" },
+  "eyes-black":                     { label: "黑色眼睛",             description: "纯黑色虹膜(比棕色更深)" },
+  "skin-very-dark":                 { label: "极深 / 乌木色",        description: "极深、乌木色肤色(肤色谱中最深一端)" },
+  "texture-acne-scarred":           { label: "痘印肌",               description: "可见痘印疤痕(与瑕疵肌不同 — 已愈合的疤痕纹理)" },
+  "face-five-oclock-shadow":        { label: "傍晚胡渣",             description: "较重的当日胡须 — 比轻度胡渣更密" },
+  "feature-under-eye-circles":      { label: "黑眼圈",               description: "眼下淡淡的暗影(与浮肿眼袋不同)" },
+  "feature-fangs":                  { label: "尖牙",                 description: "可见尖牙(吸血鬼 / 角色原型)" },
 }
 
 export default map
