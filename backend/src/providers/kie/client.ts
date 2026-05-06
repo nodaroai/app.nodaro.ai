@@ -176,8 +176,9 @@ export interface VeoRecordInfoResponse {
   data: {
     taskId: string
     paramJson?: string
-    createTime?: string
-    completeTime?: string
+    // Unix epoch ms (per live API); typed as number | string for safety
+    createTime?: number | string
+    completeTime?: number | string
     successFlag: number // 0=generating, 1=success, 2=failed, 3=generation failed
     fallbackFlag?: boolean
     errorCode?: number
@@ -186,6 +187,17 @@ export interface VeoRecordInfoResponse {
       taskId: string
       resultUrls: string[]
       originUrls?: string[]
+      // VEO Extend tasks return the full stitched video here
+      fullResultUrls?: string[]
+      // Snake-case duplicate the API also emits — kept for forward-compat
+      full_result_urls?: string[]
+      // Per-result audio presence flags (parallel to resultUrls)
+      hasAudioList?: boolean[]
+      // Per-result seeds VEO actually used — KIE returns these even when
+      // no seed was supplied in the request. Source of truth for
+      // reproducibility; used by the perfect-loop component to pin a
+      // winning roll.
+      seeds?: number[]
       resolution?: string
     }
   }
@@ -228,7 +240,15 @@ export async function runKieTask(
   input: Record<string, unknown>,
   maxAttempts: number = MAX_POLL_ATTEMPTS,
   onProgress?: ProgressCallback
-): Promise<{ resultJson: KieResultJson; costTime?: number; rawRecordInfo?: Record<string, unknown>; taskId?: string }> {
+): Promise<{
+  resultJson: KieResultJson
+  /** Provider-reported generation time in seconds (KIE `costTime`). */
+  costTime?: number
+  /** Same as `costTime` but in milliseconds for ProviderResult.providerMs. */
+  providerMs?: number
+  rawRecordInfo?: Record<string, unknown>
+  taskId?: string
+}> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -395,7 +415,10 @@ export async function runKieTask(
 
       // Capture the full raw response for credit audit (credit-related fields may be hidden)
       const rawRecordInfo = detailData as unknown as Record<string, unknown>
-      return { resultJson, costTime: detailData.data.costTime, rawRecordInfo, taskId }
+      const costTime = detailData.data.costTime
+      // KIE returns costTime in seconds; convert to ms for ProviderResult.providerMs.
+      const providerMs = costTime !== undefined ? Math.round(costTime * 1000) : undefined
+      return { resultJson, costTime, providerMs, rawRecordInfo, taskId }
     }
 
     // NOTE: KIE.ai API returns "fail" not "failed"!
@@ -436,8 +459,19 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[],
-  options?: { aspectRatio?: string; seed?: number; generationType?: string }
-): Promise<{ resultJson: KieResultJson; costTime?: number; taskId: string; rawRecordInfo?: Record<string, unknown> }> {
+  options?: { aspectRatio?: string; seed?: number; generationType?: string; resolution?: string; enableTranslation?: boolean }
+): Promise<{
+  resultJson: KieResultJson
+  costTime?: number
+  taskId: string
+  rawRecordInfo?: Record<string, unknown>
+  /** Seed VEO used (returned by KIE even when none was supplied). */
+  seed?: number
+  /** True iff KIE silently swapped to the deprecated fallback model. */
+  fallbackFlag?: boolean
+  /** Provider generation duration in ms (KIE completeTime − createTime). */
+  providerMs?: number
+}> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -474,6 +508,17 @@ export async function runVeoTask(
   }
   if (options?.seed !== undefined) {
     requestBody.seeds = options.seed
+  }
+  // 720p (default) or 1080p inline. 4K requires the separate
+  // /api/v1/veo/get-4k-video endpoint and is exposed via a dedicated node.
+  if (options?.resolution) {
+    requestBody.resolution = options.resolution
+  }
+  // Default true upstream. Surfaced so users with non-English prompts
+  // can opt out of KIE's auto-translate (which can subtly rewrite the
+  // perfect-loop seal phrase).
+  if (options?.enableTranslation !== undefined) {
+    requestBody.enableTranslation = options.enableTranslation
   }
 
   if (DEBUG) {
@@ -539,8 +584,28 @@ export async function runVeoTask(
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
 
-  const { resultUrls, rawRecordInfo } = await pollVeoRecordInfo(taskId, "VEO", apiKey)
-  return { resultJson: { resultUrls }, costTime: undefined, taskId, rawRecordInfo }
+  const poll = await pollVeoRecordInfo(taskId, "VEO", apiKey)
+  return {
+    resultJson: { resultUrls: poll.resultUrls },
+    costTime: undefined,
+    taskId,
+    rawRecordInfo: poll.rawRecordInfo,
+    seed: poll.seeds?.[0],
+    fallbackFlag: poll.fallbackFlag,
+    providerMs: poll.providerMs,
+  }
+}
+
+export interface VeoPollResult {
+  resultUrls: string[]
+  /** Per-result seeds VEO used; index-aligned with resultUrls. */
+  seeds?: number[]
+  /** True iff KIE silently swapped to the deprecated fallback model. */
+  fallbackFlag?: boolean
+  /** Provider generation duration in ms (completeTime - createTime). */
+  providerMs?: number
+  /** Raw record-info payload, kept for credit-audit and debugging. */
+  rawRecordInfo?: Record<string, unknown>
 }
 
 /**
@@ -552,7 +617,7 @@ async function pollVeoRecordInfo(
   taskId: string,
   label: string,
   apiKey: string,
-): Promise<{ resultUrls: string[]; rawRecordInfo?: Record<string, unknown> }> {
+): Promise<VeoPollResult> {
   let attempts = 0
   while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
     attempts++
@@ -600,8 +665,35 @@ async function pollVeoRecordInfo(
       if (!resultUrls?.length) {
         throw createSanitizedError(`${label} succeeded but no resultUrls found`, "Video generation")
       }
-      console.log(`[KIE.ai ${label}] Complete! URLs: ${resultUrls.join(", ")}`)
-      return { resultUrls, rawRecordInfo: detailData as unknown as Record<string, unknown> }
+      const seeds = detailData.data.response?.seeds
+      const fallbackFlag = detailData.data.fallbackFlag
+      const create = detailData.data.createTime
+      const complete = detailData.data.completeTime
+      const providerMs =
+        create !== undefined && complete !== undefined
+          ? Number(complete) - Number(create)
+          : undefined
+      if (fallbackFlag === true) {
+        console.warn(
+          `[KIE.ai ${label}] fallbackFlag=true for task ${taskId} — KIE silently used the backup model. Output forced to 720p / 16:9; cannot be upgraded via /get-1080p-video.`,
+        )
+      }
+      if (DEBUG) {
+        console.log(
+          `[KIE.ai ${label}] Complete! URLs: ${resultUrls.join(", ")}${
+            seeds?.length ? ` (seeds: ${seeds.join(",")})` : ""
+          }${providerMs !== undefined ? ` (providerMs: ${providerMs})` : ""}`,
+        )
+      } else {
+        console.log(`[KIE.ai ${label}] Complete! URLs: ${resultUrls.join(", ")}`)
+      }
+      return {
+        resultUrls,
+        seeds,
+        fallbackFlag,
+        providerMs,
+        rawRecordInfo: detailData as unknown as Record<string, unknown>,
+      }
     }
 
     if (successFlag === 2 || successFlag === 3) {
@@ -623,7 +715,13 @@ export async function runVeoExtendTask(
   prompt: string,
   model?: "fast" | "quality",
   seeds?: number
-): Promise<{ resultJson: KieResultJson; taskId: string }> {
+): Promise<{
+  resultJson: KieResultJson
+  taskId: string
+  seed?: number
+  fallbackFlag?: boolean
+  providerMs?: number
+}> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
     throw createSanitizedError("KIE_API_KEY is not configured", "Video extend")
@@ -682,8 +780,14 @@ export async function runVeoExtendTask(
 
   console.log(`[KIE.ai VEO Extend] Task created: ${extendTaskId}`)
 
-  const { resultUrls } = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
-  return { resultJson: { resultUrls }, taskId: extendTaskId }
+  const poll = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
+  return {
+    resultJson: { resultUrls: poll.resultUrls },
+    taskId: extendTaskId,
+    seed: poll.seeds?.[0],
+    fallbackFlag: poll.fallbackFlag,
+    providerMs: poll.providerMs,
+  }
 }
 
 /**

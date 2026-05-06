@@ -39,16 +39,18 @@ vi.mock("@/providers/index.js", () => ({
   editImage: mocks.mockEditImage,
 }))
 
-vi.mock("../../shared.js", () => ({
-  commitJobCredits: mocks.mockCommitJobCredits,
-  shouldSaveJobResult: mocks.mockShouldSaveJobResult,
-  markJobCompleted: mocks.mockMarkJobCompleted,
-  uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
-  // setJobProgress + startProgressRamp moved into shared.js — tests
-  // don't care about the bookkeeping here, just absorb the calls.
-  setJobProgress: vi.fn().mockResolvedValue(undefined),
-  startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
-}))
+vi.mock("../../shared.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../shared.js")>()
+  return {
+    ...actual,
+    commitJobCredits: mocks.mockCommitJobCredits,
+    shouldSaveJobResult: mocks.mockShouldSaveJobResult,
+    markJobCompleted: mocks.mockMarkJobCompleted,
+    uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
+    setJobProgress: vi.fn().mockResolvedValue(undefined),
+    startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
+  }
+})
 
 // ---------------------------------------------------------------------------
 // Import module under test

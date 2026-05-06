@@ -32,6 +32,9 @@ const textToVideoBody = z.object({
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.audio).optional(),
   webSearch: z.boolean().optional(),
   nsfwChecker: z.boolean().optional(),
+  // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
+  // upstream). Set false to keep prompts verbatim. No effect on non-VEO.
+  enableTranslation: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -61,7 +64,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker } = parsed.data
+    const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -127,6 +130,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       referenceAudioUrls,
       webSearch,
       nsfwChecker,
+      enableTranslation,
       usageLogId,
     })
 

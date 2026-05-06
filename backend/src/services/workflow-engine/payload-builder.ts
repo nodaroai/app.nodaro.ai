@@ -1027,6 +1027,7 @@ export function buildPayload(
           // the toggle. data.autoLoopTrim defaults to undefined which
           // the worker treats as true; explicit false skips the trim.
           autoLoopTrim: data.autoLoopTrim,
+          enableTranslation: data.enableTranslation,
           usageLogId,
         },
       }
@@ -1082,6 +1083,7 @@ export function buildPayload(
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
+          enableTranslation: data.enableTranslation,
           usageLogId,
         },
       }

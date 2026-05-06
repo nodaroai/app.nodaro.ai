@@ -111,7 +111,7 @@ export class KieAudioProvider
       input.lyrics = lyrics
     }
 
-    const { resultJson, rawRecordInfo } = await runKieTask(
+    const { resultJson, rawRecordInfo, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -140,7 +140,7 @@ export class KieAudioProvider
       notes: `music ${provider}`,
     })
 
-    return { url: audioUrl, cost: modelConfig.cost }
+    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async textToSpeech(
@@ -181,7 +181,7 @@ export class KieAudioProvider
     if (options?.speed != null) input.speed = options.speed
     if (options?.languageCode) input.language_code = options.languageCode
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input
     )
@@ -199,7 +199,7 @@ export class KieAudioProvider
       `[KIE.ai] TTS completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: audioUrl, cost: modelConfig.cost }
+    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async generateSoundEffect(
@@ -228,7 +228,7 @@ export class KieAudioProvider
     if (options?.loop != null) input.loop = options.loop
     if (options?.promptInfluence != null) input.prompt_influence = options.promptInfluence
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -247,7 +247,7 @@ export class KieAudioProvider
       `[KIE.ai] Sound effect completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: audioUrl, cost: modelConfig.cost }
+    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
   async isolateAudio(audioUrl: string): Promise<ProviderResult> {
@@ -353,7 +353,7 @@ export class KieAudioProvider
     if (options?.stability != null) input.stability = options.stability
     if (options?.languageCode) input.language_code = options.languageCode
 
-    const { resultJson } = await runKieTask(
+    const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO
@@ -372,6 +372,6 @@ export class KieAudioProvider
       `[KIE.ai] Dialogue completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: audioUrl, cost: modelConfig.cost }
+    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 }

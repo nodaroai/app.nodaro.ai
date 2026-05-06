@@ -1135,6 +1135,7 @@ export function executeNode(
         referenceAudioUrls: referenceAudioUrls?.length ? referenceAudioUrls : undefined,
         webSearch: i2vData.webSearch,
         nsfwChecker: i2vData.nsfwChecker,
+        enableTranslation: i2vData.enableTranslation,
       },
     );
   }
@@ -1263,6 +1264,7 @@ export function executeNode(
           aspectRatio: effectiveT2vAspect,
           negativePrompt: t2vData.negativePrompt || undefined,
           seed: t2vRaw.seed as number | undefined,
+          enableTranslation: t2vData.enableTranslation,
           ...seedance2Extras,
         };
     setUserPromptTemplate(t2vData.prompt?.trim() || undefined);

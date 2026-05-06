@@ -45,6 +45,11 @@ const generateVideoBody = z.object({
   // post-render so the rendered last frame matches the supplied
   // `last_frame_url` exactly. Set false to keep the dissolve.
   autoLoopTrim: z.boolean().optional().default(true),
+  // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
+  // upstream). Set false to keep prompts verbatim — useful when the
+  // prompt's exact wording is load-bearing (perfect-loop seal phrase,
+  // non-English creative direction). Has no effect on non-VEO providers.
+  enableTranslation: z.boolean().optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -74,7 +79,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim, enableTranslation } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -158,6 +163,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       nsfwChecker,
       generationType,
       autoLoopTrim,
+      enableTranslation,
       usageLogId,
     })
 

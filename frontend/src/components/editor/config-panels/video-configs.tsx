@@ -202,6 +202,28 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
           </MappableField>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentI2VProvider)
+            return opts && opts.length > 0 ? (
+              <div>
+                <Label className="text-xs">Resolution</Label>
+                <Select
+                  value={(data.resolution as string) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  4K is available via the dedicated VEO upgrade node — it uses KIE&apos;s separate /api/v1/veo/get-4k-video endpoint and runs after the base 720p/1080p generation.
+                </p>
+              </div>
+            ) : null
+          })()}
           <div>
             <Label className="text-xs">Seed (optional)</Label>
             <Input
@@ -249,6 +271,25 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               </p>
             </div>
           )}
+          {/* VEO auto-translate — KIE silently translates non-English
+              prompts (and lightly rewrites English ones). Disable when
+              the exact wording is load-bearing, e.g. the perfect-loop
+              seal phrase. */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="i2v-enableTranslation"
+                checked={data.enableTranslation !== false}
+                onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="i2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">
+              KIE auto-translates prompts before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
+            </p>
+          </div>
         </>
       )}
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1035,18 +1076,57 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </p>
       )}
       {(data.provider === "veo3" || data.provider === "veo3.1") && (
-        <div>
-          <Label className="text-xs">Seed (optional)</Label>
-          <Input
-            type="number"
-            min={10000}
-            max={99999}
-            placeholder="10000–99999"
-            value={data.seed ?? ""}
-            onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
-          />
-          <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
-        </div>
+        <>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentProvider)
+            return opts && opts.length > 0 ? (
+              <div>
+                <Label className="text-xs">Resolution</Label>
+                <Select
+                  value={(data.resolution as string) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  4K is available via the dedicated VEO upgrade node — it uses KIE&apos;s separate /api/v1/veo/get-4k-video endpoint and runs after the base 720p/1080p generation.
+                </p>
+              </div>
+            ) : null
+          })()}
+          <div>
+            <Label className="text-xs">Seed (optional)</Label>
+            <Input
+              type="number"
+              min={10000}
+              max={99999}
+              placeholder="10000–99999"
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="t2v-enableTranslation"
+                checked={data.enableTranslation !== false}
+                onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="t2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">
+              KIE auto-translates prompts before VEO sees them (default on). Disable to keep prompts verbatim.
+            </p>
+          </div>
+        </>
       )}
       {data.provider === "kling" && (
         <div className="flex items-center gap-2 px-1">

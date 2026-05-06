@@ -898,6 +898,8 @@ export interface GenerateVideoOptions {
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
+  // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
+  enableTranslation?: boolean
   userId?: string
 }
 
@@ -943,6 +945,7 @@ export async function generateVideo(
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
+      enableTranslation: opts.enableTranslation,
     }
     if (opts.userId) {
       body.userId = opts.userId
@@ -1009,6 +1012,8 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   referenceAudioUrls?: string[]
   webSearch?: boolean
   nsfwChecker?: boolean
+  // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
+  enableTranslation?: boolean
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt, provider, ...options }
   if (userId) {

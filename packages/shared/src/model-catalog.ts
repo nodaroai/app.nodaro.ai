@@ -770,6 +770,10 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     durations: [8],
     aspectRatios: VIDEO_RATIOS_HV,
+    // 720p (default) + 1080p inline. 4K requires KIE's separate
+    // /api/v1/veo/get-4k-video endpoint and is exposed via a dedicated
+    // upgrade node, not this picker.
+    resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "veo3", credits: 79, note: "8s with audio" }],
     featured: true,
   },
@@ -784,6 +788,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     durations: [8],
     aspectRatios: VIDEO_RATIOS_HV,
+    resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "veo3.1", credits: 19, note: "8s with audio" }],
     featured: true,
   },
