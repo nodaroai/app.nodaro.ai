@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted() for variables used inside vi.mock()
@@ -127,6 +127,9 @@ import {
   completeFfmpegVideoJob,
   completeFfmpegAudioJob,
   createAssetFromJob,
+  setJobProgress,
+  startProgressRamp,
+  _resetJobProgressMap,
 } from "../shared.js"
 
 // ---------------------------------------------------------------------------
@@ -510,5 +513,139 @@ describe("completeFfmpegAudioJob", () => {
 
     expect(mocks.mockUpdate).not.toHaveBeenCalled()
     expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// setJobProgress — monotonic guard
+// ---------------------------------------------------------------------------
+
+describe("setJobProgress monotonic guard", () => {
+  function makeJob(): { updateProgress: ReturnType<typeof vi.fn> & ((p: number) => Promise<void>) } {
+    const fn = vi.fn(async (_p: number) => undefined as unknown as void)
+    return { updateProgress: fn as ReturnType<typeof vi.fn> & ((p: number) => Promise<void>) }
+  }
+
+  beforeEach(() => {
+    _resetJobProgressMap()
+    mocks.mockUpdate.mockClear()
+  })
+
+  it("writes a forward progress value", async () => {
+    const job = makeJob()
+    await setJobProgress(job, "j-1", 30)
+    expect(job.updateProgress).toHaveBeenCalledWith(30)
+    expect(mocks.mockUpdate).toHaveBeenCalledWith({ progress: 30 })
+  })
+
+  it("drops a small backwards write within the regression window", async () => {
+    const job = makeJob()
+    await setJobProgress(job, "j-2", 30)
+    await setJobProgress(job, "j-2", 12) // 18pt drop, < 25pt threshold
+    expect(job.updateProgress).toHaveBeenCalledTimes(1)
+    expect(job.updateProgress).toHaveBeenCalledWith(30)
+  })
+
+  it("accepts a large backwards write (treats as reset/retry)", async () => {
+    const job = makeJob()
+    await setJobProgress(job, "j-3", 50)
+    await setJobProgress(job, "j-3", 5) // 45pt drop > 25pt threshold
+    expect(job.updateProgress).toHaveBeenCalledTimes(2)
+    expect(job.updateProgress).toHaveBeenLastCalledWith(5)
+  })
+
+  it("dedupes repeated identical writes", async () => {
+    const job = makeJob()
+    await setJobProgress(job, "j-4", 40)
+    await setJobProgress(job, "j-4", 40)
+    await setJobProgress(job, "j-4", 40)
+    expect(job.updateProgress).toHaveBeenCalledTimes(1)
+  })
+
+  it("clears the in-memory entry on terminal 100%", async () => {
+    const job = makeJob()
+    await setJobProgress(job, "j-5", 100)
+    // After the entry is cleared, the next backwards write goes through
+    // without being suppressed (proves the map was reset).
+    await setJobProgress(job, "j-5", 5)
+    expect(job.updateProgress).toHaveBeenCalledTimes(2)
+    expect(job.updateProgress).toHaveBeenLastCalledWith(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// startProgressRamp — two-phase (linear → asymptotic)
+// ---------------------------------------------------------------------------
+
+describe("startProgressRamp two-phase ramp", () => {
+  function makeJob(): { updateProgress: ReturnType<typeof vi.fn> & ((p: number) => Promise<void>) } {
+    const fn = vi.fn(async (_p: number) => undefined as unknown as void)
+    return { updateProgress: fn as ReturnType<typeof vi.fn> & ((p: number) => Promise<void>) }
+  }
+
+  beforeEach(() => {
+    _resetJobProgressMap()
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("climbs linearly to cap during phase 1", async () => {
+    const job = makeJob()
+    const ramp = startProgressRamp(job, "ramp-1", {
+      start: 5,
+      cap: 35,
+      tickMs: 1000,
+      tickStep: 10,
+    })
+    // Three ticks: 5 -> 15 -> 25 -> 35
+    await vi.advanceTimersByTimeAsync(3100)
+    const calls = job.updateProgress.mock.calls.map((c) => c[0])
+    expect(calls).toEqual([15, 25, 35])
+    ramp.stop()
+  })
+
+  it("keeps moving past cap via asymptotic phase 2 (no freeze)", async () => {
+    const job = makeJob()
+    const ramp = startProgressRamp(job, "ramp-2", {
+      start: 5,
+      cap: 35,
+      tickMs: 500,
+      tickStep: 10,
+      softCeiling: 90,
+      asymptoteFactor: 0.1,
+    })
+    // Phase 1 finishes after 3 ticks (15, 25, 35). Phase 2 kicks in: each
+    // tick adds (90 - current) * 0.1, so the bar keeps climbing.
+    await vi.advanceTimersByTimeAsync(20_000) // 40 ticks total
+    const calls = job.updateProgress.mock.calls.map((c) => c[0])
+    // Last value should be well past the old hard cap of 35 — proving the
+    // bar didn't freeze.
+    const last = calls[calls.length - 1]
+    expect(last).toBeGreaterThan(60)
+    // And below the soft ceiling — confirming asymptotic, not overshoot.
+    expect(last).toBeLessThan(90)
+    // Strictly monotonic — never goes backwards.
+    for (let i = 1; i < calls.length; i++) {
+      expect(calls[i]).toBeGreaterThanOrEqual(calls[i - 1] as number)
+    }
+    ramp.stop()
+  })
+
+  it("respects stop() — no further writes after stop", async () => {
+    const job = makeJob()
+    const ramp = startProgressRamp(job, "ramp-3", {
+      start: 5,
+      cap: 35,
+      tickMs: 500,
+      tickStep: 10,
+    })
+    await vi.advanceTimersByTimeAsync(1100) // 2 ticks
+    const after2Ticks = job.updateProgress.mock.calls.length
+    ramp.stop()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(job.updateProgress.mock.calls.length).toBe(after2Ticks)
   })
 })
