@@ -504,6 +504,110 @@ const map: LocaleCatalogMap = {
   "journalist": { label: "Jornalista", description: "Repórter com caderneta" },
   "barista": { description: "Atendente de cafeteria" },
 
+  // Regional Aesthetic
+  // ----- USA — Mainstream -----
+  "cali-beach": { label: "Praia da Califórnia", description: "Estética californiana descontraída de cidade litorânea" },
+  "valley-girl": { description: "Estética suburbana do sul da Califórnia (feminino)" },
+  "norcal-hippie": { label: "Hippie do Norte da Califórnia", description: "Estética hippie de Berkeley / Bay Area, no norte da Califórnia" },
+  "boho-la": { label: "Boho LA", description: "Estética bohemian-canyon de Los Angeles (feminino)" },
+  "texas-cowgirl": { label: "Cowgirl Texana", description: "Estética western de fazenda do Texas (feminino)" },
+  "texas-cowboy": { label: "Cowboy Texano", description: "Estética western de fazenda do Texas (masculino)" },
+  "southern-belle": { label: "Donzela Sulista", description: "Estética antebellum refinada de Charleston / Savannah (feminino)" },
+  "southern-gentleman": { label: "Cavalheiro Sulista", description: "Estética refinada do velho sul (masculino)" },
+  "miami-latina": { description: "Estética caribenho-latina de South Beach (feminino)" },
+  "miami-latino": { description: "Estética caribenho-latina de South Beach (masculino)" },
+  "hawaii-island": { label: "Ilha do Havaí", description: "Estética havaiana polinésio-pacífica" },
+  "nyc-fashion": { label: "Moda NYC", description: "Estética editorial-moda de Manhattan (feminino)" },
+  "nyc-sharp": { label: "NYC Estiloso", description: "Estética de alfaiataria poderosa de Manhattan (masculino)" },
+  "brooklyn-hipster": { label: "Hipster do Brooklyn", description: "Estética da classe criativa de Williamsburg" },
+  "new-england-prep": { label: "Preppy da Nova Inglaterra", description: "Estética preppy old-money de Cape Cod / Nantucket" },
+  "pnw-granola": { label: "Granola do Noroeste do Pacífico", description: "Estética outdoor de Portland / Seattle" },
+  "nashville-country": { label: "Country de Nashville", description: "Estética country-pop moderna da capital da música (feminino)" },
+  "nashville-cowboy": { label: "Cowboy de Nashville", description: "Estética cowboy moderna da capital da música (masculino)" },
+  "vegas-glam": { label: "Glamour de Vegas", description: "Estética glamour da Strip de Las Vegas (feminino)" },
+  "vegas-suit": { label: "Terno de Vegas", description: "Estética de terno na Strip de Las Vegas (masculino)" },
+
+  // ----- USA — African-American -----
+  "harlem-classic": { label: "Harlem Clássico", description: "Estética da herança negra nova-iorquina, elegância da era do jazz" },
+  "atl-southern": { label: "ATL Sulista", description: "Estética hip-hop / R&B negra-sulista de Atlanta" },
+  "nola-creole": { label: "NOLA Crioulo", description: "Estética franco-caribenho-africana da Louisiana, em Nova Orleans" },
+  "dmv-go-go": { label: "Go-Go DMV", description: "Estética go-go negra de DC / Maryland / Virgínia" },
+  "west-coast-hip-hop": { label: "Costa Oeste", description: "Estética hip-hop da costa oeste de South Central / Compton" },
+  "chicago-south-side": { label: "South Side de Chicago", description: "Estética urbana negra do meio-oeste em Chicago" },
+
+  // ----- Europe -----
+  "parisienne": { label: "Parisienne", description: "Estética chic-francesa da margem esquerda parisiense (feminino)" },
+  "parisian-flaneur": { label: "Flâneur Parisiense", description: "Estética chic-francesa da margem esquerda parisiense (masculino)" },
+  "milanese-fashion": { label: "Moda Milanesa", description: "Estética de alta-moda italiana milanesa" },
+  "sicilian-beach": { label: "Praia Siciliana", description: "Estética de praia mediterrânea do sul da Itália" },
+  "madrileña": { label: "Madrileña", description: "Estética espanhola de Madri (feminino)" },
+  "madrileño": { label: "Madrileño", description: "Estética espanhola de Madri (masculino)" },
+  "catalan-modern": { label: "Catalã Moderna", description: "Estética mediterrânea de design de Barcelona" },
+  "greek-mediterranean": { label: "Grega Mediterrânea", description: "Estética grega das ilhas do Egeu" },
+  "scandi-minimal": { label: "Minimalismo Escandinavo", description: "Estética minimalista nórdica de linhas limpas" },
+  "english-rose": { label: "Rosa Inglesa", description: "Estética inglesa do interior (feminino)" },
+  "london-prep": { label: "Preppy de Londres", description: "Estética britânica refinada de Mayfair / Chelsea (masculino)" },
+  "manchester-indie": { label: "Indie de Manchester", description: "Estética cool da classe operária do norte da Inglaterra, gig-and-rain" },
+  "berlin-alt": { label: "Alternativo de Berlim", description: "Estética contracultural techno-arte de Kreuzberg" },
+  "munich-traditional": { label: "Tradicional de Munique", description: "Estética bávara tradicional da Oktoberfest" },
+  "eastern-european-glam": { label: "Glamour do Leste Europeu", description: "Estética de glamour invernal de Moscou / Kiev (feminino)" },
+  "eastern-european-stoic": { label: "Estoico do Leste Europeu", description: "Estética de confiança castigada de Moscou / Kiev (masculino)" },
+
+  // ----- Asia -----
+  "tokyo-harajuku": { label: "Harajuku de Tóquio", description: "Estética de rua japonesa expressiva e divertida de Tóquio" },
+  "ginza-office": { label: "Escritório em Ginza", description: "Estética corporativa elegante japonesa de Ginza, Tóquio" },
+  "shibuya-streetwear": { label: "Streetwear de Shibuya", description: "Estética streetwear de Shibuya, Tóquio" },
+  "osaka-everyday": { label: "Cotidiano de Osaka", description: "Estética casual e calorosa de Kansai, em Osaka" },
+  "seoul-k-pop": { label: "K-Pop de Seul", description: "Estética polida do pop coreano em Seul" },
+  "gangnam-glam": { label: "Glamour de Gangnam", description: "Estética coreana do bairro de luxo Gangnam, em Seul" },
+  "shanghai-modern": { label: "Xangai Moderna", description: "Estética metropolitana chinesa de Xangai" },
+  "beijing-hutong": { label: "Hutong de Pequim", description: "Estética tradicional-com-moderno dos antigos pátios de Pequim" },
+  "hong-kong-cinematic": { label: "Hong Kong Cinematográfica", description: "Estética neon-noir de Hong Kong, à la Wong Kar-Wai" },
+  "mumbai-bollywood": { label: "Bollywood de Mumbai", description: "Estética da indústria cinematográfica indiana de Mumbai" },
+  "south-india-traditional": { label: "Sul da Índia Tradicional", description: "Estética clássica de cidades-templo de Tamil / Kerala" },
+  "bangkok-street": { label: "Rua de Bangkok", description: "Estética urbana neon-tailandesa dos mercados noturnos de Bangkok" },
+
+  // ----- Latin America -----
+  "carioca-rio": { label: "Carioca (Rio)", description: "Estética brasileira de praia-e-música-de-favela do Rio de Janeiro" },
+  "paulista": { label: "Paulista (São Paulo)", description: "Estética brasileira metropolitana da classe criativa de São Paulo" },
+  "buenos-aires-tango": { label: "Tango de Buenos Aires", description: "Estética de tango de Recoleta / San Telmo, em Buenos Aires (feminino)" },
+  "porteño": { label: "Porteño", description: "Estética milonguero refinada de Buenos Aires (masculino)" },
+  "mexico-city-chic": { label: "Chic da Cidade do México", description: "Estética mexicana moderna de Roma / Polanco, na CDMX" },
+  "chilango-traditional": { label: "Chilango Tradicional", description: "Estética calorosa de festa e folclore da Cidade do México" },
+  "bogota-cosmopolitan": { label: "Bogotá Cosmopolita", description: "Estética andina refinada da capital colombiana, Bogotá" },
+
+  // ----- Middle East -----
+  "beirut-riviera": { label: "Riviera de Beirute", description: "Estética cosmopolita libanesa do Mediterrâneo" },
+  "tel-aviv-beach": { label: "Praia de Tel Aviv", description: "Estética de cidade litorânea mediterrânea com energia de startup, Tel Aviv" },
+  "jerusalem-stone": { label: "Pedra de Jerusalém", description: "Estética do patrimônio em pedra calcária da cidade velha de Jerusalém" },
+  "sabra": { label: "Sabra", description: "Estética Sabra israelense nativa, direta e calorosa" },
+  "dubai-modern": { label: "Dubai Moderna", description: "Estética cosmopolita do emirado de luxo do Golfo, em Dubai" },
+  "persian-glam": { label: "Glamour Persa", description: "Estética persa iraniana de patrimônio e glamour" },
+  "istanbul-bosphorus": { label: "Bósforo de Istambul", description: "Estética otomana-e-moderna do Bósforo, ponto de encontro entre oriente e ocidente em Istambul" },
+
+  // ----- North Africa -----
+  "cairene-cosmopolitan": { label: "Cairota Cosmopolita", description: "Estética metropolitana árabe-egípcia do Cairo" },
+  "maghreb-coastal": { label: "Costa do Magrebe", description: "Estética colonial-portuária franco-mediterrâneo-norte-africana de Túnis / Argel" },
+  "marrakech-bohemian": { label: "Marrakech Bohemian", description: "Estética calorosa de especiarias da medina marroquina, em Marrakech" },
+
+  // ----- Sub-Saharan Africa -----
+  "lagos-afro-glam": { label: "Lagos Afro-Glam", description: "🇬🇧 Estética metropolitana anglófona-oeste-africana nigeriana de Lagos" },
+  "accra-afro-fashion": { label: "Accra Afro-Fashion", description: "🇬🇧 Estética kente-com-moderno anglófona-oeste-africana ganesa de Accra" },
+  "dakar-francophone": { label: "Dakar Francófona", description: "🇫🇷 Estética litorâneo-cosmopolita francófona-oeste-africana senegalesa de Dakar" },
+  "abidjan-cosmopolitan": { label: "Abidjan Cosmopolita", description: "🇫🇷 Estética urbana francófona-oeste-africana marfinense de Abidjã" },
+  "kinshasa-sape": { label: "SAPE de Kinshasa", description: "🇫🇷 Estética dândi SAPE francófona-centro-africana congolesa de Kinshasa" },
+  "nairobi-cosmopolitan": { label: "Nairóbi Cosmopolita", description: "🇬🇧 Estética urbana moderna anglófona-leste-africana queniana de Nairóbi" },
+  "addis-habesha": { label: "Addis Habesha", description: "Estética Habesha das terras altas etíopes, em Adis Abeba (Etiópia nunca foi colonizada)" },
+  "swahili-coast": { label: "Costa Suaíli", description: "🇬🇧 Estética litorânea suaíli anglófona-leste-africana de Zanzibar / Mombaça" },
+  "johannesburg-urban": { label: "Joanesburgo Urbana", description: "🇬🇧 Estética metropolitana negra anglófona-sul-africana de Joanesburgo" },
+  "cape-town-cosmopolitan": { label: "Cidade do Cabo Cosmopolita", description: "🇬🇧 Estética litorânea anglófona-sul-africana da Cidade do Cabo" },
+  "luanda-lusophone": { label: "Luanda Lusófona", description: "🇵🇹 Estética kizomba-e-costa-atlântica lusófona-sul-africana angolana de Luanda" },
+
+  // ----- Oceania -----
+  "bondi-beach": { label: "Praia de Bondi", description: "Estética litorânea australiana de sol-e-sal de Bondi" },
+  "australian-outback": { label: "Outback", description: "Estética rural do Outback australiano (feminino)" },
+  "outback-stockman": { label: "Stockman do Outback", description: "Estética rural do Outback australiano (masculino)" },
+  "auckland-coastal": { label: "Auckland Litorânea", description: "Estética pacífica da cidade portuária de Auckland, Nova Zelândia" },
 }
 
 export default map

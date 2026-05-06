@@ -36,6 +36,7 @@ export type PersonDimension =
   | "type"
   | "age"
   | "ethnicity"
+  | "regional-aesthetic"
   | "build"
   | "body-proportions"
   | "face-shape"
@@ -621,6 +622,126 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "feature-midriff-visible", label: "Midriff Visible", dimension: "distinctive-features", description: "Exposed midriff between top and bottom", promptHint: "with the midriff exposed, a strip of bare stomach visible between the top and the bottom" },
   { id: "feature-navel-visible", label: "Navel Visible", dimension: "distinctive-features", description: "Visible navel on bare stomach", promptHint: "with a visible navel on a bare stomach" },
   { id: "feature-elongated-neck", label: "Elongated Neck", dimension: "distinctive-features", description: "Long swan-like neck", promptHint: "with an elongated, swan-like neck, long and gracefully extended" },
+
+  // -------------------- Regional Aesthetic --------------------
+  // Vibe layer (composes with Ethnicity, Skin Tone, Hair, Styling — never
+  // hard-codes them). Sub-grouped via `group` so the picker can render
+  // collapsible sections by region. Multi-pick supported (up to 2).
+  //
+  // promptHint invariant: VIBE-ONLY. Do not mention skin tone, hair color,
+  // hair style, or specific wardrobe — those compete with the user's
+  // explicit picks in other dimensions.
+  //
+  // Sub-Saharan African entries use 🇬🇧 / 🇫🇷 / 🇵🇹 in the description to
+  // call out the dominant colonial-cultural overlay (Anglophone /
+  // Francophone / Lusophone) — this drives sartorial + media-diet
+  // differences. Ethiopia is intentionally untagged (never colonized).
+
+  // ----- USA — Mainstream -----
+  { id: "cali-beach",          label: "California Beach", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Laid-back beach-town California aesthetic", promptHint: "a California beach aesthetic — laid-back beach-town vibe, golden-hour sun-warmed energy, easy carefree mood" },
+  { id: "valley-girl",         label: "Valley Girl",      group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Southern California valley aesthetic (feminine)", promptHint: "a Valley Girl aesthetic — Southern California suburban-chic vibe, polished and sun-kissed" },
+  { id: "norcal-hippie",       label: "NorCal Hippie",    group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Northern California Berkeley / Bay-Area hippie aesthetic", promptHint: "a Northern California hippie aesthetic — laid-back Berkeley / Bay-Area mood, gentle counter-culture vibe" },
+  { id: "boho-la",             label: "Boho LA",          group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Los Angeles canyon-bohemian aesthetic (feminine)", promptHint: "a Boho LA aesthetic — Los Angeles canyon-bohemian vibe, free-spirited Laurel Canyon mood" },
+  { id: "texas-cowgirl",       label: "Texas Cowgirl",    group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Texas Western ranch-country aesthetic (feminine)", promptHint: "a Texas cowgirl aesthetic — Western ranch-country vibe, warm Lone-Star confidence" },
+  { id: "texas-cowboy",        label: "Texas Cowboy",     group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Texas Western ranch-country aesthetic (masculine)", promptHint: "a Texas cowboy aesthetic — Western ranch-country vibe, weathered Lone-Star presence" },
+  { id: "southern-belle",      label: "Southern Belle",   group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Charleston / Savannah antebellum-gentility aesthetic (feminine)", promptHint: "a Southern Belle aesthetic — Charleston / Savannah gentility, gracious antebellum charm" },
+  { id: "southern-gentleman",  label: "Southern Gentleman", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Old-South gentility aesthetic (masculine)", promptHint: "a Southern Gentleman aesthetic — old-South gentility, gracious Charleston / Savannah charm" },
+  { id: "miami-latina",        label: "Miami Latina",     group: "USA — Mainstream", dimension: "regional-aesthetic", description: "South Beach Caribbean-Latin aesthetic (feminine)", promptHint: "a Miami Latina aesthetic — South Beach Caribbean-Latin energy, sun-and-neon vibrance" },
+  { id: "miami-latino",        label: "Miami Latino",     group: "USA — Mainstream", dimension: "regional-aesthetic", description: "South Beach Caribbean-Latin aesthetic (masculine)", promptHint: "a Miami Latino aesthetic — South Beach Caribbean-Latin energy, sun-and-neon confidence" },
+  { id: "hawaii-island",       label: "Hawaii Island",    group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Polynesian-Pacific Hawaiian aesthetic", promptHint: "a Hawaiian island aesthetic — Polynesian-Pacific vibe, gentle ocean-warmed presence" },
+  { id: "nyc-fashion",         label: "NYC Fashion",      group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Manhattan editorial-fashion aesthetic (feminine)", promptHint: "a New York fashion-girl aesthetic — Manhattan editorial vibe, urban-sharp confident energy" },
+  { id: "nyc-sharp",           label: "NYC Sharp",        group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Manhattan power-tailored aesthetic (masculine)", promptHint: "a New York sharp-dressed aesthetic — Manhattan power-and-pace vibe, urban-tailored presence" },
+  { id: "brooklyn-hipster",    label: "Brooklyn Hipster", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Williamsburg creative-class aesthetic", promptHint: "a Brooklyn hipster aesthetic — Williamsburg creative-class vibe, considered bohemian-urban energy" },
+  { id: "new-england-prep",    label: "New England Prep", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Cape Cod / Nantucket old-money preppy aesthetic", promptHint: "a New England prep aesthetic — Cape Cod / Nantucket old-money vibe, classic Ivy-coast polish" },
+  { id: "pnw-granola",         label: "PNW Granola",      group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Portland / Seattle outdoorsy aesthetic", promptHint: "a Pacific Northwest granola aesthetic — Portland / Seattle outdoorsy vibe, mossy mountain-coffee mood" },
+  { id: "nashville-country",   label: "Nashville Country", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Music-City modern country-pop aesthetic (feminine)", promptHint: "a Nashville country-pop aesthetic — Music-City warmth, Southern modern-country charm" },
+  { id: "nashville-cowboy",    label: "Nashville Cowboy", group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Music-City modern-cowboy aesthetic (masculine)", promptHint: "a Nashville modern-cowboy aesthetic — Music-City warmth, modern-Western charm" },
+  { id: "vegas-glam",          label: "Vegas Glam",       group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Las Vegas Strip-glamour aesthetic (feminine)", promptHint: "a Las Vegas glam aesthetic — Strip-glamour vibe, high-shine showroom presence" },
+  { id: "vegas-suit",          label: "Vegas Suit",       group: "USA — Mainstream", dimension: "regional-aesthetic", description: "Las Vegas Strip suited aesthetic (masculine)", promptHint: "a Las Vegas suit-and-shine aesthetic — Strip-glamour vibe, high-roller charisma" },
+
+  // ----- USA — African-American -----
+  { id: "harlem-classic",      label: "Harlem Classic",     group: "USA — African-American", dimension: "regional-aesthetic", description: "Black-New-York heritage aesthetic, jazz-age elegance", promptHint: "a Harlem classic aesthetic — Black-New-York heritage vibe, jazz-age elegance and modern-uptown polish" },
+  { id: "atl-southern",        label: "ATL Southern",       group: "USA — African-American", dimension: "regional-aesthetic", description: "Atlanta Black-South hip-hop / R&B aesthetic", promptHint: "an Atlanta Black-South aesthetic — Southern hip-hop / R&B capital vibe, peach-tree confident-and-warm mood" },
+  { id: "nola-creole",         label: "NOLA Creole",        group: "USA — African-American", dimension: "regional-aesthetic", description: "New Orleans Louisiana French-Caribbean-African aesthetic", promptHint: "a New Orleans Creole aesthetic — Louisiana French-Caribbean-African vibe, jazz-and-second-line warmth" },
+  { id: "dmv-go-go",           label: "DMV Go-Go",          group: "USA — African-American", dimension: "regional-aesthetic", description: "DC / Maryland / Virginia Black-DMV go-go aesthetic", promptHint: "a DC / Maryland / Virginia Black-DMV aesthetic — go-go-music capital vibe, polished East-Coast confidence" },
+  { id: "west-coast-hip-hop",  label: "West Coast",         group: "USA — African-American", dimension: "regional-aesthetic", description: "South Central / Compton West Coast hip-hop aesthetic", promptHint: "a West Coast Black-LA aesthetic — South Central / Compton hip-hop vibe, sun-warmed laid-back swagger" },
+  { id: "chicago-south-side",  label: "Chicago South Side", group: "USA — African-American", dimension: "regional-aesthetic", description: "Midwest Black-urban Chicago aesthetic", promptHint: "a Chicago South Side aesthetic — Midwest Black-urban vibe, drill-era street-sharp presence" },
+
+  // ----- Europe -----
+  { id: "parisienne",           label: "Parisienne",          group: "Europe", dimension: "regional-aesthetic", description: "Left-Bank Paris French-chic aesthetic (feminine)", promptHint: "a Parisienne aesthetic — Left-Bank Paris vibe, effortless French-chic mood, je-ne-sais-quoi confidence" },
+  { id: "parisian-flaneur",     label: "Parisian Flâneur",    group: "Europe", dimension: "regional-aesthetic", description: "Left-Bank Paris French-chic aesthetic (masculine)", promptHint: "a Parisian flâneur aesthetic — Left-Bank Paris vibe, contemplative French-chic mood, refined city-walker air" },
+  { id: "milanese-fashion",     label: "Milanese Fashion",    group: "Europe", dimension: "regional-aesthetic", description: "Italian Milanese high-fashion aesthetic", promptHint: "a Milanese fashion aesthetic — Italian high-fashion polish, Quadrilatero confident sleekness" },
+  { id: "sicilian-beach",       label: "Sicilian Beach",      group: "Europe", dimension: "regional-aesthetic", description: "Mediterranean southern-Italian beach aesthetic", promptHint: "a Sicilian beach aesthetic — Mediterranean sun-and-salt vibe, warm southern-Italian ease" },
+  { id: "madrileña",            label: "Madrileña",           group: "Europe", dimension: "regional-aesthetic", description: "Madrid Spanish aesthetic (feminine)", promptHint: "a Madrileña aesthetic — Madrid Spanish vibe, sun-and-confidence Iberian energy" },
+  { id: "madrileño",            label: "Madrileño",           group: "Europe", dimension: "regional-aesthetic", description: "Madrid Spanish aesthetic (masculine)", promptHint: "a Madrileño aesthetic — Madrid Spanish vibe, sun-and-confidence Iberian presence" },
+  { id: "catalan-modern",       label: "Catalan Modern",      group: "Europe", dimension: "regional-aesthetic", description: "Barcelona Mediterranean-design aesthetic", promptHint: "a Catalan modern aesthetic — Barcelona Mediterranean-design vibe, easygoing creative coast" },
+  { id: "greek-mediterranean",  label: "Greek Mediterranean", group: "Europe", dimension: "regional-aesthetic", description: "Aegean island Greek aesthetic", promptHint: "a Greek Mediterranean aesthetic — Aegean island vibe, sun-bleached limestone-and-sea mood" },
+  { id: "scandi-minimal",       label: "Scandi Minimal",      group: "Europe", dimension: "regional-aesthetic", description: "Nordic clean-line minimal aesthetic", promptHint: "a Scandinavian minimal aesthetic — Nordic clean-line vibe, hygge-and-quiet-confidence mood" },
+  { id: "english-rose",         label: "English Rose",        group: "Europe", dimension: "regional-aesthetic", description: "Countryside English aesthetic (feminine)", promptHint: "an English Rose aesthetic — countryside English vibe, gentle rose-garden refinement" },
+  { id: "london-prep",          label: "London Prep",         group: "Europe", dimension: "regional-aesthetic", description: "Mayfair / Chelsea refined British aesthetic (masculine)", promptHint: "a London prep aesthetic — Mayfair / Chelsea vibe, refined British polish" },
+  { id: "manchester-indie",     label: "Manchester Indie",    group: "Europe", dimension: "regional-aesthetic", description: "North-England gig-and-rain working-class-cool aesthetic", promptHint: "a Manchester indie aesthetic — North-England gig-and-rain vibe, working-class cool" },
+  { id: "berlin-alt",           label: "Berlin Alt",          group: "Europe", dimension: "regional-aesthetic", description: "Kreuzberg techno-and-art counterculture aesthetic", promptHint: "a Berlin alt aesthetic — Kreuzberg techno-and-art vibe, edgy considered counterculture" },
+  { id: "munich-traditional",   label: "Munich Traditional",  group: "Europe", dimension: "regional-aesthetic", description: "Bavarian Oktoberfest-traditional aesthetic", promptHint: "a Munich Bavarian-traditional aesthetic — Oktoberfest warmth, alpine-folk pride" },
+  { id: "eastern-european-glam", label: "Eastern European Glam", group: "Europe", dimension: "regional-aesthetic", description: "Moscow / Kyiv winter-glamour aesthetic (feminine)", promptHint: "an Eastern European glam aesthetic — Moscow / Kyiv vibe, statement-confident winter-glamour" },
+  { id: "eastern-european-stoic", label: "Eastern European Stoic", group: "Europe", dimension: "regional-aesthetic", description: "Moscow / Kyiv weathered-confidence aesthetic (masculine)", promptHint: "an Eastern European stoic aesthetic — Moscow / Kyiv vibe, weathered confidence, winter-hardened presence" },
+
+  // ----- Asia -----
+  { id: "tokyo-harajuku",        label: "Tokyo Harajuku",       group: "Asia", dimension: "regional-aesthetic", description: "Tokyo playful expressive Japanese street aesthetic", promptHint: "a Tokyo Harajuku aesthetic — playful expressive Japanese street vibe, color-and-character mood" },
+  { id: "ginza-office",          label: "Ginza Office",         group: "Asia", dimension: "regional-aesthetic", description: "Tokyo Ginza Japanese corporate-elegant aesthetic", promptHint: "a Ginza Tokyo office aesthetic — buttoned-up Japanese corporate-elegant vibe" },
+  { id: "shibuya-streetwear",    label: "Shibuya Streetwear",   group: "Asia", dimension: "regional-aesthetic", description: "Tokyo Shibuya street-fashion aesthetic", promptHint: "a Shibuya streetwear aesthetic — Tokyo street-fashion vibe, layered post-modern mood" },
+  { id: "osaka-everyday",        label: "Osaka Everyday",       group: "Asia", dimension: "regional-aesthetic", description: "Osaka warm casual Kansai aesthetic", promptHint: "an Osaka everyday aesthetic — warm casual Kansai vibe, easygoing humor-and-warmth" },
+  { id: "seoul-k-pop",           label: "Seoul K-Pop",          group: "Asia", dimension: "regional-aesthetic", description: "Seoul Korean-pop polished aesthetic", promptHint: "a Seoul K-pop aesthetic — Korean-pop polish vibe, idol-grade brightness" },
+  { id: "gangnam-glam",          label: "Gangnam Glam",         group: "Asia", dimension: "regional-aesthetic", description: "Seoul Gangnam Korean luxury-district aesthetic", promptHint: "a Gangnam Seoul glam aesthetic — Korean luxury-district vibe, polished beauty-statement" },
+  { id: "shanghai-modern",       label: "Shanghai Modern",      group: "Asia", dimension: "regional-aesthetic", description: "Shanghai Chinese metropolitan aesthetic", promptHint: "a Shanghai modern aesthetic — Chinese metropolitan vibe, Bund-skyline cosmopolitan polish" },
+  { id: "beijing-hutong",        label: "Beijing Hutong",       group: "Asia", dimension: "regional-aesthetic", description: "Beijing old-courtyard traditional-meets-modern aesthetic", promptHint: "a Beijing hutong aesthetic — old-Beijing courtyard vibe, traditional-meets-modern mood" },
+  { id: "hong-kong-cinematic",   label: "Hong Kong Cinematic",  group: "Asia", dimension: "regional-aesthetic", description: "Hong Kong neon-noir Wong-Kar-Wai aesthetic", promptHint: "a Hong Kong cinematic aesthetic — neon-mid-century vibe, Wong-Kar-Wai mood" },
+  { id: "mumbai-bollywood",      label: "Mumbai Bollywood",     group: "Asia", dimension: "regional-aesthetic", description: "Mumbai Indian film-industry aesthetic", promptHint: "a Mumbai Bollywood aesthetic — Indian film-industry vibe, vibrant statement-glamour" },
+  { id: "south-india-traditional", label: "South India Traditional", group: "Asia", dimension: "regional-aesthetic", description: "Tamil / Kerala temple-town classical aesthetic", promptHint: "a South Indian traditional aesthetic — Tamil / Kerala temple-town vibe, classical refinement" },
+  { id: "bangkok-street",        label: "Bangkok Street",       group: "Asia", dimension: "regional-aesthetic", description: "Bangkok Thai night-market neon-urban aesthetic", promptHint: "a Bangkok street aesthetic — Thai night-market energy, neon-and-warmth urban vibe" },
+
+  // ----- Latin America -----
+  { id: "carioca-rio",           label: "Carioca (Rio)",       group: "Latin America", dimension: "regional-aesthetic", description: "Rio de Janeiro beach-and-favela-music Brazilian aesthetic", promptHint: "a Carioca aesthetic — Rio de Janeiro beach-and-favela-music vibe, sun-warmed Brazilian energy" },
+  { id: "paulista",              label: "Paulista (São Paulo)", group: "Latin America", dimension: "regional-aesthetic", description: "São Paulo metropolitan Brazilian creative-class aesthetic", promptHint: "a Paulista aesthetic — São Paulo metropolitan vibe, urban-Brazilian creative-class polish" },
+  { id: "buenos-aires-tango",    label: "Buenos Aires Tango",  group: "Latin America", dimension: "regional-aesthetic", description: "Buenos Aires Recoleta / San Telmo tango aesthetic (feminine)", promptHint: "a Buenos Aires tango aesthetic — Recoleta / San Telmo vibe, sultry porteña confidence" },
+  { id: "porteño",               label: "Porteño",             group: "Latin America", dimension: "regional-aesthetic", description: "Buenos Aires refined milonguero aesthetic (masculine)", promptHint: "a Porteño aesthetic — Buenos Aires vibe, refined milonguero presence" },
+  { id: "mexico-city-chic",      label: "Mexico City Chic",    group: "Latin America", dimension: "regional-aesthetic", description: "CDMX Roma / Polanco modern-Mexican aesthetic", promptHint: "a Mexico City chic aesthetic — CDMX Roma / Polanco vibe, modern-Mexican polish" },
+  { id: "chilango-traditional",  label: "Chilango Traditional", group: "Latin America", dimension: "regional-aesthetic", description: "Mexico City warm folk-and-feast aesthetic", promptHint: "a Chilango traditional aesthetic — Mexico City vibe, warm folk-and-feast mood" },
+  { id: "bogota-cosmopolitan",   label: "Bogotá Cosmopolitan", group: "Latin America", dimension: "regional-aesthetic", description: "Bogotá Colombian capital refined Andean aesthetic", promptHint: "a Bogotá cosmopolitan aesthetic — Colombian capital vibe, refined Andean polish" },
+
+  // ----- Middle East -----
+  { id: "beirut-riviera",        label: "Beirut Riviera",      group: "Middle East", dimension: "regional-aesthetic", description: "Lebanese Mediterranean cosmopolitan aesthetic", promptHint: "a Beirut Riviera aesthetic — Lebanese Mediterranean vibe, cosmopolitan-glamour mood" },
+  { id: "tel-aviv-beach",        label: "Tel Aviv Beach",      group: "Middle East", dimension: "regional-aesthetic", description: "Tel Aviv Mediterranean coastal-city startup-energy aesthetic", promptHint: "a Tel Aviv beach aesthetic — Mediterranean coastal-city vibe, easygoing sun-and-sea startup-energy mood" },
+  { id: "jerusalem-stone",       label: "Jerusalem Stone",     group: "Middle East", dimension: "regional-aesthetic", description: "Jerusalem old-city limestone-heritage aesthetic", promptHint: "a Jerusalem old-city aesthetic — limestone-warmth heritage vibe, layered ancient-and-modern presence" },
+  { id: "sabra",                 label: "Sabra",               group: "Middle East", dimension: "regional-aesthetic", description: "Native-Israeli direct-and-warm Sabra aesthetic", promptHint: "a Sabra aesthetic — native-Israeli vibe, sun-warmed direct-and-warm energy, prickly-outside-sweet-inside mood" },
+  { id: "dubai-modern",          label: "Dubai Modern",        group: "Middle East", dimension: "regional-aesthetic", description: "Gulf-luxury Dubai cosmopolitan-emirate aesthetic", promptHint: "a Dubai modern aesthetic — Gulf-luxury vibe, polished cosmopolitan-emirate presence" },
+  { id: "persian-glam",          label: "Persian Glam",        group: "Middle East", dimension: "regional-aesthetic", description: "Iranian heritage-and-glamour Persian aesthetic", promptHint: "a Persian glam aesthetic — Iranian heritage-and-glamour vibe, refined statement mood" },
+  { id: "istanbul-bosphorus",    label: "Istanbul Bosphorus",  group: "Middle East", dimension: "regional-aesthetic", description: "Istanbul east-meets-west Bosphorus Ottoman-and-modern aesthetic", promptHint: "an Istanbul Bosphorus aesthetic — east-meets-west Turkish vibe, layered Ottoman-and-modern strait-city presence" },
+
+  // ----- North Africa -----
+  { id: "cairene-cosmopolitan",  label: "Cairene Cosmopolitan", group: "North Africa", dimension: "regional-aesthetic", description: "Cairo Egyptian-Arab metropolitan aesthetic", promptHint: "a Cairene cosmopolitan aesthetic — Cairo metropolitan vibe, layered Egyptian-Arab modern-and-historical mood" },
+  { id: "maghreb-coastal",       label: "Maghreb Coastal",      group: "North Africa", dimension: "regional-aesthetic", description: "Tunis / Algiers French-Mediterranean-North-African colonial-port aesthetic", promptHint: "a Maghreb coastal aesthetic — Tunis / Algiers French-Mediterranean-North-African vibe, sun-bleached colonial-port mood" },
+  { id: "marrakech-bohemian",    label: "Marrakech Bohemian",   group: "North Africa", dimension: "regional-aesthetic", description: "Marrakech Moroccan medina warm-spice aesthetic", promptHint: "a Marrakech bohemian aesthetic — Moroccan medina vibe, warm-spice and -textile mood" },
+
+  // ----- Sub-Saharan Africa -----
+  // 🇬🇧 Anglophone, 🇫🇷 Francophone, 🇵🇹 Lusophone — colonial-cultural overlay
+  // drives sartorial / media-diet differences. Ethiopia untagged (never colonized).
+  { id: "lagos-afro-glam",       label: "Lagos Afro-Glam",         group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Lagos Nigerian Anglophone-West-African metropolitan aesthetic", promptHint: "a Lagos Afro-glam aesthetic — Nigerian Anglophone-West-African metropolitan vibe, vibrant statement-fashion mood" },
+  { id: "accra-afro-fashion",    label: "Accra Afro-Fashion",      group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Accra Ghanaian Anglophone-West-African kente-meets-modern aesthetic", promptHint: "an Accra Afro-fashion aesthetic — Ghanaian Anglophone-West-African vibe, kente-meets-modern statement" },
+  { id: "dakar-francophone",     label: "Dakar Francophone",       group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇫🇷 Dakar Senegalese Francophone-West-African coastal-cosmopolitan aesthetic", promptHint: "a Dakar aesthetic — Senegalese Francophone-West-African coastal-cosmopolitan vibe, refined boubou-and-Paris-pull mood" },
+  { id: "abidjan-cosmopolitan",  label: "Abidjan Cosmopolitan",    group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇫🇷 Abidjan Ivoirian Francophone-West-African urban aesthetic", promptHint: "an Abidjan aesthetic — Ivoirian Francophone-West-African urban vibe, lagoon-city polish" },
+  { id: "kinshasa-sape",         label: "Kinshasa SAPE",           group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇫🇷 Kinshasa Congolese Francophone-Central-African SAPE dandy aesthetic", promptHint: "a Kinshasa SAPE aesthetic — Congolese Francophone-Central-African dandy vibe, Society-of-Ambianceurs hyper-tailored statement" },
+  { id: "nairobi-cosmopolitan",  label: "Nairobi Cosmopolitan",    group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Nairobi Kenyan Anglophone-East-African modern-urban aesthetic", promptHint: "a Nairobi cosmopolitan aesthetic — Kenyan Anglophone-East-African modern-urban vibe, considered creative-class polish" },
+  { id: "addis-habesha",         label: "Addis Habesha",           group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "Addis Ababa Ethiopian Habesha highland-heritage aesthetic (Ethiopia was never colonized)", promptHint: "an Addis Ababa Habesha aesthetic — Ethiopian highland heritage vibe, refined coffee-ceremony-and-modern-Addis polish" },
+  { id: "swahili-coast",         label: "Swahili Coast",           group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Zanzibar / Mombasa Anglophone-East-African coastal-Swahili aesthetic", promptHint: "a Swahili-Coast aesthetic — Zanzibar / Mombasa Anglophone-East-African coastal vibe, Indian-Ocean-trade-route warmth" },
+  { id: "johannesburg-urban",    label: "Johannesburg Urban",      group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Johannesburg South-African Anglophone-Southern-African Black-metropolitan aesthetic", promptHint: "a Johannesburg urban aesthetic — South-African Anglophone-Southern-African Black-metropolitan vibe, post-Soweto urban-creative confidence" },
+  { id: "cape-town-cosmopolitan", label: "Cape Town Cosmopolitan", group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇬🇧 Cape Town South-African Anglophone-Southern-African coastal-city aesthetic", promptHint: "a Cape Town cosmopolitan aesthetic — South-African Anglophone-Southern-African coastal-city vibe, easygoing creative polish" },
+  { id: "luanda-lusophone",      label: "Luanda Lusophone",        group: "Sub-Saharan Africa", dimension: "regional-aesthetic", description: "🇵🇹 Luanda Angolan Lusophone-Southern-African kizomba-and-Atlantic-coast aesthetic", promptHint: "a Luanda aesthetic — Angolan Lusophone-Southern-African vibe, kizomba-and-Atlantic-coast statement-presence" },
+
+  // ----- Oceania -----
+  { id: "bondi-beach",           label: "Bondi Beach",         group: "Oceania", dimension: "regional-aesthetic", description: "Bondi Australian coastal salt-and-sun aesthetic", promptHint: "a Bondi Beach aesthetic — Australian coastal vibe, salt-and-sun easygoing presence" },
+  { id: "australian-outback",    label: "Outback",             group: "Oceania", dimension: "regional-aesthetic", description: "Rural Australian Outback aesthetic (feminine)", promptHint: "an Australian Outback aesthetic — rural Australian vibe, weathered sun-burnt confidence" },
+  { id: "outback-stockman",      label: "Outback Stockman",    group: "Oceania", dimension: "regional-aesthetic", description: "Rural Australian Outback aesthetic (masculine)", promptHint: "an Outback Stockman aesthetic — rural Australian vibe, weathered station-hand presence" },
+  { id: "auckland-coastal",      label: "Auckland Coastal",    group: "Oceania", dimension: "regional-aesthetic", description: "Auckland New Zealand harbor-city Pacific aesthetic", promptHint: "an Auckland coastal aesthetic — New Zealand harbor-city vibe, considered Pacific polish" },
 ] as const
 
 export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
@@ -628,6 +749,7 @@ export const PERSON_DIMENSION_ORDER: ReadonlyArray<PersonDimension> = [
   "type",
   "age",
   "ethnicity",
+  "regional-aesthetic",
   // Body
   "build",
   "body-proportions",
@@ -655,6 +777,7 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
   type: "Type",
   age: "Age",
   ethnicity: "Ethnicity",
+  "regional-aesthetic": "Regional Aesthetic",
   build: "Build",
   "body-proportions": "Body Proportions",
   "face-shape": "Face Shape",
@@ -681,7 +804,7 @@ export const PERSON_DIMENSION_LABELS: Readonly<Record<PersonDimension, string>> 
  */
 export const PERSON_FIELD_BY_DIMENSION: Record<
   PersonDimension,
-  | "type" | "age" | "ethnicity" | "build" | "bodyProportions"
+  | "type" | "age" | "ethnicity" | "regionalAesthetic" | "build" | "bodyProportions"
   | "faceShape" | "jawline" | "eyeShape" | "nose" | "lips" | "lipState"
   | "hairColor" | "hairBase" | "eyebrows"
   | "skinTone" | "skinTexture" | "eyeColor" | "eyeState" | "facialHair" | "distinctiveFeature"
@@ -689,6 +812,7 @@ export const PERSON_FIELD_BY_DIMENSION: Record<
   type: "type",
   age: "age",
   ethnicity: "ethnicity",
+  "regional-aesthetic": "regionalAesthetic",
   build: "build",
   "body-proportions": "bodyProportions",
   "face-shape": "faceShape",
@@ -723,6 +847,12 @@ export interface PersonValue {
   /** Single id, or an array of up to 2 ids for mixed heritage (e.g.
    *  ["slavic","mediterranean"] → "of mixed Slavic and Mediterranean heritage"). */
   ethnicity?: string | ReadonlyArray<string>
+  /** Regional / cultural aesthetic vibe (e.g. `"cali-beach"`, `"parisienne"`,
+   *  `"kinshasa-sape"`). Composes with ethnicity, skin tone, hair, and
+   *  styling — the dimension's promptHints are vibe-only and never hard-code
+   *  the visuals those other dimensions own. Single id or up to 2 ids for
+   *  hybrid looks (e.g. ["nyc-fashion","parisienne"]). */
+  regionalAesthetic?: string | ReadonlyArray<string>
   build?: string
   /** Body shape ratio (long-legged, hourglass, pear…). Independent from
    *  Build, which describes silhouette + size. */
@@ -947,7 +1077,8 @@ export function buildPersonHints(
       dimension === "distinctive-features" ||
       dimension === "lip-state" ||
       dimension === "eye-state" ||
-      dimension === "skin-texture"
+      dimension === "skin-texture" ||
+      dimension === "regional-aesthetic"
     ) {
       for (const h of emitIndependentHints(raw)) hints.push(h)
       continue

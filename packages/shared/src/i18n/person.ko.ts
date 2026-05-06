@@ -510,6 +510,110 @@ const map: LocaleCatalogMap = {
   "journalist": { label: "기자", description: "수첩을 든 기자" },
   "barista": { label: "바리스타", description: "카페 직원" },
 
+  // Regional Aesthetic
+  // ----- USA — Mainstream -----
+  "cali-beach": { label: "캘리포니아 비치", description: "느긋한 캘리포니아 해변 마을 미감" },
+  "valley-girl": { label: "밸리 걸", description: "남부 캘리포니아 밸리 미감 (여성)" },
+  "norcal-hippie": { label: "노캘 히피", description: "북부 캘리포니아 버클리 / 베이 에어리어 히피 미감" },
+  "boho-la": { label: "보호 LA", description: "로스앤젤레스 캐니언 보헤미안 미감 (여성)" },
+  "texas-cowgirl": { label: "텍사스 카우걸", description: "텍사스 서부 목장 미감 (여성)" },
+  "texas-cowboy": { label: "텍사스 카우보이", description: "텍사스 서부 목장 미감 (남성)" },
+  "southern-belle": { label: "서던 벨", description: "찰스턴 / 서배너 남북전쟁 이전 귀족 미감 (여성)" },
+  "southern-gentleman": { label: "서던 젠틀맨", description: "옛 남부 귀족 미감 (남성)" },
+  "miami-latina": { label: "마이애미 라티나", description: "사우스 비치 카리브-라틴 미감 (여성)" },
+  "miami-latino": { label: "마이애미 라티노", description: "사우스 비치 카리브-라틴 미감 (남성)" },
+  "hawaii-island": { label: "하와이 아일랜드", description: "폴리네시아-태평양 하와이 미감" },
+  "nyc-fashion": { label: "NYC 패션", description: "맨해튼 에디토리얼 패션 미감 (여성)" },
+  "nyc-sharp": { label: "NYC 샤프", description: "맨해튼 파워 테일러드 미감 (남성)" },
+  "brooklyn-hipster": { label: "브루클린 힙스터", description: "윌리엄스버그 크리에이티브 클래스 미감" },
+  "new-england-prep": { label: "뉴잉글랜드 프레피", description: "케이프 코드 / 낸터킷 올드머니 프레피 미감" },
+  "pnw-granola": { label: "PNW 그래놀라", description: "포틀랜드 / 시애틀 아웃도어 미감" },
+  "nashville-country": { label: "내슈빌 컨트리", description: "뮤직시티 모던 컨트리팝 미감 (여성)" },
+  "nashville-cowboy": { label: "내슈빌 카우보이", description: "뮤직시티 모던 카우보이 미감 (남성)" },
+  "vegas-glam": { label: "베이거스 글램", description: "라스베이거스 스트립 글래머 미감 (여성)" },
+  "vegas-suit": { label: "베이거스 슈트", description: "라스베이거스 스트립 슈트 미감 (남성)" },
+
+  // ----- USA — African-American -----
+  "harlem-classic": { label: "할렘 클래식", description: "흑인 뉴요커 헤리티지 미감, 재즈 시대의 우아함" },
+  "atl-southern": { label: "ATL 서던", description: "애틀랜타 흑인 남부 힙합 / R&B 미감" },
+  "nola-creole": { label: "NOLA 크리올", description: "뉴올리언스 루이지애나 프랑스-카리브-아프리카 미감" },
+  "dmv-go-go": { label: "DMV 고고", description: "DC / 메릴랜드 / 버지니아 흑인 DMV 고고 미감" },
+  "west-coast-hip-hop": { label: "웨스트 코스트", description: "사우스 센트럴 / 컴튼 웨스트 코스트 힙합 미감" },
+  "chicago-south-side": { label: "시카고 사우스사이드", description: "중서부 흑인 어반 시카고 미감" },
+
+  // ----- Europe -----
+  "parisienne": { label: "파리지엔느", description: "좌안 파리 프렌치 시크 미감 (여성)" },
+  "parisian-flaneur": { label: "파리지앙 플라뇌르", description: "좌안 파리 프렌치 시크 미감 (남성)" },
+  "milanese-fashion": { label: "밀라네제 패션", description: "이탈리아 밀라노 하이패션 미감" },
+  "sicilian-beach": { label: "시칠리아 비치", description: "지중해 남부 이탈리아 해변 미감" },
+  "madrileña": { label: "마드리레냐", description: "마드리드 스페인 미감 (여성)" },
+  "madrileño": { label: "마드리레뇨", description: "마드리드 스페인 미감 (남성)" },
+  "catalan-modern": { label: "카탈루냐 모던", description: "바르셀로나 지중해 디자인 미감" },
+  "greek-mediterranean": { label: "그리스 지중해", description: "에게해 섬 그리스 미감" },
+  "scandi-minimal": { label: "스칸디 미니멀", description: "북유럽 클린라인 미니멀 미감" },
+  "english-rose": { label: "잉글리시 로즈", description: "전원 잉글랜드 미감 (여성)" },
+  "london-prep": { label: "런던 프레피", description: "메이페어 / 첼시 정제된 영국 미감 (남성)" },
+  "manchester-indie": { label: "맨체스터 인디", description: "북잉글랜드 공연-비-노동계급 쿨 미감" },
+  "berlin-alt": { label: "베를린 얼터", description: "크로이츠베르크 테크노-아트 카운터컬처 미감" },
+  "munich-traditional": { label: "뮌헨 트래디셔널", description: "바이에른 옥토버페스트 전통 미감" },
+  "eastern-european-glam": { label: "동유럽 글램", description: "모스크바 / 키이우 윈터 글래머 미감 (여성)" },
+  "eastern-european-stoic": { label: "동유럽 스토익", description: "모스크바 / 키이우 풍파를 견딘 자신감 미감 (남성)" },
+
+  // ----- Asia -----
+  "tokyo-harajuku": { label: "도쿄 하라주쿠", description: "도쿄 발랄하고 표현력 있는 일본 스트리트 미감" },
+  "ginza-office": { label: "긴자 오피스", description: "도쿄 긴자 일본 코퍼레이트 엘레강스 미감" },
+  "shibuya-streetwear": { label: "시부야 스트리트웨어", description: "도쿄 시부야 스트리트 패션 미감" },
+  "osaka-everyday": { label: "오사카 에브리데이", description: "오사카 따뜻하고 캐주얼한 간사이 미감" },
+  "seoul-k-pop": { label: "서울 K-팝", description: "서울 한국 팝 정제된 미감" },
+  "gangnam-glam": { label: "강남 글램", description: "서울 강남 한국 럭셔리 디스트릭트 미감" },
+  "shanghai-modern": { label: "상하이 모던", description: "상하이 중국 메트로폴리탄 미감" },
+  "beijing-hutong": { label: "베이징 후퉁", description: "베이징 옛 사합원 전통-모던 융합 미감" },
+  "hong-kong-cinematic": { label: "홍콩 시네마틱", description: "홍콩 네온 누아르 왕가위 미감" },
+  "mumbai-bollywood": { label: "뭄바이 발리우드", description: "뭄바이 인도 영화 산업 미감" },
+  "south-india-traditional": { label: "남인도 전통", description: "타밀 / 케랄라 사원 도시 클래식 미감" },
+  "bangkok-street": { label: "방콕 스트리트", description: "방콕 태국 야시장 네온 어반 미감" },
+
+  // ----- Latin America -----
+  "carioca-rio": { label: "카리오카 (리우)", description: "리우데자네이루 해변과 파벨라 음악 브라질 미감" },
+  "paulista": { label: "파울리스타 (상파울루)", description: "상파울루 메트로폴리탄 브라질 크리에이티브 클래스 미감" },
+  "buenos-aires-tango": { label: "부에노스아이레스 탱고", description: "부에노스아이레스 레콜레타 / 산텔모 탱고 미감 (여성)" },
+  "porteño": { label: "포르테뇨", description: "부에노스아이레스 정제된 밀롱게로 미감 (남성)" },
+  "mexico-city-chic": { label: "멕시코시티 시크", description: "CDMX 로마 / 폴랑코 모던 멕시칸 미감" },
+  "chilango-traditional": { label: "칠랑고 트래디셔널", description: "멕시코시티 따뜻한 민속과 축제 미감" },
+  "bogota-cosmopolitan": { label: "보고타 코스모폴리탄", description: "보고타 콜롬비아 수도 정제된 안데스 미감" },
+
+  // ----- Middle East -----
+  "beirut-riviera": { label: "베이루트 리비에라", description: "레바논 지중해 코스모폴리탄 미감" },
+  "tel-aviv-beach": { label: "텔아비브 비치", description: "텔아비브 지중해 해안 도시 스타트업 에너지 미감" },
+  "jerusalem-stone": { label: "예루살렘 스톤", description: "예루살렘 구도시 석회암 헤리티지 미감" },
+  "sabra": { label: "사브라", description: "토착 이스라엘인의 직설적이고 따뜻한 사브라 미감" },
+  "dubai-modern": { label: "두바이 모던", description: "걸프 럭셔리 두바이 코스모폴리탄 에미리트 미감" },
+  "persian-glam": { label: "페르시안 글램", description: "이란 헤리티지와 글래머 페르시안 미감" },
+  "istanbul-bosphorus": { label: "이스탄불 보스포루스", description: "이스탄불 동서 융합 보스포루스 오스만-모던 미감" },
+
+  // ----- North Africa -----
+  "cairene-cosmopolitan": { label: "카이렌 코스모폴리탄", description: "카이로 이집트-아랍 메트로폴리탄 미감" },
+  "maghreb-coastal": { label: "마그레브 코스탈", description: "튀니스 / 알제 프랑스-지중해-북아프리카 식민 항구 미감" },
+  "marrakech-bohemian": { label: "마라케시 보헤미안", description: "마라케시 모로코 메디나의 따뜻한 향신료 미감" },
+
+  // ----- Sub-Saharan Africa -----
+  "lagos-afro-glam": { label: "라고스 아프로글램", description: "🇬🇧 라고스 나이지리아 영어권 서아프리카 메트로폴리탄 미감" },
+  "accra-afro-fashion": { label: "아크라 아프로패션", description: "🇬🇧 아크라 가나 영어권 서아프리카 켄테와 모던 융합 미감" },
+  "dakar-francophone": { label: "다카르 프랑코폰", description: "🇫🇷 다카르 세네갈 프랑스어권 서아프리카 해안 코스모폴리탄 미감" },
+  "abidjan-cosmopolitan": { label: "아비장 코스모폴리탄", description: "🇫🇷 아비장 코트디부아르 프랑스어권 서아프리카 어반 미감" },
+  "kinshasa-sape": { label: "킨샤사 SAPE", description: "🇫🇷 킨샤사 콩고 프랑스어권 중앙아프리카 SAPE 댄디 미감" },
+  "nairobi-cosmopolitan": { label: "나이로비 코스모폴리탄", description: "🇬🇧 나이로비 케냐 영어권 동아프리카 모던 어반 미감" },
+  "addis-habesha": { label: "아디스 하베샤", description: "아디스아바바 에티오피아 하베샤 고원 헤리티지 미감 (에티오피아는 식민 지배를 받지 않음)" },
+  "swahili-coast": { label: "스와힐리 코스트", description: "🇬🇧 잔지바르 / 몸바사 영어권 동아프리카 해안 스와힐리 미감" },
+  "johannesburg-urban": { label: "요하네스버그 어반", description: "🇬🇧 요하네스버그 남아프리카 영어권 남부아프리카 흑인 메트로폴리탄 미감" },
+  "cape-town-cosmopolitan": { label: "케이프타운 코스모폴리탄", description: "🇬🇧 케이프타운 남아프리카 영어권 남부아프리카 해안 도시 미감" },
+  "luanda-lusophone": { label: "루안다 루소폰", description: "🇵🇹 루안다 앙골라 포르투갈어권 남부아프리카 키좀바와 대서양 해안 미감" },
+
+  // ----- Oceania -----
+  "bondi-beach": { label: "본다이 비치", description: "본다이 호주 해안 솔트앤선 미감" },
+  "australian-outback": { label: "아웃백", description: "오스트레일리아 시골 아웃백 미감 (여성)" },
+  "outback-stockman": { label: "아웃백 스톡맨", description: "오스트레일리아 시골 아웃백 미감 (남성)" },
+  "auckland-coastal": { label: "오클랜드 코스탈", description: "오클랜드 뉴질랜드 항구 도시 태평양 미감" },
 }
 
 export default map

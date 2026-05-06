@@ -504,6 +504,111 @@ const map: LocaleCatalogMap = {
   "journalist": { label: "Журналист", description: "Репортёр с блокнотом" },
   "barista": { label: "Бариста", description: "Бариста в кофейне" },
 
+  // Regional Aesthetic
+  // ----- USA — Mainstream -----
+  "cali-beach": { label: "Калифорнийский пляж", description: "Расслабленная эстетика калифорнийского пляжного городка" },
+  "valley-girl": { label: "Valley Girl", description: "Эстетика долины Южной Калифорнии (женская)" },
+  "norcal-hippie": { label: "Хиппи Северной Калифорнии", description: "Эстетика хиппи Беркли / района Залива в Северной Калифорнии" },
+  "boho-la": { label: "Бохо Лос-Анджелес", description: "Богемная эстетика каньонов Лос-Анджелеса (женская)" },
+  "texas-cowgirl": { label: "Техасская Cowgirl", description: "Эстетика техасского Запада и ранчо (женская)" },
+  "texas-cowboy": { label: "Техасский Cowboy", description: "Эстетика техасского Запада и ранчо (мужская)" },
+  "southern-belle": { label: "Southern Belle", description: "Эстетика довоенной аристократии Чарлстона / Саванны (женская)" },
+  "southern-gentleman": { label: "Южный джентльмен", description: "Эстетика старого Юга (мужская)" },
+  "miami-latina": { label: "Miami Latina", description: "Карибско-латинская эстетика Саут-Бич (женская)" },
+  "miami-latino": { label: "Miami Latino", description: "Карибско-латинская эстетика Саут-Бич (мужская)" },
+  "hawaii-island": { label: "Гавайский остров", description: "Полинезийско-тихоокеанская гавайская эстетика" },
+  "nyc-fashion": { label: "NYC Fashion", description: "Эстетика модного редактора Манхэттена (женская)" },
+  "nyc-sharp": { label: "NYC Sharp", description: "Эстетика идеального костюма Манхэттена (мужская)" },
+  "brooklyn-hipster": { label: "Бруклинский хипстер", description: "Эстетика креативного класса Уильямсбурга" },
+  "new-england-prep": { label: "New England Prep", description: "Эстетика старых денег Кейп-Кода / Нантакета" },
+  "pnw-granola": { label: "PNW Granola", description: "Эстетика любителей природы Портленда / Сиэтла" },
+  "nashville-country": { label: "Nashville Country", description: "Современная кантри-поп эстетика Music City (женская)" },
+  "nashville-cowboy": { label: "Nashville Cowboy", description: "Современная ковбойская эстетика Music City (мужская)" },
+  "vegas-glam": { label: "Vegas Glam", description: "Гламурная эстетика Лас-Вегас Стрип (женская)" },
+  "vegas-suit": { label: "Vegas Suit", description: "Костюмная эстетика Лас-Вегас Стрип (мужская)" },
+
+  // ----- USA — African-American -----
+  "harlem-classic": { label: "Harlem Classic", description: "Афроамериканская нью-йоркская эстетика, элегантность эпохи джаза" },
+  "atl-southern": { label: "ATL Southern", description: "Атлантская афроамериканская южная хип-хоп / R&B эстетика" },
+  "nola-creole": { label: "NOLA Creole", description: "Креольская франко-карибско-африканская эстетика Нового Орлеана (Луизиана)" },
+  "dmv-go-go": { label: "DMV Go-Go", description: "Афроамериканская эстетика go-go Вашингтона / Мэриленда / Виргинии (DMV)" },
+  "west-coast-hip-hop": { label: "West Coast", description: "Хип-хоп эстетика Западного побережья (Саут-Сентрал / Комптон)" },
+  "chicago-south-side": { label: "Чикаго South Side", description: "Афроамериканская городская эстетика Среднего Запада, Чикаго" },
+
+  // ----- Europe -----
+  "parisienne": { label: "Parisienne", description: "Эстетика французского шика Левого берега Парижа (женская)" },
+  "parisian-flaneur": { label: "Parisian Flâneur", description: "Эстетика французского шика Левого берега Парижа (мужская)" },
+  "milanese-fashion": { label: "Миланская мода", description: "Высокая мода итальянского Милана" },
+  "sicilian-beach": { label: "Сицилийский пляж", description: "Средиземноморская южноитальянская пляжная эстетика" },
+  "madrileña": { label: "Madrileña", description: "Мадридская испанская эстетика (женская)" },
+  "madrileño": { label: "Madrileño", description: "Мадридская испанская эстетика (мужская)" },
+  "catalan-modern": { label: "Каталонский модерн", description: "Средиземноморский дизайн Барселоны" },
+  "greek-mediterranean": { label: "Греческое Средиземноморье", description: "Эстетика греческих островов Эгейского моря" },
+  "scandi-minimal": { label: "Скандинавский минимализм", description: "Нордическая минималистская эстетика чистых линий" },
+  "english-rose": { label: "English Rose", description: "Английская сельская эстетика (женская)" },
+  "london-prep": { label: "London Prep", description: "Утончённая британская эстетика Мейфэр / Челси (мужская)" },
+  "manchester-indie": { label: "Манчестерский инди", description: "Северно-английская эстетика концертов и дождя, рабочего класса" },
+  "berlin-alt": { label: "Berlin Alt", description: "Контркультурная эстетика техно и искусства Кройцберга" },
+  "munich-traditional": { label: "Мюнхенская традиция", description: "Баварская традиционная эстетика Октоберфеста" },
+  "eastern-european-glam": { label: "Восточноевропейский гламур", description: "Зимне-гламурная эстетика Москвы / Киева (женская)" },
+  "eastern-european-stoic": { label: "Восточноевропейский стоик", description: "Обветренно-уверенная эстетика Москвы / Киева (мужская)" },
+
+  // ----- Asia -----
+  "tokyo-harajuku": { label: "Токио Харадзюку", description: "Игривая выразительная японская уличная эстетика Токио" },
+  "ginza-office": { label: "Гинза, офис", description: "Японская корпоративно-элегантная эстетика токийской Гинзы" },
+  "shibuya-streetwear": { label: "Сибуя стритвир", description: "Уличная мода Сибуи, Токио" },
+  "osaka-everyday": { label: "Осака повседневная", description: "Тёплая повседневная эстетика Кансая, Осака" },
+  "seoul-k-pop": { label: "Сеул K-Pop", description: "Отточенная эстетика корейского поп-стиля, Сеул" },
+  "gangnam-glam": { label: "Каннам гламур", description: "Корейская эстетика люксового района Каннам, Сеул" },
+  "shanghai-modern": { label: "Шанхайский модерн", description: "Китайская столичная эстетика Шанхая" },
+  "beijing-hutong": { label: "Пекинский хутун", description: "Эстетика старых дворов Пекина — традиции встречаются с современностью" },
+  "hong-kong-cinematic": { label: "Гонконг кинематографичный", description: "Неон-нуар эстетика Гонконга в духе Вонг Карвая" },
+  "mumbai-bollywood": { label: "Мумбаи Болливуд", description: "Эстетика индийской киноиндустрии Мумбаи" },
+  "south-india-traditional": { label: "Южная Индия традиционная", description: "Классическая эстетика тамильских / керальских храмовых городов" },
+  "bangkok-street": { label: "Бангкок уличный", description: "Тайская неоново-городская эстетика ночных рынков Бангкока" },
+
+  // ----- Latin America -----
+  "carioca-rio": { label: "Carioca (Рио)", description: "Бразильская эстетика пляжей и фавельной музыки Рио-де-Жанейро" },
+  "paulista": { label: "Paulista (Сан-Паулу)", description: "Городская бразильская эстетика креативного класса Сан-Паулу" },
+  "buenos-aires-tango": { label: "Буэнос-Айрес танго", description: "Эстетика танго Реколеты / Сан-Тельмо в Буэнос-Айресе (женская)" },
+  "porteño": { label: "Porteño", description: "Утончённая милонгеро-эстетика Буэнос-Айреса (мужская)" },
+  "mexico-city-chic": { label: "Мехико шик", description: "Современная мексиканская эстетика Рома / Поланко в Мехико" },
+  "chilango-traditional": { label: "Чиланго традиционный", description: "Тёплая фолк-эстетика праздников Мехико" },
+  "bogota-cosmopolitan": { label: "Богота космополит", description: "Утончённая андская эстетика колумбийской столицы Боготы" },
+
+  // ----- Middle East -----
+  "beirut-riviera": { label: "Бейрутская Ривьера", description: "Ливанская средиземноморская космополитичная эстетика" },
+  "tel-aviv-beach": { label: "Тель-Авив пляж", description: "Средиземноморская прибрежно-городская стартап-эстетика Тель-Авива" },
+  "jerusalem-stone": { label: "Иерусалимский камень", description: "Известняково-наследственная эстетика Старого города Иерусалима" },
+  "sabra": { label: "Sabra", description: "Уроженческая израильская эстетика — прямота и теплота" },
+  "dubai-modern": { label: "Дубай современный", description: "Космополитично-эмиратская эстетика гольф-люкса Дубая" },
+  "persian-glam": { label: "Персидский гламур", description: "Иранская эстетика наследия и гламура" },
+  "istanbul-bosphorus": { label: "Стамбульский Босфор", description: "Османско-современная эстетика Стамбула, где Восток встречает Запад" },
+
+  // ----- North Africa -----
+  "cairene-cosmopolitan": { label: "Каирский космополит", description: "Египетско-арабская столичная эстетика Каира" },
+  "maghreb-coastal": { label: "Магриб прибрежный", description: "Франко-средиземноморско-североафриканская колониально-портовая эстетика Туниса / Алжира" },
+  "marrakech-bohemian": { label: "Марракеш богема", description: "Тёплая пряно-текстильная эстетика марокканской медины Марракеша" },
+
+  // ----- Sub-Saharan Africa -----
+  "lagos-afro-glam": { label: "Lagos Afro-Glam", description: "🇬🇧 Нигерийская англоязычно-западноафриканская столичная эстетика Лагоса" },
+  "accra-afro-fashion": { label: "Accra Afro-Fashion", description: "🇬🇧 Ганская англоязычно-западноафриканская эстетика кенте, переходящая в современность, Аккра" },
+  "dakar-francophone": { label: "Dakar франкофонный", description: "🇫🇷 Сенегальская франкоязычно-западноафриканская прибрежно-космополитичная эстетика Дакара" },
+  "abidjan-cosmopolitan": { label: "Абиджан космополит", description: "🇫🇷 Ивуарийская франкоязычно-западноафриканская городская эстетика Абиджана" },
+  "kinshasa-sape": { label: "Kinshasa SAPE", description: "🇫🇷 Конголезская франкоязычно-центральноафриканская дендистская SAPE-эстетика Киншасы" },
+  "nairobi-cosmopolitan": { label: "Найроби космополит", description: "🇬🇧 Кенийская англоязычно-восточноафриканская современно-городская эстетика Найроби" },
+  "addis-habesha": { label: "Addis Habesha", description: "Эфиопская хабешская нагорно-наследственная эстетика Аддис-Абебы (Эфиопия никогда не была колонизирована)" },
+  "swahili-coast": { label: "Побережье суахили", description: "🇬🇧 Англоязычно-восточноафриканская прибрежно-суахилийская эстетика Занзибара / Момбасы" },
+  "johannesburg-urban": { label: "Йоханнесбург городской", description: "🇬🇧 Южноафриканская англоязычно-южноафриканская чёрно-столичная эстетика Йоханнесбурга" },
+  "cape-town-cosmopolitan": { label: "Кейптаун космополит", description: "🇬🇧 Южноафриканская англоязычно-южноафриканская прибрежно-городская эстетика Кейптауна" },
+  "luanda-lusophone": { label: "Luanda лузофонная", description: "🇵🇹 Ангольская лузофонно-южноафриканская эстетика кизомбы и атлантического побережья, Луанда" },
+
+  // ----- Oceania -----
+  "bondi-beach": { label: "Bondi Beach", description: "Австралийская прибрежная эстетика солнца и соли, Бонди" },
+  "australian-outback": { label: "Outback", description: "Сельская эстетика австралийского аутбэка (женская)" },
+  "outback-stockman": { label: "Outback Stockman", description: "Сельская эстетика австралийского аутбэка (мужская)" },
+  "auckland-coastal": { label: "Окленд прибрежный", description: "Эстетика тихоокеанского портового города Окленд, Новая Зеландия" },
+
 }
 
 export default map

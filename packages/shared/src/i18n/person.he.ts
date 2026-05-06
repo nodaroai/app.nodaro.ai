@@ -504,6 +504,111 @@ const map: LocaleCatalogMap = {
   "journalist": { label: "עיתונאי/ת", description: "כתב עם פנקס" },
   "barista": { label: "ברמן/ית קפה", description: "מלצר בית קפה" },
 
+  // Regional Aesthetic
+  // ----- USA — Mainstream -----
+  "cali-beach": { label: "חוף קליפורניה", description: "אסתטיקה רגועה של עיירת חוף קליפורנית" },
+  "valley-girl": { label: "Valley Girl", description: "אסתטיקה של פרברי דרום קליפורניה (נשי)" },
+  "norcal-hippie": { label: "היפי צפון קליפורניה", description: "אסתטיקה היפית של צפון קליפורניה / ברקלי / מפרץ סן פרנסיסקו" },
+  "boho-la": { label: "בוהו LA", description: "אסתטיקה בוהמית-קניונית של לוס אנג'לס (נשי)" },
+  "texas-cowgirl": { label: "קאוגירל טקסנית", description: "אסתטיקה מערבית של חוות טקסס (נשי)" },
+  "texas-cowboy": { label: "קאובוי טקסני", description: "אסתטיקה מערבית של חוות טקסס (גברי)" },
+  "southern-belle": { label: "Southern Belle", description: "אסתטיקה של עידן הדרום הישן בצ'רלסטון / סבאנה (נשי)" },
+  "southern-gentleman": { label: "ג'נטלמן דרומי", description: "אסתטיקה של אצולת הדרום הישן (גברי)" },
+  "miami-latina": { label: "לטינה ממיאמי", description: "אסתטיקה קריבית-לטינית של South Beach (נשי)" },
+  "miami-latino": { label: "לטינו ממיאמי", description: "אסתטיקה קריבית-לטינית של South Beach (גברי)" },
+  "hawaii-island": { label: "האיי הוואי", description: "אסתטיקה הוואית פולינזית-פסיפית" },
+  "nyc-fashion": { label: "אופנת NYC", description: "אסתטיקה אופנתית-עריכתית של מנהטן (נשי)" },
+  "nyc-sharp": { label: "NYC חדים", description: "אסתטיקה תפורה-חזק של מנהטן (גברי)" },
+  "brooklyn-hipster": { label: "היפסטר ברוקלין", description: "אסתטיקה של מעמד יוצרים בוויליאמסבורג" },
+  "new-england-prep": { label: "פרפי ניו אינגלנד", description: "אסתטיקה פרפית של הון ישן בקייפ קוד / ננטאקט" },
+  "pnw-granola": { label: "PNW גרנולה", description: "אסתטיקה אאוטדור של פורטלנד / סיאטל" },
+  "nashville-country": { label: "קאנטרי נאשוויל", description: "אסתטיקת קאנטרי-פופ מודרני של בירת המוזיקה (נשי)" },
+  "nashville-cowboy": { label: "קאובוי נאשוויל", description: "אסתטיקת קאובוי מודרני של בירת המוזיקה (גברי)" },
+  "vegas-glam": { label: "גלאם וגאס", description: "אסתטיקה של זוהר ה-Strip בלאס וגאס (נשי)" },
+  "vegas-suit": { label: "חליפת וגאס", description: "אסתטיקה תפורה של ה-Strip בלאס וגאס (גברי)" },
+
+  // ----- USA — African-American -----
+  "harlem-classic": { label: "הארלם קלאסי", description: "אסתטיקת מורשת שחורה ניו-יורקית, אלגנטיות עידן הג'אז" },
+  "atl-southern": { label: "ATL דרומי", description: "אסתטיקה של היפ-הופ / R&B שחור-דרומי באטלנטה" },
+  "nola-creole": { label: "NOLA קריאולי", description: "אסתטיקה צרפתית-קריבית-אפריקאית של ניו אורלינס לואיזיאנה" },
+  "dmv-go-go": { label: "DMV Go-Go", description: "אסתטיקת go-go שחורה של DC / מרילנד / וירג'יניה" },
+  "west-coast-hip-hop": { label: "החוף המערבי", description: "אסתטיקת היפ-הופ של החוף המערבי, סאות' סנטרל / קומפטון" },
+  "chicago-south-side": { label: "South Side שיקגו", description: "אסתטיקה אורבנית-שחורה של המערב התיכון בשיקגו" },
+
+  // ----- Europe -----
+  "parisienne": { label: "פריזאית", description: "אסתטיקת שיק צרפתי של הגדה השמאלית בפריז (נשי)" },
+  "parisian-flaneur": { label: "Flâneur פריזאי", description: "אסתטיקת שיק צרפתי של הגדה השמאלית בפריז (גברי)" },
+  "milanese-fashion": { label: "אופנה מילאנזית", description: "אסתטיקת אופנה איטלקית עילית מילאנזית" },
+  "sicilian-beach": { label: "חוף סיציליאני", description: "אסתטיקת חוף דרום-איטלקי ים-תיכוני" },
+  "madrileña": { label: "Madrileña", description: "אסתטיקה ספרדית מדרידית (נשי)" },
+  "madrileño": { label: "Madrileño", description: "אסתטיקה ספרדית מדרידית (גברי)" },
+  "catalan-modern": { label: "קטלאני מודרני", description: "אסתטיקה ים-תיכונית-עיצובית של ברצלונה" },
+  "greek-mediterranean": { label: "יווני ים-תיכוני", description: "אסתטיקה יוונית של איי הים האגאי" },
+  "scandi-minimal": { label: "סקנדינבי מינימלי", description: "אסתטיקה נורדית מינימלית עם קווים נקיים" },
+  "english-rose": { label: "ורד אנגלי", description: "אסתטיקה אנגלית כפרית (נשי)" },
+  "london-prep": { label: "פרפי לונדון", description: "אסתטיקה בריטית מעודנת של מייפייר / צ'לסי (גברי)" },
+  "manchester-indie": { label: "אינדי מנצ'סטר", description: "אסתטיקה מגניבה-מעמד-עובד של צפון אנגליה" },
+  "berlin-alt": { label: "ברלין אלט", description: "אסתטיקת תרבות-נגד של טכנו ואמנות בקרויצברג" },
+  "munich-traditional": { label: "מינכן מסורתי", description: "אסתטיקה בווארית מסורתית של אוקטוברפסט" },
+  "eastern-european-glam": { label: "גלאם מזרח-אירופאי", description: "אסתטיקת זוהר חורפי של מוסקבה / קייב (נשי)" },
+  "eastern-european-stoic": { label: "סטואי מזרח-אירופאי", description: "אסתטיקה של ביטחון מבולה של מוסקבה / קייב (גברי)" },
+
+  // ----- Asia -----
+  "tokyo-harajuku": { label: "טוקיו הראג'וקו", description: "אסתטיקת רחוב יפנית שובבה ומבטאת של טוקיו" },
+  "ginza-office": { label: "משרד גינזה", description: "אסתטיקה יפנית קורפורטיבית-אלגנטית של גינזה טוקיו" },
+  "shibuya-streetwear": { label: "סטריטוויר שיבויה", description: "אסתטיקת אופנת רחוב של שיבויה טוקיו" },
+  "osaka-everyday": { label: "אוסקה יומיומי", description: "אסתטיקת קנסאי חמה ויומיומית של אוסקה" },
+  "seoul-k-pop": { label: "K-Pop סיאול", description: "אסתטיקת קוריאן-פופ מלוטשת של סיאול" },
+  "gangnam-glam": { label: "גלאם גנגנם", description: "אסתטיקת רובע יוקרה קוריאני של גנגנם בסיאול" },
+  "shanghai-modern": { label: "שנגחאי מודרני", description: "אסתטיקה סינית מטרופוליטנית של שנגחאי" },
+  "beijing-hutong": { label: "הוטונג בייג'ינג", description: "אסתטיקת חצרות עתיקות של בייג'ינג, מסורת פוגשת מודרניות" },
+  "hong-kong-cinematic": { label: "הונג קונג קולנועי", description: "אסתטיקת ניאון-נואר של הונג קונג בסגנון וונג קאר-וואי" },
+  "mumbai-bollywood": { label: "בוליווד מומבאי", description: "אסתטיקת תעשיית הסרטים ההודית במומבאי" },
+  "south-india-traditional": { label: "דרום הודו מסורתי", description: "אסתטיקה קלאסית של עיירות מקדשים בטמיל / קראלה" },
+  "bangkok-street": { label: "רחוב בנגקוק", description: "אסתטיקה אורבנית-ניאונית של שווקי לילה תאילנדיים בבנגקוק" },
+
+  // ----- Latin America -----
+  "carioca-rio": { label: "קריוקה (ריו)", description: "אסתטיקה ברזילאית של חופים ומוזיקת פאבלות בריו דה ז'נרו" },
+  "paulista": { label: "פאוליסטה (סאו פאולו)", description: "אסתטיקה ברזילאית מטרופוליטנית של מעמד יוצרים בסאו פאולו" },
+  "buenos-aires-tango": { label: "טנגו בואנוס איירס", description: "אסתטיקת טנגו של רקולטה / סן טלמו בבואנוס איירס (נשי)" },
+  "porteño": { label: "Porteño", description: "אסתטיקת מילונגרו מעודנת של בואנוס איירס (גברי)" },
+  "mexico-city-chic": { label: "שיק מקסיקו סיטי", description: "אסתטיקה מקסיקנית-מודרנית של רומה / פולנקו ב-CDMX" },
+  "chilango-traditional": { label: "צ'ילנגו מסורתי", description: "אסתטיקה חמה של פולקלור וחגיגה במקסיקו סיטי" },
+  "bogota-cosmopolitan": { label: "בוגוטה קוסמופוליטית", description: "אסתטיקת בירה קולומביאנית מעודנת אנדינית" },
+
+  // ----- Middle East -----
+  "beirut-riviera": { label: "ריביירת ביירות", description: "אסתטיקה לבנונית קוסמופוליטית ים-תיכונית" },
+  "tel-aviv-beach": { label: "חוף תל אביב", description: "אסתטיקת עיר חוף ים-תיכונית עם אנרגיית סטארט-אפ של תל אביב" },
+  "jerusalem-stone": { label: "אבן ירושלים", description: "אסתטיקת מורשת אבן הגיר של העיר העתיקה בירושלים" },
+  "sabra": { label: "צבר", description: "אסתטיקה ישראלית-ילידית של צבר — קוצני מבחוץ ומתוק מבפנים" },
+  "dubai-modern": { label: "דובאי מודרני", description: "אסתטיקת אמירות יוקרתית-קוסמופוליטית של המפרץ" },
+  "persian-glam": { label: "גלאם פרסי", description: "אסתטיקת מורשת וזוהר פרסית-איראנית" },
+  "istanbul-bosphorus": { label: "איסטנבול בוספורוס", description: "אסתטיקה תורכית של מפגש מזרח-מערב, עות'מאני ומודרני בבוספורוס" },
+
+  // ----- North Africa -----
+  "cairene-cosmopolitan": { label: "קאיראי קוסמופוליטי", description: "אסתטיקה מצרית-ערבית מטרופוליטנית של קהיר" },
+  "maghreb-coastal": { label: "מגרב חופי", description: "אסתטיקה צרפתית-ים-תיכונית-צפון-אפריקאית של ערי נמל קולוניאליות בתוניס / אלג'יר" },
+  "marrakech-bohemian": { label: "מראקש בוהמי", description: "אסתטיקת מדינה מרוקאית חמה של תבלינים במראקש" },
+
+  // ----- Sub-Saharan Africa -----
+  "lagos-afro-glam": { label: "לאגוס אפרו-גלאם", description: "🇬🇧 אסתטיקה מטרופוליטנית מערב-אפריקאית אנגלופונית ניגרית של לאגוס" },
+  "accra-afro-fashion": { label: "אפרו-אופנה אקרה", description: "🇬🇧 אסתטיקה מערב-אפריקאית אנגלופונית גנאית של אקרה — kente פוגש מודרניות" },
+  "dakar-francophone": { label: "דקאר פרנקופונית", description: "🇫🇷 אסתטיקה חופית-קוסמופוליטית מערב-אפריקאית פרנקופונית סנגלית של דקאר" },
+  "abidjan-cosmopolitan": { label: "אביג'אן קוסמופוליטית", description: "🇫🇷 אסתטיקה אורבנית מערב-אפריקאית פרנקופונית של אביג'אן בחוף השנהב" },
+  "kinshasa-sape": { label: "קינשאסה SAPE", description: "🇫🇷 אסתטיקת SAPE של דנדי מרכז-אפריקאי פרנקופוני קונגולזי בקינשאסה" },
+  "nairobi-cosmopolitan": { label: "ניירובי קוסמופוליטית", description: "🇬🇧 אסתטיקה אורבנית-מודרנית מזרח-אפריקאית אנגלופונית קנייתית של ניירובי" },
+  "addis-habesha": { label: "אדיס חבשי", description: "אסתטיקת מורשת רמות חבשית-אתיופית של אדיס אבבה (אתיופיה מעולם לא נכבשה קולוניאלית)" },
+  "swahili-coast": { label: "חוף סוואהילי", description: "🇬🇧 אסתטיקה חופית-סוואהילית מזרח-אפריקאית אנגלופונית של זנזיבר / מומבסה" },
+  "johannesburg-urban": { label: "יוהנסבורג אורבנית", description: "🇬🇧 אסתטיקה מטרופוליטנית-שחורה דרום-אפריקאית אנגלופונית דרום-אפריקאית של יוהנסבורג" },
+  "cape-town-cosmopolitan": { label: "קייפ טאון קוסמופוליטית", description: "🇬🇧 אסתטיקת עיר חופית דרום-אפריקאית אנגלופונית דרום-אפריקאית של קייפ טאון" },
+  "luanda-lusophone": { label: "לואנדה לוזופונית", description: "🇵🇹 אסתטיקה דרום-אפריקאית לוזופונית אנגולית של לואנדה — kizomba וחוף האטלנטי" },
+
+  // ----- Oceania -----
+  "bondi-beach": { label: "חוף בונדי", description: "אסתטיקה אוסטרלית חופית של מלח ושמש בבונדי" },
+  "australian-outback": { label: "Outback", description: "אסתטיקה אוסטרלית כפרית של ה-Outback (נשי)" },
+  "outback-stockman": { label: "Stockman מה-Outback", description: "אסתטיקה אוסטרלית כפרית של ה-Outback (גברי)" },
+  "auckland-coastal": { label: "אוקלנד חופית", description: "אסתטיקה פסיפית של עיר נמל בניו זילנד באוקלנד" },
+
 }
 
 export default map
