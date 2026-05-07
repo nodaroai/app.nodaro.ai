@@ -1,0 +1,21 @@
+# Nodaro — Embed a Published App
+
+> Scoped index for AI code generators (Lovable, v0, Bolt, Cursor, Claude, ChatGPT) building a custom external UI that runs an already-published Nodaro app via the REST API. This is **not** the canonical Nodaro entry point — for general integration (workflows, individual nodes, MCP, OAuth beyond app runs), see the root [llms.txt](https://nodaroai.github.io/app.nodaro.ai/llms.txt).
+
+## Start here
+
+- [Embed App Guide](https://nodaroai.github.io/app.nodaro.ai/embed-app-guide.md): self-contained, end-to-end. Covers probing the app schema (`GET /v1/app/:slug`), probing node types (`GET /v1/nodes/:type`), the run + poll loop, output extraction, server-side secret rule, error catalog, and full code templates for Supabase Edge Functions + browser TypeScript.
+
+## Authentication
+
+- [API Integration](https://nodaroai.github.io/app.nodaro.ai/api-integration.md): personal API tokens (`ndr_<64hex>`) — minting at `/settings/api-tokens`, scope, revocation. Use this when one Nodaro account owns all runs (personal tools, internal dashboards, single-tenant SaaS).
+- [OAuth Flow](https://nodaroai.github.io/app.nodaro.ai/oauth-flow.md): RFC 6749 authorization-code flow for multi-user apps where end-users have their own Nodaro accounts. Minimum scopes for running a published app: `workflows:execute` + `jobs:read`.
+
+## Node reference (output shapes)
+
+- [Node Index](https://nodaroai.github.io/app.nodaro.ai/nodes/README.md): per-category pages with parameter and output details for every node type. Use after `GET /v1/nodes/:type` to learn the exact shape of each output node (which keys — `url`, `imageUrl`, `videoUrl`, `audioUrl`, `text` — to read for a given node).
+
+## Optional
+
+- [SDK Quickstart](https://nodaroai.github.io/app.nodaro.ai/sdk-quickstart.md): `@nodaro/client` typed client. Note: published-app endpoints (`/v1/app/:slug/run`, `/v1/app/:slug/runs/:runId`) are **not** yet wrapped by the SDK — call them via `fetch` as shown in the Embed App Guide. The SDK is useful if you also need projects/workflows/jobs/executions endpoints alongside.
+- [Architecture](https://nodaroai.github.io/app.nodaro.ai/architecture.md): system overview. Only relevant if you need to understand worker queues, async semantics, or self-hosting context — most embedders don't need this.
