@@ -1147,28 +1147,68 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
   )
 
   // ── trim_video ──
-  // Cuts a clip out of a longer video — start/end seconds. Optional flag
-  // strips audio entirely (silent output).
+  // Three trim modes: by time (default — start_time/end_time seconds), by
+  // frames (trim_start_frames/trim_end_frames; worker probes source fps),
+  // or smart loop cut (worker picks the trailing frame closest to frame 0
+  // by PSNR and trims there — best for cleaning up VEO 3.1 first+last-frame
+  // outputs). Optional flag strips audio entirely (silent output).
   server.registerTool(
     "trim_video",
     {
       title: "Trim Video",
       description:
-        "Trim a video to a specific time window via FFmpeg. Provide ONE " +
-        "video source — video_url OR video_asset_id (a Nodaro video job " +
-        "id or upload asset id) — plus start_time and end_time in seconds.\n\n" +
-        "Set `silent: true` to strip the audio track from the trimmed clip.",
+        "Trim a video via FFmpeg. Provide ONE video source — video_url OR " +
+        "video_asset_id (a Nodaro video job id or upload asset id) — plus " +
+        "ONE of three trim modes:\n\n" +
+        "1. **By time** (default): pass `start_time` and `end_time` in seconds.\n" +
+        "2. **By frames**: pass `trim_start_frames` and/or `trim_end_frames`. " +
+        "The worker probes the source's reported fps and converts to seconds. " +
+        "Useful for VEO 3.1 outputs (24fps fixed) and any case where exact " +
+        "frame alignment matters more than time.\n" +
+        "3. **Smart loop cut**: set `smart_loop_cut: true`. The worker " +
+        "extracts frame 0 plus the last `smart_loop_cut_lookback` (default " +
+        "16) candidates, computes PSNR pixel similarity against frame 0, " +
+        "and trims at the best match. Beats a fixed offset on stochastic " +
+        "outputs because the actually-cleanest cut isn't always at the same " +
+        "frame. Returns the chosen frame index + PSNR in `output_data.smartLoopCut` " +
+        "for telemetry.\n\n" +
+        "Set `silent: true` to strip the audio track from the output.",
       inputSchema: {
         video_url: z.string().url().optional(),
         video_asset_id: z.string().optional(),
         start_time: z
           .number()
           .min(0)
-          .describe("Start of the trim window, in seconds (0 = clip start)."),
+          .optional()
+          .describe("Start of the trim window, in seconds (0 = clip start). Used in time mode."),
         end_time: z
           .number()
           .min(0)
-          .describe("End of the trim window, in seconds. Must be > start_time."),
+          .optional()
+          .describe("End of the trim window, in seconds. Must be > start_time. Used in time mode."),
+        trim_start_frames: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("Frame-based trim from start. Overrides start_time when set."),
+        trim_end_frames: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe("Frame-based trim from end (e.g. 8 = drop the last 8 frames). Overrides end_time when set."),
+        smart_loop_cut: z
+          .boolean()
+          .optional()
+          .describe("Smart loop cut mode — worker picks trailing frame closest to frame 0 (PSNR) and trims there. Overrides time/frame trim."),
+        smart_loop_cut_lookback: z
+          .number()
+          .int()
+          .min(2)
+          .max(64)
+          .optional()
+          .describe("How many trailing frames to evaluate as candidate cut points. Default 16, max 64."),
         silent: z
           .boolean()
           .optional()
@@ -1209,19 +1249,49 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           isError: true,
         }
       }
-      if (args.end_time <= args.start_time) {
-        return {
-          content: [{ type: "text", text: "end_time must be greater than start_time." }],
-          isError: true,
+      // Decide which trim mode the caller specified. Order of precedence:
+      // smart-loop-cut > frame-based > time-based.
+      const isSmartCut = args.smart_loop_cut === true
+      const isFrameTrim =
+        !isSmartCut &&
+        (args.trim_start_frames !== undefined || args.trim_end_frames !== undefined)
+      const isTimeTrim = !isSmartCut && !isFrameTrim
+      if (isTimeTrim) {
+        if (args.start_time === undefined || args.end_time === undefined) {
+          return {
+            content: [{
+              type: "text",
+              text: "Time-based trim requires both start_time and end_time. " +
+                "Or pass trim_start_frames/trim_end_frames for frame-based " +
+                "trim, or smart_loop_cut: true for the smart cut mode.",
+            }],
+            isError: true,
+          }
+        }
+        if (args.end_time <= args.start_time) {
+          return {
+            content: [{ type: "text", text: "end_time must be greater than start_time." }],
+            isError: true,
+          }
         }
       }
-      const payload = {
+      const payload: Record<string, unknown> = {
         videoUrl,
-        startTime: args.start_time,
-        endTime: args.end_time,
         outputSilentVideo: args.silent ?? false,
         mcp_client: session.clientName,
         userId: session.userId,
+      }
+      if (isSmartCut) {
+        payload.smartLoopCut = true
+        if (args.smart_loop_cut_lookback !== undefined) {
+          payload.smartLoopCutLookback = args.smart_loop_cut_lookback
+        }
+      } else if (isFrameTrim) {
+        if (args.trim_start_frames !== undefined) payload.trimStartFrames = args.trim_start_frames
+        if (args.trim_end_frames !== undefined) payload.trimEndFrames = args.trim_end_frames
+      } else {
+        payload.startTime = args.start_time
+        payload.endTime = args.end_time
       }
       const res = await fastify.inject({
         method: "POST",
@@ -1234,14 +1304,158 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
+      const widgetPrompt = isSmartCut
+        ? `smart loop cut (lookback ${args.smart_loop_cut_lookback ?? 16})`
+        : isFrameTrim
+          ? `trim ${args.trim_start_frames ?? 0} frames from start, ${args.trim_end_frames ?? 0} from end`
+          : `trim ${args.start_time}s → ${args.end_time}s` + (args.silent ? " (silent)" : "")
       return jobResultWithWidget({
         jobId,
         label: "trim video",
         session,
         widgetKind: "video",
         widgetData: {
-          prompt: `trim ${args.start_time}s → ${args.end_time}s` + (args.silent ? " (silent)" : ""),
+          prompt: widgetPrompt,
           model: "trim-video",
+        },
+      })
+    },
+  )
+
+  // ── loop_video ──
+  // FFmpeg concat-based looping with optional smart-cut preprocess. PRIMARY
+  // tool for "extend this 8-second clip into a 60-second background" /
+  // "make this loop seamlessly N times" flows. Pair with smart_cut_before_repeat
+  // when the source has a stochastic tail (e.g. VEO 3.1 first+last-frame
+  // outputs) — eliminates seam discontinuity at every internal repeat
+  // boundary, not just the final wrap.
+  server.registerTool(
+    "loop_video",
+    {
+      title: "Loop Video",
+      description:
+        "Loop a video N times (repeat mode) or until it reaches a target " +
+        "duration (duration mode). Provide ONE video source — video_url OR " +
+        "video_asset_id (a Nodaro video job id or upload asset id).\n\n" +
+        "Mode `repeat`: pass `repeat_count` (2–20). The output is the input " +
+        "concatenated to itself that many times.\n" +
+        "Mode `duration`: pass `target_duration` (seconds). The worker concatenates " +
+        "enough copies to cover the target, then trims to exact length.\n\n" +
+        "Optional `smart_cut_before_repeat: true` — the worker first runs a " +
+        "smart loop cut on the source (picks the trailing frame closest to " +
+        "frame 0 by PSNR pixel similarity, trims there) BEFORE concatenating. " +
+        "This eliminates the seam discontinuity at every internal repeat boundary, " +
+        "not just the final wrap. Highly recommended for VEO 3.1 first+last-frame " +
+        "outputs and any clip where the tail is stochastic.",
+      inputSchema: {
+        video_url: z.string().url().optional(),
+        video_asset_id: z.string().optional(),
+        mode: z.enum(["repeat", "duration"]).describe("repeat = N copies; duration = loop until target seconds reached then trim."),
+        repeat_count: z
+          .number()
+          .int()
+          .min(2)
+          .max(20)
+          .optional()
+          .describe("Number of times to repeat the input. Required when mode = repeat."),
+        target_duration: z
+          .number()
+          .min(1)
+          .max(300)
+          .optional()
+          .describe("Target output duration in seconds (1–300). Required when mode = duration."),
+        smart_cut_before_repeat: z
+          .boolean()
+          .optional()
+          .describe("Smart loop cut preprocess. Trims source to its cleanest loop boundary before concatenating. Recommended for stochastic-tail sources."),
+        smart_cut_lookback: z
+          .number()
+          .int()
+          .min(2)
+          .max(64)
+          .optional()
+          .describe("Smart-cut lookback window in frames. Default 16, max 64."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: {
+          resourceUri: "ui://nodaro/widget/v3/job-video",
+          visibility: ["model", "app"],
+        },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({
+              assetId: args.video_asset_id,
+              userId: session.userId,
+              expectedKind: "video",
+            })
+          : null)
+      if (!videoUrl) {
+        return {
+          content: [{ type: "text", text: "Pass video_url or video_asset_id." }],
+          isError: true,
+        }
+      }
+      if (args.mode === "repeat" && args.repeat_count === undefined) {
+        return {
+          content: [{ type: "text", text: "repeat_count required when mode = repeat." }],
+          isError: true,
+        }
+      }
+      if (args.mode === "duration" && args.target_duration === undefined) {
+        return {
+          content: [{ type: "text", text: "target_duration required when mode = duration." }],
+          isError: true,
+        }
+      }
+      const payload: Record<string, unknown> = {
+        videoUrl,
+        mode: args.mode,
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      if (args.mode === "repeat") payload.repeatCount = args.repeat_count
+      if (args.mode === "duration") payload.targetDuration = args.target_duration
+      if (args.smart_cut_before_repeat) payload.smartLoopCutBeforeRepeat = true
+      if (args.smart_cut_lookback !== undefined) payload.smartLoopCutLookback = args.smart_cut_lookback
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/loop-video",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      const widgetPrompt =
+        args.mode === "repeat"
+          ? `loop ${args.repeat_count}× ${args.smart_cut_before_repeat ? "(smart cut)" : ""}`.trim()
+          : `loop to ${args.target_duration}s ${args.smart_cut_before_repeat ? "(smart cut)" : ""}`.trim()
+      return jobResultWithWidget({
+        jobId,
+        label: "loop video",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: widgetPrompt,
+          model: "loop-video",
         },
       })
     },

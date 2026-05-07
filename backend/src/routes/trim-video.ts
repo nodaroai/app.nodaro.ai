@@ -9,8 +9,20 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 
 const trimVideoBody = z.object({
   videoUrl: safeUrlSchema,
-  startTime: z.number().min(0),
-  endTime: z.number().min(0),
+  // Time-based trim (seconds). Optional when caller uses frame-based or
+  // smart-cut mode; the worker dispatches based on which fields are set.
+  startTime: z.number().min(0).optional().default(0),
+  endTime: z.number().min(0).optional(),
+  // Frame-based trim. Either or both may be set; overrides time-based.
+  // Worker probes source fps and converts.
+  trimStartFrames: z.number().int().min(0).optional(),
+  trimEndFrames: z.number().int().min(0).optional(),
+  // Smart loop cut: ignore startTime/endTime/trim*Frames; the worker
+  // empirically finds the trailing frame closest to frame 0 (PSNR) and
+  // cuts there. `lookbackFrames` bounds how many trailing candidates to
+  // evaluate (default 16, max 64).
+  smartLoopCut: z.boolean().optional().default(false),
+  smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
   outputSilentVideo: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
 })

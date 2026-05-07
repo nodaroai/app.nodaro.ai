@@ -12,6 +12,11 @@ const loopVideoBody = z.object({
   mode: z.enum(["repeat", "duration"]),
   repeatCount: z.number().int().min(2).max(20).optional(),
   targetDuration: z.number().min(1).max(300).optional(),
+  // Smart loop cut preprocess: trim the input to its cleanest loop
+  // boundary BEFORE concatenating. Eliminates seam discontinuity at
+  // every internal repeat boundary.
+  smartLoopCutBeforeRepeat: z.boolean().optional().default(false),
+  smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
   userId: z.string().uuid().optional(),
 })
 

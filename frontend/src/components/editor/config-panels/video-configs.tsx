@@ -935,7 +935,11 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
 }
 
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
-  useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k"]) }, [])
+  // Topaz uses the "topaz-video" credit row (NOT the "topaz" processing
+  // row, which is 1 CR for image processing). Backend route maps the
+  // selector → identifier in upscaleCreditModel(); we mirror it here so
+  // the dropdown labels show what's actually charged.
+  useEffect(() => { prefetchModelCredits(["veo-1080p", "veo-4k", "topaz-video"]) }, [])
   const provider = data.provider || "topaz"
   return (
     <div className="flex flex-col gap-3">
@@ -946,7 +950,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
         >
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="topaz">Topaz (factor-based)</SelectItem>
+            <SelectItem value="topaz">{`Topaz factor-based (${getCachedCredits("topaz-video") ?? 19} CR)`}</SelectItem>
             <SelectItem value="veo-1080p">{`VEO 1080p (${getCachedCredits("veo-1080p") ?? 2} CR)`}</SelectItem>
             <SelectItem value="veo-4k">{`VEO 4K (${getCachedCredits("veo-4k") ?? 38} CR)`}</SelectItem>
           </SelectContent>

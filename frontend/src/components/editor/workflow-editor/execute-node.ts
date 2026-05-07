@@ -3157,10 +3157,23 @@ export function executeNode(
     }
     const d = node.data as TrimVideoData;
     setUserPromptTemplate(undefined);
+    const trimMode = d.trimMode ?? "time";
     return runProcessingNode(
       node.id,
       () =>
-        trimVideoApi(videoUrl, d.startTime, d.endTime || undefined, ctx.userId, d.outputSilentVideo),
+        trimVideoApi(
+          videoUrl,
+          d.startTime,
+          d.endTime || undefined,
+          ctx.userId,
+          d.outputSilentVideo,
+          {
+            trimStartFrames: trimMode === "frames" ? d.trimStartFrames : undefined,
+            trimEndFrames: trimMode === "frames" ? d.trimEndFrames : undefined,
+            smartLoopCut: trimMode === "smart-loop-cut",
+            smartLoopCutLookback: trimMode === "smart-loop-cut" ? d.smartLoopCutLookback : undefined,
+          },
+        ),
       "generatedVideoUrl",
       "Trim Video",
       ctx,
@@ -3293,6 +3306,10 @@ export function executeNode(
           d.repeatCount,
           d.targetDuration,
           ctx.userId,
+          {
+            smartLoopCutBeforeRepeat: d.smartLoopCutBeforeRepeat,
+            smartLoopCutLookback: d.smartLoopCutLookback,
+          },
         ),
       "generatedVideoUrl",
       "Loop Video",

@@ -18,7 +18,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { TextToVideoData } from "@/types/nodes"
 import { VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 
 function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToVideoData
@@ -40,7 +40,19 @@ function TextToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const provider = nodeData.provider ?? "seedance-2-fast"
-  const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  // Composite identifier so the displayed credit cost reflects current
+  // resolution / mode / sound / ref settings — bare provider would show
+  // stale cost on parameter changes.
+  const creditIdentifier = buildVideoCreditModelIdentifier(
+    provider,
+    nodeData.duration,
+    nodeData.sound as boolean | undefined,
+    "text-to-video",
+    nodeData.mode as string | undefined,
+    nodeData.resolution,
+    Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
+  )
+  const credits = useModelCredits(creditIdentifier, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"

@@ -10,6 +10,7 @@ import { socialMediaFormat } from "../../providers/video/social-media-format.js"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { trimAudio } from "../../providers/video/trim-audio.js"
 import { trimVideo } from "../../providers/video/trim-video.js"
+import { smartLoopCut } from "../../providers/video/smart-loop-cut.js"
 import { extractFrame } from "../../providers/video/extract-frame.js"
 import { splitMedia } from "../../providers/video/split-media.js"
 import { resizeVideo } from "../../providers/video/resize-video.js"
@@ -101,11 +102,59 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
 }
 
 const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
-  const { videoUrl, startTime, endTime, outputSilentVideo } = job.data as {
-    jobId: string; videoUrl: string; startTime: number; endTime?: number; outputSilentVideo?: boolean
+  const {
+    videoUrl, startTime, endTime, outputSilentVideo,
+    trimStartFrames, trimEndFrames, smartLoopCut: smartLoopCutFlag, smartLoopCutLookback,
+  } = job.data as {
+    jobId: string
+    videoUrl: string
+    startTime?: number
+    endTime?: number
+    outputSilentVideo?: boolean
+    trimStartFrames?: number
+    trimEndFrames?: number
+    smartLoopCut?: boolean
+    smartLoopCutLookback?: number
   }
+
+  // Smart loop cut: empirically pick the trailing frame closest to frame 0
+  // and trim there. Bypasses the time/frame trim entirely.
+  if (smartLoopCutFlag) {
+    console.log(`[worker] trim-video ${ctx.jobId} (smart-loop-cut, lookback=${smartLoopCutLookback ?? 16})`)
+    const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback })
+    await setJobProgress(job, ctx.jobId, 80)
+    const r2Url = await uploadFileToR2(slc.videoPath, ctx.jobId, "video", ctx.jobUserId)
+    await cleanupWorkDir(dirname(slc.videoPath))
+    const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+    await setJobProgress(job, ctx.jobId, 100)
+    if (!await shouldSaveJobResult(ctx.jobId)) return
+    const ok = await markJobCompleted(ctx.jobId, {
+      output_data: {
+        videoUrl: r2Url,
+        thumbnailUrl: thumbUrl,
+        smartLoopCut: {
+          chosenFrameIndex: slc.chosenFrameIndex,
+          psnr: slc.psnr,
+          sourceFrameCount: slc.sourceFrameCount,
+          fps: slc.fps,
+        },
+      },
+    })
+    if (!ok) return
+    await commitJobCredits(ctx.usageLogId, ctx.jobId)
+    console.log(`[worker] Job ${ctx.jobId} completed (smart-loop-cut): ${r2Url}`)
+    return
+  }
+
   console.log(`[worker] trim-video ${ctx.jobId}`)
-  const result = await trimVideo({ videoUrl, startTime, endTime, outputSilentVideo })
+  const result = await trimVideo({
+    videoUrl,
+    startTime: startTime ?? 0,
+    endTime,
+    outputSilentVideo,
+    trimStartFrames,
+    trimEndFrames,
+  })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
   let silentVideoR2Url: string | undefined
@@ -154,13 +203,30 @@ const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {
 }
 
 const handleLoopVideo: HandlerFn = async function handleLoopVideo(job, ctx) {
-  const { videoUrl, mode, repeatCount, targetDuration } = job.data as {
-    jobId: string; videoUrl: string; mode: "repeat" | "duration"; repeatCount?: number; targetDuration?: number
+  const { videoUrl, mode, repeatCount, targetDuration, smartLoopCutBeforeRepeat, smartLoopCutLookback } = job.data as {
+    jobId: string
+    videoUrl: string
+    mode: "repeat" | "duration"
+    repeatCount?: number
+    targetDuration?: number
+    smartLoopCutBeforeRepeat?: boolean
+    smartLoopCutLookback?: number
   }
-  console.log(`[worker] loop-video ${ctx.jobId}`)
-  const outputPath = await loopVideo({ videoUrl, mode, repeatCount, targetDuration })
+  console.log(`[worker] loop-video ${ctx.jobId}${smartLoopCutBeforeRepeat ? " [smart-cut-pre]" : ""}`)
+  const result = await loopVideo({
+    videoUrl,
+    mode,
+    repeatCount,
+    targetDuration,
+    smartLoopCutBeforeRepeat,
+    smartLoopCutLookback,
+  })
   await setJobProgress(job, ctx.jobId, 80)
-  await completeFfmpegVideoJob(outputPath, ctx)
+  await completeFfmpegVideoJob(
+    result.outputPath,
+    ctx,
+    result.smartLoopCutMeta ? { smartLoopCut: result.smartLoopCutMeta } : undefined,
+  )
 }
 
 const handleFadeVideo: HandlerFn = async function handleFadeVideo(job, ctx) {
