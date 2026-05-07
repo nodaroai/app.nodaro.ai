@@ -130,6 +130,7 @@ export const I18N_CATALOGS = [
   "held-prop",
   "lens",
   "lighting",
+  "loop-subject",
   "materials",
   "mood",
   "person",

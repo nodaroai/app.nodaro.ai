@@ -526,8 +526,10 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
 }
 
 export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectData>) {
+  const dir = useLocaleDir()
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
       <PromptInjectionPreview hints={[getLoopSubjectPromptHint(data.loopSubject)]} />
       <Label>Loop Subject</Label>
       <LoopSubjectPicker
