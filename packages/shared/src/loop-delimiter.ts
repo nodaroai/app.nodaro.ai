@@ -1,4 +1,11 @@
 /**
+ * Sentinel value persisted by the "None" delimiter option in the UI. Distinct
+ * from `undefined` (which means "default to newline") so we can tell the
+ * difference between "user actively chose not to split" and "field never set".
+ */
+export const NO_SPLIT_DELIMITER = "__none__" as const
+
+/**
  * Split text using a loop node's column delimiter.
  *
  * Uses the first text-type column's `splitDelimiter` to determine
@@ -6,13 +13,21 @@
  * is configured. The "first text column wins" heuristic is intentional:
  * connected mode pipes a single text stream into the loop, so we use
  * the primary text column's delimiter as the split strategy.
+ *
+ * `splitDelimiter === NO_SPLIT_DELIMITER` ("__none__") returns the input as
+ * a single-item array — the user explicitly opted out of splitting.
  */
 export function splitByLoopDelimiter(
   text: string,
   columns: ReadonlyArray<{ type?: string; splitDelimiter?: string }> | undefined,
 ): string[] {
   const firstTextCol = (columns ?? []).find((c) => (c.type ?? "text") === "text")
-  const delimiter = firstTextCol?.splitDelimiter ?? "\n"
+  const raw = firstTextCol?.splitDelimiter
+  if (raw === NO_SPLIT_DELIMITER) {
+    const trimmed = text.trim()
+    return trimmed.length > 0 ? [trimmed] : []
+  }
+  const delimiter = raw ?? "\n"
   return text.split(delimiter).map((s) => s.trim()).filter((s) => s.length > 0)
 }
 

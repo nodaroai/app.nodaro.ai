@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
-import { spliceDelimitedRows } from "@nodaro/shared"
+import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
 import { Plus, X, Upload, Film, Maximize2, Download, Link, Link2, GripVertical } from "lucide-react"
 import {
   DndContext,
@@ -449,7 +449,7 @@ export function LoopInputCard({
 
   const handlePasteSplit = useCallback(
     (e: React.ClipboardEvent, rowIndex: number, colIndex: number, delimiter: string | undefined) => {
-      if (!delimiter) return
+      if (!delimiter || delimiter === NO_SPLIT_DELIMITER) return
       const pasted = e.clipboardData.getData("text/plain")
       if (!pasted.includes(delimiter)) return
       e.preventDefault()

@@ -45,8 +45,13 @@ function isExtractFieldListMode(node: { type?: string; data: Record<string, unkn
   return node.type === "extract-field" && (node.data.outputType ?? "text") === "list"
 }
 
-/** Node types that always emit a structured list via __listResults. */
+/** Node types whose output is already a structured list — downstream consumers
+ *  must NOT re-split items by their own delimiter. Includes the manual rows
+ *  of loop/list (which materialise per-row) and split-text / list-transform
+ *  variants (which materialise via __listResults). */
 const STRUCTURED_LIST_TYPES = new Set([
+  "loop",
+  "list",
   "split-text",
   "json-process",
   "filter-list",
@@ -81,41 +86,37 @@ export function resolveEdgeValuesForTableColumn(
     ? resolveLoopColumnValues(upstream, edge.sourceHandle ?? undefined, edges, nodes)
     : (extractNodeOutputAsList(upstream as WorkflowNode) ?? []);
 
+  // Already-structured upstreams (loop/list/split-text/json-process/etc.) emit
+  // logical items — downstream consumers must NOT re-chop them by the target
+  // column's delimiter. Plain text upstreams DO get split.
+  const isStructured = isStructuredListNode(upstream)
+  const splitOrPassthrough = (single: string): string[] =>
+    isStructured ? [single] : splitByLoopDelimiter(single, columns)
+
   if (outputMode === "item") {
     const itemIndex = ed?.itemIndex as string | undefined;
     if (allOutputs.length > 0) {
       const idx = resolveIndex(itemIndex ?? "1", allOutputs.length);
-      return [allOutputs[idx] ?? allOutputs[0]];
+      return splitOrPassthrough(allOutputs[idx] ?? allOutputs[0]);
     }
     const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
-    return single ? [single] : null;
+    return single ? splitOrPassthrough(single) : null;
   }
   if (outputMode.startsWith("item:")) {
     const idx = parseInt(outputMode.split(":")[1], 10);
-    if (allOutputs.length > 0) return [allOutputs[idx] ?? allOutputs[0]];
+    if (allOutputs.length > 0) return splitOrPassthrough(allOutputs[idx] ?? allOutputs[0]);
     const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
-    return single ? [single] : null;
+    return single ? splitOrPassthrough(single) : null;
   }
   if (outputMode === "last") {
-    // outputMode "last" = "Selected" in the UI — the currently selected result
-    // (activeResultIndex), NOT the tail of the list. The word "last" also appears
-    // inside range/list expressions where it DOES mean the final array index —
-    // those are handled separately via resolveIndex/selectListItems.
+    // "last" here = the source's currently *selected* result (activeResultIndex),
+    // NOT the array tail. The word "last" inside range/list expressions DOES mean
+    // the final array index — handled separately by resolveIndex/selectListItems.
     const single = extractNodeOutput(upstream as WorkflowNode, edge.sourceHandle ?? undefined);
-    return single ? [single] : null;
+    return single ? splitOrPassthrough(single) : null;
   }
   if (outputMode === "each" || outputMode === "all") {
-    // Loop/list/split-text upstreams have already produced their own structured
-    // items (rows, split pieces) — never re-split those by the target's
-    // delimiter, or split-text's 13 custom-delimited items would get re-chopped
-    // by newlines into whatever the target's column expects.
-    // Extract-field in "list" output mode is also structured; in "text" mode it
-    // emits a plain string and should be split by the target's delimiter.
-    // Other sources: expand each raw item through the target's delimiter so
-    // delimited multi-line text (e.g., AI output with slide separators) becomes
-    // individual rows.
-    const isAlreadyStructured = upstream.type === "loop" || upstream.type === "list" || isStructuredListNode(upstream)
-    const items = isAlreadyStructured
+    const items = isStructured
       ? allOutputs
       : (allOutputs.length > 0
           ? allOutputs.flatMap((item) => splitByLoopDelimiter(item, columns))

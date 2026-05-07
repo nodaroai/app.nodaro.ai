@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
-import { spliceDelimitedRows } from "@nodaro/shared"
+import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
 import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
@@ -390,14 +390,16 @@ const DELIMITER_PRESETS = [
   { label: "Three Stars", value: "***" },
 ] as const
 
+const CUSTOM_DELIMITER = "__custom__" as const
+
 const DELIMITER_OPTIONS = [
-  { label: "None", value: "__none__" },
+  { label: "None", value: NO_SPLIT_DELIMITER },
   { label: "Comma", value: "," },
   { label: "Pipe", value: "|" },
   { label: "Semicolon", value: ";" },
   { label: "Newline", value: "\n" },
   { label: "Three Stars (***)", value: "***" },
-  { label: "Custom", value: "__custom__" },
+  { label: "Custom", value: CUSTOM_DELIMITER },
 ] as const
 
 function DelimiterSelect({
@@ -413,23 +415,25 @@ function DelimiterSelect({
 }) {
   const current = column.splitDelimiter
   const isPreset = DELIMITER_PRESETS.some((p) => p.value === current)
-  const isCustom = !!current && !isPreset
+  const isCustom = !!current && !isPreset && current !== NO_SPLIT_DELIMITER
   const [customValue, setCustomValue] = useState(isCustom ? current : "")
   // Track "user is editing custom" separately from "delimiter has a custom value",
   // so the custom input renders immediately when the user picks Custom, before they type.
   const [customMode, setCustomMode] = useState(isCustom)
 
+  // Unset (undefined) defaults to newline at runtime, so the dropdown shows
+  // "Newline" — keeps the dropdown honest. NO_SPLIT_DELIMITER is the explicit
+  // "don't split" choice.
   const selectValue = customMode
-    ? "__custom__"
-    : !current
-      ? "__none__"
-      : current
+    ? CUSTOM_DELIMITER
+    : current === NO_SPLIT_DELIMITER ? NO_SPLIT_DELIMITER
+    : current || "\n"
 
   function handleChange(value: string) {
-    if (value === "__none__") {
+    if (value === NO_SPLIT_DELIMITER) {
       setCustomMode(false)
-      onDelimiterChange(colIndex, undefined)
-    } else if (value === "__custom__") {
+      onDelimiterChange(colIndex, NO_SPLIT_DELIMITER)
+    } else if (value === CUSTOM_DELIMITER) {
       setCustomMode(true)
       if (customValue) onDelimiterChange(colIndex, customValue)
     } else {
@@ -456,7 +460,7 @@ function DelimiterSelect({
           ))}
         </SelectContent>
       </Select>
-      {selectValue === "__custom__" && (
+      {selectValue === CUSTOM_DELIMITER && (
         <input
           className="w-full text-xs bg-muted/30 rounded px-1.5 py-0.5 border border-border focus:border-[#ff0073] focus:outline-none"
           value={customValue}
@@ -467,7 +471,7 @@ function DelimiterSelect({
           placeholder="Delimiter..."
         />
       )}
-      {!!current && (
+      {!!current && current !== NO_SPLIT_DELIMITER && (
         <button
           type="button"
           className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
@@ -598,7 +602,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
 
   function splitColumnRows(colIndex: number) {
     const delimiter = columns[colIndex]?.splitDelimiter
-    if (!delimiter) return
+    if (!delimiter || delimiter === NO_SPLIT_DELIMITER) return
 
     const maxItems = data.maxItems ?? Infinity
     const newRows: string[][] = []
@@ -806,7 +810,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
                                       onChange={(e) => updateCell(ri, ci, e.target.value)}
                                       onPaste={(e) => {
                                         const delimiter = col.splitDelimiter
-                                        if (!delimiter) return
+                                        if (!delimiter || delimiter === NO_SPLIT_DELIMITER) return
                                         const pasted = e.clipboardData.getData("text/plain")
                                         if (!pasted.includes(delimiter)) return
                                         e.preventDefault()

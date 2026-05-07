@@ -148,14 +148,17 @@ function resolveEffectiveOutputMode(
 }
 
 /** Get the output mode label for display (separate from the edge label).
- *  Only hides the label for "last" mode (the quiet default). */
+ *  Renders all modes — including "last" (= "selected") — so users can see
+ *  what each edge will deliver without opening the edge popover. */
 function getOutputModeLabel(
   edge: WorkflowEdge,
   sourceNode: { type?: string } | undefined,
   targetNode: { type?: string } | undefined,
 ): string | undefined {
   const effectiveMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
-  if (!effectiveMode || effectiveMode === "last") return undefined
+  if (!effectiveMode) return undefined
+  // "last" is the dropdown's "Selected" option (currently selected result).
+  if (effectiveMode === "last") return "selected"
   if (effectiveMode.startsWith("item:")) return "item"
   // "all" renders as "bundle" in the UI — value stays "all" for backward compat
   if (effectiveMode === "all") return "bundle"
