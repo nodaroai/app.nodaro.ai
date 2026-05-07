@@ -46,6 +46,7 @@ const ALLOWLIST = new Set([
   "backend/src/routes/app-runner.ts",
   "backend/src/routes/cancel-jobs.ts",
   "backend/src/routes/component-execute.ts",
+  "backend/src/routes/generate-video.ts",
   "backend/src/routes/image-to-text.ts",
   "backend/src/routes/llm-chat.ts",
   "backend/src/routes/lottie-overlay-ai.ts",

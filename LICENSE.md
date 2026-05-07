@@ -22,13 +22,14 @@ You may read, modify, and run enterprise code locally for development and testin
 
 ## Published SDK packages (Apache License 2.0)
 
-The npm packages under `packages/client/` and `packages/shared/` are published to npm under the **Apache License 2.0**, not the Sustainable Use License. This is intentional: the SDK is meant to be embedded in third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
+The npm packages under `packages/client/`, `packages/shared/`, and `packages/cli/` are published to npm under the **Apache License 2.0**, not the Sustainable Use License. This is intentional: the SDK and CLI are meant to be embedded in or invoked from third-party commercial applications consuming a Nodaro instance via its `/v1/` REST API.
 
 The Apache 2.0 grant applies ONLY to:
 - [`packages/client/`](./packages/client/) — `@nodaro/client` (typed REST client)
 - [`packages/shared/`](./packages/shared/) — `@nodaro/shared` (types, model registries, prompt helpers)
+- [`packages/cli/`](./packages/cli/) — `@nodaro/cli` (terminal CLI consuming `@nodaro/client`)
 
-Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE) and [`packages/shared/LICENSE`](./packages/shared/LICENSE).
+Their full text lives in [`packages/client/LICENSE`](./packages/client/LICENSE), [`packages/shared/LICENSE`](./packages/shared/LICENSE), and [`packages/cli/LICENSE`](./packages/cli/LICENSE).
 
 The rest of the repository — backend, frontend, `packages/remotion/`, scripts, infrastructure — remains under the root `LICENSE` (Sustainable Use License) plus the `ee/LICENSE` (Enterprise License) where applicable.
 

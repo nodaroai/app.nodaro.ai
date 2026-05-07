@@ -85,4 +85,14 @@ export type {
   OAuthAppInfo,
 } from "./resources/oauth.js"
 
-export type { DeleteAppRunResult } from "./resources/apps.js"
+export type {
+  PublishedApp,
+  PublishedAppDetail,
+  ListAppsParams,
+  ListAppsResult,
+  AppRunResult,
+  AppRun,
+  ListAppRunsParams,
+  DeleteAppRunResult,
+} from "./resources/apps.js"
+export type { RunNodeResult } from "./resources/nodes.js"

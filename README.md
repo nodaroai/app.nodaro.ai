@@ -45,6 +45,17 @@ Full guide: [SDK Quickstart](docs/sdk-quickstart.md).
 
 [nodaro.ai](https://nodaro.ai) — managed instance with credits, billing, and zero-ops setup.
 
+## CLI
+
+```bash
+npm install -g @nodaro/cli
+nodaro auth login
+nodaro projects list
+nodaro workflows run <workflowId> --watch
+```
+
+Thin convenience wrapper around `@nodaro/client`. Supports multiple profiles (prod / staging / local), `--json` output for piping, and `--watch` for following execution status. See [`packages/cli/README.md`](./packages/cli/README.md).
+
 ## MCP Integration
 
 Drive Nodaro tools from any MCP-compatible AI client. Paste `https://mcp.nodaro.ai/mcp`
