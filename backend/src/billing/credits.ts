@@ -428,6 +428,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qa-check": 5,
   "qa-check:economy": 3,
   "qa-check:premium": 15,
+  // ── Dynamic-priced video utilities (NOT used by routes, but kept as
+  //    safety-net fallback). The three rows below are unreachable when
+  //    routes/loop-video.ts, routes/trim-video.ts, routes/combine-videos.ts
+  //    use the computeCredits hook in creditGuard. Their model_pricing rows
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "combine-videos": 3,
   "merge-video-audio": 2,
   "add-captions": 3,
@@ -811,13 +817,19 @@ export class CreditsService {
     profile: CreditProfile,
     modelIdentifier: string,
     isAppRun?: boolean,
+    creditOverride?: number,
   ): Promise<CreditCheckResult> {
     if (creditsDisabled()) {
       return { allowed: true, balance: 999999, watermark: false }
     }
 
-    // Get model pricing
-    const pricing = await getModelCreditCostFromDB(modelIdentifier)
+    // When a route supplies a dynamic credit override, use it for the
+    // creditCost while still respecting the DB row's isEnabled +
+    // tierRestriction (admins disabling a model still wins).
+    const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
+    const pricing = creditOverride !== undefined
+      ? { ...dbPricing, creditCost: creditOverride }
+      : dbPricing
 
     if (!pricing.isEnabled) {
       return {
@@ -962,18 +974,20 @@ export class CreditsService {
     modelIdentifier: string,
     providerCostUsd: number,
     displayCostUsd: number,
-    options?: { watermarkOverride?: boolean; isAppRun?: boolean },
+    options?: { watermarkOverride?: boolean; isAppRun?: boolean; creditOverride?: number },
   ): Promise<ReserveResult> {
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
       return { usageLogId: "self-hosted-skip", creditsReserved: 0, watermark: false }
     }
 
-    // Get credit cost for this model (cached)
-    const pricing = await getModelCreditCostFromDB(modelIdentifier)
+    const { watermarkOverride, isAppRun, creditOverride } = options ?? {}
 
-    // Determine watermark: use override from creditGuard if available, otherwise query
-    const { watermarkOverride, isAppRun } = options ?? {}
+    // Get credit cost: route-supplied override or DB lookup.
+    const dbPricing = await getModelCreditCostFromDB(modelIdentifier)
+    const pricing = creditOverride !== undefined
+      ? { ...dbPricing, creditCost: creditOverride }
+      : dbPricing
     let watermark: boolean
     if (watermarkOverride !== undefined) {
       watermark = watermarkOverride

@@ -2146,7 +2146,6 @@ export type TrimVideoData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedVideoUrl?: string
-  generatedSilentVideoUrl?: string
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }

@@ -12,7 +12,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { LoopVideoData } from "@/types/nodes"
@@ -20,7 +20,7 @@ import type { LoopVideoData } from "@/types/nodes"
 function LoopVideoNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LoopVideoData | undefined
   const nodeData = currentNodeData ?? (data as LoopVideoData)
-  const credits = useModelCredits("ffmpeg", 1)
+  const credits = useEstimatedCredits({ id, type: "loop-video", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)

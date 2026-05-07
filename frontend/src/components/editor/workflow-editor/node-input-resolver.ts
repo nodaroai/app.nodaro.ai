@@ -796,16 +796,6 @@ export function resolveNodeInputs(
       continue;
     }
 
-    // Silent video output from trim-video node
-    if (src.type === "trim-video" && srcEdge.sourceHandle === "silent-video") {
-      const srcData = src.data as Record<string, unknown>;
-      const silentUrl = srcData.generatedSilentVideoUrl as string | undefined;
-      if (silentUrl) {
-        inputs.videoUrl = silentUrl;
-      }
-      continue;
-    }
-
     // Split media output — route selected chunk by outputChunkIndex
     if (src.type === "split-media") {
       const liveNode = useWorkflowStore.getState().nodes.find(n => n.id === src!.id);

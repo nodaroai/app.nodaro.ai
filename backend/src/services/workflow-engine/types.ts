@@ -156,9 +156,15 @@ export interface ResolvedInputs {
   prompt?: string
   imageUrl?: string
   videoUrl?: string
+  /** Upstream video duration (seconds) — used for accurate credit estimation
+   *  on trim-video / loop-video. Set when the upstream node exposes a
+   *  generatedResults[*].duration or data.duration. */
+  videoDuration?: number
   videoUrls?: string[]
-  /** Video URLs with source node IDs for ordering (combine-videos) */
-  videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>
+  /** Video URLs with source node IDs for ordering (combine-videos).
+   *  `duration` is the upstream node's video duration in seconds (when known) —
+   *  used to build aligned upstreamDurations on the combine-videos payload. */
+  videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string; duration?: number }>
   audioUrl?: string
   audioUrl2?: string
   audioUrls?: string[]

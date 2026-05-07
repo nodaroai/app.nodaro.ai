@@ -342,6 +342,7 @@ describe("creditGuard", () => {
       expect.objectContaining({ tier: "free" }),
       "flux",
       true,
+      undefined,
     )
   })
 
@@ -381,6 +382,7 @@ describe("creditGuard", () => {
       "user-1",
       expect.objectContaining({ tier: "free" }),
       "flux",
+      undefined,
       undefined,
     )
   })

@@ -1294,6 +1294,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return true
     })
 
+    // Migrate legacy trim-video silent-video sidecar handle: rewrite edges
+    // sourcing from "silent-video" to the main "video-out" handle and flip
+    // outputSilentVideo on the source node so the main output is silent.
+    const trimVideoIdsWithSilentEdge = new Set<string>()
+    migratedEdges = migratedEdges.map((e) => {
+      if (e.sourceHandle !== "silent-video") return e
+      const src = migratedNodes.find((n) => n.id === e.source)
+      if (src?.type !== "trim-video") return e
+      trimVideoIdsWithSilentEdge.add(e.source)
+      return { ...e, sourceHandle: "video-out" }
+    })
+    if (trimVideoIdsWithSilentEdge.size > 0) {
+      migratedNodes = migratedNodes.map((n) =>
+        trimVideoIdsWithSilentEdge.has(n.id)
+          ? { ...n, data: { ...n.data, outputSilentVideo: true } }
+          : n,
+      )
+    }
+
     // Strip fixed width from teleport nodes so they auto-size
     migratedNodes = migratedNodes.map((n) =>
       (n.type === "teleport-send" || n.type === "teleport-receive") && n.width

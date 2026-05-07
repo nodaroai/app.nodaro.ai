@@ -146,7 +146,7 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     return
   }
 
-  console.log(`[worker] trim-video ${ctx.jobId}`)
+  console.log(`[worker] trim-video ${ctx.jobId}${outputSilentVideo ? " (silent)" : ""}`)
   const result = await trimVideo({
     videoUrl,
     startTime: startTime ?? 0,
@@ -157,16 +157,12 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
-  let silentVideoR2Url: string | undefined
-  if (result.silentVideoPath) {
-    silentVideoR2Url = await uploadFileToR2(result.silentVideoPath, `${ctx.jobId}-silent`, "video", ctx.jobUserId)
-  }
   await cleanupWorkDir(dirname(result.videoPath))
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(silentVideoR2Url ? { videoUrlSilent: silentVideoR2Url } : {}) },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
   })
   if (!ok) return
   await commitJobCredits(ctx.usageLogId, ctx.jobId)

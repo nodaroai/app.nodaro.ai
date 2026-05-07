@@ -11,7 +11,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { CachedImage } from "@/components/ui/cached-image"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -20,7 +20,7 @@ import type { CombineVideosData } from "@/types/nodes"
 function CombineVideosNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CombineVideosData | undefined
   const nodeData = currentNodeData ?? (data as CombineVideosData)
-  const credits = useModelCredits("ffmpeg", 1)
+  const credits = useEstimatedCredits({ id, type: "combine-videos", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
