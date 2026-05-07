@@ -10,6 +10,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Self-host Nodaro for my team** → [Community Edition Quickstart](./community-edition-quickstart.md)
 - **Build a server-side integration** → [API Integration](./api-integration.md) → [OAuth Flow](./oauth-flow.md)
 - **Build a custom frontend** → [SDK Quickstart](./sdk-quickstart.md) → [SDK Reference](./sdk-reference.md)
+- **Run Nodaro from the terminal** → [CLI](./cli.md)
 - **Embed a published Nodaro app in an external UI** (Lovable / v0 / Bolt) → [Embed App Guide](./embed-app-guide.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)
@@ -24,10 +25,11 @@ Set `EDITION=community|business|cloud` to switch.
 
 ## Packages
 
-Two npm packages in this repo (not yet published to public npm):
+Three npm packages in this repo:
 
 - `@nodaro/shared` — pure-logic types, model registries, prompt helpers
-- `@nodaro/client` — typed REST client (3 auth modes, 7 resource classes)
+- `@nodaro/client` — typed REST client (3 auth modes, 9 resource classes)
+- `@nodaro/cli` — terminal client wrapping `@nodaro/client`; also distributed as standalone binaries via [GitHub Releases](https://github.com/nodaroai/app.nodaro.ai/releases)
 
 ## API reference
 
