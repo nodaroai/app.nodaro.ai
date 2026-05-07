@@ -15,11 +15,12 @@
  *   GET    /v1/api/result/:execId    — Get final outputs
  */
 
-import { createHash, randomBytes } from "node:crypto"
+import { randomBytes } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { hasAdmin } from "../lib/config.js"
+import { hashApiToken, resolveApiToken } from "../lib/api-token-resolver.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
@@ -66,77 +67,10 @@ setInterval(() => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function hashToken(plaintext: string): string {
-  return createHash("sha256").update(plaintext).digest("hex")
-}
-
 function extractBearerToken(req: FastifyRequest): string | null {
   const auth = req.headers.authorization
   if (!auth?.startsWith("Bearer ")) return null
   return auth.slice(7)
-}
-
-interface ResolvedToken {
-  id: string
-  userId: string
-  workflowIds: string[]
-  rateLimit: number
-  tokenHash: string
-}
-
-declare module "fastify" {
-  interface FastifyRequest {
-    apiToken?: ResolvedToken
-  }
-}
-
-// Short-lived cache for resolved tokens (60s TTL) to avoid DB hit per request
-const TOKEN_CACHE_TTL_MS = 60_000
-const tokenCache = new Map<string, { token: ResolvedToken; expiresAt: number }>()
-// Throttle last_used_at writes to once per 5 minutes per token
-const lastUsedUpdates = new Map<string, number>()
-
-async function resolveApiToken(token: string): Promise<ResolvedToken | null> {
-  const hash = hashToken(token)
-
-  // Check cache first
-  const cached = tokenCache.get(hash)
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.token
-  }
-
-  const { data, error } = await supabase
-    .from("api_tokens")
-    .select("id, user_id, workflow_ids, rate_limit, token_hash, is_active")
-    .eq("token_hash", hash)
-    .single()
-
-  if (error || !data) return null
-  if (!data.is_active) return null
-
-  const resolved: ResolvedToken = {
-    id: data.id,
-    userId: data.user_id as string,
-    workflowIds: (data.workflow_ids ?? []) as string[],
-    rateLimit: (data.rate_limit as number) ?? 30,
-    tokenHash: data.token_hash as string,
-  }
-
-  // Cache the resolved token
-  tokenCache.set(hash, { token: resolved, expiresAt: Date.now() + TOKEN_CACHE_TTL_MS })
-
-  // Touch last_used_at at most once per 5 minutes (fire-and-forget)
-  const lastUpdated = lastUsedUpdates.get(data.id) ?? 0
-  if (Date.now() - lastUpdated > 300_000) {
-    lastUsedUpdates.set(data.id, Date.now())
-    supabase
-      .from("api_tokens")
-      .update({ last_used_at: new Date().toISOString() })
-      .eq("id", data.id)
-      .then(() => {})
-  }
-
-  return resolved
 }
 
 /** Returns invalid workflow IDs not owned by the user, or empty array if all valid. */
@@ -279,7 +213,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     // Generate token: ndr_ + 32 random bytes hex
     const rawToken = randomBytes(32).toString("hex")
     const plaintext = `ndr_${rawToken}`
-    const hash = hashToken(plaintext)
+    const hash = hashApiToken(plaintext)
     const prefix = `ndr_${rawToken.slice(0, 4)}...`
 
     const { data: token, error } = await supabase
