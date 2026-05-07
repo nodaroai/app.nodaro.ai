@@ -183,6 +183,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       insufficientCredits: false,
       nodeStates: {},
       completedNodes: 0,
+      progressSegments: {},
+      combinedProgress: {},
     })
 
     try {
@@ -410,6 +412,25 @@ async function computeProgressSegments(
     segmentNodeIds[outputNode.id] = ancestors
   }
 
+  // Seed segments with default estimates synchronously so the progress bar
+  // can render at 0% during the gap before batchExecutionEstimates resolves
+  // and the first poll fires. Multi-node flows where the output is the last
+  // node especially need this — without it, combinedProgress[outputId] is
+  // undefined while upstream nodes run, and the bar never appears.
+  const buildSegments = (estimates: Record<string, { estimatedMs: number }>): Record<string, ProgressSegment[]> => {
+    const out: Record<string, ProgressSegment[]> = {}
+    for (const [visibleId, ancestorIds] of Object.entries(segmentNodeIds)) {
+      const nodeEstimates = ancestorIds.map(id => ({
+        nodeId: id,
+        estimatedMs: estimates[id]?.estimatedMs ?? CATEGORY_DURATION_DEFAULTS.image!,
+      }))
+      out[visibleId] = buildProgressSegments(nodeEstimates)
+    }
+    return out
+  }
+
+  set({ progressSegments: buildSegments({}) })
+
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const estimateRequests = Array.from(allAncestorIds).map(nodeId => {
     const node = nodeMap.get(nodeId)
@@ -424,15 +445,5 @@ async function computeProgressSegments(
   })
 
   const estimates = await batchExecutionEstimates(estimateRequests)
-
-  const segments: Record<string, ProgressSegment[]> = {}
-  for (const [visibleId, ancestorIds] of Object.entries(segmentNodeIds)) {
-    const nodeEstimates = ancestorIds.map(id => ({
-      nodeId: id,
-      estimatedMs: estimates[id]?.estimatedMs ?? CATEGORY_DURATION_DEFAULTS.image!,
-    }))
-    segments[visibleId] = buildProgressSegments(nodeEstimates)
-  }
-
-  set({ progressSegments: segments })
+  set({ progressSegments: buildSegments(estimates) })
 }

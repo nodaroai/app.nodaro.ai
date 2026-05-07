@@ -62,7 +62,8 @@ export function OutputCard({
   fieldBadges,
   actions,
 }: OutputCardProps) {
-  const showProgress = (status === "running" || status === "waiting") && progress != null
+  const showProgress = status === "running" || status === "waiting"
+  const progressValue = progress ?? 0
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
     <div className="flex flex-wrap gap-1 mt-2 px-1">
       {fieldBadges.map((fb) => (
@@ -97,10 +98,10 @@ export function OutputCard({
         {showProgress && (
           <div className="px-1">
             <Progress
-              value={progress}
+              value={progressValue}
               className="h-2 bg-primary/20 [&>[data-slot=progress-indicator]]:bg-[#ff0073]"
             />
-            <p className="mt-1 text-xs text-muted-foreground text-center">{progress}%</p>
+            <p className="mt-1 text-xs text-muted-foreground text-center">{progressValue}%</p>
           </div>
         )}
       </div>
