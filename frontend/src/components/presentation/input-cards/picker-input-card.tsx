@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Pencil, X } from "lucide-react"
+import { ChevronDown, Pencil, X } from "lucide-react"
 import { pickIds } from "@nodaro/shared"
 import {
   Dialog,
@@ -9,11 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { GlassCard } from "../output-cards/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DimensionTileGrid } from "@/components/editor/config-panels/dimension-tile-grid"
+import { LocalePicker } from "@/components/editor/locale-picker"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocaleDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
@@ -25,7 +33,7 @@ import {
   type SingleDimParameterPickerMeta,
 } from "@/lib/parameter-picker-registry"
 
-export type PickerDisplayMode = "inline" | "modal"
+export type PickerDisplayMode = "inline" | "modal" | "compact"
 
 interface PickerInputCardProps {
   nodeId: string
@@ -140,6 +148,68 @@ function SinglePickerCard({
     />
   )
 
+  if (displayMode === "compact") {
+    const selected = meta.entries.find((e) => e.id === currentValue)
+    const selectedLabel = selected
+      ? resolveLabel(selected.id, selected.label)
+      : currentValue
+
+    return (
+      <GlassCard>
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <Label className={LABEL_CLS}>{label}</Label>
+          <LocalePicker />
+        </div>
+        <div className="flex items-center gap-2" dir={dir}>
+          <Select
+            value={currentValue}
+            onValueChange={writeValue}
+            disabled={readOnly}
+          >
+            <SelectTrigger className="flex-1 h-9">
+              <div className="flex items-center gap-2 min-w-0">
+                {meta.renderIcon && (
+                  <div className="size-5 shrink-0 flex items-center justify-center [&>*]:size-full">
+                    {meta.renderIcon(currentValue)}
+                  </div>
+                )}
+                <SelectValue placeholder={`Select ${meta.label.toLowerCase()}…`}>
+                  <span className="truncate text-sm">{selectedLabel}</span>
+                </SelectValue>
+              </div>
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {filteredEntries.map((entry) => (
+                <SelectItem key={entry.id} value={entry.id}>
+                  <span className="flex items-center gap-2">
+                    {meta.renderIcon && (
+                      <span className="size-4 shrink-0 flex items-center justify-center [&>*]:size-full">
+                        {meta.renderIcon(entry.id)}
+                      </span>
+                    )}
+                    <span>{resolveLabel(entry.id, entry.label)}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!readOnly && !isCleared && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClear}
+              className="h-9 w-9 p-0 shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label="Clear selection"
+              title="Reset to default"
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </GlassCard>
+    )
+  }
+
   if (displayMode === "modal") {
     const selected = meta.entries.find((e) => e.id === currentValue)
     const selectedLabel = selected
@@ -151,8 +221,9 @@ function SinglePickerCard({
 
     return (
       <GlassCard>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2">
           <Label className={LABEL_CLS}>{label}</Label>
+          <LocalePicker />
         </div>
         <div className="flex items-center gap-3" dir={dir}>
           <button
@@ -224,7 +295,10 @@ function SinglePickerCard({
 
   return (
     <GlassCard>
-      <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <Label className={LABEL_CLS}>{label}</Label>
+        <LocalePicker />
+      </div>
       <div
         className={cn(readOnly && "opacity-70 pointer-events-none")}
         dir={dir}
@@ -303,11 +377,57 @@ function MultiPickerCard({
     return parts
   }, [meta.fields, meta.catalogEntries, value, resolveLabel])
 
+  // Compact mode for multi-dim — same shape as modal but denser (smaller chip
+  // strip, no preview button, single line). Multi-dim doesn't have a true
+  // dropdown; this is the densest sensible variant.
+  if (displayMode === "compact") {
+    return (
+      <GlassCard>
+        <div className="flex items-center justify-between mb-2 gap-2">
+          <Label className={LABEL_CLS}>{label}</Label>
+          <LocalePicker />
+        </div>
+        <button
+          type="button"
+          onClick={() => !readOnly && setModalOpen(true)}
+          disabled={readOnly}
+          className={cn(
+            "w-full rounded-md bg-muted/30 border border-border px-3 py-1.5 text-left text-sm transition-colors flex items-center justify-between gap-2",
+            !readOnly && "hover:border-[#ff0073]/50 cursor-pointer",
+          )}
+          dir={dir}
+          aria-label={`Configure ${meta.label}`}
+        >
+          <span className="flex-1 min-w-0 truncate">
+            {summaryParts.length === 0 ? (
+              <span className="text-muted-foreground italic">
+                {`Configure ${meta.label.toLowerCase()}…`}
+              </span>
+            ) : (
+              <span className="text-foreground">{summaryParts.join(" · ")}</span>
+            )}
+          </span>
+          <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
+        </button>
+
+        <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+          <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-auto" dir={dir}>
+            <DialogHeader>
+              <DialogTitle>{`Configure ${meta.label}`}</DialogTitle>
+            </DialogHeader>
+            <Picker value={value} onChange={handlePatch} />
+          </DialogContent>
+        </Dialog>
+      </GlassCard>
+    )
+  }
+
   if (displayMode === "modal") {
     return (
       <GlassCard>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2">
           <Label className={LABEL_CLS}>{label}</Label>
+          <LocalePicker />
         </div>
         <div className="flex items-center gap-3" dir={dir}>
           <button
@@ -358,7 +478,10 @@ function MultiPickerCard({
   // Inline mode
   return (
     <GlassCard>
-      <Label className={cn(LABEL_CLS, "mb-2 block")}>{label}</Label>
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <Label className={LABEL_CLS}>{label}</Label>
+        <LocalePicker />
+      </div>
       <div
         className={cn(readOnly && "opacity-70 pointer-events-none")}
         dir={dir}
