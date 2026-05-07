@@ -88,6 +88,20 @@ nodaro workflows run <id>                # prints execution id, returns immediat
 nodaro workflows run <id> --watch        # follow until completed/failed/cancelled
 nodaro workflows run <id> --node n1 n2   # run only specific nodes
 
+# Apps — workflows wrapped in a curated UI (the things at app.nodaro.ai/app/<slug>)
+nodaro apps list [--search <query>] [--limit 20] [--cursor <token>] [--category <slug>]
+nodaro apps get <slug>                                  # show input schema + outputs
+nodaro apps run <slug> --input prompt="…" --input duration=8 [--watch]
+nodaro apps run <slug> --params-file inputs.json [--watch]
+nodaro apps runs <slug>                                 # list past runs
+nodaro apps run-get <slug> <runId>
+
+# Nodes — list types + run a single node directly (no workflow, no DAG)
+nodaro nodes list [--category ai|processing|input|...]
+nodaro nodes get <type>                                 # full input schema
+nodaro nodes run <type> --param prompt="…" --param provider=flux [--watch]
+nodaro nodes run <type> --params-file body.json [--watch] [--poll-interval 1000]
+
 nodaro executions get <id>
 nodaro executions get <id> --watch
 nodaro executions cancel <id> [--mode cancelled|stopping]
@@ -95,6 +109,35 @@ nodaro executions cancel <id> [--mode cancelled|stopping]
 nodaro jobs get <id>
 nodaro jobs cancel <id>
 ```
+
+### Three ways to run something
+
+| Want | Command |
+|---|---|
+| Run a saved DAG | `nodaro workflows run <workflowId>` |
+| Run a published app (with curated inputs/outputs) | `nodaro apps run <slug> --input k=v` |
+| Run a single node directly (one-shot, no DAG) | `nodaro nodes run <type> --param k=v` |
+
+The `nodes run` path is the SDK / CLI equivalent of the MCP server's verb tools (`generate_image`, `generate_video`, etc.) — the route convention is `POST /v1/<type>` for every generation node, so any node listed by `nodaro nodes list` can be invoked with `nodaro nodes run`.
+
+### Param syntax
+
+Both `--input` (apps) and `--param` (nodes) accept repeated `key=value` pairs with primitive coercion:
+
+```bash
+nodaro nodes run generate-image \
+  --param prompt="a futuristic city skyline at dusk" \
+  --param provider=flux \
+  --param resolution=2K \
+  --param generateAudio=false
+```
+
+- `true`/`false`/`null` → boolean / null
+- whole numbers → number
+- decimals → number
+- everything else → string (preserves `=` in values, so `query=a=b=c` works)
+
+For arrays, nested objects, or any value that doesn't fit the flag form, use `--params-file body.json`. Flag values override file values for the same key.
 
 ## Output formatting
 
