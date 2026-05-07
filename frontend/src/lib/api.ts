@@ -1094,6 +1094,8 @@ export async function combineVideos(
   userId?: string,
   trimStartFrames?: number,
   trimEndFrames?: number,
+  /** Same length and order as videoUrls; included only when ALL entries are positive numbers. */
+  upstreamDurations?: ReadonlyArray<number | undefined>,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
@@ -1101,6 +1103,13 @@ export async function combineVideos(
   }
   if (trimStartFrames && trimStartFrames > 0) body.trimStartFrames = trimStartFrames
   if (trimEndFrames && trimEndFrames > 0) body.trimEndFrames = trimEndFrames
+  if (
+    upstreamDurations &&
+    upstreamDurations.length === videoUrls.length &&
+    upstreamDurations.every((d) => typeof d === "number" && d > 0)
+  ) {
+    body.upstreamDurations = upstreamDurations
+  }
   const res = await fetch(`${API_BASE_URL}/v1/combine-videos`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1184,6 +1193,11 @@ export async function trimVideoApi(
     /** Smart loop cut: worker picks the trailing frame closest to frame 0. */
     smartLoopCut?: boolean
     smartLoopCutLookback?: number
+    /** Trim mode for credit estimator (worker dispatches based on which
+     *  fields are set, not this). */
+    trimMode?: "time" | "frames" | "smart-loop-cut"
+    /** Upstream video duration (seconds) for credit estimator. */
+    upstreamDuration?: number
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
@@ -1191,6 +1205,10 @@ export async function trimVideoApi(
   if (extras?.trimEndFrames != null) body.trimEndFrames = extras.trimEndFrames
   if (extras?.smartLoopCut) body.smartLoopCut = true
   if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
+  if (extras?.trimMode) body.trimMode = extras.trimMode
+  if (extras?.upstreamDuration != null && extras.upstreamDuration > 0) {
+    body.upstreamDuration = extras.upstreamDuration
+  }
   if (userId) {
     body.userId = userId
   }
@@ -1267,11 +1285,16 @@ export async function loopVideoApi(
      *  before concatenating N copies. */
     smartLoopCutBeforeRepeat?: boolean
     smartLoopCutLookback?: number
+    /** Upstream video duration (seconds) for credit estimator. */
+    upstreamDuration?: number
   },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, mode, repeatCount, targetDuration }
   if (extras?.smartLoopCutBeforeRepeat) body.smartLoopCutBeforeRepeat = true
   if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
+  if (extras?.upstreamDuration != null && extras.upstreamDuration > 0) {
+    body.upstreamDuration = extras.upstreamDuration
+  }
   if (userId) {
     body.userId = userId
   }

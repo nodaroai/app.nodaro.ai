@@ -7,6 +7,10 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import {
+  estimateCombineVideosCredits,
+  type CombineVideosEstimatorInput,
+} from "@nodaro/shared"
 
 const combineVideosBody = z.object({
   videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
@@ -16,10 +20,32 @@ const combineVideosBody = z.object({
   trimStartFrames: z.number().int().min(0).max(120).optional().default(0),
   trimEndFrames: z.number().int().min(0).max(120).optional().default(0),
   userId: z.string().uuid().optional(),
+  /** Optional upstream durations, one per videoUrls entry (same order).
+   *  When length doesn't match videoUrls, ignored (backend falls back to 8s
+   *  per missing entry). */
+  upstreamDurations: z.array(z.number().positive()).optional(),
 })
 
 export async function combineVideosRoutes(app: FastifyInstance) {
-  app.post("/v1/combine-videos", { preHandler: creditGuard(() => "combine-videos") }, async (req, reply) => {
+  app.post("/v1/combine-videos", {
+    preHandler: creditGuard(() => "combine-videos", {
+      computeCredits: (body) => {
+        const b = body as Record<string, unknown>
+        const urls = Array.isArray(b.videoUrls) ? b.videoUrls : []
+        const rawDurations = Array.isArray(b.upstreamDurations) ? b.upstreamDurations : []
+        // Align by position; drop length mismatches (estimator falls back per-position).
+        const aligned = rawDurations.length === urls.length
+          ? (rawDurations as Array<number | undefined>)
+          : urls.map(() => undefined)
+        return estimateCombineVideosCredits({
+          transition: b.transition as CombineVideosEstimatorInput["transition"],
+          transitionDuration: b.transitionDuration as number | undefined,
+          trimStartFrames: b.trimStartFrames as number | undefined,
+          trimEndFrames: b.trimEndFrames as number | undefined,
+        }, aligned)
+      },
+    }),
+  }, async (req, reply) => {
     const parsed = combineVideosBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

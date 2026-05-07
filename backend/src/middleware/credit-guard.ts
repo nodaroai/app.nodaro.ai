@@ -3,6 +3,7 @@ import { hasCredits } from "../lib/config.js"
 import { CreditsService, type ReserveResult, type CreditProfile, type StorageProfile } from "../billing/credits.js"
 import { supabase } from "../lib/supabase.js"
 import { warmAdminCache } from "../lib/admin-check.js"
+import { getAppSettings } from "../lib/app-settings.js"
 
 /**
  * Credit reservation attached to the request by creditGuard middleware.
@@ -12,6 +13,9 @@ export interface CreditReservation {
   usageLogId: string
   creditsReserved: number
   watermark: boolean
+  /** Set by creditGuard when a route uses computeCredits. Passed through
+   *  to reserveCredits so the same number is debited as was checked. */
+  creditOverride?: number
 }
 
 /**
@@ -45,8 +49,16 @@ export interface StorageSnapshot {
  * On success: request.creditReservation is set with { usageLogId, creditsReserved, watermark }
  * On failure: returns 402 (insufficient credits), 413 (storage limit), or 500 (system error)
  */
+export interface CreditGuardOpts {
+  /** Returns BASE credits (pre-markup) from the parsed body. When supplied,
+   *  bypasses the model_pricing lookup for cost only — isEnabled and
+   *  tierRestriction still come from the DB row. */
+  computeCredits?: (parsedBody: unknown) => number
+}
+
 export function creditGuard(
-  modelResolver: (req: FastifyRequest) => string
+  modelResolver: (req: FastifyRequest) => string,
+  opts?: CreditGuardOpts,
 ) {
   return async function creditGuardHandler(
     req: FastifyRequest,
@@ -64,6 +76,19 @@ export function creditGuard(
 
     // FFmpeg operations are free — skip all credit/storage checks
     if (modelIdentifier === "ffmpeg") return
+
+    // Resolve the dynamic credit override, if any. Apply admin markup once
+    // here so both checkCreditsWithProfile and reserveCredits receive a
+    // final post-markup number.
+    let computedCreditOverride: number | undefined
+    if (opts?.computeCredits) {
+      const baseCredits = opts.computeCredits(req.body)
+      const settings = await getAppSettings()
+      computedCreditOverride =
+        settings.cost_markup_percent > 0 && baseCredits > 0
+          ? Math.ceil(baseCredits * (1 + settings.cost_markup_percent / 100))
+          : baseCredits
+    }
 
     const routeName = req.url.split("?")[0] ?? "unknown"
 
@@ -118,7 +143,13 @@ export function creditGuard(
 
     // Step 2: Check if user has enough credits (using pre-fetched profile)
     try {
-      const creditCheck = await CreditsService.checkCreditsWithProfile(userId, profile as CreditProfile, modelIdentifier, req.isAppRun)
+      const creditCheck = await CreditsService.checkCreditsWithProfile(
+        userId,
+        profile as CreditProfile,
+        modelIdentifier,
+        req.isAppRun,
+        computedCreditOverride,
+      )
 
       if (!creditCheck.allowed) {
         reply.status(402).send({
@@ -134,7 +165,12 @@ export function creditGuard(
 
       // Step 3: Store pending reservation with watermark from checkCredits
       // (avoids duplicate profiles query in reserveCredits)
-      req.creditReservation = { usageLogId: "", creditsReserved: 0, watermark: creditCheck.watermark ?? false }
+      req.creditReservation = {
+        usageLogId: "",
+        creditsReserved: 0,
+        watermark: creditCheck.watermark ?? false,
+        creditOverride: computedCreditOverride,
+      }
     } catch (err) {
       console.error(`[credit-guard] ${routeName} credit check failed:`, err)
       reply.status(500).send({
@@ -171,7 +207,11 @@ export async function reserveCreditsForJob(
       modelIdentifier,
       0, // provider cost calculated in worker
       0, // display cost calculated in worker
-      { watermarkOverride: req.creditReservation?.watermark, isAppRun: req.isAppRun },
+      {
+        watermarkOverride: req.creditReservation?.watermark,
+        isAppRun: req.isAppRun,
+        creditOverride: req.creditReservation?.creditOverride,
+      },
     )
 
     // Store usageLogId, estimated credits, and watermark decision on the job
@@ -189,6 +229,7 @@ export async function reserveCreditsForJob(
       usageLogId: reservation.usageLogId,
       creditsReserved: reservation.creditsReserved,
       watermark: reservation.watermark,
+      creditOverride: req.creditReservation?.creditOverride,
     }
 
     return reservation

@@ -1622,13 +1622,24 @@ export function buildPayload(
       let combineVideoUrls = resolvedInputs.videoUrls || data.videoUrls || []
       // Apply user-configured clip ordering if available (matches frontend logic)
       const clipOrder = data.clipOrder as string[] | undefined
-      if (clipOrder?.length && resolvedInputs.videoUrlsWithSourceIds?.length) {
+      const sourceEntries = resolvedInputs.videoUrlsWithSourceIds
+      let upstreamDurations: Array<number | undefined> | undefined
+      if (clipOrder?.length && sourceEntries?.length) {
         const ordered: string[] = []
+        const orderedDurations: Array<number | undefined> = []
         for (const nodeId of clipOrder) {
-          const entry = resolvedInputs.videoUrlsWithSourceIds.find((e) => e.nodeId === nodeId)
-          if (entry) ordered.push(entry.url)
+          const entry = sourceEntries.find((e) => e.nodeId === nodeId)
+          if (entry) {
+            ordered.push(entry.url)
+            orderedDurations.push(entry.duration)
+          }
         }
-        if (ordered.length >= 2) combineVideoUrls = ordered
+        if (ordered.length >= 2) {
+          combineVideoUrls = ordered
+          upstreamDurations = orderedDurations
+        }
+      } else if (sourceEntries?.length) {
+        upstreamDurations = sourceEntries.map((e) => e.duration)
       }
       return ffmpegResult("combine-videos", {
         jobId,
@@ -1638,6 +1649,7 @@ export function buildPayload(
         audioMode: data.audioMode ?? "crossfade",
         trimStartFrames: (data.trimStartFrames as number) ?? 0,
         trimEndFrames: (data.trimEndFrames as number) ?? 0,
+        upstreamDurations,
         usageLogId,
       })
     }
@@ -1702,8 +1714,8 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         startTime: trimMode === "time" ? data.startTime : 0,
         endTime: trimMode === "time" ? data.endTime : undefined,
-        // outputSilentVideo toggles the dual-output silent-video branch that
-        // writes `generatedSilentVideoUrl` alongside the main trimmed clip.
+        // outputSilentVideo: when true, the main trimmed clip is encoded
+        // with `-an` (no audio).
         outputSilentVideo: data.outputSilentVideo,
         // Frame-based trim — worker probes source fps and converts.
         trimStartFrames: trimMode === "frames" ? data.trimStartFrames : undefined,
@@ -1711,6 +1723,10 @@ export function buildPayload(
         // Smart loop cut — worker picks the trailing frame closest to frame 0.
         smartLoopCut: trimMode === "smart-loop-cut",
         smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
+        // Pass through trimMode + upstream duration for accurate credit estimation
+        // (frame and smart-loop-cut modes need source length to derive output duration).
+        trimMode,
+        upstreamDuration: resolvedInputs.videoDuration,
         usageLogId,
       })
     }
@@ -1772,6 +1788,9 @@ export function buildPayload(
         targetDuration: data.targetDuration,
         smartLoopCutBeforeRepeat: data.smartLoopCutBeforeRepeat,
         smartLoopCutLookback: data.smartLoopCutLookback,
+        // Pass through upstream duration for accurate credit estimation
+        // (repeat mode multiplies upstream duration by repeatCount to derive cost).
+        upstreamDuration: resolvedInputs.videoDuration,
         usageLogId,
       })
 

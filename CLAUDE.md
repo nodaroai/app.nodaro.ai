@@ -5,6 +5,32 @@
 - This root CLAUDE.md is tracked in git. Subdirectory CLAUDE.md files are gitignored.
 - Full project spec is in `specs/FULL_SPEC.md` (reference only, don't load into context)
 
+# Public Docs Maintenance Rule (CRITICAL)
+
+**Whenever a change affects user-facing behavior, ALSO update `docs/`** in the same PR.
+
+The `docs/` directory is published as the public reference (GitHub Pages). It must stay in sync with the editor reality. Treat it as a release artifact, not "we'll get to it."
+
+**Triggers — you MUST update docs when:**
+
+| Change | Docs to update |
+|--------|----------------|
+| New node added | Create `docs/nodes/<category>/<node-name>.md` AND add a row in `docs/nodes/README.md` |
+| Node config field added/removed/renamed | The node's page in `docs/nodes/<category>/` |
+| Node credit pricing changed (static or dynamic) | The node's page — include the formula and worked examples |
+| New provider added to a node | Provider list in the node's page; if pricing changes, the credit table |
+| New API route or breaking change to existing route | `docs/api-integration.md` and/or `docs/sdk-reference.md` |
+| New OAuth scope or auth flow change | `docs/oauth-flow.md` |
+| New deployment env var or build step | `docs/deployment.md` |
+| New SDK feature or method | `docs/sdk-reference.md`, `docs/sdk-quickstart.md` |
+| MCP tool added/changed | `docs/mcp/` |
+
+**Rules:**
+- Pricing math in docs MUST match the runtime formula. If you write a formula in code, write the same formula in the doc.
+- Worked examples in docs MUST match the test cases in code (cross-check before committing).
+- For dynamic-priced nodes, document both the formula AND the fallback behavior (what happens when upstream metadata is missing).
+- If the change is rolled out under a flag, gate-check the doc — note the flag explicitly so users don't see undocumented behavior.
+
 **See also:**
 - `frontend/CLAUDE.md` — Frontend patterns (API proxy, SSE client, UI styling)
 - `backend/CLAUDE.md` — Backend patterns (providers, credits, billing, worker)
@@ -141,5 +167,5 @@
 
 ---
 
-*Last updated: 2026-05-03*
-*Version: 1.99.1*
+*Last updated: 2026-05-07*
+*Version: 2.0.0*

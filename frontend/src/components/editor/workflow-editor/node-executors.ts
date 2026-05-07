@@ -497,10 +497,11 @@ export function runCombineVideos(
   ctx: ExecutionContext,
   trimStartFrames?: number,
   trimEndFrames?: number,
+  upstreamDurations?: ReadonlyArray<number | undefined>,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames),
+    () => combineVideos(videoUrls, transition, transitionDuration, audioMode, ctx.userId, trimStartFrames, trimEndFrames, upstreamDurations),
     "generatedVideoUrl",
     "Combine videos",
     ctx,

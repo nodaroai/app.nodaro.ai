@@ -444,6 +444,8 @@ const IMAGE_RESULT_TYPES = new Set([
   "upload-image",
 ])
 
+export { extractVideoDurationFromNode } from "@nodaro/shared"
+
 /** Video-generating node types that store results in generatedVideoUrl / generatedResults */
 const VIDEO_RESULT_TYPES = new Set([
   "image-to-video",

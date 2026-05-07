@@ -1277,6 +1277,7 @@ describe("combine-videos", () => {
       expect.anything(),
       undefined,
       undefined,
+      expect.any(Array),
     )
   })
 })

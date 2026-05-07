@@ -679,6 +679,8 @@ describe("trim-video", () => {
         trimEndFrames: undefined,
         smartLoopCut: false,
         smartLoopCutLookback: undefined,
+        trimMode: "time",
+        upstreamDuration: undefined,
       },
     )
   })
@@ -706,6 +708,8 @@ describe("trim-video", () => {
         trimEndFrames: undefined,
         smartLoopCut: false,
         smartLoopCutLookback: undefined,
+        trimMode: "time",
+        upstreamDuration: undefined,
       },
     )
   })

@@ -210,6 +210,10 @@ import { sortListItems } from "@nodaro/shared";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
+import {
+  getUpstreamDuration,
+  getCombineUpstreamDurations,
+} from "@/lib/upstream-duration";
 
 // ---------------------------------------------------------------------------
 // Manual-edit pending promise bridge
@@ -2972,6 +2976,8 @@ export function executeNode(
       return Promise.reject(new Error("Need at least 2 videos"));
     }
     setUserPromptTemplate(undefined);
+    const { nodes: combineNodes, edges: combineEdges } = useWorkflowStore.getState();
+    const upstreamDurations = getCombineUpstreamDurations(node, combineNodes, combineEdges);
     return runCombineVideos(
       node.id,
       videoUrls,
@@ -2981,6 +2987,7 @@ export function executeNode(
       ctx,
       combineData.trimStartFrames,
       combineData.trimEndFrames,
+      upstreamDurations,
     );
   }
 
@@ -3158,6 +3165,8 @@ export function executeNode(
     const d = node.data as TrimVideoData;
     setUserPromptTemplate(undefined);
     const trimMode = d.trimMode ?? "time";
+    const { nodes: trimNodes, edges: trimEdges } = useWorkflowStore.getState();
+    const upstreamDuration = getUpstreamDuration(node.id, trimNodes, trimEdges);
     return runProcessingNode(
       node.id,
       () =>
@@ -3172,6 +3181,8 @@ export function executeNode(
             trimEndFrames: trimMode === "frames" ? d.trimEndFrames : undefined,
             smartLoopCut: trimMode === "smart-loop-cut",
             smartLoopCutLookback: trimMode === "smart-loop-cut" ? d.smartLoopCutLookback : undefined,
+            trimMode,
+            upstreamDuration,
           },
         ),
       "generatedVideoUrl",
@@ -3297,6 +3308,8 @@ export function executeNode(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as LoopVideoData;
+    const { nodes: loopNodes, edges: loopEdges } = useWorkflowStore.getState();
+    const upstreamDuration = getUpstreamDuration(node.id, loopNodes, loopEdges);
     return runProcessingNode(
       node.id,
       () =>
@@ -3309,6 +3322,7 @@ export function executeNode(
           {
             smartLoopCutBeforeRepeat: d.smartLoopCutBeforeRepeat,
             smartLoopCutLookback: d.smartLoopCutLookback,
+            upstreamDuration,
           },
         ),
       "generatedVideoUrl",

@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { estimateLoopVideoCredits } from "@nodaro/shared"
 
 const loopVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -17,11 +18,28 @@ const loopVideoBody = z.object({
   // every internal repeat boundary.
   smartLoopCutBeforeRepeat: z.boolean().optional().default(false),
   smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
+  /** Optional upstream video duration (seconds) for accurate credit
+   *  estimation. When omitted, backend falls back to 8s. */
+  upstreamDuration: z.number().positive().optional(),
   userId: z.string().uuid().optional(),
 })
 
 export async function loopVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/loop-video", { preHandler: creditGuard(() => "loop-video") }, async (req, reply) => {
+  app.post("/v1/loop-video", {
+    preHandler: creditGuard(() => "loop-video", {
+      computeCredits: (body) => {
+        const b = body as Record<string, unknown>
+        const upstream = typeof b.upstreamDuration === "number" ? b.upstreamDuration : undefined
+        return estimateLoopVideoCredits({
+          mode: b.mode as "repeat" | "duration" | undefined,
+          repeatCount: b.repeatCount as number | undefined,
+          targetDuration: b.targetDuration as number | undefined,
+          smartLoopCutBeforeRepeat: b.smartLoopCutBeforeRepeat as boolean | undefined,
+          smartLoopCutLookback: b.smartLoopCutLookback as number | undefined,
+        }, upstream)
+      },
+    }),
+  }, async (req, reply) => {
     const parsed = loopVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -29,7 +47,7 @@ export async function loopVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId: _bodyUserId, ...restData } = parsed.data
+    const { userId: _bodyUserId, upstreamDuration: _upDur, ...restData } = parsed.data
     const userId = req.userId
 
     if (!userId) {

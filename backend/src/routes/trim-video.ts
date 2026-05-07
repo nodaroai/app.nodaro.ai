@@ -6,6 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { estimateTrimVideoCredits } from "@nodaro/shared"
 
 const trimVideoBody = z.object({
   videoUrl: safeUrlSchema,
@@ -25,10 +26,32 @@ const trimVideoBody = z.object({
   smartLoopCutLookback: z.number().int().min(2).max(64).optional(),
   outputSilentVideo: z.boolean().optional().default(false),
   userId: z.string().uuid().optional(),
+  // Optional upstream video duration (seconds). Used by both the credit
+  // estimator (frames + smart-loop-cut modes need to know input length) and
+  // for telemetry. Omit and the backend falls back to 8s.
+  upstreamDuration: z.number().positive().optional(),
+  // Mirror frontend's trimMode for the estimator (default "time"). Worker
+  // doesn't read this directly — it dispatches based on which fields are set.
+  trimMode: z.enum(["time", "frames", "smart-loop-cut"]).optional(),
 })
 
 export async function trimVideoRoutes(app: FastifyInstance) {
-  app.post("/v1/trim-video", { preHandler: creditGuard(() => "trim-video") }, async (req, reply) => {
+  app.post("/v1/trim-video", {
+    preHandler: creditGuard(() => "trim-video", {
+      computeCredits: (body) => {
+        const b = body as Record<string, unknown>
+        const upstream = typeof b.upstreamDuration === "number" ? b.upstreamDuration : undefined
+        return estimateTrimVideoCredits({
+          trimMode: b.trimMode as "time" | "frames" | "smart-loop-cut" | undefined,
+          startTime: b.startTime as number | undefined,
+          endTime: b.endTime as number | undefined,
+          trimStartFrames: b.trimStartFrames as number | undefined,
+          trimEndFrames: b.trimEndFrames as number | undefined,
+          smartLoopCutLookback: b.smartLoopCutLookback as number | undefined,
+        }, upstream)
+      },
+    }),
+  }, async (req, reply) => {
     const parsed = trimVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -36,7 +59,7 @@ export async function trimVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { userId: _bodyUserId, ...restData } = parsed.data
+    const { userId: _bodyUserId, upstreamDuration: _upDur, trimMode: _mode, ...restData } = parsed.data
     const userId = req.userId
 
     if (!userId) {

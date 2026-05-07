@@ -372,28 +372,20 @@ describe("trim-video handler", () => {
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
   })
 
-  it("uploads silent video when outputSilentVideo=true", async () => {
-    mocks.mockTrimVideo.mockResolvedValueOnce({
-      videoPath: "/tmp/trim-work/output.mp4",
-      silentVideoPath: "/tmp/trim-work/silent.mp4",
-    })
-    mocks.mockUploadFileToR2
-      .mockResolvedValueOnce("https://r2.example.com/video.mp4")
-      .mockResolvedValueOnce("https://r2.example.com/silent.mp4")
+  it("forwards outputSilentVideo=true to the provider (single-output, no sidecar upload)", async () => {
+    mocks.mockUploadFileToR2.mockResolvedValueOnce("https://r2.example.com/video.mp4")
 
     const job = makeJob("trim-video", { videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: true })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUploadFileToR2).toHaveBeenCalledTimes(2)
+    expect(mocks.mockTrimVideo).toHaveBeenCalledWith({
+      videoUrl: "https://vid.mp4", startTime: 5, endTime: 15, outputSilentVideo: true,
+    })
+    expect(mocks.mockUploadFileToR2).toHaveBeenCalledTimes(1)
     expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/output.mp4", "job-1", "video", "user-1")
-    expect(mocks.mockUploadFileToR2).toHaveBeenCalledWith("/tmp/trim-work/silent.mp4", "job-1-silent", "video", "user-1")
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-        output_data: expect.objectContaining({
-          videoUrl: "https://r2.example.com/video.mp4",
-          videoUrlSilent: "https://r2.example.com/silent.mp4",
-        }),
-      }),
-    )
+      output_data: expect.objectContaining({ videoUrl: "https://r2.example.com/video.mp4" }),
+    }))
   })
 })
 

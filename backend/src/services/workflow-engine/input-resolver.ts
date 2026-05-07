@@ -10,7 +10,7 @@ import type {
   NodeExecutionState,
   ResolvedInputs,
 } from "./types.js"
-import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, getPrimaryOutput } from "./output-extractor.js"
+import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput } from "./output-extractor.js"
 import { extractGeneratedJsonAsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
@@ -599,19 +599,28 @@ function routeAudioOutput(
   }
 }
 
-/** Route a video output to the correct input field based on target node type. */
+/** Route a video output to the correct input field based on target node type.
+ *  `duration` is the upstream node's video duration (seconds) when known —
+ *  attached to `videoUrl` (single-input nodes like trim-video / loop-video)
+ *  and to per-entry `videoUrlsWithSourceIds` rows (combine-videos), so the
+ *  payload-builder can build aligned upstreamDurations / upstreamDuration. */
 function routeVideoOutput(
   inputs: ResolvedInputs,
   output: string,
   targetType: string,
   sourceNodeId: string,
+  duration?: number,
 ): void {
   if (targetType === "combine-videos") {
     inputs.videoUrls = [...(inputs.videoUrls ?? []), output]
-    inputs.videoUrlsWithSourceIds = [...(inputs.videoUrlsWithSourceIds ?? []), { nodeId: sourceNodeId, url: output }]
+    inputs.videoUrlsWithSourceIds = [
+      ...(inputs.videoUrlsWithSourceIds ?? []),
+      { nodeId: sourceNodeId, url: output, duration },
+    ]
   } else if (targetType === "merge-video-audio") {
     if (!inputs.videoUrl) {
       inputs.videoUrl = output
+      if (duration !== undefined) inputs.videoDuration = duration
     } else {
       inputs.audioSources = [
         ...(inputs.audioSources ?? []),
@@ -620,6 +629,7 @@ function routeVideoOutput(
     }
   } else {
     inputs.videoUrl = output
+    if (duration !== undefined) inputs.videoDuration = duration
   }
 }
 
@@ -1073,7 +1083,7 @@ function routeOutput(
       const audioUrl = (src.data.downloadedAudioUrl as string | undefined)?.trim()
       inputs.uploadUrl = audioUrl || output
     } else {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
     }
     return
   }
@@ -1122,7 +1132,7 @@ function routeOutput(
 
   // --- Video output nodes ---
   if (VIDEO_OUTPUT_NODE_TYPES.has(srcType)) {
-    routeVideoOutput(inputs, output, targetType, src.id)
+    routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
 
     // Pass through kieTaskId for VEO/Runway extend and upscale nodes
     if (targetType === "extend-video" || targetType === "video-upscale") {
@@ -1324,7 +1334,7 @@ function routeOutput(
   // fills single-value fields used by post-image/reel/story/video actions.
   if (SOCIAL_POST_NODE_TYPES.has(targetType)) {
     if (isVideoSourceType(srcType)) {
-      routeVideoOutput(inputs, output, targetType, src.id)
+      routeVideoOutput(inputs, output, targetType, src.id, extractVideoDurationFromNode(src.data))
     } else if (isImageSourceType(srcType) && srcType !== "extract-frame") {
       inputs.imageUrl = output
     } else if (AUDIO_OUTPUT_NODE_TYPES.has(srcType) || srcType === "upload-audio" || srcType === "reference-audio") {

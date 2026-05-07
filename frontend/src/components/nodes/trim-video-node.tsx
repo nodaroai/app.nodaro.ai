@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film, Download, Copy } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, X, Clapperboard, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -12,7 +12,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { TrimVideoData } from "@/types/nodes"
@@ -20,7 +20,7 @@ import type { TrimVideoData } from "@/types/nodes"
 function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TrimVideoData | undefined
   const nodeData = currentNodeData ?? (data as TrimVideoData)
-  const credits = useModelCredits("ffmpeg", 1)
+  const credits = useEstimatedCredits({ id, type: "trim-video", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const videoAutoplay = useWorkflowStore((s) => s.videoAutoplay)
@@ -57,7 +57,6 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         handles={[
           { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
           { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-          { id: "silent-video", type: "source", position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
         ]}
       >
         {hasResult ? null : (
@@ -129,48 +128,8 @@ function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {nodeData.generatedSilentVideoUrl && (
-        <div className="flex flex-col gap-1 mt-1">
-          <span className="text-[10px] text-muted-foreground font-medium px-1">Silent Video</span>
-          <VideoResultOverlay
-            url={nodeData.generatedSilentVideoUrl}
-            videoAutoplay={false}
-            label="Silent Video"
-            hasResults={false}
-            onExpand={() => {}}
-            onDelete={() => {}}
-            onDimensionsChange={() => {}}
-          />
-          <div className="flex gap-1 px-1">
-            <a
-              href={nodeData.generatedSilentVideoUrl}
-              download
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white text-[10px] rounded-md"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Download className="w-3 h-3" />
-              <span>Download</span>
-            </a>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 bg-black/40 hover:bg-black/60 border border-white/10 text-white text-[10px] rounded-md"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigator.clipboard.writeText(nodeData.generatedSilentVideoUrl!);
-              }}
-            >
-              <Copy className="w-3 h-3" />
-              <span>Copy URL</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
       <HandleIcon icon={<Film />} color="steel" top="20px" />
-      <HandleIcon icon={<Clapperboard />} color="steel" top="50px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>
