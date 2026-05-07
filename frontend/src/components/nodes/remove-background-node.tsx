@@ -14,7 +14,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { RemoveBackgroundData } from "@/types/nodes"
 

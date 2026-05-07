@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { uploadFile } from "@/lib/api"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 

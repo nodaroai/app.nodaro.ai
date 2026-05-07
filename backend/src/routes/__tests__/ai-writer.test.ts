@@ -18,7 +18,7 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: vi.fn().mockResolvedValue(undefined), refundCredits: vi.fn().mockResolvedValue(undefined) },
 }))
 
@@ -32,7 +32,7 @@ vi.mock("@/lib/sse.js", () => ({
 
 import { aiWriterRoutes } from "../ai-writer.js"
 import { supabase } from "../../lib/supabase.js"
-import { CreditsService } from "../../billing/credits.js"
+import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { createSSEStream } from "../../lib/sse.js"
 

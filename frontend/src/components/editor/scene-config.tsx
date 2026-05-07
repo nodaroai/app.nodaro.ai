@@ -23,7 +23,7 @@ import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDia
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS } from "@/components/editor/config-panels/model-options"
 import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
-import { prefetchModelCredits } from "@/hooks/use-model-credits"
+import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 
 type WizardStep = 1 | 2 | 3 | 4
 

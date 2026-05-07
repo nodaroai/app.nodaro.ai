@@ -15,7 +15,7 @@ import {
 import { createCheckoutSession } from "@/lib/api"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { toast } from "sonner"
-import { useSubscription, useChangePlanMutation } from "@/hooks/queries/use-billing-queries"
+import { useSubscription, useChangePlanMutation } from "@/ee/hooks/queries/use-billing-queries"
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth()

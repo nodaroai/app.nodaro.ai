@@ -40,7 +40,7 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: {
     checkCreditsWithProfile: mockCheckCreditsWithProfile,
     checkStorageLimitWithProfile: mockCheckStorageLimitWithProfile,

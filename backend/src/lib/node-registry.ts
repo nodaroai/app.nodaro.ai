@@ -1,5 +1,5 @@
 import type { OutputType } from "@nodaro/shared"
-import { STATIC_CREDIT_COSTS } from "../billing/credits.js"
+import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import {
   IMAGE_GEN_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,

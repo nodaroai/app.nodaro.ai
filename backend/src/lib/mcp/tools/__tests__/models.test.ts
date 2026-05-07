@@ -14,7 +14,7 @@ vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
 
-vi.mock("../../../../billing/credits.js", () => ({
+vi.mock("../../../../ee/billing/credits.js", () => ({
   STATIC_CREDIT_COSTS: {
     "nano-banana": 2,
     veo3: 79,

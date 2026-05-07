@@ -73,7 +73,7 @@ vi.mock("@/lib/supabase.js", () => ({
   supabase: { from: mocks.mockFrom },
 }))
 
-vi.mock("@/services/credits.js", () => ({
+vi.mock("@/ee/services/credits.js", () => ({
   CreditsService: {
     commitCredits: mocks.mockCommitCredits,
     refundCredits: mocks.mockRefundCredits,

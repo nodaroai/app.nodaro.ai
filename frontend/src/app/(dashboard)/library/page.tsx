@@ -21,7 +21,7 @@ import {
   useLibraryInfinite,
   useDeleteLibraryAssetMutation,
 } from "@/hooks/queries/use-assets-queries"
-import { useStorageProfile } from "@/hooks/queries/use-billing-queries"
+import { useStorageProfile } from "@/ee/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"

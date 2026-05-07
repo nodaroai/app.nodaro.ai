@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { CachedImage } from "@/components/ui/cached-image"
 import { NodeJobProgress } from "./node-job-progress"

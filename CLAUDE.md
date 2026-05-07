@@ -69,6 +69,18 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 - Credit-related code must be gated behind `hasCredits()`
 - Admin-related code must be gated behind `hasAdmin()`
 
+### `ee/` directory + dual-license boundary
+
+Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is governed by the Nodaro Enterprise License (separate from the root SUL). The npm SDK packages under `packages/client/` and `packages/shared/` are Apache 2.0. See `LICENSE.md` at the repo root for the dual-license overview.
+
+**Hard rules:**
+1. **Core code may NOT statically import from `ee/`.** Enforced by `tools/check-ee-imports.mjs` in CI. Two permanent allowlist exceptions: `backend/src/app.ts` (route registration) and `backend/src/server.ts` (cleanup cron startup) — both gate the imports at registration time.
+2. **Default placement:** put enterprise code in `backend/src/ee/` or `frontend/src/ee/`. The structure inside ee/ mirrors core (routes/, billing/, middleware/, lib/, services/, hooks/, layouts/, components/, app/).
+3. **`*.ee.<ext>` filename suffix** is a deliberate exception for in-place enterprise variants of core files (e.g., `cost-tab.tsx` + `cost-tab.ee.tsx`). Per the Enterprise License, ANY file whose name contains the `.ee.` substring is enterprise — extension is unrestricted (`.ts`, `.tsx`, `.sql`, `.md`, `.json`, etc.). Use `ee/` directory by default; the suffix is reserved for tight coupling with a core sibling.
+4. **Shim pattern for hot-path code:** `backend/src/middleware/credit-guard.ts` stays in core as a thin dispatcher; the heavy implementation lives in `backend/src/ee/lib/credit-guard-impl.ts` and is loaded via dynamic `import()` only when `hasCredits()` is true. Same pattern applies to `backend/src/workers/shared.ts` for credit operations.
+
+**See also:** `tools/check-ee-imports.mjs` enforces the boundary in CI; the allowlist documents files with pre-existing coupling slated for refactor as Phase 3.5/4.5 work.
+
 ### Coding Standards
 - Backend: Fastify plugin pattern (NOT Express Router). Zod schemas on every endpoint.
 - Frontend state: React Query (server) + Zustand (UI) + React Flow (canvas).
@@ -90,11 +102,11 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 | 4 | `backend/src/providers/kie/*.ts` or `replicate/*.ts` | Provider implementation |
 | 5 | `backend/src/providers/kie/models.ts` | KIE model config (cost, params) |
 | 6 | `backend/src/providers/kie/index.ts` or `replicate/index.ts` | `supportedModels` array |
-| 7 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
+| 7 | `backend/src/ee/billing/credits.ts` | `STATIC_CREDIT_COSTS` (supports composite identifiers like `"gpt-image:high"`) |
 | 8 | `frontend/src/lib/pricing-data.ts` | MODEL_REFERENCE |
 | 8b | `packages/shared/src/prompt-wizard-categories.ts` | `PROVIDER_CAPABILITIES` entry for the node type |
 | 9 | `supabase/migrations/NNN_*.sql` | **Write a migration with `INSERT INTO model_pricing ... ON CONFLICT DO NOTHING`** — must include the base identifier AND every composite (e.g. `:2K`, `:4K`, `:economy`, `:premium`). Without this row the model is invisible in `/admin/models` and `/admin/llm-models`. ⚠️ STATIC_CREDIT_COSTS is only a runtime fallback — the admin UI reads from the DB only. |
-| 10 | `backend/src/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
+| 10 | `backend/src/ee/billing/stripe-config.ts` | If pricing tiers or credit allocations change |
 | 11 | `frontend/src/lib/pricing-data.ts` | PRICING_TIERS if tier features/prices change |
 | 12 | `packages/shared/src/node-default-mappings.ts` | `QUALITY_MAP` + `deriveLinkedFields` if the new provider has resolution/quality variants or a linked `model` field. Each `QUALITY_MAP` entry MUST declare `field: "resolution" \| "quality"` — providers with `resolution` levers (1K/2K/4K, 720p/1080p) and `quality` levers (medium/high, basic/high) write to DIFFERENT fields on node data, and the admin-defaults resolver writes to ONLY the declared field. Without a correct `field`, the resolver poisons the wrong field and the route's Zod enum rejects the request at generate-time. |
 | 12b | Config panel for the node type | Provider-aware dropdowns MUST have a `useEffect([currentProvider])` that snaps `data.<field>` to the first valid option when invalid for the current provider, AND clears (`undefined`) when the current provider doesn't expose that lever at all. Without this, admin defaults or persisted workflow data carry stale values across providers and trip the route's Zod enum. Reference implementations: `image-configs.tsx::GenerateImageConfig`/`ModifyImageConfig`, `video-configs.tsx::ImageToVideoConfig`/`TextToVideoConfig`, `audio-configs.tsx::LipSyncConfig`. |
@@ -112,8 +124,8 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 |------|------|----------------|
 | 1 | `backend/src/routes/<node-type>.ts` | Route handler (Zod schema, credit guard, API call) |
 | 2 | `backend/src/app.ts` | `app.register()` the route |
-| 3 | `backend/src/billing/credits.ts` | `STATIC_CREDIT_COSTS` entry |
-| 4 | `backend/src/billing/credit-manager.ts` | `CREDIT_COSTS` entry |
+| 3 | `backend/src/ee/billing/credits.ts` | `STATIC_CREDIT_COSTS` entry |
+| 4 | `backend/src/ee/billing/credits.ts` | `CREDIT_COSTS` entry (same file — `credit-manager.ts` was merged into `credits.ts`) |
 | 5 | `frontend/src/types/nodes.ts` | Data type + `SceneNodeData` union + `SceneNodeType` union + `NODE_DEFINITIONS` |
 | 6 | `frontend/src/components/nodes/<node>-node.tsx` | Node component |
 | 7 | `frontend/src/components/nodes/index.ts` | `nodeTypes` map |
@@ -167,5 +179,5 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 
 ---
 
-*Last updated: 2026-05-07*
+*Last updated: 2026-05-07 (ee/ migration Phases 1-5)*
 *Version: 2.0.0*

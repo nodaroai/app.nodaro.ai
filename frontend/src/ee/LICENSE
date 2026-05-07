@@ -1,0 +1,127 @@
+# The Nodaro Enterprise License
+
+**(the "Enterprise License")**
+
+Copyright (c) 2026-present Nodaro LTD.
+
+With regard to the Nodaro Software:
+
+This software and associated documentation files (the **"Enterprise
+Software"**) — meaning all source code files containing ".ee." in their
+filename, all files residing in any directory whose path contains a
+segment named "ee" or ending with ".ee", and any compiled artifacts
+derived from such files — may only be used in production if you (and
+any entity that you represent) hold a valid Nodaro Enterprise license
+corresponding to your usage.
+
+Subject to the foregoing sentence, you are free to modify the Enterprise
+Software and publish patches to the Enterprise Software. You agree that
+Nodaro LTD and/or its licensors (as applicable) retain all right, title
+and interest in and to all such modifications and/or patches, and all
+such modifications and/or patches may only be used, copied, modified,
+displayed, distributed, or otherwise exploited with a valid Nodaro
+Enterprise license for the corresponding usage.
+
+Notwithstanding the foregoing, **you may copy and modify the Enterprise
+Software for development and testing purposes, without requiring a
+subscription**. "Development and testing purposes" means non-production
+use by an individual or entity for the purpose of evaluating, debugging,
+contributing to, or building against the Enterprise Software, and
+expressly excludes any use that processes production data, serves end
+users (whether internal or external), or otherwise supports a live
+business workflow.
+
+You agree that Nodaro LTD and/or its licensors (as applicable) retain
+all right, title and interest in and to all such modifications. You are
+not granted any other rights beyond what is expressly stated herein.
+Subject to the foregoing, it is forbidden to copy, merge, publish,
+distribute, sublicense, sell, white-label, or rebrand the Enterprise
+Software.
+
+## Combined Builds and Linked Code
+
+The Enterprise Software may be imported, referenced, or otherwise
+combined at build or runtime with code that is licensed under the
+Sustainable Use License set out in `LICENSE` (the **"Community
+Software"**).
+
+For the avoidance of doubt:
+
+1. The terms of this Enterprise License apply to the Enterprise Software
+   regardless of how it is packaged, bundled, compiled, transpiled,
+   minified, or distributed. Compiling Enterprise Software together
+   with Community Software into a single binary, container image,
+   bundle, or other artifact does not relicense the Enterprise Software
+   under the Sustainable Use License, nor does it grant any production
+   use rights to the Enterprise Software.
+
+2. Any artifact (including, without limitation, Docker images, npm
+   packages, compiled binaries, server bundles, and deployed instances)
+   that **contains, links to, dynamically loads, or executes any portion
+   of the Enterprise Software** is, with respect to that portion,
+   subject to this Enterprise License and requires a valid Nodaro
+   Enterprise license for production use.
+
+3. Disabling, removing, or routing around the Enterprise Software at
+   runtime does not by itself create a license to redistribute the
+   Enterprise Software. To distribute an artifact under the Sustainable
+   Use License alone, the Enterprise Software must be removed from the
+   artifact entirely.
+
+4. The Community Software, when separated from the Enterprise Software
+   and distributed without it, remains governed exclusively by the
+   Sustainable Use License.
+
+5. A file that is otherwise Community Software but contains import
+   statements, references, type declarations, or other syntactic
+   dependencies that resolve to Enterprise Software does not, by virtue
+   of those references alone, become Enterprise Software. However, any
+   build, package, deployment, or executable artifact in which those
+   references are actually resolved against Enterprise Software — such
+   that the Enterprise Software is included in, loaded by, or executed
+   as part of the artifact — falls within the scope of clauses 1
+   through 3 above. To distribute Community Software under the
+   Sustainable Use License alone, you must either remove all such
+   references or ensure that they resolve to non-Enterprise
+   replacements at build time.
+
+## Patent Termination
+
+If you initiate or participate in patent litigation against Nodaro LTD,
+any other contributor, or any recipient of the Software (whether
+Enterprise Software or Community Software) — including a cross-claim or
+counterclaim in a lawsuit — alleging that the Software constitutes
+direct or contributory patent infringement, then any rights granted to
+you under this Enterprise License terminate as of the date the
+litigation is filed.
+
+## Contributions
+
+Contributions to the Enterprise Software are accepted only under the
+terms of the Nodaro Contributor License Agreement (`CLA.md`).
+
+## Branches
+
+Content of branches other than the main branch (i.e., "main") is not
+licensed under these terms and is provided for reference and development
+purposes only.
+
+## Third-Party Components
+
+For all third-party components incorporated into the Nodaro Software,
+those components are licensed under the original license provided by
+the owner of the applicable component.
+
+## No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+For Enterprise license inquiries, contact: license@nodaro.ai

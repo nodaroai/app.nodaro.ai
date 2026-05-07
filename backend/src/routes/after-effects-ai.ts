@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { rateLimiter } from "../middleware/rate-limit.js"
 
 const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-ae" })
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
 import { AFTER_EFFECTS_SYSTEM_PROMPT } from "../prompts/after-effects-system.js"
 import { validateAfterEffectsPlan } from "../lib/after-effects-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"

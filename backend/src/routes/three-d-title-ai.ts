@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { rateLimiter } from "../middleware/rate-limit.js"
 
 const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-3d" })
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
 import { THREE_D_TITLE_SYSTEM_PROMPT } from "../prompts/three-d-title-system.js"
 import { validateThreeDTitlePlan } from "../lib/three-d-title-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"

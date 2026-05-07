@@ -9,7 +9,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { SunoStyleBoostData } from "@/types/nodes"
 

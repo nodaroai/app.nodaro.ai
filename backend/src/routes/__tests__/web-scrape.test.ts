@@ -11,7 +11,7 @@ vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => {},
   reserveCreditsForJob: vi.fn().mockResolvedValue({ usageLogId: "usage-1" }),
 }))
-vi.mock("../../billing/credits.js", () => ({
+vi.mock("../../ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: vi.fn(), refundCredits: vi.fn() },
 }))
 vi.mock("../../lib/supabase.js", () => ({

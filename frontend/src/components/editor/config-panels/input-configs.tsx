@@ -20,7 +20,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import { useFileUpload } from "@/hooks/use-file-upload"
-import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"

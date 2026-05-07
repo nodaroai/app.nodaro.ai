@@ -6,8 +6,6 @@ import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
-import { CreditsService } from "../services/credits.js"
-import { computeActualCredits, checkAndLogAnomaly } from "../billing/credit-anomaly.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
@@ -207,9 +205,11 @@ export async function commitJobCredits(
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
+  const { CreditsService } = await import("../ee/services/credits.js")
+  const { computeActualCredits, checkAndLogAnomaly } = await import("../ee/billing/credit-anomaly.js")
+
   try {
     if (providerCostUsd && providerCostUsd > 0) {
-      // Compute actual credits and fetch reserved amount in parallel
       const [actualCredits, { data: usageLog }] = await Promise.all([
         computeActualCredits(providerCostUsd),
         supabase
@@ -219,7 +219,6 @@ export async function commitJobCredits(
           .single(),
       ])
 
-      // Commit, update job, and log anomaly (if any) are independent — run in parallel
       // checkAndLogAnomaly has internal try/catch so it never rejects
       const tasks: PromiseLike<unknown>[] = [
         CreditsService.commitCredits(usageLogId, actualCredits),
@@ -282,6 +281,7 @@ export async function refundJobCredits(usageLogId: string | null | undefined, jo
     if (isPostProcessingFailure) {
       console.log(`[worker] Post-processing failure after provider completed - not refunding credits for job ${jobId}: ${errorMessage}`)
     } else {
+      const { CreditsService } = await import("../ee/services/credits.js")
       await CreditsService.refundCredits(usageLogId)
       console.log(`[worker] Credits refunded for job ${jobId}`)
     }

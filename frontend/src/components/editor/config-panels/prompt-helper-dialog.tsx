@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { wizardAnalyze, wizardGenerate } from "@/lib/api"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { LlmModelSelect } from "./llm-model-select"
 import type { WizardQuestion, RecommendedModel, ModelChange } from "@nodaro/shared"
