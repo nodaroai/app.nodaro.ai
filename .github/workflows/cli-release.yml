@@ -57,8 +57,10 @@ jobs:
       - name: Install workspace deps
         run: npm ci
 
-      - name: Build @nodaro/shared (transitive dep of @nodaro/client)
-        run: npm -w @nodaro/shared run build
+      - name: Build workspace packages the CLI imports
+        run: |
+          npm -w @nodaro/shared run build
+          npm -w @nodaro/client run build
 
       - name: Compile binary
         env:
