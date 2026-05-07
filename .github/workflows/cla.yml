@@ -41,7 +41,7 @@ jobs:
           # The action handles event filtering internally — it inspects
           # the triggering event and fires only on relevant comment bodies.
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
-          custom-notsigned-prompt: 'Thanks for the contribution! Before merge, please sign the [Nodaro Contributor License Agreement](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA.md) (use the [Corporate CLA](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA-CORPORATE.md) if contributing on behalf of a company). Reply with `I have read the CLA Document and I hereby sign the CLA` to sign.'
+          custom-notsigned-prompt: 'Thanks for the contribution! Before merge, please sign the [Nodaro Contributor License Agreement](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA.md). Reply with `I have read the CLA Document and I hereby sign the CLA` to sign.'
           custom-allsigned-prompt: 'All Contributors have signed the CLA.'
 
 # Operational prerequisites (not enforced by this file):

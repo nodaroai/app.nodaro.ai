@@ -79,7 +79,7 @@ Only the contents of the `main` branch of github.com/nodaroai/app.nodaro.ai are 
 
 ## Contributing
 
-By submitting a contribution you agree to the Nodaro Contributor License Agreement ([`CLA.md`](./CLA.md) for individuals, [`CLA-CORPORATE.md`](./CLA-CORPORATE.md) for corporate contributors). The cla-assistant bot will automatically prompt you on your first pull request.
+By submitting a contribution you agree to the Nodaro [Contributor License Agreement](./CLA.md). The same CLA covers individual and corporate contributions — Section 2 handles employer permission. The cla-assistant bot will automatically prompt you on your first pull request.
 
 ## Commercial licensing
 

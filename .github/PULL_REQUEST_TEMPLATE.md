@@ -23,8 +23,8 @@
 
 By submitting this Pull Request, I confirm that:
 
-- [ ] I have read and agree to the [Nodaro Contributor License Agreement](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA.md) (or the [Corporate CLA](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA-CORPORATE.md) if contributing on behalf of an employer).
-- [ ] My contribution is my original work, or properly licensed third-party work clearly marked as such per CLA Section 7.
+- [ ] I have read and agree to the [Nodaro Contributor License Agreement](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA.md) (the same CLA covers individual and corporate contributions — Section 2 handles employer permission).
+- [ ] My contribution is my original work, or I have the right to submit it under the CLA terms.
 - [ ] I understand that contributions to `ee/` directories or `*.ee.{ts,tsx,sql,md}` files are subject to the [Nodaro Enterprise License](https://github.com/nodaroai/app.nodaro.ai/blob/main/backend/src/ee/LICENSE).
 
 The CLA Assistant bot (configured in `.github/workflows/cla.yml`) will prompt for signature on your first contribution.

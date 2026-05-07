@@ -337,10 +337,10 @@ for the full overview):
   commercial applications freely.
 
 By submitting a contribution, you agree to the [Nodaro Contributor
-License Agreement](../CLA.md) (or the
-[Corporate CLA](../CLA-CORPORATE.md) if contributing on behalf of an
-employer). The cla-assistant bot will prompt for signature
-automatically on your first pull request.
+License Agreement](../CLA.md). The same CLA covers individual and
+corporate contributions — Section 2 handles employer-permission. The
+cla-assistant bot will prompt for signature automatically on your
+first pull request.
 
 If you're contributing on behalf of an employer, double-check that
 your employer's IP policy allows you to do so before signing.

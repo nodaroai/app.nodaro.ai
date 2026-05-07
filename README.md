@@ -90,6 +90,6 @@ Nodaro is fair-code with three license tiers. See [`LICENSE.md`](LICENSE.md) for
 - **Enterprise code** (`backend/src/ee/`, `frontend/src/ee/`, `*.ee.{ts,tsx,sql,md}`) — [Enterprise License](backend/src/ee/LICENSE). Production use requires a paid Nodaro Cloud or Nodaro Enterprise subscription. Free for development, testing, and evaluation.
 - **SDK packages** (`packages/client/`, `packages/shared/`) — [Apache License 2.0](packages/shared/LICENSE). Embed in commercial applications freely.
 
-Contributing requires signing the [Contributor License Agreement](CLA.md) (or [Corporate CLA](CLA-CORPORATE.md) for company contributions). The cla-assistant bot handles signing automatically on your first PR.
+Contributing requires signing the [Contributor License Agreement](CLA.md) — the same CLA covers individual and corporate contributions (Section 2 handles employer permission). The cla-assistant bot handles signing automatically on your first PR.
 
 For commercial licensing inquiries, contact license@nodaro.ai.
