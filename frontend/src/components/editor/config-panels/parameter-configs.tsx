@@ -538,7 +538,7 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
       />
       <p className="text-[10px] text-muted-foreground leading-snug">
         Wire this node&apos;s output into a Generate Image prompt input. Pair with
-        Image-to-Video (VEO 3.1, same image at start AND end frame, autoLoopTrim
+        Image-to-Video (VEO 3.1, same image at start AND end frame, loopTrim
         on) and the seal phrase &quot;Seamless loop: motion begins and ends in the
         exact same composition and lighting so the first and last frames match
         perfectly.&quot;

@@ -1313,6 +1313,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       )
     }
 
+    // Migrate legacy ImageToVideoData.autoLoopTrim → loopTrim shape.
+    // autoLoopTrim was a VEO-3.1-only boolean; loopTrim is a generic config
+    // shape. Default-on for legacy nodes maps to framesToTest=8 (matches the
+    // old fixed 8-frame behavior). New users get the new default of 16.
+    migratedNodes = migratedNodes.map((n) => {
+      if (n.type !== "image-to-video") return n
+      const data = n.data as Record<string, unknown>
+      if (!("autoLoopTrim" in data)) return n
+      // From here: autoLoopTrim present. If loopTrim ALSO present, prefer
+      // loopTrim and just drop the orphan autoLoopTrim field. Otherwise
+      // synthesize a loopTrim from the boolean.
+      const wasOn = data.autoLoopTrim !== false
+      const existingLoopTrim = data.loopTrim as
+        | { enabled: boolean; framesToTest?: number; quality?: "lossless" | "precise" }
+        | undefined
+      const newData = { ...n.data } as Record<string, unknown>
+      delete newData.autoLoopTrim
+      newData.loopTrim = existingLoopTrim ?? (wasOn
+        ? { enabled: true, framesToTest: 8, quality: "precise" as const }
+        : { enabled: false })
+      return { ...n, data: newData as typeof n.data }
+    })
+
     // Strip fixed width from teleport nodes so they auto-size
     migratedNodes = migratedNodes.map((n) =>
       (n.type === "teleport-send" || n.type === "teleport-receive") && n.width

@@ -298,18 +298,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
             "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
           ),
-        auto_loop_trim: z
-          .boolean()
-          .optional()
-          .describe(
-            "VEO 3.1 only, applies when start AND end frames are supplied. VEO 3.1's " +
-            "first+last-frame mode adds a ~333ms tail dissolve that breaks loop seams. " +
-            "Default true: Nodaro strips the last 8 frames @ 24fps so the rendered last " +
-            "frame matches the supplied end frame exactly. Set false to keep the dissolve " +
-            "(useful for inspecting the raw provider output, or when the end frame differs " +
-            "from the start frame and you want the soft transition). Silently ignored on " +
-            "non-veo3.1 providers — those models never receive the trim.",
-          ),
+        loop_trim: z.object({
+          enabled: z.boolean(),
+          frames_to_test: z.number().int().min(1).max(64).optional(),
+          quality: z.enum(["lossless", "precise"]).optional(),
+        }).optional()
+          .describe("Smart-loop-cut post-process. When enabled, trims the output to its cleanest loop boundary. quality=lossless for byte-perfect stream-copy at keyframes, precise for frame-precise re-encode."),
+        // Legacy alias — accepted for one release, normalized internally.
+        auto_loop_trim: z.boolean().optional()
+          .describe("DEPRECATED: use loop_trim instead. Maps to loop_trim={enabled,frames_to_test:8,quality:'precise'}."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -423,7 +420,17 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         // Pass through only when explicitly set so the route's default (true)
         // applies when the caller doesn't specify. Worker still gates on
         // `provider === "veo3.1"` — non-veo3.1 jobs ignore this flag.
-        ...(args.auto_loop_trim !== undefined ? { autoLoopTrim: args.auto_loop_trim } : {}),
+        ...(args.loop_trim !== undefined
+          ? { loopTrim: {
+              enabled: args.loop_trim.enabled,
+              ...(args.loop_trim.frames_to_test !== undefined ? { framesToTest: args.loop_trim.frames_to_test } : {}),
+              ...(args.loop_trim.quality !== undefined ? { quality: args.loop_trim.quality } : {}),
+            } }
+          : args.auto_loop_trim !== undefined
+            ? { loopTrim: args.auto_loop_trim
+                ? { enabled: true, framesToTest: 8, quality: "precise" as const }
+                : { enabled: false } }
+            : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

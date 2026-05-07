@@ -900,6 +900,14 @@ export interface GenerateVideoOptions {
   generationType?: string        // VEO: REFERENCE_2_VIDEO
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
   enableTranslation?: boolean
+  // Smart-loop-cut post-process. Worker runs PSNR-based loop search after
+  // generation and trims clip at the best loop point. Replaces legacy
+  // `autoLoopTrim` boolean (VEO-3.1-only, fixed 8 frames).
+  loopTrim?: {
+    enabled: boolean
+    framesToTest?: number
+    quality?: "lossless" | "precise"
+  }
   userId?: string
 }
 
@@ -946,6 +954,7 @@ export async function generateVideo(
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
       enableTranslation: opts.enableTranslation,
+      loopTrim: opts.loopTrim,
     }
     if (opts.userId) {
       body.userId = opts.userId

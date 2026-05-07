@@ -672,3 +672,51 @@ export async function withProgressRamp<T>(
     ramp.stop()
   }
 }
+
+/**
+ * Partial-success refund: the i2v generation succeeded but the smart-loop-cut
+ * post-process failed. Keep the un-trimmed clip as the result, refund only
+ * the loop-trim addon credits (commit actual = reserved - addon).
+ *
+ * Wraps CreditsService.commitCredits with the partial actual amount and
+ * stamps usage_logs.metadata.loop_trim_refunded for traceability.
+ */
+export async function refundLoopTrimAddon(
+  jobId: string,
+  usageLogId: string | null | undefined,
+  addonCredits: number,
+): Promise<void> {
+  if (!hasCredits() || !usageLogId || addonCredits <= 0) return
+
+  try {
+    const { data: usageLog, error } = await supabase
+      .from("usage_logs")
+      .select("credits_used, metadata")
+      .eq("id", usageLogId)
+      .single()
+
+    if (error || !usageLog) {
+      console.error(`[worker] refundLoopTrimAddon: usage_log not found for ${usageLogId}`)
+      return
+    }
+
+    const reserved = (usageLog.credits_used as number | null) ?? 0
+    const actual = Math.max(0, reserved - addonCredits)
+
+    const { CreditsService } = await import("../ee/services/credits.js")
+    await CreditsService.commitCredits(usageLogId, actual)
+
+    const existingMeta = (usageLog.metadata as Record<string, unknown> | null) ?? {}
+    await supabase
+      .from("usage_logs")
+      .update({ metadata: { ...existingMeta, loop_trim_refunded: true } })
+      .eq("id", usageLogId)
+
+    await supabase.from("jobs").update({ credits_actual: actual }).eq("id", jobId)
+
+    console.log(`[worker] loop-trim addon refunded for job ${jobId} (reserved=${reserved}, actual=${actual})`)
+  } catch (err) {
+    console.error(`[worker] refundLoopTrimAddon failed for job ${jobId}:`, err)
+    // Non-fatal: prefer NOT failing the whole job over a refund hiccup.
+  }
+}

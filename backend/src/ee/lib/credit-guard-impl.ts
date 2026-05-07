@@ -31,7 +31,7 @@ export function creditGuardImpl(
     // final post-markup number.
     let computedCreditOverride: number | undefined
     if (opts?.computeCredits) {
-      const baseCredits = opts.computeCredits(req.body)
+      const baseCredits = await opts.computeCredits(req.body)
       const settings = await getAppSettings()
       computedCreditOverride =
         settings.cost_markup_percent > 0 && baseCredits > 0

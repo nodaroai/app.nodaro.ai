@@ -21,7 +21,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 import { PROVIDERS_WITH_REFERENCES, PROVIDERS_WITH_END_FRAME, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, buildVideoCreditModelIdentifier, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = new Set([
@@ -101,7 +101,9 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.resolution,
     Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
   )
-  const credits = useModelCredits(creditIdentifier, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  const baseCredits = useModelCredits(creditIdentifier, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  const loopAddon = estimateLoopTrimAddonCredits(nodeData.loopTrim, nodeData.duration ?? 8)
+  const credits = baseCredits + loopAddon
   const useFull = useFullResolution(id)
   // When the active result has stored width/height (captured the first
   // time it loaded), aspectRatio is available synchronously on switch —

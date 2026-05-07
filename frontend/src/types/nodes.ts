@@ -1226,11 +1226,21 @@ export type ImageToVideoData = {
   // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
   webSearch?: boolean
   nsfwChecker?: boolean
-  // VEO3.1 first+last-frame mode adds a ~333ms tail dissolve that breaks
-  // loop seams. Default true: backend trims the last 8 frames @ 24fps so
-  // the rendered end matches `endFrame` exactly. Set false to keep the
-  // soft cross-fade. Only meaningful for veo3.1 + start AND end frames.
-  autoLoopTrim?: boolean
+  // Smart-loop-cut post-process. When `enabled: true`, the worker runs a
+  // PSNR-based loop-point search after generation and trims the clip there.
+  // Replaces the legacy autoLoopTrim (VEO 3.1 only, fixed 8 frames).
+  // `framesToTest` (default 16, range 1-64) controls search depth.
+  // `quality`:
+  //   - "precise"  (default): any-frame candidates + libx264 re-encode.
+  //                Frame-precise; slight quality loss.
+  //   - "lossless": keyframe-only candidates + stream-copy. Byte-perfect;
+  //                 cut snaps to nearest keyframe; supports any resolution
+  //                 including 4K with no encode-pipeline memory cost.
+  loopTrim?: {
+    enabled: boolean
+    framesToTest?: number
+    quality?: "lossless" | "precise"
+  }
   // VEO 3.x only. KIE auto-translates prompts to English by default. Set
   // false to keep prompts (e.g. the perfect-loop seal phrase) verbatim.
   // Default true (matches KIE behaviour) — undefined means "send default".

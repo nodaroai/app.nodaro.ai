@@ -1023,10 +1023,10 @@ export function buildPayload(
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
-          // VEO3.1 first+last-frame loop trim — only the canvas exposes
-          // the toggle. data.autoLoopTrim defaults to undefined which
-          // the worker treats as true; explicit false skips the trim.
-          autoLoopTrim: data.autoLoopTrim,
+          // Generic smart-loop-cut post-process. Worker reads loopTrim.enabled.
+          // Legacy autoLoopTrim is normalized at the route level; orchestrator
+          // path sees it migrated by the frontend already (use-workflow-store).
+          loopTrim: data.loopTrim,
           enableTranslation: data.enableTranslation,
           usageLogId,
         },

@@ -568,7 +568,7 @@ class TtlCache<T> {
 
 // ── Model pricing cache (60s TTL) ──
 
-interface ModelPricing {
+export interface ModelPricing {
   creditCost: number
   isEnabled: boolean
   tierRestriction: string | null
@@ -584,37 +584,44 @@ export function invalidateModelPricingCache(): void {
 }
 
 /**
+ * Returns the PRE-MARKUP base cost for a model (cached 60s).
+ * Use this when the caller will apply markup separately (e.g. routes
+ * composing dbCost + addon via the creditGuard computeCredits hook).
+ * For most callers, prefer getModelCreditCostFromDB which returns
+ * post-markup values matching what the user is charged.
+ */
+export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
+  const cached = modelPricingCache.get(modelIdentifier)
+  if (cached) return cached
+
+  const { data, error } = await supabase
+    .from("model_pricing")
+    .select("credit_cost, is_enabled, tier_restriction")
+    .eq("model_identifier", modelIdentifier)
+    .single()
+
+  let base: ModelPricing
+  if (error || !data) {
+    const staticCost = STATIC_CREDIT_COSTS[modelIdentifier]
+    if (staticCost === undefined) {
+      console.warn(`[credits] Unknown model identifier "${modelIdentifier}" — no DB or static cost, defaulting to 1`)
+    }
+    base = { creditCost: staticCost ?? 1, isEnabled: true, tierRestriction: null }
+  } else {
+    base = { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
+  }
+  modelPricingCache.set(modelIdentifier, base)
+  return base
+}
+
+/**
  * Get credit cost for a model from database, falling back to static costs.
  * Base costs are cached for 60s. The cost_markup_percent from admin settings
  * is applied on top: finalCost = ceil(baseCost * (1 + markup/100)).
  * Both DB values and STATIC_CREDIT_COSTS represent base costs at 0% markup.
  */
-async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelPricing> {
-  // Resolve base cost (cached 60s)
-  let base: ModelPricing
-  const cached = modelPricingCache.get(modelIdentifier)
-  if (cached) {
-    base = cached
-  } else {
-    const { data, error } = await supabase
-      .from("model_pricing")
-      .select("credit_cost, is_enabled, tier_restriction")
-      .eq("model_identifier", modelIdentifier)
-      .single()
-
-    if (error || !data) {
-      const staticCost = STATIC_CREDIT_COSTS[modelIdentifier]
-      if (staticCost === undefined) {
-        console.warn(`[credits] Unknown model identifier "${modelIdentifier}" — no DB or static cost, defaulting to 1`)
-      }
-      base = { creditCost: staticCost ?? 1, isEnabled: true, tierRestriction: null }
-    } else {
-      base = { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
-    }
-
-    modelPricingCache.set(modelIdentifier, base)
-  }
-
+export async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelPricing> {
+  const base = await getModelCreditBaseCost(modelIdentifier)
   // Apply markup from admin settings (cached 60s separately)
   const settings = await getAppSettings()
   if (settings.cost_markup_percent > 0 && base.creditCost > 0) {
@@ -623,7 +630,6 @@ async function getModelCreditCostFromDB(modelIdentifier: string): Promise<ModelP
       creditCost: Math.ceil(base.creditCost * (1 + settings.cost_markup_percent / 100)),
     }
   }
-
   return base
 }
 
