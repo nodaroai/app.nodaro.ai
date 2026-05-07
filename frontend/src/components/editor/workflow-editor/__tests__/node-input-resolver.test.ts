@@ -575,4 +575,100 @@ describe("resolveEdgeValuesForTableColumn (UI display helper)", () => {
       "piece three",
     ])
   })
+
+  // ---------------------------------------------------------------------------
+  // Regression: Bundle worked, Selected/Item didn't — single value picked from
+  // upstream wasn't being run through the list column's delimiter.
+  // ---------------------------------------------------------------------------
+  it("LLM upstream + Selected mode → splits picked value by list's delimiter", () => {
+    // The "selected" result from an LLM is one big multi-line string. The list
+    // should still split it on its configured delimiter (here: ",").
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "alpha,bravo,charlie",
+    })
+    const edge = {
+      source: "llm1",
+      target: "list1",
+      sourceHandle: null,
+      targetHandle: "col_c1_in",
+      data: { outputMode: "last" }, // "last" = "Selected" in the UI
+    }
+    const columns = [{ id: "c1", handleId: "col_c1", type: "text" as const, splitDelimiter: "," }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      llm as any,
+      [edge] as any,
+      [llm] as any,
+      columns,
+    )
+    expect(vals).toEqual(["alpha", "bravo", "charlie"])
+  })
+
+  it("LLM upstream + Item mode (new format) → splits picked value by list's delimiter", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "first|second|third",
+    })
+    const edge = {
+      source: "llm1",
+      target: "list1",
+      sourceHandle: null,
+      targetHandle: "col_c1_in",
+      data: { outputMode: "item", itemIndex: "1" },
+    }
+    const columns = [{ id: "c1", handleId: "col_c1", type: "text" as const, splitDelimiter: "|" }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      llm as any,
+      [edge] as any,
+      [llm] as any,
+      columns,
+    )
+    expect(vals).toEqual(["first", "second", "third"])
+  })
+
+  it("LLM upstream + Item:1 mode (legacy) → splits picked value by list's delimiter", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "x;y;z",
+    })
+    const edge = {
+      source: "llm1",
+      target: "list1",
+      sourceHandle: null,
+      targetHandle: "col_c1_in",
+      data: { outputMode: "item:0" },
+    }
+    const columns = [{ id: "c1", handleId: "col_c1", type: "text" as const, splitDelimiter: ";" }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      llm as any,
+      [edge] as any,
+      [llm] as any,
+      columns,
+    )
+    expect(vals).toEqual(["x", "y", "z"])
+  })
+
+  it("Already-structured upstream (split-text) + Item mode → does NOT re-split picked item", () => {
+    // Picking item 1 from split-text gives one piece — it should land in the
+    // list column whole, not chopped further by the column's newline default.
+    const split = makeNode("split1", "split-text", {
+      splitResults: ["one\ntwo", "three\nfour"],
+    })
+    const edge = {
+      source: "split1",
+      target: "list1",
+      sourceHandle: null,
+      targetHandle: "col_c1_in",
+      data: { outputMode: "item", itemIndex: "1" },
+    }
+    const columns = [{ id: "c1", handleId: "col_c1", type: "text" as const }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      split as any,
+      [edge] as any,
+      [split] as any,
+      columns,
+    )
+    expect(vals).toEqual(["one\ntwo"])
+  })
 })

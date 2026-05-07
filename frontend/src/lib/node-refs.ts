@@ -4,9 +4,10 @@
  * Also builds label→output maps for execution-time resolution.
  */
 
-import type { WorkflowNode, WorkflowEdge, LoopNodeData } from "@/types/nodes"
+import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
-import { resolveNodeRefs } from "@nodaro/shared"
+import { extractNodeOutputAsList } from "@/components/editor/workflow-editor/node-input-resolver"
+import { resolveIndex, resolveNodeRefs } from "@nodaro/shared"
 
 export interface NodeRefItem {
   id: string
@@ -84,52 +85,40 @@ export function getUpstreamNodes(
 
 const LIST_LIKE_TYPES = new Set(["list", "loop", "split-text"])
 
-/** Return the outputMode from connecting edges, defaulting to "each" for list-like nodes. */
+/** Return the edge's outputMode + itemIndex, defaulting to "each" for list-like nodes. */
 function getEdgeOutputMode(
   connectingEdges: ReadonlyArray<WorkflowEdge>,
-): string {
+): { mode: string; itemIndex?: string } {
   for (const edge of connectingEdges) {
-    const mode = (edge.data as Record<string, unknown> | undefined)
-      ?.outputMode as string | undefined
-    if (mode) return mode
+    const ed = edge.data as Record<string, unknown> | undefined
+    const mode = ed?.outputMode as string | undefined
+    if (mode) return { mode, itemIndex: ed?.itemIndex as string | undefined }
   }
-  return "each"
+  return { mode: "each" }
 }
 
-/** Parse the list of items from a list/loop/split-text node's data. */
+/** Parse the list of items from a list/loop/split-text node's data.
+ *  Delegates to extractNodeOutputAsList so connected/legacy/format permutations
+ *  behave the same way as the runtime executor and the list-node UI. */
 function extractListItems(node: WorkflowNode): string[] {
-  const data = node.data as Record<string, unknown>
-  if (node.type === "list") {
-    // New format: columns + rows (same as loop)
-    const listCols = (data as LoopNodeData).columns
-    if (listCols) {
-      const rows = (data as LoopNodeData).rows
-      return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
-    }
-    // Legacy format: items string
-    return ((data.items as string) || "")
-      .split("\n")
-      .map((l: string) => l.trim())
-      .filter((l: string) => l.length > 0)
-  }
-  if (node.type === "loop") {
-    const rows = (data as LoopNodeData).rows
-    return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
-  }
-  if (node.type === "split-text") {
-    return (data.splitResults as string[] | undefined) ?? []
-  }
-  return []
+  return extractNodeOutputAsList(node) ?? []
 }
 
-/** Resolve a list of items using the given output mode. */
+/** Resolve a list of items using the given output mode + 1-based itemIndex. */
 function resolveListOutput(
   items: string[],
   mode: string,
+  itemIndex?: string,
 ): string | undefined {
   if (items.length === 0) return undefined
   if (mode === "last") return items[items.length - 1]
+  if (mode === "item") {
+    // New format: outputMode="item" + itemIndex="1"|"2"|"last" (1-based, supports last/last-N)
+    const idx = resolveIndex(itemIndex ?? "1", items.length)
+    return items[idx] ?? items[0]
+  }
   if (mode.startsWith("item:")) {
+    // Legacy format: outputMode="item:0" (0-based index baked into the mode string)
     const idx = parseInt(mode.split(":")[1], 10)
     return items[idx] ?? items[0]
   }
@@ -183,9 +172,9 @@ export function buildNodeRefMap(
     // regular behavior — it's fan-out, so the ref should resolve via items)
     let output: string | undefined
     if (LIST_LIKE_TYPES.has(node.type as string)) {
-      const mode = getEdgeOutputMode(connectingEdges)
+      const { mode, itemIndex } = getEdgeOutputMode(connectingEdges)
       const items = extractListItems(node)
-      output = resolveListOutput(items, mode)
+      output = resolveListOutput(items, mode, itemIndex)
     }
     // All other nodes use default extraction
     if (output === undefined) {
