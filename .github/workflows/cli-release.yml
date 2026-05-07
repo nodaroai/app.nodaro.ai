@@ -47,6 +47,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Pin npm to match the lockfile
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
