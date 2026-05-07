@@ -386,12 +386,21 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
   "veo3.1": {
     model: "veo3_fast",  // Fast model - quicker generation, lower quality
     credits: 60,
-    cost: 0.30,  // 60 KIE credits * $0.005 (VEO 3.1 Fast)
+    ***REDACTED-OSS-SCRUB***
     imageParam: "imageUrls",
     extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 Fast always produces 8 second videos (not configurable)
     supportsEndFrame: true,  // Pass 2 images in imageUrls array for start+end frame
     // Note: VEO uses imageUrls array - [startFrame, endFrame] - no separate endFrameParam
+  },
+  "veo3_lite": {
+    model: "veo3_lite",  // Cheapest VEO 3.1 tier; KIE pricing 30 KIE cr / $0.15 @ 720p, 35 cr / $0.175 @ 1080p
+    credits: 30,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "imageUrls",
+    extraParams: { generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO" },
+    allowedDurations: [8],  // FIXED: VEO 3.1 Lite always produces 8 second videos
+    supportsEndFrame: true,  // Same imageUrls[start, end] pattern as veo3 / veo3.1
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/image-to-video
@@ -640,9 +649,16 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
   "veo3.1": {
     model: "veo3_fast",  // Fast model - lower cost, faster
     credits: 60,
-    cost: 0.30,  // 60 KIE credits * $0.005 (VEO 3.1 Fast)
+    ***REDACTED-OSS-SCRUB***
     extraParams: { generationType: "TEXT_2_VIDEO" },
     allowedDurations: [8],  // FIXED: VEO3 always produces 8 second videos (not configurable)
+  },
+  "veo3_lite": {
+    model: "veo3_lite",  // Cheapest VEO 3.1 tier
+    credits: 30,
+    ***REDACTED-OSS-SCRUB***
+    extraParams: { generationType: "TEXT_2_VIDEO" },
+    allowedDurations: [8],  // FIXED: VEO 3.1 Lite always produces 8 second videos
   },
 
   // Kling family - VERIFIED: docs.kie.ai/market/kling/text-to-video

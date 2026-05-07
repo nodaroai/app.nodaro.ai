@@ -12,6 +12,7 @@ import {
   AUDIO_ADDON_PROVIDERS,
   MODE_ADDON_PROVIDERS,
   RESOLUTION_VIDEO_REF_PRICING,
+  VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   MOTION_DURATION_TIERS,
 } from "./model-constants.js"
@@ -94,6 +95,13 @@ export function buildVideoCreditModelIdentifier(
         return override
       }
     }
+  }
+
+  // VEO 3.x with resolution-tiered pricing: 720p is the base (no suffix),
+  // 1080p gets ":1080p". Duration is fixed at 8s for VEO so the
+  // duration-tier path below does not apply.
+  if (VEO_RESOLUTION_TIERED_PROVIDERS.has(effectiveProvider)) {
+    return resolution === "1080p" ? `${effectiveProvider}:1080p` : effectiveProvider
   }
 
   if (!DURATION_PRICED_PROVIDERS.has(effectiveProvider)) {

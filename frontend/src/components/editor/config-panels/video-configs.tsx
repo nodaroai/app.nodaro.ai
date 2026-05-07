@@ -73,7 +73,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     : baseDurations
   const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(data.provider || "seedance-2-fast")
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(data.provider || "seedance-2-fast")
-  const isVeo = data.provider === "veo3" || data.provider === "veo3.1"
+  const isVeo = data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
   const isVeoRefMode = isVeo && data.veoMode === "reference"
 
   const connectedImages = useMemo(() => {
@@ -189,7 +189,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
-      {(data.provider === "veo3" || data.provider === "veo3.1") && (
+      {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
@@ -317,7 +317,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "veo3" || data.provider === "veo3.1"
+          {data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
             ? "VEO 3.1 produces ~8 second videos (not configurable)."
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
@@ -1070,12 +1070,12 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "veo3" || data.provider === "veo3.1"
+          {data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
             ? "VEO 3.1 produces ~8 second videos (not configurable)."
             : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
-      {(data.provider === "veo3" || data.provider === "veo3.1") && (
+      {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (
         <>
           {(() => {
             const opts = getVideoResolutionOptions(currentProvider)

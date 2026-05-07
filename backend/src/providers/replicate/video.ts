@@ -111,7 +111,8 @@ export class ReplicateVideoProvider
 
     const extraInput = { ...cfg.extraInput }
 
-    // VEO 3/3.1 generate_audio: default true
+    // VEO 3/3.1 generate_audio: default true (veo3_lite is KIE-only —
+    // Replicate doesn't host the Lite tier, so it's not branched here)
     if (resolvedModel === "veo3" || resolvedModel === "veo3.1") {
       extraInput.generate_audio = true
     }

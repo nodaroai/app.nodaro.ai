@@ -248,6 +248,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "minimax",
   "veo3",
   "veo3.1",
+  "veo3_lite",
   "kling",
   "kling-turbo",
   "kling-3.0",
@@ -277,6 +278,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "minimax",
   "veo3",
   "veo3.1",
+  "veo3_lite",
   "kling",
   "kling-turbo",
   "kling-3.0",
@@ -551,6 +553,23 @@ export const AUDIO_ADDON_PROVIDERS = new Set([
  * When provider is in this set and mode is "high", ":high" is appended to the identifier.
  */
 export const MODE_ADDON_PROVIDERS = new Set<string>([
+])
+
+/**
+ * VEO 3.x providers where credit cost depends on the requested output
+ * resolution (720p default vs 1080p inline; 4K is via the separate
+ * upgrade endpoint and isn't part of this set). When provider is in
+ * this set and resolution !== "720p", `:1080p` is appended to the
+ * identifier so the credit lookup hits the per-resolution rate.
+ *
+ * Per KIE pricing (verified 2026-05-06):
+ *   veo3.1 (Fast): 720p=60 KIE cr, 1080p=65 KIE cr
+ *   veo3_lite:    720p=30 KIE cr, 1080p=35 KIE cr
+ *   veo3 (Quality) is not in this set yet — pricing not in our reference data.
+ */
+export const VEO_RESOLUTION_TIERED_PROVIDERS = new Set<string>([
+  "veo3.1",
+  "veo3_lite",
 ])
 
 /**
