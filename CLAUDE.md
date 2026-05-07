@@ -146,6 +146,22 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 ***REDACTED-OSS-SCRUB***
 
+### Parameter Picker Node Registration (CRITICAL)
+
+**If the new node is a parameter picker (a curated catalog with a tile-grid picker UI — Setting, Mood, Action FX, Loop Subject, Person, etc.), it MUST also be registered in BOTH of these to render in published apps:**
+
+| Step | File | What to Update |
+|------|------|----------------|
+| 20 | `frontend/src/lib/parameter-picker-types.ts` | Add the node type string to the `PARAMETER_PICKER_NODE_TYPES` set ⚠️ **Without this, `input-card.tsx` falls through to `ParameterCard` (text input) and the picker UI never mounts in apps** |
+| 21 | `frontend/src/lib/parameter-picker-registry.tsx` | Add a `kind:"single"` (one valueField + catalog) or `kind:"multi"` (multiple fields + custom Picker) entry. Single: `nodeType`, `label`, `valueField`, `defaultValue`, `catalogId`, `entries: mapCat(CATALOG, "category")`, optional `groupOrder`/`groupLabels`/`renderIcon`. Multi: `fields`, `catalogEntries: flatCat(CATALOG)`, `Picker: erase(YourPickerComponent)`. |
+| 22 | `packages/shared/src/<catalog>.ts` | If the catalog has categories, export `<NAME>_CATEGORY_ORDER` and `<NAME>_CATEGORY_LABELS` (mirror `action-fx.ts` / `loop-subject.ts`) so the registry's `groupOrder`/`groupLabels` can use them. Also export from `packages/shared/src/index.ts`. |
+| 23 | `packages/shared/src/i18n/types.ts` | Add the `catalogId` literal to the `I18nCatalogId` union so `useLocalizedCatalog(catalogId)` typechecks. |
+
+**The two registries (steps 20 and 21) MUST stay in sync.** The lightweight set in step 20 is what `input-card.tsx` (the published-app runtime) imports — it intentionally avoids the heavy registry to keep the bundle small. The full registry in step 21 is only loaded on demand. A node listed in step 20 but missing from step 21 will render `null` in apps; a node in step 21 but missing from step 20 won't be detected as a picker and will render as a generic text input bound to the wrong field.
+
+**Reference example (single-dim picker):** `loop-subject` — see `parameter-picker-registry.tsx` line ~277 + `parameter-picker-types.ts`.
+**Reference example (multi-dim picker):** `person` — see `parameter-picker-registry.tsx` line ~424 + the `PersonPicker` component.
+
 ### Database Rules
 - RLS on every table.
 - **NEVER create RLS policies on `profiles` that query `profiles`** — infinite recursion. Use the `is_admin()` SECURITY DEFINER function instead.
@@ -193,5 +209,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-07 (i2v loop trim + app-run archive)*
-*Version: 2.1.0*
+*Last updated: 2026-05-07 (parameter picker registration rule + Loop Subject app-render fix)*
+*Version: 2.2.0*

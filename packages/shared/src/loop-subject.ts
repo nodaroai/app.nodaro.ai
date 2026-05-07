@@ -30,6 +30,16 @@ export interface LoopSubject {
   readonly promptHint: string
 }
 
+export const LOOP_SUBJECT_CATEGORY_ORDER: ReadonlyArray<LoopSubjectCategory> = [
+  "realistic",
+  "abstract",
+] as const
+
+export const LOOP_SUBJECT_CATEGORY_LABELS: Readonly<Record<LoopSubjectCategory, string>> = {
+  realistic: "Realistic",
+  abstract: "Abstract / VJ",
+} as const
+
 export const LOOP_SUBJECTS: ReadonlyArray<LoopSubject> = [
   // -------------------- Realistic --------------------
   {
