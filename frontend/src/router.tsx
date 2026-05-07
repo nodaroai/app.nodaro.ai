@@ -45,6 +45,9 @@ const SignupPage = lazy(() => import("@/app/(auth)/signup/page"))
 // OAuth consent screen (lazy — public route, no chrome)
 const OAuthAuthorizePage = lazy(() => import("@/app/oauth/authorize/page"))
 
+// CLI login bridge (lazy — only used when `nodaro auth login` opens it)
+const AuthCliPage = lazy(() => import("@/app/auth/cli/page"))
+
 // MCP marketing landing page (lazy — public route, no chrome)
 const McpPage = lazy(() => import("@/app/mcp/page"))
 
@@ -156,6 +159,11 @@ export const router = createBrowserRouter([
   {
     path: "/oauth/authorize",
     element: <SuspenseWrapper><OAuthAuthorizePage /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/auth/cli",
+    element: <SuspenseWrapper><AuthCliPage /></SuspenseWrapper>,
     errorElement: <RouteErrorBoundary />,
   },
   {
