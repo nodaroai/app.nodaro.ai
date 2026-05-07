@@ -328,8 +328,9 @@ for the full overview):
   source-available; permits personal + internal-business use +
   self-hosting; prohibits commercial hosted-service offerings to third
   parties.
-- Enterprise code (`backend/src/ee/`, `frontend/src/ee/`,
-  `*.ee.{ts,tsx,sql,md}`): [Enterprise License](../backend/src/ee/LICENSE) —
+- Enterprise code (any path with an `ee` segment, any filename
+  containing `.ee.`, plus compiled artifacts derived from such files):
+  [Enterprise License](../backend/src/ee/LICENSE) —
   same terms plus a paid subscription requirement for production use,
   with carve-outs for development, testing, and evaluation.
 - SDK packages (`packages/client/`, `packages/shared/`):

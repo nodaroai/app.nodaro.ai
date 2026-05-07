@@ -186,16 +186,26 @@ function listFiles(dir) {
   return out
 }
 
+// Mirrors the scope defined in backend/src/ee/LICENSE:
+//   "all source code files containing '.ee.' in their filename, all files
+//    residing in any directory whose path contains a segment named 'ee'
+//    or ending with '.ee', and any compiled artifacts derived from such
+//    files"
 function isEnterprisePath(filePath) {
   const segments = filePath.split(sep)
-  if (segments.includes("ee")) return true
-  if (/\.ee\.(ts|tsx|sql|md)$/.test(filePath)) return true
+  // Directory segment named exactly "ee" or ending with ".ee"
+  if (segments.slice(0, -1).some((s) => s === "ee" || s.endsWith(".ee"))) return true
+  // Filename containing the ".ee." substring (any extension)
+  const filename = segments[segments.length - 1] ?? ""
+  if (filename.includes(".ee.")) return true
   return false
 }
 
 function isEnterpriseImportSpecifier(spec) {
-  if (spec.includes("/ee/")) return true
-  if (/\.ee(\.|$)/.test(spec)) return true
+  // Path containing an "ee" or "*.ee" directory segment
+  if (/(?:^|\/)ee\//.test(spec) || /\.ee\//.test(spec)) return true
+  // Specifier ending with ".ee" or containing ".ee." in filename
+  if (/\.ee(?:\.|$)/.test(spec)) return true
   return false
 }
 
