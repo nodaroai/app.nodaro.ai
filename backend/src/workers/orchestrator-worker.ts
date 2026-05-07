@@ -32,7 +32,7 @@ import type {
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { filterCloneNodes } from "@nodaro/shared"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
 import { migrateEdgeOutputMode } from "@nodaro/shared"
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "@nodaro/shared"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -355,6 +355,20 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
             completedAt: new Date().toISOString(),
           }
         }
+      } else if (node.type && PARAMETER_NODE_TYPES.has(node.type)) {
+        // Parameter pickers (mood, action-fx, loop-subject, person, etc.) emit
+        // a prompt fragment via FieldMappings — they never make API calls and
+        // have no executable handler. Mark them completed up-front so they
+        // (a) don't end up in any execution level, (b) never reach executeNode
+        // (which would fall through to executeWorkerNode → create a stale jobs
+        // row → buildPayload throw "Unknown node type"), and (c) still expose
+        // their prompt hint as output for {Label} ref resolution downstream.
+        const hint = getParameterPromptHint(node)
+        nodeStates[node.id] = {
+          status: "completed",
+          output: hint ? { text: hint } : {},
+          completedAt: new Date().toISOString(),
+        }
       } else if (skippedIds.has(node.id)) {
         // Skipped = frozen: don't re-execute, but preserve saved output
         // so downstream nodes can still resolve inputs from this node.
@@ -395,6 +409,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     const executableNodes = nodes.filter((n) => {
       if (isSourceNode(n.type)) return false
       if (isSkipNode(n.type)) return false
+      if (n.type && PARAMETER_NODE_TYPES.has(n.type)) return false
       if (skippedIds.has(n.id)) return false
       if (nodeSubset && !nodeSubset.has(n.id)) return false
       return true
@@ -534,9 +549,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         }
       }
 
-      // Filter to executable nodes (not source, not skipped, not gated, not already done)
+      // Filter to executable nodes (not source, not parameter picker, not
+      // skipped, not gated, not already done)
       const executableNodes = level.filter((node) => {
         if (isSourceNode(node.type)) return false
+        if (node.type && PARAMETER_NODE_TYPES.has(node.type)) return false
         if (skippedIds.has(node.id)) return false
         if (isSkipNode(node.type)) return false
         if (routerGatedIds.has(node.id)) return false
