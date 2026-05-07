@@ -14,13 +14,14 @@ Portions of this software are licensed as follows:
   other artifact combines such files with files licensed under the
   Sustainable Use License, the combined-build rules in
   `backend/src/ee/LICENSE` govern the artifact.
-- Source code files in `packages/client/` and `packages/shared/` are
-  published as the npm packages `@nodaro/client` and `@nodaro/shared`
-  under the **Apache License 2.0**, as set out in
-  `packages/client/LICENSE` and `packages/shared/LICENSE`. Those files
-  are NOT subject to the Sustainable Use License set out below, and
-  the branch-scope restriction in the first bullet does not affect
-  their Apache 2.0 grant.
+- Source code files in `packages/client/`, `packages/shared/`, and
+  `packages/cli/` are published as the npm packages `@nodaro/client`,
+  `@nodaro/shared`, and `@nodaro/cli` under the **Apache License 2.0**,
+  as set out in `packages/client/LICENSE`, `packages/shared/LICENSE`,
+  and `packages/cli/LICENSE`. Those files are NOT subject to the
+  Sustainable Use License set out below, and the branch-scope
+  restriction in the first bullet does not affect their Apache 2.0
+  grant.
 - All third-party components incorporated into the Nodaro Software are
   licensed under the original license provided by the owner of the
   applicable component.

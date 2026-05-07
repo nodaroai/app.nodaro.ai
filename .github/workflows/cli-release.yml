@@ -1,0 +1,110 @@
+name: Publish @nodaro/cli binaries
+
+# Triggered manually via the GitHub Actions UI, or automatically when a tag
+# matching cli-v* is pushed (e.g., cli-v0.1.0). The job compiles standalone
+# binaries for 5 target platforms via `bun build --compile` and uploads them
+# as GitHub Release assets.
+#
+# Disabled by default: requires the workflow_dispatch trigger or a tag push.
+# This avoids accidentally cutting a release on every commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'CLI version (matches the tag without prefix, e.g., 0.1.0)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'cli-v*'
+
+permissions:
+  contents: write  # needed to create the release + upload assets
+
+jobs:
+  build:
+    name: Compile ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-darwin-arm64
+            asset:  nodaro-darwin-arm64
+          - target: bun-darwin-x64
+            asset:  nodaro-darwin-x64
+          - target: bun-linux-arm64
+            asset:  nodaro-linux-arm64
+          - target: bun-linux-x64
+            asset:  nodaro-linux-x64
+          - target: bun-windows-x64
+            asset:  nodaro-windows-x64.exe
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Build @nodaro/shared (transitive dep of @nodaro/client)
+        run: npm -w @nodaro/shared run build
+
+      - name: Compile binary
+        env:
+          # Matrix values are pulled from the workflow file (not user input),
+          # but routed via env to satisfy the project-level injection guard.
+          TARGET: ${{ matrix.target }}
+          ASSET:  ${{ matrix.asset }}
+        run: |
+          mkdir -p packages/cli/dist/binaries
+          bun build packages/cli/src/index.ts \
+            --compile \
+            --target="$TARGET" \
+            --outfile="packages/cli/dist/binaries/$ASSET"
+
+      - name: Upload binary as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: packages/cli/dist/binaries/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Attach binaries to GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "tag=cli-v$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            # Tag push — github.ref_name is already cli-vX.Y.Z
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create release + attach assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
