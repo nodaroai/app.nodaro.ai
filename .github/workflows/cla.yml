@@ -18,6 +18,12 @@ permissions:
 
 jobs:
   CLAAssistant:
+    # Dormant until the repository variable CLA_BOT_ENABLED is set to "true".
+    # Until then the job is skipped (shown as "skipped" / green, not failed),
+    # so PR checks stay clean while the operational prereqs below are pending.
+    # To activate: complete the operational prerequisites at the bottom of
+    # this file, then set CLA_BOT_ENABLED=true under repo Settings > Variables.
+    if: vars.CLA_BOT_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: CLA Assistant
@@ -44,8 +50,10 @@ jobs:
           custom-notsigned-prompt: 'Thanks for the contribution! Before merge, please sign the [Nodaro Contributor License Agreement](https://github.com/nodaroai/app.nodaro.ai/blob/main/CLA.md). Reply with `I have read the CLA Document and I hereby sign the CLA` to sign.'
           custom-allsigned-prompt: 'All Contributors have signed the CLA.'
 
-# Operational prerequisites (not enforced by this file):
+# Operational prerequisites to ACTIVATE this workflow:
 #   1. Create the private repo nodaroai/cla-signatures with an empty main branch.
 #   2. Generate a fine-grained PAT with `contents: write` scoped only to that repo;
 #      add it as the `CLA_PAT` secret on this repo.
-#   3. Update the path-to-document URL above if the repo is moved or renamed.
+#   3. Set CLA_BOT_ENABLED=true under repo Settings > Variables (the if: guard
+#      above checks this; until set, the job is skipped on every PR).
+#   4. Update the path-to-document URL above if the repo is moved or renamed.
