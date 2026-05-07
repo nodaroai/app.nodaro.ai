@@ -11,6 +11,8 @@ nodaro workflows run <workflowId> --watch
 
 ## Install
 
+### Option A — npm (cross-platform, requires Node)
+
 ```bash
 npm install -g @nodaro/cli
 # or run a one-off without installing:
@@ -18,6 +20,32 @@ npx @nodaro/cli --help
 ```
 
 Requires Node.js ≥ 20.
+
+### Option B — standalone binary (no Node required, ~10ms cold start)
+
+Download a pre-built binary from the [Releases page](https://github.com/nodaroai/app.nodaro.ai/releases?q=cli-v):
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/nodaroai/app.nodaro.ai/releases/latest/download/nodaro-darwin-arm64 \
+  -o /usr/local/bin/nodaro && chmod +x /usr/local/bin/nodaro
+
+# macOS (Intel)
+curl -L https://github.com/nodaroai/app.nodaro.ai/releases/latest/download/nodaro-darwin-x64 \
+  -o /usr/local/bin/nodaro && chmod +x /usr/local/bin/nodaro
+
+# Linux (x86_64)
+curl -L https://github.com/nodaroai/app.nodaro.ai/releases/latest/download/nodaro-linux-x64 \
+  -o /usr/local/bin/nodaro && chmod +x /usr/local/bin/nodaro
+
+# Linux (ARM64)
+curl -L https://github.com/nodaroai/app.nodaro.ai/releases/latest/download/nodaro-linux-arm64 \
+  -o /usr/local/bin/nodaro && chmod +x /usr/local/bin/nodaro
+
+# Windows (x86_64) — download nodaro-windows-x64.exe and rename to nodaro.exe
+```
+
+Binaries are ~60 MB single-file executables compiled with [`bun build --compile`](https://bun.com/docs/bundler/executables) — no dependencies, no Node runtime needed. Cold-start is ~15× faster than the npm version.
 
 ## Authentication
 

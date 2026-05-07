@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { createInterface } from "node:readline/promises"
 import { stdin, stdout } from "node:process"
-import kleur from "kleur"
+import pc from "picocolors"
 import { configPath, deleteProfile, getProfile, setProfile } from "../config.js"
 import { success, info, dim, warn, emit, type OutputOpts } from "../output.js"
 
@@ -42,7 +42,7 @@ export function authCommand(): Command {
       if (opts.json) {
         emit({ profile: name, baseUrl: profile.baseUrl, tokenMasked: maskToken(profile.token), signedIn: true }, opts)
       } else {
-        info(`profile:  ${kleur.cyan(name)}`)
+        info(`profile:  ${pc.cyan(name)}`)
         info(`baseUrl:  ${profile.baseUrl}`)
         info(`token:    ${maskToken(profile.token)}`)
       }

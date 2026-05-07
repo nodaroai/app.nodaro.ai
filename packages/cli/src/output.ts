@@ -1,4 +1,4 @@
-import kleur from "kleur"
+import pc from "picocolors"
 
 // Lightweight output utilities. We intentionally don't pull in a table-rendering
 // library — pad-to-column-width handles the volumes we care about and keeps the
@@ -15,7 +15,7 @@ export function emit(value: unknown, opts: OutputOpts = {}): void {
 }
 
 export function success(line: string): void {
-  console.log(kleur.green("✓") + " " + line)
+  console.log(pc.green("✓") + " " + line)
 }
 
 export function info(line: string): void {
@@ -23,16 +23,16 @@ export function info(line: string): void {
 }
 
 export function dim(line: string): void {
-  console.log(kleur.dim(line))
+  console.log(pc.dim(line))
 }
 
 export function warn(line: string): void {
-  console.error(kleur.yellow("⚠") + " " + line)
+  console.error(pc.yellow("⚠") + " " + line)
 }
 
 export function table(rows: Array<Record<string, unknown>>, columns: string[]): void {
   if (rows.length === 0) {
-    console.log(kleur.dim("(empty)"))
+    console.log(pc.dim("(empty)"))
     return
   }
   const widths: Record<string, number> = {}
@@ -46,7 +46,7 @@ export function table(rows: Array<Record<string, unknown>>, columns: string[]): 
   // Cap any single column at 60 chars so a runaway value doesn't blow up the layout.
   for (const col of columns) widths[col] = Math.min(widths[col], 60)
 
-  console.log(columns.map((c) => kleur.bold(c.padEnd(widths[c]))).join("  "))
+  console.log(columns.map((c) => pc.bold(c.padEnd(widths[c]))).join("  "))
   console.log(columns.map((c) => "-".repeat(widths[c])).join("  "))
   for (const row of rows) {
     console.log(
