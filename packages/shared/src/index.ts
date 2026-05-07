@@ -626,6 +626,8 @@ export type { Setting, SettingCategory } from "./setting.js"
 
 export {
   LOOP_SUBJECTS,
+  LOOP_SUBJECT_CATEGORY_ORDER,
+  LOOP_SUBJECT_CATEGORY_LABELS,
   getLoopSubject,
   getLoopSubjectLabel,
   getLoopSubjectPromptHint,

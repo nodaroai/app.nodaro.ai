@@ -39,6 +39,7 @@ import { RENDER_QUALITIES } from "@nodaro/shared"
 import { COMPOSITION_EFFECTS } from "@nodaro/shared"
 import { POST_PROCESS_EFFECTS } from "@nodaro/shared"
 import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER } from "@nodaro/shared"
+import { LOOP_SUBJECTS, LOOP_SUBJECT_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_ORDER } from "@nodaro/shared"
 import { FRAMINGS } from "@nodaro/shared"
 import { LIGHTINGS } from "@nodaro/shared"
 import { PEOPLE } from "@nodaro/shared"
@@ -271,6 +272,17 @@ const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     entries: mapCat(ACTION_FX, "category"),
     groupOrder: ACTION_FX_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: ACTION_FX_CATEGORY_LABELS as Record<string, string>,
+  },
+  {
+    kind: "single",
+    nodeType: "loop-subject",
+    label: "Loop Subject",
+    valueField: "loopSubject",
+    defaultValue: "tunnel",
+    catalogId: "loop-subject",
+    entries: mapCat(LOOP_SUBJECTS, "category"),
+    groupOrder: LOOP_SUBJECT_CATEGORY_ORDER as ReadonlyArray<string>,
+    groupLabels: LOOP_SUBJECT_CATEGORY_LABELS as Record<string, string>,
   },
   {
     kind: "single",
