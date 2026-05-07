@@ -12,10 +12,11 @@ All files **outside** the patterns listed below are licensed under the **Nodaro 
 
 ## Enterprise code (`ee/`)
 
-Files in either of the following patterns are licensed under the **Nodaro Enterprise License** in [`backend/src/ee/LICENSE`](./backend/src/ee/LICENSE) (the same Sustainable Use License terms PLUS additional restrictions, including a paid subscription requirement for production use):
+Files in either of the following patterns are licensed under the **Nodaro Enterprise License** in [`backend/src/ee/LICENSE`](./backend/src/ee/LICENSE) — a self-contained license requiring a paid Nodaro Enterprise subscription for production use:
 
-1. Any file under `backend/src/ee/`, `frontend/src/ee/`, or any directory whose path component is exactly `ee` (case-sensitive).
-2. Any file whose name ends in `.ee.ts`, `.ee.tsx`, `.ee.sql`, or `.ee.md` (the `*.ee.<ext>` convention).
+1. Any file in a directory whose path contains a segment named `ee` or ending with `.ee` (e.g., `backend/src/ee/`, `frontend/src/ee/`).
+2. Any file whose name contains the substring `.ee.` (e.g., `cost-tab.ee.tsx`, `094_admin_audit.ee.sql`).
+3. Any compiled artifact derived from the above.
 
 You may read, modify, and run enterprise code locally for development and testing without a subscription. Production deployment requires a valid Nodaro Cloud or Nodaro Enterprise subscription.
 
@@ -49,13 +50,13 @@ The binary as a whole is governed by the Enterprise License. However:
 
 ### Q: How long can I use the Enterprise Code for "development and testing" without a subscription?
 
-The development and testing exception is not time-limited, but it is scope-limited:
+The development and testing exception is not time-limited, but it is scope-limited. Per the Enterprise License, "development and testing purposes" means non-production use for evaluating, debugging, contributing to, or building against the Enterprise Software, and **excludes** any use that:
 
-- The deployment may not be accessible to end users beyond the developer's own evaluation team.
-- No real customer data, real revenue, or real production workloads.
-- Synthetic test accounts and data only.
+- processes production data,
+- serves end users (whether internal or external), or
+- otherwise supports a live business workflow.
 
-If your environment processes real customer data or is accessible to end users, it is production and requires a subscription.
+If your environment does any of those, it is production and requires a subscription.
 
 ### Q: Can I use Nodaro to build a SaaS product I plan to sell?
 
@@ -64,10 +65,6 @@ No, not under the Community license. The "internal business purposes" permission
 ### Q: I want to publish Nodaro outputs (videos, images, audio) commercially. Can I?
 
 Yes — the outputs you generate through the Platform are yours. The license restrictions apply to the Software, not to the content you create with it. See `https://nodaro.ai/terms` for details on output ownership.
-
-### Q: Can I train an AI model on the Nodaro source code?
-
-No. See the AI training restrictions in the Enterprise License. Personal AI assistants used while contributing to Nodaro are exempt; large-scale training of models intended for public release or commercial use is not.
 
 ### Q: Is the SDK Apache 2.0 grant defensive against my downstream commercial use?
 

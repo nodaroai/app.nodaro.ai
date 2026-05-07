@@ -87,7 +87,7 @@ See [Contributing](docs/contributing.md) for dev environment setup and standards
 Nodaro is fair-code with three license tiers. See [`LICENSE.md`](LICENSE.md) for the full overview.
 
 - **Community code (default)** — [Sustainable Use License](LICENSE). Self-host for personal or internal-business use; no commercial hosting as a service to third parties.
-- **Enterprise code** (`backend/src/ee/`, `frontend/src/ee/`, `*.ee.{ts,tsx,sql,md}`) — [Enterprise License](backend/src/ee/LICENSE). Production use requires a paid Nodaro Cloud or Nodaro Enterprise subscription. Free for development, testing, and evaluation.
+- **Enterprise code** (any path with an `ee` segment, any filename containing `.ee.`, or compiled artifacts derived from such files) — [Enterprise License](backend/src/ee/LICENSE). Production use requires a paid Nodaro Cloud or Nodaro Enterprise subscription. Free for development, testing, and evaluation.
 - **SDK packages** (`packages/client/`, `packages/shared/`) — [Apache License 2.0](packages/shared/LICENSE). Embed in commercial applications freely.
 
 Contributing requires signing the [Contributor License Agreement](CLA.md) — the same CLA covers individual and corporate contributions (Section 2 handles employer permission). The cla-assistant bot handles signing automatically on your first PR.
