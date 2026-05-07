@@ -120,8 +120,12 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   // Smart loop cut: empirically pick the trailing frame closest to frame 0
   // and trim there. Bypasses the time/frame trim entirely.
   if (smartLoopCutFlag) {
-    console.log(`[worker] trim-video ${ctx.jobId} (smart-loop-cut, lookback=${smartLoopCutLookback ?? 16})`)
-    const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback })
+    console.log(`[worker] trim-video ${ctx.jobId} (smart-loop-cut, lookback=${smartLoopCutLookback ?? 16}${outputSilentVideo ? ", silent" : ""})`)
+    const slc = await smartLoopCut({
+      videoUrl,
+      lookbackFrames: smartLoopCutLookback,
+      outputSilent: outputSilentVideo,
+    })
     await setJobProgress(job, ctx.jobId, 80)
     const r2Url = await uploadFileToR2(slc.videoPath, ctx.jobId, "video", ctx.jobUserId)
     await cleanupWorkDir(dirname(slc.videoPath))
