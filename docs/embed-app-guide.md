@@ -315,6 +315,21 @@ If `thumbnailNodeId` is null, fall back to the **last node in topological order*
 
 ---
 
+## 6.5. Deleting a run (soft-delete / archive semantics)
+
+```bash
+curl -X DELETE https://app.nodaro.ai/v1/app/<slug>/runs/<runId> \
+  -H "Authorization: Bearer ndr_<token>"
+```
+
+This is a **soft-delete**: the run is moved to the user's archive (hidden from the default run list, but recoverable). The response is `{ "success": true, "archived": true }`.
+
+Why soft, not hard:
+- API / SDK / MCP `DELETE` calls cannot accidentally destroy a user's data. If an automation deletes the wrong run, the user can still recover it.
+- Restore (`POST /v1/app/:slug/runs/:runId/restore`) and permanent deletion (`DELETE /v1/app/:slug/runs/:runId/permanent`) are intentionally **only exposed through the Nodaro UI** at https://app.nodaro.ai/archived-runs. They are reachable via direct HTTPS for the UI's needs but are not advertised as integration endpoints — your integrations should not call them.
+
+If you need confirmation flow in your UI, ask the user to delete in your app, then call DELETE — they can always recover from Nodaro's archive if needed.
+
 ## 7. Authentication options
 
 There are two ways to get a `Bearer` token. Pick one based on your use case.

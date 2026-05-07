@@ -155,13 +155,15 @@ interface PresentationViewProps {
   showFullscreenToggle?: boolean
   /** Optional element rendered left of the title (e.g. Runs button) */
   headerLeft?: React.ReactNode
+  /** Optional element rendered between the title and the right-side controls (e.g. active-run actions menu) */
+  headerActions?: React.ReactNode
   /** Called when hidden nodes change (for external persistence -- e.g., app runner) */
   onHiddenNodesChange?: (nodeIds: string[]) => void
   /** Called when node states change due to media edits (for external persistence -- e.g., app runner) */
   onNodeStatesChange?: (nodeStates: Record<string, unknown>) => void
 }
 
-export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, onHiddenNodesChange, onNodeStatesChange }: PresentationViewProps) {
+export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCancel, onNewRun, newRunLabel, inputsReadOnly, suppressOutputFallback, isRunning: externalIsRunning, showFullscreenToggle, headerLeft, headerActions, onHiddenNodesChange, onNodeStatesChange }: PresentationViewProps) {
   const { user, signOut: globalSignOut } = useAuth()
   const navigate = useNavigate()
   const [isEditMode, setIsEditMode] = useState(false)
@@ -1495,6 +1497,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
             <h1 className="text-sm md:text-lg font-semibold truncate text-foreground min-w-[3rem]">
               {workflowName || "Untitled"}
             </h1>
+            {headerActions}
           </div>
           {/* Mobile-only: compact right-side controls */}
           <div className="flex items-center gap-1 md:hidden shrink-0">

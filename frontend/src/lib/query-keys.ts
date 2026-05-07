@@ -200,4 +200,9 @@ export const queryKeys = {
   nodeDefaults: {
     all: ["node-defaults"] as const,
   },
+
+  archivedRuns: {
+    all: ["archived-runs"] as const,
+    list: (cursor?: string) => (cursor ? ["archived-runs", "list", cursor] as const : ["archived-runs", "list"] as const),
+  },
 } as const

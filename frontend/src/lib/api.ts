@@ -4399,9 +4399,14 @@ export async function updateAppRunInputs(
 }
 
 /** List runner's past runs for a published app. */
-export async function getAppRuns(slug: string, cursor?: string): Promise<{ data: AppRun[]; nextCursor: string | null }> {
+export async function getAppRuns(
+  slug: string,
+  cursor?: string,
+  options?: { archived?: boolean },
+): Promise<{ data: AppRun[]; nextCursor: string | null }> {
   const params = new URLSearchParams()
   if (cursor) params.set("cursor", cursor)
+  if (options?.archived) params.set("archived", "true")
   const qs = params.toString()
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs${qs ? `?${qs}` : ""}`,
@@ -4417,12 +4422,55 @@ export async function getAppRun(slug: string, runId: string): Promise<AppRun> {
   )
 }
 
-/** Delete a run from history. */
+/** Soft-delete a run (move to archive). The run can be restored from the archive view. */
 export async function deleteAppRun(slug: string, runId: string): Promise<void> {
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}`,
-    "Failed to delete run",
+    "Failed to archive run",
     { method: "DELETE" },
+  )
+}
+
+/** Restore a soft-deleted run from the archive. */
+export async function restoreAppRun(slug: string, runId: string): Promise<void> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/restore`,
+    "Failed to restore run",
+    { method: "POST", body: {} },
+  )
+}
+
+/** Permanently delete an archived run. Run must already be soft-deleted. */
+export async function permanentlyDeleteAppRun(slug: string, runId: string): Promise<void> {
+  return apiRequest(
+    `/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/permanent`,
+    "Failed to permanently delete run",
+    { method: "DELETE" },
+  )
+}
+
+export interface ArchivedAppRun {
+  id: string
+  appSlug: string | null
+  appName: string | null
+  appIconUrl: string | null
+  createdAt: string
+  deletedAt: string
+  name: string | null
+  status: string
+  creditsUsed: number
+  thumbnailUrl: string | null
+  completedAt: string | null
+}
+
+/** List all archived runs across all apps for the authenticated user. */
+export async function getArchivedRuns(cursor?: string): Promise<{ data: ArchivedAppRun[]; nextCursor: string | null }> {
+  const params = new URLSearchParams()
+  if (cursor) params.set("cursor", cursor)
+  const qs = params.toString()
+  return apiRequest(
+    `/v1/me/archived-runs${qs ? `?${qs}` : ""}`,
+    "Failed to load archived runs",
   )
 }
 

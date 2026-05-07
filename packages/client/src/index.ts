@@ -30,6 +30,7 @@ export { ExecutionsResource } from "./resources/executions.js"
 export { NodesResource } from "./resources/nodes.js"
 export { DeveloperAppsResource } from "./resources/developer-apps.js"
 export { OAuthResource } from "./resources/oauth.js"
+export { AppsResource } from "./resources/apps.js"
 
 // --- Resource type definitions ---
 export type {
@@ -83,3 +84,5 @@ export type {
   AccessTokenResponse,
   OAuthAppInfo,
 } from "./resources/oauth.js"
+
+export type { DeleteAppRunResult } from "./resources/apps.js"
