@@ -1,0 +1,35 @@
+{
+  "name": "@nodaro/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Nodaro — list and run workflows, inspect jobs and executions, manage projects from the terminal.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "nodaro": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@nodaro/client": "*",
+    "@nodaro/shared": "*",
+    "commander": "^12.1.0",
+    "kleur": "^4.1.5"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.2"
+  },
+  "engines": { "node": ">=20" },
+  "keywords": ["nodaro", "ai", "workflow", "cli", "command-line"]
+}
