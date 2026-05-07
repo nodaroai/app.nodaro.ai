@@ -452,6 +452,18 @@ export interface SettingData {
   setting: string
 }
 
+/** Standalone Loop Subject parameter node data. Loop-friendly scene prompt
+ * for image generation in a perfect-loop pipeline (image-gen → VEO 3.1
+ * with same start/end frame + seal phrase). Output is a curated subject
+ * prompt — wires into a Generate Image node's prompt input via the
+ * existing FieldMappings system. */
+export interface LoopSubjectData {
+  [key: string]: unknown
+  label: string
+  /** Subject id from LOOP_SUBJECTS catalog (packages/shared/src/loop-subject.ts). */
+  loopSubject: string
+}
+
 /** Standalone Person parameter node data. Subject-appearance compound hint
  * appended to downstream gen prompts. Multi-dimension: each orthogonal field
  * is optional. Non-empty fields are joined as comma-separated fragments
@@ -3112,6 +3124,7 @@ export type SceneNodeData =
   | ActionFxData
   | StyleData
   | SettingData
+  | LoopSubjectData
   | PersonData
   | MoodData
   | PhotographerData
@@ -3256,6 +3269,7 @@ export type SceneNodeType =
   | "action-fx"
   | "style"
   | "setting"
+  | "loop-subject"
   | "person"
   | "mood"
   | "photographer"
@@ -3657,6 +3671,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Setting", setting: "forest" },
+  },
+  {
+    type: "loop-subject",
+    label: "Loop Subject",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Loop Subject", loopSubject: "tunnel" },
   },
   {
     type: "person",

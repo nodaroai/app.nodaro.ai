@@ -99,6 +99,8 @@ export function getParameterValue(
       return trim(data.style)
     case "setting":
       return trim(data.setting)
+    case "loop-subject":
+      return trim(data.loopSubject)
     case "material":
       return trim(data.material)
     case "animal":

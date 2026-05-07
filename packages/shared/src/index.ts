@@ -622,6 +622,14 @@ export {
 export type { Setting, SettingCategory } from "./setting.js"
 
 export {
+  LOOP_SUBJECTS,
+  getLoopSubject,
+  getLoopSubjectLabel,
+  getLoopSubjectPromptHint,
+} from "./loop-subject.js"
+export type { LoopSubject, LoopSubjectCategory } from "./loop-subject.js"
+
+export {
   STYLINGS,
   STYLING_DIMENSION_LABELS,
   STYLING_DIMENSION_ORDER,
