@@ -1,6 +1,7 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, info, dim, type OutputOpts } from "../output.js"
+import { emit, success, table, dim, type OutputOpts } from "../output.js"
+import { collectVariadic, watchUntilTerminal } from "../util.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -87,26 +88,9 @@ export async function watchExecution(
   executionId: string,
   opts: OutputOpts,
 ): Promise<void> {
-  const start = Date.now()
-  let lastStatus = ""
-  for (;;) {
-    const result = await client.executions.get(executionId)
-    const status = result.data.status
-    if (status !== lastStatus) {
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-      info(`[${elapsed}s] ${executionId} → ${status}`)
-      lastStatus = status
-    }
-    if (status === "completed" || status === "failed" || status === "cancelled") {
-      if (opts.json) emit(result.data, opts)
-      else if (status === "completed") success(`completed in ${((Date.now() - start) / 1000).toFixed(1)}s`)
-      else process.exit(status === "failed" ? 2 : 130)
-      return
-    }
-    await sleep(2000)
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return watchUntilTerminal({
+    fetch: () => client.executions.get(executionId),
+    label: executionId,
+    ...opts,
+  })
 }

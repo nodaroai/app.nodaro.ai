@@ -40,7 +40,7 @@ export function executionsCommand(): Command {
     .action(async (id: string, opts: GlobalOpts & { mode?: "cancelled" | "stopping" }) => {
       try {
         const client = buildClient(opts.profile)
-        const params = opts.mode ? { mode: opts.mode } : {}
+        const params = opts.mode === "stopping" ? { mode: "after_current" as const } : {}
         const result = await client.executions.cancel(id, params)
         if (opts.json) emit(result, opts)
         else success(`cancelled execution ${id} (mode: ${opts.mode ?? "cancelled"})`)

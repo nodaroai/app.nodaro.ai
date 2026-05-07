@@ -74,3 +74,18 @@ export function mergeParams(
 ): Record<string, unknown> {
   return { ...fromFile, ...fromFlags }
 }
+
+/**
+ * Combined helper used by `apps run` and `nodes run` — loads a JSON file (if
+ * `filePath` is given), parses any `--param key=value` flags, and merges so
+ * flag values override file values for the same key. Either input may be
+ * absent.
+ */
+export function resolveParams(
+  pairs: string[] | undefined,
+  filePath: string | undefined,
+): Record<string, unknown> {
+  const fromFile = filePath ? loadParamsFile(filePath) : {}
+  const fromFlags = parseParamPairs(pairs)
+  return mergeParams(fromFile, fromFlags)
+}

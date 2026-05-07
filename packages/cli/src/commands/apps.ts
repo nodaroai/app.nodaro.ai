@@ -1,7 +1,8 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, table, type OutputOpts } from "../output.js"
-import { parseParamPairs, loadParamsFile, mergeParams } from "../params.js"
+import { resolveParams } from "../params.js"
+import { collectVariadic } from "../util.js"
 import { watchExecution } from "./workflows.js"
 
 interface GlobalOpts extends OutputOpts {
@@ -67,7 +68,7 @@ export function appsCommand(): Command {
   cmd
     .command("run <slug>")
     .description("trigger an app run — pass inputs via --input k=v or --params-file f.json")
-    .option("--input <pairs...>", "key=value input pairs (repeat or space-separate)", collectInputs)
+    .option("--input <pairs...>", "key=value input pairs (repeat or space-separate)", collectVariadic)
     .option("--params-file <path>", "JSON file with the inputs object (--input flags override)")
     .option("--watch", "follow the resulting execution until completion")
     .option("--profile <name>")
@@ -75,9 +76,7 @@ export function appsCommand(): Command {
     .action(async (slug: string, opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
       try {
         const client = buildClient(opts.profile)
-        const fromFile = opts.paramsFile ? loadParamsFile(opts.paramsFile) : {}
-        const fromFlags = parseParamPairs(opts.input)
-        const inputs = mergeParams(fromFile, fromFlags)
+        const inputs = resolveParams(opts.input, opts.paramsFile)
         const result = await client.apps.run(slug, inputs)
         if (opts.json && !opts.watch) {
           emit(result, opts)
@@ -141,10 +140,4 @@ export function appsCommand(): Command {
     })
 
   return cmd
-}
-
-// commander's variadic option arity collects values into an array; this helper
-// makes the type explicit so the action handler sees `string[]` cleanly.
-function collectInputs(value: string, previous: string[] | undefined): string[] {
-  return [...(previous ?? []), value]
 }

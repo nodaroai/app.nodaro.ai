@@ -1,7 +1,8 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, table, type OutputOpts } from "../output.js"
-import { parseParamPairs, loadParamsFile, mergeParams } from "../params.js"
+import { resolveParams } from "../params.js"
+import { collectVariadic, watchUntilTerminal } from "../util.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -62,7 +63,7 @@ export function nodesCommand(): Command {
   cmd
     .command("run <type>")
     .description("run a single node directly — no workflow, no DAG; equivalent to the MCP server's verb tools")
-    .option("--param <pairs...>", "key=value request body (repeat or space-separate)", collectParams)
+    .option("--param <pairs...>", "key=value request body (repeat or space-separate)", collectVariadic)
     .option("--params-file <path>", "JSON file with the request body (--param overrides)")
     .option("--watch", "if the response includes a jobId, poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
@@ -75,9 +76,7 @@ export function nodesCommand(): Command {
       ) => {
         try {
           const client = buildClient(opts.profile)
-          const fromFile = opts.paramsFile ? loadParamsFile(opts.paramsFile) : {}
-          const fromFlags = parseParamPairs(opts.param)
-          const params = mergeParams(fromFile, fromFlags)
+          const params = resolveParams(opts.param, opts.paramsFile)
           const result = await client.nodes.run(type, params)
           const jobId = typeof result === "object" && result && "jobId" in result ? (result.jobId as string) : null
 
@@ -98,7 +97,12 @@ export function nodesCommand(): Command {
             dim(`follow: nodaro jobs get ${jobId}`)
             return
           }
-          await watchJob(client, jobId, opts.pollInterval, opts)
+          await watchUntilTerminal({
+            fetch: () => client.jobs.get(jobId),
+            label: jobId,
+            intervalMs: opts.pollInterval,
+            ...opts,
+          })
         } catch (err) {
           handleError(err)
         }
@@ -106,34 +110,4 @@ export function nodesCommand(): Command {
     )
 
   return cmd
-}
-
-async function watchJob(
-  client: ReturnType<typeof buildClient>,
-  jobId: string,
-  intervalMs: number,
-  opts: OutputOpts,
-): Promise<void> {
-  const start = Date.now()
-  let lastStatus = ""
-  for (;;) {
-    const result = await client.jobs.get(jobId)
-    const status = result.data.status
-    if (status !== lastStatus) {
-      const elapsed = ((Date.now() - start) / 1000).toFixed(1)
-      console.log(`[${elapsed}s] ${jobId} → ${status}`)
-      lastStatus = status
-    }
-    if (status === "completed" || status === "failed" || status === "cancelled") {
-      if (opts.json) emit(result.data, opts)
-      else if (status === "completed") success(`completed in ${((Date.now() - start) / 1000).toFixed(1)}s`)
-      else process.exit(status === "failed" ? 2 : 130)
-      return
-    }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs))
-  }
-}
-
-function collectParams(value: string, previous: string[] | undefined): string[] {
-  return [...(previous ?? []), value]
 }

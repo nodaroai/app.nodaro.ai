@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, afterAll } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseParamPairs, loadParamsFile, mergeParams } from "../params.js"
+import { parseParamPairs, loadParamsFile, mergeParams, resolveParams } from "../params.js"
 
 describe("parseParamPairs", () => {
   it("returns empty object when no pairs given", () => {
@@ -53,6 +53,7 @@ describe("parseParamPairs", () => {
 
 describe("loadParamsFile", () => {
   const dir = mkdtempSync(join(tmpdir(), "nci-params-"))
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
   it("loads a JSON object", () => {
     const path = join(dir, "ok.json")
@@ -81,9 +82,6 @@ describe("loadParamsFile", () => {
   it("reports a clear error for missing files", () => {
     expect(() => loadParamsFile(join(dir, "does-not-exist.json"))).toThrow(/cannot read --params-file/)
   })
-
-  // Cleanup at end of suite
-  it.afterAll?.(() => rmSync(dir, { recursive: true, force: true }))
 })
 
 describe("mergeParams", () => {
@@ -105,5 +103,30 @@ describe("mergeParams", () => {
     mergeParams(file, flags)
     expect(file).toEqual({ a: 1 })
     expect(flags).toEqual({ b: 2 })
+  })
+})
+
+describe("resolveParams", () => {
+  const dir = mkdtempSync(join(tmpdir(), "nci-resolve-"))
+  afterAll(() => rmSync(dir, { recursive: true, force: true }))
+
+  it("returns empty object when both inputs are absent", () => {
+    expect(resolveParams(undefined, undefined)).toEqual({})
+  })
+
+  it("returns flags-only when no file path given", () => {
+    expect(resolveParams(["a=1"], undefined)).toEqual({ a: 1 })
+  })
+
+  it("returns file-only when no flags given", () => {
+    const path = join(dir, "f.json")
+    writeFileSync(path, JSON.stringify({ a: 1 }))
+    expect(resolveParams(undefined, path)).toEqual({ a: 1 })
+  })
+
+  it("flags override file values for the same key", () => {
+    const path = join(dir, "g.json")
+    writeFileSync(path, JSON.stringify({ a: 1, b: 2 }))
+    expect(resolveParams(["a=9"], path)).toEqual({ a: 9, b: 2 })
   })
 })
