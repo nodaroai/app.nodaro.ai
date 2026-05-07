@@ -219,7 +219,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K is available via the dedicated VEO upgrade node — it uses KIE&apos;s separate /api/v1/veo/get-4k-video endpoint and runs after the base 720p/1080p generation.
+                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
                 </p>
               </div>
             ) : null
@@ -271,10 +271,10 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               </p>
             </div>
           )}
-          {/* VEO auto-translate — KIE silently translates non-English
-              prompts (and lightly rewrites English ones). Disable when
-              the exact wording is load-bearing, e.g. the perfect-loop
-              seal phrase. */}
+          {/* VEO auto-translate — the provider silently translates
+              non-English prompts (and lightly rewrites English ones).
+              Disable when the exact wording is load-bearing, e.g. the
+              perfect-loop seal phrase. */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2 px-1">
               <input
@@ -287,7 +287,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               <label htmlFor="i2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
             </div>
             <p className="text-xs text-muted-foreground px-1">
-              KIE auto-translates prompts before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
+              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
             </p>
           </div>
         </>
@@ -1094,7 +1094,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  4K is available via the dedicated VEO upgrade node — it uses KIE&apos;s separate /api/v1/veo/get-4k-video endpoint and runs after the base 720p/1080p generation.
+                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
                 </p>
               </div>
             ) : null
@@ -1123,7 +1123,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <label htmlFor="t2v-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
             </div>
             <p className="text-xs text-muted-foreground px-1">
-              KIE auto-translates prompts before VEO sees them (default on). Disable to keep prompts verbatim.
+              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim.
             </p>
           </div>
         </>
