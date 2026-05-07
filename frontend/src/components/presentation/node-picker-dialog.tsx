@@ -68,7 +68,7 @@ function PickerInputConfig({
     ? `Restrict (${allowedCount}/${total})`
     : `Restrict (all)`
 
-  const updateCard = (patch: { pickerMode?: "inline" | "modal"; pickerAllowedValues?: string[] | undefined }) => {
+  const updateCard = (patch: { pickerMode?: "inline" | "modal" | "compact"; pickerAllowedValues?: string[] | undefined }) => {
     const current = presentationSettings.cardMeta ?? {}
     const next = { ...current, [nodeId]: { ...(current[nodeId] ?? {}), ...patch } }
     updatePresentationSettings({ cardMeta: next })
@@ -89,6 +89,12 @@ function PickerInputConfig({
           onClick={() => updateCard({ pickerMode: "modal" })}
         >
           Modal
+        </button>
+        <button
+          className={`text-[10px] px-2 py-0.5 rounded border ${mode === "compact" ? "bg-[#ff007320] border-[#ff0073] text-[#ff0073]" : "bg-card border-border text-muted-foreground"}`}
+          onClick={() => updateCard({ pickerMode: "compact" })}
+        >
+          Compact
         </button>
       </div>
       {meta.kind === "single" && (
