@@ -31,7 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/use-auth"
 import { isFeatureEnabled, hasCredits } from "@/lib/edition"
-import { useUserCredits } from "@/hooks/queries/use-credits-queries"
+import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { PRICING_TIERS } from "@/lib/pricing-data"
 import { APP_VERSION } from "@/lib/version"
 import { NodaroLogo } from "@/components/nodaro-logo"

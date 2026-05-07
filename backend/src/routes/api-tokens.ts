@@ -21,7 +21,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { hasAdmin } from "../lib/config.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
-import { estimateWorkflowCredits } from "../billing/credits.js"
+import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import {
   getInputNodes,

@@ -6,7 +6,7 @@ import {
   groupByFamily,
   validateModelInput,
 } from "@nodaro/shared"
-import { STATIC_CREDIT_COSTS } from "../../../billing/credits.js"
+import { STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
 
 describe("Model catalog ↔ STATIC_CREDIT_COSTS", () => {
   it("every catalog pricing identifier exists in STATIC_CREDIT_COSTS with matching cost", () => {

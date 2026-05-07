@@ -7,7 +7,7 @@ import { refreshAccessToken, type SocialPlatform } from "../services/social/oaut
 import { platformPublishers, type PublishRequest } from "../services/social/platforms/index.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
 import {
   INSTAGRAM_CAROUSEL_MIN_ITEMS,
   INSTAGRAM_CAROUSEL_MAX_ITEMS,

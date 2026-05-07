@@ -14,7 +14,7 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { copyToClipboard } from "@/lib/utils"
 import { useFileUpload } from "@/hooks/use-file-upload"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
-import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadVideoData, GeneratedResult } from "@/types/nodes"
 

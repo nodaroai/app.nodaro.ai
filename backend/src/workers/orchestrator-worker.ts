@@ -8,7 +8,7 @@
 import { Worker, type Job } from "bullmq"
 import IORedis from "ioredis"
 import { config, hasCredits } from "../lib/config.js"
-import { TIER_PARALLELISM } from "../billing/stripe-config.js"
+import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import {

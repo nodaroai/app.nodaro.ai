@@ -30,7 +30,7 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: vi.fn().mockResolvedValue(undefined), refundCredits: vi.fn().mockResolvedValue(undefined) },
 }))
 
@@ -58,7 +58,7 @@ vi.mock("@/lib/aspect-dimensions.js", () => ({
 // Imports after mocks
 import { afterEffectsAIRoutes } from "../after-effects-ai.js"
 import { supabase } from "../../lib/supabase.js"
-import { CreditsService } from "../../billing/credits.js"
+import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { validateAfterEffectsPlan } from "../../lib/after-effects-validator.js"
 

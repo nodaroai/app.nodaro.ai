@@ -44,7 +44,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({ useModelCredits: () => 2 }))
+vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 2 }))
 vi.mock("@/components/ui/delete-confirmation-dialog", () => ({ DeleteConfirmationDialog: () => null }))
 vi.mock("@/lib/ai-writer-templates", () => ({
   getAIWriterTemplate: () => ({ id: "blog-post", label: "Blog Post" }),

@@ -65,7 +65,7 @@ vi.mock("@/components/editor/workflow-editor/node-input-resolver", () => ({
   resolveEdgeValuesForTableColumn: () => null,
 }))
 
-vi.mock("@/components/credits/StorageExceededModal", () => ({
+vi.mock("@/ee/components/credits/StorageExceededModal", () => ({
   StorageExceededModal: () => null,
 }))
 

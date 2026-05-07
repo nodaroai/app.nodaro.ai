@@ -19,7 +19,7 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 vi.mock("@/middleware/rate-limit.js", () => ({ rateLimiter: () => async () => {} }))
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { commitCredits: vi.fn().mockResolvedValue(undefined), refundCredits: vi.fn().mockResolvedValue(undefined) },
 }))
 
@@ -46,7 +46,7 @@ vi.mock("@/lib/aspect-dimensions.js", () => ({
 
 import { motionGraphicsAIRoutes } from "../motion-graphics-ai.js"
 import { supabase } from "../../lib/supabase.js"
-import { CreditsService } from "../../billing/credits.js"
+import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { validateMotionGraphicsPlan } from "../../lib/motion-graphics-validator.js"
 

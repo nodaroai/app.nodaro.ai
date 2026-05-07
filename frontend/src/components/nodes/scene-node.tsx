@@ -15,7 +15,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 const SceneEditorModal = lazy(() => import("@/components/editor/scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"

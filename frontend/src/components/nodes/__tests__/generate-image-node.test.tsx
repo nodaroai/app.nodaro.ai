@@ -76,7 +76,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({
+vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 
@@ -84,7 +84,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
   buildCreditModelIdentifier: vi.fn(() => "nano-banana"),
 }))
 
-vi.mock("@/hooks/use-providers-credits-sum", () => ({
+vi.mock("@/ee/hooks/use-providers-credits-sum", () => ({
   useProvidersCreditsSum: () => 0,
 }))
 

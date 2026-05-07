@@ -65,7 +65,7 @@ vi.mock("@/lib/query-keys", () => ({
   },
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({
+vi.mock("@/ee/hooks/use-model-credits", () => ({
   getCachedCredits: vi.fn(),
 }))
 

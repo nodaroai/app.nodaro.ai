@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { rateLimiter } from "../middleware/rate-limit.js"
 
 const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-lo" })
-import { CreditsService } from "../billing/credits.js"
+import { CreditsService } from "../ee/billing/credits.js"
 import { LOTTIE_OVERLAY_SYSTEM_PROMPT } from "../prompts/lottie-overlay-system.js"
 import { validateLottieOverlayPlan } from "../lib/lottie-overlay-validator.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"

@@ -14,7 +14,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
-import { prefetchModelCredits } from "@/hooks/use-model-credits"
+import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
 import { uploadFile } from "@/lib/api"
 import type { ImageToVideoData } from "@/types/nodes"

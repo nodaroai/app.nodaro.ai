@@ -48,7 +48,7 @@ vi.mock("@/lib/orchestration-queue.js", () => ({
   },
 }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
   CreditsService: {
     getModelCreditCost: vi.fn().mockResolvedValue(5),

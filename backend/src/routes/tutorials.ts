@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { supabase } from "../lib/supabase.js"
-import { toTutorialResponse } from "./admin-tutorials.js"
+import { toTutorialResponse } from "../lib/tutorials-shared.js"
 
 export async function tutorialsRoutes(app: FastifyInstance) {
   // GET /v1/tutorials — public, returns enabled tutorials

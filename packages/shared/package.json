@@ -2,6 +2,7 @@
   "name": "@nodaro/shared",
   "version": "1.0.0",
   "type": "module",
+  "license": "Apache-2.0",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,7 +16,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "README.md", "src"],
+  "files": ["dist", "README.md", "src", "LICENSE"],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

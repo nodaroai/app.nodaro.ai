@@ -38,7 +38,7 @@ vi.mock("@/lib/admin-check.js", () => ({
   checkIsAdmin: vi.fn().mockResolvedValue(false),
 }))
 
-vi.mock("@/billing/credits.js", () => ({
+vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
 }))
 

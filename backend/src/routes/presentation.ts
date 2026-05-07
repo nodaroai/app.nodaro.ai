@@ -14,7 +14,7 @@ import { supabase } from "../lib/supabase.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
-import { estimateWorkflowCredits } from "../billing/credits.js"
+import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),

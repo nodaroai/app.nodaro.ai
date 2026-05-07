@@ -1,7 +1,7 @@
 "use client"
 
 import { SelectItemWithMeta } from "@/components/ui/select"
-import { useModelCredits } from "@/hooks/use-model-credits"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { MODEL_CREDIT_RANGES } from "./model-options"
 
 export function ModelSelectOption({ value, label, desc }: { value: string; label: string; desc: string }) {

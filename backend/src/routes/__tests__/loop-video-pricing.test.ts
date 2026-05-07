@@ -42,7 +42,7 @@ vi.mock("../../lib/supabase.js", () => ({
 }))
 
 const reserveSpy = vi.fn(() => Promise.resolve({ usageLogId: "log-1", creditsReserved: 12, watermark: false }))
-vi.mock("../../billing/credits.js", () => ({
+vi.mock("../../ee/billing/credits.js", () => ({
   CreditsService: {
     checkStorageLimitWithProfile: () => ({ allowed: true, usedBytes: 0, limitBytes: 1e10 }),
     checkCreditsWithProfile: vi.fn(() => Promise.resolve({ allowed: true, watermark: false })),

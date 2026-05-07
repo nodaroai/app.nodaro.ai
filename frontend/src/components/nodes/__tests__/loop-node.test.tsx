@@ -63,7 +63,7 @@ vi.mock("@/hooks/use-file-upload", () => ({
   }),
 }))
 
-vi.mock("@/components/credits/StorageExceededModal", () => ({
+vi.mock("@/ee/components/credits/StorageExceededModal", () => ({
   StorageExceededModal: () => null,
 }))
 

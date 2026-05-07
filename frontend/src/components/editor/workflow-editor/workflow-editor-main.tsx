@@ -36,11 +36,11 @@ import { StorageExceededError, uploadFile, setCurrentWorkflowId, cancelWorkflowE
 import { probeMediaMetadata } from "@/lib/probe-media-metadata";
 import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
-import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits";
+import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
-import { InsufficientCreditsModal } from "@/components/credits/InsufficientCreditsModal";
-import { StorageExceededModal } from "@/components/credits/StorageExceededModal";
+import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
+import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import {
   NODE_CREDIT_COSTS,
   estimateNodeCredits,

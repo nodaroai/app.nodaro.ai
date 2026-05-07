@@ -27,9 +27,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { CreditBalance } from "@/components/credits/CreditBalance"
-import { GetCreditsModal } from "@/components/credits/GetCreditsModal"
-import { useUserCredits } from "@/hooks/queries/use-credits-queries"
+import { CreditBalance } from "@/ee/components/credits/CreditBalance"
+import { GetCreditsModal } from "@/ee/components/credits/GetCreditsModal"
+import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { hasCredits } from "@/lib/edition"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
@@ -44,7 +44,7 @@ import {
 } from "@/lib/presentation-utils"
 import { EXECUTABLE_TYPES, estimateNodeCredits, isExecutableNode, getFanOutMultiplier } from "@/components/editor/workflow-editor/types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { getCachedCredits, prefetchModelCredits } from "@/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { isExpandedClone } from "@nodaro/shared"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import { shareWorkflow } from "@/lib/api"

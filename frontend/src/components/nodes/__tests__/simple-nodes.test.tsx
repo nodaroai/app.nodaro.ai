@@ -79,7 +79,7 @@ vi.mock("@/lib/providers-config", () => ({
   getProviderLabel: (_cat: string, provider: string) => provider,
 }))
 
-vi.mock("@/hooks/use-model-credits", () => ({
+vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 

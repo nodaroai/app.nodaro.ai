@@ -27,7 +27,7 @@ import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINE
 import { CachedImage } from "@/components/ui/cached-image"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFileUpload } from "@/hooks/use-file-upload"
-import { StorageExceededModal } from "@/components/credits/StorageExceededModal"
+import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { copyToClipboard } from "@/lib/utils"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"

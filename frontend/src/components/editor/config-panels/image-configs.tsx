@@ -18,7 +18,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { prefetchModelCredits } from "@/hooks/use-model-credits"
+import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { PromptHelperButton } from "./prompt-helper-button"
 import type {

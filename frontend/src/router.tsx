@@ -1,6 +1,7 @@
-import { createBrowserRouter, Navigate } from "react-router-dom"
+import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 import { Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
+import { hasAdmin } from "@/lib/edition"
 
 // Error handling
 import RouteErrorBoundary from "@/components/route-error-boundary"
@@ -18,7 +19,7 @@ import ProjectPage from "@/routes/project-page"
 
 // Lazy-loaded routes — not needed for initial /projects page load
 const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
-const BillingPage = lazy(() => import("@/app/(dashboard)/billing/page"))
+const BillingPage = lazy(() => import("@/ee/app/(dashboard)/billing/page"))
 const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
 const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
@@ -46,24 +47,24 @@ const OAuthAuthorizePage = lazy(() => import("@/app/oauth/authorize/page"))
 const McpPage = lazy(() => import("@/app/mcp/page"))
 
 // Admin layout + all admin pages (lazy — admin-only, most users never visit)
-const AdminLayout = lazy(() => import("@/layouts/admin-layout"))
-const AdminDashboard = lazy(() => import("@/app/(admin)/admin/page"))
-const AdminUsers = lazy(() => import("@/app/(admin)/admin/users/page"))
-const AdminJobs = lazy(() => import("@/app/(admin)/admin/jobs/page"))
-const AdminUsage = lazy(() => import("@/app/(admin)/admin/usage/page"))
-const AdminAlerts = lazy(() => import("@/app/(admin)/admin/alerts/page"))
-const AdminModels = lazy(() => import("@/app/(admin)/admin/models/page"))
-const AdminReports = lazy(() => import("@/app/(admin)/admin/reports/page"))
-const AdminPricingPage = lazy(() => import("@/app/(admin)/admin/pricing/page"))
-const AdminSettings = lazy(() => import("@/app/(admin)/admin/settings/page"))
-const AdminApps = lazy(() => import("@/app/(admin)/admin/apps/page"))
-const AdminCreditAudit = lazy(() => import("@/app/(admin)/admin/credit-audit/page"))
-const AdminCreditAnomalies = lazy(() => import("@/app/(admin)/admin/credit-anomalies/page"))
-const AdminKieCredits = lazy(() => import("@/app/(admin)/admin/kie-credits/page"))
-const AdminSubscriptions = lazy(() => import("@/app/(admin)/admin/subscriptions/page"))
-const AdminLlmModels = lazy(() => import("@/app/(admin)/admin/llm-models/page"))
-const AdminNodeDefaults = lazy(() => import("@/app/(admin)/admin/node-defaults/page"))
-const AdminTutorials = lazy(() => import("@/app/(admin)/admin/tutorials/page"))
+const AdminLayout = lazy(() => import("@/ee/layouts/admin-layout"))
+const AdminDashboard = lazy(() => import("@/ee/app/(admin)/admin/page"))
+const AdminUsers = lazy(() => import("@/ee/app/(admin)/admin/users/page"))
+const AdminJobs = lazy(() => import("@/ee/app/(admin)/admin/jobs/page"))
+const AdminUsage = lazy(() => import("@/ee/app/(admin)/admin/usage/page"))
+const AdminAlerts = lazy(() => import("@/ee/app/(admin)/admin/alerts/page"))
+const AdminModels = lazy(() => import("@/ee/app/(admin)/admin/models/page"))
+const AdminReports = lazy(() => import("@/ee/app/(admin)/admin/reports/page"))
+const AdminPricingPage = lazy(() => import("@/ee/app/(admin)/admin/pricing/page"))
+const AdminSettings = lazy(() => import("@/ee/app/(admin)/admin/settings/page"))
+const AdminApps = lazy(() => import("@/ee/app/(admin)/admin/apps/page"))
+const AdminCreditAudit = lazy(() => import("@/ee/app/(admin)/admin/credit-audit/page"))
+const AdminCreditAnomalies = lazy(() => import("@/ee/app/(admin)/admin/credit-anomalies/page"))
+const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/page"))
+const AdminSubscriptions = lazy(() => import("@/ee/app/(admin)/admin/subscriptions/page"))
+const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page"))
+const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
+const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -74,6 +75,36 @@ function SuspenseWrapper({ children }: { children: React.ReactNode }) {
     </Suspense>
   )
 }
+
+// Admin route block — only included when EDITION grants admin (business or cloud).
+// In community builds the spread is empty, the AdminLayout chunk is never loaded,
+// and /admin URLs hit the NotFound handler at the bottom of the route tree.
+const adminRoutes: RouteObject[] = hasAdmin() ? [
+  {
+    path: "/admin",
+    element: <SuspenseWrapper><AdminLayout /></SuspenseWrapper>,
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      { index: true, element: <SuspenseWrapper><AdminDashboard /></SuspenseWrapper> },
+      { path: "users", element: <SuspenseWrapper><AdminUsers /></SuspenseWrapper> },
+      { path: "jobs", element: <SuspenseWrapper><AdminJobs /></SuspenseWrapper> },
+      { path: "usage", element: <SuspenseWrapper><AdminUsage /></SuspenseWrapper> },
+      { path: "alerts", element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper> },
+      { path: "models", element: <SuspenseWrapper><AdminModels /></SuspenseWrapper> },
+      { path: "reports", element: <SuspenseWrapper><AdminReports /></SuspenseWrapper> },
+      { path: "pricing", element: <SuspenseWrapper><AdminPricingPage /></SuspenseWrapper> },
+      { path: "settings", element: <SuspenseWrapper><AdminSettings /></SuspenseWrapper> },
+      { path: "apps", element: <SuspenseWrapper><AdminApps /></SuspenseWrapper> },
+      { path: "credit-audit", element: <SuspenseWrapper><AdminCreditAudit /></SuspenseWrapper> },
+      { path: "credit-anomalies", element: <SuspenseWrapper><AdminCreditAnomalies /></SuspenseWrapper> },
+      { path: "kie-credits", element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper> },
+      { path: "subscriptions", element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper> },
+      { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
+      { path: "node-defaults", element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper> },
+      { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
+    ],
+  },
+] : []
 
 export const router = createBrowserRouter([
   {
@@ -200,81 +231,7 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  {
-    path: "/admin",
-    element: <SuspenseWrapper><AdminLayout /></SuspenseWrapper>,
-    errorElement: <RouteErrorBoundary />,
-    children: [
-      {
-        index: true,
-        element: <SuspenseWrapper><AdminDashboard /></SuspenseWrapper>,
-      },
-      {
-        path: "users",
-        element: <SuspenseWrapper><AdminUsers /></SuspenseWrapper>,
-      },
-      {
-        path: "jobs",
-        element: <SuspenseWrapper><AdminJobs /></SuspenseWrapper>,
-      },
-      {
-        path: "usage",
-        element: <SuspenseWrapper><AdminUsage /></SuspenseWrapper>,
-      },
-      {
-        path: "alerts",
-        element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper>,
-      },
-      {
-        path: "models",
-        element: <SuspenseWrapper><AdminModels /></SuspenseWrapper>,
-      },
-      {
-        path: "reports",
-        element: <SuspenseWrapper><AdminReports /></SuspenseWrapper>,
-      },
-      {
-        path: "pricing",
-        element: <SuspenseWrapper><AdminPricingPage /></SuspenseWrapper>,
-      },
-      {
-        path: "settings",
-        element: <SuspenseWrapper><AdminSettings /></SuspenseWrapper>,
-      },
-      {
-        path: "apps",
-        element: <SuspenseWrapper><AdminApps /></SuspenseWrapper>,
-      },
-      {
-        path: "credit-audit",
-        element: <SuspenseWrapper><AdminCreditAudit /></SuspenseWrapper>,
-      },
-      {
-        path: "credit-anomalies",
-        element: <SuspenseWrapper><AdminCreditAnomalies /></SuspenseWrapper>,
-      },
-      {
-        path: "kie-credits",
-        element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper>,
-      },
-      {
-        path: "subscriptions",
-        element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper>,
-      },
-      {
-        path: "llm-models",
-        element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper>,
-      },
-      {
-        path: "node-defaults",
-        element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper>,
-      },
-      {
-        path: "tutorials",
-        element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper>,
-      },
-    ],
-  },
+  ...adminRoutes,
   {
     path: "*",
     element: <NotFound />,
