@@ -328,6 +328,7 @@ interface AppRow {
   estimated_credits: number | null
   created_at: string
   thumbnail_node_id: string | null
+  deleted_at: string | null
 }
 
 export interface AdminApp extends AppRow {
@@ -343,7 +344,7 @@ export function useAdminApps(page: number, pageSize = 50) {
       const supabase = createClient()
       const { data, error } = await (supabase
         .from("published_apps" as "assets")
-        .select("id, name, slug, workflow_id, creator_id, icon_url, version, is_active, is_listed, estimated_credits, created_at, thumbnail_node_id") as unknown as PromiseLike<{ data: AppRow[] | null; error: Error | null }>)
+        .select("id, name, slug, workflow_id, creator_id, icon_url, version, is_active, is_listed, estimated_credits, created_at, thumbnail_node_id, deleted_at") as unknown as PromiseLike<{ data: AppRow[] | null; error: Error | null }>)
       if (error) throw error
       if (!data || data.length === 0) return []
       const creatorIds = [...new Set(data.map((a) => a.creator_id).filter(Boolean))]

@@ -110,6 +110,7 @@ async function resolveSlug(slug: string): Promise<string | null> {
     .from("published_apps")
     .select("workflow_id")
     .eq("slug", slug)
+    .is("deleted_at", null)
     .limit(1)
     .single()
   return error || !data ? null : (data.workflow_id as string)
@@ -125,6 +126,7 @@ async function loadAppVersion(
     .from("published_apps")
     .select(columns)
     .eq("workflow_id", workflowId)
+    .is("deleted_at", null)
 
   if (version) {
     query = query.eq("version", version)
@@ -170,6 +172,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .from("published_apps")
       .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id, monetization_enabled, monetization_flat_fee, monetization_percent")
       .eq("workflow_id", workflowId)
+      .is("deleted_at", null)
       .order("version", { ascending: false })
 
     if (!allVersionRows || allVersionRows.length === 0) {
@@ -574,6 +577,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       .from("published_apps")
       .select("id, version, thumbnail_node_id")
       .eq("workflow_id", workflowId)
+      .is("deleted_at", null)
 
     if (!allVersions || allVersions.length === 0) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })

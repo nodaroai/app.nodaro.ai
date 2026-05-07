@@ -21,6 +21,8 @@ import {
   Workflow,
   Settings,
   Puzzle,
+  Trash2,
+  Archive,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,6 +32,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
@@ -42,6 +54,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
+import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
 import { calculateMonetizedCost } from "@nodaro/shared"
 import { useAuth } from "@/hooks/use-auth"
@@ -145,13 +158,23 @@ export default function AppsPage() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ appId, isActive }: { appId: string; isActive: boolean }) => {
-      if (isActive) {
-        await updateApp(appId, { isActive: true })
-      } else {
-        await deactivateApp(appId)
-      }
+      await updateApp(appId, { isActive })
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-apps"] }) },
+  })
+
+  const deleteAppMutation = useMutation({
+    mutationFn: async ({ appId }: { appId: string }) => {
+      await deactivateApp(appId)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["my-apps"] })
+      qc.invalidateQueries({ queryKey: queryKeys.appMarketplace.all })
+      toast.success("App deleted. Recover it from Deleted Apps.")
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to delete app")
+    },
   })
 
   const originsMutation = useMutation({
@@ -173,6 +196,8 @@ export default function AppsPage() {
 
   // Edit dialog state
   const [editApp, setEditApp] = useState<PublishedApp | null>(null)
+  // Delete confirmation state
+  const [deleteConfirmApp, setDeleteConfirmApp] = useState<PublishedApp | null>(null)
 
   const editMutation = useMutation({
     mutationFn: async ({ appId, data }: { appId: string; data: Record<string, unknown> }) => {
@@ -231,6 +256,10 @@ export default function AppsPage() {
             Discover and run AI-powered apps, or manage your own
           </p>
         </div>
+        <Link to="/apps/deleted" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+          <Archive className="h-3 w-3" />
+          Deleted apps
+        </Link>
       </div>
 
       {/* View mode tabs + search */}
@@ -474,6 +503,7 @@ export default function AppsPage() {
             onUpdateOrigins={(appId, origins) => originsMutation.mutate({ appId, origins })}
             onToggleListed={(appId, isListed) => listToggleMutation.mutate({ appId, isListed })}
             onEdit={setEditApp}
+            onDelete={setDeleteConfirmApp}
           />
           <EditAppDialog
             app={editApp}
@@ -482,6 +512,30 @@ export default function AppsPage() {
             onSave={(appId, data) => editMutation.mutate({ appId, data })}
             isSaving={editMutation.isPending}
           />
+          <AlertDialog open={deleteConfirmApp !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmApp(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this app?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  It'll be hidden from the marketplace and from your apps list. You can restore it any time from your Deleted Apps. The app's earnings, analytics, and run history are preserved.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    if (deleteConfirmApp) {
+                      deleteAppMutation.mutate({ appId: deleteConfirmApp.id })
+                      setDeleteConfirmApp(null)
+                    }
+                  }}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       )}
     </div>
@@ -500,6 +554,7 @@ function MyAppsGrid({
   onUpdateOrigins,
   onToggleListed,
   onEdit,
+  onDelete,
 }: {
   apps: PublishedApp[] | undefined
   onCopyUrl: (slug: string) => void
@@ -508,8 +563,11 @@ function MyAppsGrid({
   onUpdateOrigins: (appId: string, origins: string[]) => void
   onToggleListed: (appId: string, isListed: boolean) => void
   onEdit: (app: PublishedApp) => void
+  onDelete: (app: PublishedApp) => void
 }) {
-  if (!apps || apps.length === 0) {
+  const visibleApps = (apps ?? []).filter((a) => a.deletedAt == null)
+
+  if (!apps || visibleApps.length === 0) {
     return (
       <div className="text-center py-16">
         <Rocket className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
@@ -522,8 +580,8 @@ function MyAppsGrid({
     )
   }
 
-  const activeApps = apps.filter((a) => a.isActive !== false)
-  const inactiveApps = apps.filter((a) => a.isActive === false)
+  const activeApps = visibleApps.filter((a) => a.isActive !== false)
+  const inactiveApps = visibleApps.filter((a) => a.isActive === false)
 
   return (
     <div className="space-y-6">
@@ -539,6 +597,7 @@ function MyAppsGrid({
               onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
               onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
               onEdit={() => onEdit(app)}
+              onDelete={() => onDelete(app)}
             />
           ))}
         </div>
@@ -558,6 +617,7 @@ function MyAppsGrid({
                 onUpdateOrigins={(origins) => onUpdateOrigins(app.id, origins)}
                 onToggleListed={(isListed) => onToggleListed(app.id, isListed)}
                 onEdit={() => onEdit(app)}
+                onDelete={() => onDelete(app)}
               />
             ))}
           </div>
@@ -575,6 +635,7 @@ function MyAppCard({
   onUpdateOrigins,
   onToggleListed,
   onEdit,
+  onDelete,
 }: {
   app: PublishedApp
   onCopyUrl: (slug: string) => void
@@ -583,6 +644,7 @@ function MyAppCard({
   onUpdateOrigins: (origins: string[]) => void
   onToggleListed: (isListed: boolean) => void
   onEdit: () => void
+  onDelete: () => void
 }) {
   const [showEmbed, setShowEmbed] = useState(false)
   const [newOrigin, setNewOrigin] = useState("")
@@ -743,6 +805,15 @@ function MyAppCard({
           ) : (
             <ToggleLeft className="h-4 w-4 text-muted-foreground" />
           )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+          title="Delete app"
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       </div>
 

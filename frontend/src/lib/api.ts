@@ -4123,6 +4123,7 @@ export interface PublishedApp {
   monetizationPercent?: number
   publishType?: "app" | "component"
   componentMetadata?: Record<string, unknown> | null
+  deletedAt: string | null
 }
 
 /** Slim card type returned by /v1/apps/browse (no snapshot data) */
@@ -4261,12 +4262,37 @@ export async function updateApp(appId: string, data: {
   )
 }
 
-/** Deactivate a published app (soft delete). */
+/** Soft-delete a published app (sets deleted_at + is_active=false; restorable via /restore). */
 export async function deactivateApp(appId: string): Promise<void> {
   return apiRequest(
     `/v1/apps/${encodeURIComponent(appId)}`,
-    "Failed to deactivate app",
+    "Failed to delete app",
     { method: "DELETE" },
+  )
+}
+
+/** Restore a soft-deleted app (clears deleted_at, leaves is_active=false). */
+export async function restoreApp(appId: string): Promise<{ success: boolean; restored: boolean }> {
+  return apiRequest(
+    `/v1/apps/${encodeURIComponent(appId)}/restore`,
+    "Failed to restore app",
+    { method: "POST" },
+  )
+}
+
+/** Admin-only: hard-delete a soft-deleted app for legal compliance. */
+export async function expungeApp(appId: string, reason: string): Promise<{
+  success: boolean
+  expungedAt: string
+  r2KeysCollected: number
+  r2KeysDeleted: number
+  r2Errors: number
+  auditWarning?: string
+}> {
+  return apiRequest(
+    `/v1/admin/apps/${encodeURIComponent(appId)}/expunge`,
+    "Failed to expunge app",
+    { method: "DELETE", body: { reason } },
   )
 }
 

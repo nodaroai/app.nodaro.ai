@@ -52,7 +52,8 @@ import { supabase } from "../../lib/supabase.js"
 
 function mockPublishedAppLookup(result: { data: unknown; error: unknown }) {
   const mockSingle = vi.fn().mockResolvedValue(result)
-  const mockEq2 = vi.fn().mockReturnValue({ single: mockSingle })
+  const mockIs = vi.fn().mockReturnValue({ single: mockSingle })
+  const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
   const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
   const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
   return { select: mockSelect } as never

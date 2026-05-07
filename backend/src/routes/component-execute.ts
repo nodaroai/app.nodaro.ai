@@ -43,6 +43,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
+      .is("deleted_at", null)
 
     if (pinnedVersion) {
       appQuery = appQuery.eq("version", pinnedVersion)
@@ -198,6 +199,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
+      .is("deleted_at", null)
 
     if (pinnedVersion && pinnedVersion > 0) {
       query = query.eq("version", pinnedVersion)

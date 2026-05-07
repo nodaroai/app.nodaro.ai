@@ -11,6 +11,20 @@ export function copyToClipboard(text: string, toastMessage = "Copied") {
   navigator.clipboard.writeText(text).then(() => toast.success(toastMessage)).catch(() => {})
 }
 
+/** Format an ISO timestamp as a relative time string ("2h ago", "3d ago"). */
+export function formatRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return "just now"
+  if (min < 60) return `${min}m ago`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.floor(hr / 24)
+  if (d < 30) return `${d}d ago`
+  const mo = Math.floor(d / 30)
+  return `${mo}mo ago`
+}
+
 /** Download text content as a .txt file. */
 export function downloadTextFile(text: string, filename: string) {
   const blob = new Blob([text], { type: "text/plain" })

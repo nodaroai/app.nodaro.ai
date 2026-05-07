@@ -52,7 +52,7 @@ const FREE_TIER_DEFAULTS = {
  * Extract R2 key from a public R2 URL.
  * Returns null if the URL doesn't match the R2 public URL pattern.
  */
-function r2KeyFromUrl(url: string): string | null {
+export function r2KeyFromUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL || !url.startsWith(config.R2_PUBLIC_URL)) {
     return null
   }

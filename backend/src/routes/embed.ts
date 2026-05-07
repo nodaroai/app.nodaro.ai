@@ -27,6 +27,7 @@ export async function embedRoutes(app: FastifyInstance) {
       .select("id, slug, is_embeddable, allowed_origins")
       .eq("slug", slug)
       .eq("is_active", true)
+      .is("deleted_at", null)
       .single()
 
     if (error || !appRow) {
