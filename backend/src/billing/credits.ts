@@ -151,7 +151,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Video Generation (I2V / T2V) ──
   "minimax": 18,                 // 57 KIE cr, $0.285 (6s, 1080p)
   "veo3": 79,                    // 250 KIE cr, $1.25 (VEO 3.1 Quality)
-  "veo3.1": 19,                  // 60 KIE cr, $0.30 (VEO 3.1 Fast)
+  "veo3.1": 19,                  // 60 KIE cr, $0.30 (VEO 3.1 Fast @ 720p)
+  "veo3.1:1080p": 21,            // 65 KIE cr, $0.325 (VEO 3.1 Fast @ 1080p)
+  "veo3_lite": 10,               // 30 KIE cr, $0.15 (VEO 3.1 Lite @ 720p)
+  "veo3_lite:1080p": 11,         // 35 KIE cr, $0.175 (VEO 3.1 Lite @ 1080p)
   ***REDACTED-OSS-SCRUB***
   // Kling 2.6 duration-tiered pricing (5s/10s, audio doubles cost)
   ***REDACTED-OSS-SCRUB***

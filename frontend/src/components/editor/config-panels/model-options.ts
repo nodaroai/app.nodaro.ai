@@ -87,6 +87,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
+  { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 8s with audio" },
   { value: "wan-i2v", label: "Wan 2.6", desc: "Wan I2V, 5-15s, resolution options" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast Wan, 5s clips" },
 ]
@@ -106,6 +107,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "seedance-2-fast", label: "Seedance 2.0 Fast", desc: "Bytedance Fast, 4-15s, multimodal references" },
   { value: "veo3", label: "VEO 3.1 (Quality)", desc: "Top quality, 8s with audio" },
   { value: "veo3.1", label: "VEO 3.1 (Fast)", desc: "Fast VEO, 8s with audio" },
+  { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 8s with audio" },
   { value: "wan", label: "Wan 2.6", desc: "High quality, 5-15s, 1080p" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
 ]
@@ -260,7 +262,7 @@ export const PROVIDERS_WITH_REFERENCES: string[] = modelsWithFeature("reference-
 
 /** Fallback credit cost per video provider — shown in node badge until `useModelCredits` resolves. */
 export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
-  minimax: 18, veo3: 79, "veo3.1": 19, kling: 28, "kling-turbo": 14,
+  minimax: 18, veo3: 79, "veo3.1": 19, "veo3_lite": 10, kling: 28, "kling-turbo": 14,
   "kling-3.0": 63, "grok-i2v": 7, seedance: 7,
   "seedance-2": 82, "seedance-2-fast": 66,
   "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,

@@ -789,8 +789,29 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     durations: [8],
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p"],
-    pricing: [{ identifier: "veo3.1", credits: 19, note: "8s with audio" }],
+    pricing: [
+      { identifier: "veo3.1", credits: 19, note: "8s with audio @ 720p" },
+      { identifier: "veo3.1:1080p", credits: 21, note: "8s with audio @ 1080p" },
+    ],
     featured: true,
+  },
+  "veo3_lite": {
+    id: "veo3_lite",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,
+    family: "Google",
+    label: "VEO 3.1 Lite",
+    description: "VEO 3.1 Lite — most cost-effective VEO tier for high-volume generation. 8s with audio, supports first+last frame.",
+    useCases: ["cinematic", "cheap", "high-volume"],
+    features: ["end-frame", "audio", "reference-image"],
+    durations: [8],
+    aspectRatios: VIDEO_RATIOS_HV,
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "veo3_lite", credits: 10, note: "8s with audio @ 720p" },
+      { identifier: "veo3_lite:1080p", credits: 11, note: "8s with audio @ 1080p" },
+    ],
+    featured: false,
   },
 
   // ── Kling ──

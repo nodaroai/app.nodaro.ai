@@ -144,7 +144,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const isKling3MultiShot = isKling3 && nodeData.multiShot
   const showEndFrame = supportsEndFrame && !isKling3MultiShot
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(provider)
-  const isVeo = provider === "veo3" || provider === "veo3.1"
+  const isVeo = provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite"
   const isVeoRefMode = isVeo && nodeData.veoMode === "reference"
   const showReferences = supportsReferences && (!isVeo || isVeoRefMode)
   const showStartFrame = !isVeoRefMode

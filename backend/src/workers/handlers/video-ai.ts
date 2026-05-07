@@ -191,7 +191,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   if (
     sound === false &&
     !audioUrl &&
-    (provider === "veo3" || provider === "veo3.1")
+    (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite")
   ) {
     console.log(
       `[worker] VEO sound=false — stripping audio from output for job ${ctx.jobId}`,
@@ -349,7 +349,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // VEO3 / VEO3.1: KIE has no native audio toggle, so honour `sound: false`
   // by stripping the audio track post-generation (cheap stream copy).
   let providerOutputUrl = result.url
-  if (sound === false && (provider === "veo3" || provider === "veo3.1")) {
+  if (sound === false && (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite")) {
     console.log(
       `[worker] VEO sound=false — stripping audio from t2v output for job ${ctx.jobId}`,
     )

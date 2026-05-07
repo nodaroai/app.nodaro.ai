@@ -1027,7 +1027,7 @@ export function executeNode(
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
     // VEO reference mode doesn't use start frame — skip the requirement
-    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1") && i2vData.veoMode === "reference"
+    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
     if (!startFrameUrl && !isVeoRefMode) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);

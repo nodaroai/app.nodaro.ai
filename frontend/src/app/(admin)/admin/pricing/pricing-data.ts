@@ -164,7 +164,10 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── Video Generation (I2V / T2V) — costs for default config ──
   "minimax":           { provider: "KIE.ai",    providerCostUsd: 0.285, markupPct: 25 },  // 57 KIE cr (hailuo 02 Pro 6s 1080p)
   "veo3":              { provider: "KIE.ai",    providerCostUsd: 1.250, markupPct: 25 },  // 250 KIE cr (VEO 3.1 Quality)
-  "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast)
+  "veo3.1":            { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr (VEO 3.1 Fast @ 720p)
+  "veo3.1:1080p":      { provider: "KIE.ai",    providerCostUsd: 0.325, markupPct: 25 },  // 65 KIE cr (VEO 3.1 Fast @ 1080p)
+  "veo3_lite":         { provider: "KIE.ai",    providerCostUsd: 0.150, markupPct: 25 },  // 30 KIE cr (VEO 3.1 Lite @ 720p)
+  "veo3_lite:1080p":   { provider: "KIE.ai",    providerCostUsd: 0.175, markupPct: 25 },  // 35 KIE cr (VEO 3.1 Lite @ 1080p)
   "kling":             { provider: "KIE.ai",    providerCostUsd: 0.550, markupPct: 25 },  // 110 KIE cr (2.6, 10s avg)
   "kling-turbo":       { provider: "KIE.ai",    providerCostUsd: 0.210, markupPct: 25 },  // 42 KIE cr (2.5 turbo 5s)
   "kling-3.0":         { provider: "KIE.ai",    providerCostUsd: 1.000, markupPct: 25 },  // 40 cr/sec × 5s = 200 KIE cr (audio, 1080P)

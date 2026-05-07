@@ -454,7 +454,7 @@ export class KieVideoProvider
     }
 
     // VEO3 uses a special API endpoint
-    if (provider === "veo3" || provider === "veo3.1") {
+    if (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite") {
       let imageUrls: string[]
       if (options?.generationType === "REFERENCE_2_VIDEO" && options?.referenceImageUrls?.length) {
         imageUrls = options.referenceImageUrls.slice(0, 3)
@@ -721,7 +721,7 @@ export class KieVideoProvider
     }
 
     // VEO3/VEO3.1 uses a special API endpoint
-    if (provider === "veo3" || provider === "veo3.1") {
+    if (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite") {
       const veoResult = await runVeoTask(
         modelConfig.model,
         prompt,
