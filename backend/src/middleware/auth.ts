@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
+import { resolveApiToken } from "../lib/api-token-resolver.js"
 
 /**
  * Extend Fastify request with auth data.
@@ -260,6 +261,21 @@ export function registerAuthHook(app: FastifyInstance): void {
         .eq("id", data.id)
         .then(() => {})
 
+      return
+    }
+
+    // --- Personal API token path (ndr_<64hex>, not OAuth) ---
+    if (token?.startsWith("ndr_")) {
+      const resolved = await resolveApiToken(token)
+      if (!resolved) {
+        if (isPublic) return
+        reply.status(401).send({
+          error: { code: "unauthorized", message: "Invalid or revoked API token" },
+        })
+        return
+      }
+      req.userId = resolved.userId
+      req.apiToken = resolved
       return
     }
 

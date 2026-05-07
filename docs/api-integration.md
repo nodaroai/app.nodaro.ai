@@ -55,8 +55,15 @@ Backend reference: `POST /v1/api-tokens` (JWT-authenticated, body
 
 ## 3. Public API endpoints
 
-Four endpoints are designed for API-token authentication. They all live
-under `/v1/api/` and accept `Authorization: Bearer ndr_…`.
+Personal API tokens (`Authorization: Bearer ndr_…`) authenticate every
+authenticated route in the backend, including the published-app endpoints
+under `/v1/app/:slug/*` (see the [Embed App Guide](./embed-app-guide.md))
+and the per-feature routes (jobs, workflows, projects, etc.).
+
+The five legacy endpoints below are scoped specifically to running
+workflows by ID with input overrides — they live under `/v1/api/` and
+predate the published-app system. Most new integrations should prefer
+`/v1/app/:slug/run` instead, but these remain supported.
 
 | Method | Path | Purpose |
 |---|---|---|
