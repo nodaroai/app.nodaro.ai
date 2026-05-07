@@ -306,5 +306,53 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
         }
       },
     )
+
+    // ── delete_app_run ──
+    // Soft-deletes (archives) a run. Restoration and permanent deletion are
+    // intentionally only available from the Nodaro web UI — this protects
+    // users from MCP tools accidentally destroying their data.
+    server.registerTool(
+      "delete_app_run",
+      {
+        title: "Archive App Run",
+        description:
+          "Move a published-app run to the user's archive. The run is removed from the active list but can be restored or permanently deleted from https://app.nodaro.ai/archived-runs. Use when the user asks to delete or remove a run by ID.",
+        inputSchema: {
+          slug: z.string().min(1).describe("The published app's slug (last path segment of the app URL)."),
+          runId: z.string().uuid().describe("The run's UUID."),
+        },
+      },
+      async (args) => {
+        const res = await fastify.inject({
+          method: "DELETE",
+          url: `/v1/app/${encodeURIComponent(args.slug)}/runs/${encodeURIComponent(args.runId)}`,
+          headers: {
+            "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+          },
+          payload: { userId: session.userId },
+        })
+        if (res.statusCode >= 400) {
+          return {
+            content: [
+              { type: "text", text: `Failed to archive run: ${res.statusCode} ${res.body}` },
+            ],
+            isError: true,
+          }
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Archived run ${args.runId}. Restore or permanently delete from https://app.nodaro.ai/archived-runs.`,
+            },
+          ],
+          structuredContent: {
+            slug: args.slug,
+            runId: args.runId,
+            archived: true,
+          },
+        }
+      },
+    )
   }
 }

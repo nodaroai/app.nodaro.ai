@@ -179,5 +179,18 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 ---
 
-*Last updated: 2026-05-07 (ee/ migration Phases 1-5)*
-*Version: 2.0.0*
+## App Run Archive (soft-delete)
+
+`app_runs.deleted_at` makes `DELETE /v1/app/:slug/runs/:runId` a soft-delete. The run is hidden from the default list and recoverable from `/archived-runs` in the UI. API / SDK (`client.apps.deleteRun()`) / MCP (`delete_app_run` tool) all soft-delete by design — they cannot destroy data.
+
+UI-only routes (deliberately not surfaced in SDK/MCP):
+- `GET  /v1/me/archived-runs` — global archive list across all apps
+- `POST /v1/app/:slug/runs/:runId/restore` — un-archive
+- `DELETE /v1/app/:slug/runs/:runId/permanent` — real destroy (row + workflow_executions row; R2 reaped by cleanup-cron)
+
+Permanent delete requires the run to be archived first (returns 400 `not_archived` otherwise).
+
+---
+
+*Last updated: 2026-05-07 (app-run archive)*
+*Version: 2.1.0*

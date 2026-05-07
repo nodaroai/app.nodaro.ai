@@ -23,6 +23,7 @@ const BillingPage = lazy(() => import("@/ee/app/(dashboard)/billing/page"))
 const SettingsPage = lazy(() => import("@/app/(dashboard)/settings/page"))
 const LibraryPage = lazy(() => import("@/app/(dashboard)/library/page"))
 const ExecutionsPage = lazy(() => import("@/app/(dashboard)/executions/page"))
+const ArchivedRunsPage = lazy(() => import("@/app/(dashboard)/archived-runs/page"))
 const GalleryPage = lazy(() => import("@/app/gallery/page"))
 const PricingPage = lazy(() => import("@/app/pricing/page"))
 const PresentPage = lazy(() => import("@/routes/present-page"))
@@ -200,6 +201,10 @@ export const router = createBrowserRouter([
       {
         path: "/executions",
         element: <SuspenseWrapper><ExecutionsPage /></SuspenseWrapper>,
+      },
+      {
+        path: "/archived-runs",
+        element: <SuspenseWrapper><ArchivedRunsPage /></SuspenseWrapper>,
       },
       {
         path: "/my-files",

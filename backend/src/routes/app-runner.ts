@@ -57,6 +57,7 @@ const updateRunBody = z.object({
 const runsQuery = z.object({
   cursor: z.string().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  archived: z.coerce.boolean().optional().default(false),
 })
 
 const appQuery = z.object({
@@ -357,6 +358,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         })
         .eq("id", runId)
         .eq("runner_id", req.userId)
+        .is("deleted_at", null)
         .select("id")
         .single()
 
@@ -559,7 +561,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { cursor, limit } = queryParsed.data
+    const { cursor, limit, archived } = queryParsed.data
 
     // Step 1: resolve slug → workflow_id
     const workflowId = await resolveSlug(slug)
@@ -600,12 +602,19 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
+        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, deleted_at, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
       )
       .in("app_id", versionIds)
       .eq("runner_id", req.userId)
       .order("created_at", { ascending: false })
       .limit(limit + 1) // fetch one extra for cursor
+
+    // Default: active runs only. archived=true: only soft-deleted runs.
+    if (archived) {
+      query = query.not("deleted_at", "is", null)
+    } else {
+      query = query.is("deleted_at", null)
+    }
 
     if (cursorDate) {
       query = query.lt("created_at", cursorDate)
@@ -661,6 +670,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           version: versionMap.get(run.app_id) ?? null,
           thumbnailUrl,
           hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
+          deletedAt: (run as { deleted_at?: string | null }).deleted_at ?? null,
         }
       }),
       nextCursor,
@@ -752,7 +762,112 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     })
   })
 
-  // --- Delete run from history ---
+  // --- List all archived runs across all apps for the authenticated user ---
+  // This powers the global archive view in the Nodaro UI. API/SDK/MCP don't
+  // surface archived runs by default; listing them is intentionally only
+  // available to the runner's own UI.
+  app.get("/v1/me/archived-runs", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const queryParsed = z
+      .object({
+        cursor: z.string().uuid().optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+      })
+      .safeParse(req.query)
+    if (!queryParsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid query parameters" },
+      })
+    }
+    const { cursor, limit } = queryParsed.data
+
+    let cursorDate: string | undefined
+    if (cursor) {
+      const { data: cursorRow } = await supabase
+        .from("app_runs")
+        .select("deleted_at")
+        .eq("id", cursor)
+        .single()
+      cursorDate = cursorRow?.deleted_at as string | undefined
+    }
+
+    let query = supabase
+      .from("app_runs")
+      .select(
+        "id, app_id, created_at, deleted_at, name, input_values, status, credits_used, execution_id, node_states, published_apps!app_id(slug, name, icon_url, version, thumbnail_node_id), workflow_executions(node_states, total_credits_used, completed_at)"
+      )
+      .eq("runner_id", req.userId)
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false })
+      .limit(limit + 1)
+
+    if (cursorDate) {
+      query = query.lt("deleted_at", cursorDate)
+    }
+
+    const { data: runs, error: runsError } = await query
+    if (runsError) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: "Failed to fetch archived runs" },
+      })
+    }
+
+    const hasMore = (runs?.length ?? 0) > limit
+    const items = (runs ?? []).slice(0, limit)
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : undefined
+
+    return reply.send({
+      data: items.map((run) => {
+        const exec = run.workflow_executions as unknown as {
+          node_states: unknown
+          total_credits_used: number | null
+          completed_at: string | null
+        } | null
+        const pubApp = run.published_apps as unknown as {
+          slug: string
+          name: string
+          icon_url: string | null
+          version: number
+          thumbnail_node_id: string | null
+        } | null
+
+        let thumbnailUrl: string | null = null
+        const tnNodeId = pubApp?.thumbnail_node_id
+        if (tnNodeId && exec?.node_states) {
+          const ns = exec.node_states as Record<string, { output?: Record<string, unknown> }>
+          const nodeOutput = ns[tnNodeId]?.output
+          if (nodeOutput) {
+            thumbnailUrl = (nodeOutput.url ?? nodeOutput.imageUrl ?? nodeOutput.videoUrl ?? nodeOutput.audioUrl ?? nodeOutput.resultUrl ?? null) as string | null
+          }
+        }
+
+        return {
+          id: run.id,
+          appSlug: pubApp?.slug ?? null,
+          appName: pubApp?.name ?? null,
+          appIconUrl: pubApp?.icon_url ?? null,
+          createdAt: run.created_at,
+          deletedAt: run.deleted_at,
+          name: (run as { name?: string | null }).name ?? null,
+          status: (run as { status?: string }).status ?? "draft",
+          creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
+          thumbnailUrl,
+          completedAt: exec?.completed_at ?? null,
+        }
+      }),
+      nextCursor,
+    })
+  })
+
+  // --- Soft-delete (archive) a run ---
+  // The run row is preserved with deleted_at timestamp. Users can restore or
+  // permanently delete from the Nodaro UI's archive view. API/SDK/MCP delete
+  // calls soft-delete; recovery is UI-only by design.
   app.delete("/v1/app/:slug/runs/:runId", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
@@ -769,10 +884,85 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { runId } = parsed.data
 
-    // Verify ownership before deleting
+    const { data: updated, error: updateError } = await supabase
+      .from("app_runs")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", runId)
+      .eq("runner_id", req.userId)
+      .is("deleted_at", null)
+      .select("id")
+      .single()
+
+    if (updateError || !updated) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Run not found" },
+      })
+    }
+
+    return reply.send({ success: true, archived: true })
+  })
+
+  // --- Restore an archived run ---
+  app.post("/v1/app/:slug/runs/:runId/restore", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const parsed = slugRunParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid parameters" },
+      })
+    }
+
+    const { runId } = parsed.data
+
+    const { data: updated, error: updateError } = await supabase
+      .from("app_runs")
+      .update({ deleted_at: null })
+      .eq("id", runId)
+      .eq("runner_id", req.userId)
+      .not("deleted_at", "is", null)
+      .select("id")
+      .single()
+
+    if (updateError || !updated) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Archived run not found" },
+      })
+    }
+
+    return reply.send({ success: true, restored: true })
+  })
+
+  // --- Permanently delete an archived run (real destroy) ---
+  // Removes the app_runs row + its workflow_executions row (cascades to node
+  // states / outputs in DB). Generated R2 assets are reaped by the existing
+  // cleanup-cron based on storage retention; we don't block this request on
+  // R2 deletion.
+  app.delete("/v1/app/:slug/runs/:runId/permanent", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const parsed = slugRunParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "validation_error", message: "Invalid parameters" },
+      })
+    }
+
+    const { runId } = parsed.data
+
+    // Must already be archived. This guards against accidental hard-deletes
+    // bypassing the archive flow.
     const { data: run, error: findError } = await supabase
       .from("app_runs")
-      .select("id")
+      .select("id, execution_id, deleted_at")
       .eq("id", runId)
       .eq("runner_id", req.userId)
       .single()
@@ -781,6 +971,23 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({
         error: { code: "not_found", message: "Run not found" },
       })
+    }
+
+    if (!run.deleted_at) {
+      return reply.status(400).send({
+        error: { code: "not_archived", message: "Run must be archived before permanent deletion. Call DELETE first." },
+      })
+    }
+
+    // Delete the underlying execution row first (its node_states JSONB holds
+    // the output URLs). Best-effort: if it's gone or not owned, we still
+    // proceed with deleting the app_runs row.
+    if (run.execution_id) {
+      await supabase
+        .from("workflow_executions")
+        .delete()
+        .eq("id", run.execution_id)
+        .eq("user_id", req.userId)
     }
 
     const { error: deleteError } = await supabase
@@ -795,6 +1002,6 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    return reply.send({ success: true })
+    return reply.send({ success: true, permanentlyDeleted: true })
   })
 }

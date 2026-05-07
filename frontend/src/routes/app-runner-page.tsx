@@ -1,6 +1,13 @@
 import { useEffect, useCallback } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
-import { Loader2, Clock } from "lucide-react"
+import { Loader2, Clock, MoreVertical, Trash2, Link as LinkIcon } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
 import { useAuth } from "@/hooks/use-auth"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
@@ -122,17 +129,17 @@ export default function AppRunnerPage() {
     <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Delete Run</DialogTitle>
+          <DialogTitle>Move to archive</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Are you sure you want to delete this run? This action cannot be undone.
+          This run will be moved to your archive. You can restore it or permanently delete it from <Link to="/archived-runs" className="underline">Archived runs</Link>.
         </p>
         <DialogFooter className="flex gap-2 sm:justify-end">
           <Button variant="outline" onClick={() => runSlots.setDeleteConfirmSlotId(null)} autoFocus>
             Cancel
           </Button>
           <Button variant="destructive" onClick={runSlots.handleConfirmDelete}>
-            Delete
+            Move to archive
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -208,6 +215,44 @@ export default function AppRunnerPage() {
                 <Clock className="h-4 w-4 mr-1" />
                 Runs
               </Button>
+            ) : null
+          }
+          headerActions={
+            user && runSlots.activeSlotId && runSlots.activeSlotId !== ORIGINAL_SLOT_ID ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                    aria-label="Run actions"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      const url = new URL(window.location.href)
+                      url.searchParams.set("run", runSlots.activeSlotId!)
+                      navigator.clipboard.writeText(url.toString()).then(
+                        () => toast.success("Link copied"),
+                        () => toast.error("Failed to copy link"),
+                      )
+                    }}
+                  >
+                    <LinkIcon className="h-4 w-4 mr-2" />
+                    Copy link to this run
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => runSlots.handleRequestDelete(runSlots.activeSlotId!)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Move to archive
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null
           }
         />
