@@ -11,8 +11,11 @@
  *      extraction).
  *   3. For each candidate, decode pixels via sharp and compute PSNR against
  *      frame 0. Higher PSNR = closer match.
- *   4. Re-encode the source up to (chosen-frame-index + 1) frames using
- *      `-vframes`.
+ *   4. Re-encode the source up to (but EXCLUDING) the chosen frame using
+ *      `-vframes <chosenFrameIndex>`. Excluding the match means the loop
+ *      boundary is f(K-1) → f0 (continuous motion). Including it would
+ *      produce a 1-frame freeze since the matching frame is by selection
+ *      visually ≈ frame 0.
  *
  * Use cases:
  *   - VEO 3.1 first+last-frame mode produces a tail dissolve that
@@ -40,11 +43,17 @@ export interface SmartLoopCutOptions {
    *  Default 16 — covers the typical VEO tail-dissolve range plus
    *  a few extra frames of slack. Cap at 64 for runtime sanity. */
   readonly lookbackFrames?: number
+  /** When true, the output is encoded with `-an` (no audio). Default
+   *  false — source audio is copied through up to the chosen cut. */
+  readonly outputSilent?: boolean
 }
 
 export interface SmartLoopCutResult {
   readonly videoPath: string
-  /** 0-indexed frame number we trimmed to. Output frame count = chosenFrameIndex + 1. */
+  /** 0-indexed frame at which the loop-match was found — also the cut
+   *  point. The output INCLUDES frames 0..chosenFrameIndex-1 and EXCLUDES
+   *  the matching frame (so the loop boundary is seamless). Output frame
+   *  count = chosenFrameIndex. */
   readonly chosenFrameIndex: number
   /** PSNR (dB) between the chosen end-frame and frame 0. Higher is better.
    *  >30 ≈ visually identical · 20–30 ≈ noticeable diff · <20 ≈ broken seam. */
@@ -130,21 +139,26 @@ export async function smartLoopCut(
     }
 
     const chosenFrameIndex = candidateIndices[bestIdx]
-    // Output exactly chosenFrameIndex + 1 frames. `-vframes` is robust here —
-    // works regardless of variable frame rate.
+    // Output `chosenFrameIndex` frames (indices 0..chosenFrameIndex-1).
+    // The chosen frame itself is EXCLUDED so the loop boundary is
+    // f(K-1) → f0 (continuous motion), not f(K) → f0 which would be a
+    // 1-frame freeze since f(K) ≈ f0 by selection. `-vframes` works
+    // regardless of variable frame rate.
+    const audioArgs = options.outputSilent ? ["-an"] : ["-c:a", "copy"]
     await runFfmpeg([
       "-y", "-i", inputPath,
-      "-vframes", String(chosenFrameIndex + 1),
+      "-vframes", String(chosenFrameIndex),
       "-c:v", "libx264", "-pix_fmt", "yuv420p",
       "-preset", "fast", "-crf", "20",
-      "-c:a", "copy",
+      ...audioArgs,
       "-movflags", "+faststart",
       outputPath,
     ])
 
     console.log(
       `[smartLoopCut] Source ${frameCount} frames @ ${fps}fps; ` +
-        `chose frame ${chosenFrameIndex} (cut ${frameCount - chosenFrameIndex - 1} trailing frames, PSNR ${bestPsnr.toFixed(2)})`,
+        `cut at frame ${chosenFrameIndex} (kept ${chosenFrameIndex} frames, ` +
+        `dropped ${frameCount - chosenFrameIndex} trailing, PSNR ${bestPsnr.toFixed(2)})`,
     )
 
     return {

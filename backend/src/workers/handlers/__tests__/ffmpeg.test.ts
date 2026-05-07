@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => {
   const mockSpeedRamp = vi.fn().mockResolvedValue("/tmp/speed-work/output.mp4")
   const mockLoopVideo = vi.fn().mockResolvedValue({ outputPath: "/tmp/loop-work/output.mp4" })
   const mockFadeVideo = vi.fn().mockResolvedValue("/tmp/fade-work/output.mp4")
+  const mockSmartLoopCut = vi.fn().mockResolvedValue({
+    videoPath: "/tmp/slc-work/output.mp4", chosenFrameIndex: 184, psnr: 38, sourceFrameCount: 192, fps: 24,
+  })
 
   // ffmpeg-utils
   const mockCreateWorkDir = vi.fn().mockResolvedValue("/tmp/transcode-work")
@@ -56,6 +59,7 @@ const mocks = vi.hoisted(() => {
     mockSpeedRamp,
     mockLoopVideo,
     mockFadeVideo,
+    mockSmartLoopCut,
     mockCreateWorkDir,
     mockDownloadFile,
     mockRunFfmpeg,
@@ -108,6 +112,10 @@ vi.mock("@/providers/video/trim-audio.js", () => ({
 
 vi.mock("@/providers/video/trim-video.js", () => ({
   trimVideo: mocks.mockTrimVideo,
+}))
+
+vi.mock("@/providers/video/smart-loop-cut.js", () => ({
+  smartLoopCut: mocks.mockSmartLoopCut,
 }))
 
 vi.mock("@/providers/video/resize-video.js", () => ({
@@ -386,6 +394,31 @@ describe("trim-video handler", () => {
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: expect.objectContaining({ videoUrl: "https://r2.example.com/video.mp4" }),
     }))
+  })
+
+  it("forwards outputSilentVideo=true through the smart-loop-cut path", async () => {
+    mocks.mockSmartLoopCut.mockResolvedValueOnce({
+      videoPath: "/tmp/slc-work/output.mp4",
+      chosenFrameIndex: 184,
+      psnr: 38.2,
+      sourceFrameCount: 192,
+      fps: 24,
+    })
+    mocks.mockUploadFileToR2.mockResolvedValueOnce("https://r2.example.com/video.mp4")
+
+    const job = makeJob("trim-video", {
+      videoUrl: "https://vid.mp4",
+      smartLoopCut: true,
+      smartLoopCutLookback: 32,
+      outputSilentVideo: true,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSmartLoopCut).toHaveBeenCalledWith({
+      videoUrl: "https://vid.mp4",
+      lookbackFrames: 32,
+      outputSilent: true,
+    })
   })
 })
 
