@@ -908,7 +908,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
       </MappableField>
       <ModelDescriptionHint modelId={provider} />
 
-      {/* Resolution — KIE providers only */}
+      {/* Resolution — Kling Avatar / InfiniTalk providers only */}
       {isKie && (
         <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select value={data.resolution || "720p"} onValueChange={(v) => onUpdate({ resolution: v as LipSyncData["resolution"] })}>
@@ -922,7 +922,7 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
         </MappableField>
       )}
 
-      {/* Motion Prompt — KIE providers only */}
+      {/* Motion Prompt — Kling Avatar / InfiniTalk providers only */}
       {isKie && (
         <MappableField field="prompt" label="Motion Prompt (optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />

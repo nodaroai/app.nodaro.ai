@@ -45,7 +45,13 @@ export interface RouteResult {
   cost: number | null
   displayCost: number | null
   providerUsed: ProviderUsed
-  kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
+  kieTaskId?: string  // Provider task ID for extend/upscale operations (VEO, Runway)
+  /** Provider-reported seed (VEO only). */
+  seed?: number
+  /** Whether the provider silently used a fallback model (VEO only). */
+  fallbackFlag?: boolean
+  /** Provider-side generation duration in milliseconds. */
+  providerMs?: number
 }
 
 // ─── Core routing engine ──────────────────────────────────────────
@@ -111,6 +117,9 @@ async function routeAndExecute(
       displayCost,
       providerUsed,
       kieTaskId: result.kieTaskId,
+      seed: result.seed,
+      fallbackFlag: result.fallbackFlag,
+      providerMs: result.providerMs,
     }
   }
 
