@@ -63,7 +63,7 @@ export interface SmartLoopCutResult {
 export async function smartLoopCut(
   options: SmartLoopCutOptions,
 ): Promise<SmartLoopCutResult> {
-  const lookback = Math.max(1, Math.min(options.lookbackFrames ?? 16, 64))
+  const requestedLookback = Math.max(1, Math.min(options.lookbackFrames ?? 16, 64))
   const workDir = await createWorkDir("smart-loop-cut")
 
   try {
@@ -74,9 +74,24 @@ export async function smartLoopCut(
     await downloadFile(options.videoUrl, inputPath)
 
     const { fps, frameCount } = await probeFpsAndFrameCount(inputPath)
-    if (frameCount < lookback + 2) {
+
+    // Need at least 3 frames: frame 0 (reference) + 2 candidates (so the
+    // search has any meaning — picking from a single candidate is a no-op).
+    if (frameCount < 3) {
       throw new Error(
-        `Source too short for smart loop cut: ${frameCount} frames, need ≥ ${lookback + 2}`,
+        `Source too short for smart loop cut: ${frameCount} frame(s). ` +
+          `Use the "Time" or "Frames" trim mode instead, or skip trimming entirely.`,
+      )
+    }
+
+    // Auto-clamp lookback to the available trailing window. Better than
+    // failing the whole job for a short clip — the user gets a result that
+    // honours the spirit of the request even when the source is too short
+    // for the full requested search depth.
+    const lookback = Math.min(requestedLookback, frameCount - 2)
+    if (lookback < requestedLookback) {
+      console.warn(
+        `[smartLoopCut] Source has ${frameCount} frames; clamping lookback ${requestedLookback}→${lookback}`,
       )
     }
 
