@@ -163,27 +163,36 @@ export async function smartLoopCut(
 async function probeFpsAndFrameCount(
   filePath: string,
 ): Promise<{ fps: number; frameCount: number }> {
-  // -count_packets is faster than -count_frames and accurate enough for
-  // mp4. Fall back to duration × fps if the count probe returns 0/N/A
-  // (some containers don't expose nb_read_packets).
+  // Use -count_frames + nb_read_frames (decodes the stream; accurate)
+  // instead of -count_packets, which under-reports on fragmented MP4s
+  // (e.g. VEO 3.1 outputs report ~7 packets for an 8s clip with ~192
+  // actual frames because the fragments aren't flat-packet streams).
+  // JSON output avoids any CSV field-order ambiguity.
   const out = await runFfprobe([
     "-v", "error",
     "-select_streams", "v:0",
-    "-count_packets",
-    "-show_entries", "stream=r_frame_rate,nb_read_packets,duration",
-    "-of", "csv=p=0",
+    "-count_frames",
+    "-show_entries", "stream=r_frame_rate,nb_read_frames,duration",
+    "-of", "json",
     filePath,
   ])
-  const [fpsExpr, packetsStr, durationStr] = out.trim().split(",")
+  const parsed = JSON.parse(out) as {
+    streams?: Array<{ r_frame_rate?: string; nb_read_frames?: string; duration?: string }>
+  }
+  const stream = parsed.streams?.[0]
+  if (!stream) {
+    throw new Error("ffprobe returned no video stream for smart-loop-cut probe")
+  }
+  const fpsExpr = stream.r_frame_rate
   const fps = parseFractionalFps(fpsExpr)
-  let frameCount = parseInt(packetsStr ?? "", 10)
+  let frameCount = parseInt(stream.nb_read_frames ?? "", 10)
   if (!Number.isFinite(frameCount) || frameCount <= 0) {
-    const duration = parseFloat(durationStr ?? "0")
+    const duration = parseFloat(stream.duration ?? "0")
     frameCount = Math.round(duration * fps)
   }
   if (!Number.isFinite(fps) || fps <= 0 || frameCount <= 0) {
     throw new Error(
-      `Could not determine fps/frame-count: fpsExpr="${fpsExpr}" packets="${packetsStr}" duration="${durationStr}"`,
+      `Could not determine fps/frame-count: fpsExpr="${fpsExpr}" frames="${stream.nb_read_frames}" duration="${stream.duration}"`,
     )
   }
   return { fps, frameCount }
