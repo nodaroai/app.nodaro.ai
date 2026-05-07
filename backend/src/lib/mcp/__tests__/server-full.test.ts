@@ -135,12 +135,12 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("upload_audio")).toBe(false)
     expect(names.has("upload_video")).toBe(false)
 
-    // Sanity: ping + verbs + jobs + workflows + gallery + 9 upload tools.
-    // Bound bumped to 60 after adding voice_changer, dubbing, voice_clone,
-    // voice_design, suno_separate_stems, suno_extend, suno_cover,
-    // modify_video, motion_transfer (was 50, now ~54).
+    // Sanity: ping + verbs + jobs + workflows + gallery + 9 upload tools +
+    // app tools (list_apps, get_app_inputs, run_app, delete_app_run).
+    // Upper bound has headroom for future tool additions; bump when adding
+    // a new tool family rather than tracking every single tool.
     expect(tools.length).toBeGreaterThanOrEqual(28)
-    expect(tools.length).toBeLessThanOrEqual(60)
+    expect(tools.length).toBeLessThanOrEqual(70)
   })
 
   it("with only jobs:read, registers ping + jobs tools and nothing else", async () => {

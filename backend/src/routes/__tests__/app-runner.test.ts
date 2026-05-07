@@ -598,16 +598,10 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
     expect(res.json().error.code).toBe("not_found")
   })
 
-  it("returns 200 on successful delete", async () => {
-    let callCount = 0
+  it("returns 200 with archived: true on successful soft-delete", async () => {
+    // Soft-delete is a single update-and-return-row call.
     vi.mocked(supabase.from).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // Ownership check
-        return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
-      }
-      // Delete
-      return createChainMock({ error: null }) as never
+      return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
     })
 
     const res = await app.inject({
@@ -618,18 +612,14 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().success).toBe(true)
+    expect(res.json().archived).toBe(true)
   })
 
-  it("returns 500 when delete fails", async () => {
-    let callCount = 0
+  it("returns 404 when run is already archived (idempotent guard)", async () => {
+    // The update path filters `.is(deleted_at, null)`, so an already-archived
+    // run produces an empty update result that we surface as 404.
     vi.mocked(supabase.from).mockImplementation(() => {
-      callCount++
-      if (callCount === 1) {
-        // Ownership check succeeds
-        return createChainMock({ data: { id: TEST_RUN_ID }, error: null }) as never
-      }
-      // Delete fails
-      return createChainMock({ error: { message: "FK constraint" } }) as never
+      return createChainMock({ data: null, error: { code: "PGRST116", message: "no rows" } }) as never
     })
 
     const res = await app.inject({
@@ -638,7 +628,7 @@ describe("DELETE /v1/app/:slug/runs/:runId", () => {
       headers: { "x-user-id": TEST_USER_ID },
     })
 
-    expect(res.statusCode).toBe(500)
-    expect(res.json().error.code).toBe("internal_error")
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
   })
 })
