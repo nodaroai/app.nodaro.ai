@@ -73,6 +73,7 @@ export function registerComponents({
           )
           .eq("is_active", true)
           .eq("publish_type", "component")
+          .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(limit)
         if (scope === "mine") {
@@ -140,6 +141,7 @@ export function registerComponents({
           .eq("slug", args.component_id)
           .eq("publish_type", "component")
           .eq("is_active", true)
+          .is("deleted_at", null)
           .limit(1)
           .single()
         if (error || !data) {
@@ -221,6 +223,7 @@ export function registerComponents({
             .eq("slug", args.component_id)
             .eq("publish_type", "component")
             .eq("is_active", true)
+            .is("deleted_at", null)
             .limit(1)
             .single()
           if (row) {

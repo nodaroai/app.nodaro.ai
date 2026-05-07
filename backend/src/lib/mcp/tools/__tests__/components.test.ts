@@ -19,7 +19,7 @@ function chainResolves(rows: unknown[]) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = {}
   const mk = () => chain
-  for (const m of ["select", "eq", "order", "lt", "textSearch", "limit"]) {
+  for (const m of ["select", "eq", "is", "order", "lt", "textSearch", "limit"]) {
     chain[m] = vi.fn(mk)
   }
   chain.then = (onR: (v: { data: unknown; error: null }) => unknown) =>
@@ -31,7 +31,7 @@ function chainResolvesSingle(row: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = {}
   const mk = () => chain
-  for (const m of ["select", "eq", "order", "lt", "textSearch", "limit"]) {
+  for (const m of ["select", "eq", "is", "order", "lt", "textSearch", "limit"]) {
     chain[m] = vi.fn(mk)
   }
   chain.single = vi.fn().mockResolvedValue({ data: row, error: null })

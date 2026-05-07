@@ -256,10 +256,11 @@ describe("POST /v1/apps/publish", () => {
       if (table === "published_apps") {
         appsCallCount++
         if (appsCallCount === 1) {
-          // First apps call: check existing versions
+          // First apps call: check existing versions (.eq().is().order().limit())
           const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-          const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockEq = vi.fn().mockReturnValue({ is: mockIs })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {
@@ -311,20 +312,24 @@ describe("POST /v1/apps/publish", () => {
         appsCallCount++
         if (appsCallCount === 1) {
           // Return existing version 3 (with slug + is_listed for carry-forward)
+          // Chain: .select().eq().is().order().limit()
           const mockLimit = vi.fn().mockResolvedValue({
             data: [{ id: "prev-id", version: 3, slug: "my-app-abc123", is_listed: true }],
             error: null,
           })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-          const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockEq = vi.fn().mockReturnValue({ is: mockIs })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else if (appsCallCount === 2) {
           // Fetch all old versions for slug retirement
-          const mockEq2 = vi.fn().mockResolvedValue({
+          // Chain: .select().eq().eq().is()
+          const mockIs = vi.fn().mockResolvedValue({
             data: [{ id: "prev-id", version: 3, slug: "my-app-abc123" }],
             error: null,
           })
+          const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
           const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
           return { select: mockSelect } as never
@@ -371,9 +376,11 @@ describe("POST /v1/apps/publish", () => {
         appsCallCount++
         if (appsCallCount === 1) {
           // version check — no existing versions
+          // Chain: .select().eq().is().order().limit()
           const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
           const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
-          const mockEq = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockEq = vi.fn().mockReturnValue({ is: mockIs })
           const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
           return { select: mockSelect } as never
         } else {

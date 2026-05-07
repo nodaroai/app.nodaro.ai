@@ -212,6 +212,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .select(selectCols)
       .eq("is_listed", true)
       .eq("is_active", true)
+      .is("deleted_at", null)
       .limit(limit + 1) // fetch one extra to detect next page
 
     // Filters
@@ -307,6 +308,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       .select("id, version")
       .eq("slug", slug)
       .eq("is_active", true)
+      .is("deleted_at", null)
       .order("version", { ascending: false })
       .limit(1)
       .single()
@@ -456,11 +458,14 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
     }
 
-    // Compute version + deactivate old versions
+    // Compute version + deactivate old versions. Filter deleted rows so a
+    // republish after deletion gets a fresh v1 and the deleted row's slug
+    // stays intact (restore must yield the original slug).
     const { data: existingApps } = await supabase
       .from("published_apps")
       .select("id, version, slug, is_listed, monetization_enabled, monetization_flat_fee, monetization_percent")
       .eq("workflow_id", workflowId)
+      .is("deleted_at", null)
       .order("version", { ascending: false })
       .limit(1)
 
@@ -470,14 +475,16 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Reuse slug from previous version so the app URL stays stable across versions
     const inheritedSlug = prevVersion?.slug ?? null
 
-    // Auto-deactivate all previous versions and retire their slugs to free the
-    // UNIQUE constraint — new version inherits the original slug.
+    // Auto-deactivate live previous versions and retire their slugs to free
+    // the UNIQUE constraint. Deleted rows are skipped so their slugs stay
+    // intact for restore.
     if (prevVersion) {
       const { data: allOldVersions } = await supabase
         .from("published_apps")
         .select("id, version, slug")
         .eq("workflow_id", workflowId)
         .eq("creator_id", userId)
+        .is("deleted_at", null)
 
       if (allOldVersions) {
         for (const old of allOldVersions) {
@@ -680,6 +687,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       runCount: app.app_runs?.[0]?.count ?? 0,
       publishType: app.publish_type ?? "app",
       componentMetadata: app.component_metadata ?? null,
+      deletedAt: app.deleted_at ?? null,
     }))
 
     return reply.send(result)
@@ -794,7 +802,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     return reply.send(toCamelCase(updated as Record<string, unknown>))
   })
 
-  // DELETE /v1/apps/:appId — Soft delete (set is_active = false)
+  // DELETE /v1/apps/:appId — Soft delete (set deleted_at + is_active = false)
   app.delete("/v1/apps/:appId", async (req, reply) => {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
@@ -817,13 +825,52 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
 
     const { error: updateError } = await supabase
       .from("published_apps")
-      .update({ is_active: false })
+      .update({
+        deleted_at: new Date().toISOString(),
+        is_active: false,
+      })
       .eq("id", appId)
 
     if (updateError) {
-      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to deactivate app" } })
+      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to delete app" } })
     }
 
     return reply.send({ success: true })
+  })
+
+  // POST /v1/apps/:appId/restore — Clears deleted_at, leaves is_active=false
+  // (no expiration; user must re-publish manually from the edit page).
+  app.post("/v1/apps/:appId/restore", async (req, reply) => {
+    const userId = req.userId
+    if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+
+    const { appId } = req.params as { appId: string }
+
+    const { data: existing, error: fetchError } = await supabase
+      .from("published_apps")
+      .select("id, creator_id, deleted_at")
+      .eq("id", appId)
+      .single()
+
+    if (fetchError || !existing) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+    if (existing.creator_id !== userId) {
+      return reply.status(403).send({ error: { code: "forbidden", message: "Not your app" } })
+    }
+    if (!existing.deleted_at) {
+      return reply.status(404).send({ error: { code: "not_deleted", message: "App is not in a deleted state" } })
+    }
+
+    const { error: updateError } = await supabase
+      .from("published_apps")
+      .update({ deleted_at: null, is_active: false })
+      .eq("id", appId)
+
+    if (updateError) {
+      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to restore app" } })
+    }
+
+    return reply.send({ success: true, restored: true })
   })
 }

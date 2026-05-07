@@ -79,6 +79,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           )
           .eq("is_active", true)
           .eq("publish_type", "app")
+          .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .limit(limit)
         if (scope === "mine") {
@@ -144,6 +145,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           .eq("slug", args.slug)
           .eq("publish_type", "app")
           .eq("is_active", true)
+          .is("deleted_at", null)
           .limit(1)
           .single()
         if (error || !data) {
@@ -236,6 +238,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
           .eq("slug", args.slug)
           .eq("publish_type", "app")
           .eq("is_active", true)
+          .is("deleted_at", null)
           .limit(1)
           .single()
 

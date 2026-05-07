@@ -32,6 +32,7 @@ export async function ogTagsRoutes(app: FastifyInstance) {
       .from("published_apps")
       .select("name, description, icon_url, workflow_id, snapshot_nodes, thumbnail_node_id")
       .eq("slug", slug)
+      .is("deleted_at", null)
       .order("version", { ascending: false })
       .limit(1)
       .single()

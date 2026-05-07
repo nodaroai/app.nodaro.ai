@@ -167,6 +167,7 @@ export async function monetizationRoutes(app: FastifyInstance) {
       .from("published_apps")
       .select("creator_id")
       .eq("id", appId)
+      .is("deleted_at", null)
       .single()
 
     if (!appRow || appRow.creator_id !== req.userId) {

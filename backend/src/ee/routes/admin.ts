@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
+import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
+import { batchDeleteFromR2 } from "../../lib/storage.js"
 
 // ============================================================
 // Admin Routes - Cost Alerts, Model Pricing & Asset Library
@@ -522,5 +524,108 @@ export async function adminRoutes(app: FastifyInstance) {
       message: "Asset demoted from library",
       data: asset,
     }
+  })
+
+  // DELETE /v1/admin/apps/:appId/expunge — Hard-delete a soft-deleted app
+  // for legal compliance (GDPR right-to-erasure, takedown requests). Two-
+  // step gate: app must be soft-deleted first. Earnings + run records are
+  // preserved with snapshot columns; user content (run inputs/outputs +
+  // R2 files) is erased.
+  app.delete("/v1/admin/apps/:appId/expunge", { preHandler: requireAdmin }, async (req, reply) => {
+    if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    const userId = req.userId
+    const { appId } = req.params as { appId: string }
+
+    const bodyParse = z
+      .object({
+        reason: z.string().min(10).max(2000),
+      })
+      .safeParse(req.body)
+    if (!bodyParse.success) {
+      return reply.status(400).send({ error: { code: "reason_required", message: "Reason required (10-2000 chars)" } })
+    }
+    const { reason } = bodyParse.data
+
+    const { data: existing, error: fetchError } = await supabase
+      .from("published_apps")
+      .select("id, deleted_at, slug")
+      .eq("id", appId)
+      .single()
+    if (fetchError || !existing) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
+    }
+    if (!existing.deleted_at) {
+      return reply.status(400).send({
+        error: {
+          code: "app_not_soft_deleted",
+          message: "App must be soft-deleted before expunge. Soft-delete first via DELETE /v1/apps/:appId.",
+        },
+      })
+    }
+
+    const r2Keys = await collectAppR2Keys(appId)
+
+    const { error: snapshotError } = await supabase.rpc("expunge_app_snapshots", { p_app_id: appId })
+    if (snapshotError) {
+      console.error(`[admin-expunge] snapshot RPC failed for ${appId}:`, snapshotError.message)
+      return reply.status(500).send({ error: { code: "snapshot_failed", message: snapshotError.message } })
+    }
+
+    const { error: redactError } = await supabase
+      .from("app_runs")
+      .update({ input_data: null, output_data: null })
+      .eq("app_id", appId)
+    if (redactError) {
+      console.error(`[admin-expunge] run redact failed for ${appId}:`, redactError.message)
+      return reply.status(500).send({ error: { code: "redact_failed", message: redactError.message } })
+    }
+
+    const { error: deleteError } = await supabase.from("published_apps").delete().eq("id", appId)
+    if (deleteError) {
+      console.error(`[admin-expunge] delete failed for ${appId}:`, deleteError.message)
+      return reply.status(500).send({ error: { code: "delete_failed", message: deleteError.message } })
+    }
+
+    let r2Result = { deleted: 0, errors: 0 }
+    if (r2Keys.length > 0) {
+      try {
+        r2Result = await batchDeleteFromR2(r2Keys)
+      } catch (err) {
+        console.error(`[admin-expunge] R2 batch delete failed for ${appId}:`, err)
+      }
+    }
+
+    const { error: auditError } = await supabase.from("admin_actions").insert({
+      admin_user_id: userId,
+      action: "expunge_app",
+      target_type: "published_app",
+      target_id: appId,
+      reason,
+      payload: {
+        slug: existing.slug,
+        r2_keys_count: r2Keys.length,
+        r2_deleted: r2Result.deleted,
+        r2_errors: r2Result.errors,
+      },
+    })
+    if (auditError) {
+      console.error(`[admin-expunge] audit insert failed for ${appId}:`, auditError.message)
+      return reply.send({
+        success: true,
+        expungedAt: new Date().toISOString(),
+        r2KeysCollected: r2Keys.length,
+        r2KeysDeleted: r2Result.deleted,
+        r2Errors: r2Result.errors,
+        auditWarning: "Audit log insert failed — record manually in admin_actions.",
+      })
+    }
+
+    return reply.send({
+      success: true,
+      expungedAt: new Date().toISOString(),
+      r2KeysCollected: r2Keys.length,
+      r2KeysDeleted: r2Result.deleted,
+      r2Errors: r2Result.errors,
+    })
   })
 }

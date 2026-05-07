@@ -203,16 +203,24 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         .from("published_apps")
         .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id")
         .eq("id", appVersionId)
+        .is("deleted_at", null)
         .single()
 
-      if (!appError && appVersion) {
-        workflowData = {
-          nodes: appVersion.snapshot_nodes,
-          edges: appVersion.snapshot_edges,
-          settings: appVersion.snapshot_settings,
-        }
-        ctx.workflowOwnerId = (appVersion.creator_id as string | null) ?? undefined
+      if (appError || !appVersion) {
+        // App was provided in the job but is missing or has been soft-deleted.
+        // Do NOT fall through to the workflows-table fetch — that would execute
+        // the live (un-published) workflow instead of the published snapshot,
+        // letting lingering webhook/schedule triggers bypass deletion.
+        await failExecution(executionId, `App version ${appVersionId} not found or has been deleted`)
+        return
       }
+
+      workflowData = {
+        nodes: appVersion.snapshot_nodes,
+        edges: appVersion.snapshot_edges,
+        settings: appVersion.snapshot_settings,
+      }
+      ctx.workflowOwnerId = (appVersion.creator_id as string | null) ?? undefined
     }
 
     if (!workflowData) {
@@ -818,6 +826,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           .from("published_apps")
           .select("creator_id, monetization_enabled, monetization_flat_fee, monetization_percent")
           .eq("id", appVersionId)
+          .is("deleted_at", null)
           .single()
 
         if (
