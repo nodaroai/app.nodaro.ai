@@ -23,6 +23,7 @@ import { AtmosphereNode } from "./atmosphere-node";
 import { ActionFxNode } from "./action-fx-node";
 import { StyleNode } from "./style-node";
 import { SettingNode } from "./setting-node";
+import { LoopSubjectNode } from "./loop-subject-node";
 import { PersonNode } from "./person-node";
 import { MoodNode } from "./mood-node";
 import { PhotographerNode } from "./photographer-node";
@@ -168,6 +169,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "action-fx": ActionFxNode,
   "style": StyleNode,
   "setting": SettingNode,
+  "loop-subject": LoopSubjectNode,
   "person": PersonNode,
   "mood": MoodNode,
   "photographer": PhotographerNode,

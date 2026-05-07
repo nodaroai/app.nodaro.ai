@@ -58,6 +58,7 @@ import {
   ActionFxConfig,
   StyleConfig,
   SettingConfig,
+  LoopSubjectConfig,
   PersonConfig,
   MoodConfig,
   PhotographerConfig,
@@ -206,6 +207,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "action-fx": "Action FX",
   "style": "Style",
   "setting": "Setting",
+  "loop-subject": "Loop Subject",
   "person": "Person",
   "mood": "Mood",
   "photographer": "Photographer / Artist Style",
@@ -406,6 +408,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "action-fx": return <ActionFxConfig {...configProps} />
     case "style": return <StyleConfig {...configProps} />
     case "setting": return <SettingConfig {...configProps} />
+    case "loop-subject": return <LoopSubjectConfig {...configProps} />
     case "person": return <PersonConfig {...configProps} />
     case "mood": return <MoodConfig {...configProps} />
     case "photographer": return <PhotographerConfig {...configProps} />

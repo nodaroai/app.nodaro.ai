@@ -26,6 +26,7 @@ import { buildAtmosphereHints } from "./atmosphere.js"
 import { buildActionFxHints } from "./action-fx.js"
 import { getStylePromptHint } from "./style.js"
 import { getSettingPromptHint } from "./setting.js"
+import { getLoopSubjectPromptHint } from "./loop-subject.js"
 import { buildPersonHints } from "./person.js"
 import { buildMoodHints } from "./mood.js"
 import { buildPoseHints } from "./pose.js"
@@ -120,6 +121,8 @@ export function getParameterPromptHint(
       return getStylePromptHint(asStr(data.style))
     case "setting":
       return getSettingPromptHint(asStr(data.setting))
+    case "loop-subject":
+      return getLoopSubjectPromptHint(asStr(data.loopSubject))
     case "material":
       return buildMaterialHints(data.material)
     case "animal": {

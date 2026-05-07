@@ -36,6 +36,7 @@ import type {
   ActionFxData,
   StyleData,
   SettingData,
+  LoopSubjectData,
   PersonData,
   MoodData,
   PhotographerData,
@@ -66,6 +67,7 @@ import { AtmospherePicker } from "./atmosphere-picker"
 import { ActionFxPicker } from "./action-fx-picker"
 import { StylePicker } from "./style-picker"
 import { SettingPicker } from "./setting-picker"
+import { LoopSubjectPicker } from "./loop-subject-picker"
 import { PersonPicker } from "./person-picker"
 import { MOODS } from "@nodaro/shared"
 import { MoodEmoji } from "./mood-emoji"
@@ -98,7 +100,7 @@ import { getColorLookPromptHint } from "@nodaro/shared"
 import { buildAtmosphereHints } from "@nodaro/shared"
 import { buildActionFxHints } from "@nodaro/shared"
 import { getStylePromptHint } from "@nodaro/shared"
-import { getSettingPromptHint } from "@nodaro/shared"
+import { getSettingPromptHint, getLoopSubjectPromptHint } from "@nodaro/shared"
 import { buildPersonHints } from "@nodaro/shared"
 import { buildMoodHints } from "@nodaro/shared"
 import { buildPoseHints } from "@nodaro/shared"
@@ -519,6 +521,28 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
         value={data.setting || "forest"}
         onValueChange={(v) => onUpdate({ setting: v })}
       />
+    </div>
+  )
+}
+
+export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectData>) {
+  const dir = useLocaleDir()
+  return (
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
+      <PromptInjectionPreview hints={[getLoopSubjectPromptHint(data.loopSubject)]} />
+      <Label>Loop Subject</Label>
+      <LoopSubjectPicker
+        value={data.loopSubject || "tunnel"}
+        onValueChange={(v) => onUpdate({ loopSubject: v })}
+      />
+      <p className="text-[10px] text-muted-foreground leading-snug">
+        Wire this node&apos;s output into a Generate Image prompt input. Pair with
+        Image-to-Video (VEO 3.1, same image at start AND end frame, autoLoopTrim
+        on) and the seal phrase &quot;Seamless loop: motion begins and ends in the
+        exact same composition and lighting so the first and last frames match
+        perfectly.&quot;
+      </p>
     </div>
   )
 }

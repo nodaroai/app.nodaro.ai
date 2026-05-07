@@ -346,6 +346,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"],
   },
   {
+    type: "loop-subject",
+    label: "Loop Subject",
+    icon: <Sparkles className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["loop", "loopable", "seamless", "tunnel", "kaleidoscope", "fractal", "aurora", "particle", "vj", "background", "perfect loop", "veo loop"],
+  },
+  {
     type: "person",
     label: "Person",
     icon: <UserRound className="h-4 w-4" />,
