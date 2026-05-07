@@ -4,25 +4,42 @@ import { stdin, stdout } from "node:process"
 import pc from "picocolors"
 import { configPath, deleteProfile, getProfile, setProfile } from "../config.js"
 import { success, info, dim, warn, emit, type OutputOpts } from "../output.js"
+import { loginViaBrowser } from "../auth-browser.js"
 
-const DEFAULT_BASE_URL = "https://api.nodaro.ai"
+const DEFAULT_BASE_URL = "https://app.nodaro.ai"
 
 export function authCommand(): Command {
   const cmd = new Command("auth").description("manage credentials for one or more Nodaro instances")
 
   cmd
     .command("login")
-    .description("save a token for a profile")
+    .description("save a token for a profile (browser flow by default; --token or --no-browser for paste)")
     .option("--profile <name>", "profile name", "production")
-    .option("--token <token>", "API token (defaults to interactive prompt)")
+    .option("--token <token>", "API token (skips browser flow and prompt)")
     .option("--base-url <url>", "Nodaro base URL", DEFAULT_BASE_URL)
-    .action(async (opts: { profile: string; token?: string; baseUrl: string }) => {
-      const token = opts.token ?? (await promptToken())
-      if (!token || !token.trim()) {
+    .option("--no-browser", "skip the browser flow and prompt for a pasted token instead")
+    .action(async (opts: { profile: string; token?: string; baseUrl: string; browser: boolean }) => {
+      let token = opts.token?.trim()
+
+      if (!token && opts.browser) {
+        try {
+          const result = await loginViaBrowser({ baseUrl: opts.baseUrl })
+          token = result.token
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err)
+          warn(`browser flow failed: ${detail}`)
+          warn("falling back to manual token paste")
+          token = (await promptToken()).trim()
+        }
+      } else if (!token) {
+        token = (await promptToken()).trim()
+      }
+
+      if (!token) {
         warn("no token provided — aborting")
         process.exit(1)
       }
-      setProfile(opts.profile, { baseUrl: opts.baseUrl, token: token.trim() })
+      setProfile(opts.profile, { baseUrl: opts.baseUrl, token })
       success(`saved profile "${opts.profile}" → ${opts.baseUrl}`)
       dim(`config: ${configPath()} (chmod 0600)`)
     })
