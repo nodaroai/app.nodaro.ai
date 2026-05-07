@@ -43,6 +43,7 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "composition-effects",
   "post-process-effects",
   "action-fx",
+  "loop-subject",
   "scene-count",
   "duration",
   "aspect-ratio",
