@@ -5,10 +5,11 @@ import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "@nodaro/shared"
+import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 
 const generateVideoBody = z.object({
@@ -44,7 +45,14 @@ const generateVideoBody = z.object({
   // breaks loop seamlessness. Default true: strip the last 8 frames
   // post-render so the rendered last frame matches the supplied
   // `last_frame_url` exactly. Set false to keep the dissolve.
-  autoLoopTrim: z.boolean().optional().default(true),
+  loopTrim: z.object({
+    enabled: z.boolean(),
+    framesToTest: z.number().int().min(1).max(64).optional(),
+    quality: z.enum(["lossless", "precise"]).optional(),
+  }).optional(),
+  // Legacy field — accepted for one release as a deprecation cycle.
+  // Frontend migrates on workflow load; routes/MCP map it on entry.
+  autoLoopTrim: z.boolean().optional(),
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true
   // upstream). Set false to keep prompts verbatim — useful when the
   // prompt's exact wording is load-bearing (perfect-loop seal phrase,
@@ -55,19 +63,46 @@ const generateVideoBody = z.object({
 
 export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
-      return buildVideoCreditModelIdentifier(
-        (body?.provider as string) ?? "minimax",
-        body?.duration as number | string | undefined,
-        body?.sound as boolean | undefined,
-        "image-to-video",
-        body?.videoSize as string | undefined,
-        body?.resolution as string | undefined,
-        hasVideoRef,
-      )
-    }),
+    preHandler: creditGuard(
+      (req) => {
+        const body = req.body as Record<string, unknown>
+        const hasVideoRef = Array.isArray(body?.referenceVideoUrls) && (body.referenceVideoUrls as unknown[]).length > 0
+        return buildVideoCreditModelIdentifier(
+          (body?.provider as string) ?? "minimax",
+          body?.duration as number | string | undefined,
+          body?.sound as boolean | undefined,
+          "image-to-video",
+          body?.videoSize as string | undefined,
+          body?.resolution as string | undefined,
+          hasVideoRef,
+        )
+      },
+      {
+        computeCredits: async (body) => {
+          const b = body as Record<string, unknown>
+          const hasVideoRef = Array.isArray(b?.referenceVideoUrls) && (b.referenceVideoUrls as unknown[]).length > 0
+          const modelId = buildVideoCreditModelIdentifier(
+            (b?.provider as string) ?? "minimax",
+            b?.duration as number | string | undefined,
+            b?.sound as boolean | undefined,
+            "image-to-video",
+            b?.videoSize as string | undefined,
+            b?.resolution as string | undefined,
+            hasVideoRef,
+          )
+          const { creditCost: baseCost } = await getModelCreditBaseCost(modelId)
+          // Normalize legacy autoLoopTrim into loopTrim for addon math.
+          const rawLoopTrim = b.loopTrim as { enabled?: boolean; framesToTest?: number } | undefined
+          const legacyAuto = b.autoLoopTrim as boolean | undefined
+          const loopTrim = rawLoopTrim ?? (legacyAuto !== undefined
+            ? (legacyAuto ? { enabled: true, framesToTest: 8 } : { enabled: false })
+            : undefined)
+          const duration = typeof b.duration === "number" ? b.duration : 8
+          const addon = estimateLoopTrimAddonCredits(loopTrim, duration)
+          return baseCost + addon
+        },
+      },
+    ),
   }, async (req, reply) => {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
@@ -79,7 +114,14 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim, enableTranslation } = parsed.data
+    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation } = parsed.data
+
+    // Legacy autoLoopTrim → loopTrim normalization. Drop in a future release.
+    const loopTrim = rawLoopTrim ?? (autoLoopTrim !== undefined
+      ? (autoLoopTrim
+        ? { enabled: true, framesToTest: 8, quality: "precise" as const }
+        : { enabled: false })
+      : undefined)
     const userId = req.userId
 
     if (!userId) {
@@ -162,7 +204,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       webSearch,
       nsfwChecker,
       generationType,
-      autoLoopTrim,
+      loopTrim,
       enableTranslation,
       usageLogId,
     })

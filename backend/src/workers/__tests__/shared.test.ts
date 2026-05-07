@@ -649,3 +649,73 @@ describe("startProgressRamp two-phase ramp", () => {
     expect(job.updateProgress.mock.calls.length).toBe(after2Ticks)
   })
 })
+
+// ---------------------------------------------------------------------------
+// refundLoopTrimAddon — partial-success refund (i2v ok, loop-trim failed)
+// ---------------------------------------------------------------------------
+
+describe("refundLoopTrimAddon", () => {
+  beforeEach(() => {
+    mocks.mockHasCredits.value = true
+    mocks.mockCommitCredits.mockClear()
+    mocks.mockUpdate.mockClear()
+  })
+
+  it("commits actualCredits = reserved - addon and stamps metadata", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { credits_used: 22, metadata: {} },
+      error: null,
+    })
+
+    const { refundLoopTrimAddon } = await import("../shared.js")
+    await refundLoopTrimAddon("job-1", "log-1", 3)
+
+    // commitCredits called with reserved (22) - addon (3) = 19
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("log-1", 19)
+    // usage_logs metadata update with loop_trim_refunded: true
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ loop_trim_refunded: true }),
+      }),
+    )
+  })
+
+  it("is a no-op when credits are disabled (self-hosted)", async () => {
+    mocks.mockHasCredits.value = false
+
+    const { refundLoopTrimAddon } = await import("../shared.js")
+    await refundLoopTrimAddon("job-1", "log-1", 3)
+
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalled()
+  })
+
+  it("preserves existing metadata fields when stamping", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: { credits_used: 22, metadata: { from_sub: 5, from_topup: 17 } },
+      error: null,
+    })
+
+    const { refundLoopTrimAddon } = await import("../shared.js")
+    await refundLoopTrimAddon("job-1", "log-1", 3)
+
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { from_sub: 5, from_topup: 17, loop_trim_refunded: true },
+      }),
+    )
+  })
+
+  it("is a no-op when usageLogId is null/undefined", async () => {
+    const { refundLoopTrimAddon } = await import("../shared.js")
+    await refundLoopTrimAddon("job-1", null, 3)
+    await refundLoopTrimAddon("job-1", undefined, 3)
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+  })
+
+  it("is a no-op when addonCredits <= 0", async () => {
+    const { refundLoopTrimAddon } = await import("../shared.js")
+    await refundLoopTrimAddon("job-1", "log-1", 0)
+    expect(mocks.mockCommitCredits).not.toHaveBeenCalled()
+  })
+})

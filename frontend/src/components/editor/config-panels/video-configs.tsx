@@ -249,28 +249,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             </div>
             <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
           </div>
-          {/* VEO3.1 loop trim — only relevant in frame-to-frame mode WITH
-              an end frame connected. The 8-frame tail dissolve is what
-              breaks loop seams; trimming it gets a frame-perfect loop. */}
-          {data.provider === "veo3.1" &&
-            data.veoMode !== "reference" &&
-            connectedImages.some((img) => img.targetHandle === "endFrame") && (
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 px-1">
-                <input
-                  type="checkbox"
-                  id="autoLoopTrim"
-                  checked={data.autoLoopTrim !== false}
-                  onChange={(e) => onUpdate({ autoLoopTrim: e.target.checked })}
-                  className="rounded border-muted-foreground/40"
-                />
-                <label htmlFor="autoLoopTrim" className="text-xs">Trim tail dissolve (perfect loop)</label>
-              </div>
-              <p className="text-xs text-muted-foreground px-1">
-                VEO 3.1 adds a ~333ms cross-fade at the end. Removing the last 8 frames @ 24fps recovers a frame-perfect seamless loop. Disable to keep the dissolve.
-              </p>
-            </div>
-          )}
           {/* VEO auto-translate — the provider silently translates
               non-English prompts (and lightly rewrites English ones).
               Disable when the exact wording is load-bearing, e.g. the
@@ -330,6 +308,64 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           </p>
         </div>
       )}
+      {/* Loop trim — generic smart-loop-cut post-process */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="loopTrim-enabled"
+            checked={data.loopTrim?.enabled ?? false}
+            onChange={(e) => onUpdate({
+              loopTrim: e.target.checked
+                ? { enabled: true, framesToTest: data.loopTrim?.framesToTest ?? 16, quality: data.loopTrim?.quality ?? "precise" }
+                : { enabled: false },
+            })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="loopTrim-enabled" className="text-xs">Loop trim</label>
+        </div>
+        {data.loopTrim?.enabled && (
+          <>
+            <div className="px-1">
+              <label htmlFor="loopTrim-frames" className="text-[10px] text-muted-foreground">
+                Frames to test: {data.loopTrim.framesToTest ?? 16}
+              </label>
+              <input
+                id="loopTrim-frames"
+                type="range"
+                min={4}
+                max={64}
+                step={1}
+                value={data.loopTrim.framesToTest ?? 16}
+                onChange={(e) => onUpdate({
+                  loopTrim: { ...data.loopTrim!, framesToTest: parseInt(e.target.value, 10) },
+                })}
+                className="w-full h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
+              />
+            </div>
+            <div className="px-1">
+              <label htmlFor="loopTrim-quality" className="text-[10px] text-muted-foreground">Quality</label>
+              <Select
+                value={data.loopTrim.quality ?? "precise"}
+                onValueChange={(v) => onUpdate({
+                  loopTrim: { ...data.loopTrim!, quality: v as "lossless" | "precise" },
+                })}
+              >
+                <SelectTrigger id="loopTrim-quality" className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="precise">Precise — frame-precise, slight quality drop</SelectItem>
+                  <SelectItem value="lossless">Lossless — keyframe-only, byte-perfect</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
+              <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
+                Works best when start and end frames are pinned to the same image. Without an end frame, the algorithm picks the best loop point it can find but the result may not be seamless.
+              </p>
+            )}
+          </>
+        )}
+      </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 px-1">
           <input

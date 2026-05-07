@@ -1140,6 +1140,7 @@ export function executeNode(
         webSearch: i2vData.webSearch,
         nsfwChecker: i2vData.nsfwChecker,
         enableTranslation: i2vData.enableTranslation,
+        loopTrim: i2vData.loopTrim,
       },
     );
   }

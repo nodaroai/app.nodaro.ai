@@ -27,10 +27,10 @@ export interface StorageSnapshot {
 export interface CreditGuardOpts {
   /** Returns BASE credits (pre-markup) from the parsed body. When supplied,
    *  bypasses the model_pricing lookup for cost only — isEnabled and
-   *  tierRestriction still come from the DB row. Markup is applied inside
-   *  creditGuard so checkCredits and reserveCredits receive the same final
-   *  number. */
-  computeCredits?: (parsedBody: unknown) => number
+   *  tierRestriction still come from the DB row. May be sync or async.
+   *  Markup is applied inside creditGuard so checkCredits and reserveCredits
+   *  receive the same final number. */
+  computeCredits?: (parsedBody: unknown) => number | Promise<number>
 }
 
 // FastifyRequest augmentation (userId, userRole, creditReservation, storageSnapshot)
@@ -44,7 +44,7 @@ export interface CreditGuardOpts {
  *   For FFmpeg processing routes use `() => "ffmpeg"`.
  * @param opts - Optional hooks. `computeCredits(body)` returns BASE credits to
  *   override the model_pricing lookup for routes with dynamic pricing
- *   (loop-video, trim-video, combine-videos, etc.).
+ *   (loop-video, trim-video, combine-videos, image-to-video loopTrim, etc.).
  *
  * Behavior by edition:
  * - community: returns a no-op preHandler

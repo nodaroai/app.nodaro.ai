@@ -46,6 +46,12 @@ export interface SmartLoopCutOptions {
   /** When true, the output is encoded with `-an` (no audio). Default
    *  false — source audio is copied through up to the chosen cut. */
   readonly outputSilent?: boolean
+  /** "precise" — any-frame candidates + libx264 re-encode (default; current
+   *  behavior; frame-precise; slight quality loss).
+   *  "lossless" — keyframe-only candidates + stream-copy (byte-perfect
+   *  quality; cut snaps to nearest keyframe; supports any resolution at
+   *  near-zero memory cost). */
+  readonly quality?: "lossless" | "precise"
 }
 
 export interface SmartLoopCutResult {
@@ -104,6 +110,102 @@ export async function smartLoopCut(
       )
     }
 
+    // === lossless mode (keyframe-only candidates + stream-copy) ===
+    // When quality === "lossless", search the trailing window for KEYFRAMES
+    // only and stream-copy the cut. Output is byte-perfect (no re-encode).
+    // Trade-off: cut snaps to nearest keyframe, so accuracy is keyframe-spaced
+    // (typically 1–4s with default GOP). If no keyframe lands in the lookback
+    // window, fall through to the precise re-encode path below.
+    //
+    // Why packet timestamps and not frame indices: with B-frames, decode
+    // order ≠ display order, and `coded_picture_number` doesn't align with
+    // `-vframes K` byte position. Packet `pts_time` is stable.
+    const quality = options.quality ?? "precise"
+    if (quality === "lossless") {
+      const pktOut = await runFfprobe([
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_packets",
+        "-show_entries", "packet=pts_time,flags",
+        "-of", "csv=p=0",
+        inputPath,
+      ])
+      const keyframeTimes = pktOut
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => {
+          const [pts, flags] = line.split(",")
+          return { pts: parseFloat(pts ?? ""), isKey: (flags ?? "").startsWith("K") }
+        })
+        .filter((p) => p.isKey && Number.isFinite(p.pts))
+        .map((p) => p.pts)
+
+      const totalDuration = frameCount / fps
+      const lookbackSec = lookback / fps
+      const windowStart = totalDuration - lookbackSec
+      const candidates = keyframeTimes.filter((t) => t >= windowStart && t < totalDuration)
+
+      if (candidates.length === 0) {
+        console.warn(
+          `[smartLoopCut] No keyframes in last ${lookbackSec.toFixed(2)}s; ` +
+            `falling back to precise mode for ${options.videoUrl}`,
+        )
+        // Fall through to precise mode below.
+      } else {
+        // Extract frame 0 once for PSNR comparison
+        const frame0Path = join(workDir, "frame_0.png")
+        await runFfmpeg(["-y", "-i", inputPath, "-frames:v", "1", frame0Path])
+        const frame0Pixels = await sharp(frame0Path)
+          .raw()
+          .toBuffer({ resolveWithObject: true })
+
+        let bestIdx = 0
+        let bestPsnr = -Infinity
+        for (let i = 0; i < candidates.length; i++) {
+          const candPath = join(workDir, `cand_${i}.png`)
+          await runFfmpeg([
+            "-y", "-ss", String(candidates[i]),
+            "-i", inputPath,
+            "-frames:v", "1",
+            candPath,
+          ])
+          const psnr = await psnrAgainst(frame0Pixels.data, frame0Pixels.info, candPath)
+          if (psnr > bestPsnr) {
+            bestPsnr = psnr
+            bestIdx = i
+          }
+        }
+        const chosenPts = candidates[bestIdx]!
+
+        const audioArgs = options.outputSilent ? ["-an"] : ["-c:a", "copy"]
+        await runFfmpeg([
+          "-y", "-i", inputPath,
+          "-t", String(chosenPts),
+          "-c:v", "copy",
+          ...audioArgs,
+          "-movflags", "+faststart",
+          outputPath,
+        ])
+
+        const chosenFrameIndex = Math.round(chosenPts * fps)
+        console.log(
+          `[smartLoopCut] (lossless) Source ${frameCount} frames @ ${fps}fps; ` +
+            `cut at pts ${chosenPts}s (frame ~${chosenFrameIndex}, ` +
+            `dropped ${frameCount - chosenFrameIndex} trailing, PSNR ${bestPsnr.toFixed(2)})`,
+        )
+
+        return {
+          videoPath: outputPath,
+          chosenFrameIndex,
+          psnr: bestPsnr,
+          sourceFrameCount: frameCount,
+          fps,
+        }
+      }
+    }
+
+    // === precise mode (or lossless fallback) — EXISTING CODE ===
     // Indices to extract: frame 0 + the last `lookback` frames.
     // Express as ffmpeg `select` filter alternatives.
     const candidateIndices = Array.from(

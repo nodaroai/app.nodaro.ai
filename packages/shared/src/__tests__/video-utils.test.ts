@@ -5,6 +5,10 @@ import {
   estimateTrimVideoCredits,
   estimateCombineVideosCredits,
 } from "../credit-estimators/video-utils.js"
+import {
+  estimateLoopTrimAddonCredits,
+  type LoopTrimEstimatorInput,
+} from "../credit-estimators/video-utils.js"
 
 describe("estimateLoopVideoCredits", () => {
   describe("repeat mode", () => {
@@ -191,5 +195,44 @@ describe("estimateCombineVideosCredits", () => {
   it("uses default transitionDuration 0.5 when missing on a non-cut", () => {
     // [10, 10] fade, no transitionDuration → 20 - 0.5 = 19.5 → ceil(19.5/5)=4
     expect(estimateCombineVideosCredits({ transition: "fade" }, [10, 10])).toBe(4)
+  })
+})
+
+describe("estimateLoopTrimAddonCredits", () => {
+  it("returns 0 when loopTrim is undefined", () => {
+    expect(estimateLoopTrimAddonCredits(undefined, 8)).toBe(0)
+  })
+
+  it("returns 0 when enabled is false", () => {
+    expect(estimateLoopTrimAddonCredits({ enabled: false }, 8)).toBe(0)
+  })
+
+  it("computes ceil(duration/5) + ceil(framesToTest/24) when enabled", () => {
+    // 8s / 5 = 2 (ceil), 16 / 24 = 1 (ceil) → 3
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 8)).toBe(3)
+  })
+
+  it("uses default framesToTest=16 when omitted", () => {
+    // 10s / 5 = 2, 16 / 24 = 1 → 3
+    expect(estimateLoopTrimAddonCredits({ enabled: true }, 10)).toBe(3)
+  })
+
+  it("clamps framesToTest to 64 max", () => {
+    // 8s / 5 = 2, 64 / 24 = 3 → 5
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 999 }, 8)).toBe(5)
+  })
+
+  it("clamps framesToTest to 1 min", () => {
+    // 8s / 5 = 2, 1 / 24 = 1 → 3
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 0 }, 8)).toBe(3)
+  })
+
+  it("scales with output duration", () => {
+    // 60s / 5 = 12, 16 / 24 = 1 → 13
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 60)).toBe(13)
+  })
+
+  it("returns 0 when framesToTest=64 but enabled is false (precedence)", () => {
+    expect(estimateLoopTrimAddonCredits({ enabled: false, framesToTest: 64 }, 60)).toBe(0)
   })
 })

@@ -73,3 +73,36 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 - VEO 3.1 Fast offers a good quality/speed balance at 8 seconds
 - Kling 3.0 with audio produces sound-enabled video
 - Connect a Camera Motion parameter node to control movement consistently across multiple I2V nodes
+
+## Loop trim (smart-loop-cut)
+
+Optional post-process that trims the output to its cleanest loop boundary using PSNR-based frame search. Replaces the legacy VEO-only fixed 8-frame trim.
+
+**When to use it:**
+- VEO 3.1 / Kling Turbo / Hailuo Standard / Bytedance Lite with both start AND end frames pinned to the same image (intentional perfect-loop output)
+- Other i2v models if their output happens to drift toward the start frame at the end
+
+**Configuration:**
+
+| Field | Default | Description |
+|---|---|---|
+| Enabled | off | Toggle the post-process |
+| Frames to test | 16 | How many trailing frames to PSNR-search (1-64) |
+| Quality | Precise | "Precise" = frame-precise re-encode (libx264 crf=20). "Lossless" = keyframe-only stream-copy (byte-perfect, snaps to GOP boundary, supports any resolution including 4K). |
+
+**Credit cost:**
+
+Loop trim adds to the base i2v provider cost: `ceil(duration / 5) + ceil(framesToTest / 24)`, minimum 1 each.
+
+| Configuration | Add-on |
+|---|---|
+| 8s output, framesToTest=16 | +3 credits |
+| 8s output, framesToTest=64 | +5 credits |
+| 5s output, framesToTest=16 | +2 credits |
+| 60s output, framesToTest=16 | +13 credits |
+
+Quality mode does NOT affect pricing — lossless is faster (no encode) but charges the same; the work the user pays for is the PSNR search.
+
+**Partial-failure behavior:**
+
+If the smart-loop-cut step fails after generation succeeds (e.g., source has fewer than 3 frames, ffmpeg crashes), the un-trimmed clip is kept and only the loop-trim addon is refunded. The user gets a working video and pays only for the work that succeeded.

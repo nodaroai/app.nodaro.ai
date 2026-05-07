@@ -237,6 +237,12 @@ export function runVideoGeneration(
     nsfwChecker?: boolean;
     /** VEO 3.x: opt out of KIE's auto-translate-to-English. */
     enableTranslation?: boolean;
+    /** Smart-loop-cut post-process (replaces legacy autoLoopTrim). */
+    loopTrim?: {
+      enabled: boolean;
+      framesToTest?: number;
+      quality?: "lossless" | "precise";
+    };
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -270,6 +276,7 @@ export function runVideoGeneration(
         nsfwChecker: extras?.nsfwChecker,
         generationType,
         enableTranslation: extras?.enableTranslation,
+        loopTrim: extras?.loopTrim,
         userId: ctx.userId,
       }),
     "generatedVideoUrl",
