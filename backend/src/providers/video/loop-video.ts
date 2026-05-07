@@ -1,24 +1,51 @@
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { smartLoopCut, type SmartLoopCutResult } from "./smart-loop-cut.js"
 
 interface LoopVideoOptions {
   readonly videoUrl: string
   readonly mode: "repeat" | "duration"
   readonly repeatCount?: number
   readonly targetDuration?: number
+  /** Smart loop cut preprocess: trim the input to its cleanest loop
+   *  boundary BEFORE concatenating. Eliminates seam discontinuity at
+   *  every internal repeat boundary, not just the final wrap. */
+  readonly smartLoopCutBeforeRepeat?: boolean
+  readonly smartLoopCutLookback?: number
 }
 
-export async function loopVideo(options: LoopVideoOptions): Promise<string> {
-  const { videoUrl, mode, repeatCount = 2, targetDuration = 10 } = options
+export interface LoopVideoResult {
+  readonly outputPath: string
+  /** Populated when `smartLoopCutBeforeRepeat: true`. Useful for
+   *  surfacing the chosen frame / PSNR back to the caller / UI. */
+  readonly smartLoopCutMeta?: Pick<SmartLoopCutResult, "chosenFrameIndex" | "psnr" | "sourceFrameCount" | "fps">
+}
+
+export async function loopVideo(options: LoopVideoOptions): Promise<LoopVideoResult> {
+  const { videoUrl, mode, repeatCount = 2, targetDuration = 10, smartLoopCutBeforeRepeat = false, smartLoopCutLookback } = options
   const workDir = await createWorkDir("loop-video")
 
   try {
-    const inputPath = join(workDir, "input.mp4")
+    let inputPath = join(workDir, "input.mp4")
     const outputPath = join(workDir, "output.mp4")
+    let smartLoopCutMeta: LoopVideoResult["smartLoopCutMeta"]
 
     console.log(`[loopVideo] Downloading video from ${videoUrl}`)
     await downloadFile(videoUrl, inputPath)
+
+    if (smartLoopCutBeforeRepeat) {
+      console.log(`[loopVideo] Applying smart loop cut before repeat (lookback=${smartLoopCutLookback ?? 16})`)
+      const slc = await smartLoopCut({ videoUrl, lookbackFrames: smartLoopCutLookback })
+      // Replace the input with the smart-cut output for the concat step.
+      inputPath = slc.videoPath
+      smartLoopCutMeta = {
+        chosenFrameIndex: slc.chosenFrameIndex,
+        psnr: slc.psnr,
+        sourceFrameCount: slc.sourceFrameCount,
+        fps: slc.fps,
+      }
+    }
 
     if (mode === "repeat") {
       // Use concat with filelist repeated N times
@@ -61,7 +88,7 @@ export async function loopVideo(options: LoopVideoOptions): Promise<string> {
     }
 
     console.log(`[loopVideo] Output: ${outputPath}`)
-    return outputPath
+    return { outputPath, smartLoopCutMeta }
   } catch (err) {
     await cleanupWorkDir(workDir)
     throw err

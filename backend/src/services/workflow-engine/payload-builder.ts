@@ -1695,17 +1695,25 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "trim-video":
+    case "trim-video": {
+      const trimMode = (data.trimMode as string | undefined) ?? "time"
       return ffmpegResult("trim-video", {
         jobId,
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startTime: trimMode === "time" ? data.startTime : 0,
+        endTime: trimMode === "time" ? data.endTime : undefined,
         // outputSilentVideo toggles the dual-output silent-video branch that
         // writes `generatedSilentVideoUrl` alongside the main trimmed clip.
         outputSilentVideo: data.outputSilentVideo,
+        // Frame-based trim — worker probes source fps and converts.
+        trimStartFrames: trimMode === "frames" ? data.trimStartFrames : undefined,
+        trimEndFrames: trimMode === "frames" ? data.trimEndFrames : undefined,
+        // Smart loop cut — worker picks the trailing frame closest to frame 0.
+        smartLoopCut: trimMode === "smart-loop-cut",
+        smartLoopCutLookback: trimMode === "smart-loop-cut" ? data.smartLoopCutLookback : undefined,
         usageLogId,
       })
+    }
 
     case "extract-frame":
       return ffmpegResult("extract-frame", {
@@ -1762,6 +1770,8 @@ export function buildPayload(
         mode: data.mode ?? "repeat",
         repeatCount: data.repeatCount ?? data.loops,
         targetDuration: data.targetDuration,
+        smartLoopCutBeforeRepeat: data.smartLoopCutBeforeRepeat,
+        smartLoopCutLookback: data.smartLoopCutLookback,
         usageLogId,
       })
 

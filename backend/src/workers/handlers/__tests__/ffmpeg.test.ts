@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
   const mockAddCaptions = vi.fn().mockResolvedValue("/tmp/captions-work/output.mp4")
   const mockMixAudio = vi.fn().mockResolvedValue("/tmp/mix-work/output.mp3")
   const mockSpeedRamp = vi.fn().mockResolvedValue("/tmp/speed-work/output.mp4")
-  const mockLoopVideo = vi.fn().mockResolvedValue("/tmp/loop-work/output.mp4")
+  const mockLoopVideo = vi.fn().mockResolvedValue({ outputPath: "/tmp/loop-work/output.mp4" })
   const mockFadeVideo = vi.fn().mockResolvedValue("/tmp/fade-work/output.mp4")
 
   // ffmpeg-utils
@@ -427,9 +427,14 @@ describe("loop-video handler", () => {
     await handler(job as never, ctx)
 
     expect(mocks.mockLoopVideo).toHaveBeenCalledWith({
-      videoUrl: "https://vid.mp4", mode: "repeat", repeatCount: 3, targetDuration: undefined,
+      videoUrl: "https://vid.mp4",
+      mode: "repeat",
+      repeatCount: 3,
+      targetDuration: undefined,
+      smartLoopCutBeforeRepeat: undefined,
+      smartLoopCutLookback: undefined,
     })
-    expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith("/tmp/loop-work/output.mp4", ctx)
+    expect(mocks.mockCompleteFfmpegVideoJob).toHaveBeenCalledWith("/tmp/loop-work/output.mp4", ctx, undefined)
   })
 })
 

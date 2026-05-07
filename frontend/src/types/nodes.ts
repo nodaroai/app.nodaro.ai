@@ -2128,8 +2128,19 @@ export type TrimVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
+  /** Trim mode — "time" (default; uses startTime/endTime), "frames" (uses
+   *  trimStartFrames/trimEndFrames), or "smart-loop-cut" (worker probes
+   *  source for the trailing frame closest to frame 0 and trims there). */
+  trimMode?: "time" | "frames" | "smart-loop-cut"
   startTime: number
   endTime: number
+  /** Frame-based trim from start. Used when trimMode === "frames". */
+  trimStartFrames?: number
+  /** Frame-based trim from end. Used when trimMode === "frames". */
+  trimEndFrames?: number
+  /** Smart-loop-cut lookback window — how many trailing frames to evaluate
+   *  as candidate end-frames. Default 16, max 64. */
+  smartLoopCutLookback?: number
   outputSilentVideo?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
@@ -2303,6 +2314,12 @@ export type LoopVideoData = {
   mode: "repeat" | "duration"
   repeatCount: number
   targetDuration: number
+  /** Smart-loop-cut preprocess: trim the source clip to its cleanest
+   *  loop boundary BEFORE concatenating N copies. Eliminates seam
+   *  discontinuity at every internal repeat boundary, not just the
+   *  final wrap. Default off. */
+  smartLoopCutBeforeRepeat?: boolean
+  smartLoopCutLookback?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

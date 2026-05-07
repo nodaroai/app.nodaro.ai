@@ -29,9 +29,20 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl
   const [previewOpen, setPreviewOpen] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
-  const upscaleProvider = (nodeData.provider as string | undefined) ?? "topaz-video"
-  const upscaleFallback = upscaleProvider === "veo-4k" ? 38 : upscaleProvider === "veo-1080p" ? 2 : 19
-  const credits = useModelCredits(upscaleProvider, upscaleFallback)
+  const upscaleProvider = (nodeData.provider as string | undefined) ?? "topaz"
+  // Mirror the backend's upscaleCreditModel() in routes/video-upscale.ts:
+  // topaz selector maps to the "topaz-video" credit row (charges 19 CR);
+  // VEO upscales use their direct identifiers. Without this mapping the
+  // node badge displayed "1 CR" (the unrelated "topaz" processing row)
+  // while the backend reserved 19 CR — visible drift.
+  const creditIdentifier =
+    upscaleProvider === "veo-1080p"
+      ? "veo-1080p"
+      : upscaleProvider === "veo-4k"
+        ? "veo-4k"
+        : "topaz-video"
+  const upscaleFallback = creditIdentifier === "veo-4k" ? 38 : creditIdentifier === "veo-1080p" ? 2 : 19
+  const credits = useModelCredits(creditIdentifier, upscaleFallback)
 
   useEffect(() => { setVideoDimensions(null) }, [activeUrl])
 

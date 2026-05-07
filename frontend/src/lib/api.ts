@@ -1171,8 +1171,26 @@ export async function splitMediaApi(opts: { videoUrl?: string; audioUrl?: string
   return res.json()
 }
 
-export async function trimVideoApi(videoUrl: string, startTime: number, endTime?: number, userId?: string, outputSilentVideo?: boolean): Promise<{ jobId: string }> {
+export async function trimVideoApi(
+  videoUrl: string,
+  startTime: number,
+  endTime?: number,
+  userId?: string,
+  outputSilentVideo?: boolean,
+  extras?: {
+    /** Frame-based trim. When set, overrides startTime/endTime. */
+    trimStartFrames?: number
+    trimEndFrames?: number
+    /** Smart loop cut: worker picks the trailing frame closest to frame 0. */
+    smartLoopCut?: boolean
+    smartLoopCutLookback?: number
+  },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
+  if (extras?.trimStartFrames != null) body.trimStartFrames = extras.trimStartFrames
+  if (extras?.trimEndFrames != null) body.trimEndFrames = extras.trimEndFrames
+  if (extras?.smartLoopCut) body.smartLoopCut = true
+  if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
   if (userId) {
     body.userId = userId
   }
@@ -1238,8 +1256,22 @@ export async function speedRampApi(videoUrl: string, speed: number, adjustAudio:
   return res.json()
 }
 
-export async function loopVideoApi(videoUrl: string, mode: "repeat" | "duration", repeatCount?: number, targetDuration?: number, userId?: string): Promise<{ jobId: string }> {
+export async function loopVideoApi(
+  videoUrl: string,
+  mode: "repeat" | "duration",
+  repeatCount?: number,
+  targetDuration?: number,
+  userId?: string,
+  extras?: {
+    /** Smart-cut preprocess: trim source to its cleanest loop boundary
+     *  before concatenating N copies. */
+    smartLoopCutBeforeRepeat?: boolean
+    smartLoopCutLookback?: number
+  },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, mode, repeatCount, targetDuration }
+  if (extras?.smartLoopCutBeforeRepeat) body.smartLoopCutBeforeRepeat = true
+  if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
   if (userId) {
     body.userId = userId
   }

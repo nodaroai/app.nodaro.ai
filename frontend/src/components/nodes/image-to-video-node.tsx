@@ -21,7 +21,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 import { PROVIDERS_WITH_REFERENCES, PROVIDERS_WITH_END_FRAME, VIDEO_PROVIDER_FALLBACKS } from "../editor/config-panels/model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, buildVideoCreditModelIdentifier } from "@nodaro/shared"
 
 // Node types that output images
 const IMAGE_OUTPUT_TYPES = new Set([
@@ -88,7 +88,20 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const [showConfig, setShowConfig] = useState(false)
   const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null)
   const provider = nodeData.provider ?? "seedance-2-fast"
-  const credits = useModelCredits(provider, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
+  // Composite identifier — VEO 3.x prices vary by resolution, Seedance by
+  // duration/resolution/ref, kling by duration/audio. Without this the
+  // RunNodeButton + node badge would show stale credit cost on parameter
+  // changes (e.g. switching VEO 3.1 from 720p → 1080p must shift 19 → 21).
+  const creditIdentifier = buildVideoCreditModelIdentifier(
+    provider,
+    nodeData.duration,
+    nodeData.sound as boolean | undefined,
+    "image-to-video",
+    nodeData.videoSize as string | undefined,
+    nodeData.resolution,
+    Array.isArray(nodeData.referenceVideoUrls) && (nodeData.referenceVideoUrls as unknown[]).length > 0,
+  )
+  const credits = useModelCredits(creditIdentifier, VIDEO_PROVIDER_FALLBACKS[provider] ?? 25)
   const useFull = useFullResolution(id)
   // When the active result has stored width/height (captured the first
   // time it loaded), aspectRatio is available synchronously on switch —

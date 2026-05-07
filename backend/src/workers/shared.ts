@@ -392,6 +392,11 @@ export async function generateAndUploadThumbnail(
 export async function completeFfmpegVideoJob(
   outputPath: string,
   ctx: JobContext,
+  /** Optional sidecar fields to merge into output_data alongside the
+   *  standard videoUrl/thumbnailUrl. Used by handlers that produce
+   *  ancillary data (e.g. smart-loop-cut metadata) without rewriting
+   *  the upload/cleanup/thumbnail flow. */
+  extraOutput?: Record<string, unknown>,
 ): Promise<void> {
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
   await cleanupWorkDir(dirname(outputPath))
@@ -404,7 +409,7 @@ export async function completeFfmpegVideoJob(
 
   // Atomic conditional update — skips commit if user cancelled mid-flight.
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...(extraOutput ?? {}) },
   })
   if (!ok) return
 

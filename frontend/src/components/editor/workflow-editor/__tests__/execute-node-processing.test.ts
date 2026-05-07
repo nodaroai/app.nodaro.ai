@@ -674,6 +674,12 @@ describe("trim-video", () => {
       15,
       "u1",
       undefined,
+      {
+        trimStartFrames: undefined,
+        trimEndFrames: undefined,
+        smartLoopCut: false,
+        smartLoopCutLookback: undefined,
+      },
     )
   })
 
@@ -695,6 +701,12 @@ describe("trim-video", () => {
       undefined,
       "u1",
       undefined,
+      {
+        trimStartFrames: undefined,
+        trimEndFrames: undefined,
+        smartLoopCut: false,
+        smartLoopCutLookback: undefined,
+      },
     )
   })
 })
@@ -861,6 +873,10 @@ describe("loop-video", () => {
       3,
       30,
       "u1",
+      {
+        smartLoopCutBeforeRepeat: undefined,
+        smartLoopCutLookback: undefined,
+      },
     )
   })
 
@@ -879,6 +895,10 @@ describe("loop-video", () => {
       undefined,
       undefined,
       "u1",
+      {
+        smartLoopCutBeforeRepeat: undefined,
+        smartLoopCutLookback: undefined,
+      },
     )
   })
 })

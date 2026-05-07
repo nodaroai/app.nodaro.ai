@@ -1,9 +1,10 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useRef } from "react"
 import { X, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
+import { useSeamlessVideoLoop } from "@/hooks/use-seamless-video-loop"
 
 interface VideoResultOverlayProps {
   url: string
@@ -34,18 +35,25 @@ function VideoResultOverlayComponent({
   isSettingsOpen,
   onEdit,
 }: VideoResultOverlayProps) {
+  const videoElRef = useRef<HTMLVideoElement | null>(null)
+  // Manual loop driver — avoids the native `<video loop>` EOS pause that
+  // shows as a visible jitter at the seam on tight loops. Native `loop`
+  // attribute is intentionally NOT set when this is on (loop={false}).
+  useSeamlessVideoLoop(videoElRef, videoAutoplay)
   return (
     <div
       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', zIndex: 10 }}
       className="group/video"
     >
       <video
+        ref={videoElRef}
         src={url}
         crossOrigin="anonymous"
         autoPlay={videoAutoplay}
-        loop={videoAutoplay}
+        loop={false}
         muted
         playsInline
+        preload="auto"
         className="w-full h-full object-cover"
         onError={onVideoError}
         onLoadedMetadata={(e) => {

@@ -536,30 +536,101 @@ export function AdjustVolumeConfig({ data, onUpdate }: ConfigProps<AdjustVolumeD
 }
 
 export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) {
+  const mode = data.trimMode ?? "time"
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <Label htmlFor="start-time">Start Time (s)</Label>
-        <Input
-          id="start-time"
-          type="number"
-          min={0}
-          step={0.1}
-          value={data.startTime ?? ""}
-          onChange={(e) => onUpdate({ startTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-        />
+        <Label>Trim Mode</Label>
+        <Select value={mode} onValueChange={(v) => onUpdate({ trimMode: v as TrimVideoData["trimMode"] })}>
+          <SelectTrigger aria-label="Trim mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="time">By time (seconds)</SelectItem>
+            <SelectItem value="frames">By frames</SelectItem>
+            <SelectItem value="smart-loop-cut">Smart loop cut</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <div>
-        <Label htmlFor="end-time">End Time (s)</Label>
-        <Input
-          id="end-time"
-          type="number"
-          min={0}
-          step={0.1}
-          value={data.endTime ?? ""}
-          onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-        />
-      </div>
+
+      {mode === "time" && (
+        <>
+          <div>
+            <Label htmlFor="start-time">Start Time (s)</Label>
+            <Input
+              id="start-time"
+              type="number"
+              min={0}
+              step={0.1}
+              value={data.startTime ?? ""}
+              onChange={(e) => onUpdate({ startTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="end-time">End Time (s)</Label>
+            <Input
+              id="end-time"
+              type="number"
+              min={0}
+              step={0.1}
+              value={data.endTime ?? ""}
+              onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+        </>
+      )}
+
+      {mode === "frames" && (
+        <>
+          <div>
+            <Label htmlFor="trim-start-frames">Trim from start (frames)</Label>
+            <Input
+              id="trim-start-frames"
+              type="number"
+              min={0}
+              step={1}
+              placeholder="0"
+              value={data.trimStartFrames ?? ""}
+              onChange={(e) => onUpdate({ trimStartFrames: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="trim-end-frames">Trim from end (frames)</Label>
+            <Input
+              id="trim-end-frames"
+              type="number"
+              min={0}
+              step={1}
+              placeholder="0"
+              value={data.trimEndFrames ?? ""}
+              onChange={(e) => onUpdate({ trimEndFrames: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            The worker probes the source&apos;s frame rate and converts. Useful for VEO 3.1 outputs (24fps fixed) and any case where exact frame alignment matters more than time.
+          </p>
+        </>
+      )}
+
+      {mode === "smart-loop-cut" && (
+        <>
+          <div>
+            <Label htmlFor="smart-lookback">Lookback window (frames)</Label>
+            <Input
+              id="smart-lookback"
+              type="number"
+              min={2}
+              max={64}
+              step={1}
+              placeholder="16"
+              value={data.smartLoopCutLookback ?? ""}
+              onChange={(e) => onUpdate({ smartLoopCutLookback: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Picks the trailing frame closest to frame 0 (by PSNR pixel similarity) and trims there. Beats a fixed offset on stochastic outputs — VEO 3.1 first+last-frame mode in particular benefits because the actual cleanest cut isn&apos;t always exactly 8 frames in.
+          </p>
+        </>
+      )}
+
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
@@ -705,6 +776,37 @@ export function LoopVideoConfig({ data, onUpdate }: ConfigProps<LoopVideoData>) 
           ? "The input video will be repeated the specified number of times."
           : "The input video will loop until the target duration is reached, then trim to exact length."}
       </p>
+
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="loop-video-smart-cut-pre"
+            checked={data.smartLoopCutBeforeRepeat ?? false}
+            onChange={(e) => onUpdate({ smartLoopCutBeforeRepeat: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="loop-video-smart-cut-pre" className="text-xs">Smart cut before looping</label>
+        </div>
+        <p className="text-[10px] text-muted-foreground px-1 leading-snug">
+          Trims the input clip to its cleanest loop boundary BEFORE concatenating. Eliminates seam discontinuity at every internal repeat boundary, not just the final wrap. Useful for VEO 3.1 outputs and any clip with a stochastic tail.
+        </p>
+        {data.smartLoopCutBeforeRepeat && (
+          <div>
+            <Label htmlFor="loop-video-smart-lookback" className="text-xs">Lookback window (frames)</Label>
+            <Input
+              id="loop-video-smart-lookback"
+              type="number"
+              min={2}
+              max={64}
+              step={1}
+              placeholder="16"
+              value={data.smartLoopCutLookback ?? ""}
+              onChange={(e) => onUpdate({ smartLoopCutLookback: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
