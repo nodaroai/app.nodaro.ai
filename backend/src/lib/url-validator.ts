@@ -44,3 +44,27 @@ export const safeUrlSchema = z
     },
     { message: "URL must use http(s) and must not point to localhost or private networks" },
   )
+
+/**
+ * Bare origin URL — `https://example.com` (or `http://localhost`), no path /
+ * query / fragment. Used for CORS allowlists and CSP `frame-ancestors` lists,
+ * where any extra characters in the stored value would be either silently
+ * ignored or — worse — interpreted as an allowlist-pollution / header-
+ * directive injection vector when the value is later concatenated into a
+ * response header.
+ */
+export const bareOriginSchema = z
+  .string()
+  .url()
+  .refine(
+    (v) => {
+      try {
+        const u = new URL(v)
+        if (u.protocol !== "http:" && u.protocol !== "https:") return false
+        return u.pathname === "/" && u.search === "" && u.hash === ""
+      } catch {
+        return false
+      }
+    },
+    { message: "Must be a bare http(s) origin (no path, query, or fragment)" },
+  )

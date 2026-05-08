@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
+import { safeFetch } from "../lib/safe-fetch.js"
 
 // ============================================================
 // Types
@@ -160,8 +161,10 @@ export async function generateThumbnailFromUrl(videoUrl: string): Promise<Buffer
   const framePath = join(workDir, "frame.png")
 
   try {
-    // Download video to temp file
-    const response = await fetch(videoUrl, { signal: AbortSignal.timeout(60_000) })
+    // Download video to temp file. safeFetch validates DNS resolution against
+    // private/reserved IP ranges at connection time — defense in depth in case
+    // a caller ever passes a URL that hasn't been laundered through R2.
+    const response = await safeFetch(videoUrl, { timeoutMs: 60_000 })
     if (!response.ok) throw new Error(`Failed to download video: ${response.status}`)
     const buffer = Buffer.from(await response.arrayBuffer())
     await fs.writeFile(videoPath, buffer)

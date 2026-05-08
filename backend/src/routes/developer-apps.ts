@@ -6,17 +6,11 @@ import { supabase } from "../lib/supabase.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { invalidateDynamicOriginsCache } from "../lib/dynamic-origins.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { bareOriginSchema } from "../lib/url-validator.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
 })
-
-const originString = z.string().url().refine((v) => {
-  try {
-    const u = new URL(v)
-    return u.pathname === "/" && u.search === "" && u.hash === ""
-  } catch { return false }
-}, { message: "Must be a bare origin (no path)" })
 
 const createBody = z.object({
   name: z.string().min(1).max(100),
@@ -24,7 +18,7 @@ const createBody = z.object({
   homepageUrl: httpsUrl.optional(),
   logoUrl: httpsUrl.optional(),
   redirectUris: z.array(httpsUrl).min(1).max(10),
-  allowedOrigins: z.array(originString).max(5).default([]),
+  allowedOrigins: z.array(bareOriginSchema).max(5).default([]),
   scopesRequested: z.array(z.enum(ALL_SCOPES)).min(1),
 })
 

@@ -6,6 +6,7 @@ import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType } from "@nodaro/shared"
 import { calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
+import { bareOriginSchema } from "../lib/url-validator.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -158,7 +159,13 @@ const updateBodySchema = z.object({
   isActive: z.boolean().optional(),
   isListed: z.boolean().optional(),
   isEmbeddable: z.boolean().optional(),
-  allowedOrigins: z.array(z.string()).optional(),
+  // Validated as bare origins because this list is concatenated into the
+  // `frame-ancestors` CSP header in routes/embed.ts. Without strict
+  // validation, a developer could store strings containing whitespace or
+  // semicolons that would inject extra CSP directives at the response
+  // boundary. bareOriginSchema rejects anything other than a bare http(s)
+  // origin URL — same shape developer_apps.allowed_origins already enforces.
+  allowedOrigins: z.array(bareOriginSchema).max(20).optional(),
   maxRunsPerUserPerDay: z.number().int().min(0).optional(),
   thumbnailNodeId: z.string().max(100).nullable().optional(),
   // Marketplace fields

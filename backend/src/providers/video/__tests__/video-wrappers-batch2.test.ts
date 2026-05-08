@@ -27,16 +27,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const downloadFile = vi.fn().mockResolvedValue(undefined)
   const runFfmpeg = vi.fn().mockResolvedValue("")
+  // runFfprobe returns Promise<string> (stdout from execFile). merge-video-audio
+  // uses it to detect VP8/VP9 inputs that need re-encoding to H.264 for MP4 mux.
+  const runFfprobe = vi.fn().mockResolvedValue("h264")
   const createWorkDir = vi.fn().mockResolvedValue("/tmp/work")
   const cleanupWorkDir = vi.fn().mockResolvedValue(undefined)
   const fsWriteFile = vi.fn().mockResolvedValue(undefined)
   const fsReaddirSync = vi.fn(() => [] as string[])
-  // execSync is called with { encoding: "utf-8" } so it returns a string
+  // execSync is mocked at the node:child_process boundary in case other
+  // wrappers reach for it; merge-video-audio no longer uses it directly.
   const execSync = vi.fn(() => "h264")
   const uploadFileToR2 = vi.fn()
   const smartLoopCut = vi.fn()
   return {
-    downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir,
+    downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir,
     fsWriteFile, fsReaddirSync, execSync,
     uploadFileToR2, smartLoopCut,
   }
@@ -45,6 +49,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("../ffmpeg-utils.js", () => ({
   downloadFile: mocks.downloadFile,
   runFfmpeg: mocks.runFfmpeg,
+  runFfprobe: mocks.runFfprobe,
   createWorkDir: mocks.createWorkDir,
   cleanupWorkDir: mocks.cleanupWorkDir,
 }))
@@ -93,6 +98,7 @@ beforeEach(() => {
   mocks.cleanupWorkDir.mockResolvedValue(undefined)
   mocks.downloadFile.mockResolvedValue(undefined)
   mocks.runFfmpeg.mockResolvedValue("")
+  mocks.runFfprobe.mockResolvedValue("h264")
   mocks.fsWriteFile.mockResolvedValue(undefined)
   mocks.fsReaddirSync.mockReturnValue([])
   mocks.execSync.mockReturnValue("h264")
@@ -658,7 +664,7 @@ describe("mergeVideoAudio", () => {
   })
 
   it("re-encodes video for VP9 input (cannot mux into MP4)", async () => {
-    mocks.execSync.mockReturnValueOnce("vp9\n")
+    mocks.runFfprobe.mockResolvedValueOnce("vp9\n")
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 
@@ -668,7 +674,7 @@ describe("mergeVideoAudio", () => {
   })
 
   it("stream-copies video for h264 input", async () => {
-    mocks.execSync.mockReturnValueOnce("h264\n")
+    mocks.runFfprobe.mockResolvedValueOnce("h264\n")
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 
@@ -678,9 +684,7 @@ describe("mergeVideoAudio", () => {
   })
 
   it("falls back to copy when codec probe throws", async () => {
-    mocks.execSync.mockImplementationOnce(() => {
-      throw new Error("ffprobe missing")
-    })
+    mocks.runFfprobe.mockRejectedValueOnce(new Error("ffprobe missing"))
 
     await mergeVideoAudio({ videoUrl: "v", audioUrl: "a" })
 

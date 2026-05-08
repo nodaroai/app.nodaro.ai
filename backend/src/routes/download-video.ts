@@ -10,6 +10,8 @@ import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
+import { firstHeaderValue } from "../lib/request-helpers.js"
 
 const SUPPORTED_HOSTNAMES = [
   "youtube.com", "youtu.be",
@@ -289,11 +291,23 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
       })
     }
 
+    // Bypass Fastify's onSend hooks (we write to reply.raw directly), so
+    // re-implement the CORS check that lib/sse.ts uses: only reflect the
+    // Origin header when it's in the dynamic allowlist. Reflecting an
+    // arbitrary origin would let any site that knows the downloadId UUID
+    // read SSE progress events for another user's download.
+    const corsHeaders: Record<string, string> = {}
+    const originStr = firstHeaderValue(req.headers.origin)
+    if (originStr && (await isOriginAllowedDynamic(originStr))) {
+      corsHeaders["Access-Control-Allow-Origin"] = originStr
+      corsHeaders["Access-Control-Allow-Credentials"] = "true"
+    }
+
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
-      "Access-Control-Allow-Origin": req.headers.origin ?? "*",
+      ...corsHeaders,
     })
 
     const sendEvent = (data: Record<string, unknown>) => {
