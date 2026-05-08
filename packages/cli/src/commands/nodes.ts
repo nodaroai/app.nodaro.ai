@@ -1,11 +1,32 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, dim, table, type OutputOpts } from "../output.js"
+import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic, watchUntilTerminal } from "../util.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
+}
+
+/**
+ * Catch a common mistake: `nodaro nodes run generate-image "{prompt:'cli'}"`.
+ * Commander will silently swallow the extra positional, the request body
+ * ends up empty, and the backend returns a confusing validation_error.
+ * If we see one, exit with a pointed message.
+ */
+function rejectPositionalParams(extras: string[], example: { cmd: string; key: string }): void {
+  if (!extras || extras.length === 0) return
+  const looksLikeObject = extras[0].trim().startsWith("{")
+  if (looksLikeObject) {
+    warn(`Unexpected positional argument: ${JSON.stringify(extras[0])}`)
+    warn(`Pass parameters via --param flags or a JSON file:`)
+    warn(`  ${example.cmd} --param ${example.key}="..."`)
+    warn(`  ${example.cmd} --params-file body.json`)
+  } else {
+    warn(`Unexpected positional argument(s): ${extras.map((e) => JSON.stringify(e)).join(" ")}`)
+    warn(`Did you forget --param? Try: ${example.cmd} --param ${example.key}=...`)
+  }
+  process.exit(1)
 }
 
 export function nodesCommand(): Command {
@@ -61,19 +82,29 @@ export function nodesCommand(): Command {
     })
 
   cmd
-    .command("run <type>")
-    .description("run a single node directly — no workflow, no DAG; equivalent to the MCP server's verb tools")
-    .option("--param <pairs...>", "key=value request body (repeat or space-separate)", collectVariadic)
-    .option("--params-file <path>", "JSON file with the request body (--param overrides)")
+    .command("run <type> [extras...]")
+    .description("run a single node directly — no workflow, no DAG. Inputs go through --param k=v (repeat) or --params-file body.json")
+    .option("--param <pairs...>", "input value, repeat or space-separate (e.g. --param prompt=\"a leopard\" --param resolution=2K)", collectVariadic)
+    .option("--params-file <path>", "JSON file with the full input body (--param flags override matching keys)")
     .option("--watch", "if the response includes a jobId, poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
     .option("--json")
+    .addHelpText("after", `
+Examples:
+  $ nodaro nodes run generate-image --param prompt="a snow leopard" --watch
+  $ nodaro nodes run generate-image --param prompt="hi" --param provider=flux --param resolution=2K --watch
+  $ echo '{"prompt":"hi","provider":"flux"}' > body.json
+  $ nodaro nodes run generate-image --params-file body.json --watch
+
+Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, providers, capabilities).`)
     .action(
       async (
         type: string,
+        extras: string[],
         opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number } & GlobalOpts,
       ) => {
+        rejectPositionalParams(extras, { cmd: `nodaro nodes run ${type}`, key: "prompt" })
         try {
           const client = buildClient(opts.profile)
           const params = resolveParams(opts.param, opts.paramsFile)
