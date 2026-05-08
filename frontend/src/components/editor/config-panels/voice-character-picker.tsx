@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { Fragment, memo, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import {
   VOICE_AGES,
@@ -34,8 +34,9 @@ interface VoiceCharacterPickerProps {
   readonly className?: string
 }
 
+type SingleKey = "age" | "gender" | "accent" | "timbre"
 interface SingleSection {
-  readonly key: "age" | "gender" | "accent" | "timbre"
+  readonly key: SingleKey
   readonly label: string
   readonly entries: ReadonlyArray<VoiceCharacterEntry>
 }
@@ -46,6 +47,9 @@ const SINGLE_SECTIONS: ReadonlyArray<SingleSection> = [
   { key: "accent",  label: "Accent",  entries: VOICE_ACCENTS  },
   { key: "timbre",  label: "Timbre",  entries: VOICE_TIMBRES  },
 ]
+
+/** Index where Language is interleaved (between Gender and Accent). */
+const LANGUAGE_INSERT_AT = 2
 
 /**
  * Five dimensions: age (single), gender (single), language (multi up to 3),
@@ -81,6 +85,7 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
   const languageIds = pickIds(value.language)
   const isMultiLanguage = Array.isArray(value.language)
   const languageChecked = languageEnabled || languageIds.length > 0
+  const languageVisible = !query || filteredLanguages.length > 0
 
   const anyVisible =
     filteredSingle.some((s) => s.entries.length > 0) ||
@@ -105,101 +110,59 @@ export const VoiceCharacterPicker = memo(function VoiceCharacterPicker({
         </div>
       )}
 
-      {/* Age + Gender first */}
-      {filteredSingle.slice(0, 2).map(({ key, label, entries }) => {
-        if (query && entries.length === 0) return null
-        const current = value[key]
-        const checked = current !== undefined && current !== ""
-        const selectedIds = current ? [current] : []
-        return (
-          <SoundDimensionSection
-            key={key}
-            label={label}
-            entries={entries}
-            selectedIds={selectedIds}
-            checked={checked}
-            resolveLabel={resolveLabel}
-            resolveDescription={resolveDescription}
-            onToggle={(next) => {
-              if (next) {
-                const first = entries[0]?.id
-                if (first) onChange({ [key]: first } as Partial<VoiceCharacterValue>)
-              } else {
-                onChange({ [key]: undefined } as Partial<VoiceCharacterValue>)
+      {filteredSingle.map((section, idx) => (
+        <Fragment key={section.key}>
+          {idx === LANGUAGE_INSERT_AT && languageVisible && (
+            <SoundDimensionSection
+              label="Language"
+              entries={filteredLanguages}
+              selectedIds={languageIds}
+              maxSelected={MAX_LANGUAGES}
+              isMultiData={isMultiLanguage}
+              checked={languageChecked}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
+              onToggle={(next) => {
+                setLanguageEnabled(next)
+                if (!next) onChange({ language: undefined })
+              }}
+              onPick={(id) => {
+                if (!isMultiLanguage) {
+                  onChange({ language: languageIds[0] === id ? undefined : id })
+                  return
+                }
+                const next = togglePick(languageIds, id, MAX_LANGUAGES)
+                onChange({ language: next.length === 0 ? undefined : next })
+              }}
+              onActivateMulti={(id) => onChange({ language: [id] })}
+              onDemoteToSingle={(id) => onChange({ language: id })}
+            />
+          )}
+          {(!query || section.entries.length > 0) && (
+            <SoundDimensionSection
+              label={section.label}
+              entries={section.entries}
+              selectedIds={value[section.key] ? [value[section.key]!] : []}
+              checked={!!value[section.key]}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
+              onToggle={(next) => {
+                if (next) {
+                  const first = section.entries[0]?.id
+                  if (first) onChange({ [section.key]: first } as Partial<VoiceCharacterValue>)
+                } else {
+                  onChange({ [section.key]: undefined } as Partial<VoiceCharacterValue>)
+                }
+              }}
+              onPick={(id) =>
+                onChange({
+                  [section.key]: value[section.key] === id ? undefined : id,
+                } as Partial<VoiceCharacterValue>)
               }
-            }}
-            onPick={(id) =>
-              onChange({ [key]: current === id ? undefined : id } as Partial<VoiceCharacterValue>)
-            }
-          />
-        )
-      })}
-
-      {/* Language (multi up to 3) */}
-      {(!query || filteredLanguages.length > 0) && (
-        <SoundDimensionSection
-          label="Language"
-          entries={filteredLanguages}
-          selectedIds={languageIds}
-          maxSelected={MAX_LANGUAGES}
-          isMultiData={isMultiLanguage}
-          checked={languageChecked}
-          resolveLabel={resolveLabel}
-          resolveDescription={resolveDescription}
-          onToggle={(next) => {
-            if (next) {
-              setLanguageEnabled(true)
-            } else {
-              setLanguageEnabled(false)
-              onChange({ language: undefined })
-            }
-          }}
-          onPick={(id) => {
-            if (!isMultiLanguage) {
-              if (languageIds[0] === id) {
-                onChange({ language: undefined })
-              } else {
-                onChange({ language: id })
-              }
-              return
-            }
-            const next = togglePick(languageIds, id, MAX_LANGUAGES)
-            onChange({ language: next.length === 0 ? undefined : next })
-          }}
-          onActivateMulti={(id) => onChange({ language: [id] })}
-          onDemoteToSingle={(id) => onChange({ language: id })}
-        />
-      )}
-
-      {/* Accent + Timbre last */}
-      {filteredSingle.slice(2).map(({ key, label, entries }) => {
-        if (query && entries.length === 0) return null
-        const current = value[key]
-        const checked = current !== undefined && current !== ""
-        const selectedIds = current ? [current] : []
-        return (
-          <SoundDimensionSection
-            key={key}
-            label={label}
-            entries={entries}
-            selectedIds={selectedIds}
-            checked={checked}
-            resolveLabel={resolveLabel}
-            resolveDescription={resolveDescription}
-            onToggle={(next) => {
-              if (next) {
-                const first = entries[0]?.id
-                if (first) onChange({ [key]: first } as Partial<VoiceCharacterValue>)
-              } else {
-                onChange({ [key]: undefined } as Partial<VoiceCharacterValue>)
-              }
-            }}
-            onPick={(id) =>
-              onChange({ [key]: current === id ? undefined : id } as Partial<VoiceCharacterValue>)
-            }
-          />
-        )
-      })}
+            />
+          )}
+        </Fragment>
+      ))}
     </div>
   )
 })

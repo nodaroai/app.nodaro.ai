@@ -5,22 +5,21 @@ import type {
   VoiceCharacterData, VoiceDeliveryData,
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { LocalePicker } from "@/components/editor/locale-picker"
+import { LocaleHeader } from "./locale-header"
 import { MusicGenrePicker } from "./music-genre-picker"
 import { MusicMoodPicker } from "./music-mood-picker"
 import { InstrumentationPicker } from "./instrumentation-picker"
 import { VoiceCharacterPicker } from "./voice-character-picker"
 import { VoiceDeliveryPicker } from "./voice-delivery-picker"
 
-/** Compact header that mounts the locale picker at the top of each sound
- *  config panel. Mirrors LocaleHeader in parameter-configs.tsx so users
- *  can switch picker language for every i18n-aware picker below. */
-function LocaleHeader() {
-  return (
-    <div className="flex items-center justify-end -mt-1 -mb-2">
-      <LocalePicker />
-    </div>
-  )
+/** Copy a string|ReadonlyArray<string>|undefined patch field into a fresh
+ *  mutable string[] (or pass-through for string/undefined). The picker
+ *  components emit ReadonlyArray for the multi-pick fields; the workflow
+ *  store expects mutable arrays so legacy mutation paths don't fail on a
+ *  frozen reference. */
+function unfreeze(v: string | ReadonlyArray<string> | undefined): string | string[] | undefined {
+  if (v === undefined || typeof v === "string") return v
+  return [...v]
 }
 
 export function MusicGenreConfig({ data, onUpdate }: ConfigProps<MusicGenreData>) {
@@ -59,24 +58,13 @@ export function InstrumentationConfig({ data, onUpdate }: ConfigProps<Instrument
           singingStyle: data.singingStyle,
         }}
         onChange={(patch) => {
-          // Mutable string[] copies for fields the picker emits as
-          // ReadonlyArray — keeps the workflow store on plain arrays so any
-          // legacy mutation paths don't fail on a frozen reference.
           const out: Partial<InstrumentationData> = {}
           if ("production" in patch) out.production = patch.production
           if ("instruments" in patch) {
             out.instruments = patch.instruments ? [...patch.instruments] : undefined
           }
-          if ("vocalPresence" in patch) {
-            out.vocalPresence = Array.isArray(patch.vocalPresence)
-              ? [...patch.vocalPresence]
-              : patch.vocalPresence
-          }
-          if ("singingStyle" in patch) {
-            out.singingStyle = Array.isArray(patch.singingStyle)
-              ? [...patch.singingStyle]
-              : patch.singingStyle
-          }
+          if ("vocalPresence" in patch) out.vocalPresence = unfreeze(patch.vocalPresence)
+          if ("singingStyle" in patch) out.singingStyle = unfreeze(patch.singingStyle)
           onUpdate(out)
         }}
       />
@@ -102,11 +90,7 @@ export function VoiceCharacterConfig({ data, onUpdate }: ConfigProps<VoiceCharac
           if ("gender" in patch) out.gender = patch.gender
           if ("accent" in patch) out.accent = patch.accent
           if ("timbre" in patch) out.timbre = patch.timbre
-          if ("language" in patch) {
-            out.language = Array.isArray(patch.language)
-              ? [...patch.language]
-              : patch.language
-          }
+          if ("language" in patch) out.language = unfreeze(patch.language)
           onUpdate(out)
         }}
       />
