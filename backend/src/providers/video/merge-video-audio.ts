@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
+import { downloadFile, runFfmpeg, runFfprobe, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 
 interface AudioTrack {
   readonly url: string
@@ -111,14 +111,17 @@ export async function mergeVideoAudio(options: MergeVideoAudioOptions): Promise<
 
     const filterComplex = buildAudioFilter(tracks, voiceoverVolume, bgVol, keepOriginalAudio)
 
-    // Detect if video needs re-encoding (VP8/VP9 cannot be muxed into MP4)
-    const { execSync } = await import("node:child_process")
+    // Detect if video needs re-encoding (VP8/VP9 cannot be muxed into MP4).
+    // runFfprobe uses execFile with an argv array — no shell, no interpolation.
     let needsReencode = false
     try {
-      const probeOut = execSync(
-        `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "${videoPath}"`,
-        { encoding: "utf-8" }
-      ).trim().toLowerCase()
+      const probeOut = (await runFfprobe([
+        "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        videoPath,
+      ])).trim().toLowerCase()
       needsReencode = probeOut === "vp8" || probeOut === "vp9"
       console.log(`[mergeVideoAudio] Video codec: ${probeOut}, needsReencode: ${needsReencode}`)
     } catch {
