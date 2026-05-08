@@ -161,7 +161,7 @@ function CategorySection({
               title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
               onClick={() => onPick(exposure.id)}
               className={cn(
-                "group flex flex-col items-center gap-1 p-2 rounded-lg border text-center transition-colors cursor-pointer overflow-hidden min-h-[44px]",
+                "w-full flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-center transition-colors cursor-pointer",
                 selected
                   ? "border-[#ff0073] bg-[#ff0073]/10 ring-1 ring-[#ff0073]/60"
                   : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] hover:border-gray-300 dark:hover:border-[#3D3D3D]",
@@ -170,8 +170,8 @@ function CategorySection({
               <FitText
                 text={entryLabel}
                 className={cn(
-                  "text-[11px] font-semibold leading-tight",
-                  selected ? "text-white" : "text-gray-700 dark:text-[#E2E8F0]",
+                  "text-[11px] font-medium leading-tight max-w-full",
+                  selected ? "text-[#ff0073]" : "text-gray-700 dark:text-[#E2E8F0]",
                 )}
               />
             </button>
