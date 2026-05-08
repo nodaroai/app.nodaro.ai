@@ -52,17 +52,26 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
   // Fail-safe: when the current provider doesn't expose a resolution lever
   // (or the cached value isn't in its valid set), clear/snap so admin
-  // defaults and stale state can't poison the request payload. Provider list
-  // for video has per-provider conditional dropdowns with hard-coded options
-  // — getVideoResolutionOptions mirrors them as the single source of truth.
+  // defaults and stale state can't poison the request payload. Same for
+  // duration — the rendered Select defaults to allowedDurations[0] when
+  // data.duration is invalid, but without a snap data.duration carries the
+  // stale value into the request and into credit pricing.
   useEffect(() => {
+    const updates: Partial<ImageToVideoData> = {}
     const opts = getVideoResolutionOptions(currentI2VProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        onUpdate({ resolution: opts[0]?.value })
+        updates.resolution = opts[0]?.value
       }
     } else if (data.resolution !== undefined) {
-      onUpdate({ resolution: undefined })
+      updates.resolution = undefined
+    }
+    const baseDurations = KIE_VIDEO_DURATIONS[currentI2VProvider] || null
+    if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
+      updates.duration = baseDurations[0]
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates)
     }
   }, [currentI2VProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1024,17 +1033,25 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
   const isSeedance2 = isSeedance2Provider(currentProvider)
 
-  // Fail-safe: keep `data.resolution` consistent with the current provider's
-  // valid set, or clear it when the provider has no resolution lever.
+  // Fail-safe: keep `data.resolution` and `data.duration` consistent with
+  // the current provider's valid sets, or clear/snap when invalid.
   // See ImageToVideoConfig for the rationale.
   useEffect(() => {
+    const updates: Partial<TextToVideoData> = {}
     const opts = getVideoResolutionOptions(currentProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
-        onUpdate({ resolution: opts[0]?.value })
+        updates.resolution = opts[0]?.value
       }
     } else if (data.resolution !== undefined) {
-      onUpdate({ resolution: undefined })
+      updates.resolution = undefined
+    }
+    const baseDurations = KIE_T2V_DURATIONS[currentProvider] || null
+    if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
+      updates.duration = baseDurations[0]
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates)
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
