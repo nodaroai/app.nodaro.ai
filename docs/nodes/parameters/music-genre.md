@@ -2,22 +2,28 @@
 
 A parameter-picker that emits a music-genre prompt-hint to feed Suno Generate, Generate Music (MiniMax), and Text to Audio.
 
+The picker shows a horizontal tab row across genre categories (Hip Hop / R&B, Electronic, Pop, Rock / Metal, Acoustic / Roots, Global, Cinematic / Score) — taxonomy aligned with [Splice](https://splice.com/sounds/genres).
+
 ## Configuration
 
-| Field    | Type                | Description                                                  |
-|----------|---------------------|--------------------------------------------------------------|
-| genre    | string              | Top-level genre id (e.g. `electronic`, `rock`, `hip-hop`).   |
-| subgenre | string              | Optional. Subgenre id within the chosen genre.               |
-| era      | string              | Optional. Era id (`1960s` … `2010s` … `modern`).             |
+| Field    | Type                          | Description                                                                                  |
+|----------|-------------------------------|----------------------------------------------------------------------------------------------|
+| genre    | string \| string[]            | Top-level genre id, or up to 3 ids for fusion (e.g. `["rock","jazz"]`).                      |
+| subgenre | string                        | Optional. Subgenre id within the chosen genre. Ignored when `genre` is an array.             |
+| era      | string                        | Optional. Era id (`1920s` … `2010s` … `modern`, `futurist`).                                 |
 
 ## Output
 
-Emits a composed prompt-hint string via the `out` source handle. Composition order: `[era] [subgenre|genre]`.
+Emits a composed prompt-hint string via the `out` source handle.
 
-Examples:
+**Single-genre composition:** `[era] [subgenre|genre]`
 - `{ genre: "electronic", subgenre: "outrun", era: "1980s" }` → `1980s outrun synthwave`
 - `{ genre: "hip-hop", subgenre: "lo-fi-hip-hop" }` → `lo-fi hip hop`
 - `{ genre: "country" }` → `country`
+
+**Multi-genre composition:** `[era] [a / b / c]` — each genre's hint joined with " / ", subgenre is dropped (only meaningful for a single genre).
+- `{ genre: ["rock","jazz"], era: "1970s" }` → `1970s rock / jazz`
+- `{ genre: ["lofi","jazz","ambient-genre"] }` → `lo-fi / jazz / ambient`
 
 When only one sub-field is set, the bare hint is emitted (e.g. `synthwave`). When no sub-fields are set, the output is an empty string and the aggregator drops it.
 
