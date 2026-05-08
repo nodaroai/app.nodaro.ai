@@ -102,9 +102,20 @@ export function getParameterValue(
     case "music-mood":
       return trim(data.emotion) ?? trim(data.energy) ?? trim(data.vibe)
     case "instrumentation":
-      return trim(data.production) ?? trim(data.instruments) ?? trim(data.vocalPresence)
+      return (
+        trim(data.production) ??
+        trim(data.instruments) ??
+        trim(data.vocalPresence) ??
+        trim(data.singingStyle)
+      )
     case "voice-character":
-      return trim(data.timbre) ?? trim(data.accent) ?? trim(data.gender) ?? trim(data.age)
+      return (
+        trim(data.timbre) ??
+        trim(data.accent) ??
+        trim(data.language) ??
+        trim(data.gender) ??
+        trim(data.age)
+      )
     case "voice-delivery":
       return trim(data.archetype) ?? trim(data.emotion) ?? trim(data.pace)
     case "atmosphere":

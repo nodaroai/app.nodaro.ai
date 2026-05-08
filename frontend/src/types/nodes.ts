@@ -498,26 +498,30 @@ export type MusicMoodData = {
 }
 
 /** Standalone Instrumentation parameter node data. Multi-pick instruments +
- *  production style + vocal-presence picks from
+ *  production style + vocal-presence + singing-style picks from
  *  `packages/shared/src/instrumentation.ts`. Vocal-presence "instrumental"
- *  also flips the MiniMax `instrumental` flag at runtime. */
+ *  also flips the MiniMax `instrumental` flag at runtime. Vocal-presence
+ *  and singing-style are multi-pick (up to 3 each). */
 export type InstrumentationData = {
   [key: string]: unknown
   label: string
   instruments?: string[]
   production?: string
-  vocalPresence?: string
+  vocalPresence?: string | ReadonlyArray<string>
+  singingStyle?: string | ReadonlyArray<string>
 }
 
-/** Standalone Voice Character parameter node data. Age + gender + accent +
- *  timbre picks from `packages/shared/src/voice-character.ts`. Emits a
+/** Standalone Voice Character parameter node data. Age + gender + language +
+ *  accent + timbre picks from `packages/shared/src/voice-character.ts`. Emits a
  *  voice-description hint that drives ElevenLabs `voice_description` and
- *  TTS provider voice selection. */
+ *  TTS provider voice selection. `language` is multi-pick (up to 3) for
+ *  codeswitching / multilingual voice work. */
 export type VoiceCharacterData = {
   [key: string]: unknown
   label: string
   age?: string
   gender?: string
+  language?: string | ReadonlyArray<string>
   accent?: string
   timbre?: string
 }

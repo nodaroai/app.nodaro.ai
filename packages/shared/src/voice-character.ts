@@ -1,7 +1,13 @@
 /**
- * Voice-character catalog: age + gender + accent + timbre. Feeds
+ * Voice-character catalog: age + gender + language + accent + timbre. Feeds
  * Voice Design's voiceDescription field via the Sound aggregator.
+ *
+ * `language` is multi-pick (up to 3) for codeswitching / multilingual
+ * voice work. Distinct from `accent` — accent is HOW it sounds, language
+ * is WHAT'S being spoken.
  */
+
+import { pickIds } from "./multi-pick.js"
 
 export interface VoiceCharacterEntry {
   readonly id: string
@@ -25,6 +31,42 @@ export const VOICE_GENDERS: ReadonlyArray<VoiceCharacterEntry> = [
   { id: "male",         label: "Male",         description: "Male voice",         promptHint: "male" },
   { id: "female",       label: "Female",       description: "Female voice",       promptHint: "female" },
   { id: "androgynous",  label: "Androgynous",  description: "Gender-neutral",     promptHint: "androgynous" },
+] as const
+
+export const VOICE_LANGUAGES: ReadonlyArray<VoiceCharacterEntry> = [
+  { id: "english",     label: "English",     description: "English",                  promptHint: "English" },
+  { id: "spanish",     label: "Spanish",     description: "Spanish (Castilian / LatAm)", promptHint: "Spanish" },
+  { id: "french",      label: "French",      description: "French",                   promptHint: "French" },
+  { id: "german",      label: "German",      description: "German",                   promptHint: "German" },
+  { id: "italian",     label: "Italian",     description: "Italian",                  promptHint: "Italian" },
+  { id: "portuguese",  label: "Portuguese",  description: "Portuguese / Brazilian",   promptHint: "Portuguese" },
+  { id: "dutch",       label: "Dutch",       description: "Dutch",                    promptHint: "Dutch" },
+  { id: "russian",     label: "Russian",     description: "Russian",                  promptHint: "Russian" },
+  { id: "polish",      label: "Polish",      description: "Polish",                   promptHint: "Polish" },
+  { id: "ukrainian",   label: "Ukrainian",   description: "Ukrainian",                promptHint: "Ukrainian" },
+  { id: "swedish",     label: "Swedish",     description: "Swedish",                  promptHint: "Swedish" },
+  { id: "norwegian",   label: "Norwegian",   description: "Norwegian",                promptHint: "Norwegian" },
+  { id: "danish",      label: "Danish",      description: "Danish",                   promptHint: "Danish" },
+  { id: "finnish",     label: "Finnish",     description: "Finnish",                  promptHint: "Finnish" },
+  { id: "greek",       label: "Greek",       description: "Greek",                    promptHint: "Greek" },
+  { id: "turkish",     label: "Turkish",     description: "Turkish",                  promptHint: "Turkish" },
+  { id: "arabic",      label: "Arabic",      description: "Modern Standard Arabic",   promptHint: "Arabic" },
+  { id: "hebrew",      label: "Hebrew",      description: "Hebrew",                   promptHint: "Hebrew" },
+  { id: "persian",     label: "Persian",     description: "Persian / Farsi",          promptHint: "Persian" },
+  { id: "hindi",       label: "Hindi",       description: "Hindi",                    promptHint: "Hindi" },
+  { id: "bengali",     label: "Bengali",     description: "Bengali / Bangla",         promptHint: "Bengali" },
+  { id: "tamil",       label: "Tamil",       description: "Tamil",                    promptHint: "Tamil" },
+  { id: "urdu",        label: "Urdu",        description: "Urdu",                     promptHint: "Urdu" },
+  { id: "tagalog",     label: "Tagalog",     description: "Tagalog / Filipino",       promptHint: "Tagalog" },
+  { id: "indonesian",  label: "Indonesian",  description: "Bahasa Indonesia",         promptHint: "Indonesian" },
+  { id: "thai",        label: "Thai",        description: "Thai",                     promptHint: "Thai" },
+  { id: "vietnamese",  label: "Vietnamese",  description: "Vietnamese",               promptHint: "Vietnamese" },
+  { id: "mandarin",    label: "Mandarin",    description: "Mandarin Chinese",         promptHint: "Mandarin Chinese" },
+  { id: "cantonese",   label: "Cantonese",   description: "Cantonese Chinese",        promptHint: "Cantonese" },
+  { id: "japanese",    label: "Japanese",    description: "Japanese",                 promptHint: "Japanese" },
+  { id: "korean",      label: "Korean",      description: "Korean",                   promptHint: "Korean" },
+  { id: "swahili",     label: "Swahili",     description: "Swahili",                  promptHint: "Swahili" },
+  { id: "yoruba",      label: "Yoruba",      description: "Yoruba",                   promptHint: "Yoruba" },
 ] as const
 
 export const VOICE_ACCENTS: ReadonlyArray<VoiceCharacterEntry> = [
@@ -110,11 +152,13 @@ export const VOICE_TIMBRES: ReadonlyArray<VoiceCharacterEntry> = [
 
 const AGE_BY_ID = new Map(VOICE_AGES.map((x) => [x.id, x]))
 const GENDER_BY_ID = new Map(VOICE_GENDERS.map((x) => [x.id, x]))
+const LANGUAGE_BY_ID = new Map(VOICE_LANGUAGES.map((x) => [x.id, x]))
 const ACCENT_BY_ID = new Map(VOICE_ACCENTS.map((x) => [x.id, x]))
 const TIMBRE_BY_ID = new Map(VOICE_TIMBRES.map((x) => [x.id, x]))
 
 export function getVoiceAge(id: string | undefined) { return id ? AGE_BY_ID.get(id) : undefined }
 export function getVoiceGender(id: string | undefined) { return id ? GENDER_BY_ID.get(id) : undefined }
+export function getVoiceLanguage(id: string | undefined) { return id ? LANGUAGE_BY_ID.get(id) : undefined }
 export function getVoiceAccent(id: string | undefined) { return id ? ACCENT_BY_ID.get(id) : undefined }
 export function getVoiceTimbre(id: string | undefined) { return id ? TIMBRE_BY_ID.get(id) : undefined }
 
@@ -125,11 +169,16 @@ export function getVoiceTimbre(id: string | undefined) { return id ? TIMBRE_BY_I
  *   { timbre }                      → "warm timbre"
  *   { accent }                      → "British RP accent"
  *   { age, gender }                 → "middle-aged male voice"
+ *   { language: ["english","spanish"] } → "English / Spanish voice"
  *   { }                             → ""
+ *
+ * `language` is multi-pick — multiple languages emit "English / Spanish"
+ * for codeswitching / multilingual voices.
  */
 export function buildVoiceCharacterHints(data: {
   readonly age?: string
   readonly gender?: string
+  readonly language?: string | ReadonlyArray<string>
   readonly accent?: string
   readonly timbre?: string
 }): string {
@@ -138,19 +187,35 @@ export function buildVoiceCharacterHints(data: {
   const accent = getVoiceAccent(data.accent)
   const timbre = getVoiceTimbre(data.timbre)
 
+  const langIds = pickIds(data.language)
+  const langHints = langIds
+    .map((id) => getVoiceLanguage(id)?.promptHint)
+    .filter((h): h is string => !!h)
+  const langClause = langHints.join(" / ")
+
   const ageGender = [age?.promptHint, gender?.promptHint].filter(Boolean).join(" ")
   const traits: string[] = []
   if (timbre) traits.push(`${timbre.promptHint} timbre`)
   if (accent) traits.push(`${accent.promptHint} accent`)
 
+  let core = ""
   if (ageGender && traits.length > 0) {
-    return `${ageGender} voice with ${traits.join(" and ")}`
+    core = `${ageGender} voice with ${traits.join(" and ")}`
+  } else if (ageGender) {
+    core = `${ageGender} voice`
+  } else if (traits.length > 0) {
+    core = traits.join(" and ")
   }
-  if (ageGender) return `${ageGender} voice`
-  if (traits.length > 0) return traits.join(" and ")
-  return ""
+
+  if (langClause && core) return `${langClause}-speaking ${core}`
+  if (langClause) return `${langClause} voice`
+  return core
 }
 
 export const VOICE_CHARACTER_DEFAULT_DATA: {
-  age?: string; gender?: string; accent?: string; timbre?: string
+  age?: string
+  gender?: string
+  language?: string | ReadonlyArray<string>
+  accent?: string
+  timbre?: string
 } = {}
