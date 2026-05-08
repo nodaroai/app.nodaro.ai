@@ -46,6 +46,13 @@ import { PEOPLE } from "@nodaro/shared"
 import { STYLINGS } from "@nodaro/shared"
 import { TEMPORALS } from "@nodaro/shared"
 import { EXPOSURE_SETTINGS } from "@nodaro/shared"
+import {
+  MUSIC_GENRES, MUSIC_ERAS,
+  MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES,
+  INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE,
+  VOICE_AGES, VOICE_GENDERS, VOICE_ACCENTS, VOICE_TIMBRES,
+  VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES,
+} from "@nodaro/shared"
 
 import { SettingPreview } from "@/components/editor/config-panels/setting-preview"
 import { MaterialPreview } from "@/components/editor/config-panels/material-preview"
@@ -63,6 +70,11 @@ import { PersonPicker } from "@/components/editor/config-panels/person-picker"
 import { StylingPicker } from "@/components/editor/config-panels/styling-picker"
 import { TemporalPicker } from "@/components/editor/config-panels/temporal-picker"
 import { ExposureSettingsPicker } from "@/components/editor/config-panels/exposure-settings-picker"
+import { MusicGenrePicker } from "@/components/editor/config-panels/music-genre-picker"
+import { MusicMoodPicker } from "@/components/editor/config-panels/music-mood-picker"
+import { InstrumentationPicker } from "@/components/editor/config-panels/instrumentation-picker"
+import { VoiceCharacterPicker } from "@/components/editor/config-panels/voice-character-picker"
+import { VoiceDeliveryPicker } from "@/components/editor/config-panels/voice-delivery-picker"
 import { ANIMAL_ICON_FOR } from "./parameter-picker-icons-animals"
 import { VEHICLE_ICON_FOR } from "./parameter-picker-icons-vehicles"
 import { WEAPON_ICON_FOR } from "./parameter-picker-icons-weapons"
@@ -474,6 +486,77 @@ const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     catalogId: "exposure-settings",
     catalogEntries: flatCat(EXPOSURE_SETTINGS),
     Picker: erase(ExposureSettingsPicker),
+  },
+  // -------- "Sound" family --------
+  // Music Genre catalog is hierarchical: top-level genres each have a list
+  // of subgenres. Flatten genres + every subgenre + eras so the summary
+  // chip in PickerInputCard can resolve any selected id (genre / subgenre /
+  // era) back to a human label.
+  {
+    kind: "multi",
+    nodeType: "music-genre",
+    label: "Music Genre",
+    fields: ["genre", "subgenre", "era"],
+    catalogId: "music-genre",
+    catalogEntries: [
+      ...flatCat(MUSIC_GENRES),
+      ...MUSIC_GENRES.flatMap((g) => g.subgenres.map((s) => ({ id: s.id, label: s.label }))),
+      ...flatCat(MUSIC_ERAS),
+    ],
+    Picker: erase(MusicGenrePicker),
+  },
+  {
+    kind: "multi",
+    nodeType: "music-mood",
+    label: "Music Mood",
+    fields: ["energy", "emotion", "vibe"],
+    catalogId: "music-mood",
+    catalogEntries: [
+      ...flatCat(MUSIC_ENERGIES),
+      ...flatCat(MUSIC_EMOTIONS),
+      ...flatCat(MUSIC_VIBES),
+    ],
+    Picker: erase(MusicMoodPicker),
+  },
+  {
+    kind: "multi",
+    nodeType: "instrumentation",
+    label: "Instrumentation",
+    fields: ["instruments", "production", "vocalPresence"],
+    catalogId: "instrumentation",
+    catalogEntries: [
+      ...flatCat(INSTRUMENTS),
+      ...flatCat(PRODUCTION_STYLES),
+      ...flatCat(VOCAL_PRESENCE),
+    ],
+    Picker: erase(InstrumentationPicker),
+  },
+  {
+    kind: "multi",
+    nodeType: "voice-character",
+    label: "Voice Character",
+    fields: ["age", "gender", "accent", "timbre"],
+    catalogId: "voice-character",
+    catalogEntries: [
+      ...flatCat(VOICE_AGES),
+      ...flatCat(VOICE_GENDERS),
+      ...flatCat(VOICE_ACCENTS),
+      ...flatCat(VOICE_TIMBRES),
+    ],
+    Picker: erase(VoiceCharacterPicker),
+  },
+  {
+    kind: "multi",
+    nodeType: "voice-delivery",
+    label: "Voice Delivery",
+    fields: ["pace", "emotion", "archetype"],
+    catalogId: "voice-delivery",
+    catalogEntries: [
+      ...flatCat(VOICE_PACES),
+      ...flatCat(VOICE_EMOTIONS),
+      ...flatCat(VOICE_ARCHETYPES),
+    ],
+    Picker: erase(VoiceDeliveryPicker),
   },
 ]
 

@@ -16,6 +16,7 @@ export const PARAMETER_PICKER_NODE_TYPES = new Set<string>([
   "camera-motion", "lens", "camera-format",
   "pose", "material", "animal", "vehicle", "weapon", "held-prop",
   "framing", "lighting", "person", "styling", "temporal", "exposure-settings",
+  "music-genre", "music-mood", "instrumentation", "voice-character", "voice-delivery",
 ])
 
 export function isParameterPickerNode(nodeType: string | undefined | null): boolean {
