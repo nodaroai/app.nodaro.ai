@@ -241,12 +241,22 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       query = query.in("id", ids)
     }
 
-    // Sort + cursor
+    // Sort + cursor. Split on the FIRST colon only — the timestamp half
+    // contains colons (`2026-03-23T19:30:10...`), so a naive `split(":")`
+    // shreds it and the resulting `dateStr` is a partial like `"2026-03-23T19"`,
+    // which Postgres rejects as an invalid timestamp (500 internal_error).
+    const splitCursor = (raw: string): { countStr: string; dateStr: string } => {
+      const idx = raw.indexOf(":")
+      return idx < 0
+        ? { countStr: raw, dateStr: "" }
+        : { countStr: raw.slice(0, idx), dateStr: raw.slice(idx + 1) }
+    }
+
     if (sort === "popular") {
       query = query.order("total_run_count", { ascending: false }).order("created_at", { ascending: false })
       if (cursor) {
         // cursor = "runCount:createdAt"
-        const [countStr, dateStr] = cursor.split(":")
+        const { countStr, dateStr } = splitCursor(cursor)
         const countVal = Number(countStr)
         if (!isNaN(countVal) && dateStr) {
           query = query.or(`total_run_count.lt.${countVal},and(total_run_count.eq.${countVal},created_at.lt.${dateStr})`)
@@ -255,7 +265,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     } else if (sort === "most-favorited") {
       query = query.order("favorite_count", { ascending: false }).order("created_at", { ascending: false })
       if (cursor) {
-        const [countStr, dateStr] = cursor.split(":")
+        const { countStr, dateStr } = splitCursor(cursor)
         const countVal = Number(countStr)
         if (!isNaN(countVal) && dateStr) {
           query = query.or(`favorite_count.lt.${countVal},and(favorite_count.eq.${countVal},created_at.lt.${dateStr})`)
