@@ -474,11 +474,14 @@ export interface LoopSubjectData {
 /** Standalone Music Genre parameter node data. Genre + optional subgenre + era
  *  picks from `packages/shared/src/music-genre.ts`. Emits a music-prompt hint
  *  (e.g. "synthwave with neo-disco influence, 80s") for Suno / MiniMax /
- *  Text-to-Audio generators. */
+ *  Text-to-Audio generators.
+ *  `genre` is `string` for a single pick or `ReadonlyArray<string>` for a
+ *  multi-pick (up to 3 genres). Subgenre is meaningful only for single-pick
+ *  mode and is ignored when `genre` is an array. */
 export type MusicGenreData = {
   [key: string]: unknown
   label: string
-  genre?: string
+  genre?: string | ReadonlyArray<string>
   subgenre?: string
   era?: string
 }

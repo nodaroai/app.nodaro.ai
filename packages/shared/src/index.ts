@@ -714,6 +714,8 @@ export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle } from "./ca
 export {
   MUSIC_GENRES,
   MUSIC_ERAS,
+  MUSIC_GENRE_CATEGORY_ORDER,
+  MUSIC_GENRE_CATEGORY_LABELS,
   getMusicGenre,
   getMusicGenreLabel,
   getMusicSubgenre,
@@ -721,7 +723,7 @@ export {
   buildMusicGenreHints,
   MUSIC_GENRE_DEFAULT_DATA,
 } from "./music-genre.js"
-export type { MusicSubgenre, MusicGenre, MusicEra } from "./music-genre.js"
+export type { MusicSubgenre, MusicGenre, MusicEra, MusicGenreCategory } from "./music-genre.js"
 
 export {
   MUSIC_ENERGIES,
@@ -739,13 +741,15 @@ export {
   INSTRUMENTS,
   PRODUCTION_STYLES,
   VOCAL_PRESENCE,
+  INSTRUMENT_CATEGORY_ORDER,
+  INSTRUMENT_CATEGORY_LABELS,
   getInstrument,
   getProductionStyle,
   getVocalPresence,
   buildInstrumentationHints,
   INSTRUMENTATION_DEFAULT_DATA,
 } from "./instrumentation.js"
-export type { InstrumentationEntry } from "./instrumentation.js"
+export type { InstrumentationEntry, CategorizedInstrument, InstrumentCategory } from "./instrumentation.js"
 
 export {
   VOICE_AGES,
