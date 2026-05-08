@@ -248,3 +248,107 @@ describe("POST /v1/edit-image", () => {
     )
   })
 })
+
+// ---------------------------------------------------------------------------
+// grok-upscale provider — accepts taskId instead of imageUrl
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/edit-image — grok-upscale provider", () => {
+  it("accepts taskId without imageUrl", async () => {
+    const { mockInsert } = mockJobInsert({
+      data: { id: "job-grok" },
+      error: null,
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-upscale",
+        taskId: "grok-prior-task-abc",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({
+          provider: "grok-upscale",
+          taskId: "grok-prior-task-abc",
+          type: "edit-image",
+        }),
+      })
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({
+        provider: "grok-upscale",
+        taskId: "grok-prior-task-abc",
+      })
+    )
+  })
+
+  it("returns 400 when grok-upscale is sent without taskId (even with imageUrl)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "grok-upscale",
+        imageUrl: "https://example.com/photo.png",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.error.code).toBe("validation_error")
+  })
+
+  it("returns 400 when neither imageUrl nor taskId provided for any provider", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "recraft-upscale",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    const body = res.json()
+    expect(body.error.code).toBe("validation_error")
+  })
+
+  it("non-grok-upscale providers ignore taskId field if provided", async () => {
+    const { mockInsert } = mockJobInsert({
+      data: { id: "job-1" },
+      error: null,
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        provider: "recraft-upscale",
+        imageUrl: "https://example.com/photo.png",
+        taskId: "stray-task-id",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    // Request still succeeds — taskId is plumbed through but the worker
+    // routes off `provider` not `taskId`. (Belt-and-suspenders: this also
+    // catches if the refinement accidentally rejects valid requests when
+    // taskId is set alongside imageUrl for a non-grok provider.)
+    expect(res.statusCode).toBe(200)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input_data: expect.objectContaining({
+          imageUrl: "https://example.com/photo.png",
+          provider: "recraft-upscale",
+        }),
+      })
+    )
+  })
+})

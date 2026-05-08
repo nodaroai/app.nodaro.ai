@@ -117,19 +117,9 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
  * the model up by adding it to the appropriate shared array + frontend
  * dropdown, or (b) remove it from `kie/models.ts` and pricing.
  *
- * Tracking notes per entry below.
+ * Empty for now — grok-upscale was wired up properly in IMAGE_EDIT_PROVIDERS.
  */
-const KIE_DEAD_CODE: ReadonlySet<string> = new Set<string>([
-  // grok-upscale: registered in KIE_IMAGE_MODELS as inputType="image-to-image"
-  // with documented pricing (10 KIE credits / 4 Nodaro credits) and a
-  // model-catalog entry, BUT not present in IMAGE_I2I_PROVIDERS,
-  // IMAGE_EDIT_PROVIDERS, or UPSCALE_IMAGE_PROVIDERS — so no route Zod will
-  // accept it. The model config itself notes "uses task_id, not image_url —
-  // requires special handling", suggesting the integration was never finished.
-  // TODO: either finish the wiring (add to IMAGE_EDIT_PROVIDERS + frontend
-  // upscale dropdown) or remove from KIE_IMAGE_MODELS and pricing.
-  "grok-upscale",
-])
+const KIE_DEAD_CODE: ReadonlySet<string> = new Set<string>([])
 
 // ---------------------------------------------------------------------------
 // 1) Every KIE-registered model must appear in the corresponding shared

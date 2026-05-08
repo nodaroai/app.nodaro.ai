@@ -222,6 +222,9 @@ export const IMAGE_EDIT_PROVIDERS = [
   "recraft-remove-bg",
   "nano-banana-edit",
   "topaz-image-upscale",
+  // grok-upscale takes a prior Grok generation's task_id (NOT an image URL) —
+  // see edit-image route for the taskId-vs-imageUrl branching.
+  "grok-upscale",
 ] as const
 
 /** Modify image providers (I2I + edit-with-prompt) */

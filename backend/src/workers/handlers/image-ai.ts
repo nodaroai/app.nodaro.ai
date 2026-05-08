@@ -69,9 +69,10 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = job.data as {
+  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = job.data as {
     jobId: string
-    imageUrl: string
+    imageUrl?: string
+    taskId?: string
     prompt?: string
     provider?: string
     upscaleFactor?: string
@@ -81,6 +82,18 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     seed?: number
   }
   const resolvedProvider = provider ?? "recraft-upscale"
+  // grok-upscale takes a prior Grok task_id instead of an image URL; the KIE
+  // provider's editImage uses `imageParam` to route the input value to the
+  // correct request key, so we just plumb taskId through the imageUrl arg
+  // and let imageParam: "task_id" (in models.ts) place it correctly.
+  const inputId = resolvedProvider === "grok-upscale" ? taskId : imageUrl
+  if (!inputId) {
+    throw new Error(
+      resolvedProvider === "grok-upscale"
+        ? "grok-upscale requires taskId from a prior Grok generation"
+        : "edit-image requires imageUrl",
+    )
+  }
   // Append style to prompt if present (same pattern as generate-image)
   const effectivePrompt = style && prompt ? `${prompt}. Style: ${style}` : prompt
   console.log(`[worker] edit-image ${ctx.jobId} (provider: ${resolvedProvider}): "${effectivePrompt ?? "(no prompt)"}"`)
@@ -97,7 +110,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   const editRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 55 })
   let result
   try {
-    result = await editImage(imageUrl, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
+    result = await editImage(inputId, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
   } finally {
     editRamp.stop()
   }
