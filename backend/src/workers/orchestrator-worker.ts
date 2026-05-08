@@ -43,7 +43,7 @@ import { calculateMonetizationMarkup } from "@nodaro/shared"
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
 
 /** Resolve per-execution parallelism limit from user tier (cloud) or env ceiling (self-hosted). */
-function getParallelismLimit(tier: string | undefined): number {
+export function getParallelismLimit(tier: string | undefined): number {
   if (!hasCredits()) return MAX_CONCURRENT_NODES_CEILING
   const tierLimit = TIER_PARALLELISM[tier ?? "free"] ?? TIER_PARALLELISM.free
   return Math.min(tierLimit, MAX_CONCURRENT_NODES_CEILING)
