@@ -6,6 +6,8 @@ import {
   INSTRUMENTS,
   PRODUCTION_STYLES,
   VOCAL_PRESENCE,
+  INSTRUMENT_CATEGORY_ORDER,
+  INSTRUMENT_CATEGORY_LABELS,
   pickIds,
   togglePick,
   type InstrumentationEntry,
@@ -14,8 +16,9 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { SoundDimensionSection } from "./sound-dimension-section"
+import { SoundTabbedSection, type TabbedEntry } from "./sound-tabbed-section"
 
-/** Cap instruments at 5 to keep the prompt-hint composability sane. */
+/** Cap instruments at 5 — keeps prompt-hint composability sane. */
 const MAX_INSTRUMENTS = 5
 
 export interface InstrumentationValue {
@@ -31,10 +34,12 @@ interface InstrumentationPickerProps {
 }
 
 /**
- * Three sections: instruments (multi-select up to 5) + production style +
- * vocal presence. Instruments is always array-shaped (matches the
- * underlying `InstrumentationData.instruments: string[]` field), so no
- * single/multi mode badge — every tap toggles the id in the array.
+ * Three sections:
+ *  - Instruments — multi-select up to 5, tabbed by family (Drums /
+ *    Percussion / Keys / Synth / Guitar / Bass / Brass / Woodwinds /
+ *    Strings / World — Splice-aligned)
+ *  - Production — single-select tile grid
+ *  - Vocal Presence — single-select tile grid
  */
 export const InstrumentationPicker = memo(function InstrumentationPicker({
   value,
@@ -42,15 +47,22 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
   className,
 }: InstrumentationPickerProps) {
   const [query, setQuery] = useState("")
-  /** Explicit-enable flag for the multi section so the user can "check" it
-   *  without forcing a default pick (mirrors StylingPicker pattern). */
+  /** Explicit-enable for the multi section so the user can "check" it
+   *  without forcing a default pick. */
   const [instrumentsEnabled, setInstrumentsEnabled] = useState(false)
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("instrumentation")
 
-  const filteredInstruments = useMemo(
-    () => INSTRUMENTS.filter((e) => matches(e.id, e.label, e.description, query)),
-    [matches, query],
-  )
+  const filteredInstrumentEntries = useMemo<ReadonlyArray<TabbedEntry>>(() => {
+    return INSTRUMENTS
+      .filter((e) => matches(e.id, e.label, e.description, query))
+      .map((e) => ({
+        id: e.id,
+        label: e.label,
+        description: e.description,
+        group: e.category,
+      }))
+  }, [matches, query])
+
   const filteredProduction = useMemo(
     () => PRODUCTION_STYLES.filter((e) => matches(e.id, e.label, e.description, query)),
     [matches, query],
@@ -70,7 +82,7 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
   const vocalChecked = vocalCurrent !== undefined && vocalCurrent !== ""
 
   const anyVisible =
-    filteredInstruments.length > 0 ||
+    filteredInstrumentEntries.length > 0 ||
     filteredProduction.length > 0 ||
     filteredVocal.length > 0
 
@@ -93,10 +105,12 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
         </div>
       )}
 
-      {(!query || filteredInstruments.length > 0) && (
-        <SoundDimensionSection
+      {(!query || filteredInstrumentEntries.length > 0) && (
+        <SoundTabbedSection
           label="Instruments"
-          entries={filteredInstruments}
+          entries={filteredInstrumentEntries}
+          groupOrder={INSTRUMENT_CATEGORY_ORDER as ReadonlyArray<string>}
+          groupLabels={INSTRUMENT_CATEGORY_LABELS as Readonly<Record<string, string>>}
           selectedIds={instrumentIds}
           maxSelected={MAX_INSTRUMENTS}
           isMultiData={true}

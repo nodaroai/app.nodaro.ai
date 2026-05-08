@@ -5,7 +5,11 @@ import { Search } from "lucide-react"
 import {
   MUSIC_GENRES,
   MUSIC_ERAS,
+  MUSIC_GENRE_CATEGORY_ORDER,
+  MUSIC_GENRE_CATEGORY_LABELS,
   getMusicGenre,
+  pickIds,
+  togglePick,
   type MusicGenre,
   type MusicSubgenre,
   type MusicEra,
@@ -14,9 +18,13 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { SoundDimensionSection } from "./sound-dimension-section"
+import { SoundTabbedSection, type TabbedEntry } from "./sound-tabbed-section"
+
+/** Cap multi-genre picks at 3 to keep prompt-hint composability sane. */
+const MAX_GENRES = 3
 
 export interface MusicGenreValue {
-  readonly genre?: string
+  readonly genre?: string | ReadonlyArray<string>
   readonly subgenre?: string
   readonly era?: string
 }
@@ -43,9 +51,13 @@ function subgenreEntries(genre: MusicGenre | undefined): ReadonlyArray<{
 }
 
 /**
- * Hierarchical music picker: Genre → (dependent) Subgenre + Era. Picking a
- * new genre auto-clears the subgenre if it doesn't belong to the new genre.
- * Genres with no subgenres (Blues, Reggae, World) hide the Subgenre section.
+ * Hierarchical music picker:
+ *  - Genre (multi-pick up to 3, tabbed by category — tabs match Splice's
+ *    genre taxonomy: Hip Hop / R&B, Electronic, Pop, Rock / Metal,
+ *    Acoustic, Global, Cinematic / Score)
+ *  - Subgenre (only meaningful for a single chosen genre — section hides
+ *    in multi-genre mode)
+ *  - Era (flat tile grid)
  */
 export const MusicGenrePicker = memo(function MusicGenrePicker({
   value,
@@ -53,18 +65,32 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
   className,
 }: MusicGenrePickerProps) {
   const [query, setQuery] = useState("")
+  /** Explicit-enable for the genre section (mirrors StylingPicker pattern). */
+  const [genreEnabled, setGenreEnabled] = useState(false)
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("music-genre")
 
-  const filteredGenres = useMemo<ReadonlyArray<MusicGenre>>(
-    () => MUSIC_GENRES.filter((g) => matches(g.id, g.label, g.description, query)),
-    [matches, query],
-  )
+  const genreIds = pickIds(value.genre)
+  const isMultiGenre = Array.isArray(value.genre)
+  const genreChecked = genreEnabled || genreIds.length > 0
+
+  const filteredGenreEntries = useMemo<ReadonlyArray<TabbedEntry>>(() => {
+    return MUSIC_GENRES
+      .filter((g) => matches(g.id, g.label, g.description, query))
+      .map((g) => ({
+        id: g.id,
+        label: g.label,
+        description: g.description,
+        group: g.category,
+      }))
+  }, [matches, query])
+
   const filteredEras = useMemo<ReadonlyArray<MusicEra>>(
     () => MUSIC_ERAS.filter((e) => matches(e.id, e.label, e.description, query)),
     [matches, query],
   )
 
-  const currentGenre = getMusicGenre(value.genre)
+  const singleGenreId = genreIds.length === 1 ? genreIds[0] : undefined
+  const currentGenre = getMusicGenre(singleGenreId)
   const allSubgenres = subgenreEntries(currentGenre)
   const filteredSubgenres = useMemo(
     () =>
@@ -74,12 +100,11 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
     [allSubgenres, matches, query],
   )
 
-  const genreChecked = value.genre !== undefined && value.genre !== ""
   const subgenreChecked = value.subgenre !== undefined && value.subgenre !== ""
   const eraChecked = value.era !== undefined && value.era !== ""
 
   const anyVisible =
-    filteredGenres.length > 0 ||
+    filteredGenreEntries.length > 0 ||
     filteredSubgenres.length > 0 ||
     filteredEras.length > 0
 
@@ -102,33 +127,51 @@ export const MusicGenrePicker = memo(function MusicGenrePicker({
         </div>
       )}
 
-      {(!query || filteredGenres.length > 0) && (
-        <SoundDimensionSection
+      {(!query || filteredGenreEntries.length > 0) && (
+        <SoundTabbedSection
           label="Genre"
-          entries={filteredGenres}
-          selectedIds={value.genre ? [value.genre] : []}
+          entries={filteredGenreEntries}
+          groupOrder={MUSIC_GENRE_CATEGORY_ORDER as ReadonlyArray<string>}
+          groupLabels={MUSIC_GENRE_CATEGORY_LABELS as Readonly<Record<string, string>>}
+          selectedIds={genreIds}
+          maxSelected={MAX_GENRES}
+          isMultiData={isMultiGenre}
           checked={genreChecked}
           resolveLabel={resolveLabel}
           resolveDescription={resolveDescription}
           onToggle={(next) => {
             if (next) {
-              const first = filteredGenres[0]?.id ?? MUSIC_GENRES[0]?.id
-              if (first) onChange({ genre: first })
+              setGenreEnabled(true)
             } else {
+              setGenreEnabled(false)
               onChange({ genre: undefined, subgenre: undefined })
             }
           }}
           onPick={(id) => {
-            if (value.genre === id) {
-              onChange({ genre: undefined, subgenre: undefined })
-            } else {
-              // Different genre → drop any stale subgenre.
-              onChange({ genre: id, subgenre: undefined })
+            if (!isMultiGenre) {
+              // Single mode: replace, clear, or pick. Picking a different
+              // genre clears the subgenre (subgenre is genre-specific).
+              if (genreIds[0] === id) {
+                onChange({ genre: undefined, subgenre: undefined })
+              } else {
+                onChange({ genre: id, subgenre: undefined })
+              }
+              return
             }
+            // Multi mode: toggle id in the array. Adding a 4th id FIFO-replaces
+            // the oldest. Subgenre is meaningless when multi — clear it.
+            const next = togglePick(genreIds, id, MAX_GENRES)
+            onChange({
+              genre: next.length === 0 ? undefined : next,
+              subgenre: undefined,
+            })
           }}
+          onActivateMulti={(id) => onChange({ genre: [id], subgenre: undefined })}
+          onDemoteToSingle={(id) => onChange({ genre: id })}
         />
       )}
 
+      {/* Subgenre only meaningful when exactly one genre is picked. */}
       {currentGenre && allSubgenres.length > 0 && (!query || filteredSubgenres.length > 0) && (
         <SoundDimensionSection
           label="Subgenre"
