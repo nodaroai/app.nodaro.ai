@@ -47,6 +47,11 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "scene-count",
   "duration",
   "aspect-ratio",
+  "music-genre",
+  "music-mood",
+  "instrumentation",
+  "voice-character",
+  "voice-delivery",
 ])
 
 export function getParameterValue(
@@ -92,6 +97,16 @@ export function getParameterValue(
       )
     case "color-look":
       return trim(data.colorLook)
+    case "music-genre":
+      return trim(data.subgenre) ?? trim(data.genre) ?? trim(data.era)
+    case "music-mood":
+      return trim(data.emotion) ?? trim(data.energy) ?? trim(data.vibe)
+    case "instrumentation":
+      return trim(data.production) ?? trim(data.instruments) ?? trim(data.vocalPresence)
+    case "voice-character":
+      return trim(data.timbre) ?? trim(data.accent) ?? trim(data.gender) ?? trim(data.age)
+    case "voice-delivery":
+      return trim(data.archetype) ?? trim(data.emotion) ?? trim(data.pace)
     case "atmosphere":
       return trim(data.atmosphere)
     case "action-fx":
@@ -233,3 +248,4 @@ function trim(v: unknown): string | undefined {
   }
   return undefined
 }
+

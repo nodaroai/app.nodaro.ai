@@ -47,6 +47,11 @@ import { buildExposureHints } from "./exposure-settings.js"
 import { getRenderQualityPromptHint } from "./render-quality.js"
 import { getCompositionEffectPromptHint } from "./composition-effects.js"
 import { buildPostProcessHints } from "./post-process-effects.js"
+import { buildMusicGenreHints } from "./music-genre.js"
+import { buildMusicMoodHints } from "./music-mood.js"
+import { buildInstrumentationHints } from "./instrumentation.js"
+import { buildVoiceCharacterHints } from "./voice-character.js"
+import { buildVoiceDeliveryHints } from "./voice-delivery.js"
 
 export interface HintNodeLike {
   readonly id: string
@@ -113,6 +118,16 @@ export function getParameterPromptHint(
       return getCameraFormatPromptHint(asStr(data.cameraFormat))
     case "color-look":
       return getColorLookPromptHint(asStr(data.colorLook))
+    case "music-genre":
+      return buildMusicGenreHints((data ?? {}) as Parameters<typeof buildMusicGenreHints>[0])
+    case "music-mood":
+      return buildMusicMoodHints((data ?? {}) as Parameters<typeof buildMusicMoodHints>[0])
+    case "instrumentation":
+      return buildInstrumentationHints((data ?? {}) as Parameters<typeof buildInstrumentationHints>[0])
+    case "voice-character":
+      return buildVoiceCharacterHints((data ?? {}) as Parameters<typeof buildVoiceCharacterHints>[0])
+    case "voice-delivery":
+      return buildVoiceDeliveryHints((data ?? {}) as Parameters<typeof buildVoiceDeliveryHints>[0])
     case "atmosphere":
       return buildAtmosphereHints(data.atmosphere).join(", ")
     case "action-fx":

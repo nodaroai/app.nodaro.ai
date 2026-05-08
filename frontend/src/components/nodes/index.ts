@@ -24,6 +24,11 @@ import { ActionFxNode } from "./action-fx-node";
 import { StyleNode } from "./style-node";
 import { SettingNode } from "./setting-node";
 import { LoopSubjectNode } from "./loop-subject-node";
+import { MusicGenreNode } from "./music-genre-node";
+import { MusicMoodNode } from "./music-mood-node";
+import { InstrumentationNode } from "./instrumentation-node";
+import { VoiceCharacterNode } from "./voice-character-node";
+import { VoiceDeliveryNode } from "./voice-delivery-node";
 import { PersonNode } from "./person-node";
 import { MoodNode } from "./mood-node";
 import { PhotographerNode } from "./photographer-node";
@@ -170,6 +175,11 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "style": StyleNode,
   "setting": SettingNode,
   "loop-subject": LoopSubjectNode,
+  "music-genre": MusicGenreNode,
+  "music-mood": MusicMoodNode,
+  "instrumentation": InstrumentationNode,
+  "voice-character": VoiceCharacterNode,
+  "voice-delivery": VoiceDeliveryNode,
   "person": PersonNode,
   "mood": MoodNode,
   "photographer": PhotographerNode,

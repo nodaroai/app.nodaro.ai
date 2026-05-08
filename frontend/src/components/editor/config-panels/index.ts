@@ -22,3 +22,10 @@ export { ResultsGallery } from "./results-gallery"
 export { PresentationDisplayConfig } from "./presentation-display-config"
 export { getConnectedSources, getModelIdentifier, buildCreditModelIdentifier } from "./helpers"
 export type { SourceNodeInfo, ConfigProps } from "./types"
+export {
+  MusicGenreConfig,
+  MusicMoodConfig,
+  InstrumentationConfig,
+  VoiceCharacterConfig,
+  VoiceDeliveryConfig,
+} from "./sound-configs"

@@ -99,6 +99,10 @@ import {
   LayoutDashboard,
   HandMetal,
   Zap,
+  Activity,
+  Piano,
+  User,
+  MessageCircle,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -484,6 +488,42 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Sparkles className="h-4 w-4" />,
     category: "Look",
     keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"],
+  },
+  // Sound
+  {
+    type: "music-genre",
+    label: "Music Genre",
+    icon: <Music className="h-4 w-4" />,
+    category: "Sound",
+    keywords: ["music", "genre", "rock", "pop", "electronic"],
+  },
+  {
+    type: "music-mood",
+    label: "Music Mood",
+    icon: <Activity className="h-4 w-4" />,
+    category: "Sound",
+    keywords: ["music", "mood", "energy", "emotion", "vibe"],
+  },
+  {
+    type: "instrumentation",
+    label: "Instrumentation",
+    icon: <Piano className="h-4 w-4" />,
+    category: "Sound",
+    keywords: ["instruments", "guitar", "piano", "drums"],
+  },
+  {
+    type: "voice-character",
+    label: "Voice Character",
+    icon: <User className="h-4 w-4" />,
+    category: "Sound",
+    keywords: ["voice", "age", "gender", "accent", "timbre"],
+  },
+  {
+    type: "voice-delivery",
+    label: "Voice Delivery",
+    icon: <MessageCircle className="h-4 w-4" />,
+    category: "Sound",
+    keywords: ["voice", "pace", "emotion", "narrator"],
   },
   // AI — Script & Text
   {
@@ -1171,6 +1211,12 @@ export const CATEGORIES = [
     description: "Material, Animal, Vehicle, Weapon",
   },
   {
+    id: "Sound",
+    label: "SOUND",
+    icon: <Music className="h-4 w-4" />,
+    description: "Music Genre, Mood, Instrumentation, Voice",
+  },
+  {
     id: "AI",
     label: "AI",
     icon: <BookOpen className="h-4 w-4" />,
@@ -1214,6 +1260,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Triggers: "text-[#F97316]",
   Data: "text-[#14B8A6]",
   Parameter: "text-[#6366F1]",
+  Sound: "text-[#a78bfa]",
   AI: "text-[#ff0073]",
   Processing: "text-[#475569]",
   Assets: "text-[#EC4899]",

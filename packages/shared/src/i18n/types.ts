@@ -128,11 +128,14 @@ export const I18N_CATALOGS = [
   "framing",
   "furniture",
   "held-prop",
+  "instrumentation",
   "lens",
   "lighting",
   "loop-subject",
   "materials",
   "mood",
+  "music-genre",
+  "music-mood",
   "person",
   "photo-genre",
   "photographer",
@@ -144,6 +147,8 @@ export const I18N_CATALOGS = [
   "styling",
   "temporal",
   "vehicles",
+  "voice-character",
+  "voice-delivery",
   "weapons",
 ] as const
 

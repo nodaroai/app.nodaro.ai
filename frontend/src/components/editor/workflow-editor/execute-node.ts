@@ -209,6 +209,8 @@ import {
 import { sortListItems } from "@nodaro/shared";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
+import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
+import { getEffectiveSunoCustomMode } from "@nodaro/shared";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
   getUpstreamDuration,
@@ -1331,17 +1333,26 @@ export function executeNode(
     }
     const d = node.data as GenerateMusicData;
     const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined;
+    // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
+    // into the prompt and — for minimax — into the typed genre/mood/instrumental
+    // fields. Other providers receive prompt-only.
+    const audioStyle = collectAudioStyleHints(node, "generate-music", nodes, edges);
+    const composedPrompt = truncateForField(audioStyle.text, prompt, 2000);
+    const finalPrompt = appendField(prompt, composedPrompt);
+    const finalGenre = (d.genre || audioStyle.fields.genre) ?? "";
+    const finalMood  = (d.mood  || audioStyle.fields.mood)  ?? "";
+    const finalInstrumental = d.instrumental || audioStyle.fields.instrumental || false;
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
         generateMusicApi(
-          prompt,
+          finalPrompt,
           d.provider || undefined,
           d.duration || undefined,
-          d.genre || undefined,
-          d.mood || undefined,
-          d.instrumental,
+          finalGenre || undefined,
+          finalMood || undefined,
+          finalInstrumental,
           d.lyrics || undefined,
           refUrl,
           ctx.userId,
@@ -1370,12 +1381,17 @@ export function executeNode(
       d.provider === "elevenlabs-sfx"
         ? { loop: d.loop, promptInfluence: d.promptInfluence }
         : undefined;
+    // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
+    // into the SFX prompt with a 2000-char budget.
+    const audioStyle = collectAudioStyleHints(node, "text-to-audio", nodes, edges);
+    const composedPrompt = truncateForField(audioStyle.text, prompt, 2000);
+    const finalPrompt = appendField(prompt, composedPrompt);
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
         textToAudioApi(
-          prompt,
+          finalPrompt,
           d.provider || undefined,
           d.duration || undefined,
           ctx.userId,
@@ -1537,13 +1553,19 @@ export function executeNode(
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
     }
+    // Fold connected Voice Sound nodes (voice-character / voice-delivery)
+    // into the voiceDescription field with a 1000-char budget.
+    const audioStyle = collectAudioStyleHints(node, "voice-design", nodes, edges);
+    const userVoiceDesc = d.voiceDescription ?? "";
+    const composedVoiceDesc = truncateForField(audioStyle.text, userVoiceDesc, 1000);
+    const finalVoiceDescription = appendField(userVoiceDesc, composedVoiceDesc);
     setUserPromptTemplate(d.voiceDescription?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
         voiceDesignApi(
           designText,
-          d.voiceDescription!,
+          finalVoiceDescription,
           {
             model: d.model,
             loudness: d.loudness,
@@ -1667,23 +1689,37 @@ export function executeNode(
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
     }
-    const hasCustomFields = !!(d.style || d.title || d.lyrics);
+    const effectiveCustomMode = getEffectiveSunoCustomMode(d);
+    // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
+    // into either `style` (customMode true, 500-char budget) or `prompt`
+    // (customMode false, 3000-char budget). Suno enforces these caps server-side.
+    const audioStyle = collectAudioStyleHints(node, "suno-generate", nodes, edges);
+    const userStyle = d.style ?? "";
+    let finalStyle = userStyle;
+    let finalPrompt = prompt;
+    if (effectiveCustomMode) {
+      const composedStyle = truncateForField(audioStyle.text, userStyle, 500);
+      finalStyle = appendField(userStyle, composedStyle);
+    } else {
+      const composedPrompt = truncateForField(audioStyle.text, prompt, 3000);
+      finalPrompt = appendField(prompt, composedPrompt);
+    }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
         sunoGenerateApi({
-          prompt,
+          prompt: finalPrompt,
           model: d.model || undefined,
           lyrics: d.lyrics || undefined,
-          style: d.style || undefined,
+          style: finalStyle || undefined,
           title: d.title || undefined,
           negativeStyle: d.negativeStyle || undefined,
           vocalGender: d.vocalGender || undefined,
           styleWeight: d.styleWeight,
           weirdnessConstraint: d.weirdnessConstraint,
           audioWeight: d.audioWeight,
-          customMode: d.customMode ?? hasCustomFields,
+          customMode: effectiveCustomMode,
           instrumental: d.instrumental ?? false,
           userId: ctx.userId,
         }),

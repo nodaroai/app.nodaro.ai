@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -91,6 +91,12 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "render-quality", label: "Render Quality", icon: <Cpu className="h-4 w-4" />, category: "Look", keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"] },
   { type: "composition-effects", label: "Composition Effects", icon: <Wand2 className="h-4 w-4" />, category: "Look", keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"] },
   { type: "post-process-effects", label: "Post-Process Effects", icon: <Sparkles className="h-4 w-4" />, category: "Look", keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"] },
+  // Sound
+  { type: "music-genre", label: "Music Genre", icon: <Music className="h-4 w-4" />, category: "Sound", keywords: ["music", "genre"] },
+  { type: "music-mood", label: "Music Mood", icon: <Activity className="h-4 w-4" />, category: "Sound", keywords: ["music", "mood"] },
+  { type: "instrumentation", label: "Instrumentation", icon: <Piano className="h-4 w-4" />, category: "Sound", keywords: ["instruments"] },
+  { type: "voice-character", label: "Voice Character", icon: <User className="h-4 w-4" />, category: "Sound", keywords: ["voice", "character"] },
+  { type: "voice-delivery", label: "Voice Delivery", icon: <MessageCircle className="h-4 w-4" />, category: "Sound", keywords: ["voice", "delivery"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "llm-chat", label: "LLM Chat", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
@@ -209,6 +215,7 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
   Triggers: "group-hover:text-[#F97316]",
   Data: "group-hover:text-[#14B8A6]",
   Parameter: "group-hover:text-[#6366F1]",
+  Sound: "group-hover:text-[#a78bfa]",
   AI: "group-hover:text-[#ff0073]",
   Processing: "group-hover:text-[#475569]",
   Character: "group-hover:text-[#EC4899]",
