@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "منخفضة", description: "هادئة، بطيئة" },
+  "mellow": { label: "ناعمة", description: "مسترخية، متروية" },
+  "gentle": { label: "لطيفة", description: "ناعمة، رقيقة" },
+  "moderate": { label: "معتدلة", description: "متوازنة، ثابتة" },
+  "building": { label: "متصاعدة", description: "تشتد ببطء" },
+  "upbeat": { label: "حيوية", description: "مفعمة بالنشاط، متفائلة" },
+  "driving": { label: "دافعة", description: "زخم اندفاعي للأمام" },
+  "high": { label: "عالية", description: "نشطة، مكثفة" },
+  "explosive": { label: "متفجرة", description: "منفجرة، جامحة" },
+  "frenetic": { label: "محمومة", description: "مكثفة، سريعة" },
+  "pulsing": { label: "نابضة", description: "إيقاعية، يقودها الإيقاع" },
+  "throbbing": { label: "خافقة", description: "ثقيلة، منومة" },
+  "simmering": { label: "متأججة", description: "متوترة، مكبوتة" },
+  "ferocious": { label: "ضارية", description: "عدوانية، عنيدة" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "سعيدة", description: "مبهجة، مشرقة" },
+  "joyful": { label: "بهيجة", description: "متهللة، احتفالية" },
+  "euphoric": { label: "نشوانة", description: "نشوة، متعالية" },
+  "melancholic": { label: "كئيبة", description: "حنينية، حلوة مرة" },
+  "sad": { label: "حزينة", description: "كئيبة، أسيانة" },
+  "longing": { label: "متشوقة", description: "مشتاقة، موجعة" },
+  "lonely": { label: "وحيدة", description: "معزولة، بعيدة" },
+  "angry": { label: "غاضبة", description: "عدوانية، عدائية" },
+  "defiant": { label: "متحدية", description: "متمردة، مقاومة" },
+  "triumphant": { label: "ظافرة", description: "بطولية، منتصرة" },
+  "victorious": { label: "منتصرة", description: "غازية، نشيدية" },
+  "tender": { label: "رقيقة", description: "ناعمة، حنونة" },
+  "romantic": { label: "رومانسية", description: "محبة، حسية" },
+  "haunting": { label: "ملازمة", description: "مخيفة، باقية" },
+  "mysterious": { label: "غامضة", description: "محيرة، سرية" },
+  "menacing": { label: "مهددة", description: "متوعدة، نذير شؤم" },
+  "playful": { label: "مرحة", description: "غريبة الأطوار، ممتعة" },
+  "mischievous": { label: "شقية", description: "مكارة، مشاغبة" },
+  "anxious": { label: "قلقة", description: "متوترة، خائفة" },
+  "fearful": { label: "خائفة", description: "مذعورة، مرتعبة" },
+  "hopeful": { label: "متفائلة", description: "ملهمة، طموحة" },
+  "inspirational": { label: "ملهمة", description: "محفزة، محلقة" },
+  "nostalgic": { label: "حنينية", description: "متطلعة للماضي، حنينية" },
+  "bittersweet": { label: "حلوة مرة", description: "حزن حلو، مختلطة" },
+  "peaceful": { label: "هادئة", description: "ساكنة، مريحة" },
+  "contemplative": { label: "تأملية", description: "متأملة، متفكرة" },
+  "ethereal": { label: "أثيرية", description: "غير دنيوية، طافية" },
+  "awe": { label: "رهبة", description: "إعجاب، شساعة" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "سينمائية", description: "كموسيقى تصويرية، موحية" },
+  "intimate": { label: "حميمية", description: "شخصية، قريبة" },
+  "epic": { label: "ملحمية", description: "عظيمة، جارفة" },
+  "anthemic": { label: "نشيدية", description: "كبيرة لمشاركة الحشد بالغناء" },
+  "lo-fi": { description: "دافئة، غير مثالية" },
+  "polished": { label: "مصقولة", description: "متقنة، سائدة" },
+  "raw": { label: "خام", description: "غير مفلترة، خشنة" },
+  "dreamy": { label: "حالمة", description: "ضبابية، سريالية" },
+  "hypnotic": { label: "منومة", description: "متكررة، شبيهة بالغيبوبة" },
+  "dark": { label: "مظلمة", description: "متجهمة، ظليلة" },
+  "gritty": { label: "خشنة", description: "وعرة، حضرية" },
+  "uplifting": { label: "محفزة", description: "مشرقة، مشجعة" },
+  "tense": { label: "متوترة", description: "مشوقة" },
+  "spacey": { label: "فضائية", description: "كونية، شاسعة" },
+  "psychedelic": { label: "سيكدلية", description: "محرفة للعقل، دوارة" },
+  "noir": { label: "نوار", description: "مدخنة، صلبة" },
+  "vintage": { label: "كلاسيكية", description: "رجعية، عتيقة" },
+  "futuristic": { label: "مستقبلية", description: "خيال علمي، استشرافية" },
+}
 
 export default map

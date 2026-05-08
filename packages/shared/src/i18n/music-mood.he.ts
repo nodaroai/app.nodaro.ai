@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "נמוכה", description: "רגועה, איטית" },
+  "mellow": { label: "רכה", description: "נינוחה, משוחררת" },
+  "gentle": { label: "עדינה", description: "רכה, מלטפת" },
+  "moderate": { label: "מתונה", description: "מאוזנת, יציבה" },
+  "building": { label: "מתעצמת", description: "מתחזקת לאט" },
+  "upbeat": { label: "מתלהבת", description: "תוססת, אופטימית" },
+  "driving": { label: "דוחפת", description: "תאוצה קדימה" },
+  "high": { label: "גבוהה", description: "אנרגטית, עזה" },
+  "explosive": { label: "נפיצה", description: "פורצת, פראית" },
+  "frenetic": { label: "קדחתנית", description: "עזה, מהירה" },
+  "pulsing": { label: "פועמת", description: "קצבית, מובלת מקצב" },
+  "throbbing": { label: "הולמת", description: "כבדה, היפנוטית" },
+  "simmering": { label: "רוחשת", description: "דרוכה, מאופקת" },
+  "ferocious": { label: "פראית", description: "תוקפנית, חסרת רחם" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "שמחה", description: "עליזה, בהירה" },
+  "joyful": { label: "שמחת לב", description: "סוערת, חגיגית" },
+  "euphoric": { label: "אופורית", description: "אקסטטית, נשגבת" },
+  "melancholic": { label: "מלנכולית", description: "געגועית, מתוקה־מרה" },
+  "sad": { label: "עצובה", description: "קודרת, מוכת יגון" },
+  "longing": { label: "מתגעגעת", description: "כמהה, כואבת" },
+  "lonely": { label: "בודדה", description: "מבודדת, מרוחקת" },
+  "angry": { label: "כועסת", description: "תוקפנית, עוינת" },
+  "defiant": { label: "מתריסה", description: "מורדת, מתנגדת" },
+  "triumphant": { label: "מנצחת", description: "הרואית, מנצחת" },
+  "victorious": { label: "ניצחון", description: "כובשת, המנונית" },
+  "tender": { label: "ענוגה", description: "רכה, חיבה" },
+  "romantic": { label: "רומנטית", description: "אוהבת, חושנית" },
+  "haunting": { label: "רודפת", description: "מאיימת, נצחית" },
+  "mysterious": { label: "מסתורית", description: "חידתית, חשאית" },
+  "menacing": { label: "מאיימת", description: "מאיימת, מבשרת רע" },
+  "playful": { label: "שובבה", description: "מצחיקה, כיפית" },
+  "mischievous": { label: "שובבית", description: "ערמומית, קונדסית" },
+  "anxious": { label: "חרדה", description: "דרוכה, חוששת" },
+  "fearful": { label: "מפוחדת", description: "פוחדת, מבוהלת" },
+  "hopeful": { label: "מלאת תקווה", description: "מרוממת, שואפת" },
+  "inspirational": { label: "מעוררת השראה", description: "מניעה, מרוממת" },
+  "nostalgic": { label: "נוסטלגית", description: "מבט לאחור, געגועית" },
+  "bittersweet": { label: "מתוקה־מרה", description: "צער מתוק, מעורבת" },
+  "peaceful": { label: "שלווה", description: "רוגעת, נינוחה" },
+  "contemplative": { label: "הגותית", description: "מהורהרת, מתבוננת" },
+  "ethereal": { label: "אתרית", description: "לא מן העולם הזה, מרחפת" },
+  "awe": { label: "יראה", description: "פלא, רוממות" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "קולנועית", description: "כמו פסקול, מעוררת" },
+  "intimate": { label: "אינטימית", description: "אישית, קרובה" },
+  "epic": { label: "אפית", description: "מרהיבה, סוחפת" },
+  "anthemic": { label: "המנונית", description: "גדולה לשירה משותפת" },
+  "lo-fi": { description: "חמה, לא מושלמת" },
+  "polished": { label: "מלוטשת", description: "מושלמת, מיינסטרים" },
+  "raw": { label: "גולמית", description: "ללא סינון, מחוספסת" },
+  "dreamy": { label: "חלומית", description: "מעורפלת, סוריאליסטית" },
+  "hypnotic": { label: "היפנוטית", description: "בלולאה, כמו טראנס" },
+  "dark": { label: "אפלה", description: "קודרת, מצללת" },
+  "gritty": { label: "מחוספסת", description: "גסה, עירונית" },
+  "uplifting": { label: "מרוממת", description: "בהירה, מעודדת" },
+  "tense": { label: "מתוחה", description: "מותחת" },
+  "spacey": { label: "חללית", description: "קוסמית, נרחבת" },
+  "psychedelic": { label: "פסיכדלית", description: "מטלטלת תודעה, מערבולתית" },
+  "noir": { label: "נואר", description: "עשנה, קשוחה" },
+  "vintage": { label: "וינטג'", description: "רטרו, מיושנת" },
+  "futuristic": { label: "עתידנית", description: "מדע בדיוני, צופה פני עתיד" },
+}
 
 export default map

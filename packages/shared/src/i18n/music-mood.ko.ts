@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "낮음", description: "차분하고 느림" },
+  "mellow": { label: "부드러움", description: "편안하고 여유로움" },
+  "gentle": { label: "부드러운", description: "부드럽고 다정한" },
+  "moderate": { label: "보통", description: "균형 잡히고 안정적" },
+  "building": { label: "고조되는", description: "서서히 강해지는" },
+  "upbeat": { label: "경쾌한", description: "활기차고 낙관적" },
+  "driving": { label: "추진력 있는", description: "앞으로 미는 추진력" },
+  "high": { label: "높음", description: "에너지 넘치고 강렬" },
+  "explosive": { label: "폭발적", description: "터지고 거친" },
+  "frenetic": { label: "광적인", description: "강렬하고 빠른" },
+  "pulsing": { label: "맥동하는", description: "리듬감 있고 비트 위주" },
+  "throbbing": { label: "고동치는", description: "묵직하고 최면적" },
+  "simmering": { label: "끓어오르는", description: "긴장되고 절제된" },
+  "ferocious": { label: "맹렬한", description: "공격적이고 가차없는" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "행복한", description: "즐겁고 밝은" },
+  "joyful": { label: "기쁨에 찬", description: "넘치는, 축제 분위기" },
+  "euphoric": { label: "황홀한", description: "엑스터시, 초월적" },
+  "melancholic": { label: "우울한", description: "쓸쓸하고 씁쓸달콤한" },
+  "sad": { label: "슬픈", description: "침울하고 비통한" },
+  "longing": { label: "갈망하는", description: "그리워하고 아픈" },
+  "lonely": { label: "외로운", description: "고립되고 멀어진" },
+  "angry": { label: "분노한", description: "공격적이고 적대적" },
+  "defiant": { label: "도전적", description: "반항적이고 저항적" },
+  "triumphant": { label: "승리에 찬", description: "영웅적이고 승리감" },
+  "victorious": { label: "승리한", description: "정복적, 송가적" },
+  "tender": { label: "다정한", description: "부드럽고 애정 어린" },
+  "romantic": { label: "로맨틱", description: "사랑스럽고 관능적" },
+  "haunting": { label: "여운 있는", description: "기괴하고 잔잔히 남는" },
+  "mysterious": { label: "신비로운", description: "수수께끼 같고 비밀스러운" },
+  "menacing": { label: "위협적인", description: "위협적이고 불길한" },
+  "playful": { label: "장난스러운", description: "기발하고 재미있는" },
+  "mischievous": { label: "짓궂은", description: "교활하고 말썽꾸러기" },
+  "anxious": { label: "불안한", description: "긴장되고 우려되는" },
+  "fearful": { label: "두려운", description: "겁먹고 공황 상태" },
+  "hopeful": { label: "희망찬", description: "고무적이고 야심찬" },
+  "inspirational": { label: "감동적인", description: "동기부여, 비상" },
+  "nostalgic": { label: "향수 어린", description: "과거를 돌아보고 쓸쓸한" },
+  "bittersweet": { label: "씁쓸달콤한", description: "달콤한 슬픔, 뒤섞인" },
+  "peaceful": { label: "평화로운", description: "고요하고 편안한" },
+  "contemplative": { label: "사색적인", description: "성찰적이고 사려깊은" },
+  "ethereal": { label: "공허한", description: "이세계적이고 떠다니는" },
+  "awe": { label: "경외", description: "경이, 광활함" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "시네마틱", description: "스코어 같은, 환기적" },
+  "intimate": { label: "친밀한", description: "개인적이고 가까운" },
+  "epic": { label: "장대한", description: "웅장하고 휩쓸리는" },
+  "anthemic": { label: "찬가풍", description: "관중이 따라부를 만큼 큰" },
+  "lo-fi": { description: "따뜻하고 불완전한" },
+  "polished": { label: "세련된", description: "깔끔하고 주류" },
+  "raw": { label: "거친", description: "필터 없이, 거칠게" },
+  "dreamy": { label: "몽환적", description: "흐릿하고 초현실적" },
+  "hypnotic": { label: "최면적", description: "반복되는, 황홀경" },
+  "dark": { label: "어두운", description: "음울하고 그늘진" },
+  "gritty": { label: "거친 질감의", description: "거칠고 도시적" },
+  "uplifting": { label: "기운 북돋우는", description: "밝고 격려하는" },
+  "tense": { label: "긴장된", description: "서스펜스 가득한" },
+  "spacey": { label: "우주적", description: "코스믹하고 광대한" },
+  "psychedelic": { label: "사이키델릭", description: "정신을 휘젓는, 소용돌이치는" },
+  "noir": { label: "느와르", description: "연기 자욱하고 하드보일드" },
+  "vintage": { label: "빈티지", description: "레트로, 세월이 깃든" },
+  "futuristic": { label: "미래적", description: "SF적, 앞을 내다보는" },
+}
 
 export default map

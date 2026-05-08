@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "Faible", description: "Calme, lent" },
+  "mellow": { label: "Doux", description: "Détendu, décontracté" },
+  "gentle": { label: "Délicat", description: "Doux, tendre" },
+  "moderate": { label: "Modéré", description: "Équilibré, constant" },
+  "building": { label: "Montant", description: "S'intensifiant lentement" },
+  "upbeat": { label: "Entraînant", description: "Vif, optimiste" },
+  "driving": { label: "Propulsif", description: "Élan vers l'avant" },
+  "high": { label: "Élevé", description: "Énergique, intense" },
+  "explosive": { label: "Explosif", description: "Éclatant, sauvage" },
+  "frenetic": { label: "Frénétique", description: "Intense, rapide" },
+  "pulsing": { label: "Pulsant", description: "Rythmé, cadencé" },
+  "throbbing": { label: "Palpitant", description: "Lourd, hypnotique" },
+  "simmering": { label: "Bouillonnant", description: "Tendu, retenu" },
+  "ferocious": { label: "Féroce", description: "Agressif, implacable" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "Joyeux", description: "Joyeux, lumineux" },
+  "joyful": { label: "Allègre", description: "Exubérant, festif" },
+  "euphoric": { label: "Euphorique", description: "Extatique, transcendant" },
+  "melancholic": { label: "Mélancolique", description: "Nostalgique, doux-amer" },
+  "sad": { label: "Triste", description: "Sombre, peiné" },
+  "longing": { label: "Languissant", description: "Aspirant, douloureux" },
+  "lonely": { label: "Solitaire", description: "Isolé, distant" },
+  "angry": { label: "En colère", description: "Agressif, hostile" },
+  "defiant": { label: "Provocant", description: "Rebelle, résistant" },
+  "triumphant": { label: "Triomphant", description: "Héroïque, victorieux" },
+  "victorious": { label: "Victorieux", description: "Conquérant, hymnique" },
+  "tender": { label: "Tendre", description: "Doux, affectueux" },
+  "romantic": { label: "Romantique", description: "Amoureux, sensuel" },
+  "haunting": { label: "Obsédant", description: "Étrange, persistant" },
+  "mysterious": { label: "Mystérieux", description: "Énigmatique, secret" },
+  "menacing": { label: "Menaçant", description: "Inquiétant, présage" },
+  "playful": { label: "Espiègle", description: "Fantaisiste, amusant" },
+  "mischievous": { label: "Malicieux", description: "Rusé, fauteur de troubles" },
+  "anxious": { label: "Anxieux", description: "Tendu, appréhensif" },
+  "fearful": { label: "Craintif", description: "Effrayé, paniqué" },
+  "hopeful": { label: "Plein d'espoir", description: "Édifiant, aspirationnel" },
+  "inspirational": { label: "Inspirant", description: "Motivant, exaltant" },
+  "nostalgic": { label: "Nostalgique", description: "Tourné vers le passé, mélancolique" },
+  "bittersweet": { label: "Doux-amer", description: "Douce tristesse, mêlée" },
+  "peaceful": { label: "Paisible", description: "Serein, reposant" },
+  "contemplative": { label: "Contemplatif", description: "Réfléchi, méditatif" },
+  "ethereal": { label: "Éthéré", description: "D'un autre monde, flottant" },
+  "awe": { label: "Émerveillement", description: "Merveille, immensité" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "Cinématographique", description: "Comme une bande originale, évocateur" },
+  "intimate": { label: "Intime", description: "Personnel, proche" },
+  "epic": { label: "Épique", description: "Grandiose, balayant" },
+  "anthemic": { label: "Hymne", description: "Grand à reprendre en chœur" },
+  "lo-fi": { description: "Chaud, imparfait" },
+  "polished": { label: "Soigné", description: "Impeccable, grand public" },
+  "raw": { label: "Brut", description: "Non filtré, rugueux" },
+  "dreamy": { label: "Rêveur", description: "Brumeux, surréel" },
+  "hypnotic": { label: "Hypnotique", description: "En boucle, transe" },
+  "dark": { label: "Sombre", description: "Maussade, ombrageux" },
+  "gritty": { label: "Granuleux", description: "Rugueux, urbain" },
+  "uplifting": { label: "Élévateur", description: "Lumineux, encourageant" },
+  "tense": { label: "Tendu", description: "Suspense" },
+  "spacey": { label: "Cosmique", description: "Cosmique, vaste" },
+  "psychedelic": { label: "Psychédélique", description: "Vertigineux, tourbillonnant" },
+  "noir": { label: "Noir", description: "Enfumé, dur à cuire" },
+  "vintage": { label: "Vintage", description: "Rétro, vieilli" },
+  "futuristic": { label: "Futuriste", description: "Sci-fi, tourné vers l'avenir" },
+}
 
 export default map

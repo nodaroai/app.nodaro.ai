@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "低", description: "平静、缓慢" },
+  "mellow": { label: "柔和", description: "放松、悠闲" },
+  "gentle": { label: "轻柔", description: "柔软、温柔" },
+  "moderate": { label: "适中", description: "平衡、稳定" },
+  "building": { label: "渐强", description: "缓慢加强" },
+  "upbeat": { label: "欢快", description: "活泼、乐观" },
+  "driving": { label: "推动", description: "向前推进的动力" },
+  "high": { label: "高", description: "充满活力、强烈" },
+  "explosive": { label: "爆发", description: "迸发、狂野" },
+  "frenetic": { label: "狂热", description: "强烈、迅速" },
+  "pulsing": { label: "脉动", description: "有节奏、节拍驱动" },
+  "throbbing": { label: "悸动", description: "厚重、催眠" },
+  "simmering": { label: "酝酿", description: "紧张、克制" },
+  "ferocious": { label: "凶猛", description: "侵略性、毫不留情" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "快乐", description: "喜悦、明亮" },
+  "joyful": { label: "欢乐", description: "兴高采烈、庆祝" },
+  "euphoric": { label: "陶醉", description: "狂喜、超然" },
+  "melancholic": { label: "忧郁", description: "怀旧、苦乐参半" },
+  "sad": { label: "悲伤", description: "阴沉、悲痛" },
+  "longing": { label: "渴望", description: "向往、痛苦" },
+  "lonely": { label: "孤独", description: "孤立、遥远" },
+  "angry": { label: "愤怒", description: "侵略性、敌意" },
+  "defiant": { label: "反抗", description: "叛逆、抵抗" },
+  "triumphant": { label: "凯旋", description: "英雄式、胜利" },
+  "victorious": { label: "胜利", description: "征服、颂歌" },
+  "tender": { label: "温柔", description: "柔软、深情" },
+  "romantic": { label: "浪漫", description: "充满爱意、感性" },
+  "haunting": { label: "萦绕", description: "诡异、挥之不去" },
+  "mysterious": { label: "神秘", description: "扑朔迷离、隐秘" },
+  "menacing": { label: "威胁", description: "威胁性、不祥" },
+  "playful": { label: "顽皮", description: "异想天开、有趣" },
+  "mischievous": { label: "调皮", description: "狡黠、捣乱" },
+  "anxious": { label: "焦虑", description: "紧张、忧虑" },
+  "fearful": { label: "恐惧", description: "害怕、惊慌" },
+  "hopeful": { label: "充满希望", description: "鼓舞人心、有抱负" },
+  "inspirational": { label: "鼓舞人心", description: "激励、振奋" },
+  "nostalgic": { label: "怀旧", description: "回首往昔、伤感" },
+  "bittersweet": { label: "苦乐参半", description: "甜蜜的哀愁、混合" },
+  "peaceful": { label: "宁静", description: "安详、休憩" },
+  "contemplative": { label: "沉思", description: "反思、深思" },
+  "ethereal": { label: "缥缈", description: "超凡脱俗、漂浮" },
+  "awe": { label: "敬畏", description: "惊叹、浩瀚" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "电影感", description: "如配乐般、富有感染力" },
+  "intimate": { label: "亲密", description: "个人化、贴近" },
+  "epic": { label: "史诗", description: "宏大、磅礴" },
+  "anthemic": { label: "颂歌式", description: "适合人群合唱的宏大感" },
+  "lo-fi": { description: "温暖、不完美" },
+  "polished": { label: "精致", description: "无瑕、主流" },
+  "raw": { label: "原始", description: "未经修饰、粗犷" },
+  "dreamy": { label: "梦幻", description: "朦胧、超现实" },
+  "hypnotic": { label: "催眠", description: "循环、出神" },
+  "dark": { label: "黑暗", description: "阴郁、阴影" },
+  "gritty": { label: "粗粝", description: "粗糙、都市" },
+  "uplifting": { label: "振奋", description: "明亮、鼓舞" },
+  "tense": { label: "紧张", description: "悬疑" },
+  "spacey": { label: "太空感", description: "宇宙、辽阔" },
+  "psychedelic": { label: "迷幻", description: "扭曲心智、旋转" },
+  "noir": { label: "黑色电影", description: "烟雾缭绕、硬朗" },
+  "vintage": { label: "复古", description: "怀旧、岁月感" },
+  "futuristic": { label: "未来感", description: "科幻、前瞻" },
+}
 
 export default map

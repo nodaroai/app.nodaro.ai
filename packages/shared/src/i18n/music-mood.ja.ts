@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "低い", description: "穏やか、ゆっくり" },
+  "mellow": { label: "まろやか", description: "リラックス、のんびり" },
+  "gentle": { label: "優しい", description: "柔らかく、繊細" },
+  "moderate": { label: "中庸", description: "バランスが取れた、安定" },
+  "building": { label: "高まる", description: "徐々に強まる" },
+  "upbeat": { label: "アップビート", description: "活気あふれる、楽観的" },
+  "driving": { label: "駆動感", description: "前進する勢い" },
+  "high": { label: "高い", description: "エネルギッシュ、強烈" },
+  "explosive": { label: "爆発的", description: "弾けるような、ワイルド" },
+  "frenetic": { label: "熱狂的", description: "強烈、急速" },
+  "pulsing": { label: "脈打つ", description: "リズミカル、ビート主体" },
+  "throbbing": { label: "鼓動", description: "重く、催眠的" },
+  "simmering": { label: "くすぶる", description: "張り詰めた、抑制された" },
+  "ferocious": { label: "獰猛", description: "攻撃的、容赦ない" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "ハッピー", description: "喜ばしい、明るい" },
+  "joyful": { label: "歓喜", description: "陽気、祝祭的" },
+  "euphoric": { label: "陶酔", description: "恍惚、超越的" },
+  "melancholic": { label: "メランコリック", description: "もの悲しい、ほろ苦い" },
+  "sad": { label: "悲しい", description: "陰鬱、悲嘆" },
+  "longing": { label: "切望", description: "焦がれる、痛む" },
+  "lonely": { label: "孤独", description: "孤立、遠い" },
+  "angry": { label: "怒り", description: "攻撃的、敵対的" },
+  "defiant": { label: "反抗的", description: "反逆、抵抗的" },
+  "triumphant": { label: "勝ち誇る", description: "英雄的、勝利の" },
+  "victorious": { label: "勝利", description: "征服、賛歌的" },
+  "tender": { label: "優しさ", description: "柔らかく、愛情深い" },
+  "romantic": { label: "ロマンティック", description: "愛情あふれる、官能的" },
+  "haunting": { label: "心に残る", description: "不気味、長く残る" },
+  "mysterious": { label: "神秘的", description: "謎めいた、秘密めいた" },
+  "menacing": { label: "脅威的", description: "脅迫的、不吉な" },
+  "playful": { label: "遊び心", description: "気まぐれ、楽しい" },
+  "mischievous": { label: "いたずらっぽい", description: "ずる賢い、悪戯好き" },
+  "anxious": { label: "不安", description: "緊張、心配" },
+  "fearful": { label: "恐怖", description: "怯えた、パニック" },
+  "hopeful": { label: "希望", description: "高揚させる、抱負ある" },
+  "inspirational": { label: "感動的", description: "やる気を起こさせる、舞い上がる" },
+  "nostalgic": { label: "ノスタルジック", description: "過去を見つめる、もの悲しい" },
+  "bittersweet": { label: "ほろ苦い", description: "甘い悲しみ、入り混じった" },
+  "peaceful": { label: "穏やか", description: "静謐、安らか" },
+  "contemplative": { label: "瞑想的", description: "内省的、思慮深い" },
+  "ethereal": { label: "幽玄", description: "この世のものでない、漂う" },
+  "awe": { label: "畏敬", description: "驚異、広大さ" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "シネマティック", description: "スコア風、喚起的" },
+  "intimate": { label: "親密", description: "個人的、近い" },
+  "epic": { label: "壮大", description: "壮麗、雄大" },
+  "anthemic": { label: "アンセム", description: "観衆が合唱できる大きさ" },
+  "lo-fi": { description: "温かく、不完全" },
+  "polished": { label: "洗練", description: "美しい、メインストリーム" },
+  "raw": { label: "生々しい", description: "未加工、ざらざら" },
+  "dreamy": { label: "夢見心地", description: "ぼんやり、シュール" },
+  "hypnotic": { label: "催眠的", description: "ループする、トランス状態" },
+  "dark": { label: "ダーク", description: "陰鬱、影のある" },
+  "gritty": { label: "ザラついた", description: "粗い、都会的" },
+  "uplifting": { label: "高揚させる", description: "明るく、励ます" },
+  "tense": { label: "緊張", description: "サスペンスフル" },
+  "spacey": { label: "宇宙的", description: "コズミック、広大" },
+  "psychedelic": { label: "サイケデリック", description: "意識を変える、渦巻く" },
+  "noir": { label: "ノワール", description: "煙たい、ハードボイルド" },
+  "vintage": { label: "ヴィンテージ", description: "レトロ、年代物" },
+  "futuristic": { label: "未来的", description: "SF、先進的" },
+}
 
 export default map
