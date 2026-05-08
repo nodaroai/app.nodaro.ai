@@ -12,6 +12,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -44,10 +45,7 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       const parsed = generateBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

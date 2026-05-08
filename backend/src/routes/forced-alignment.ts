@@ -6,6 +6,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const forcedAlignmentBody = z.object({
   audioUrl: safeUrlSchema,
@@ -21,10 +22,7 @@ export async function forcedAlignmentRoutes(app: FastifyInstance) {
     const parsed = forcedAlignmentBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

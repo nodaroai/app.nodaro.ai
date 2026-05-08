@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 // Gallery only shows AI-generated creative content — NOT processing/application results
 const IMAGE_JOBS = new Set([
@@ -261,7 +262,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     const parsed = favoriteBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
@@ -331,10 +332,7 @@ export async function galleryRoutes(app: FastifyInstance) {
     const parsed = reportBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

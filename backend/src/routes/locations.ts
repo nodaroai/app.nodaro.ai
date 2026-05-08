@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const upsertLocationBody = z.object({
   id: z.string().uuid().optional(),
@@ -148,10 +149,7 @@ export async function locationRoutes(app: FastifyInstance) {
     const parsed = upsertLocationBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

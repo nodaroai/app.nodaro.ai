@@ -6,6 +6,7 @@ import { config } from "../lib/config.js"
 import { findAppByClientId, verifyClientSecret } from "./developer-apps.js"
 import { issueCode, redeemCode } from "../lib/oauth-codes.js"
 import { ALL_SCOPES, formatScopeString } from "../lib/scopes.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const ACCESS_TOKEN_TTL_DAYS = 90
 
@@ -92,7 +93,7 @@ export async function oauthRoutes(app: FastifyInstance) {
 
     const parsed = authorizeBody.safeParse(req.body)
     if (!parsed.success) {
-      return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" } })
+      return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
 
     const { clientId, redirectUri, scopes, state, codeChallenge, codeChallengeMethod } = parsed.data

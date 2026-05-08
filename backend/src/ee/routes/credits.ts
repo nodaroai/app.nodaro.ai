@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
+import { formatZodError } from "../../lib/zod-error.js"
 
 const modelCostsBody = z.object({
   models: z.array(z.string().min(1)).min(1).max(50),
@@ -169,7 +170,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const parsed = modelCostsBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { models } = parsed.data
@@ -205,7 +206,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const parsed = reserveBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { jobId, modelIdentifier, providerCostUsd = 0, displayCostUsd = 0 } = parsed.data
@@ -244,7 +245,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const parsed = commitBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { usageLogId, actualCredits } = parsed.data
@@ -288,7 +289,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const parsed = refundBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { usageLogId } = parsed.data
@@ -325,7 +326,7 @@ export async function creditsRoutes(app: FastifyInstance) {
     const parsed = estimateWorkflowBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { nodes } = parsed.data

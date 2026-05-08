@@ -6,6 +6,7 @@ import { config, isCloud } from "../lib/config.js"
 import { deleteFromR2 } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 // ============================================================
 // Schemas
@@ -339,10 +340,7 @@ export async function libraryRoutes(app: FastifyInstance) {
     const parsed = saveGeneratedBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

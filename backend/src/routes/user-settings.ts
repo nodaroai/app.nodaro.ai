@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { SYSTEM_PROMPT_TEMPLATES } from "../config/prompt-templates.js"
 import { invalidateUserPreferences } from "../lib/mcp/user-preferences.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const PRIVATE_MODE_TIERS = new Set(["standard", "pro", "business"])
 
@@ -125,7 +126,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     const parsed = updateSettingsBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

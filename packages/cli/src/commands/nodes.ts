@@ -3,9 +3,30 @@ import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic, watchUntilTerminal } from "../util.js"
+import { pickFromList, isInteractive } from "../interactive.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
+}
+
+async function pickNodeInteractively(client: ReturnType<typeof buildClient>): Promise<string> {
+  if (!isInteractive()) {
+    warn("missing <type> and stdin is not a TTY — provide a node type or pipe input")
+    process.exit(2)
+  }
+  const result = await client.nodes.list()
+  if (result.data.length === 0) {
+    warn("no node types available (server returned an empty list)")
+    process.exit(1)
+  }
+  return pickFromList<string>({
+    message: "Pick a node type to run:",
+    choices: result.data.map((n) => ({
+      name: `${n.label} — ${n.type}`,
+      value: n.type,
+      description: `${n.category} → ${n.outputType}${n.creditCost ? ` (${n.creditCost} cr)` : ""}`,
+    })),
+  })
 }
 
 /**
@@ -82,8 +103,8 @@ export function nodesCommand(): Command {
     })
 
   cmd
-    .command("run <type> [extras...]")
-    .description("run a single node directly — no workflow, no DAG. Inputs go through --param k=v (repeat) or --params-file body.json")
+    .command("run [type] [extras...]")
+    .description("run a single node directly — no workflow, no DAG. Inputs go through --param k=v (repeat) or --params-file body.json. Omit <type> for an interactive picker.")
     .option("--param <pairs...>", "input value, repeat or space-separate (e.g. --param prompt=\"a leopard\" --param resolution=2K)", collectVariadic)
     .option("--params-file <path>", "JSON file with the full input body (--param flags override matching keys)")
     .option("--watch", "if the response includes a jobId, poll until the job completes")
@@ -100,15 +121,16 @@ Examples:
 Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, providers, capabilities).`)
     .action(
       async (
-        type: string,
+        type: string | undefined,
         extras: string[],
         opts: { param?: string[]; paramsFile?: string; watch?: boolean; pollInterval: number } & GlobalOpts,
       ) => {
-        rejectPositionalParams(extras, { cmd: `nodaro nodes run ${type}`, key: "prompt" })
+        rejectPositionalParams(extras, { cmd: `nodaro nodes run ${type ?? "<type>"}`, key: "prompt" })
         try {
           const client = buildClient(opts.profile)
+          const resolvedType = type ?? (await pickNodeInteractively(client))
           const params = resolveParams(opts.param, opts.paramsFile)
-          const result = await client.nodes.run(type, params)
+          const result = await client.nodes.run(resolvedType, params)
           const jobId = typeof result === "object" && result && "jobId" in result ? (result.jobId as string) : null
 
           if (opts.json && !opts.watch) {
@@ -118,7 +140,7 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
 
           if (!jobId) {
             // Inline node (combine-text/split-text/composite) — synchronous result body.
-            success(`${type} completed (inline)`)
+            success(`${resolvedType} completed (inline)`)
             console.log(JSON.stringify(result, null, 2))
             return
           }

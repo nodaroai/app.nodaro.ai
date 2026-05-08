@@ -8,6 +8,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { MUSIC_PROVIDERS } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const generateMusicBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -28,10 +29,7 @@ export async function generateMusicRoutes(app: FastifyInstance) {
     const parsed = generateMusicBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

@@ -35,6 +35,7 @@ import {
 } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
 import type { GenericNode, GenericEdge } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 // ---------------------------------------------------------------------------
 // Rate limiter (in-memory, per token hash)
@@ -184,7 +185,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     const parsed = createTokenBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
