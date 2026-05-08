@@ -195,25 +195,17 @@ export const InstrumentationPicker = memo(function InstrumentationPicker({
           }}
           onPick={(id) => {
             // "instrumental" is mutually exclusive with any other vocal pick.
-            const isInstrumental = id === VOCAL_PRESENCE_INSTRUMENTAL_ID
-            if (isInstrumental) {
-              if (vocalIds.includes(id)) {
-                onChange({ vocalPresence: undefined })
-              } else {
-                onChange({ vocalPresence: id })
-              }
+            if (id === VOCAL_PRESENCE_INSTRUMENTAL_ID) {
+              onChange({ vocalPresence: vocalIds.includes(id) ? undefined : id })
               return
             }
-            // Picking a non-instrumental clears "instrumental" if set.
-            const filtered = vocalIds.filter((v) => v !== VOCAL_PRESENCE_INSTRUMENTAL_ID)
             if (!isMultiVocal) {
-              if (vocalIds.length === 1 && vocalIds[0] === id) {
-                onChange({ vocalPresence: undefined })
-              } else {
-                onChange({ vocalPresence: id })
-              }
+              const isToggleOff = vocalIds.length === 1 && vocalIds[0] === id
+              onChange({ vocalPresence: isToggleOff ? undefined : id })
               return
             }
+            // Multi mode: drop "instrumental" if it was set, then toggle.
+            const filtered = vocalIds.filter((v) => v !== VOCAL_PRESENCE_INSTRUMENTAL_ID)
             const next = togglePick(filtered, id, MAX_VOCAL_PRESENCE)
             onChange({ vocalPresence: next.length === 0 ? undefined : next })
           }}
