@@ -122,6 +122,7 @@ import { getCompositionEffectPromptHint } from "@nodaro/shared"
 import { buildPostProcessHints } from "@nodaro/shared"
 import { useLocaleDir } from "@/lib/locale-store"
 import { LocaleHeader } from "./locale-header"
+import { CustomTextRows } from "./custom-text-rows"
 import type { ConfigProps } from "./types"
 
 export function ToneConfig({ data, onUpdate }: ConfigProps<ToneData>) {
@@ -310,10 +311,18 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={composed} />
+      <PromptInjectionPreview hints={[data.preText, ...composed, data.postText].filter(Boolean) as string[]} />
       <p className="text-[10px] text-muted-foreground italic px-0.5">
         Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
       </p>
+      <CustomTextRows
+        idPrefix="camera-motion"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. starts handheld"
+        postPlaceholder="e.g. settles to lock-off"
+        onChange={onUpdate}
+      />
       <Label>Camera Motion</Label>
       <CameraMotionPicker
         value={data.cameraMotion || "static"}
@@ -329,7 +338,15 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildFramingHints(data)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildFramingHints(data), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="framing"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. handheld feel"
+        postPlaceholder="e.g. with subtle dolly-in"
+        onChange={onUpdate}
+      />
       <Label>Framing</Label>
       <FramingPicker
         value={{
@@ -369,7 +386,15 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getLensPromptHint(data.lens)]} />
+      <PromptInjectionPreview hints={[data.preText, getLensPromptHint(data.lens), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="lens"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. vintage"
+        postPlaceholder="e.g. with chromatic aberration"
+        onChange={onUpdate}
+      />
       <Label>Lens</Label>
       <LensPicker
         value={data.lens || "normal-50mm"}
@@ -384,7 +409,15 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getCameraFormatPromptHint(data.cameraFormat)]} />
+      <PromptInjectionPreview hints={[data.preText, getCameraFormatPromptHint(data.cameraFormat), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="camera-format"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. push-processed"
+        postPlaceholder="e.g. with grain bloom"
+        onChange={onUpdate}
+      />
       <Label>Camera / Film</Label>
       <CameraFormatPicker
         value={data.cameraFormat || "35mm-film"}
@@ -400,7 +433,15 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildLightingHints(data)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildLightingHints(data), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="lighting"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. natural fill from window"
+        postPlaceholder="e.g. with practical lights in frame"
+        onChange={onUpdate}
+      />
       <Label>Lighting</Label>
       <LightingPicker
         value={{
@@ -440,7 +481,15 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getColorLookPromptHint(data.colorLook)]} />
+      <PromptInjectionPreview hints={[data.preText, getColorLookPromptHint(data.colorLook), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="color-look"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. heavy grain"
+        postPlaceholder="e.g. with film burn at edges"
+        onChange={onUpdate}
+      />
       <Label>Color / Look</Label>
       <ColorLookPicker
         value={data.colorLook || "warm"}
@@ -455,7 +504,15 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildAtmosphereHints(data.atmosphere)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildAtmosphereHints(data.atmosphere), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="atmosphere"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. just before dawn"
+        postPlaceholder="e.g. with dust suspended in beams"
+        onChange={onUpdate}
+      />
       <Label>Atmosphere (pick up to 2)</Label>
       <AtmospherePicker
         value={data.atmosphere}
@@ -471,7 +528,15 @@ export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildActionFxHints(data.actionFx)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildActionFxHints(data.actionFx), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="action-fx"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. mid-recoil"
+        postPlaceholder="e.g. fading into smoke"
+        onChange={onUpdate}
+      />
       <Label>Action FX (pick up to 2)</Label>
       <ActionFxPicker
         value={data.actionFx}
@@ -487,7 +552,15 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getStylePromptHint(data.style)]} />
+      <PromptInjectionPreview hints={[data.preText, getStylePromptHint(data.style), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="style"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. wet plate aesthetic"
+        postPlaceholder="e.g. with hand-printed edges"
+        onChange={onUpdate}
+      />
       <Label>Style</Label>
       <StylePicker
         value={data.style || "cinematic"}
@@ -502,7 +575,15 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getSettingPromptHint(data.setting)]} />
+      <PromptInjectionPreview hints={[data.preText, getSettingPromptHint(data.setting), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="setting"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. abandoned"
+        postPlaceholder="e.g. with mist creeping in"
+        onChange={onUpdate}
+      />
       <Label>Setting</Label>
       <SettingPicker
         value={data.setting || "forest"}
@@ -517,7 +598,15 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getLoopSubjectPromptHint(data.loopSubject)]} />
+      <PromptInjectionPreview hints={[data.preText, getLoopSubjectPromptHint(data.loopSubject), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="loop-subject"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. with lightning flashes"
+        postPlaceholder="e.g. seen from below"
+        onChange={onUpdate}
+      />
       <Label>Loop Subject</Label>
       <LoopSubjectPicker
         value={data.loopSubject || "tunnel"}
@@ -672,7 +761,15 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[buildPhotographerHints(data.photographer)]} />
+      <PromptInjectionPreview hints={[data.preText, buildPhotographerHints(data.photographer), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="photographer"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. early-career style"
+        postPlaceholder="e.g. with the studio's signature lighting"
+        onChange={onUpdate}
+      />
       <Label>Photographer / Artist Style (pick up to 2)</Label>
       <PhotographerPicker
         value={data.photographer}
@@ -688,7 +785,15 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[buildAestheticHints(data.aesthetic)]} />
+      <PromptInjectionPreview hints={[data.preText, buildAestheticHints(data.aesthetic), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="aesthetic"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. heavily stylized"
+        postPlaceholder="e.g. with neon accents"
+        onChange={onUpdate}
+      />
       <Label>Aesthetic / Microtrend (pick up to 2)</Label>
       <AestheticPicker
         value={data.aesthetic}
@@ -704,7 +809,15 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getEraPromptHint(data.era)]} />
+      <PromptInjectionPreview hints={[data.preText, getEraPromptHint(data.era), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="era"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. late summer"
+        postPlaceholder="e.g. with VHS grain"
+        onChange={onUpdate}
+      />
       <Label>Era / Period</Label>
       <EraPicker
         value={data.era || "1990s-mall"}
@@ -847,7 +960,15 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildTemporalHints(data)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildTemporalHints(data), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="temporal"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. ramping"
+        postPlaceholder="e.g. with strobing flicker"
+        onChange={onUpdate}
+      />
       <Label>Temporal</Label>
       <TemporalPicker
         value={{
@@ -886,7 +1007,15 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[buildMaterialHints(data.material)]} />
+      <PromptInjectionPreview hints={[data.preText, buildMaterialHints(data.material), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="material"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. weather-beaten"
+        postPlaceholder="e.g. with hairline cracks"
+        onChange={onUpdate}
+      />
       <Label>Material (pick up to 2)</Label>
       <MaterialPicker
         value={data.material}
@@ -904,7 +1033,15 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[hint]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="animal"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. mid-leap"
+        postPlaceholder="e.g. with fur catching the light"
+        onChange={onUpdate}
+      />
       <Label>Animal</Label>
       <AnimalPicker
         value={data.animal || "dog-golden-retriever"}
@@ -921,7 +1058,15 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[hint]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="vehicle"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. matte-black"
+        postPlaceholder="e.g. with tire smoke"
+        onChange={onUpdate}
+      />
       <Label>Vehicle</Label>
       <VehiclePicker
         value={data.vehicle || "sedan"}
@@ -938,7 +1083,15 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[hint]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="weapon"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. battle-worn"
+        postPlaceholder="e.g. blood-stained"
+        onChange={onUpdate}
+      />
       <Label>Weapon</Label>
       <WeaponPicker
         value={data.weapon || "katana"}
@@ -953,7 +1106,15 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getPhotoGenrePromptHint(data.photoGenre)]} />
+      <PromptInjectionPreview hints={[data.preText, getPhotoGenrePromptHint(data.photoGenre), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="photo-genre"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. mid-action"
+        postPlaceholder="e.g. behind-the-scenes feel"
+        onChange={onUpdate}
+      />
       <Label>Photo Genre</Label>
       <PhotoGenrePicker
         value={data.photoGenre || "fashion-editorial"}
@@ -968,7 +1129,15 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getBackdropPromptHint(data.backdrop)]} />
+      <PromptInjectionPreview hints={[data.preText, getBackdropPromptHint(data.backdrop), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="backdrop"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. softly lit"
+        postPlaceholder="e.g. with subtle vignette"
+        onChange={onUpdate}
+      />
       <Label>Backdrop</Label>
       <BackdropPicker
         value={data.backdrop || "white-seamless"}
@@ -983,7 +1152,15 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildHeldPropHints(data.heldProp)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildHeldPropHints(data.heldProp), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="held-prop"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. clutched tightly"
+        postPlaceholder="e.g. with knuckles white"
+        onChange={onUpdate}
+      />
       <Label>Held Prop (pick up to 2)</Label>
       <HeldPropPicker
         value={data.heldProp}
@@ -999,7 +1176,15 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildExposureHints(data)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildExposureHints(data), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="exposure-settings"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. push +1 stop"
+        postPlaceholder="e.g. with halation"
+        onChange={onUpdate}
+      />
       <Label>Exposure Settings</Label>
       <ExposureSettingsPicker
         value={{ aperture: data.aperture, shutterSpeed: data.shutterSpeed, isoValue: data.isoValue }}
@@ -1014,7 +1199,15 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getRenderQualityPromptHint(data.renderQuality)]} />
+      <PromptInjectionPreview hints={[data.preText, getRenderQualityPromptHint(data.renderQuality), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="render-quality"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. early ray-traced"
+        postPlaceholder="e.g. with lens caustics"
+        onChange={onUpdate}
+      />
       <Label>Render Quality</Label>
       <RenderQualityPicker
         value={data.renderQuality || "raytracing"}
@@ -1029,7 +1222,15 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[getCompositionEffectPromptHint(data.compositionEffect)]} />
+      <PromptInjectionPreview hints={[data.preText, getCompositionEffectPromptHint(data.compositionEffect), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="composition-effects"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. subtle"
+        postPlaceholder="e.g. layered"
+        onChange={onUpdate}
+      />
       <Label>Composition Effect</Label>
       <CompositionEffectsPicker
         value={data.compositionEffect || "bursting-through-frame"}
@@ -1044,7 +1245,15 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={buildPostProcessHints(data.postProcess)} />
+      <PromptInjectionPreview hints={[data.preText, ...buildPostProcessHints(data.postProcess), data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="post-process-effects"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. light dose"
+        postPlaceholder="e.g. plus subtle film grain"
+        onChange={onUpdate}
+      />
       <Label>Post-Process Effect (pick up to 2)</Label>
       <PostProcessEffectsPicker
         value={data.postProcess}

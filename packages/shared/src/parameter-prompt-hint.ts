@@ -75,6 +75,21 @@ function asStr(v: unknown): string {
   return typeof v === "string" ? v : ""
 }
 
+/** Compose `[preText, mainHint, postText]` into a comma-joined string,
+ *  honoring the user's free-text fragments around the structured hint.
+ *  Helpers like `getStylePromptHint` that already include preText/postText
+ *  composition (build*Hints in mood/person/etc.) bypass this — they
+ *  return the fully-composed string directly. */
+function withCustomText(data: Record<string, unknown>, mainHint: string): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+  if (mainHint) fragments.push(mainHint)
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+  return fragments.join(", ")
+}
+
 /**
  * Dispatch by parameter-node type to its prompt-hint string. For camera-motion,
  * pass `ctx` to include the composed start/end clauses; otherwise only the
@@ -109,15 +124,19 @@ export function getParameterPromptHint(
 
   switch (node.type) {
     case "framing":
-      return buildFramingHints(data).join(", ")
+      return withCustomText(data, buildFramingHints(data).join(", "))
     case "lighting":
-      return buildLightingHints(data).join(", ")
+      return withCustomText(data, buildLightingHints(data).join(", "))
     case "lens":
-      return getLensPromptHint(asStr(data.lens))
+      return withCustomText(data, getLensPromptHint(asStr(data.lens)))
     case "camera-format":
-      return getCameraFormatPromptHint(asStr(data.cameraFormat))
+      return withCustomText(data, getCameraFormatPromptHint(asStr(data.cameraFormat)))
     case "color-look":
-      return getColorLookPromptHint(asStr(data.colorLook))
+      return withCustomText(data, getColorLookPromptHint(asStr(data.colorLook)))
+
+    // build*Hints in music-* / voice-* / mood / person / etc. compose
+    // preText/postText internally — bypass the wrapper to avoid double-
+    // composition.
     case "music-genre":
       return buildMusicGenreHints((data ?? {}) as Parameters<typeof buildMusicGenreHints>[0])
     case "music-mood":
@@ -128,60 +147,71 @@ export function getParameterPromptHint(
       return buildVoiceCharacterHints((data ?? {}) as Parameters<typeof buildVoiceCharacterHints>[0])
     case "voice-delivery":
       return buildVoiceDeliveryHints((data ?? {}) as Parameters<typeof buildVoiceDeliveryHints>[0])
-    case "atmosphere":
-      return buildAtmosphereHints(data.atmosphere).join(", ")
-    case "action-fx":
-      return buildActionFxHints(data.actionFx).join(", ")
-    case "style":
-      return getStylePromptHint(asStr(data.style))
-    case "setting":
-      return getSettingPromptHint(asStr(data.setting))
-    case "loop-subject":
-      return getLoopSubjectPromptHint(asStr(data.loopSubject))
-    case "material":
-      return buildMaterialHints(data.material)
-    case "animal": {
-      const animal = getAnimal(asStr(data.animal))
-      return animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : ""
-    }
-    case "vehicle": {
-      const vehicle = getVehicle(asStr(data.vehicle))
-      return vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : ""
-    }
-    case "weapon": {
-      const weapon = getWeapon(asStr(data.weapon))
-      return weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : ""
-    }
-    case "photo-genre":
-      return getPhotoGenrePromptHint(asStr(data.photoGenre))
-    case "backdrop":
-      return getBackdropPromptHint(asStr(data.backdrop))
-    case "held-prop":
-      return buildHeldPropHints(data.heldProp).join(", ")
     case "person":
       return buildPersonHints(data).join(", ")
     case "mood":
       return buildMoodHints(data).join(", ")
-    case "photographer":
-      return buildPhotographerHints(data.photographer)
-    case "aesthetic":
-      return buildAestheticHints(data.aesthetic)
-    case "era":
-      return getEraPromptHint(asStr(data.era))
     case "pose":
       return buildPoseHints(data).join(", ")
     case "styling":
       return buildStylingHints(data).join(", ")
+
+    case "atmosphere":
+      return withCustomText(data, buildAtmosphereHints(data.atmosphere).join(", "))
+    case "action-fx":
+      return withCustomText(data, buildActionFxHints(data.actionFx).join(", "))
+    case "style":
+      return withCustomText(data, getStylePromptHint(asStr(data.style)))
+    case "setting":
+      return withCustomText(data, getSettingPromptHint(asStr(data.setting)))
+    case "loop-subject":
+      return withCustomText(data, getLoopSubjectPromptHint(asStr(data.loopSubject)))
+    case "material":
+      return withCustomText(data, buildMaterialHints(data.material))
+    case "animal": {
+      const animal = getAnimal(asStr(data.animal))
+      return withCustomText(
+        data,
+        animal ? `featuring a ${animal.label.toLowerCase()}, ${animal.description}` : "",
+      )
+    }
+    case "vehicle": {
+      const vehicle = getVehicle(asStr(data.vehicle))
+      return withCustomText(
+        data,
+        vehicle ? `featuring a ${vehicle.label.toLowerCase()}, ${vehicle.description}` : "",
+      )
+    }
+    case "weapon": {
+      const weapon = getWeapon(asStr(data.weapon))
+      return withCustomText(
+        data,
+        weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : "",
+      )
+    }
+    case "photo-genre":
+      return withCustomText(data, getPhotoGenrePromptHint(asStr(data.photoGenre)))
+    case "backdrop":
+      return withCustomText(data, getBackdropPromptHint(asStr(data.backdrop)))
+    case "held-prop":
+      return withCustomText(data, buildHeldPropHints(data.heldProp).join(", "))
+    case "photographer":
+      return withCustomText(data, buildPhotographerHints(data.photographer))
+    case "aesthetic":
+      return withCustomText(data, buildAestheticHints(data.aesthetic))
+    case "era":
+      return withCustomText(data, getEraPromptHint(asStr(data.era)))
     case "temporal":
-      return buildTemporalHints(data).join(", ")
+      return withCustomText(data, buildTemporalHints(data).join(", "))
     case "exposure-settings":
-      return buildExposureHints(data).join(", ")
+      return withCustomText(data, buildExposureHints(data).join(", "))
     case "render-quality":
-      return getRenderQualityPromptHint(asStr(data.renderQuality))
+      return withCustomText(data, getRenderQualityPromptHint(asStr(data.renderQuality)))
     case "composition-effects":
-      return getCompositionEffectPromptHint(asStr(data.compositionEffect))
+      return withCustomText(data, getCompositionEffectPromptHint(asStr(data.compositionEffect)))
     case "post-process-effects":
-      return buildPostProcessHints(data.postProcess).join(", ")
+      return withCustomText(data, buildPostProcessHints(data.postProcess).join(", "))
+
     case "tone":
       return asStr(data.tone).trim()
     case "text-prompt":
