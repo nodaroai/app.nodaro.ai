@@ -55,9 +55,16 @@ import { PromptHelperButton } from "./prompt-helper-button"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
+import { ConnectedAudioSources } from "./connected-audio-sources"
+import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode } from "@nodaro/shared"
+import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+
+// Hoisted to avoid creating a fresh empty array on every render — preserves
+// referential equality so memoised children don't re-run.
+const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {
   const textSource = data.textSource || "connected"
@@ -171,7 +178,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToAudioData>) {
+export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToAudioData> & { nodeId?: string }) {
   const isSfx = data.provider === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
@@ -179,6 +186,14 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
 
   return (
     <div className="flex flex-col gap-3">
+      <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
+      <FinalAudioPromptPreview
+        consumerNodeId={nodeId}
+        consumerType="text-to-audio"
+        userPrompt={data.prompt}
+        nodes={nodes}
+        edges={edges ?? EMPTY_EDGES}
+      />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-audio" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
@@ -250,9 +265,19 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
-export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<SunoGenerateData>) {
+export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<SunoGenerateData> & { nodeId?: string }) {
   return (
     <div className="flex flex-col gap-3">
+      <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
+      <FinalAudioPromptPreview
+        consumerNodeId={nodeId}
+        consumerType="suno-generate"
+        userPrompt={data.prompt}
+        userStyle={data.style}
+        customMode={getEffectiveSunoCustomMode(data)}
+        nodes={nodes}
+        edges={edges ?? EMPTY_EDGES}
+      />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="suno-generate" currentPrompt={data.prompt || ""} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
           rows={3}
@@ -1347,10 +1372,18 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
   "eleven_multilingual_ttv_v2": "elevenlabs-multilingual",
 }
 
-export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VoiceDesignData>) {
+export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceDesignData> & { nodeId?: string }) {
   const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
   return (
     <div className="flex flex-col gap-3">
+      <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
+      <FinalAudioPromptPreview
+        consumerNodeId={nodeId}
+        consumerType="voice-design"
+        userVoiceDescription={data.voiceDescription}
+        nodes={nodes}
+        edges={edges ?? EMPTY_EDGES}
+      />
       <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Textarea
           rows={3}

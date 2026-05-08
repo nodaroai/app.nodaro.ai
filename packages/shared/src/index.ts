@@ -710,6 +710,77 @@ export {
 } from "./caption-styles.js"
 export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle } from "./caption-styles.js"
 
+// Sound parameter-node dimensions (music + voice pickers + backend hints)
+export {
+  MUSIC_GENRES,
+  MUSIC_ERAS,
+  getMusicGenre,
+  getMusicGenreLabel,
+  getMusicSubgenre,
+  getMusicEra,
+  buildMusicGenreHints,
+  MUSIC_GENRE_DEFAULT_DATA,
+} from "./music-genre.js"
+export type { MusicSubgenre, MusicGenre, MusicEra } from "./music-genre.js"
+
+export {
+  MUSIC_ENERGIES,
+  MUSIC_EMOTIONS,
+  MUSIC_VIBES,
+  getMusicEnergy,
+  getMusicEmotion,
+  getMusicVibe,
+  buildMusicMoodHints,
+  MUSIC_MOOD_DEFAULT_DATA,
+} from "./music-mood.js"
+export type { MusicMoodEntry } from "./music-mood.js"
+
+export {
+  INSTRUMENTS,
+  PRODUCTION_STYLES,
+  VOCAL_PRESENCE,
+  getInstrument,
+  getProductionStyle,
+  getVocalPresence,
+  buildInstrumentationHints,
+  INSTRUMENTATION_DEFAULT_DATA,
+} from "./instrumentation.js"
+export type { InstrumentationEntry } from "./instrumentation.js"
+
+export {
+  VOICE_AGES,
+  VOICE_GENDERS,
+  VOICE_ACCENTS,
+  VOICE_TIMBRES,
+  getVoiceAge,
+  getVoiceGender,
+  getVoiceAccent,
+  getVoiceTimbre,
+  buildVoiceCharacterHints,
+  VOICE_CHARACTER_DEFAULT_DATA,
+} from "./voice-character.js"
+export type { VoiceCharacterEntry } from "./voice-character.js"
+
+export {
+  VOICE_PACES,
+  VOICE_EMOTIONS,
+  VOICE_ARCHETYPES,
+  getVoicePace,
+  getVoiceEmotion,
+  getVoiceArchetype,
+  buildVoiceDeliveryHints,
+  VOICE_DELIVERY_DEFAULT_DATA,
+} from "./voice-delivery.js"
+export type { VoiceDeliveryEntry } from "./voice-delivery.js"
+
+export {
+  composeSoundHintFromConnections,
+  appendField,
+  truncateForField,
+  getEffectiveSunoCustomMode,
+} from "./sound-aggregator.js"
+export type { SoundConsumerType, SoundCompositionFields, SoundComposition } from "./sound-aggregator.js"
+
 // i18n
 export {
   LANGUAGES,

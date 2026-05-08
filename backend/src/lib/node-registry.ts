@@ -186,6 +186,12 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "face", label: "Face", category: "entity", description: "Reusable face reference.", outputType: "data" },
   { type: "object", label: "Object", category: "entity", description: "Reusable object reference.", outputType: "data" },
   { type: "location", label: "Location", category: "entity", description: "Reusable location reference.", outputType: "data" },
+
+  { type: "music-genre",     label: "Music Genre",     category: "parameter", description: "Pick a music genre (with optional subgenre and era). Emits a prompt-hint for Suno/MiniMax/Text-to-Audio.", outputType: "text" },
+  { type: "music-mood",      label: "Music Mood",      category: "parameter", description: "Pick energy + emotion + vibe for music generation.", outputType: "text" },
+  { type: "instrumentation", label: "Instrumentation", category: "parameter", description: "Pick instruments + production style + vocal presence. 'instrumental' vocal-presence flips MiniMax instrumental flag.", outputType: "text" },
+  { type: "voice-character", label: "Voice Character", category: "parameter", description: "Pick age + gender + accent + timbre for ElevenLabs Voice Design.", outputType: "text" },
+  { type: "voice-delivery",  label: "Voice Delivery",  category: "parameter", description: "Pick pace + emotion + archetype for ElevenLabs Voice Design.", outputType: "text" },
 ]
 
 /** Enrich descriptors with live credit costs from STATIC_CREDIT_COSTS. */

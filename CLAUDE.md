@@ -225,5 +225,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-08 (@nodaro/cli v0.1.0 — terminal CLI + standalone binaries + apps/single-node SDK additions)*
-*Version: 2.4.0*
+*Last updated: 2026-05-08 (Sound parameter nodes)*
+*Version: 2.5.0*

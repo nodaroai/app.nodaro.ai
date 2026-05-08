@@ -10,6 +10,13 @@ import type {
 } from "@nodaro/shared"
 import type { ScraperActorId } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
+import {
+  MUSIC_GENRE_DEFAULT_DATA,
+  MUSIC_MOOD_DEFAULT_DATA,
+  INSTRUMENTATION_DEFAULT_DATA,
+  VOICE_CHARACTER_DEFAULT_DATA,
+  VOICE_DELIVERY_DEFAULT_DATA,
+} from "@nodaro/shared"
 import type { ExposableField, ExposableOutput } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { IdentityMeta } from "@nodaro/shared"
@@ -462,6 +469,65 @@ export interface LoopSubjectData {
   label: string
   /** Subject id from LOOP_SUBJECTS catalog (packages/shared/src/loop-subject.ts). */
   loopSubject: string
+}
+
+/** Standalone Music Genre parameter node data. Genre + optional subgenre + era
+ *  picks from `packages/shared/src/music-genre.ts`. Emits a music-prompt hint
+ *  (e.g. "synthwave with neo-disco influence, 80s") for Suno / MiniMax /
+ *  Text-to-Audio generators. */
+export type MusicGenreData = {
+  [key: string]: unknown
+  label: string
+  genre?: string
+  subgenre?: string
+  era?: string
+}
+
+/** Standalone Music Mood parameter node data. Energy + emotion + vibe picks
+ *  from `packages/shared/src/music-mood.ts`. Emits a music-prompt hint
+ *  (e.g. "high-energy, euphoric, anthemic") for music generators. */
+export type MusicMoodData = {
+  [key: string]: unknown
+  label: string
+  energy?: string
+  emotion?: string
+  vibe?: string
+}
+
+/** Standalone Instrumentation parameter node data. Multi-pick instruments +
+ *  production style + vocal-presence picks from
+ *  `packages/shared/src/instrumentation.ts`. Vocal-presence "instrumental"
+ *  also flips the MiniMax `instrumental` flag at runtime. */
+export type InstrumentationData = {
+  [key: string]: unknown
+  label: string
+  instruments?: string[]
+  production?: string
+  vocalPresence?: string
+}
+
+/** Standalone Voice Character parameter node data. Age + gender + accent +
+ *  timbre picks from `packages/shared/src/voice-character.ts`. Emits a
+ *  voice-description hint that drives ElevenLabs `voice_description` and
+ *  TTS provider voice selection. */
+export type VoiceCharacterData = {
+  [key: string]: unknown
+  label: string
+  age?: string
+  gender?: string
+  accent?: string
+  timbre?: string
+}
+
+/** Standalone Voice Delivery parameter node data. Pace + emotion + archetype
+ *  picks from `packages/shared/src/voice-delivery.ts`. Pairs with Voice
+ *  Character to shape the speaking style hint passed to TTS / dubbing. */
+export type VoiceDeliveryData = {
+  [key: string]: unknown
+  label: string
+  pace?: string
+  emotion?: string
+  archetype?: string
 }
 
 /** Standalone Person parameter node data. Subject-appearance compound hint
@@ -3266,6 +3332,11 @@ export type SceneNodeData =
   | ScheduleTriggerData
   | TelegramTriggerData
   | SocialPostData
+  | MusicGenreData
+  | MusicMoodData
+  | InstrumentationData
+  | VoiceCharacterData
+  | VoiceDeliveryData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -3414,6 +3485,11 @@ export type SceneNodeType =
   | "telegram-post"
   | "telegram-trigger"
   | "component"
+  | "music-genre"
+  | "music-mood"
+  | "instrumentation"
+  | "voice-character"
+  | "voice-delivery"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -3706,6 +3782,51 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Loop Subject", loopSubject: "tunnel" },
+  },
+  {
+    type: "music-genre",
+    label: "Music Genre",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Music Genre", ...MUSIC_GENRE_DEFAULT_DATA } as MusicGenreData,
+  },
+  {
+    type: "music-mood",
+    label: "Music Mood",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Music Mood", ...MUSIC_MOOD_DEFAULT_DATA } as MusicMoodData,
+  },
+  {
+    type: "instrumentation",
+    label: "Instrumentation",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Instrumentation", ...INSTRUMENTATION_DEFAULT_DATA } as InstrumentationData,
+  },
+  {
+    type: "voice-character",
+    label: "Voice Character",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Voice Character", ...VOICE_CHARACTER_DEFAULT_DATA } as VoiceCharacterData,
+  },
+  {
+    type: "voice-delivery",
+    label: "Voice Delivery",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Voice Delivery", ...VOICE_DELIVERY_DEFAULT_DATA } as VoiceDeliveryData,
   },
   {
     type: "person",

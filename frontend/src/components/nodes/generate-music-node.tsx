@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid } from "lucide-react"
+import { Music, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Sparkles } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
@@ -81,6 +81,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "ref-audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
         { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px', left: 'auto' }, hideHandle: true },
       ]}
     >
@@ -144,6 +145,7 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 50px)" />
     <HandleIcon icon={<Volume2 />} color="pink" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Sparkles />} color="indigo" side="left" top="calc(100% - 80px)" label="Audio style" />
     <HandleIcon icon={<Music />} color="pink" side="right" top="20px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

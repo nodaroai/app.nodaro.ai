@@ -175,6 +175,11 @@ import {
   XPostConfig,
   FacebookPostConfig,
   TelegramPostConfig,
+  MusicGenreConfig,
+  MusicMoodConfig,
+  InstrumentationConfig,
+  VoiceCharacterConfig,
+  VoiceDeliveryConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -198,6 +203,11 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "aspect-ratio": "Aspect Ratio",
   "motion": "Motion",
   "camera-motion": "Camera Motion",
+  "music-genre": "Music Genre",
+  "music-mood": "Music Mood",
+  "instrumentation": "Instrumentation",
+  "voice-character": "Voice Character",
+  "voice-delivery": "Voice Delivery",
   "framing": "Framing",
   "lens": "Lens",
   "camera-format": "Camera / Film Stock",
@@ -399,6 +409,11 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "aspect-ratio": return <AspectRatioConfig {...configProps} />
     case "motion": return <MotionConfig {...configProps} />
     case "camera-motion": return <CameraMotionConfig {...configProps} nodeId={selectedNodeId} />
+    case "music-genre": return <MusicGenreConfig {...configProps} />
+    case "music-mood": return <MusicMoodConfig {...configProps} />
+    case "instrumentation": return <InstrumentationConfig {...configProps} />
+    case "voice-character": return <VoiceCharacterConfig {...configProps} />
+    case "voice-delivery": return <VoiceDeliveryConfig {...configProps} />
     case "framing": return <FramingConfig {...configProps} />
     case "lens": return <LensConfig {...configProps} />
     case "camera-format": return <CameraFormatConfig {...configProps} />
@@ -450,16 +465,16 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     )
     case "text-to-speech": return <TextToSpeechConfig {...configProps} />
     case "qa-check": return <QACheckConfig {...configProps} />
-    case "generate-music": return <GenerateMusicConfig {...configProps} />
-    case "text-to-audio": return <TextToAudioConfig {...configProps} />
+    case "generate-music": return <GenerateMusicConfig {...configProps} nodeId={selectedNodeId} />
+    case "text-to-audio": return <TextToAudioConfig {...configProps} nodeId={selectedNodeId} />
     case "audio-isolation": return <AudioIsolationConfig {...configProps} />
     case "text-to-dialogue": return <TextToDialogueConfig {...configProps} />
     case "voice-changer": return <VoiceChangerConfig {...configProps} />
     case "dubbing": return <DubbingConfig {...configProps} />
     case "voice-remix": return <VoiceRemixConfig {...configProps} />
-    case "voice-design": return <VoiceDesignConfig {...configProps} />
+    case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />
     case "forced-alignment": return <ForcedAlignmentConfig {...configProps} />
-    case "suno-generate": return <SunoGenerateConfig {...configProps} />
+    case "suno-generate": return <SunoGenerateConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-cover": return <SunoCoverConfig {...configProps} />
     case "suno-extend": return <SunoExtendConfig {...configProps} />
     case "suno-lyrics": return <SunoLyricsConfig {...configProps} />

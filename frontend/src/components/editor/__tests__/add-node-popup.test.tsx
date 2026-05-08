@@ -31,6 +31,7 @@ vi.mock("lucide-react", () => {
     PawPrint: I, Car: I, Swords: I,
     Camera: I, Hourglass: I, Cpu: I, LayoutDashboard: I, HandMetal: I,
     Zap: I,
+    Activity: I, Piano: I, User: I, MessageCircle: I,
   }
 })
 
@@ -153,6 +154,17 @@ describe("NODE_OPTIONS", () => {
     expect(assetTypes).toContain("scene")
   })
 
+  it("contains expected Sound nodes", () => {
+    const soundTypes = NODE_OPTIONS
+      .filter((o) => o.category === "Sound")
+      .map((o) => o.type)
+    expect(soundTypes).toContain("music-genre")
+    expect(soundTypes).toContain("music-mood")
+    expect(soundTypes).toContain("instrumentation")
+    expect(soundTypes).toContain("voice-character")
+    expect(soundTypes).toContain("voice-delivery")
+  })
+
   it("every label is non-empty and under 30 characters", () => {
     for (const opt of NODE_OPTIONS) {
       expect(opt.label.length).toBeGreaterThan(0)
@@ -184,6 +196,7 @@ describe("CATEGORIES", () => {
     expect(ids).toContain("Processing")
     expect(ids).toContain("Assets")
     expect(ids).toContain("Output")
+    expect(ids).toContain("Sound")
   })
 
   it("every category has id, label, icon, and description", () => {

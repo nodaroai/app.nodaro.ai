@@ -14,12 +14,18 @@ import {
 } from "@/components/ui/select"
 import { CachedImage } from "@/components/ui/cached-image"
 import { uploadAudio, downloadYouTubeAudio } from "@/lib/api"
-import type { GenerateMusicData } from "@/types/nodes"
+import type { GenerateMusicData, WorkflowEdge } from "@/types/nodes"
 import { MappableField } from "./mappable-field"
 import { PromptHelperButton } from "./prompt-helper-button"
+import { ConnectedAudioSources } from "./connected-audio-sources"
+import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import type { ConfigProps } from "./types"
 
-export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<GenerateMusicData>) {
+// Hoisted to avoid creating a fresh empty array on every render — preserves
+// referential equality so memoised children don't re-run.
+const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
+
+export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeId }: ConfigProps<GenerateMusicData> & { nodeId?: string }) {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle")
   const [ytStatus, setYtStatus] = useState<"idle" | "downloading" | "error">("idle")
 
@@ -54,6 +60,14 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
 
   return (
     <div className="flex flex-col gap-3">
+      <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
+      <FinalAudioPromptPreview
+        consumerNodeId={nodeId}
+        consumerType="generate-music"
+        userPrompt={data.prompt}
+        nodes={nodes}
+        edges={edges ?? EMPTY_EDGES}
+      />
       <div>
         <Label>Provider</Label>
         <Select

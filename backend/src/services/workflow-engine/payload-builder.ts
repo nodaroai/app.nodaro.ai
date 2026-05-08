@@ -13,6 +13,14 @@ import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
+import {
+  composeSoundHintFromConnections,
+  truncateForField,
+  appendField,
+  getEffectiveSunoCustomMode,
+  type SoundConsumerType,
+  type SoundComposition,
+} from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import type { CharacterDef, SceneData } from "@nodaro/shared"
@@ -425,6 +433,34 @@ function collectCinematographyHints(
     if (hint) hints.push(hint)
   }
   return hints
+}
+
+/**
+ * Audio-style aggregator. Mirror of the frontend `collectAudioStyleHints` —
+ * delegates to the shared composer so the canvas preview and orchestrator
+ * runs produce byte-identical prompt enrichment for the 4 audio consumers
+ * (suno-generate, generate-music, voice-design, text-to-audio).
+ */
+function collectAudioStyleHints(
+  consumerNode: SimpleNode,
+  consumerType: SoundConsumerType,
+  ctx: PayloadBuildContext | undefined,
+): SoundComposition {
+  const allNodes = ctx?.nodes ?? []
+  const allEdges = ctx?.edges ?? []
+  return composeSoundHintFromConnections(
+    { id: consumerNode.id, type: consumerNode.type, data: consumerNode.data },
+    consumerType,
+    {
+      nodes: allNodes.map((n) => ({ id: n.id, type: n.type, data: n.data })),
+      edges: allEdges.map((e) => ({
+        source: e.source,
+        target: e.target,
+        sourceHandle: e.sourceHandle ?? null,
+        targetHandle: e.targetHandle ?? null,
+      })),
+    },
+  )
 }
 
 /**
@@ -1308,18 +1344,26 @@ export function buildPayload(
 
     case "generate-music": {
       const provider = (data.provider as string) ?? "musicgen"
+      const audioStyle = collectAudioStyleHints(node, "generate-music", buildCtx)
+      const userPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || ""
+      const composed = truncateForField(audioStyle.text, userPrompt, 2000)
+      const finalPrompt = appendField(userPrompt, composed)
+      // composeSoundHintFromConnections already gates fields.{genre,mood,instrumental}
+      // on consumer.data.provider === "minimax" — they're undefined for other
+      // providers, so a flat `data.x || audioStyle.fields.x` short-circuits
+      // correctly without an outer isMinimax ternary.
       return {
         jobName: "generate-music",
         queueName: "video-generation",
         modelIdentifier: "generate-music",
         payload: {
           jobId,
-          prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          prompt: finalPrompt,
           provider,
           duration: data.duration,
-          genre: data.genre,
-          mood: data.mood,
-          instrumental: data.instrumental,
+          genre: data.genre || audioStyle.fields.genre,
+          mood:  data.mood  || audioStyle.fields.mood,
+          instrumental: data.instrumental || audioStyle.fields.instrumental || false,
           lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
           referenceAudioUrl: resolvedInputs.audioUrl || data.referenceAudioUrl,
           // modelVersion is an optional Suno-family field (v4/v5/v4.5); forward
@@ -1332,9 +1376,16 @@ export function buildPayload(
 
     case "text-to-audio": {
       const t2aProvider = (data.provider as string) ?? "elevenlabs-sfx"
+      const audioStyle = collectAudioStyleHints(node, "text-to-audio", buildCtx)
+      const userPrompt = resolvedInputs.prompt
+        || resolveRefs(data.prompt as string | undefined, refMap)
+        || resolveRefs(data.text as string | undefined, refMap)
+        || ""
+      const composed = truncateForField(audioStyle.text, userPrompt, 2000)
+      const finalPrompt = appendField(userPrompt, composed)
       return simpleResult("text-to-audio", "elevenlabs-sfx", {
         jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.text as string | undefined, refMap),
+        prompt: finalPrompt,
         provider: t2aProvider,
         duration: data.duration,
         // Only send SFX-specific options for elevenlabs-sfx (matches frontend)
@@ -1395,11 +1446,15 @@ export function buildPayload(
         usageLogId,
       })
 
-    case "voice-design":
+    case "voice-design": {
+      const audioStyle = collectAudioStyleHints(node, "voice-design", buildCtx)
+      const userVoiceDesc = (data.voiceDescription as string | undefined) ?? ""
+      const composed = truncateForField(audioStyle.text, userVoiceDesc, 1000)
+      const finalVoiceDescription = appendField(userVoiceDesc, composed)
       return simpleResult("voice-design", "elevenlabs-voice-design", {
         jobId,
         text: resolvedInputs.prompt || resolveRefs(data.text as string | undefined, refMap),
-        voiceDescription: data.voiceDescription,
+        voiceDescription: finalVoiceDescription,
         model: data.model,
         loudness: data.loudness,
         guidanceScale: data.guidanceScale,
@@ -1408,6 +1463,7 @@ export function buildPayload(
         shouldEnhance: data.shouldEnhance,
         usageLogId,
       })
+    }
 
     case "forced-alignment":
       return simpleResult("forced-alignment", "elevenlabs-forced-alignment", {
@@ -1419,21 +1475,35 @@ export function buildPayload(
 
     // --- Suno ---
     case "suno-generate": {
-      const hasCustomFields = !!(data.style || data.title || data.lyrics)
       const sunoGenCreditId = (data.model as string) === "V5" ? "suno-v5" : "suno-generate"
+      const audioStyle = collectAudioStyleHints(node, "suno-generate", buildCtx)
+      const effectiveCustomMode = getEffectiveSunoCustomMode(data)
+      const userStyle = (data.style as string | undefined) ?? ""
+      const userPromptForSuno = resolvedInputs.prompt
+        || resolveRefs(data.prompt as string | undefined, refMap)
+        || ""
+      let finalStyle = userStyle
+      let finalSunoPrompt = userPromptForSuno
+      if (effectiveCustomMode) {
+        const composed = truncateForField(audioStyle.text, userStyle, 500)
+        finalStyle = appendField(userStyle, composed)
+      } else {
+        const composed = truncateForField(audioStyle.text, userPromptForSuno, 3000)
+        finalSunoPrompt = appendField(userPromptForSuno, composed)
+      }
       return simpleResult("suno-generate", sunoGenCreditId, {
         jobId,
-        prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+        prompt: finalSunoPrompt,
         model: data.model,
         lyrics: resolveRefs(data.lyrics as string | undefined, refMap),
-        style: data.style,
+        style: finalStyle,
         title: data.title,
         negativeStyle: data.negativeStyle,
         vocalGender: data.vocalGender,
         styleWeight: data.styleWeight,
         weirdnessConstraint: data.weirdnessConstraint,
         audioWeight: data.audioWeight,
-        customMode: data.customMode ?? hasCustomFields,
+        customMode: effectiveCustomMode,
         instrumental: data.instrumental ?? false,
         usageLogId,
       })

@@ -2,11 +2,12 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Volume2, Loader2, AlertCircle, Type, LayoutGrid } from "lucide-react"
+import { Volume2, Loader2, AlertCircle, Type, LayoutGrid, Sparkles } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -79,6 +80,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -146,6 +148,8 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
     >
       <Type className="w-3.5 h-3.5 text-white" />
     </div>
+    {/* Audio style input handle icon */}
+    <HandleIcon icon={<Sparkles />} color="indigo" side="left" top="calc(100% - 50px)" label="Audio style" />
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
