@@ -474,13 +474,16 @@ export interface LoopSubjectData {
 /** Standalone Music Genre parameter node data. Genre + optional subgenre + era
  *  picks from `packages/shared/src/music-genre.ts`. Emits a music-prompt hint
  *  (e.g. "synthwave with neo-disco influence, 80s") for Suno / MiniMax /
- *  Text-to-Audio generators.
- *  `genre` is `string` for a single pick or `ReadonlyArray<string>` for a
- *  multi-pick (up to 3 genres). Subgenre is meaningful only for single-pick
- *  mode and is ignored when `genre` is an array. */
+ *  Text-to-Audio generators. `preText`/`postText` are user free-text fragments
+ *  composed before / after the structured hint. `genre` is `string` for a
+ *  single pick or `ReadonlyArray<string>` for a multi-pick (up to 3 genres).
+ *  Subgenre is meaningful only for single-pick mode and is ignored when
+ *  `genre` is an array. */
 export type MusicGenreData = {
   [key: string]: unknown
   label: string
+  preText?: string
+  postText?: string
   genre?: string | ReadonlyArray<string>
   subgenre?: string
   era?: string
@@ -488,10 +491,14 @@ export type MusicGenreData = {
 
 /** Standalone Music Mood parameter node data. Energy + emotion + vibe picks
  *  from `packages/shared/src/music-mood.ts`. Emits a music-prompt hint
- *  (e.g. "high-energy, euphoric, anthemic") for music generators. */
+ *  (e.g. "high-energy, euphoric, anthemic") for music generators.
+ *  `preText`/`postText` are user free-text fragments composed before / after
+ *  the structured hint. */
 export type MusicMoodData = {
   [key: string]: unknown
   label: string
+  preText?: string
+  postText?: string
   energy?: string
   emotion?: string
   vibe?: string
@@ -501,10 +508,14 @@ export type MusicMoodData = {
  *  production style + vocal-presence + singing-style picks from
  *  `packages/shared/src/instrumentation.ts`. Vocal-presence "instrumental"
  *  also flips the MiniMax `instrumental` flag at runtime. Vocal-presence
- *  and singing-style are multi-pick (up to 3 each). */
+ *  and singing-style are multi-pick (up to 3 each). `preText`/`postText`
+ *  are user free-text fragments composed before / after the structured
+ *  hint. */
 export type InstrumentationData = {
   [key: string]: unknown
   label: string
+  preText?: string
+  postText?: string
   instruments?: string[]
   production?: string
   vocalPresence?: string | ReadonlyArray<string>
@@ -515,10 +526,13 @@ export type InstrumentationData = {
  *  accent + timbre picks from `packages/shared/src/voice-character.ts`. Emits a
  *  voice-description hint that drives ElevenLabs `voice_description` and
  *  TTS provider voice selection. `language` is multi-pick (up to 3) for
- *  codeswitching / multilingual voice work. */
+ *  codeswitching / multilingual voice work. `preText`/`postText` are user
+ *  free-text fragments composed before / after the structured hint. */
 export type VoiceCharacterData = {
   [key: string]: unknown
   label: string
+  preText?: string
+  postText?: string
   age?: string
   gender?: string
   language?: string | ReadonlyArray<string>
@@ -528,10 +542,14 @@ export type VoiceCharacterData = {
 
 /** Standalone Voice Delivery parameter node data. Pace + emotion + archetype
  *  picks from `packages/shared/src/voice-delivery.ts`. Pairs with Voice
- *  Character to shape the speaking style hint passed to TTS / dubbing. */
+ *  Character to shape the speaking style hint passed to TTS / dubbing.
+ *  `preText`/`postText` are user free-text fragments composed before / after
+ *  the structured hint. */
 export type VoiceDeliveryData = {
   [key: string]: unknown
   label: string
+  preText?: string
+  postText?: string
   pace?: string
   emotion?: string
   archetype?: string

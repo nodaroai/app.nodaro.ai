@@ -105,10 +105,16 @@ export function getVoiceArchetype(id: string | undefined) { return id ? ARCHETYP
  *   { pace }                     → "measured pace"
  */
 export function buildVoiceDeliveryHints(data: {
+  readonly preText?: string
+  readonly postText?: string
   readonly pace?: string
   readonly emotion?: string
   readonly archetype?: string
 }): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
   const pace = getVoicePace(data.pace)
   const emotion = getVoiceEmotion(data.emotion)
   const archetype = getVoiceArchetype(data.archetype)
@@ -120,10 +126,17 @@ export function buildVoiceDeliveryHints(data: {
 
   const emotionClause = emotion ? `${emotion.promptHint} tone` : ""
 
-  if (deliveryClause && emotionClause) return `${deliveryClause}, ${emotionClause}`
-  return deliveryClause || emotionClause
+  let main = ""
+  if (deliveryClause && emotionClause) main = `${deliveryClause}, ${emotionClause}`
+  else main = deliveryClause || emotionClause
+  if (main) fragments.push(main)
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
 }
 
 export const VOICE_DELIVERY_DEFAULT_DATA: {
-  pace?: string; emotion?: string; archetype?: string
+  preText?: string; postText?: string; pace?: string; emotion?: string; archetype?: string
 } = {}
