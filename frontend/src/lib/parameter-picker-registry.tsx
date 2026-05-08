@@ -49,8 +49,8 @@ import { EXPOSURE_SETTINGS } from "@nodaro/shared"
 import {
   MUSIC_GENRES, MUSIC_ERAS,
   MUSIC_ENERGIES, MUSIC_EMOTIONS, MUSIC_VIBES,
-  INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE,
-  VOICE_AGES, VOICE_GENDERS, VOICE_ACCENTS, VOICE_TIMBRES,
+  INSTRUMENTS, PRODUCTION_STYLES, VOCAL_PRESENCE, SINGING_STYLES,
+  VOICE_AGES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_ACCENTS, VOICE_TIMBRES,
   VOICE_PACES, VOICE_EMOTIONS, VOICE_ARCHETYPES,
 } from "@nodaro/shared"
 
@@ -522,12 +522,13 @@ const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     kind: "multi",
     nodeType: "instrumentation",
     label: "Instrumentation",
-    fields: ["instruments", "production", "vocalPresence"],
+    fields: ["instruments", "production", "vocalPresence", "singingStyle"],
     catalogId: "instrumentation",
     catalogEntries: [
       ...flatCat(INSTRUMENTS),
       ...flatCat(PRODUCTION_STYLES),
       ...flatCat(VOCAL_PRESENCE),
+      ...flatCat(SINGING_STYLES),
     ],
     Picker: erase(InstrumentationPicker),
   },
@@ -535,11 +536,12 @@ const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     kind: "multi",
     nodeType: "voice-character",
     label: "Voice Character",
-    fields: ["age", "gender", "accent", "timbre"],
+    fields: ["age", "gender", "language", "accent", "timbre"],
     catalogId: "voice-character",
     catalogEntries: [
       ...flatCat(VOICE_AGES),
       ...flatCat(VOICE_GENDERS),
+      ...flatCat(VOICE_LANGUAGES),
       ...flatCat(VOICE_ACCENTS),
       ...flatCat(VOICE_TIMBRES),
     ],

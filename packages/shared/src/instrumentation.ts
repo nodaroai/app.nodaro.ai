@@ -200,7 +200,7 @@ export const PRODUCTION_STYLES: ReadonlyArray<InstrumentationEntry> = [
 ] as const
 
 export const VOCAL_PRESENCE: ReadonlyArray<InstrumentationEntry> = [
-  { id: "instrumental",    label: "Instrumental",    description: "No vocals",                        promptHint: "instrumental, no vocals" },
+  { id: "instrumental",    label: "Instrumental",    description: "No vocals (exclusive)",            promptHint: "instrumental, no vocals" },
   { id: "male-lead",       label: "Male Lead",       description: "Male lead vocal",                  promptHint: "male lead vocals" },
   { id: "female-lead",     label: "Female Lead",     description: "Female lead vocal",                promptHint: "female lead vocals" },
   { id: "androgynous-lead",label: "Androgynous",     description: "Gender-neutral lead",              promptHint: "androgynous lead vocals" },
@@ -214,9 +214,42 @@ export const VOCAL_PRESENCE: ReadonlyArray<InstrumentationEntry> = [
   { id: "mixed",           label: "Mixed",           description: "Multiple lead vocalists",          promptHint: "mixed lead vocals" },
 ] as const
 
+/** "instrumental" is mutually exclusive with any other vocal presence —
+ *  picking it while others are selected clears the others, and picking
+ *  another while "instrumental" is selected clears it. */
+export const VOCAL_PRESENCE_INSTRUMENTAL_ID = "instrumental"
+
+export const SINGING_STYLES: ReadonlyArray<InstrumentationEntry> = [
+  { id: "pop-singing",      label: "Pop",             description: "Mainstream lead style",          promptHint: "pop singing" },
+  { id: "rock-singing",     label: "Rock",            description: "Rock-style vocal delivery",      promptHint: "rock singing" },
+  { id: "operatic",         label: "Operatic",        description: "Classical opera technique",      promptHint: "operatic singing" },
+  { id: "classical-vocals", label: "Classical",       description: "Trained classical voice",        promptHint: "classical vocals" },
+  { id: "rap",              label: "Rap",             description: "Rhythmic spoken delivery",       promptHint: "rap" },
+  { id: "trap-melodic",     label: "Trap (Melodic)",  description: "Melodic trap, autotuned",        promptHint: "melodic trap singing" },
+  { id: "growl",            label: "Growl",           description: "Death-metal-style growl",        promptHint: "growled vocals" },
+  { id: "scream",           label: "Scream",          description: "Hardcore / screamed",            promptHint: "screamed vocals" },
+  { id: "shout",            label: "Shout",           description: "Punk / chanted shout",           promptHint: "shouted vocals" },
+  { id: "falsetto",         label: "Falsetto",        description: "High register, light",           promptHint: "falsetto" },
+  { id: "head-voice",       label: "Head Voice",      description: "Resonant high register",         promptHint: "head voice" },
+  { id: "chest-voice",      label: "Chest Voice",     description: "Strong, low register",           promptHint: "chest voice" },
+  { id: "belting",          label: "Belting",         description: "Powerful sustained high",        promptHint: "belting" },
+  { id: "crooning",         label: "Crooning",        description: "Smooth vintage romantic",        promptHint: "crooning" },
+  { id: "scat",             label: "Scat",            description: "Improvised jazz syllables",      promptHint: "scat singing" },
+  { id: "yodeling",         label: "Yodeling",        description: "Alpine register-flip",           promptHint: "yodeling" },
+  { id: "throat-singing",   label: "Throat Singing",  description: "Mongolian / Tuvan overtone",     promptHint: "throat singing" },
+  { id: "melismatic",       label: "Melismatic",      description: "Multi-note runs per syllable",   promptHint: "melismatic" },
+  { id: "autotuned",        label: "Autotuned",       description: "Pitch-corrected, processed",     promptHint: "autotuned vocals" },
+  { id: "vocoded",          label: "Vocoded",         description: "Vocoder-processed vocals",       promptHint: "vocoded vocals" },
+  { id: "whisper-singing",  label: "Whisper Sing",    description: "Hushed, intimate singing",       promptHint: "whisper-singing" },
+  { id: "breathy-singing",  label: "Breathy",         description: "Airy, intimate singing",         promptHint: "breathy singing" },
+  { id: "harmonized",       label: "Harmonized",      description: "Multi-voice harmonies",          promptHint: "harmonized vocals" },
+  { id: "chant",            label: "Chant",           description: "Liturgical / monk chanting",     promptHint: "chanted vocals" },
+] as const
+
 const INSTRUMENT_BY_ID = new Map(INSTRUMENTS.map((x) => [x.id, x]))
 const PRODUCTION_BY_ID = new Map(PRODUCTION_STYLES.map((x) => [x.id, x]))
 const VOCAL_BY_ID = new Map(VOCAL_PRESENCE.map((x) => [x.id, x]))
+const SINGING_STYLE_BY_ID = new Map(SINGING_STYLES.map((x) => [x.id, x]))
 
 export function getInstrument(id: string | undefined): CategorizedInstrument | undefined {
   return id ? INSTRUMENT_BY_ID.get(id) : undefined
@@ -227,11 +260,17 @@ export function getProductionStyle(id: string | undefined): InstrumentationEntry
 export function getVocalPresence(id: string | undefined): InstrumentationEntry | undefined {
   return id ? VOCAL_BY_ID.get(id) : undefined
 }
+export function getSingingStyle(id: string | undefined): InstrumentationEntry | undefined {
+  return id ? SINGING_STYLE_BY_ID.get(id) : undefined
+}
+
+import { pickIds } from "./multi-pick.js"
 
 export function buildInstrumentationHints(data: {
   readonly instruments?: ReadonlyArray<string>
   readonly production?: string
-  readonly vocalPresence?: string
+  readonly vocalPresence?: string | ReadonlyArray<string>
+  readonly singingStyle?: string | ReadonlyArray<string>
 }): string {
   const segments: string[] = []
   const prod = getProductionStyle(data.production)
@@ -242,16 +281,37 @@ export function buildInstrumentationHints(data: {
     .filter((x): x is CategorizedInstrument => !!x)
   if (insts.length > 0) segments.push(insts.map((x) => x.promptHint).join(", "))
 
-  const vocal = getVocalPresence(data.vocalPresence)
-  if (vocal) {
-    if (segments.length > 0) {
-      return `${segments.join(" ")} with ${vocal.promptHint}`
-    }
-    return vocal.promptHint
+  const vocalIds = pickIds(data.vocalPresence)
+  const vocalHints = vocalIds
+    .map((id) => getVocalPresence(id)?.promptHint)
+    .filter((h): h is string => !!h)
+  const vocalClause = vocalHints.join(", ")
+
+  const styleIds = pickIds(data.singingStyle)
+  const styleHints = styleIds
+    .map((id) => getSingingStyle(id)?.promptHint)
+    .filter((h): h is string => !!h)
+  const styleClause = styleHints.join(", ")
+
+  // Compose: [production] [instruments] with [vocals] in [style].
+  const result: string[] = []
+  if (segments.length > 0) result.push(segments.join(" "))
+  if (vocalClause) {
+    result.push(result.length > 0 ? `with ${vocalClause}` : vocalClause)
   }
-  return segments.join(" ")
+  if (styleClause) {
+    result.push(result.length > 0 ? `in ${styleClause} style` : `${styleClause} style`)
+  }
+  return result.join(" ")
+}
+
+export function isInstrumentalVocal(value: unknown): boolean {
+  return pickIds(value).includes(VOCAL_PRESENCE_INSTRUMENTAL_ID)
 }
 
 export const INSTRUMENTATION_DEFAULT_DATA: {
-  instruments?: ReadonlyArray<string>; production?: string; vocalPresence?: string
+  instruments?: ReadonlyArray<string>
+  production?: string
+  vocalPresence?: string | ReadonlyArray<string>
+  singingStyle?: string | ReadonlyArray<string>
 } = { instruments: [] }
