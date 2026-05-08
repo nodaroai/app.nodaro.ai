@@ -1,12 +1,27 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, dim, table, type OutputOpts } from "../output.js"
+import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic } from "../util.js"
 import { watchExecution } from "./workflows.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
+}
+
+function rejectPositionalInputs(extras: string[], slug: string): void {
+  if (!extras || extras.length === 0) return
+  const looksLikeObject = extras[0].trim().startsWith("{")
+  if (looksLikeObject) {
+    warn(`Unexpected positional argument: ${JSON.stringify(extras[0])}`)
+    warn(`Pass inputs via --input flags or a JSON file:`)
+    warn(`  nodaro apps run ${slug} --input prompt="..."`)
+    warn(`  nodaro apps run ${slug} --params-file inputs.json`)
+  } else {
+    warn(`Unexpected positional argument(s): ${extras.map((e) => JSON.stringify(e)).join(" ")}`)
+    warn(`Did you forget --input? Try: nodaro apps run ${slug} --input prompt=...`)
+  }
+  process.exit(1)
 }
 
 export function appsCommand(): Command {
@@ -66,14 +81,22 @@ export function appsCommand(): Command {
     })
 
   cmd
-    .command("run <slug>")
-    .description("trigger an app run — pass inputs via --input k=v or --params-file f.json")
-    .option("--input <pairs...>", "key=value input pairs (repeat or space-separate)", collectVariadic)
-    .option("--params-file <path>", "JSON file with the inputs object (--input flags override)")
+    .command("run <slug> [extras...]")
+    .description("trigger an app run. Inputs go through --input k=v (repeat) or --params-file inputs.json")
+    .option("--input <pairs...>", "input value, repeat or space-separate (e.g. --input prompt=\"hi\" --input duration=8)", collectVariadic)
+    .option("--params-file <path>", "JSON file with the full inputs object (--input flags override matching keys)")
     .option("--watch", "follow the resulting execution until completion")
     .option("--profile <name>")
     .option("--json")
-    .action(async (slug: string, opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
+    .addHelpText("after", `
+Examples:
+  $ nodaro apps run hair-styler-dd3erw --input prompt="curly red hair" --watch
+  $ echo '{"prompt":"hi","duration":8}' > inputs.json
+  $ nodaro apps run hair-styler-dd3erw --params-file inputs.json --watch
+
+Tip: \`nodaro apps get <slug>\` shows the input schema for that app.`)
+    .action(async (slug: string, extras: string[], opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
+      rejectPositionalInputs(extras, slug)
       try {
         const client = buildClient(opts.profile)
         const inputs = resolveParams(opts.input, opts.paramsFile)
