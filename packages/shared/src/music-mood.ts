@@ -94,10 +94,16 @@ export function getMusicVibe(id: string | undefined): MusicMoodEntry | undefined
 }
 
 export function buildMusicMoodHints(data: {
+  readonly preText?: string
+  readonly postText?: string
   readonly energy?: string
   readonly emotion?: string
   readonly vibe?: string
 }): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
   const parts: string[] = []
   const e = getMusicEnergy(data.energy)
   if (e) parts.push(e.promptHint)
@@ -105,9 +111,14 @@ export function buildMusicMoodHints(data: {
   if (m) parts.push(m.promptHint)
   const v = getMusicVibe(data.vibe)
   if (v) parts.push(v.promptHint)
-  return parts.join(" ")
+  if (parts.length > 0) fragments.push(parts.join(" "))
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
 }
 
 export const MUSIC_MOOD_DEFAULT_DATA: {
-  energy?: string; emotion?: string; vibe?: string
+  preText?: string; postText?: string; energy?: string; emotion?: string; vibe?: string
 } = {}

@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useId } from "react"
-import type { I18nCatalogId } from "@nodaro/shared"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { MultiPickBadge } from "./multi-pick-ui"
@@ -13,7 +13,7 @@ export interface SoundDimensionEntry {
 }
 
 export interface SoundDimensionSectionProps {
-  /** Section heading shown next to the toggle checkbox. */
+  /** Section heading shown next to the toggle switch. */
   readonly label: string
   /** Tiles to render in the grid. */
   readonly entries: ReadonlyArray<SoundDimensionEntry>
@@ -25,14 +25,11 @@ export interface SoundDimensionSectionProps {
   readonly isMultiData?: boolean
   /** Section is "checked" (entries clickable). */
   readonly checked: boolean
-  /** Catalog used for i18n label / description resolution. */
   readonly resolveLabel: (id: string, englishLabel: string) => string
   readonly resolveDescription: (id: string, englishDescription: string) => string
   readonly onToggle: (next: boolean) => void
   readonly onPick: (id: string) => void
-  /** Promote single → multi (only invoked when maxSelected > 1). */
   readonly onActivateMulti?: (id: string) => void
-  /** Demote multi → single (only invoked when maxSelected > 1). */
   readonly onDemoteToSingle?: (id: string) => void
   /** Optional emoji / icon string rendered above the label. */
   readonly renderIcon?: (id: string) => React.ReactNode
@@ -41,16 +38,13 @@ export interface SoundDimensionSectionProps {
 /**
  * Reusable per-dimension section for sound-pickers (Music Genre, Music Mood,
  * Instrumentation, Voice Character, Voice Delivery). Mirrors the visual
- * language of ExposureSettingsPicker / StylingPicker: checkbox-toggleable
- * heading + 3-column tile grid, brand-pink (#ff0073) for selected.
+ * language of PersonPicker / StylingPicker: large branded headline + Switch
+ * toggle + 3-column tile grid + brand-pink (#ff0073) for selected, with a
+ * border-t divider between sections.
  *
  * Multi-pick mode (maxSelected > 1) reuses MultiPickBadge so the user can
  * promote a single pick to multi by tapping the `+` badge on the selected
  * tile, mirroring StylingPicker.
- *
- * Catalog-id is not required here — the parent picker resolves localized
- * label/description and passes the resolvers in (so the section stays a
- * pure presentational component).
  */
 export const SoundDimensionSection = memo(function SoundDimensionSection({
   label,
@@ -69,27 +63,34 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
 }: SoundDimensionSectionProps) {
   const id = useId()
   const multi = maxSelected > 1
-  const heading = multi ? `${label} (pick up to ${maxSelected})` : label
+  const switchId = `${id}-toggle`
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
-        <input
-          type="checkbox"
-          id={`${id}-toggle`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
+    <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <label
-          htmlFor={`${id}-toggle`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
         >
-          {heading}
+          {label}
+          {multi && checked && (
+            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
+              pick up to {maxSelected}
+            </span>
+          )}
         </label>
+        <Switch
+          id={switchId}
+          checked={checked}
+          onCheckedChange={(next) => onToggle(next)}
+          aria-label={`Enable ${label}`}
+        />
       </div>
       <div
         role={multi ? "group" : "radiogroup"}
-        aria-label={heading}
+        aria-label={label}
         className={cn(
           "grid grid-cols-3 gap-1.5 transition-opacity",
           !checked && "opacity-40",
@@ -109,7 +110,7 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
                 title={
                   checked
                     ? entryDescription
-                    : `${entryDescription} (click to enable ${label})`
+                    : `${entryDescription} (toggle on ${label} to pick)`
                 }
                 onClick={() => onPick(entry.id)}
                 className={cn(
@@ -144,12 +145,3 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
     </div>
   )
 })
-
-/** Catalog id constants re-exported for the sound picker family. */
-export const SOUND_CATALOG_IDS = {
-  musicGenre: "music-genre" as const,
-  musicMood: "music-mood" as const,
-  instrumentation: "instrumentation" as const,
-  voiceCharacter: "voice-character" as const,
-  voiceDelivery: "voice-delivery" as const,
-} satisfies Record<string, I18nCatalogId>

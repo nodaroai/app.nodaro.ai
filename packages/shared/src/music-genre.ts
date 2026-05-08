@@ -604,31 +604,37 @@ export function getMusicEra(id: string | undefined): MusicEra | undefined {
 }
 
 /**
- * Compose an adjective stack: [era] [subgenre|genre]. Examples:
- *   { genre: "electronic", subgenre: "outrun", era: "1980s" } → "1980s outrun synthwave"
- *   { genre: ["rock","jazz"], era: "1970s" }                  → "1970s rock / jazz"
+ * Compose hints from MusicGenreData: optional preText, structured
+ * [era] [subgenre|genre] (or " / "-joined genres for multi), optional
+ * postText. Returns array — caller joins with ", " (matches buildMoodHints
+ * / buildPersonHints pattern).
  *
  * Multi-genre (genre is an array): emit each genre's hint joined with " / "
  * — subgenre is ignored in multi-mode (subgenre is meaningful only against
- * a single chosen genre). Empty/unknown sub-fields are skipped. Returns ""
- * when nothing resolves.
+ * a single chosen genre).
  */
 export function buildMusicGenreHints(data: {
+  readonly preText?: string
+  readonly postText?: string
   readonly genre?: string | ReadonlyArray<string>
   readonly subgenre?: string
   readonly era?: string
 }): string {
+  const fragments: string[] = []
+
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
   const parts: string[] = []
   const era = getMusicEra(data.era)
   if (era) parts.push(era.promptHint)
 
   const genreIds = pickIds(data.genre)
   if (genreIds.length > 1) {
-    // Multi-genre: emit each as a comma/slash-separated stack, skip subgenre.
-    const hints = genreIds
+    const genreHints = genreIds
       .map((id) => getMusicGenre(id)?.promptHint)
       .filter((h): h is string => !!h)
-    if (hints.length > 0) parts.push(hints.join(" / "))
+    if (genreHints.length > 0) parts.push(genreHints.join(" / "))
   } else if (genreIds.length === 1) {
     const sub = getMusicSubgenre(genreIds[0], data.subgenre)
     if (sub) {
@@ -638,8 +644,19 @@ export function buildMusicGenreHints(data: {
       if (genre) parts.push(genre.promptHint)
     }
   }
-  return parts.join(" ")
+  if (parts.length > 0) fragments.push(parts.join(" "))
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
 }
 
 /** Default data when a music-genre node is dropped on canvas. Empty by design — forces a deliberate pick. */
-export const MUSIC_GENRE_DEFAULT_DATA: { genre?: string | ReadonlyArray<string>; subgenre?: string; era?: string } = {}
+export const MUSIC_GENRE_DEFAULT_DATA: {
+  preText?: string
+  postText?: string
+  genre?: string | ReadonlyArray<string>
+  subgenre?: string
+  era?: string
+} = {}

@@ -176,12 +176,18 @@ export function getVoiceTimbre(id: string | undefined) { return id ? TIMBRE_BY_I
  * for codeswitching / multilingual voices.
  */
 export function buildVoiceCharacterHints(data: {
+  readonly preText?: string
+  readonly postText?: string
   readonly age?: string
   readonly gender?: string
   readonly language?: string | ReadonlyArray<string>
   readonly accent?: string
   readonly timbre?: string
 }): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
   const age = getVoiceAge(data.age)
   const gender = getVoiceGender(data.gender)
   const accent = getVoiceAccent(data.accent)
@@ -207,12 +213,22 @@ export function buildVoiceCharacterHints(data: {
     core = traits.join(" and ")
   }
 
-  if (langClause && core) return `${langClause}-speaking ${core}`
-  if (langClause) return `${langClause} voice`
-  return core
+  let main = ""
+  if (langClause && core) main = `${langClause}-speaking ${core}`
+  else if (langClause) main = `${langClause} voice`
+  else main = core
+
+  if (main) fragments.push(main)
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
 }
 
 export const VOICE_CHARACTER_DEFAULT_DATA: {
+  preText?: string
+  postText?: string
   age?: string
   gender?: string
   language?: string | ReadonlyArray<string>

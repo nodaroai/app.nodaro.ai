@@ -267,11 +267,17 @@ export function getSingingStyle(id: string | undefined): InstrumentationEntry | 
 import { pickIds } from "./multi-pick.js"
 
 export function buildInstrumentationHints(data: {
+  readonly preText?: string
+  readonly postText?: string
   readonly instruments?: ReadonlyArray<string>
   readonly production?: string
   readonly vocalPresence?: string | ReadonlyArray<string>
   readonly singingStyle?: string | ReadonlyArray<string>
 }): string {
+  const fragments: string[] = []
+  const pre = typeof data.preText === "string" ? data.preText.trim() : ""
+  if (pre) fragments.push(pre)
+
   const segments: string[] = []
   const prod = getProductionStyle(data.production)
   if (prod) segments.push(prod.promptHint)
@@ -293,7 +299,6 @@ export function buildInstrumentationHints(data: {
     .filter((h): h is string => !!h)
   const styleClause = styleHints.join(", ")
 
-  // Compose: [production] [instruments] with [vocals] in [style].
   const result: string[] = []
   if (segments.length > 0) result.push(segments.join(" "))
   if (vocalClause) {
@@ -302,7 +307,12 @@ export function buildInstrumentationHints(data: {
   if (styleClause) {
     result.push(result.length > 0 ? `in ${styleClause} style` : `${styleClause} style`)
   }
-  return result.join(" ")
+  if (result.length > 0) fragments.push(result.join(" "))
+
+  const post = typeof data.postText === "string" ? data.postText.trim() : ""
+  if (post) fragments.push(post)
+
+  return fragments.join(", ")
 }
 
 export function isInstrumentalVocal(value: unknown): boolean {
@@ -310,6 +320,8 @@ export function isInstrumentalVocal(value: unknown): boolean {
 }
 
 export const INSTRUMENTATION_DEFAULT_DATA: {
+  preText?: string
+  postText?: string
   instruments?: ReadonlyArray<string>
   production?: string
   vocalPresence?: string | ReadonlyArray<string>

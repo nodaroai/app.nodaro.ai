@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useId, useMemo, useState } from "react"
+import { Switch } from "@/components/ui/switch"
 import { FitText } from "@/components/ui/fit-text"
 import { cn } from "@/lib/utils"
 import { MultiPickBadge } from "./multi-pick-ui"
@@ -33,10 +34,11 @@ export interface SoundTabbedSectionProps {
 }
 
 /**
- * Tabbed dimension section: horizontal tab row at the top filtering a tile
- * grid below. Mirrors PersonPicker.TabbedEntryGrid for sound dimensions
- * (genre by category, instruments by family). Pink dot indicator on tabs
- * with picks; numeric count badge in multi-mode.
+ * Tabbed dimension section: large branded headline + Switch toggle, then a
+ * horizontal tab row filtering a tile grid below. Mirrors PersonPicker's
+ * TabbedEntryGrid for sound dimensions (genre by category, instruments by
+ * family). Pink dot indicator on tabs with picks; numeric count badge in
+ * multi-mode.
  *
  * Search is handled by the parent — pass already-filtered entries; this
  * component does NOT filter further.
@@ -59,7 +61,7 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
 }: SoundTabbedSectionProps) {
   const id = useId()
   const multi = maxSelected > 1
-  const heading = multi ? `${label} (pick up to ${maxSelected})` : label
+  const switchId = `${id}-toggle`
 
   const { visibleGroups, byGroup } = useMemo(() => {
     const map = new Map<string, TabbedEntry[]>()
@@ -95,21 +97,28 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
   const activeEntries = byGroup.get(effectiveActive) ?? []
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2 px-0.5">
-        <input
-          type="checkbox"
-          id={`${id}-toggle`}
-          checked={checked}
-          onChange={(e) => onToggle(e.target.checked)}
-          className="rounded border-muted-foreground/40"
-        />
+    <div className="flex flex-col gap-2 border-t-[3px] border-border/40">
+      <div className="flex items-center justify-between gap-2 px-0.5 mt-5">
         <label
-          htmlFor={`${id}-toggle`}
-          className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground select-none cursor-pointer"
+          htmlFor={switchId}
+          className={cn(
+            "text-[18px] font-semibold uppercase tracking-wide select-none cursor-pointer transition-colors",
+            checked ? "text-[#ff0073]" : "text-muted-foreground/60",
+          )}
         >
-          {heading}
+          {label}
+          {multi && checked && (
+            <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
+              pick up to {maxSelected}
+            </span>
+          )}
         </label>
+        <Switch
+          id={switchId}
+          checked={checked}
+          onCheckedChange={(next) => onToggle(next)}
+          aria-label={`Enable ${label}`}
+        />
       </div>
 
       {visibleGroups.length > 0 && (
@@ -164,7 +173,7 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
 
           <div
             role={multi ? "group" : "radiogroup"}
-            aria-label={`${heading} — ${groupLabels[effectiveActive] ?? effectiveActive}`}
+            aria-label={`${label} — ${groupLabels[effectiveActive] ?? effectiveActive}`}
             className={cn(
               "grid grid-cols-3 gap-1.5 transition-opacity",
               !checked && "opacity-40",
@@ -184,7 +193,7 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
                     title={
                       checked
                         ? entryDescription
-                        : `${entryDescription} (click to enable ${label})`
+                        : `${entryDescription} (toggle on ${label} to pick)`
                     }
                     onClick={() => onPick(entry.id)}
                     className={cn(
