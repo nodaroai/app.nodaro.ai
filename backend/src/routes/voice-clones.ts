@@ -8,6 +8,7 @@ import { uploadBufferToR2 } from "../lib/storage.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const fromUrlBody = z.object({
   audioUrl: safeUrlSchema,
@@ -226,7 +227,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     const parsed = fromUrlBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { audioUrl, name } = parsed.data

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const costSummaryBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(500),
@@ -31,7 +32,7 @@ export async function workflowCostRoutes(app: FastifyInstance) {
     const parsed = costSummaryBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
@@ -224,7 +225,7 @@ export async function jobRoutes(app: FastifyInstance) {
     const parsed = batchStatusBody.safeParse(req.body ?? {})
     if (!parsed.success) {
       return reply.status(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

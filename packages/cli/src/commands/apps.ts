@@ -4,6 +4,27 @@ import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic } from "../util.js"
 import { watchExecution } from "./workflows.js"
+import { pickFromList, isInteractive } from "../interactive.js"
+
+async function pickAppInteractively(client: ReturnType<typeof buildClient>): Promise<string> {
+  if (!isInteractive()) {
+    warn("missing <slug> and stdin is not a TTY — provide a slug or pipe input")
+    process.exit(2)
+  }
+  const result = await client.apps.list({ limit: 50 })
+  if (result.data.length === 0) {
+    warn("no published apps available")
+    process.exit(1)
+  }
+  return pickFromList<string>({
+    message: "Pick an app to run:",
+    choices: result.data.map((a) => ({
+      name: `${a.name} (${a.slug})`,
+      value: a.slug,
+      description: a.creatorName ?? a.creatorId,
+    })),
+  })
+}
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -81,8 +102,8 @@ export function appsCommand(): Command {
     })
 
   cmd
-    .command("run <slug> [extras...]")
-    .description("trigger an app run. Inputs go through --input k=v (repeat) or --params-file inputs.json")
+    .command("run [slug] [extras...]")
+    .description("trigger an app run. Inputs go through --input k=v (repeat) or --params-file inputs.json. Omit <slug> for an interactive picker.")
     .option("--input <pairs...>", "input value, repeat or space-separate (e.g. --input prompt=\"hi\" --input duration=8)", collectVariadic)
     .option("--params-file <path>", "JSON file with the full inputs object (--input flags override matching keys)")
     .option("--watch", "follow the resulting execution until completion")
@@ -95,12 +116,13 @@ Examples:
   $ nodaro apps run hair-styler-dd3erw --params-file inputs.json --watch
 
 Tip: \`nodaro apps get <slug>\` shows the input schema for that app.`)
-    .action(async (slug: string, extras: string[], opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
-      rejectPositionalInputs(extras, slug)
+    .action(async (slug: string | undefined, extras: string[], opts: { input?: string[]; paramsFile?: string; watch?: boolean } & GlobalOpts) => {
+      rejectPositionalInputs(extras, slug ?? "<slug>")
       try {
         const client = buildClient(opts.profile)
+        const resolvedSlug = slug ?? (await pickAppInteractively(client))
         const inputs = resolveParams(opts.input, opts.paramsFile)
-        const result = await client.apps.run(slug, inputs)
+        const result = await client.apps.run(resolvedSlug, inputs)
         if (opts.json && !opts.watch) {
           emit(result, opts)
           return

@@ -9,6 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_EDIT_PROVIDERS } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const editImageBody = z.object({
   imageUrl: safeUrlSchema,
@@ -34,10 +35,7 @@ export async function editImageRoutes(app: FastifyInstance) {
     const parsed = editImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

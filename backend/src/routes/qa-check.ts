@@ -8,6 +8,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
@@ -41,10 +42,7 @@ export async function qaCheckRoutes(app: FastifyInstance) {
       const parsed = qaCheckBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

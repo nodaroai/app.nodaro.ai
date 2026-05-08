@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const aiRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "ai-3d" })
 import { CreditsService } from "../ee/billing/credits.js"
@@ -45,10 +46,7 @@ export async function threeDTitleAIRoutes(app: FastifyInstance) {
       const parsed = generateBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

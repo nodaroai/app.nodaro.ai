@@ -7,6 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const lipSyncBody = z.object({
   imageUrl: safeUrlSchema.optional(),     // Portrait/face image (required for KIE/SadTalker)
@@ -58,10 +59,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

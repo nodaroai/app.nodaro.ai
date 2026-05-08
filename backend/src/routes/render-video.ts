@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { renderQueue } from "../lib/render-queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const renderRateLimit = rateLimiter({ windowMs: 60_000, max: 10, keyPrefix: "render" })
 
@@ -155,10 +156,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const parsed = renderVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
@@ -228,10 +226,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const parsed = renderSceneGraphBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
@@ -283,10 +278,7 @@ export async function renderVideoRoutes(app: FastifyInstance) {
     const parsed = renderPlanBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

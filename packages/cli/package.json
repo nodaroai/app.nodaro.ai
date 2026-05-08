@@ -9,7 +9,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -19,13 +23,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "compile:darwin-arm64": "bun build src/index.ts --compile --target=bun-darwin-arm64 --outfile=dist/binaries/nodaro-darwin-arm64",
-    "compile:darwin-x64":   "bun build src/index.ts --compile --target=bun-darwin-x64   --outfile=dist/binaries/nodaro-darwin-x64",
-    "compile:linux-arm64":  "bun build src/index.ts --compile --target=bun-linux-arm64  --outfile=dist/binaries/nodaro-linux-arm64",
-    "compile:linux-x64":    "bun build src/index.ts --compile --target=bun-linux-x64    --outfile=dist/binaries/nodaro-linux-x64",
-    "compile:windows-x64":  "bun build src/index.ts --compile --target=bun-windows-x64  --outfile=dist/binaries/nodaro-windows-x64.exe",
+    "compile:darwin-x64": "bun build src/index.ts --compile --target=bun-darwin-x64   --outfile=dist/binaries/nodaro-darwin-x64",
+    "compile:linux-arm64": "bun build src/index.ts --compile --target=bun-linux-arm64  --outfile=dist/binaries/nodaro-linux-arm64",
+    "compile:linux-x64": "bun build src/index.ts --compile --target=bun-linux-x64    --outfile=dist/binaries/nodaro-linux-x64",
+    "compile:windows-x64": "bun build src/index.ts --compile --target=bun-windows-x64  --outfile=dist/binaries/nodaro-windows-x64.exe",
     "compile:all": "npm run compile:darwin-arm64 && npm run compile:darwin-x64 && npm run compile:linux-arm64 && npm run compile:linux-x64 && npm run compile:windows-x64"
   },
   "dependencies": {
+    "@inquirer/confirm": "^6.0.12",
+    "@inquirer/input": "^5.0.12",
+    "@inquirer/select": "^5.1.4",
     "@nodaro/client": "*",
     "@nodaro/shared": "*",
     "commander": "^12.1.0",
@@ -36,6 +43,14 @@
     "typescript": "^5.7.3",
     "vitest": "^4.1.2"
   },
-  "engines": { "node": ">=20" },
-  "keywords": ["nodaro", "ai", "workflow", "cli", "command-line"]
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "nodaro",
+    "ai",
+    "workflow",
+    "cli",
+    "command-line"
+  ]
 }

@@ -5,6 +5,7 @@ import { safeFetch } from "../lib/safe-fetch.js"
 import sharp from "sharp"
 import { uploadBufferToR2 } from "../lib/storage.js"
 import { randomUUID } from "node:crypto"
+import { formatZodError } from "../lib/zod-error.js"
 
 const splitImageBody = z.object({
   imageUrl: safeUrlSchema,
@@ -25,10 +26,7 @@ export async function splitImageRoutes(app: FastifyInstance) {
     const parsed = splitImageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

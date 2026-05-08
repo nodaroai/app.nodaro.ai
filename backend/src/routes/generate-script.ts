@@ -7,6 +7,7 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { SCRIPT_PROVIDERS } from "@nodaro/shared"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const generateScriptBody = z.object({
   prompt: z.string().min(1).max(10000),
@@ -24,10 +25,7 @@ export async function generateScriptRoutes(app: FastifyInstance) {
     const parsed = generateScriptBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { fetchAllKieLogs } from "../../providers/kie/credit-lookup.js"
+import { formatZodError } from "../../lib/zod-error.js"
 
 const creditAuditSyncBody = z.object({
   token: z.string().min(1, "token is required"),
@@ -214,7 +215,7 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     const parsed = creditAuditSyncBody.safeParse(request.body ?? {})
     if (!parsed.success) {
       return reply.code(400).send({
-        error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
     const { token } = parsed.data

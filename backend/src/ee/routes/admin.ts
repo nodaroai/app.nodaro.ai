@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
+import { formatZodError } from "../../lib/zod-error.js"
 
 // ============================================================
 // Admin Routes - Cost Alerts, Model Pricing & Asset Library
@@ -86,10 +87,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const parsed = createAlertBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
@@ -251,10 +249,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const parsed = upsertModelPricingBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

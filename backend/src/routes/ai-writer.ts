@@ -9,6 +9,7 @@ import { llmComplete, llmStream } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const aiWriterBody = z.object({
   systemPrompt: z.string().max(10000),
@@ -39,10 +40,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -166,10 +164,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

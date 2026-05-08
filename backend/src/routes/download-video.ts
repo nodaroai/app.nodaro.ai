@@ -9,6 +9,7 @@ import { promises as fs } from "node:fs"
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const SUPPORTED_HOSTNAMES = [
   "youtube.com", "youtu.be",
@@ -257,10 +258,7 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const parsed = downloadVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
