@@ -13,59 +13,14 @@ import type {
 } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { useLocaleDir } from "@/lib/locale-store"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { LocaleHeader } from "./locale-header"
+import { CustomTextRows } from "./custom-text-rows"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
 import { MusicGenrePicker } from "./music-genre-picker"
 import { MusicMoodPicker } from "./music-mood-picker"
 import { InstrumentationPicker } from "./instrumentation-picker"
 import { VoiceCharacterPicker } from "./voice-character-picker"
 import { VoiceDeliveryPicker } from "./voice-delivery-picker"
-
-interface CustomTextRowsProps {
-  readonly idPrefix: string
-  readonly preText?: string
-  readonly postText?: string
-  readonly prePlaceholder: string
-  readonly postPlaceholder: string
-  readonly onChange: (patch: { preText?: string; postText?: string }) => void
-}
-
-function CustomTextRows({
-  idPrefix, preText, postText, prePlaceholder, postPlaceholder, onChange,
-}: CustomTextRowsProps) {
-  return (
-    <>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${idPrefix}-pre-text`} className="text-xs text-muted-foreground">
-          Custom text (before)
-        </Label>
-        <Textarea
-          id={`${idPrefix}-pre-text`}
-          value={preText ?? ""}
-          onChange={(e) => onChange({ preText: e.target.value })}
-          placeholder={prePlaceholder}
-          rows={2}
-          className="text-xs resize-none"
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${idPrefix}-post-text`} className="text-xs text-muted-foreground">
-          Custom text (after)
-        </Label>
-        <Textarea
-          id={`${idPrefix}-post-text`}
-          value={postText ?? ""}
-          onChange={(e) => onChange({ postText: e.target.value })}
-          placeholder={postPlaceholder}
-          rows={2}
-          className="text-xs resize-none"
-        />
-      </div>
-    </>
-  )
-}
 
 /** Copy a string|ReadonlyArray<string>|undefined patch field into a fresh
  *  mutable string[] (or pass-through for string/undefined). */

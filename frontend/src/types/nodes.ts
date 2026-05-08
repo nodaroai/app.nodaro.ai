@@ -353,6 +353,10 @@ export type CameraMotionData = {
   label: string
   /** Motion id from CAMERA_MOTIONS catalog (packages/shared/src/camera-motions.ts). */
   cameraMotion: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 export type FramingData = {
@@ -370,6 +374,10 @@ export type FramingData = {
   /** Grid columns when displaying multiple enabled categories in the node
    * card. Default (render-time) = 1 (vertical stack). Range 1-5. */
   maxItemsPerRow?: number
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Lens parameter node data. */
@@ -378,6 +386,10 @@ export interface LensData {
   label: string
   /** Lens id from LENSES catalog (packages/shared/src/lens.ts). */
   lens: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Camera / Film Stock parameter node data. */
@@ -386,6 +398,10 @@ export interface CameraFormatData {
   label: string
   /** Camera-format id from CAMERA_FORMATS catalog (packages/shared/src/camera-format.ts). */
   cameraFormat: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Lighting parameter node data. */
@@ -406,6 +422,10 @@ export interface LightingData {
   /** Grid columns when displaying multiple enabled categories in the node
    * card. Default (render-time) = 1 (vertical stack). Range 1-3. */
   maxItemsPerRow?: number
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Color/Look parameter node data. */
@@ -414,6 +434,10 @@ export interface ColorLookData {
   label: string
   /** Color/Look id from COLOR_LOOKS catalog (packages/shared/src/color-look.ts). */
   colorLook: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Atmosphere parameter node data. */
@@ -424,6 +448,10 @@ export interface AtmosphereData {
    *  particle effects (e.g. ["fog","god-rays"], ["dust","sun-shafts"]).
    *  Undefined = user cleared all picks; the node emits no atmosphere hint. */
   atmosphere: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Action FX parameter node data. Multi-pick 1–2 ids — string for
@@ -435,6 +463,10 @@ export interface ActionFxData {
    *  effects (e.g. ["explosion","sparks"], ["splash","ripples"]).
    *  Undefined = user cleared all picks; the node emits no action-fx hint. */
   actionFx: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Style parameter node data. */
@@ -446,6 +478,10 @@ export interface StyleData {
    * catalog (via IMAGE_STYLE_PRESETS in model-options.ts), so both surfaces
    * resolve to the same promptHint at execution time. */
   style: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Setting parameter node data. Place/environment hint appended
@@ -457,6 +493,10 @@ export interface SettingData {
   label: string
   /** Setting id from SETTINGS catalog (packages/shared/src/setting.ts). */
   setting: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Loop Subject parameter node data. Loop-friendly scene prompt
@@ -469,6 +509,10 @@ export interface LoopSubjectData {
   label: string
   /** Subject id from LOOP_SUBJECTS catalog (packages/shared/src/loop-subject.ts). */
   loopSubject: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Music Genre parameter node data. Genre + optional subgenre + era
@@ -714,6 +758,10 @@ export interface PhotographerData {
    *  blended visual signatures (e.g. ["tim-walker","helmut-newton"]).
    *  Undefined = user cleared all picks. */
   photographer: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Aesthetic / Microtrend parameter node data. Picks ONE
@@ -726,6 +774,10 @@ export interface AestheticData {
    *  aesthetic blend (e.g. ["y2k","dadcore"]).
    *  Undefined = user cleared all picks. */
   aesthetic: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Era / Period parameter node data. Picks ONE historical era or
@@ -736,6 +788,10 @@ export interface EraData {
   label: string
   /** Era id from ERAS catalog. */
   era: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Pose parameter node data. Posture + action hint appended to
@@ -774,6 +830,10 @@ export interface MaterialData {
    *  (e.g. ["leather","brass"] → "made of leather and brass").
    *  Undefined = user cleared all picks. */
   material: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Animal parameter node data. Reuses the catalog from the
@@ -785,6 +845,10 @@ export interface AnimalData {
   label: string
   /** Animal id from ANIMALS catalog. */
   animal: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Vehicle parameter node data. Reuses the catalog from the
@@ -796,6 +860,10 @@ export interface VehicleData {
   label: string
   /** Vehicle id from VEHICLES catalog. */
   vehicle: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Weapon parameter node data. Reuses the catalog from the
@@ -807,6 +875,10 @@ export interface WeaponData {
   label: string
   /** Weapon id from WEAPONS catalog. */
   weapon: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Photo Genre parameter node data. Single-pick meta-preset
@@ -818,6 +890,10 @@ export interface PhotoGenreData {
   label: string
   /** Photo genre id from PHOTO_GENRES catalog. */
   photoGenre: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Backdrop parameter node data. Single-pick describing the
@@ -829,6 +905,10 @@ export interface BackdropData {
   label: string
   /** Backdrop id from BACKDROPS catalog. */
   backdrop: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Held Prop parameter node data. Single-pick describing the
@@ -843,6 +923,10 @@ export interface HeldPropData {
    *  (e.g. ["book","coffee-cup"], ["cigarette","wine-glass"]).
    *  Undefined = user cleared all picks. */
   heldProp: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Exposure Settings parameter node data. Multi-category: aperture
@@ -859,6 +943,10 @@ export interface ExposureSettingsData {
   isoValue?: string
   /** Grid columns when displaying multiple enabled categories on the node card. */
   maxItemsPerRow?: number
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Render Quality parameter node data. Single-pick technical
@@ -869,6 +957,10 @@ export interface RenderQualityData {
   label: string
   /** Render-quality id from RENDER_QUALITIES catalog. */
   renderQuality: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Composition Effects parameter node data. Single-pick subject /
@@ -879,6 +971,10 @@ export interface CompositionEffectsData {
   label: string
   /** Composition-effect id from COMPOSITION_EFFECTS catalog. */
   compositionEffect: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Post-Process Effects parameter node data. Single-pick image-
@@ -892,6 +988,10 @@ export interface PostProcessEffectsData {
    *  ["halation-glow","bloom"]).
    *  Undefined = user cleared all picks. */
   postProcess: string | ReadonlyArray<string> | undefined
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 /** Standalone Temporal parameter node data. */
@@ -907,6 +1007,10 @@ export interface TemporalData {
   /** Grid columns when displaying multiple enabled categories in the node
    * card. Default (render-time) = 1 (vertical stack). Range 1-4. */
   maxItemsPerRow?: number
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
 }
 
 // --- AI Node Data ---
