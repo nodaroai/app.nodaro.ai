@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "Baixa", description: "Calma, lenta" },
+  "mellow": { label: "Suave", description: "Relaxada, descontraída" },
+  "gentle": { label: "Delicada", description: "Macia, terna" },
+  "moderate": { label: "Moderada", description: "Equilibrada, constante" },
+  "building": { label: "Crescente", description: "Intensificando lentamente" },
+  "upbeat": { label: "Animada", description: "Vibrante, otimista" },
+  "driving": { label: "Pulsante", description: "Impulso para frente" },
+  "high": { label: "Alta", description: "Enérgica, intensa" },
+  "explosive": { label: "Explosiva", description: "Estourante, selvagem" },
+  "frenetic": { label: "Frenética", description: "Intensa, rápida" },
+  "pulsing": { label: "Pulsante", description: "Rítmica, marcada pelo beat" },
+  "throbbing": { label: "Latejante", description: "Pesada, hipnótica" },
+  "simmering": { label: "Fervilhante", description: "Tensa, contida" },
+  "ferocious": { label: "Feroz", description: "Agressiva, implacável" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "Feliz", description: "Alegre, brilhante" },
+  "joyful": { label: "Jubilosa", description: "Exuberante, festiva" },
+  "euphoric": { label: "Eufórica", description: "Extática, transcendente" },
+  "melancholic": { label: "Melancólica", description: "Saudosa, agridoce" },
+  "sad": { label: "Triste", description: "Sombria, pesarosa" },
+  "longing": { label: "Anseante", description: "Anseio, dolorida" },
+  "lonely": { label: "Solitária", description: "Isolada, distante" },
+  "angry": { label: "Raivosa", description: "Agressiva, hostil" },
+  "defiant": { label: "Desafiadora", description: "Rebelde, resistente" },
+  "triumphant": { label: "Triunfante", description: "Heroica, vitoriosa" },
+  "victorious": { label: "Vitoriosa", description: "Conquistadora, hino" },
+  "tender": { label: "Terna", description: "Macia, afetuosa" },
+  "romantic": { label: "Romântica", description: "Amorosa, sensual" },
+  "haunting": { label: "Assombrosa", description: "Estranha, persistente" },
+  "mysterious": { label: "Misteriosa", description: "Enigmática, secreta" },
+  "menacing": { label: "Ameaçadora", description: "Ameaçadora, agourenta" },
+  "playful": { label: "Brincalhona", description: "Caprichosa, divertida" },
+  "mischievous": { label: "Travessa", description: "Astuta, traquina" },
+  "anxious": { label: "Ansiosa", description: "Tensa, apreensiva" },
+  "fearful": { label: "Temerosa", description: "Assustada, em pânico" },
+  "hopeful": { label: "Esperançosa", description: "Edificante, aspiracional" },
+  "inspirational": { label: "Inspiradora", description: "Motivadora, elevada" },
+  "nostalgic": { label: "Nostálgica", description: "Voltada ao passado, saudosa" },
+  "bittersweet": { label: "Agridoce", description: "Doce tristeza, mista" },
+  "peaceful": { label: "Pacífica", description: "Serena, repousante" },
+  "contemplative": { label: "Contemplativa", description: "Reflexiva, pensativa" },
+  "ethereal": { label: "Etérea", description: "Sobrenatural, flutuante" },
+  "awe": { label: "Espanto", description: "Maravilha, vastidão" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "Cinemática", description: "Tipo trilha sonora, evocativa" },
+  "intimate": { label: "Íntima", description: "Pessoal, próxima" },
+  "epic": { label: "Épica", description: "Grandiosa, arrebatadora" },
+  "anthemic": { label: "Hino", description: "Grande para multidão cantar" },
+  "lo-fi": { description: "Quente, imperfeita" },
+  "polished": { label: "Polida", description: "Impecável, mainstream" },
+  "raw": { label: "Crua", description: "Sem filtro, áspera" },
+  "dreamy": { label: "Onírica", description: "Enevoada, surreal" },
+  "hypnotic": { label: "Hipnótica", description: "Em loop, transe" },
+  "dark": { label: "Sombria", description: "Carrancuda, sombreada" },
+  "gritty": { label: "Áspera", description: "Grosseira, urbana" },
+  "uplifting": { label: "Elevadora", description: "Brilhante, encorajadora" },
+  "tense": { label: "Tensa", description: "Suspense" },
+  "spacey": { label: "Espacial", description: "Cósmica, vasta" },
+  "psychedelic": { label: "Psicodélica", description: "Alucinante, rodopiante" },
+  "noir": { label: "Noir", description: "Esfumaçada, durona" },
+  "vintage": { label: "Vintage", description: "Retrô, envelhecida" },
+  "futuristic": { label: "Futurista", description: "Sci-fi, voltada ao futuro" },
+}
 
 export default map

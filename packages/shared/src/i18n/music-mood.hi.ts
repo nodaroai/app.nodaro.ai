@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "धीमी", description: "शांत, धीमी" },
+  "mellow": { label: "मधुर", description: "आरामदायक, लापरवाह" },
+  "gentle": { label: "कोमल", description: "मुलायम, स्नेहल" },
+  "moderate": { label: "मध्यम", description: "संतुलित, स्थिर" },
+  "building": { label: "बढ़ती हुई", description: "धीरे-धीरे तीव्र होती" },
+  "upbeat": { label: "उल्लासपूर्ण", description: "जीवंत, आशावादी" },
+  "driving": { label: "प्रेरक", description: "आगे बढ़ने वाली गति" },
+  "high": { label: "उच्च", description: "ऊर्जावान, तीव्र" },
+  "explosive": { label: "विस्फोटक", description: "फूटती, जंगली" },
+  "frenetic": { label: "उन्मत्त", description: "तीव्र, तेज़" },
+  "pulsing": { label: "स्पंदित", description: "लयबद्ध, बीट-संचालित" },
+  "throbbing": { label: "धड़कती", description: "भारी, सम्मोहक" },
+  "simmering": { label: "उबलती", description: "तनावपूर्ण, संयमित" },
+  "ferocious": { label: "उग्र", description: "आक्रामक, अनवरत" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "प्रसन्न", description: "आनंदमय, उज्ज्वल" },
+  "joyful": { label: "हर्षित", description: "उत्साही, उत्सवपूर्ण" },
+  "euphoric": { label: "उन्मादी", description: "परमानंद, अतिक्रमणकारी" },
+  "melancholic": { label: "उदास", description: "विचारमग्न, खट्टी-मीठी" },
+  "sad": { label: "दुखी", description: "गमगीन, शोकाकुल" },
+  "longing": { label: "तरसती", description: "व्याकुल, पीड़ादायक" },
+  "lonely": { label: "अकेली", description: "अलग-थलग, दूर" },
+  "angry": { label: "क्रोधित", description: "आक्रामक, शत्रुतापूर्ण" },
+  "defiant": { label: "विद्रोही", description: "बागी, प्रतिरोधी" },
+  "triumphant": { label: "विजयी", description: "वीरतापूर्ण, विजयी" },
+  "victorious": { label: "विजेता", description: "विजयी, गीतात्मक" },
+  "tender": { label: "कोमल", description: "नरम, स्नेहपूर्ण" },
+  "romantic": { label: "रोमांटिक", description: "प्रेमपूर्ण, कामुक" },
+  "haunting": { label: "व्यथित करने वाली", description: "रहस्यमयी, स्थायी" },
+  "mysterious": { label: "रहस्यमय", description: "गूढ़, गुप्त" },
+  "menacing": { label: "धमकी भरी", description: "खतरनाक, आशंकित" },
+  "playful": { label: "चंचल", description: "मनमौजी, मज़ेदार" },
+  "mischievous": { label: "शरारती", description: "धूर्त, उपद्रवी" },
+  "anxious": { label: "चिंतित", description: "तनावपूर्ण, आशंकित" },
+  "fearful": { label: "भयभीत", description: "डरा हुआ, घबराया" },
+  "hopeful": { label: "आशावादी", description: "उत्थानकारी, आकांक्षी" },
+  "inspirational": { label: "प्रेरणादायक", description: "प्रेरक, उत्थान" },
+  "nostalgic": { label: "पुरानी यादों भरी", description: "पीछे देखती, उदास" },
+  "bittersweet": { label: "खट्टी-मीठी", description: "मीठा दुख, मिश्रित" },
+  "peaceful": { label: "शांतिपूर्ण", description: "शांत, विश्रामपूर्ण" },
+  "contemplative": { label: "चिंतनशील", description: "विचारशील, सोचनेवाली" },
+  "ethereal": { label: "स्वर्गिक", description: "अलौकिक, तैरती" },
+  "awe": { label: "विस्मय", description: "अद्भुत, विशालता" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "सिनेमाई", description: "स्कोर जैसी, उद्बोधक" },
+  "intimate": { label: "घनिष्ठ", description: "व्यक्तिगत, करीबी" },
+  "epic": { label: "महाकाव्य", description: "भव्य, विस्तृत" },
+  "anthemic": { label: "गान-समान", description: "भीड़ के गाने योग्य बड़ा" },
+  "lo-fi": { description: "गर्मजोश, अपूर्ण" },
+  "polished": { label: "परिष्कृत", description: "बेदाग, मुख्यधारा" },
+  "raw": { label: "कच्ची", description: "अनफ़िल्टर्ड, खुरदरी" },
+  "dreamy": { label: "स्वप्निल", description: "धुंधली, अतियथार्थ" },
+  "hypnotic": { label: "सम्मोहक", description: "लूप वाली, समाधि जैसी" },
+  "dark": { label: "अंधकारमय", description: "गूढ़, छायामय" },
+  "gritty": { label: "खुरदरी", description: "मोटी, शहरी" },
+  "uplifting": { label: "उत्थानकारी", description: "उज्ज्वल, प्रोत्साहक" },
+  "tense": { label: "तनावपूर्ण", description: "रहस्यमय" },
+  "spacey": { label: "अंतरिक्षीय", description: "ब्रह्मांडीय, विशाल" },
+  "psychedelic": { label: "साइकेडेलिक", description: "मन-झुकाने वाली, घुमावदार" },
+  "noir": { label: "नॉयर", description: "धुँआदार, कठोर" },
+  "vintage": { label: "विंटेज", description: "रेट्रो, पुरानी" },
+  "futuristic": { label: "भविष्यवादी", description: "साइंस-फ़िक्शन, आगे देखती" },
+}
 
 export default map

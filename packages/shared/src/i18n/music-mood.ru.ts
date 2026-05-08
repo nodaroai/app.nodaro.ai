@@ -1,7 +1,71 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// English seed — translations TODO. Empty map causes useLocalizedCatalog
-// to fall back to canonical English from the catalog.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // -------------------- Energies --------------------
+  "low": { label: "Низкая", description: "Спокойная, медленная" },
+  "mellow": { label: "Мягкая", description: "Расслабленная, непринуждённая" },
+  "gentle": { label: "Нежная", description: "Мягкая, ласковая" },
+  "moderate": { label: "Умеренная", description: "Сбалансированная, ровная" },
+  "building": { label: "Нарастающая", description: "Медленно усиливающаяся" },
+  "upbeat": { label: "Бодрая", description: "Живая, оптимистичная" },
+  "driving": { label: "Движущая", description: "Импульс вперёд" },
+  "high": { label: "Высокая", description: "Энергичная, интенсивная" },
+  "explosive": { label: "Взрывная", description: "Бурная, дикая" },
+  "frenetic": { label: "Неистовая", description: "Интенсивная, стремительная" },
+  "pulsing": { label: "Пульсирующая", description: "Ритмичная, на пульсе" },
+  "throbbing": { label: "Тяжело пульсирующая", description: "Тяжёлая, гипнотическая" },
+  "simmering": { label: "Тлеющая", description: "Напряжённая, сдержанная" },
+  "ferocious": { label: "Свирепая", description: "Агрессивная, неумолимая" },
+
+  // -------------------- Emotions --------------------
+  "happy": { label: "Счастливая", description: "Радостная, светлая" },
+  "joyful": { label: "Радостная", description: "Бурная, праздничная" },
+  "euphoric": { label: "Эйфорическая", description: "Экстатичная, трансцендентная" },
+  "melancholic": { label: "Меланхоличная", description: "Тоскливая, горько-сладкая" },
+  "sad": { label: "Грустная", description: "Мрачная, скорбная" },
+  "longing": { label: "Тоскующая", description: "Стремящаяся, ноющая" },
+  "lonely": { label: "Одинокая", description: "Изолированная, отдалённая" },
+  "angry": { label: "Гневная", description: "Агрессивная, враждебная" },
+  "defiant": { label: "Дерзкая", description: "Бунтарская, сопротивляющаяся" },
+  "triumphant": { label: "Торжествующая", description: "Героическая, победная" },
+  "victorious": { label: "Победоносная", description: "Покоряющая, гимновая" },
+  "tender": { label: "Нежная", description: "Мягкая, ласковая" },
+  "romantic": { label: "Романтическая", description: "Любовная, чувственная" },
+  "haunting": { label: "Преследующая", description: "Жуткая, въедающаяся" },
+  "mysterious": { label: "Загадочная", description: "Энигматичная, тайная" },
+  "menacing": { label: "Угрожающая", description: "Грозная, предвещающая" },
+  "playful": { label: "Игривая", description: "Прихотливая, весёлая" },
+  "mischievous": { label: "Озорная", description: "Лукавая, шкодливая" },
+  "anxious": { label: "Тревожная", description: "Напряжённая, опасливая" },
+  "fearful": { label: "Боязливая", description: "Напуганная, паническая" },
+  "hopeful": { label: "Полная надежды", description: "Возвышающая, устремлённая" },
+  "inspirational": { label: "Вдохновляющая", description: "Мотивирующая, парящая" },
+  "nostalgic": { label: "Ностальгическая", description: "Обращённая в прошлое, тоскливая" },
+  "bittersweet": { label: "Горько-сладкая", description: "Сладкая печаль, смешанная" },
+  "peaceful": { label: "Умиротворённая", description: "Безмятежная, успокаивающая" },
+  "contemplative": { label: "Созерцательная", description: "Размышляющая, вдумчивая" },
+  "ethereal": { label: "Эфирная", description: "Неземная, парящая" },
+  "awe": { label: "Благоговение", description: "Чудо, необъятность" },
+
+  // -------------------- Vibes --------------------
+  "cinematic": { label: "Кинематографичная", description: "Как саундтрек, выразительная" },
+  "intimate": { label: "Интимная", description: "Личная, близкая" },
+  "epic": { label: "Эпическая", description: "Величественная, размашистая" },
+  "anthemic": { label: "Гимническая", description: "Большая для подпевания толпой" },
+  "lo-fi": { description: "Тёплая, несовершенная" },
+  "polished": { label: "Отшлифованная", description: "Безупречная, мейнстрим" },
+  "raw": { label: "Сырая", description: "Нефильтрованная, грубая" },
+  "dreamy": { label: "Мечтательная", description: "Туманная, сюрреалистичная" },
+  "hypnotic": { label: "Гипнотическая", description: "Зацикленная, трансовая" },
+  "dark": { label: "Тёмная", description: "Хмурая, теневая" },
+  "gritty": { label: "Жёсткая", description: "Грубая, городская" },
+  "uplifting": { label: "Воодушевляющая", description: "Светлая, ободряющая" },
+  "tense": { label: "Напряжённая", description: "Саспенс" },
+  "spacey": { label: "Космическая", description: "Космическая, безбрежная" },
+  "psychedelic": { label: "Психоделическая", description: "Изменяющая сознание, кружащаяся" },
+  "noir": { label: "Нуар", description: "Дымчатая, крутая" },
+  "vintage": { label: "Винтажная", description: "Ретро, выдержанная" },
+  "futuristic": { label: "Футуристическая", description: "Сай-фай, обращённая в будущее" },
+}
 
 export default map
