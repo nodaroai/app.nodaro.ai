@@ -95,8 +95,10 @@ function auditHeaders(sessionToken: string, uniqueId: string) {
  * successFlag varies by endpoint: suno-audio uses 200, others use 1 for success.
  * VEO uses: 0=generating, 1=success, 2=failed, 3=generation failed.
  */
+// Exported for unit testing — pure function with extensive field-aliasing
+// fallback chains across 20+ KIE endpoint response shapes.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeRecord(raw: any, sourceLabel: string): KieLogRecord {
+export function normalizeRecord(raw: any, sourceLabel: string): KieLogRecord {
   let state = raw.state ?? ""
   if (!state && raw.successFlag !== undefined) {
     // Use Number() to handle string values (e.g., "1" vs 1)
