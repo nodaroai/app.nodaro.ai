@@ -219,6 +219,65 @@ describe("edit-image handler", () => {
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined, undefined)
   })
+
+  // -------------------------------------------------------------------------
+  // grok-upscale: takes a prior Grok task_id instead of imageUrl. The KIE
+  // provider's editImage signature is unchanged — the worker passes the
+  // taskId through the imageUrl arg, and `imageParam: "task_id"` on the KIE
+  // model config (kie/models.ts) routes it to the correct request key.
+  // -------------------------------------------------------------------------
+
+  it("grok-upscale: passes taskId through the imageUrl arg of editImage", async () => {
+    const job = makeJob("edit-image", {
+      provider: "grok-upscale",
+      taskId: "grok-prior-task-abc",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "grok-prior-task-abc", // taskId routed through imageUrl arg
+      "grok-upscale",
+      undefined,
+      undefined,
+    )
+  })
+
+  it("grok-upscale: throws when taskId is missing (no fallback to imageUrl)", async () => {
+    const job = makeJob("edit-image", {
+      provider: "grok-upscale",
+      imageUrl: "https://input.png", // ignored for grok-upscale
+    })
+
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(
+      /grok-upscale requires taskId/,
+    )
+    expect(mocks.mockEditImage).not.toHaveBeenCalled()
+  })
+
+  it("non-grok-upscale providers ignore taskId field in job data", async () => {
+    const job = makeJob("edit-image", {
+      provider: "recraft-upscale",
+      imageUrl: "https://input.png",
+      taskId: "ignored-task-id",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://input.png", // imageUrl wins for non-grok providers
+      "recraft-upscale",
+      undefined,
+      undefined,
+    )
+  })
+
+  it("non-grok-upscale: throws when imageUrl is missing", async () => {
+    const job = makeJob("edit-image", { provider: "recraft-upscale" })
+
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(
+      /edit-image requires imageUrl/,
+    )
+    expect(mocks.mockEditImage).not.toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------

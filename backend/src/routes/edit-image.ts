@@ -12,7 +12,17 @@ import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const editImageBody = z.object({
-  imageUrl: safeUrlSchema,
+  // imageUrl is required for every provider EXCEPT grok-upscale, which
+  // takes a prior Grok task_id instead of an image URL. The refinement
+  // below enforces "imageUrl XOR taskId" with provider-aware routing.
+  imageUrl: safeUrlSchema.optional(),
+  /**
+   * Prior Grok generation task_id, used only by `provider: "grok-upscale"`.
+   * KIE's grok-imagine/upscale endpoint upscales by referencing a previous
+   * task rather than re-uploading the image, so we plumb the task_id through
+   * a separate field instead of overloading imageUrl.
+   */
+  taskId: z.string().min(1).max(200).optional(),
   prompt: z.string().max(2000).optional(),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(IMAGE_EDIT_PROVIDERS).optional(),
@@ -23,7 +33,15 @@ const editImageBody = z.object({
   style: z.string().max(500).optional(),
   seed: z.number().int().min(0).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
-})
+}).refine(
+  (data) => {
+    if (data.provider === "grok-upscale") {
+      return Boolean(data.taskId)
+    }
+    return Boolean(data.imageUrl)
+  },
+  { message: "imageUrl is required (or taskId for grok-upscale)" },
+)
 
 export async function editImageRoutes(app: FastifyInstance) {
   app.post("/v1/edit-image", { preHandler: creditGuard((req) => {
@@ -39,7 +57,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
+    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -88,6 +106,7 @@ export async function editImageRoutes(app: FastifyInstance) {
     await videoQueue.add("edit-image", {
       jobId: job.id,
       imageUrl,
+      taskId,
       prompt,
       provider,
       upscaleFactor,

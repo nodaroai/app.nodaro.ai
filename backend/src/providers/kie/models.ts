@@ -325,12 +325,16 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
 
   // Grok image upscale (requires task_id from previous grok generation)
   // See: docs.kie.ai/market/grok-imagine/upscale.md
-  // NOTE: This uses task_id, not image_url — requires special handling
+  // The route accepts a `taskId` field (not imageUrl) for this provider; the
+  // worker passes the taskId in via the `imageUrl` arg of editImage, and the
+  // KIE provider writes it to `input[imageParamName]` — so setting
+  // imageParam: "task_id" makes the KIE request body { task_id: <taskId> }.
   "grok-upscale": {
     model: "grok-imagine/upscale",
     credits: 10,
     ***REDACTED-OSS-SCRUB***
     inputType: "image-to-image",
+    imageParam: "task_id",
     extraParams: {},
   },
 
