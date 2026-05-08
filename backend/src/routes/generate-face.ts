@@ -8,6 +8,7 @@ import { resolveTemplate, applyTemplate } from "../config/prompt-templates.js"
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildFaceTemplateInputs } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -25,10 +26,7 @@ export async function generateFaceRoutes(app: FastifyInstance) {
     const parsed = generateFaceBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

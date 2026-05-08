@@ -6,6 +6,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { VOICE_DESIGN_MODELS } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const voiceDesignBody = z.object({
   text: z.string().min(100).max(1000),
@@ -27,10 +28,7 @@ export async function voiceDesignRoutes(app: FastifyInstance) {
     const parsed = voiceDesignBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

@@ -7,6 +7,7 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { getSizeLimit, type FileCategory } from "../utils/file-validation.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const saveToStorageBody = z.object({
   mediaUrl: safeUrlSchema,
@@ -55,10 +56,7 @@ export async function saveToStorageRoutes(app: FastifyInstance) {
     const parsed = saveToStorageBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

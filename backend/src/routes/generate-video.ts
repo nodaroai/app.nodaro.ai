@@ -11,6 +11,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const generateVideoBody = z.object({
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
@@ -107,10 +108,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const parsed = generateVideoBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

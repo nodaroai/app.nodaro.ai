@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { supabase } from "../lib/supabase.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { invalidateDynamicOriginsCache } from "../lib/dynamic-origins.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const httpsUrl = z.string().url().refine((v) => v.startsWith("https://") || v.startsWith("http://localhost"), {
   message: "Must be https:// or http://localhost",
@@ -69,7 +70,7 @@ export async function developerAppRoutes(app: FastifyInstance) {
 
     const parsed = createBody.safeParse(req.body)
     if (!parsed.success) {
-      return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.issues[0]?.message ?? "Invalid request" } })
+      return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
 
     const { count } = await supabase

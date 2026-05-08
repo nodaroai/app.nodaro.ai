@@ -11,6 +11,7 @@ import {
   estimateCombineVideosCredits,
   type CombineVideosEstimatorInput,
 } from "@nodaro/shared"
+import { formatZodError } from "../lib/zod-error.js"
 
 const combineVideosBody = z.object({
   videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
@@ -49,10 +50,7 @@ export async function combineVideosRoutes(app: FastifyInstance) {
     const parsed = combineVideosBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 

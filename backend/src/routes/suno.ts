@@ -9,6 +9,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { SUNO_MODELS } from "@nodaro/shared"
 import { sunoStyleBoost } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../ee/billing/credits.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5")
 const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5"]).optional().default("V5")
@@ -156,10 +157,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoGenerateBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -234,10 +232,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoCoverBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -309,10 +304,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoExtendBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -383,10 +375,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoLyricsBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -444,10 +433,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoSeparateBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -505,10 +491,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoMusicVideoBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -564,10 +547,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoMashupBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -631,10 +611,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoReplaceSectionBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -695,10 +672,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoStyleBoostBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -781,10 +755,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoAddInstrumentalBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -841,10 +812,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoAddVocalsBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -901,10 +869,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoConvertWavBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 
@@ -960,10 +925,7 @@ export async function sunoRoutes(app: FastifyInstance) {
       const parsed = sunoUploadExtendBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
-          error: {
-            code: "validation_error",
-            message: parsed.error.issues[0]?.message ?? "Invalid request",
-          },
+          error: { code: "validation_error", ...formatZodError(parsed.error) },
         })
       }
 

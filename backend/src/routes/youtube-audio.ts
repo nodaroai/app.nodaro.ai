@@ -7,6 +7,7 @@ import { join } from "node:path"
 import { promises as fs } from "node:fs"
 import youtubedl from "youtube-dl-exec"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
+import { formatZodError } from "../lib/zod-error.js"
 
 // Supported video platforms (yt-dlp supports 1000+ sites natively)
 const SUPPORTED_HOSTNAMES = [
@@ -36,10 +37,7 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
     const parsed = videoAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
-        error: {
-          code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid request",
-        },
+        error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
     }
 
