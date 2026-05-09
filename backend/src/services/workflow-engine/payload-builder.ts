@@ -1499,7 +1499,9 @@ export function buildPayload(
         style: finalStyle,
         title: data.title,
         negativeStyle: data.negativeStyle,
-        vocalGender: data.vocalGender,
+        // Manual vocalGender wins; otherwise derive from a connected
+        // voice-character node (audioStyle.fields.vocalGender).
+        vocalGender: data.vocalGender ?? audioStyle.fields.vocalGender,
         styleWeight: data.styleWeight,
         weirdnessConstraint: data.weirdnessConstraint,
         audioWeight: data.audioWeight,

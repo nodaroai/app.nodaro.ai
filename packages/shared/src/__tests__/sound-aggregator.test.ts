@@ -56,18 +56,73 @@ describe("composeSoundHintFromConnections — Suno Generate", () => {
     expect(out.warnings).toEqual([])
   })
 
-  it("warns on voice nodes (Suno is music-only)", () => {
+  it("accepts voice-character nodes (Suno V5 supports vocal description)", () => {
     const out = composeSoundHintFromConnections(
       sunoConsumer({ customMode: true }),
       "suno-generate",
       ctx(
-        [{ id: "v", type: "voice-character", data: { timbre: "warm" } }],
+        [{ id: "v", type: "voice-character", data: { timbre: "warm", gender: "female", accent: "british-rp" } }],
         [audioStyleEdge("v")],
       ),
     )
-    expect(out.text).toBe("")
-    expect(out.warnings.length).toBeGreaterThan(0)
-    expect(out.warnings[0].toLowerCase()).toContain("voice")
+    expect(out.text).toContain("warm")
+    expect(out.warnings).toEqual([])
+  })
+
+  it("extracts voice-character.gender → fields.vocalGender (male)", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: true }),
+      "suno-generate",
+      ctx(
+        [{ id: "v", type: "voice-character", data: { gender: "male", timbre: "deep" } }],
+        [audioStyleEdge("v")],
+      ),
+    )
+    expect(out.fields.vocalGender).toBe("male")
+  })
+
+  it("extracts voice-character.gender → fields.vocalGender (female)", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: true }),
+      "suno-generate",
+      ctx(
+        [{ id: "v", type: "voice-character", data: { gender: "female" } }],
+        [audioStyleEdge("v")],
+      ),
+    )
+    expect(out.fields.vocalGender).toBe("female")
+  })
+
+  it("does NOT extract vocalGender for androgynous (Suno's field is binary)", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: true }),
+      "suno-generate",
+      ctx(
+        [{ id: "v", type: "voice-character", data: { gender: "androgynous", timbre: "warm" } }],
+        [audioStyleEdge("v")],
+      ),
+    )
+    expect(out.fields.vocalGender).toBeUndefined()
+    // Text still includes the description
+    expect(out.text).toContain("warm")
+  })
+
+  it("composes mixed music + voice nodes for Suno", () => {
+    const out = composeSoundHintFromConnections(
+      sunoConsumer({ customMode: false }),
+      "suno-generate",
+      ctx(
+        [
+          { id: "g", type: "music-genre", data: { genre: "rock" } },
+          { id: "v", type: "voice-character", data: { gender: "male", timbre: "raspy" } },
+          { id: "d", type: "voice-delivery", data: { emotion: "intense" } },
+        ],
+        [audioStyleEdge("g"), audioStyleEdge("v"), audioStyleEdge("d")],
+      ),
+    )
+    expect(out.text).toMatch(/rock|raspy/)
+    expect(out.fields.vocalGender).toBe("male")
+    expect(out.warnings).toEqual([])
   })
 })
 
@@ -105,6 +160,20 @@ describe("composeSoundHintFromConnections — Generate Music (MiniMax)", () => {
     )
     expect(out.fields?.genre).toBeUndefined()
     expect(out.text).toContain("electronic")
+  })
+
+  it("accepts voice nodes (music with vocals benefits from voice description)", () => {
+    const out = composeSoundHintFromConnections(
+      minimaxConsumer(),
+      "generate-music",
+      ctx(
+        [{ id: "v", type: "voice-character", data: { gender: "female", timbre: "smooth" } }],
+        [audioStyleEdge("v")],
+      ),
+    )
+    expect(out.text).toContain("smooth")
+    expect(out.fields.vocalGender).toBe("female")
+    expect(out.warnings).toEqual([])
   })
 })
 
