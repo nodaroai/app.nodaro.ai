@@ -9,7 +9,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
-const textToSpeechBody = z.object({
+export const textToSpeechBody = z.object({
   text: z.string().min(1).max(5000),
   userPrompt: z.string().max(8000).optional(),
   voice: z.string().optional(),

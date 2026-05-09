@@ -12,7 +12,7 @@ import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
-const textToVideoBody = z.object({
+export const textToVideoBody = z.object({
   prompt: z.string().min(1).max(2500),
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),

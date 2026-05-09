@@ -13,7 +13,7 @@ import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, e
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
-const generateVideoBody = z.object({
+export const generateVideoBody = z.object({
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
   endFrameUrl: safeUrlSchema.optional(),
   audioUrl: safeUrlSchema.optional(),
