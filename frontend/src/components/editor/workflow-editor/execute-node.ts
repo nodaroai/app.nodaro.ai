@@ -1535,17 +1535,29 @@ export function executeNode(
       toast.error(`Node "${d.label}": no preview text provided`);
       return Promise.reject(new Error("No text"));
     }
-    if (!d.voiceDescription?.trim()) {
+    // Fold connected Voice Sound nodes (voice-character / voice-delivery)
+    // into the voiceDescription field with a 1000-char budget. Collected
+    // BEFORE the description-required check so upstream voice pickers can
+    // supply the description entirely.
+    const audioStyle = collectAudioStyleHints(node, "voice-remix", nodes, edges);
+    const userVoiceDesc = d.voiceDescription?.trim() ?? "";
+    if (!userVoiceDesc && !audioStyle.text) {
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
     }
+    const composedVoiceDesc = userVoiceDesc
+      ? truncateForField(audioStyle.text, userVoiceDesc, 1000)
+      : audioStyle.text;
+    const finalVoiceDescription = userVoiceDesc
+      ? appendField(userVoiceDesc, composedVoiceDesc)
+      : composedVoiceDesc;
     setUserPromptTemplate(d.voiceDescription?.trim() || undefined);
     return runProcessingNode(
       node.id,
       () =>
         voiceRemixApi(
           remixText,
-          d.voiceDescription!,
+          finalVoiceDescription,
           ctx.userId,
         ),
       "generatedAudioUrl",

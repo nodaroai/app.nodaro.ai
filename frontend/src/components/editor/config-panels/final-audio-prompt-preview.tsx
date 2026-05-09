@@ -26,6 +26,7 @@ const FIELD_MAX = {
   "suno-generate-prompt": 3000,
   "generate-music": 2000,
   "voice-design": 1000,
+  "voice-remix": 1000,
   "text-to-audio": 2000,
 } as const
 
@@ -69,6 +70,10 @@ export function FinalAudioPromptPreview({
       label = "Final voice description"
       userText = userVoiceDescription ?? ""
       max = FIELD_MAX["voice-design"]
+    } else if (consumerType === "voice-remix") {
+      label = "Final voice description"
+      userText = userVoiceDescription ?? ""
+      max = FIELD_MAX["voice-remix"]
     } else if (consumerType === "generate-music") {
       label = "Final prompt"
       userText = userPrompt ?? ""

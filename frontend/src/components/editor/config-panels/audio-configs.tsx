@@ -1332,9 +1332,17 @@ export function DubbingConfig({ data, onUpdate, nodeRefs }: ConfigProps<DubbingD
   )
 }
 
-export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<VoiceRemixData>) {
+export function VoiceRemixConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceRemixData> & { nodeId?: string }) {
   return (
     <div className="flex flex-col gap-3">
+      <ConnectedAudioSources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? EMPTY_EDGES} />
+      <FinalAudioPromptPreview
+        consumerNodeId={nodeId}
+        consumerType="voice-remix"
+        userVoiceDescription={data.voiceDescription}
+        nodes={nodes}
+        edges={edges ?? EMPTY_EDGES}
+      />
       <MappableField field="voiceDescription" label="Voice Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <TagTextarea
           rows={3}
