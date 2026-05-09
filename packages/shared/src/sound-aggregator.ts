@@ -20,6 +20,7 @@ export type SoundConsumerType =
   | "suno-generate"
   | "generate-music"
   | "voice-design"
+  | "voice-remix"
   | "text-to-audio"
 
 export interface SoundCompositionFields {
@@ -88,9 +89,9 @@ export function composeSoundHintFromConnections(
   // (sound effects) rejects voice nodes (sound effects aren't vocal).
   for (const src of sources) {
     const t = src.type
-    if (consumerType === "voice-design") {
+    if (consumerType === "voice-design" || consumerType === "voice-remix") {
       if (isMusic(t)) {
-        warnings.push(`Music nodes (${t}) are ignored on Voice Design.`)
+        warnings.push(`Music nodes (${t}) are ignored on ${consumerType === "voice-design" ? "Voice Design" : "Voice Remix"}.`)
         continue
       }
     }
@@ -149,8 +150,9 @@ export function composeSoundHintFromConnections(
 
   const text = acceptedHints.join(", ")
 
-  // Voice Design: also surface the composed text as voiceDescription.
-  if (consumerType === "voice-design" && text) {
+  // Voice Design / Voice Remix: also surface the composed text as
+  // voiceDescription so callers can drop it straight into the API field.
+  if ((consumerType === "voice-design" || consumerType === "voice-remix") && text) {
     Object.assign(fields, { voiceDescription: text })
   }
 

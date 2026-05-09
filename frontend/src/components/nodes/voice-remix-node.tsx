@@ -79,6 +79,10 @@ function VoiceRemixNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        // audio-style handle accepts upstream voice-character / voice-delivery
+        // parameter pickers — their composed prompt fills the voiceDescription
+        // field at run time. Same handle convention as voice-design.
+        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
         { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >

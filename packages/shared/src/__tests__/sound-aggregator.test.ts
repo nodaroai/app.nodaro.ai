@@ -210,6 +210,41 @@ describe("composeSoundHintFromConnections — Voice Design", () => {
   })
 })
 
+describe("composeSoundHintFromConnections — Voice Remix", () => {
+  const remixConsumer: HintNodeLike = { id: "consumer", type: "voice-remix", data: {} }
+
+  it("composes voice nodes into voiceDescription (mirrors voice-design)", () => {
+    const out = composeSoundHintFromConnections(
+      remixConsumer,
+      "voice-remix",
+      ctx(
+        [
+          { id: "vc", type: "voice-character", data: { age: "young-adult", gender: "female", timbre: "bright" } },
+          { id: "vd", type: "voice-delivery", data: { archetype: "friendly-host" } },
+        ],
+        [audioStyleEdge("vc"), audioStyleEdge("vd")],
+      ),
+    )
+    expect(out.text).toContain("bright")
+    expect(out.fields.voiceDescription).toBe(out.text)
+    expect(out.warnings).toEqual([])
+  })
+
+  it("warns on music nodes (Voice Remix is voice-only)", () => {
+    const out = composeSoundHintFromConnections(
+      remixConsumer,
+      "voice-remix",
+      ctx(
+        [{ id: "g", type: "music-genre", data: { genre: "electronic" } }],
+        [audioStyleEdge("g")],
+      ),
+    )
+    expect(out.text).toBe("")
+    expect(out.warnings.length).toBeGreaterThan(0)
+    expect(out.warnings[0]).toContain("Voice Remix")
+  })
+})
+
 describe("composeSoundHintFromConnections — Text to Audio", () => {
   it("accepts music nodes, warns on voice nodes", () => {
     const out = composeSoundHintFromConnections(

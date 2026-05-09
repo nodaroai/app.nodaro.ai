@@ -471,7 +471,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "text-to-dialogue": return <TextToDialogueConfig {...configProps} />
     case "voice-changer": return <VoiceChangerConfig {...configProps} />
     case "dubbing": return <DubbingConfig {...configProps} />
-    case "voice-remix": return <VoiceRemixConfig {...configProps} />
+    case "voice-remix": return <VoiceRemixConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />
     case "forced-alignment": return <ForcedAlignmentConfig {...configProps} />
     case "suno-generate": return <SunoGenerateConfig {...configProps} nodeId={selectedNodeId} />
