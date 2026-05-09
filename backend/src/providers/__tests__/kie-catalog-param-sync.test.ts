@@ -106,27 +106,23 @@ const PARAM_TO_CATALOG_FIELD: Record<string, "aspectRatios" | "resolutions" | "q
  *      catalog doesn't yet mirror (technical debt).
  */
 const PARAM_SHAPE_ALLOWLIST: ReadonlySet<string> = new Set<string>([
-  // L1#4-allowlist surfaced 2026-05-08 — Seedance 2 / Seedance 2 Fast send
-  // aspect_ratio to KIE but MODEL_CATALOG.{seedance-2,seedance-2-fast} doesn't
-  // declare aspectRatios. The frontend probably falls back to default ratios.
-  // Follow-up: add aspectRatios to catalog OR confirm hardcoded default.
-  "seedance-2:aspect_ratio",
-  "seedance-2-fast:aspect_ratio",
-  // L1#4-allowlist — runway-kie sends `quality` to KIE; catalog has no qualities.
+  // L1#4-allowlist — runway-kie sends `quality` to KIE, but the values are
+  // actually resolution strings ("720p"/"1080p"), not quality tiers. The
+  // catalog correctly declares them under `resolutions`. The KIE param name
+  // is semantically misleading; the catalog field reflects intent. Cannot
+  // be cleanly fixed without renaming the KIE param (out of our control)
+  // or special-casing in the param→catalog map.
   "runway-kie:quality",
-  // L1#4-allowlist — kling sends aspect_ratio (t2v) and resolution (i2v + t2v +
-  // motion-transfer) to KIE. The motion-transfer entry is special-cased; the
-  // i2v/t2v entries probably need catalog updates. Follow-up audit.
-  "kling:aspect_ratio",
+  // L1#4-allowlist — kling motion-transfer config sends `resolution: "720p"`,
+  // but the user-facing catalog entry covers i2v/t2v (where motion-transfer
+  // doesn't apply). Motion-transfer has its own dropdown registry; declaring
+  // resolutions on the kling catalog entry would be wrong for i2v/t2v.
   "kling:resolution",
-  // L1#4-allowlist — grok t2v sends `resolution` to KIE; catalog only has
-  // resolutions for grok-i2v family. Follow-up: declare for the t2v entry.
+  // L1#4-allowlist — grok t2v sends `resolution`, but the `grok` catalog
+  // entry covers t2i+t2v (t2i doesn't accept resolution). Adding resolutions
+  // to the entry would mislead the t2i dropdown UI. Long-term fix: split
+  // grok-t2i and grok-t2v in the catalog, or scope the dropdown by mode.
   "grok:resolution",
-  // L1#4-allowlist — bytedance-lite, bytedance-pro, wan-turbo (all t2v) send
-  // aspect_ratio to KIE; catalog entries are missing aspectRatios.
-  "bytedance-lite:aspect_ratio",
-  "bytedance-pro:aspect_ratio",
-  "wan-turbo:aspect_ratio",
 ])
 
 /**

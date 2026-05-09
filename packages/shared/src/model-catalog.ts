@@ -226,6 +226,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Nano Banana Edit",
     description: "Image-to-image edits via Google's Nano Banana family. Good general-purpose editor.",
     useCases: ["edit", "remix", "general"],
+    features: ["reference-image"],
     aspectRatios: NANO_BANANA_RATIOS,
     pricing: [{ identifier: "nano-banana-edit", credits: 2 }],
   },
@@ -239,6 +240,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Flux 2 Pro",
     description: "Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K.",
     useCases: ["realistic", "general"],
+    features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [
@@ -254,6 +256,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Flux 2 Flex",
     description: "Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro.",
     useCases: ["premium", "fidelity", "realistic"],
+    features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
     resolutions: ["1K", "2K"],
     pricing: [
@@ -328,6 +331,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "GPT Image 1.5",
     description: "Best for text rendering, typography, logos, and graphic design. Limited aspect ratios.",
     useCases: ["typography", "logo", "graphic-design", "text-heavy"],
+    features: ["reference-image"],
     aspectRatios: GPT_IMAGE_RATIOS,
     qualities: ["medium", "high"],
     pricing: [
@@ -363,6 +367,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "GPT Image 2",
     description: "Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K).",
     useCases: ["typography", "high-res", "general"],
+    features: ["reference-image"],
     aspectRatios: GPT_IMAGE_2_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
@@ -505,6 +510,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Seedream 4.5",
     description: "Bytedance's Seedream 4.5 — precise control, high resolution at 4K via :high.",
     useCases: ["realistic", "high-res", "control"],
+    features: ["reference-image"],
     aspectRatios: SEEDREAM_RATIOS,
     qualities: ["basic", "high"],
     pricing: [
@@ -538,6 +544,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Seedream 5 Lite",
     description: "Newer Seedream 5 Lite — instruction-based generation, visual reasoning.",
     useCases: ["realistic", "instruction"],
+    features: ["reference-image"],
     aspectRatios: SEEDREAM_RATIOS,
     qualities: ["basic", "high"],
     pricing: [
@@ -571,6 +578,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Qwen",
     description: "Cheap, fast, decent quality. Native negative-prompt support.",
     useCases: ["fast", "cheap", "general"],
+    features: ["reference-image"],
     aspectRatios: IDEOGRAM_RATIOS,
     pricing: [{ identifier: "qwen", credits: 1 }],
   },
@@ -626,6 +634,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Grok Imagine",
     description: "Expressive, high-contrast output. Supports both image and video.",
     useCases: ["stylized", "expressive", "general"],
+    features: ["reference-image"],
     aspectRatios: GROK_RATIOS,
     pricing: [{ identifier: "grok", credits: 2 }],
   },
@@ -660,6 +669,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Recraft Remove BG",
     description: "Remove image background. Cheap utility.",
     useCases: ["background-removal", "utility"],
+    features: ["reference-image"],
     pricing: [{ identifier: "recraft-remove-bg", credits: 1 }],
   },
   "recraft-upscale": {
@@ -670,6 +680,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Recraft Crisp Upscale",
     description: "Light-weight image upscale (Recraft Crisp).",
     useCases: ["upscale", "utility"],
+    features: ["reference-image"],
     pricing: [{ identifier: "recraft-upscale", credits: 1 }],
   },
   "topaz-image-upscale": {
@@ -680,6 +691,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Topaz Image Upscale",
     description: "High-quality image upscale up to 8K. Best for production-ready output.",
     useCases: ["upscale", "high-res", "premium"],
+    features: ["reference-image"],
     resolutions: ["2K", "4K", "8K"],
     pricing: [
       { identifier: "topaz-image-upscale", credits: 4, note: "2K default" },
@@ -824,6 +836,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Kling 2.6 I2V — strong motion realism. 5s/10s, optional native audio.",
     useCases: ["realistic", "motion", "dance"],
     features: ["audio"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
     pricing: [
       { identifier: "kling", credits: 28, note: "10s no audio default" },
@@ -936,6 +949,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Seedance 2 — premium tier with native audio. Per-second pricing by resolution.",
     useCases: ["premium", "narrative"],
     features: ["end-frame", "audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p"],
     pricing: [
@@ -955,6 +969,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Cheaper / quicker Seedance 2 tier.",
     useCases: ["fast", "motion"],
     features: ["end-frame", "audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     resolutions: ["480p", "720p"],
     pricing: [
@@ -992,6 +1007,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Wan 2.2 Turbo",
     description: "Cheap, fast Wan turbo — 5s. Serves both i2v and t2v under one id.",
     useCases: ["cheap", "fast"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5],
     resolutions: ["480p", "720p"],
     // Different KIE endpoints (i2v vs t2v) → different costs under
@@ -1038,6 +1054,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Cheapest Bytedance video tier with end-frame support.",
     useCases: ["cheap", "motion"],
     features: ["end-frame"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
     resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-lite", credits: 6 }],
@@ -1050,6 +1067,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Bytedance Pro I2V",
     description: "Pro Bytedance video tier — better quality.",
     useCases: ["motion", "narrative"],
+    aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
     resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-pro", credits: 18 }],
