@@ -30,51 +30,16 @@ import {
 } from "@nodaro/shared"
 
 /**
- * Allowlist of ref-image drifted models. Each is currently divergent
- * between the three sources of truth and surfaced by Phase 2 of the
- * test-strategy. Two distinct categories:
- *
- *   (a) Image models in MODELS_WITH_REFERENCE_IMAGE_SUPPORT (set) but
- *       missing from MODEL_CATALOG.features. Frontend gates the ref-image
- *       upload widget correctly, but MCP `list_models` doesn't advertise
- *       the capability — agents may overlook these models. Fix: add
- *       "reference-image" to the catalog `features` array.
- *
- *   (b) Video models in MODEL_CATALOG.features = "reference-image" but not
- *       in MODELS_WITH_REFERENCE_IMAGE_SUPPORT. The set is image-only by
- *       design (used by image-configs.tsx for the upload widget); video
- *       models handle ref images via separate `imageUrls`/`startFrame`
- *       paths. Fix: either rename the set to clarify scope, or split the
- *       catalog feature into "reference-image" (image) and
- *       "reference-video"/"start-frame" (video).
+ * Allowlist of ref-image drifted models. Empty after the Phase 2 cleanup:
+ * (a) all 12 image-model gaps (catalog feature missing) were fixed by
+ *     adding "reference-image" to their MODEL_CATALOG entries.
+ * (b) the 6 video-model false-positives (veo3/seedance-2/etc.) are now
+ *     handled by scoping the catalog→set check to image models only —
+ *     video models use the catalog feature legitimately for start-frame
+ *     support, but image-configs.tsx (the consumer of
+ *     MODELS_WITH_REFERENCE_IMAGE_SUPPORT) is image-only by design.
  */
-const REF_IMAGE_DRIFT_ALLOWLIST: ReadonlySet<string> = new Set<string>([
-  // L1#11-allowlist surfaced 2026-05-08 — category (a): image models with
-  // set membership but no catalog feature flag. Quick fix is to add the
-  // feature to the catalog entries.
-  "flux",
-  "flux-flex",
-  "gpt-image",
-  "gpt-image-2",
-  "grok",
-  "nano-banana-edit",
-  "qwen",
-  "recraft-remove-bg",
-  "recraft-upscale",
-  "seedream",
-  "seedream-5-lite",
-  "topaz-image-upscale",
-  // L1#11-allowlist surfaced 2026-05-08 — category (b): video models with
-  // catalog feature but image-only set lacks them by design. The right
-  // long-term fix is splitting the catalog feature into image vs video
-  // variants.
-  "grok-i2v",
-  "seedance-2",
-  "seedance-2-fast",
-  "veo3",
-  "veo3.1",
-  "veo3_lite",
-])
+const REF_IMAGE_DRIFT_ALLOWLIST: ReadonlySet<string> = new Set<string>([])
 
 // ---------------------------------------------------------------------------
 // Test 1 — every model in MODELS_WITH_REFERENCE_IMAGE_SUPPORT has a
@@ -101,23 +66,29 @@ describe('MODELS_WITH_REFERENCE_IMAGE_SUPPORT × MODEL_CATALOG.features = "refer
 })
 
 // ---------------------------------------------------------------------------
-// Test 2 — every model in MODEL_CATALOG with `features: ["reference-image"]`
-// is in MODELS_WITH_REFERENCE_IMAGE_SUPPORT.
+// Test 2 — every IMAGE model in MODEL_CATALOG with `features:
+// ["reference-image"]` is in MODELS_WITH_REFERENCE_IMAGE_SUPPORT.
+//
+// The set is image-scoped by design — image-configs.tsx and
+// reference-support-warning.tsx are the only consumers, and both gate the
+// IMAGE upload widget. Video models legitimately declare the feature in
+// the catalog (for start-frame support) but route through different
+// frontend code paths and don't need set membership.
 // ---------------------------------------------------------------------------
 
-describe("MODEL_CATALOG ref-image features × MODELS_WITH_REFERENCE_IMAGE_SUPPORT", () => {
-  const catalogClaimsRefImage = Object.entries(MODEL_CATALOG)
-    .filter(([, entry]) => entry.features?.includes("reference-image"))
+describe("MODEL_CATALOG ref-image image features × MODELS_WITH_REFERENCE_IMAGE_SUPPORT", () => {
+  const imageCatalogClaimsRefImage = Object.entries(MODEL_CATALOG)
+    .filter(([, entry]) => entry.kind === "image" && entry.features?.includes("reference-image"))
     .map(([id]) => id)
     .sort()
 
-  it.each(catalogClaimsRefImage)(
-    'MODELS_WITH_REFERENCE_IMAGE_SUPPORT includes "%s" (catalog declares reference-image feature)',
+  it.each(imageCatalogClaimsRefImage)(
+    'MODELS_WITH_REFERENCE_IMAGE_SUPPORT includes "%s" (image-kind catalog declares reference-image feature)',
     (modelId) => {
       if (REF_IMAGE_DRIFT_ALLOWLIST.has(modelId)) return
       expect(
         MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(modelId),
-        `MODEL_CATALOG["${modelId}"].features declares "reference-image" but the model is missing from MODELS_WITH_REFERENCE_IMAGE_SUPPORT in packages/shared/src/model-constants.ts. The frontend may render an upload widget but the route Zod will silently strip the ref-image field. Add "${modelId}" to the set, or remove "reference-image" from the catalog features array.`,
+        `MODEL_CATALOG["${modelId}"] is an image model with "reference-image" feature but is missing from MODELS_WITH_REFERENCE_IMAGE_SUPPORT in packages/shared/src/model-constants.ts. The frontend may render an upload widget but the route Zod will silently strip the ref-image field. Add "${modelId}" to the set, or remove "reference-image" from the catalog features array.`,
       ).toBe(true)
     },
   )
@@ -147,6 +118,7 @@ describe("REF_IMAGE_MAX_LIMITS × MODELS_WITH_REFERENCE_IMAGE_SUPPORT", () => {
 
 describe("REF_IMAGE_DRIFT_ALLOWLIST integrity", () => {
   it("every allowlist entry is still actually drifted (in one source but not the other)", () => {
+    if (REF_IMAGE_DRIFT_ALLOWLIST.size === 0) return // empty list — nothing to verify
     const stale: string[] = []
     for (const id of REF_IMAGE_DRIFT_ALLOWLIST) {
       const inSet = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(id)
