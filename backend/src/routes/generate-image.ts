@@ -39,7 +39,7 @@ function resolveEffectiveProvider(
   return T2I_TO_I2I_VARIANT[provider] ?? provider
 }
 
-const generateImageBody = z.object({
+export const generateImageBody = z.object({
   prompt: z.string().min(1).max(2000),
   userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),

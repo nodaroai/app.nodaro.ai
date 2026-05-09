@@ -1101,7 +1101,7 @@ function emitExecutionEvent(event: ExecutionEvent): void {
   }
 }
 
-async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {
+export async function checkExecutionControl(executionId: string): Promise<"running" | "cancelled" | "stopping"> {
   const { data } = await supabase
     .from("workflow_executions")
     .select("status")

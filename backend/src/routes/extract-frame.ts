@@ -9,7 +9,7 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
-const extractFrameBody = z.object({
+export const extractFrameBody = z.object({
   videoUrl: safeUrlSchema,
   mode: z.enum(["first", "last", "timestamp"]).default("first"),
   timestamp: z.number().min(0).optional(),
