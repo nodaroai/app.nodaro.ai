@@ -1321,24 +1321,32 @@ export function executeNode(
 
   if (node.type === "generate-music") {
     // Manual wins — see gen-image note above.
-    const prompt =
+    const typedPrompt =
       overridePrompt ??
       resolveTextRefs((node.data as GenerateMusicData).prompt?.trim(), refMap) ??
       inputs.prompt;
-    if (!prompt) {
-      toast.error(
-        `Node "${(node.data as GenerateMusicData).label}": no prompt found`,
-      );
-      return Promise.reject(new Error("No prompt"));
-    }
     const d = node.data as GenerateMusicData;
     const refUrl = inputs.audioUrl || d.referenceAudioUrl || undefined;
-    // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
-    // into the prompt and — for minimax — into the typed genre/mood/instrumental
-    // fields. Other providers receive prompt-only.
+    // Fold connected Sound nodes (music-genre / music-mood / instrumentation
+    // / voice-character / voice-delivery) into the prompt and — for minimax —
+    // into the typed genre/mood/instrumental fields.
+    //
+    // IMPORTANT: collect audioStyle BEFORE the prompt-required check —
+    // upstream parameter pickers can supply the prompt entirely (e.g. user
+    // wires music-genre + music-mood without typing a prompt). Bailing on
+    // empty typedPrompt before considering audioStyle.text reproduces the
+    // bug where music nodes refuse to run from parameter-only input.
     const audioStyle = collectAudioStyleHints(node, "generate-music", nodes, edges);
-    const composedPrompt = truncateForField(audioStyle.text, prompt, 2000);
-    const finalPrompt = appendField(prompt, composedPrompt);
+    if (!typedPrompt && !audioStyle.text) {
+      toast.error(`Node "${d.label}": no prompt found`);
+      return Promise.reject(new Error("No prompt"));
+    }
+    const composedPrompt = typedPrompt
+      ? truncateForField(audioStyle.text, typedPrompt, 2000)
+      : audioStyle.text;
+    const finalPrompt = typedPrompt
+      ? appendField(typedPrompt, composedPrompt)
+      : composedPrompt;
     const finalGenre = (d.genre || audioStyle.fields.genre) ?? "";
     const finalMood  = (d.mood  || audioStyle.fields.mood)  ?? "";
     const finalInstrumental = d.instrumental || audioStyle.fields.instrumental || false;
@@ -1366,26 +1374,30 @@ export function executeNode(
 
   if (node.type === "text-to-audio") {
     // Manual wins — see gen-image note above.
-    const prompt =
+    const typedPrompt =
       overridePrompt ??
       resolveTextRefs((node.data as TextToAudioData).prompt?.trim(), refMap) ??
       inputs.prompt;
-    if (!prompt) {
-      toast.error(
-        `Node "${(node.data as TextToAudioData).label}": no prompt found`,
-      );
-      return Promise.reject(new Error("No prompt"));
-    }
     const d = node.data as TextToAudioData;
     const sfxOptions =
       d.provider === "elevenlabs-sfx"
         ? { loop: d.loop, promptInfluence: d.promptInfluence }
         : undefined;
     // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
-    // into the SFX prompt with a 2000-char budget.
+    // into the SFX prompt with a 2000-char budget. Collected BEFORE the
+    // prompt-required check so upstream parameter pickers can supply the
+    // prompt entirely.
     const audioStyle = collectAudioStyleHints(node, "text-to-audio", nodes, edges);
-    const composedPrompt = truncateForField(audioStyle.text, prompt, 2000);
-    const finalPrompt = appendField(prompt, composedPrompt);
+    if (!typedPrompt && !audioStyle.text) {
+      toast.error(`Node "${d.label}": no prompt found`);
+      return Promise.reject(new Error("No prompt"));
+    }
+    const composedPrompt = typedPrompt
+      ? truncateForField(audioStyle.text, typedPrompt, 2000)
+      : audioStyle.text;
+    const finalPrompt = typedPrompt
+      ? appendField(typedPrompt, composedPrompt)
+      : composedPrompt;
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
@@ -1549,16 +1561,22 @@ export function executeNode(
       toast.error(`Node "${d.label}": no preview text provided`);
       return Promise.reject(new Error("No text"));
     }
-    if (!d.voiceDescription?.trim()) {
+    // Fold connected Voice Sound nodes (voice-character / voice-delivery)
+    // into the voiceDescription field with a 1000-char budget. Collected
+    // BEFORE the description-required check so upstream voice-character /
+    // voice-delivery pickers can supply the description entirely.
+    const audioStyle = collectAudioStyleHints(node, "voice-design", nodes, edges);
+    const userVoiceDesc = d.voiceDescription?.trim() ?? "";
+    if (!userVoiceDesc && !audioStyle.text) {
       toast.error(`Node "${d.label}": no voice description provided`);
       return Promise.reject(new Error("No voice description"));
     }
-    // Fold connected Voice Sound nodes (voice-character / voice-delivery)
-    // into the voiceDescription field with a 1000-char budget.
-    const audioStyle = collectAudioStyleHints(node, "voice-design", nodes, edges);
-    const userVoiceDesc = d.voiceDescription ?? "";
-    const composedVoiceDesc = truncateForField(audioStyle.text, userVoiceDesc, 1000);
-    const finalVoiceDescription = appendField(userVoiceDesc, composedVoiceDesc);
+    const composedVoiceDesc = userVoiceDesc
+      ? truncateForField(audioStyle.text, userVoiceDesc, 1000)
+      : audioStyle.text;
+    const finalVoiceDescription = userVoiceDesc
+      ? appendField(userVoiceDesc, composedVoiceDesc)
+      : composedVoiceDesc;
     setUserPromptTemplate(d.voiceDescription?.trim() || undefined);
     return runProcessingNode(
       node.id,
@@ -1684,25 +1702,36 @@ export function executeNode(
 
   if (node.type === "suno-generate") {
     const d = node.data as SunoGenerateData;
-    const prompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
-    if (!prompt) {
+    const typedPrompt = overridePrompt ?? inputs.prompt ?? resolveTextRefs(d.prompt?.trim(), refMap);
+    const effectiveCustomMode = getEffectiveSunoCustomMode(d);
+    // Fold connected Sound nodes (music-genre / music-mood / instrumentation
+    // / voice-character / voice-delivery) into either `style` (customMode
+    // true, 500-char budget) or `prompt` (customMode false, 3000-char
+    // budget). Collected BEFORE the prompt-required check so upstream
+    // parameter pickers can supply the prompt entirely. Suno enforces
+    // these caps server-side.
+    const audioStyle = collectAudioStyleHints(node, "suno-generate", nodes, edges);
+    if (!typedPrompt && !audioStyle.text) {
       toast.error(`Node "${d.label}": no prompt found`);
       return Promise.reject(new Error("No prompt"));
     }
-    const effectiveCustomMode = getEffectiveSunoCustomMode(d);
-    // Fold connected Sound nodes (music-genre / music-mood / instrumentation)
-    // into either `style` (customMode true, 500-char budget) or `prompt`
-    // (customMode false, 3000-char budget). Suno enforces these caps server-side.
-    const audioStyle = collectAudioStyleHints(node, "suno-generate", nodes, edges);
     const userStyle = d.style ?? "";
     let finalStyle = userStyle;
-    let finalPrompt = prompt;
+    let finalPrompt = typedPrompt ?? "";
     if (effectiveCustomMode) {
-      const composedStyle = truncateForField(audioStyle.text, userStyle, 500);
-      finalStyle = appendField(userStyle, composedStyle);
+      const composedStyle = userStyle
+        ? truncateForField(audioStyle.text, userStyle, 500)
+        : audioStyle.text;
+      finalStyle = userStyle
+        ? appendField(userStyle, composedStyle)
+        : composedStyle;
     } else {
-      const composedPrompt = truncateForField(audioStyle.text, prompt, 3000);
-      finalPrompt = appendField(prompt, composedPrompt);
+      const composedPrompt = typedPrompt
+        ? truncateForField(audioStyle.text, typedPrompt, 3000)
+        : audioStyle.text;
+      finalPrompt = typedPrompt
+        ? appendField(typedPrompt, composedPrompt)
+        : composedPrompt;
     }
     setUserPromptTemplate(d.prompt?.trim() || undefined);
     return runProcessingNode(
@@ -1715,7 +1744,9 @@ export function executeNode(
           style: finalStyle || undefined,
           title: d.title || undefined,
           negativeStyle: d.negativeStyle || undefined,
-          vocalGender: d.vocalGender || undefined,
+          // Manual vocalGender wins; otherwise extract from a connected
+          // voice-character node ("male"/"female" only).
+          vocalGender: d.vocalGender || audioStyle.fields.vocalGender || undefined,
           styleWeight: d.styleWeight,
           weirdnessConstraint: d.weirdnessConstraint,
           audioWeight: d.audioWeight,

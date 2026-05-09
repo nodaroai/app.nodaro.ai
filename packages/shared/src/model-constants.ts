@@ -410,6 +410,11 @@ export const MUSIC_PROVIDERS = [
   // Replicate disabled
   // "musicgen",
   "minimax",
+  // TODO: surface Suno V5 here for discoverability — needs backend wiring
+  // through suno-client.ts (Suno uses /api/v1/generate, NOT the standard
+  // /api/v1/jobs/createTask path runKieTask uses). Tracked as a separate
+  // follow-up PR. Until then, Suno is reachable via the standalone
+  // `suno-generate` node.
   // Replicate disabled
   // "lyria",
   // "bark",

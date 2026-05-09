@@ -79,6 +79,9 @@ export function GenerateMusicConfig({ data, onUpdate, sources, fieldMappings, on
             {/* Replicate disabled */}
             {/* <SelectItem value="musicgen">MusicGen (Meta) - instrumental (default)</SelectItem> */}
             <SelectItem value="minimax">MiniMax Music - vocals & lyrics</SelectItem>
+            {/* TODO: add Suno V5 here once backend routes generate-music
+                with provider=suno-v5 through suno-client.ts. Today Suno is
+                reachable via the standalone Suno Generate node. */}
             {/* Replicate disabled */}
             {/* <SelectItem value="lyria">Lyria 2 (Google) - high quality</SelectItem> */}
             {/* <SelectItem value="bark">Bark (Suno) - speech & music</SelectItem> */}

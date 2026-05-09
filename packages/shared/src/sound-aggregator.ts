@@ -27,6 +27,13 @@ export interface SoundCompositionFields {
   readonly mood?: string
   readonly instrumental?: boolean
   readonly voiceDescription?: string
+  /**
+   * Suno's binary vocal-gender control. Extracted from a connected
+   * voice-character node's `gender` field when it's "male" or "female"
+   * ("androgynous" is left to prompt-only since Suno doesn't accept it).
+   * Set on suno-generate and generate-music consumers.
+   */
+  readonly vocalGender?: "male" | "female"
 }
 
 export interface SoundComposition {
@@ -69,21 +76,18 @@ export function composeSoundHintFromConnections(
   const acceptedHints: string[] = []
   const fields: SoundCompositionFields = {}
 
-  // Identify which sources are accepted vs warned-about by consumer type
+  // Identify which sources are accepted vs warned-about by consumer type.
+  //
+  // Music consumers (suno-generate, generate-music) accept BOTH music nodes
+  // AND voice nodes — voice description (gender, age, accent, language,
+  // timbre, delivery archetype) is valid input for music with vocals. Suno
+  // V5 in particular benefits from rich voice description; the typed
+  // `vocalGender` field on Suno is also extracted below from voice-character.
+  //
+  // Voice Design rejects music nodes (different domain). Text-to-Audio
+  // (sound effects) rejects voice nodes (sound effects aren't vocal).
   for (const src of sources) {
     const t = src.type
-    if (consumerType === "suno-generate") {
-      if (isVoice(t)) {
-        warnings.push(`Voice nodes (${t}) are ignored on Suno Generate (music only).`)
-        continue
-      }
-    }
-    if (consumerType === "generate-music") {
-      if (isVoice(t)) {
-        warnings.push(`Voice nodes (${t}) are ignored on Generate Music.`)
-        continue
-      }
-    }
     if (consumerType === "voice-design") {
       if (isMusic(t)) {
         warnings.push(`Music nodes (${t}) are ignored on Voice Design.`)
@@ -99,6 +103,22 @@ export function composeSoundHintFromConnections(
 
     const hint = getParameterPromptHint(src)
     if (hint) acceptedHints.push(hint)
+
+    // Music consumers — extract vocalGender from connected voice-character
+    // node (when gender is "male" or "female"; "androgynous" doesn't map to
+    // Suno's binary vocalGender field, so it's left to the prompt-only path).
+    // Applies to BOTH suno-generate and generate-music since the Suno
+    // provider routes both.
+    if (
+      (consumerType === "suno-generate" || consumerType === "generate-music") &&
+      t === "voice-character" &&
+      src.data
+    ) {
+      const gender = (src.data as Record<string, unknown>).gender
+      if ((gender === "male" || gender === "female") && !fields.vocalGender) {
+        Object.assign(fields, { vocalGender: gender })
+      }
+    }
 
     // Generate Music — populate typed fields when provider is minimax.
     if (consumerType === "generate-music" && consumer.data && (consumer.data as Record<string, unknown>).provider === "minimax") {
