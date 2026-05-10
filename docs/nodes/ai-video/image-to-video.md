@@ -51,6 +51,11 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 
 21 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway.
 
+Additional KIE providers:
+- **Wan 2.7 I2V** (`wan-2.7-i2v`) — 2–15s, 720p or 1080p, supports start+end frame input
+- **HappyHorse I2V** (`happyhorse-i2v`) — 3–15s, 720p or 1080p, single start frame
+- **HappyHorse Ref2V** (`happyhorse-ref2v`) — 3–15s, 720p or 1080p, 1–9 reference images
+
 ## Best Practices
 
 - Use high-quality, well-composed source images for best results

@@ -33,6 +33,13 @@ The Text to Video node creates video from a text prompt without requiring a sour
 
 **Outputs:**
 - Generated video URL
+
+## Supported Providers
+
+Additional KIE providers:
+- **Wan 2.7** (`wan-2.7-t2v`) — 2–15s, 720p or 1080p
+- **HappyHorse** (`happyhorse`) — 3–15s, 720p or 1080p
+
 ## Best Practices
 
 - Write detailed, cinematic prompts describing action, lighting, and mood
