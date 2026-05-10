@@ -1535,6 +1535,7 @@ export type VideoToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  connectedImageOrder?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -4301,7 +4302,6 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 25,
     inputs: ["in"],
     outputs: ["video"],
-    // V2V uses Wan 2.6 only via KIE.ai (no provider selection needed)
     defaultData: { label: "Video to Video", prompt: "", duration: 5, fieldMappings: {} },
   },
   {

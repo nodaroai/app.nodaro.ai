@@ -102,6 +102,18 @@ describe("elementsSchema", () => {
     expect(result.success).toBe(false)
   })
 
+  it("rejects element with empty description", () => {
+    const result = elementsSchema.safeParse([
+      {
+        name: "dog",
+        description: "",
+        type: "video",
+        urls: ["https://a.com/v.mp4"],
+      },
+    ])
+    expect(result.success).toBe(false)
+  })
+
   it("rejects element name exceeding 50 characters", () => {
     const result = elementsSchema.safeParse([
       {

@@ -276,7 +276,6 @@ const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",
-  "reference-images": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
 };
@@ -985,7 +984,7 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "upload-image") {
-      if (node.type === "generate-image") {
+      if (node.type === "generate-image" || node.type === "video-to-video") {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
@@ -1044,7 +1043,7 @@ export function resolveNodeInputs(
         inputs.videoUrl = output;
       }
     } else if (src.type === "generate-image") {
-      if (node.type === "generate-image") {
+      if (node.type === "generate-image" || node.type === "video-to-video") {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
@@ -1061,7 +1060,8 @@ export function resolveNodeInputs(
         node.type === "generate-image" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
-        node.type === "modify-image"
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -1077,7 +1077,8 @@ export function resolveNodeInputs(
         node.type === "generate-image" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
-        node.type === "modify-image"
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -1093,7 +1094,8 @@ export function resolveNodeInputs(
         node.type === "generate-image" ||
         (node.type as string) === "edit-image" ||
         (node.type as string) === "image-to-image" ||
-        node.type === "modify-image"
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
       ) {
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
@@ -1172,7 +1174,7 @@ export function resolveNodeInputs(
       const sceneImageUrl =
         sceneResults[sceneActiveIdx]?.url ?? sceneData.generatedImageUrl;
       if (sceneImageUrl) {
-        if (node.type === "generate-image") {
+        if (node.type === "generate-image" || node.type === "video-to-video") {
           inputs.referenceImageUrls = [
             ...(inputs.referenceImageUrls ?? []),
             sceneImageUrl,

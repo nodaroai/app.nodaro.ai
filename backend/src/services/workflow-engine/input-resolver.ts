@@ -662,7 +662,6 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",
-  "reference-images": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
 }
@@ -1059,7 +1058,7 @@ function routeOutput(
 
   // --- Upload image ---
   if (srcType === "upload-image") {
-    if (targetType === "generate-image") {
+    if (targetType === "generate-image" || targetType === "video-to-video") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
       inputs.imageUrl = output
@@ -1090,7 +1089,7 @@ function routeOutput(
 
   // --- Generate image → depends on target ---
   if (srcType === "generate-image") {
-    if (targetType === "generate-image") {
+    if (targetType === "generate-image" || targetType === "video-to-video") {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else if (targetType === "text-to-audio") {
       inputs.prompt = (src.data.prompt as string) ?? ""
@@ -1106,7 +1105,8 @@ function routeOutput(
       targetType === "generate-image" ||
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
-      targetType === "modify-image"
+      targetType === "modify-image" ||
+      targetType === "video-to-video"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1121,7 +1121,8 @@ function routeOutput(
       targetType === "generate-image" ||
       targetType === "edit-image" ||
       targetType === "image-to-image" ||
-      targetType === "modify-image"
+      targetType === "modify-image" ||
+      targetType === "video-to-video"
     ) {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]
     } else {
@@ -1196,7 +1197,7 @@ function routeOutput(
   if (srcType === "scene") {
     const state = nodeStates[src.id]
     if (state?.output?.imageUrl) {
-      if (targetType === "generate-image") {
+      if (targetType === "generate-image" || targetType === "video-to-video") {
         inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), state.output.imageUrl]
       } else {
         inputs.imageUrl = state.output.imageUrl
