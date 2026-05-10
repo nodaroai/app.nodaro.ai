@@ -1078,6 +1078,13 @@ export function executeNode(
 
     // Manual wins — see gen-image note above.
     let prompt = (resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap) ?? inputs.prompt) as string | undefined;
+    // Kling 3 Studio stores the main prompt in data.motionPrompt (not data.prompt)
+    if (!prompt) {
+      const klingMotionPrompt = (i2vData as Record<string, unknown>).motionPrompt as string | undefined;
+      if (klingMotionPrompt?.trim()) {
+        prompt = resolveTextRefs(klingMotionPrompt.trim(), refMap) ?? klingMotionPrompt.trim();
+      }
+    }
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
