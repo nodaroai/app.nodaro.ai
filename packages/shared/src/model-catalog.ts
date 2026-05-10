@@ -161,6 +161,8 @@ const Z_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
 
 const VIDEO_RATIOS_HV = ["16:9", "9:16"] as const
 const VIDEO_RATIOS_HVS = ["16:9", "9:16", "1:1"] as const
+const WAN_27_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "8:1", "1:8"] as const
+const VIDEO_RATIOS_HVS345 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 
 // =============================================================================
 // IMAGE MODELS
@@ -1043,6 +1045,128 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Faster Wan V2V variant.",
     useCases: ["v2v", "fast"],
     pricing: [{ identifier: "wan-flash", credits: 13 }],
+  },
+  // ── Wan 2.7 ──
+  "wan-2.7": {
+    id: "wan-2.7",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Alibaba",
+    label: "Wan 2.7",
+    description: "Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images.",
+    useCases: ["photorealistic", "stylized", "reference"],
+    aspectRatios: WAN_27_IMAGE_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "wan-2.7",    credits: 3,  note: "1K base" },
+      { identifier: "wan-2.7:2K", credits: 5,  note: "2K" },
+      { identifier: "wan-2.7:4K", credits: 10, note: "4K" },
+    ],
+  },
+  "wan-2.7-pro": {
+    id: "wan-2.7-pro",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Alibaba",
+    label: "Wan 2.7 Pro",
+    description: "Wan 2.7 Pro text-to-image — higher quality, 1K/2K/4K, no image input.",
+    useCases: ["photorealistic", "premium"],
+    aspectRatios: WAN_27_IMAGE_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "wan-2.7-pro",    credits: 4,  note: "1K base" },
+      { identifier: "wan-2.7-pro:2K", credits: 8,  note: "2K" },
+      { identifier: "wan-2.7-pro:4K", credits: 15, note: "4K" },
+    ],
+  },
+  "wan-2.7-i2v": {
+    id: "wan-2.7-i2v",
+    kind: "video",
+    modes: ["i2v"] as const,
+    family: "Alibaba",
+    label: "Wan 2.7 I2V",
+    description: "Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame.",
+    useCases: ["motion", "narrative"],
+    durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    features: ["end-frame"],
+    pricing: [
+      { identifier: "wan-2.7-i2v", credits: 24, note: "5s 720p default" },
+    ],
+  },
+  "wan-2.7-t2v": {
+    id: "wan-2.7-t2v",
+    kind: "video",
+    modes: ["t2v"] as const,
+    family: "Alibaba",
+    label: "Wan 2.7 T2V",
+    description: "Wan 2.7 text-to-video — 2–15s at 720p/1080p.",
+    useCases: ["motion", "narrative"],
+    aspectRatios: VIDEO_RATIOS_HVS345,
+    durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "wan-2.7-t2v", credits: 24, note: "5s 720p default" },
+    ],
+  },
+  // ── HappyHorse ──
+  "happyhorse": {
+    id: "happyhorse",
+    kind: "video",
+    modes: ["t2v"] as const,
+    family: "HappyHorse",
+    label: "HappyHorse",
+    description: "HappyHorse text-to-video — 3–15s at 720p/1080p.",
+    useCases: ["motion", "creative"],
+    aspectRatios: VIDEO_RATIOS_HVS345,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "happyhorse", credits: 16, note: "5s 720p default" },
+    ],
+  },
+  "happyhorse-i2v": {
+    id: "happyhorse-i2v",
+    kind: "video",
+    modes: ["i2v"] as const,
+    family: "HappyHorse",
+    label: "HappyHorse I2V",
+    description: "HappyHorse image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image.",
+    useCases: ["motion", "creative"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "happyhorse-i2v", credits: 16, note: "5s 720p default" },
+    ],
+  },
+  "happyhorse-ref2v": {
+    id: "happyhorse-ref2v",
+    kind: "video",
+    modes: ["i2v"] as const,
+    family: "HappyHorse",
+    label: "HappyHorse Ref2V",
+    description: "HappyHorse reference-to-video — 1–9 reference images, 3–15s at 720p/1080p.",
+    useCases: ["motion", "reference"],
+    aspectRatios: VIDEO_RATIOS_HVS345,
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    features: ["reference-image"],
+    pricing: [
+      { identifier: "happyhorse-ref2v", credits: 19, note: "5s 720p default" },
+    ],
+  },
+  "happyhorse-edit": {
+    id: "happyhorse-edit",
+    kind: "video",
+    modes: ["v2v"] as const,
+    family: "HappyHorse",
+    label: "HappyHorse Edit",
+    description: "HappyHorse video-edit — video-to-video transformation, up to 60s input, 720p/1080p output.",
+    useCases: ["v2v", "restyle"],
+    resolutions: ["720p", "1080p"],
+    pricing: [
+      { identifier: "happyhorse-edit", credits: 25, note: "720p default" },
+    ],
   },
   // ── Bytedance video lite/pro ──
   "bytedance-lite": {
