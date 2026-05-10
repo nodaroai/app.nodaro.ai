@@ -4,20 +4,23 @@ A parameter-picker that emits a music-mood prompt-hint to feed Suno Generate, Ge
 
 ## Configuration
 
-| Field   | Type   | Description                                                                       |
-|---------|--------|-----------------------------------------------------------------------------------|
-| energy  | string | Optional. Energy level id (e.g. `low-energy`, `mid-energy`, `high-energy`).       |
-| emotion | string | Optional. Emotion id (e.g. `triumphant`, `melancholic`, `reassuring`, `playful`). |
-| vibe    | string | Optional. Overall vibe id (e.g. `cinematic`, `dreamy`, `aggressive`, `nostalgic`).|
+| Field   | Type                              | Description                                                                                            |
+|---------|-----------------------------------|--------------------------------------------------------------------------------------------------------|
+| energy  | string                            | Optional. Energy level id (e.g. `low-energy`, `mid-energy`, `high-energy`). Single-select.             |
+| emotion | string \| string[] (up to 3)      | Optional. One or more emotion ids (e.g. `triumphant`, `melancholic`, `reassuring`, `playful`).         |
+| vibe    | string \| string[] (up to 3)      | Optional. One or more vibe ids (e.g. `cinematic`, `dreamy`, `aggressive`, `nostalgic`, `suspenseful`, `espionage`, `cold`, `clandestine`). |
+
+`emotion` and `vibe` support multi-select (up to 3 choices each). Multiple selections are comma-joined in the emitted hint.
 
 ## Output
 
-Emits a composed prompt-hint string via the `out` source handle. Composition order: `[energy] [emotion] [vibe]`.
+Emits a composed prompt-hint string via the `out` source handle. Composition order: `[energy] [emotion(s)] [vibe(s)]`.
 
 Examples:
 - `{ energy: "high-energy", emotion: "triumphant", vibe: "cinematic" }` → `high-energy triumphant cinematic`
 - `{ emotion: "melancholic", vibe: "dreamy" }` → `melancholic dreamy`
 - `{ vibe: "aggressive" }` → `aggressive`
+- `{ emotion: ["melancholic", "bittersweet"], vibe: ["dreamy", "suspenseful"] }` → `melancholic, bittersweet dreamy, suspenseful`
 
 When only one sub-field is set, the bare hint is emitted. When no sub-fields are set, the output is an empty string and the aggregator drops it.
 
