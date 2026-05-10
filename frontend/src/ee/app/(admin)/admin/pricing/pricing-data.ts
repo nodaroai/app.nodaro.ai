@@ -198,6 +198,17 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "wan-turbo-t2v":     { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr (T2V 5s 720p)
   "wan-animate-move":  { provider: "KIE.ai",    providerCostUsd: 0.510, markupPct: 25 },  // 102 KIE cr (480p default)
   "wan-animate-replace": { provider: "KIE.ai",  providerCostUsd: 0.510, markupPct: 25 },  // 102 KIE cr (480p default)
+  // Wan 2.7
+  "wan-2.7":        { provider: "KIE.ai", providerCostUsd: 0.040, markupPct: 25 },  // 8 KIE cr, 1K default
+  "wan-2.7-pro":    { provider: "KIE.ai", providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr, 1K default
+  "wan-2.7-i2v":    { provider: "KIE.ai", providerCostUsd: 0.375, markupPct: 25 },  // 75 KIE cr, 5s 720p
+  "wan-2.7-t2v":    { provider: "KIE.ai", providerCostUsd: 0.375, markupPct: 25 },  // 75 KIE cr, 5s 720p
+
+  // HappyHorse
+  "happyhorse":       { provider: "KIE.ai", providerCostUsd: 0.250, markupPct: 25 },  // 50 KIE cr, 5s 720p
+  "happyhorse-i2v":   { provider: "KIE.ai", providerCostUsd: 0.250, markupPct: 25 },  // 50 KIE cr, 5s 720p
+  "happyhorse-ref2v": { provider: "KIE.ai", providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr, 5s 720p
+  "happyhorse-edit":  { provider: "KIE.ai", providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr
   "luma-modify":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (upscale 1x/2x/4x)
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)
