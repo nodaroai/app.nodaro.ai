@@ -1535,6 +1535,7 @@ export type VideoToVideoData = {
   // Progress tracking fields
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
+  connectedImageOrder?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -4299,7 +4300,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Video to Video",
     category: "ai",
     creditCost: 25,
-    inputs: ["in", "reference-images"],
+    inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Video to Video", prompt: "", duration: 5, fieldMappings: {} },
   },
