@@ -75,7 +75,7 @@ function buildKlingElements(
   return namePrefixMap
 }
 
-/** Replace @name references in prompt and multi_prompt with @element_name prefixes. */
+/** Replace @name references in prompt, multi_prompt, and element descriptions with @element_name prefixes. */
 function applyElementNamePrefixes(
   input: Record<string, unknown>,
   namePrefixMap: Record<string, string>,
@@ -104,6 +104,16 @@ function applyElementNamePrefixes(
   if (input.multi_prompt) {
     input.multi_prompt = (input.multi_prompt as Array<{ prompt: string; duration: number }>).map(
       (shot) => ({ ...shot, prompt: replaceRefs(shot.prompt) })
+    )
+  }
+
+  // Also replace @name refs inside element descriptions — Kling may interpret them as
+  // unresolvable element refs and silently ignore the element if the short name is used.
+  if (Array.isArray(input.kling_elements)) {
+    input.kling_elements = (input.kling_elements as Array<Record<string, unknown>>).map(
+      (el) => typeof el.description === "string"
+        ? { ...el, description: replaceRefs(el.description) }
+        : el
     )
   }
 }
