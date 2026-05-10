@@ -908,10 +908,9 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                   </button>
 
                   {/* Example */}
-                  <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-transparent p-4">
-                    <p className="text-[11px] text-muted-foreground">
-                      Example: <span className="font-mono text-foreground">&quot;Close-up of @hero walking through rain, @hero says &apos;I never thought I&apos;d see this place again&apos;&quot;</span>
-                    </p>
+                  <div className="rounded-xl border border-border bg-gradient-to-br from-[#ff0073]/5 to-transparent p-4 space-y-1">
+                    <p className="text-[11px] font-medium text-muted-foreground">Use @name in the Scene prompt to reference elements:</p>
+                    <p className="font-mono text-[11px] text-foreground">&quot;Close-up of @hero walking through rain, @hero says &apos;I never thought I&apos;d see this place again&apos;&quot;</p>
                   </div>
                 </div>
               )}
