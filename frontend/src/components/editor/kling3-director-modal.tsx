@@ -771,12 +771,18 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
 
                       {/* DESCRIPTION */}
                       <div>
-                        <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">Description</span>
+                        <div className="flex items-baseline gap-1 mb-1">
+                          <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">Description</span>
+                          <span className="text-[9px] text-[#ff0073]">*</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/70 mb-1.5 leading-relaxed">
+                          Tells Kling what this element looks and sounds like. This is how it resolves <span className="font-mono">@{el.name || "name"}</span> in your Scene prompt — be specific.
+                        </p>
                         <textarea
                           value={el.description}
                           onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 100))}
                           maxLength={100}
-                          placeholder="Describe appearance, clothing, voice tone... e.g. 'Young woman with red hair, green jacket, confident warm voice'"
+                          placeholder="e.g. Young woman with red hair, green jacket, confident warm voice"
                           className="w-full min-h-[60px] px-3 py-2 text-sm rounded-xl border-2 border-border bg-background outline-none focus:border-[#ff0073] resize-none leading-relaxed transition-colors"
                         />
                         <span className={`text-[9px] mt-0.5 block text-right ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
