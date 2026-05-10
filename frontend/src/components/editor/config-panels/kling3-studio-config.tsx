@@ -209,7 +209,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
 
   return (
     <div className="flex flex-col gap-4">
-      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      <FinalPromptPreview userPrompt={(data.motionPrompt as string) || ""} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       {/* Connected Images */}
       {connectedImages.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
