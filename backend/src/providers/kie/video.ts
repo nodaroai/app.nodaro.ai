@@ -929,6 +929,34 @@ export class KieVideoProvider
       return { url: outputUrl, cost: modelConfig.cost }
     }
 
+    // HappyHorse Video Edit uses video_url (array, one element) + optional reference_image
+    if (provider === "happyhorse-edit") {
+      const input: Record<string, unknown> = {
+        ...(modelConfig.extraParams ?? {}),
+        prompt: finalPrompt,
+        video_url: [videoUrl],
+      }
+      if (options?.referenceImageUrl) {
+        input.reference_image = [options.referenceImageUrl]
+      }
+      if (options?.resolution) {
+        input.resolution = options.resolution
+      }
+      console.log(`[KIE.ai] HappyHorse Edit input:`, JSON.stringify(input, null, 2))
+      const { resultJson, providerMs } = await runKieTask(
+        modelConfig.model,
+        input,
+        MAX_POLL_ATTEMPTS_VIDEO,
+        options?.onProgress
+      )
+      const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!outputUrl) {
+        throw createSanitizedError("HappyHorse Edit task succeeded but no URL found", "Video generation")
+      }
+      console.log(`[KIE.ai] HappyHorse Edit completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    }
+
     // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash)
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
