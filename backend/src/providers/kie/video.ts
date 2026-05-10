@@ -535,18 +535,18 @@ export class KieVideoProvider
       `[KIE.ai] Using image parameter: ${imageParamName}`
     )
 
-    if (imageParamName === "image_urls" || imageParamName === "input_urls") {
-      // Array format for kling, grok, seedance, wan-i2v
+    if (imageParamName === "image_urls" || imageParamName === "input_urls" || imageParamName === "reference_image") {
+      // Array format for kling, grok, seedance, wan-i2v, happyhorse-i2v, happyhorse-ref2v
       input[imageParamName] = [effectiveImageUrl]
     } else {
-      // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master
+      // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master, wan-2.7-i2v
       input[imageParamName] = effectiveImageUrl
     }
 
-    // Merge reference images for providers that support multiple inputs
-    if (provider === "grok-i2v" && options?.referenceImageUrls?.length) {
+    // Merge reference images for models that support multi-image input
+    if (modelConfig.maxRefImages && options?.referenceImageUrls?.length) {
       const merged = [effectiveImageUrl, ...options.referenceImageUrls]
-      input.image_urls = merged.slice(0, 7) // Grok max 7 images
+      input[imageParamName] = merged.slice(0, modelConfig.maxRefImages)
     }
 
     // Override duration if provided
@@ -561,7 +561,7 @@ export class KieVideoProvider
     if (endFrameUrl) {
       if (provider === "seedance") {
         input.input_urls = [effectiveImageUrl, endFrameUrl]
-      } else if (isSeedance2Provider(provider)) {
+      } else if (isSeedance2Provider(provider) || provider === "wan-2.7-i2v") {
         input.last_frame_url = endFrameUrl
       } else if (provider === "kling-turbo") {
         input.tail_image_url = endFrameUrl
@@ -798,7 +798,8 @@ export class KieVideoProvider
 
     // Override aspect ratio if provided
     if (aspectRatio) {
-      input.aspect_ratio = mapAspectRatio(provider, aspectRatio)
+      const ratioKey = modelConfig.aspectRatioParam ?? "aspect_ratio"
+      input[ratioKey] = mapAspectRatio(provider, aspectRatio)
     }
 
     // Override sound from options (Kling 2.6 supports sound toggle)

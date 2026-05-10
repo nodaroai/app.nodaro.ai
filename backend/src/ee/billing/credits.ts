@@ -266,6 +266,27 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "wan-t2v": 33,                 // 104.5 KIE cr, $0.5225 (T2V 5s 1080p default)
   "wan-turbo-t2v": 25,           // 80 KIE cr, $0.40 (T2V 5s 720p default)
+  // Wan 2.7 T2I — 1K/2K/4K (estimated, adjust after audit-credits post-ship)
+  "wan-2.7": 3,        // $0.04 × 1.25 / $0.02 = 2.5 → 3 (8 KIE cr, 1K default)
+  "wan-2.7:2K": 5,     // $0.08 × 1.25 / $0.02 = 5   (16 KIE cr est.)
+  "wan-2.7:4K": 10,    // $0.16 × 1.25 / $0.02 = 10  (32 KIE cr est.)
+
+  // Wan 2.7 Pro T2I — 1K/2K/4K (estimated)
+  "wan-2.7-pro": 4,        // $0.06 × 1.25 / $0.02 = 3.75 → 4 (12 KIE cr, 1K)
+  "wan-2.7-pro:2K": 8,     // $0.12 × 1.25 / $0.02 = 7.5 → 8 (24 KIE cr est.)
+  "wan-2.7-pro:4K": 15,    // $0.24 × 1.25 / $0.02 = 15  (48 KIE cr est.)
+
+  // Wan 2.7 I2V (estimated)
+  "wan-2.7-i2v": 24,    // $0.375 × 1.25 / $0.02 = 23.4 → 24 (75 KIE cr, 5s 720p)
+
+  // Wan 2.7 T2V (estimated)
+  "wan-2.7-t2v": 24,    // $0.375 × 1.25 / $0.02 = 23.4 → 24 (75 KIE cr, 5s 720p)
+
+  // HappyHorse (estimated)
+  "happyhorse": 16,        // $0.25 × 1.25 / $0.02 = 15.6 → 16 (50 KIE cr, 5s 720p)
+  "happyhorse-i2v": 16,    // $0.25 × 1.25 / $0.02 = 15.6 → 16 (50 KIE cr, 5s 720p)
+  "happyhorse-ref2v": 19,  // $0.30 × 1.25 / $0.02 = 18.75 → 19 (60 KIE cr, 5s 720p)
+  "happyhorse-edit": 25,   // $0.40 × 1.25 / $0.02 = 25  (80 KIE cr)
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***

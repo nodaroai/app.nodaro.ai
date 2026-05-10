@@ -1,6 +1,6 @@
 # Image to Video
 
-> Generate video from a static image using 21+ AI video providers.
+> Generate video from a static image using 24+ AI video providers.
 
 ## Overview
 
@@ -47,9 +47,15 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 **Outputs:**
 - Generated video URL
 - Provider task metadata
+
 ## Supported Providers
 
-21 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway.
+23 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, wan-2.7-i2v, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway, happyhorse-i2v, happyhorse-ref2v.
+
+Provider notes:
+- **Wan 2.7 I2V** (`wan-2.7-i2v`) — 2–15s, 720p or 1080p, supports start+end frame input
+- **HappyHorse I2V** (`happyhorse-i2v`) — 3–15s, 720p or 1080p, single start frame
+- **HappyHorse Ref2V** (`happyhorse-ref2v`) — 3–15s, 720p or 1080p, 1–9 reference images
 
 ## Best Practices
 

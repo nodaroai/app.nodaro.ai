@@ -23,6 +23,8 @@ export interface KieModelConfig {
   credits: number         // Credits consumed per generation
   inputType?: string      // Some models have different input types
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
+  aspectRatioParam?: string    // Non-standard aspect ratio param name (default: "aspect_ratio"; e.g., "ratio")
+  maxRefImages?: number        // If set, merges primary + referenceImageUrls into imageParam array up to this cap
   extraParams?: Record<string, unknown>  // Default extra parameters
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
@@ -72,6 +74,26 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "image_urls",  // Nano Banana Edit uses image_urls array
     extraParams: { image_size: "16:9" },
+  },
+
+  // Wan 2.7 Image — T2I with optional ref images (up to 9 via input_urls)
+  // See: docs.kie.ai/market/wan/2-7-image.md
+  // Resolution 1K/2K/4K; ref images are optional (acts as pure T2I when omitted)
+  "wan-2.7": {
+    model: "wan/2-7-image",
+    credits: 8,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "input_urls",  // optional array of ref image URLs
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
+  },
+
+  // Wan 2.7 Image Pro — higher quality T2I, no image input
+  // See: docs.kie.ai/market/wan/2-7-image-pro.md
+  "wan-2.7-pro": {
+    model: "wan/2-7-image-pro",
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
+    extraParams: { aspect_ratio: "16:9", resolution: "1K" },
   },
 
   // Flux family
@@ -449,10 +471,11 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "grok-imagine/image-to-video",
     credits: 20,
     ***REDACTED-OSS-SCRUB***
-    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
+    imageParam: "image_urls",  // array format
+    maxRefImages: 7,           // up to 7 images total (primary + refs)
     extraParams: { mode: "normal", duration: "6" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
-    supportsEndFrame: false,  // Grok only accepts 1 image
+    supportsEndFrame: false,
   },
 
   // Seedance 1.5 Pro - docs.kie.ai/market/bytedance/seedance-1.5-pro
@@ -528,6 +551,41 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: { resolution: "480p" },
     allowedDurations: [5],
     supportsEndFrame: false,
+  },
+
+  // Wan 2.7 I2V — 2–15s, 720p/1080p, supports start+end frame
+  // See: docs.kie.ai/market/wan/2-7-image-to-video.md
+  // KIE params: first_frame_url (string) + last_frame_url (string) for end frame
+  "wan-2.7-i2v": {
+    model: "wan/2-7-image-to-video",
+    credits: 75,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "first_frame_url",  // single string; end frame goes to last_frame_url
+    supportsEndFrame: true,
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // HappyHorse I2V — image_urls array (single-element), 3–15s, AR inferred from image
+  // See: docs.kie.ai/market/happyhorse/image-to-video.md
+  "happyhorse-i2v": {
+    model: "happyhorse/image-to-video",
+    credits: 50,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "image_urls",  // array format (single-element)
+    supportsEndFrame: false,
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // HappyHorse Ref2V — reference_image array (1–9 ref images), 3–15s
+  // See: docs.kie.ai/market/happyhorse/reference-to-video.md
+  "happyhorse-ref2v": {
+    model: "happyhorse/reference-to-video",
+    credits: 60,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "reference_image",  // array of up to 9 ref image URLs
+    maxRefImages: 9,
+    supportsEndFrame: false,
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
   // Hailuo 2.3 Pro I2V - docs.kie.ai/market/hailuo/2-3-image-to-video-pro
@@ -797,6 +855,25 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: { duration: 5, quality: "720p", aspectRatio: "16:9" },
     allowedDurations: [5, 10],
   },
+
+  // Wan 2.7 T2V — 2–15s, 720p/1080p
+  // See: docs.kie.ai/market/wan/2-7-text-to-video.md
+  "wan-2.7-t2v": {
+    model: "wan/2-7-text-to-video",
+    credits: 75,
+    ***REDACTED-OSS-SCRUB***
+    aspectRatioParam: "ratio",  // KIE uses "ratio" not "aspect_ratio" for this model
+    allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
+
+  // HappyHorse T2V — 3–15s, 720p/1080p
+  // See: docs.kie.ai/market/happyhorse/text-to-video.md
+  "happyhorse": {
+    model: "happyhorse/text-to-video",
+    credits: 50,
+    ***REDACTED-OSS-SCRUB***
+    allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  },
 }
 
 // =============================================================================
@@ -842,6 +919,17 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "runway-aleph",
     credits: 110,
     ***REDACTED-OSS-SCRUB***
+    extraParams: {},
+  },
+
+  // HappyHorse Video Edit — video-to-video, up to 60s input, 720p/1080p
+  // Initial release: video URL only. ref images param TBD from KIE API testing.
+  // See: docs.kie.ai/market/happyhorse/video-edit.md
+  "happyhorse-edit": {
+    model: "happyhorse/video-edit",
+    credits: 80,
+    ***REDACTED-OSS-SCRUB***
+    imageParam: "video_url",  // input video URL (single string)
     extraParams: {},
   },
 }

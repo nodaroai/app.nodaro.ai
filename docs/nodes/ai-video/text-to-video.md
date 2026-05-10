@@ -33,6 +33,15 @@ The Text to Video node creates video from a text prompt without requiring a sour
 
 **Outputs:**
 - Generated video URL
+
+## Supported Providers
+
+minimax, veo3, kling, kling-turbo, kling-3.0, grok, sora2, sora2-pro, seedance, wan, wan-turbo, hailuo-standard, bytedance-lite, bytedance-pro, wan-2.7-t2v, happyhorse.
+
+Provider notes:
+- **Wan 2.7** (`wan-2.7-t2v`) — 2–15s, 720p or 1080p
+- **HappyHorse** (`happyhorse`) — 3–15s, 720p or 1080p
+
 ## Best Practices
 
 - Write detailed, cinematic prompts describing action, lighting, and mood
