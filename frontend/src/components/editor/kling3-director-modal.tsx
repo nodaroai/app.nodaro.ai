@@ -13,6 +13,110 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { uploadFile } from "@/lib/api"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
+// ─── MentionTextarea ─────────────────────────────────────────────────────────
+
+interface MentionTextareaProps {
+  value: string
+  onChange: (value: string) => void
+  elements: Array<{ name: string }>
+  placeholder?: string
+  rows?: number
+  className?: string
+}
+
+function MentionTextarea({ value, onChange, elements, placeholder, rows, className }: MentionTextareaProps) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const [mention, setMention] = useState<{ query: string; atPos: number } | null>(null)
+  const [selectedIdx, setSelectedIdx] = useState(0)
+
+  const candidates = elements.filter((el) => el.name.trim())
+  const filtered = mention
+    ? candidates.filter((el) => el.name.startsWith(mention.query))
+    : []
+
+  function detectMention(val: string, cursor: number) {
+    const before = val.slice(0, cursor)
+    const m = before.match(/@([a-z0-9_]*)$/)
+    if (m) {
+      setMention({ query: m[1], atPos: cursor - m[0].length })
+      setSelectedIdx(0)
+    } else {
+      setMention(null)
+    }
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    onChange(e.target.value)
+    detectMention(e.target.value, e.target.selectionStart)
+  }
+
+  function insert(name: string) {
+    if (!mention || !ref.current) return
+    const cursor = ref.current.selectionStart
+    const next = value.slice(0, mention.atPos) + `@${name} ` + value.slice(cursor)
+    onChange(next)
+    setMention(null)
+    const newPos = mention.atPos + name.length + 2
+    setTimeout(() => {
+      if (!ref.current) return
+      ref.current.focus()
+      ref.current.setSelectionRange(newPos, newPos)
+    }, 0)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!mention || filtered.length === 0) return
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setSelectedIdx((i) => Math.max(i - 1, 0))
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      if (filtered[selectedIdx]) {
+        e.preventDefault()
+        insert(filtered[selectedIdx].name)
+      }
+    } else if (e.key === "Escape") {
+      setMention(null)
+    }
+  }
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={ref}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setTimeout(() => setMention(null), 150)}
+        placeholder={placeholder}
+        rows={rows}
+        className={className}
+      />
+      {mention && filtered.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-lg shadow-xl overflow-hidden min-w-[160px]">
+          {filtered.map((el, i) => (
+            <button
+              key={el.name}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); insert(el.name) }}
+              className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors ${
+                i === selectedIdx
+                  ? "bg-[#ff0073]/10 text-[#ff0073]"
+                  : "hover:bg-muted/50 text-foreground"
+              }`}
+            >
+              <span className="font-mono text-[#ff0073] text-xs">@</span>
+              <span>{el.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type DirectorTab = "scene" | "shots" | "elements"
@@ -471,9 +575,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     <label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-1.5 block">
                       Master Prompt
                     </label>
-                    <textarea
+                    <MentionTextarea
                       value={(data.motionPrompt as string) ?? ""}
-                      onChange={(e) => handleUpdate({ motionPrompt: e.target.value })}
+                      onChange={(v) => handleUpdate({ motionPrompt: v })}
+                      elements={elements}
                       placeholder="Describe the overall scene, characters, and setting. Use @name to reference elements. Add dialogue with 'character says ...'"
                       rows={5}
                       className="w-full p-3 text-sm min-h-[150px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
@@ -663,9 +768,10 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                               </button>
                             )}
                           </div>
-                          <textarea
+                          <MentionTextarea
                             value={shot.prompt}
-                            onChange={(e) => handleUpdateShot(i, "prompt", e.target.value)}
+                            onChange={(v) => handleUpdateShot(i, "prompt", v)}
+                            elements={elements}
                             placeholder="Describe what happens: camera angle, action, dialogue. e.g. Close-up, she whispers 'I knew you'd come back.' Soft rain falls."
                             rows={4}
                             className="w-full p-3 text-sm min-h-[100px] rounded-lg border border-border bg-muted/30 focus:border-[#ff0073] focus:ring-1 focus:ring-[#ff0073]/20 outline-none resize-none leading-relaxed transition-colors"
