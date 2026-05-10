@@ -643,7 +643,7 @@ async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[Suno] Poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[Suno] Poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
@@ -758,7 +758,7 @@ async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[Suno] Lyrics poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[Suno] Lyrics poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
@@ -940,7 +940,7 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[Suno] Separate poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[Suno] Separate poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
@@ -1114,10 +1114,15 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[Suno] Music video poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[Suno] Music video poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
+    }
+
+    if (!detailResponse.ok) {
+      console.warn(`[Suno] Music video poll attempt ${attempts} HTTP ${detailResponse.status} for taskId=${taskId}`)
+      continue
     }
 
     const detailText = await detailResponse.text()
