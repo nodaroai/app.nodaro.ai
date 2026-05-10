@@ -276,7 +276,6 @@ const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",
-  "reference-images": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
 };

@@ -662,7 +662,6 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",
-  "reference-images": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
 }

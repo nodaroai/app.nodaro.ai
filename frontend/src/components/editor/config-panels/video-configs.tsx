@@ -35,6 +35,7 @@ import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
+import type { RefImageItem } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -110,6 +111,20 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
     }))
   }, [sources])
+
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
+    const all = [
+      ...connectedImages.map((img) => ({ ...img, isRef: false })),
+      ...connectedRefImages.map((img) => ({ ...img, isRef: true })),
+    ]
+    return all.map((img, i) => ({
+      url: img.imageUrl ?? "",
+      label: img.label,
+      source: "wired" as const,
+      index: i + 1,
+      defaultLabel: "image",
+    }))
+  }, [connectedImages, connectedRefImages])
 
   const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
@@ -195,6 +210,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
 
@@ -721,15 +737,42 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
+const V2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
+
 export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
   const provider = data.provider || "wan"
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
   const isAleph = provider === "runway-aleph"
 
+  const connectedImages = useMemo(() => {
+    return sources.filter((s) => V2V_IMAGE_TYPES.includes(s.type)).map((s) => ({
+      id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
+    }))
+  }, [sources])
+
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
+    return connectedImages.map((img, i) => ({
+      url: img.imageUrl ?? "",
+      label: img.label,
+      source: "wired" as const,
+      index: i + 1,
+      defaultLabel: "image",
+    }))
+  }, [connectedImages])
+
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      {connectedImages.length > 0 && (
+        <ConnectedMediaList
+          sources={sources}
+          mediaOrder={data.connectedImageOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ connectedImageOrder: order })}
+          acceptedTypes={new Set(V2V_IMAGE_TYPES)}
+          mediaType="image"
+        />
+      )}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
         <Select
           value={provider}
@@ -754,6 +797,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
 
@@ -1055,11 +1099,23 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const T2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
+
   const connectedRefImages = useMemo(() => {
-    return sources.filter((s) => s.targetHandle === "reference-images").map((s) => ({
+    return sources.filter((s) => T2V_IMAGE_TYPES.includes(s.type)).map((s) => ({
       id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
     }))
   }, [sources])
+
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
+    return connectedRefImages.map((img, i) => ({
+      url: img.imageUrl ?? "",
+      label: img.label,
+      source: "wired" as const,
+      index: i + 1,
+      defaultLabel: "image",
+    }))
+  }, [connectedRefImages])
 
   const connectedRefVideos = useMemo(
     () => sources.filter((s) => s.targetHandle === "reference-videos"),
@@ -1100,6 +1156,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
+          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>

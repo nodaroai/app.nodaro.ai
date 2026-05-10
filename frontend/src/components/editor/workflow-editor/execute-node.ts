@@ -1007,6 +1007,13 @@ export function executeNode(
     return runRemoveBackground(node.id, imageUrl, ctx);
   }
 
+  // Strip {image:N:label} tokens from video prompts (label kept, curly syntax removed).
+  // Video APIs don't process image-reference tokens — strip them to plain text.
+  function stripVideoImageTokens(text: string | undefined): string | undefined {
+    if (!text) return text
+    return text.replace(/\{image:\d+(?::([a-zA-Z0-9_-]+))?\}/gi, (_, label) => label ?? "").replace(/\s{2,}/g, " ").trim() || undefined
+  }
+
   if (node.type === "image-to-video") {
     const i2vData = node.data as ImageToVideoData;
     const nodeProvider = i2vData.provider;
@@ -1085,6 +1092,7 @@ export function executeNode(
         prompt = resolveTextRefs(klingMotionPrompt.trim(), refMap) ?? klingMotionPrompt.trim();
       }
     }
+    prompt = stripVideoImageTokens(prompt)
     // Inject motion + cinematography hints into prompt
     const motionHints: string[] = [];
     if (i2vData.motionEnabled && i2vData.motion) motionHints.push(`${i2vData.motion} motion`);
@@ -1170,7 +1178,7 @@ export function executeNode(
       refMap,
     );
     // Manual wins — see gen-image note above.
-    let prompt = dataPrompt || inputPrompt;
+    let prompt = stripVideoImageTokens(dataPrompt || inputPrompt)
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
@@ -1207,10 +1215,11 @@ export function executeNode(
   if (node.type === "text-to-video") {
     const t2vData = node.data as TextToVideoData;
     // Manual wins — see gen-image note above.
-    let prompt =
+    let prompt = stripVideoImageTokens(
       overridePrompt ??
       resolveTextRefs(t2vData.prompt?.trim(), refMap) ??
-      (typeof inputs.prompt === "string" ? inputs.prompt : undefined);
+      (typeof inputs.prompt === "string" ? inputs.prompt : undefined)
+    );
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
       if (cinematographyHints.length > 0) {
