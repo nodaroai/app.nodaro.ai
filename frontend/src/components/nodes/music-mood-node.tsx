@@ -5,7 +5,7 @@ import type { NodeProps } from "@xyflow/react"
 import { Activity } from "lucide-react"
 import {
   getMusicEnergy, getMusicEmotion, getMusicVibe,
-  buildMusicMoodHints,
+  buildMusicMoodHints, pickIds,
 } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
 import type { MusicMoodData } from "@/types/nodes"
@@ -13,10 +13,10 @@ import type { MusicMoodData } from "@/types/nodes"
 function MusicMoodNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MusicMoodData
   const e = getMusicEnergy(nodeData.energy)
-  const m = getMusicEmotion(Array.isArray(nodeData.emotion) ? nodeData.emotion[0] : nodeData.emotion)
-  const v = getMusicVibe(Array.isArray(nodeData.vibe) ? nodeData.vibe[0] : nodeData.vibe)
+  const emotionLabels = pickIds(nodeData.emotion).map((id) => getMusicEmotion(id)?.label).filter((l): l is string => !!l)
+  const vibeLabels = pickIds(nodeData.vibe).map((id) => getMusicVibe(id)?.label).filter((l): l is string => !!l)
   const composed = buildMusicMoodHints(nodeData)
-  const summary = [e?.label, m?.label, v?.label].filter(Boolean).join(" / ") || "Music Mood"
+  const summary = [e?.label, ...emotionLabels, ...vibeLabels].filter(Boolean).join(" / ") || "Music Mood"
 
   return (
     <ParameterNodeShell id={id} label={nodeData.label} icon={<Activity />} handleId="out" selected={selected} fluidWidth>
