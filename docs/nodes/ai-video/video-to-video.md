@@ -26,6 +26,7 @@ The Video to Video node applies AI-powered transformations to an existing video 
 - **Wan** (22cr) — Good general-purpose V2V with reliable results
 - **Luma Modify** (32cr) — Strong at style transfer and artistic modifications
 - **Runway Aleph** (35cr) — High-quality transformations
+- **HappyHorse Edit** (`happyhorse-edit`) — video-to-video transformation, up to 60s input, 720p or 1080p
 
 ## Best Practices
 

@@ -154,6 +154,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream": "Artistic, painterly styles, creative interpretation",
     "seedream-5-lite": "Lighter Seedream, faster artistic generation",
     "z-image": "Experimental, novel generation approaches",
+    "wan-2.7":     "Wan 2.7 T2I — 1K/2K/4K, up to 9 ref images",
+    "wan-2.7-pro": "Wan 2.7 Pro T2I — higher quality, 1K/2K/4K",
   },
   "image-to-image": {
     "nano-banana": "Fast style transfer and transformation",
@@ -210,6 +212,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "bytedance-lite": "Fast, lightweight generation",
     "bytedance-pro": "Higher quality ByteDance",
     "runway-kie": "Runway via KIE, strong cinematic quality",
+    "wan-2.7-t2v": "Wan 2.7 T2V — 2–15s, 720p/1080p",
+    "happyhorse":   "HappyHorse T2V — 3–15s, 720p/1080p",
   },
   "image-to-video": {
     "minimax": "Versatile animation from still images",
@@ -233,11 +237,15 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "bytedance-pro-fast": "Fast premium ByteDance",
     "grok-i2v": "General purpose animation",
     "runway-kie": "Cinematic image animation",
+    "wan-2.7-i2v":    "Wan 2.7 I2V — 2–15s, 720p/1080p, start+end frame",
+    "happyhorse-i2v":  "HappyHorse I2V — 3–15s, 720p/1080p",
+    "happyhorse-ref2v": "HappyHorse Ref2V — multi-ref image to video, 3–15s",
   },
   "video-to-video": {
     "wan": "Style transfer and video transformation",
     "luma-modify": "Video modification preserving structure",
     "runway-aleph": "Advanced video transformation",
+    "happyhorse-edit": "HappyHorse video-to-video editing",
   },
   "motion-transfer": {
     "kling": "Motion transfer with camera control",

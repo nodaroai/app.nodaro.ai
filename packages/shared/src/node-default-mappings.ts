@@ -175,6 +175,12 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "kling":               { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "kling-3.0":           { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "seedance-2-fast":     { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "wan-2.7-i2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "wan-2.7-t2v":         { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "happyhorse":          { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "happyhorse-i2v":      { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "happyhorse-ref2v":    { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "happyhorse-edit":     { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
 }
 
 const ASPECT_PASSTHROUGH_PROVIDERS = new Set([

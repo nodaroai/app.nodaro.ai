@@ -27,7 +27,7 @@ interface MusicMoodPickerProps {
 }
 
 interface Section {
-  readonly key: "energy" | "emotion" | "vibe"
+  readonly key: keyof MusicMoodValue
   readonly label: string
   readonly entries: ReadonlyArray<MusicMoodEntry>
   readonly maxSelected: number
@@ -51,6 +51,11 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("music-mood")
 
+  const energyMulti = useMultiPick(
+    value.energy,
+    (next) => onChange({ energy: next as string | undefined }),
+    1,
+  )
   const emotionMulti = useMultiPick(
     value.emotion,
     (next) => onChange({ emotion: next }),
@@ -96,35 +101,7 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
 
       {filtered.map(({ key, label, entries, maxSelected }) => {
         if (query && entries.length === 0) return null
-
-        if (key === "energy") {
-          const current = value.energy
-          const checked = current !== undefined && current !== ""
-          return (
-            <SoundDimensionSection
-              key={key}
-              label={label}
-              entries={entries}
-              selectedIds={current ? [current] : []}
-              checked={checked}
-              resolveLabel={resolveLabel}
-              resolveDescription={resolveDescription}
-              onToggle={(next) => {
-                if (next) {
-                  const first = entries[0]?.id
-                  if (first) onChange({ energy: first })
-                } else {
-                  onChange({ energy: undefined })
-                }
-              }}
-              onPick={(id) =>
-                onChange({ energy: current === id ? undefined : id })
-              }
-            />
-          )
-        }
-
-        const multi = key === "emotion" ? emotionMulti : vibeMulti
+        const multi = key === "energy" ? energyMulti : key === "emotion" ? emotionMulti : vibeMulti
         const checked = multi.selectedIds.length > 0
         return (
           <SoundDimensionSection
@@ -140,7 +117,7 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
             onToggle={(next) => {
               if (next) {
                 const first = entries[0]?.id
-                if (first) multi.activateMulti(first)
+                if (first) multi.handlePick(first)
               } else {
                 onChange({ [key]: undefined } as Partial<MusicMoodValue>)
               }

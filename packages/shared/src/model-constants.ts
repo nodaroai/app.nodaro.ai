@@ -69,6 +69,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "recraft-remove-bg",
   "recraft-upscale",
   "topaz-image-upscale",
+  // Wan 2.7 — accepts up to 9 optional ref images via input_urls (pure T2I when omitted)
+  "wan-2.7",
 ])
 
 /**
@@ -105,6 +107,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana": 8,
   "nano-banana-pro": 8,
   "nano-banana-2": 4,
+  "wan-2.7": 9,
   // Image-to-image (multi-source array)
   "nano-banana-edit": 8,
   "gpt-image-i2i": 16,
@@ -150,6 +153,8 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "ideogram-remix": "rendering-speed",
   "ideogram-reframe": "rendering-speed",
   "ideogram-v3": "rendering-speed",
+  "wan-2.7": "resolution",
+  "wan-2.7-pro": "resolution",
 }
 
 
@@ -164,6 +169,8 @@ export const RESOLUTION_2K_4K_TIERED_PROVIDERS = new Set([
   "nano-banana-2",
   "gpt-image-2",
   "gpt-image-2-i2i",
+  "wan-2.7",
+  "wan-2.7-pro",
 ])
 
 // Ideogram family models with TURBO/QUALITY pricing variants
@@ -193,6 +200,8 @@ export const IMAGE_GEN_PROVIDERS = [
   "flux-kontext",
   "flux-kontext-max",
   "z-image",
+  "wan-2.7",
+  "wan-2.7-pro",
 ] as const
 
 /** Image-to-image providers (require input image) */
@@ -268,6 +277,9 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "bytedance-pro",
   "bytedance-pro-fast",
   "grok-i2v",
+  "wan-2.7-i2v",
+  "happyhorse-i2v",
+  "happyhorse-ref2v",
   "runway-kie",
   // Replicate disabled
   // "runway",
@@ -294,6 +306,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "bytedance-lite",
   "bytedance-pro",
   "wan-turbo",
+  "wan-2.7-t2v",
+  "happyhorse",
   "runway-kie",
   // Replicate disabled
   // "runway",
@@ -308,6 +322,7 @@ export const VIDEO_TO_VIDEO_PROVIDERS = [
   "wan-flash",
   "luma-modify",
   "runway-aleph",
+  "happyhorse-edit",
 ] as const
 export type VideoToVideoProvider = typeof VIDEO_TO_VIDEO_PROVIDERS[number]
 
