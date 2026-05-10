@@ -35,7 +35,6 @@ import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
-import type { RefImageItem } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -112,19 +111,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     }))
   }, [sources])
 
-  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
-    const all = [
-      ...connectedImages.map((img) => ({ ...img, isRef: false })),
-      ...connectedRefImages.map((img) => ({ ...img, isRef: true })),
-    ]
-    return all.map((img, i) => ({
-      url: img.imageUrl ?? "",
-      label: img.label,
-      source: "wired" as const,
-      index: i + 1,
-      defaultLabel: "image",
-    }))
-  }, [connectedImages, connectedRefImages])
 
   const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
@@ -210,7 +196,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
-          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
 
@@ -751,16 +736,6 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     }))
   }, [sources])
 
-  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
-    return connectedImages.map((img, i) => ({
-      url: img.imageUrl ?? "",
-      label: img.label,
-      source: "wired" as const,
-      index: i + 1,
-      defaultLabel: "image",
-    }))
-  }, [connectedImages])
-
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -797,7 +772,6 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
-          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
 
@@ -1107,16 +1081,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     }))
   }, [sources])
 
-  const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
-    return connectedRefImages.map((img, i) => ({
-      url: img.imageUrl ?? "",
-      label: img.label,
-      source: "wired" as const,
-      index: i + 1,
-      defaultLabel: "image",
-    }))
-  }, [connectedRefImages])
-
   const connectedRefVideos = useMemo(
     () => sources.filter((s) => s.targetHandle === "reference-videos"),
     [sources],
@@ -1156,7 +1120,6 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
           displayMode={variableDisplayMode}
           refMap={refMap}
-          referenceImages={refImagesForAutocomplete.length > 0 ? refImagesForAutocomplete : undefined}
         />
       </MappableField>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
