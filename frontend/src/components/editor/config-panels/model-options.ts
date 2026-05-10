@@ -28,6 +28,8 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "seedream", label: "Seedream", desc: "Photorealistic, high detail" },
   { value: "seedream-5-lite", label: "Seedream 5 Lite", desc: "Latest Seedream, fast and sharp" },
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
+  { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
+  { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
 ]
 
 export const IMAGE_GEN_MODEL_IDS = IMAGE_GEN_MODELS.map(m => m.value)
@@ -90,6 +92,9 @@ export const VIDEO_I2V_MODELS = [
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 8s with audio" },
   { value: "wan-i2v", label: "Wan 2.6", desc: "Wan I2V, 5-15s, resolution options" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast Wan, 5s clips" },
+  { value: "wan-2.7-i2v",    label: "Wan 2.7",            desc: "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame" },
+  { value: "happyhorse-i2v",  label: "HappyHorse I2V",    desc: "3–15s, 720p/1080p, single start frame" },
+  { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -110,11 +115,14 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "veo3_lite", label: "VEO 3.1 (Lite)", desc: "Cheapest VEO tier, 8s with audio" },
   { value: "wan", label: "Wan 2.6", desc: "High quality, 5-15s, 1080p" },
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
+  { value: "wan-2.7-t2v", label: "Wan 2.7",    desc: "Wan 2.7 T2V, 2–15s, 720p/1080p" },
+  { value: "happyhorse",   label: "HappyHorse", desc: "3–15s, 720p/1080p" },
 ]
 
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
+  { value: "happyhorse-edit", label: "HappyHorse Edit", desc: "Video-to-video editing, up to 60s input" },
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
@@ -268,6 +276,8 @@ export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   "wan-i2v": 22, "wan-turbo": 13, "hailuo-2.3-pro": 20, "hailuo-2.3": 10,
   "hailuo-standard": 10, "bytedance-lite": 6, "bytedance-pro": 18,
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
+  "wan-2.7-i2v": 24, "wan-2.7-t2v": 24,
+  "happyhorse": 16, "happyhorse-i2v": 16, "happyhorse-ref2v": 19, "happyhorse-edit": 25,
 }
 
 /** Aspect ratio options supported by Seedance 2.0 (includes 4:3, 3:4, 21:9, adaptive). */
