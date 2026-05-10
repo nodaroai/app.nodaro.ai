@@ -134,7 +134,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     ramp.stop()
   }
 
-  await setJobProgress(job, ctx.jobId, 40)
+  // Don't write a backward milestone here — KIE (or the ramp) may have
+  // already reported 80–90%+, and writing 40% would visibly regress the bar.
+  // The upload milestone below (90%) advances past whatever was reported.
 
   let providerOutputUrl = result.url
 
@@ -182,7 +184,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   let finalVideoUrl = audioUrl
     ? await uploadToR2(providerOutputUrl, ctx.jobId, "video", ctx.jobUserId)
     : await uploadVideoMaybeWatermark(providerOutputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
-  await setJobProgress(job, ctx.jobId, 70)
+  await setJobProgress(job, ctx.jobId, 90)
 
   // If audio URL is provided, merge it with the video
   if (audioUrl) {
@@ -194,7 +196,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
       backgroundVolume: 30,
       keepOriginalAudio: generateAudio ?? false,
     })
-    await setJobProgress(job, ctx.jobId, 90)
+    await setJobProgress(job, ctx.jobId, 95)
 
     // Upload merged video (with watermark if applicable)
     finalVideoUrl = await watermarkLocalVideoAndUpload(mergedPath, `${ctx.jobId}-merged`, ctx.jobUserId, ctx.shouldWatermark)
@@ -322,7 +324,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     t2vRamp.stop()
   }
 
-  await setJobProgress(job, ctx.jobId, 50)
+  // Don't write a backward milestone — the ramp may already be at 80–90%+
+  // for long generations. The 100% write after upload will advance past it.
 
   // VEO3 / VEO3.1: KIE has no native audio toggle, so honour `sound: false`
   // by stripping the audio track post-generation (cheap stream copy).

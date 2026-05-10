@@ -271,16 +271,14 @@ async function pollKling3Task(
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[Kling3] Poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[Kling3] Poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
     }
 
     if (!detailResponse.ok) {
-      if (DEBUG) console.warn(
-        `[Kling3] Poll attempt ${attempts} failed: ${detailResponse.status}`
-      )
+      console.warn(`[Kling3] Poll attempt ${attempts} HTTP ${detailResponse.status} for taskId=${taskId}`)
       continue
     }
 
@@ -291,22 +289,32 @@ async function pollKling3Task(
     try {
       detailData = JSON.parse(detailText)
     } catch {
-      if (DEBUG) console.warn(`[Kling3] Poll attempt ${attempts} invalid JSON`)
+      console.warn(`[Kling3] Poll attempt ${attempts} invalid JSON for taskId=${taskId}`)
       continue
     }
 
     const data = detailData.data as Record<string, unknown> | undefined
     if (!data) {
-      if (DEBUG) console.warn(`[Kling3] Poll attempt ${attempts} missing data`)
+      console.warn(`[Kling3] Poll attempt ${attempts} missing data field for taskId=${taskId}`)
       continue
     }
 
     const state = (data.state as string) ?? (data.status as string)
     const progress = data.progress as number | undefined
-    if (DEBUG) console.log(`[Kling3] Task ${taskId} state: ${state}${progress !== undefined ? ` (${progress}%)` : ""} (attempt ${attempts})`)
+
+    // Log every 5th attempt unconditionally so production has visibility
+    if (attempts % 5 === 0 || attempts === 1) {
+      console.log(`[Kling3] taskId=${taskId} state=${state}${progress !== undefined ? ` progress=${progress}%` : ""} attempt=${attempts}`)
+    } else if (DEBUG) {
+      console.log(`[Kling3] Task ${taskId} state: ${state}${progress !== undefined ? ` (${progress}%)` : ""} (attempt ${attempts})`)
+    }
 
     if (onProgress && progress !== undefined) {
-      await onProgress(progress)
+      try {
+        await onProgress(progress)
+      } catch (e) {
+        console.warn(`[Kling3] Progress callback error for taskId=${taskId}:`, e)
+      }
     }
 
     if (state === "success" || state === "completed") {
@@ -319,23 +327,27 @@ async function pollKling3Task(
 
       // Check resultJson as fallback
       if (!videoUrl && data.resultJson) {
-        const resultJson =
-          typeof data.resultJson === "string"
-            ? JSON.parse(data.resultJson as string)
-            : data.resultJson
-        const parsed = resultJson as Record<string, unknown>
-        const fromResult =
-          (parsed.resultUrls as string[])?.[0] ??
-          (parsed.videoUrl as string) ??
-          (parsed.video_url as string)
-        if (fromResult) {
-          if (DEBUG) console.log(`[Kling3] Video completed: ${fromResult}`)
-          return fromResult
+        try {
+          const resultJson =
+            typeof data.resultJson === "string"
+              ? JSON.parse(data.resultJson as string)
+              : data.resultJson
+          const parsed = resultJson as Record<string, unknown>
+          const fromResult =
+            (parsed.resultUrls as string[])?.[0] ??
+            (parsed.videoUrl as string) ??
+            (parsed.video_url as string)
+          if (fromResult) {
+            console.log(`[Kling3] taskId=${taskId} completed via resultJson: ${fromResult}`)
+            return fromResult
+          }
+        } catch (e) {
+          console.warn(`[Kling3] Failed to parse resultJson for taskId=${taskId}:`, e)
         }
       }
 
       if (videoUrl) {
-        if (DEBUG) console.log(`[Kling3] Video completed: ${videoUrl}`)
+        console.log(`[Kling3] taskId=${taskId} completed: ${videoUrl}`)
         return videoUrl
       }
 
@@ -355,6 +367,7 @@ async function pollKling3Task(
         (data.fail_msg as string) ??
         (data.errorMessage as string) ??
         "Unknown error"
+      console.warn(`[Kling3] taskId=${taskId} failed: ${failMsg}`)
       throw createSanitizedError(
         `Kling 3.0 generation failed: ${failMsg}`,
         "Kling 3.0"
