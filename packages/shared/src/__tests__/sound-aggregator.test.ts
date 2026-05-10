@@ -245,6 +245,37 @@ describe("composeSoundHintFromConnections — Voice Remix", () => {
   })
 })
 
+describe("composeSoundHintFromConnections — minimax multi-emotion", () => {
+  const minimaxConsumer = (): HintNodeLike => ({
+    id: "consumer", type: "generate-music", data: { provider: "minimax" },
+  })
+
+  it("joins multiple emotions into fields.mood for minimax", () => {
+    const out = composeSoundHintFromConnections(
+      minimaxConsumer(),
+      "generate-music",
+      ctx(
+        [{ id: "m", type: "music-mood", data: { emotion: ["bittersweet", "mysterious"] } }],
+        [audioStyleEdge("m")],
+      ),
+    )
+    expect(out.fields.mood).toContain("bittersweet")
+    expect(out.fields.mood).toContain("mysterious")
+  })
+
+  it("handles single-string emotion for minimax (back-compat)", () => {
+    const out = composeSoundHintFromConnections(
+      minimaxConsumer(),
+      "generate-music",
+      ctx(
+        [{ id: "m", type: "music-mood", data: { emotion: "ethereal" } }],
+        [audioStyleEdge("m")],
+      ),
+    )
+    expect(out.fields.mood).toContain("ethereal")
+  })
+})
+
 describe("composeSoundHintFromConnections — Text to Audio", () => {
   it("accepts music nodes, warns on voice nodes", () => {
     const out = composeSoundHintFromConnections(

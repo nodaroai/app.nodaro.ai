@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "تايكو", description: "طبل فرقة ياباني" },
   "frame-drum": { label: "طبل إطاري", description: "طبل دائري ضحل" },
   "cajon": { label: "كاخون", description: "طبل بيروفي على شكل صندوق" },
+  "darbuka": { label: "دربوكة", description: "طبل كأسي من الشرق الأوسط" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "بيانو", description: "بيانو كبير أو قائم صوتي" },

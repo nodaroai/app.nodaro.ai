@@ -24,6 +24,13 @@ describe("MUSIC_ENERGIES / EMOTIONS / VIBES catalogs", () => {
       for (const x of list) expect(x.promptHint.length).toBeGreaterThan(0)
     }
   })
+
+  it("MUSIC_VIBES includes the four dark-thriller entries", () => {
+    const ids = new Set(MUSIC_VIBES.map((x) => x.id))
+    for (const id of ["suspenseful", "espionage", "cold", "clandestine"]) {
+      expect(ids.has(id), `MUSIC_VIBES missing "${id}"`).toBe(true)
+    }
+  })
 })
 
 describe("buildMusicMoodHints", () => {
@@ -49,6 +56,29 @@ describe("buildMusicMoodHints", () => {
 
   it("falls back gracefully on unknown ids", () => {
     expect(buildMusicMoodHints({ energy: "not-real" })).toBe("")
+  })
+
+  it("accepts emotion as a string array and joins hints", () => {
+    const [e1, e2, e3] = MUSIC_EMOTIONS
+    const out = buildMusicMoodHints({ emotion: [e1.id, e2.id, e3.id] })
+    expect(out).toContain(e1.promptHint)
+    expect(out).toContain(e2.promptHint)
+    expect(out).toContain(e3.promptHint)
+  })
+
+  it("accepts vibe as a string array and joins hints", () => {
+    const [v1, v2] = MUSIC_VIBES
+    const out = buildMusicMoodHints({ vibe: [v1.id, v2.id] })
+    expect(out).toContain(v1.promptHint)
+    expect(out).toContain(v2.promptHint)
+  })
+
+  it("preserves existing single-string emotion/vibe (back-compat)", () => {
+    const emotion = MUSIC_EMOTIONS[0]
+    const vibe = MUSIC_VIBES[0]
+    const out = buildMusicMoodHints({ emotion: emotion.id, vibe: vibe.id })
+    expect(out).toContain(emotion.promptHint)
+    expect(out).toContain(vibe.promptHint)
   })
 })
 

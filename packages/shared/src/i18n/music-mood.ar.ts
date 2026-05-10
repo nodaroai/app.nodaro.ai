@@ -66,6 +66,10 @@ const map: LocaleCatalogMap = {
   "noir": { label: "نوار", description: "مدخنة، صلبة" },
   "vintage": { label: "كلاسيكية", description: "رجعية، عتيقة" },
   "futuristic": { label: "مستقبلية", description: "خيال علمي، استشرافية" },
+  "suspenseful": { label: "مشوقة", description: "رعب، على حافة الهاوية" },
+  "espionage": { label: "تجسس", description: "إثارة، عمليات سرية" },
+  "cold": { label: "باردة", description: "متجمدة، منفصلة، حادة" },
+  "clandestine": { label: "سرية", description: "خفية، متخفية" },
 }
 
 export default map

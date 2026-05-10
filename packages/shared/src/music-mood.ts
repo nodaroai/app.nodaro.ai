@@ -3,6 +3,8 @@
  * Composed by buildMusicMoodHints into "[energy] [emotion] [vibe]".
  */
 
+import { pickIds } from "./multi-pick.js"
+
 export interface MusicMoodEntry {
   readonly id: string
   readonly label: string
@@ -77,6 +79,10 @@ export const MUSIC_VIBES: ReadonlyArray<MusicMoodEntry> = [
   { id: "noir",         label: "Noir",         description: "Smoky, hard-boiled",         promptHint: "noir" },
   { id: "vintage",      label: "Vintage",      description: "Retro, period-aged",         promptHint: "vintage" },
   { id: "futuristic",   label: "Futuristic",   description: "Sci-fi, forward-looking",    promptHint: "futuristic" },
+  { id: "suspenseful",  label: "Suspenseful",  description: "Dread, edge-of-seat",          promptHint: "suspenseful" },
+  { id: "espionage",    label: "Espionage",    description: "Spy-thriller, covert ops",      promptHint: "espionage" },
+  { id: "cold",         label: "Cold",         description: "Icy, detached, stark",          promptHint: "cold" },
+  { id: "clandestine",  label: "Clandestine",  description: "Secret, shadowy, covert",       promptHint: "clandestine" },
 ] as const
 
 const ENERGY_BY_ID = new Map(MUSIC_ENERGIES.map((x) => [x.id, x]))
@@ -97,8 +103,8 @@ export function buildMusicMoodHints(data: {
   readonly preText?: string
   readonly postText?: string
   readonly energy?: string
-  readonly emotion?: string
-  readonly vibe?: string
+  readonly emotion?: string | ReadonlyArray<string>
+  readonly vibe?: string | ReadonlyArray<string>
 }): string {
   const fragments: string[] = []
   const pre = typeof data.preText === "string" ? data.preText.trim() : ""
@@ -107,10 +113,17 @@ export function buildMusicMoodHints(data: {
   const parts: string[] = []
   const e = getMusicEnergy(data.energy)
   if (e) parts.push(e.promptHint)
-  const m = getMusicEmotion(data.emotion)
-  if (m) parts.push(m.promptHint)
-  const v = getMusicVibe(data.vibe)
-  if (v) parts.push(v.promptHint)
+
+  const emotionHints = pickIds(data.emotion)
+    .map((id) => getMusicEmotion(id)?.promptHint)
+    .filter((h): h is string => !!h)
+  if (emotionHints.length > 0) parts.push(emotionHints.join(", "))
+
+  const vibeHints = pickIds(data.vibe)
+    .map((id) => getMusicVibe(id)?.promptHint)
+    .filter((h): h is string => !!h)
+  if (vibeHints.length > 0) parts.push(vibeHints.join(", "))
+
   if (parts.length > 0) fragments.push(parts.join(" "))
 
   const post = typeof data.postText === "string" ? data.postText.trim() : ""
@@ -120,5 +133,5 @@ export function buildMusicMoodHints(data: {
 }
 
 export const MUSIC_MOOD_DEFAULT_DATA: {
-  preText?: string; postText?: string; energy?: string; emotion?: string; vibe?: string
+  preText?: string; postText?: string; energy?: string; emotion?: string | ReadonlyArray<string>; vibe?: string | ReadonlyArray<string>
 } = {}

@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "Тайко", description: "Японский ансамблевый барабан" },
   "frame-drum": { label: "Рамочный Барабан", description: "Неглубокий круглый барабан" },
   "cajon": { label: "Кахон", description: "Перуанский барабан в форме коробки" },
+  "darbuka": { label: "Дарбука", description: "Ближневосточный кубковый барабан" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "Пианино", description: "Акустический рояль или пианино" },

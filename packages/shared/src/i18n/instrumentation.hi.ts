@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "ताइको", description: "जापानी समूह ड्रम" },
   "frame-drum": { label: "फ्रेम ड्रम", description: "उथला गोल ड्रम" },
   "cajon": { label: "काजोन", description: "बक्से के आकार का पेरूवियाई ड्रम" },
+  "darbuka": { label: "दरबुका", description: "मध्य पूर्वी गॉब्लेट ड्रम" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "पियानो", description: "ध्वनिक ग्रैंड या अपराइट" },

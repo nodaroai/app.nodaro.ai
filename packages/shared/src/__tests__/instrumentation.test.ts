@@ -22,6 +22,13 @@ describe("instrumentation catalogs", () => {
   it("VOCAL_PRESENCE includes 'instrumental' so it can flip the boolean for MiniMax", () => {
     expect(VOCAL_PRESENCE.find((x) => x.id === "instrumental")).toBeDefined()
   })
+
+  it("INSTRUMENTS includes darbuka in percussion", () => {
+    const entry = INSTRUMENTS.find((x) => x.id === "darbuka")
+    expect(entry).toBeDefined()
+    expect(entry?.category).toBe("percussion")
+    expect(entry?.promptHint).toBe("darbuka")
+  })
 })
 
 describe("buildInstrumentationHints", () => {

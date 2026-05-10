@@ -544,8 +544,8 @@ export type MusicMoodData = {
   preText?: string
   postText?: string
   energy?: string
-  emotion?: string
-  vibe?: string
+  emotion?: string | ReadonlyArray<string>
+  vibe?: string | ReadonlyArray<string>
 }
 
 /** Standalone Instrumentation parameter node data. Multi-pick instruments +

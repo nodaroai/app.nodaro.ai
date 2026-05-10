@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "太鼓", description: "日本の合奏ドラム" },
   "frame-drum": { label: "フレームドラム", description: "浅い円形ドラム" },
   "cajon": { label: "カホン", description: "箱型のペルー・ドラム" },
+  "darbuka": { label: "ダルブッカ", description: "中東のゴブレットドラム" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "ピアノ", description: "アコースティック・グランドまたはアップライト" },

@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { description: "Japanische Ensemble-Trommel" },
   "frame-drum": { label: "Rahmentrommel", description: "Flache runde Trommel" },
   "cajon": { label: "Cajón", description: "Boxförmige peruanische Trommel" },
+  "darbuka": { label: "Darbuka", description: "Nahöstliche Kelchtrommel" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "Klavier", description: "Akustischer Flügel oder Pianino" },

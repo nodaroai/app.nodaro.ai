@@ -79,6 +79,7 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   { id: "taiko",           label: "Taiko",           description: "Japanese ensemble drum",    promptHint: "taiko",                category: "percussion" },
   { id: "frame-drum",      label: "Frame Drum",      description: "Shallow round drum",        promptHint: "frame drum",           category: "percussion" },
   { id: "cajon",           label: "Cajón",           description: "Box-shaped Peruvian drum",  promptHint: "cajón",                category: "percussion" },
+  { id: "darbuka",         label: "Darbuka",         description: "Middle Eastern goblet drum",promptHint: "darbuka",              category: "percussion" },
 
   // -------- Keys --------
   { id: "piano",           label: "Piano",           description: "Acoustic grand or upright", promptHint: "piano",                category: "keys" },
