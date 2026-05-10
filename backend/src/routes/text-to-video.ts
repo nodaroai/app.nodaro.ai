@@ -17,7 +17,7 @@ export const textToVideoBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   provider: z.enum(TEXT_TO_VIDEO_PROVIDERS).optional(),
   duration: z.number().int().min(1).max(60).optional(),
-  mode: z.enum(["pro", "std"]).optional(),
+  mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(2500).optional(),
   cfgScale: z.number().min(0).max(1).optional(),

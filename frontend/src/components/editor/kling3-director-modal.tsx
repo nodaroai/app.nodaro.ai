@@ -367,7 +367,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
             {/* Status badges */}
             <div className="flex items-center gap-1.5">
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/15 text-purple-400 font-medium">
-                {(data as Record<string, unknown>).kling3Mode === "std" ? "Std" : "Pro"}
+                {(data as Record<string, unknown>).kling3Mode === "std" ? "Std" : (data as Record<string, unknown>).kling3Mode === "4K" ? "4K" : "Pro"}
               </span>
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 font-medium">
                 {data.aspectRatio ?? "16:9"}
@@ -613,8 +613,9 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                               onChange={(e) => handleUpdate({ kling3Mode: e.target.value })}
                               className="w-full h-8 px-2 text-xs rounded-md border border-border bg-muted/30 outline-none"
                             >
-                              <option value="pro">Pro</option>
-                              <option value="std">Standard</option>
+                              <option value="pro">Pro (1080p)</option>
+                              <option value="std">Standard (720p)</option>
+                              <option value="4K">4K (Ultra HD)</option>
                             </select>
                           </div>
                           <div>

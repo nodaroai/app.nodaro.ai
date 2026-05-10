@@ -327,8 +327,9 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   >
                     <SelectTrigger aria-label="Mode" className="h-8"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pro">Pro</SelectItem>
-                      <SelectItem value="std">Standard</SelectItem>
+                      <SelectItem value="pro">Pro (1080p)</SelectItem>
+                      <SelectItem value="std">Standard (720p)</SelectItem>
+                      <SelectItem value="4K">4K (Ultra HD)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
