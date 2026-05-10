@@ -50,7 +50,7 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 
 ## Supported Providers
 
-24 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, wan-2.7-i2v, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway, happyhorse-i2v, happyhorse-ref2v.
+23 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, wan-2.7-i2v, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway, happyhorse-i2v, happyhorse-ref2v.
 
 Provider notes:
 - **Wan 2.7 I2V** (`wan-2.7-i2v`) — 2–15s, 720p or 1080p, supports start+end frame input
