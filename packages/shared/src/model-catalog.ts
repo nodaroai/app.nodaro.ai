@@ -1055,6 +1055,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Wan 2.7",
     description: "Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images.",
     useCases: ["photorealistic", "stylized", "reference"],
+    features: ["reference-image"] as const,
     aspectRatios: WAN_27_IMAGE_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     pricing: [
