@@ -225,5 +225,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-08 (Sound parameter nodes)*
-*Version: 2.5.0*
+*Last updated: 2026-05-10 (Sound multi-select emotion/vibe, dark-thriller vibes, darbuka)*
+*Version: 2.6.0*
