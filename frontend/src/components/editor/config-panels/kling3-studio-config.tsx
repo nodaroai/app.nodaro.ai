@@ -583,18 +583,24 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
               </div>
 
               <div>
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">Description</span>
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 block">
+                  Description <span className="text-red-500">*</span>
+                </span>
                 <input
                   type="text"
                   value={el.description}
                   onChange={(e) => handleUpdateElement(i, "description", e.target.value.slice(0, 100))}
                   maxLength={100}
                   placeholder="Describe appearance, clothing, voice tone... e.g. 'Young woman with red hair, green jacket, confident warm voice'"
-                  className="w-full h-8 px-2.5 text-xs rounded-lg border-2 border-border bg-background outline-none focus:border-[#ff0073] transition-colors"
+                  className={`w-full h-8 px-2.5 text-xs rounded-lg border-2 bg-background outline-none focus:border-[#ff0073] transition-colors ${el.description === "" ? "border-red-500/60" : "border-border"}`}
                 />
-                <span className={`text-[9px] mt-0.5 block text-right ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
-                  {el.description.length}/100
-                </span>
+                {el.description === "" ? (
+                  <span className="text-[9px] mt-0.5 block text-red-500">Required — describe the element's appearance so Kling can identify it</span>
+                ) : (
+                  <span className={`text-[9px] mt-0.5 block text-right ${el.description.length >= 100 ? "text-red-500" : el.description.length > 80 ? "text-yellow-500" : "text-muted-foreground"}`}>
+                    {el.description.length}/100
+                  </span>
+                )}
               </div>
 
               <div>

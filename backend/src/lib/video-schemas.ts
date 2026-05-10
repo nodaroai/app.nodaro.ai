@@ -10,7 +10,7 @@ import { safeUrlSchema } from "./url-validator.js"
 /** A single Kling 3.0 element (image or video reference). */
 const klingElementSchema = z.object({
   name: z.string().max(50),
-  description: z.string().max(200),
+  description: z.string().min(1).max(200),
   type: z.enum(["image", "video"]),
   urls: z.array(safeUrlSchema).min(1).max(4),
 }).refine(
