@@ -631,14 +631,14 @@ async function pollVeoRecordInfo(
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
-        if (DEBUG) console.log(`[KIE.ai ${label}] Poll attempt ${attempts} timeout, retrying...`)
+        console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} timeout, retrying...`)
         continue
       }
       throw err
     }
 
     if (!detailResponse.ok) {
-      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} failed: ${detailResponse.status}`)
+      console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} HTTP ${detailResponse.status} for taskId=${taskId}`)
       continue
     }
 
@@ -651,7 +651,7 @@ async function pollVeoRecordInfo(
     try {
       detailData = JSON.parse(detailText) as VeoRecordInfoResponse
     } catch {
-      if (DEBUG) console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} invalid JSON`)
+      console.warn(`[KIE.ai ${label}] Poll attempt ${attempts} invalid JSON for taskId=${taskId}`)
       continue
     }
 
