@@ -23,6 +23,8 @@ export interface KieModelConfig {
   credits: number         // Credits consumed per generation
   inputType?: string      // Some models have different input types
   imageParam?: string     // Parameter name for input image (default: "image", some use "input_urls")
+  aspectRatioParam?: string    // Non-standard aspect ratio param name (default: "aspect_ratio"; e.g., "ratio")
+  maxRefImages?: number        // If set, merges primary + referenceImageUrls into imageParam array up to this cap
   extraParams?: Record<string, unknown>  // Default extra parameters
   allowedDurations?: number[]  // Video models: allowed duration values in seconds
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
@@ -469,10 +471,11 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "grok-imagine/image-to-video",
     credits: 20,
     ***REDACTED-OSS-SCRUB***
-    imageParam: "image_urls",  // array format (maxItems: 1, no end frame support)
+    imageParam: "image_urls",  // array format
+    maxRefImages: 7,           // up to 7 images total (primary + refs)
     extraParams: { mode: "normal", duration: "6" },
     allowedDurations: [6, 10],  // Grok supports 6 or 10 second videos
-    supportsEndFrame: false,  // Grok only accepts 1 image
+    supportsEndFrame: false,
   },
 
   // Seedance 1.5 Pro - docs.kie.ai/market/bytedance/seedance-1.5-pro
@@ -580,6 +583,7 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     credits: 60,
     ***REDACTED-OSS-SCRUB***
     imageParam: "reference_image",  // array of up to 9 ref image URLs
+    maxRefImages: 9,
     supportsEndFrame: false,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
@@ -858,6 +862,7 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     model: "wan/2-7-text-to-video",
     credits: 75,
     ***REDACTED-OSS-SCRUB***
+    aspectRatioParam: "ratio",  // KIE uses "ratio" not "aspect_ratio" for this model
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 

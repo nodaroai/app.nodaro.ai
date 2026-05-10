@@ -543,14 +543,10 @@ export class KieVideoProvider
       input[imageParamName] = effectiveImageUrl
     }
 
-    // Merge reference images for providers that support multiple inputs
-    if (provider === "grok-i2v" && options?.referenceImageUrls?.length) {
+    // Merge reference images for models that support multi-image input
+    if (modelConfig.maxRefImages && options?.referenceImageUrls?.length) {
       const merged = [effectiveImageUrl, ...options.referenceImageUrls]
-      input.image_urls = merged.slice(0, 7) // Grok max 7 images
-    }
-    if (provider === "happyhorse-ref2v" && options?.referenceImageUrls?.length) {
-      const merged = [effectiveImageUrl, ...options.referenceImageUrls]
-      input.reference_image = merged.slice(0, 9) // HappyHorse max 9 ref images
+      input[imageParamName] = merged.slice(0, modelConfig.maxRefImages)
     }
 
     // Override duration if provided
@@ -802,13 +798,8 @@ export class KieVideoProvider
 
     // Override aspect ratio if provided
     if (aspectRatio) {
-      const mappedRatio = mapAspectRatio(provider, aspectRatio)
-      // wan-2.7-t2v uses "ratio" instead of "aspect_ratio"
-      if (provider === "wan-2.7-t2v") {
-        input.ratio = mappedRatio
-      } else {
-        input.aspect_ratio = mappedRatio
-      }
+      const ratioKey = modelConfig.aspectRatioParam ?? "aspect_ratio"
+      input[ratioKey] = mapAspectRatio(provider, aspectRatio)
     }
 
     // Override sound from options (Kling 2.6 supports sound toggle)
