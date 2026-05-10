@@ -210,6 +210,9 @@ export class KieImageProvider
       } else if (provider === "flux-kontext" || provider === "flux-kontext-max") {
         // Flux Kontext uses "inputImage" (camelCase) for image editing mode
         input.inputImage = referenceImageUrls[0]
+      } else if (modelConfig.imageParam === "input_urls" || modelConfig.imageParam === "image_urls") {
+        // T2I models that accept optional reference images via an array param (e.g., wan-2.7)
+        input[modelConfig.imageParam] = referenceImageUrls
       } else {
         // Text-to-image models use "image_input" for reference images
         input.image_input = referenceImageUrls

@@ -550,36 +550,36 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     supportsEndFrame: false,
   },
 
-  // Wan 2.7 I2V — 2–15s, 720p/1080p, supports start+end frame via image_urls array
+  // Wan 2.7 I2V — 2–15s, 720p/1080p, supports start+end frame
   // See: docs.kie.ai/market/wan/2-7-image-to-video.md
+  // KIE params: first_frame_url (string) + last_frame_url (string) for end frame
   "wan-2.7-i2v": {
     model: "wan/2-7-image-to-video",
     credits: 75,
     ***REDACTED-OSS-SCRUB***
-    imageParam: "image_urls",  // array: [startFrame] or [startFrame, endFrame]
+    imageParam: "first_frame_url",  // single string; end frame goes to last_frame_url
     supportsEndFrame: true,
     allowedDurations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // HappyHorse I2V — single image_url (string), 3–15s, AR inferred from image
+  // HappyHorse I2V — image_urls array (single-element), 3–15s, AR inferred from image
   // See: docs.kie.ai/market/happyhorse/image-to-video.md
   "happyhorse-i2v": {
     model: "happyhorse/image-to-video",
     credits: 50,
     ***REDACTED-OSS-SCRUB***
-    imageParam: "image_url",  // single string (not array)
+    imageParam: "image_urls",  // array format (single-element)
     supportsEndFrame: false,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
 
-  // HappyHorse Ref2V — image_urls array (1–9 ref images), 3–15s
-  // All images are reference inputs, not start-frame
+  // HappyHorse Ref2V — reference_image array (1–9 ref images), 3–15s
   // See: docs.kie.ai/market/happyhorse/reference-to-video.md
   "happyhorse-ref2v": {
     model: "happyhorse/reference-to-video",
     credits: 60,
     ***REDACTED-OSS-SCRUB***
-    imageParam: "image_urls",  // array of up to 9 ref image URLs
+    imageParam: "reference_image",  // array of up to 9 ref image URLs
     supportsEndFrame: false,
     allowedDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
   },
