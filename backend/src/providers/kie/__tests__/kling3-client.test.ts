@@ -410,6 +410,20 @@ describe("kling3Generate — kling_elements name prefixing", () => {
     )
   })
 
+  it("rewrites @name → @element_name in element descriptions", async () => {
+    queueSuccess()
+    await withTimers(() =>
+      kling3Generate({
+        prompt: "@adi enters the frame",
+        klingElements: [
+          { name: "adi", description: "Close-up of @adi walking through the man" },
+        ],
+      }),
+    )
+    const elements = (getCreateBody().input as Record<string, unknown>).kling_elements as Array<{ name: string; description: string }>
+    expect(elements[0].description).toBe("Close-up of @element_adi walking through the man")
+  })
+
   it("preserves names that already have element_ prefix without double-prefixing", async () => {
     queueSuccess()
     await withTimers(() =>
