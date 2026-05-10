@@ -13,8 +13,8 @@ import type { MusicMoodData } from "@/types/nodes"
 function MusicMoodNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MusicMoodData
   const e = getMusicEnergy(nodeData.energy)
-  const m = getMusicEmotion(nodeData.emotion)
-  const v = getMusicVibe(nodeData.vibe)
+  const m = getMusicEmotion(Array.isArray(nodeData.emotion) ? nodeData.emotion[0] : nodeData.emotion)
+  const v = getMusicVibe(Array.isArray(nodeData.vibe) ? nodeData.vibe[0] : nodeData.vibe)
   const composed = buildMusicMoodHints(nodeData)
   const summary = [e?.label, m?.label, v?.label].filter(Boolean).join(" / ") || "Music Mood"
 

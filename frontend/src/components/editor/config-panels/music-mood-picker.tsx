@@ -12,11 +12,12 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { SoundDimensionSection } from "./sound-dimension-section"
+import { useMultiPick, type MultiPickValue } from "./multi-pick-ui"
 
 export interface MusicMoodValue {
   readonly energy?: string
-  readonly emotion?: string
-  readonly vibe?: string
+  readonly emotion?: MultiPickValue
+  readonly vibe?: MultiPickValue
 }
 
 interface MusicMoodPickerProps {
@@ -26,21 +27,21 @@ interface MusicMoodPickerProps {
 }
 
 interface Section {
-  readonly key: keyof MusicMoodValue
+  readonly key: "energy" | "emotion" | "vibe"
   readonly label: string
   readonly entries: ReadonlyArray<MusicMoodEntry>
+  readonly maxSelected: number
 }
 
 const SECTIONS: ReadonlyArray<Section> = [
-  { key: "energy",  label: "Energy",  entries: MUSIC_ENERGIES },
-  { key: "emotion", label: "Emotion", entries: MUSIC_EMOTIONS },
-  { key: "vibe",    label: "Vibe",    entries: MUSIC_VIBES    },
+  { key: "energy",  label: "Energy",  entries: MUSIC_ENERGIES, maxSelected: 1 },
+  { key: "emotion", label: "Emotion", entries: MUSIC_EMOTIONS, maxSelected: 3 },
+  { key: "vibe",    label: "Vibe",    entries: MUSIC_VIBES,    maxSelected: 3 },
 ]
 
 /**
- * Three single-select dimensions (energy / emotion / vibe). Each section
- * is independently toggleable via its checkbox; the search input filters
- * across all three at once.
+ * Three dimensions: energy (single-select), emotion (up to 3), vibe (up to 3).
+ * Multi-pick for emotion/vibe uses the MultiPickBadge tap-to-promote UX.
  */
 export const MusicMoodPicker = memo(function MusicMoodPicker({
   value,
@@ -49,6 +50,17 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
 }: MusicMoodPickerProps) {
   const [query, setQuery] = useState("")
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("music-mood")
+
+  const emotionMulti = useMultiPick(
+    value.emotion,
+    (next) => onChange({ emotion: next }),
+    3,
+  )
+  const vibeMulti = useMultiPick(
+    value.vibe,
+    (next) => onChange({ vibe: next }),
+    3,
+  )
 
   const filtered = useMemo(
     () =>
@@ -82,31 +94,60 @@ export const MusicMoodPicker = memo(function MusicMoodPicker({
         </div>
       )}
 
-      {filtered.map(({ key, label, entries }) => {
+      {filtered.map(({ key, label, entries, maxSelected }) => {
         if (query && entries.length === 0) return null
-        const current = value[key]
-        const checked = current !== undefined && current !== ""
-        const selectedIds = current ? [current] : []
+
+        if (key === "energy") {
+          const current = value.energy
+          const checked = current !== undefined && current !== ""
+          return (
+            <SoundDimensionSection
+              key={key}
+              label={label}
+              entries={entries}
+              selectedIds={current ? [current] : []}
+              checked={checked}
+              resolveLabel={resolveLabel}
+              resolveDescription={resolveDescription}
+              onToggle={(next) => {
+                if (next) {
+                  const first = entries[0]?.id
+                  if (first) onChange({ energy: first })
+                } else {
+                  onChange({ energy: undefined })
+                }
+              }}
+              onPick={(id) =>
+                onChange({ energy: current === id ? undefined : id })
+              }
+            />
+          )
+        }
+
+        const multi = key === "emotion" ? emotionMulti : vibeMulti
+        const checked = multi.selectedIds.length > 0
         return (
           <SoundDimensionSection
             key={key}
             label={label}
             entries={entries}
-            selectedIds={selectedIds}
+            selectedIds={multi.selectedIds}
+            maxSelected={maxSelected}
+            isMultiData={multi.isMulti}
             checked={checked}
             resolveLabel={resolveLabel}
             resolveDescription={resolveDescription}
             onToggle={(next) => {
               if (next) {
                 const first = entries[0]?.id
-                if (first) onChange({ [key]: first } as Partial<MusicMoodValue>)
+                if (first) multi.activateMulti(first)
               } else {
                 onChange({ [key]: undefined } as Partial<MusicMoodValue>)
               }
             }}
-            onPick={(id) =>
-              onChange({ [key]: current === id ? undefined : id } as Partial<MusicMoodValue>)
-            }
+            onPick={multi.handlePick}
+            onActivateMulti={multi.activateMulti}
+            onDemoteToSingle={multi.demoteToSingle}
           />
         )
       })}

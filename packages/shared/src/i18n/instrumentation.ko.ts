@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "타이코", description: "일본 앙상블 드럼" },
   "frame-drum": { label: "프레임 드럼", description: "얕은 둥근 드럼" },
   "cajon": { label: "카혼", description: "박스 모양의 페루 드럼" },
+  "darbuka": { label: "다르부카", description: "중동 고블릿 드럼" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "피아노", description: "어쿠스틱 그랜드 또는 업라이트" },

@@ -66,6 +66,10 @@ const map: LocaleCatalogMap = {
   "noir": { label: "黑色电影", description: "烟雾缭绕、硬朗" },
   "vintage": { label: "复古", description: "怀旧、岁月感" },
   "futuristic": { label: "未来感", description: "科幻、前瞻" },
+  "suspenseful": { label: "悬疑", description: "恐惧，悬念感" },
+  "espionage": { label: "间谍", description: "谍战惊悚，秘密行动" },
+  "cold": { label: "冷酷", description: "冰冷，疏离，锋利" },
+  "clandestine": { label: "秘密", description: "隐秘，暗藏，隐蔽" },
 }
 
 export default map

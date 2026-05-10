@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "太鼓", description: "日本合奏鼓" },
   "frame-drum": { label: "框鼓", description: "浅圆鼓" },
   "cajon": { label: "卡洪鼓", description: "盒形秘鲁鼓" },
+  "darbuka": { label: "达布卡", description: "中东陶鼓" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "钢琴", description: "原声三角钢琴或立式钢琴" },

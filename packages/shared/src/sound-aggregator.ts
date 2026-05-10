@@ -15,6 +15,7 @@ import type { HintGraphContext, HintNodeLike } from "./parameter-prompt-hint.js"
 import { getParameterPromptHint } from "./parameter-prompt-hint.js"
 import { getMusicGenre, getMusicEra } from "./music-genre.js"
 import { getMusicEnergy, getMusicEmotion, getMusicVibe } from "./music-mood.js"
+import { pickIds } from "./multi-pick.js"
 
 export type SoundConsumerType =
   | "suno-generate"
@@ -136,9 +137,15 @@ export function composeSoundHintFromConnections(
       }
       if (t === "music-mood" && data) {
         const energyHint = getMusicEnergy(typeof data.energy === "string" ? data.energy : undefined)?.promptHint
-        const emotionHint = getMusicEmotion(typeof data.emotion === "string" ? data.emotion : undefined)?.promptHint
-        const vibeHint = getMusicVibe(typeof data.vibe === "string" ? data.vibe : undefined)?.promptHint
-        const composed = [energyHint, emotionHint, vibeHint].filter(Boolean).join(" ")
+        const emotionHints = pickIds(data.emotion)
+          .map((id) => getMusicEmotion(id)?.promptHint)
+          .filter((h): h is string => !!h)
+          .join(", ")
+        const vibeHints = pickIds(data.vibe)
+          .map((id) => getMusicVibe(id)?.promptHint)
+          .filter((h): h is string => !!h)
+          .join(", ")
+        const composed = [energyHint, emotionHints, vibeHints].filter(Boolean).join(" ")
         if (composed && !fields.mood) Object.assign(fields, { mood: composed })
       }
       if (t === "instrumentation" && data) {

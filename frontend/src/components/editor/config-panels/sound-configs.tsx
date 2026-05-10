@@ -66,7 +66,11 @@ export function MusicMoodConfig({ data, onUpdate }: ConfigProps<MusicMoodData>) 
         onChange={onUpdate}
       />
       <MusicMoodPicker
-        value={{ energy: data.energy, emotion: data.emotion, vibe: data.vibe }}
+        value={{
+          energy: data.energy,
+          emotion: data.emotion,
+          vibe: data.vibe,
+        }}
         onChange={(patch) => onUpdate(patch)}
       />
     </div>

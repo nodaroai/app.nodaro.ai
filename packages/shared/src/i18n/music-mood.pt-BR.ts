@@ -66,6 +66,10 @@ const map: LocaleCatalogMap = {
   "noir": { label: "Noir", description: "Esfumaçada, durona" },
   "vintage": { label: "Vintage", description: "Retrô, envelhecida" },
   "futuristic": { label: "Futurista", description: "Sci-fi, voltada ao futuro" },
+  "suspenseful": { label: "Suspense", description: "Terror, à beira do abismo" },
+  "espionage": { label: "Espionagem", description: "Thriller de espias, operações encobertas" },
+  "cold": { label: "Fria", description: "Gelada, distante, afiada" },
+  "clandestine": { label: "Clandestina", description: "Secreta, nas sombras, encoberta" },
 }
 
 export default map

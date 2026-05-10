@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { description: "Tambour d'ensemble japonais" },
   "frame-drum": { label: "Tambour sur Cadre", description: "Tambour rond peu profond" },
   "cajon": { description: "Tambour péruvien en forme de boîte" },
+  "darbuka": { label: "Darbouka", description: "Tambour calice du Moyen-Orient" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { description: "Piano à queue ou droit acoustique" },

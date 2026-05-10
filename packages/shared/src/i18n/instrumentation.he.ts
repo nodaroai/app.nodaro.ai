@@ -27,6 +27,7 @@ const map: LocaleCatalogMap = {
   "taiko": { label: "טאיקו", description: "תוף הרכב יפני" },
   "frame-drum": { label: "תוף מסגרת", description: "תוף עגול שטוח" },
   "cajon": { label: "קחון", description: "תוף פרואני בצורת קופסה" },
+  "darbuka": { label: "דרבוקה", description: "תוף גביעי ממוצא מזרח תיכוני" },
 
   // -------------------- INSTRUMENTS: Keys --------------------
   "piano": { label: "פסנתר", description: "פסנתר כנף או זקוף אקוסטי" },
