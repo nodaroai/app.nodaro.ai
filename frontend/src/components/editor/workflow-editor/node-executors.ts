@@ -304,6 +304,11 @@ export function runVideoToVideoGeneration(
     aspectRatio?: string;
     seed?: number;
     referenceImageUrl?: string;
+    // Wan video edit (wan-videoedit) params
+    negativePrompt?: string;
+    videoEditDuration?: string;
+    audioSetting?: string;
+    promptExtend?: boolean;
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
