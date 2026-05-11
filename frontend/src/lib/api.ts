@@ -898,6 +898,7 @@ export interface GenerateVideoOptions {
   webSearch?: boolean            // Seedance 2 (required field)
   nsfwChecker?: boolean          // Seedance 2 (optional content filter toggle)
   generationType?: string        // VEO: REFERENCE_2_VIDEO
+  seedance2InputMode?: "frames" | "references"
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
   enableTranslation?: boolean
   // Smart-loop-cut post-process. Worker runs PSNR-based loop search after
@@ -953,6 +954,7 @@ export async function generateVideo(
       webSearch: opts.webSearch,
       nsfwChecker: opts.nsfwChecker,
       generationType: opts.generationType,
+      seedance2InputMode: opts.seedance2InputMode,
       enableTranslation: opts.enableTranslation,
       loopTrim: opts.loopTrim,
     }

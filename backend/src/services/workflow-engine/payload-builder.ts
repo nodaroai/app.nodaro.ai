@@ -1002,6 +1002,8 @@ export function buildPayload(
     // --- Video generation ---
     case "image-to-video": {
       const provider = (data.provider as string) ?? "kling"
+      const isS2 = isSeedance2Provider(provider)
+      const s2Mode = isS2 ? ((data.seedance2InputMode as string | undefined) ?? "frames") : "frames"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       return {
         jobName: "image-to-video",
@@ -1017,8 +1019,8 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          imageUrl: resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl,
-          endFrameUrl: resolvedInputs.endFrameUrl,
+          imageUrl: (isS2 && s2Mode === "references") ? undefined : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl),
+          endFrameUrl: (isS2 && s2Mode === "references") ? undefined : resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
           prompt: (() => {
             let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
@@ -1053,9 +1055,9 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
-          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
-          referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          referenceImageUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceImageUrls,
+          referenceVideoUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceVideoUrls,
+          referenceAudioUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
           generationType: data.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,

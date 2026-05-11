@@ -59,6 +59,7 @@ export const generateVideoBody = z.object({
   // prompt's exact wording is load-bearing (perfect-loop seal phrase,
   // non-English creative direction). Has no effect on non-VEO providers.
   enableTranslation: z.boolean().optional(),
+  seedance2InputMode: z.enum(["frames", "references"]).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -112,7 +113,16 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation } = parsed.data
+    const { audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode } = parsed.data
+
+    // Seedance 2: strip inputs that belong to the inactive mode — hidden handles leave
+    // stale edges that still resolve and would otherwise send conflicting params to KIE
+    const isS2 = isSeedance2Provider(provider)
+    const imageUrl = (isS2 && seedance2InputMode === "references") ? undefined : parsed.data.imageUrl
+    const endFrameUrl = (isS2 && seedance2InputMode === "references") ? undefined : parsed.data.endFrameUrl
+    const referenceImageUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceImageUrls
+    const referenceVideoUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceVideoUrls
+    const referenceAudioUrls = (isS2 && seedance2InputMode === "frames") ? undefined : parsed.data.referenceAudioUrls
 
     // Legacy autoLoopTrim → loopTrim normalization. Drop in a future release.
     const loopTrim = rawLoopTrim ?? (autoLoopTrim !== undefined
@@ -128,7 +138,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const hasMultimodalRef = isSeedance2Provider(provider) && (
+    const hasMultimodalRef = isS2 && (
       (referenceVideoUrls?.length ?? 0) > 0 ||
       (referenceAudioUrls?.length ?? 0) > 0 ||
       (referenceImageUrls?.length ?? 0) > 0

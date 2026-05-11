@@ -243,6 +243,7 @@ export function runVideoGeneration(
       framesToTest?: number;
       quality?: "lossless" | "precise";
     };
+    seedance2InputMode?: "frames" | "references";
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -275,6 +276,7 @@ export function runVideoGeneration(
         webSearch: extras?.webSearch,
         nsfwChecker: extras?.nsfwChecker,
         generationType,
+        seedance2InputMode: extras?.seedance2InputMode,
         enableTranslation: extras?.enableTranslation,
         loopTrim: extras?.loopTrim,
         userId: ctx.userId,
