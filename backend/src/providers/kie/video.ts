@@ -963,6 +963,44 @@ export class KieVideoProvider
       return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
     }
 
+    // Wan 2.7 VideoEdit — single video_url string, optional reference_image
+    if (provider === "wan-videoedit") {
+      const input: Record<string, unknown> = {
+        ...(modelConfig.extraParams ?? {}),
+        prompt: finalPrompt,
+        video_url: videoUrl,
+        resolution: options?.resolution ?? "1080p",
+      }
+      if (options?.negativePrompt) input.negative_prompt = options.negativePrompt
+      if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
+      // duration: 0 = auto-detect, 2-10 = target seconds
+      const durStr = options?.videoEditDuration ?? "0"
+      input.duration = parseInt(durStr, 10)
+      if (options?.audioSetting) input.audio_setting = options.audioSetting
+      if (options?.promptExtend !== undefined) input.prompt_extend = options.promptExtend
+      if (options?.seed !== undefined && options.seed >= 0) input.seed = options.seed
+      if (options?.referenceImageUrl) input.reference_image = options.referenceImageUrl
+
+      console.log(`[KIE.ai] Wan VideoEdit input:`, JSON.stringify(input, null, 2))
+      const { resultJson, providerMs } = await runKieTask(
+        modelConfig.model,
+        input,
+        MAX_POLL_ATTEMPTS_VIDEO,
+        options?.onProgress
+      )
+      const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+      if (!outputUrl) {
+        throw createSanitizedError(
+          "Wan VideoEdit task succeeded but no URL found in response",
+          "Video generation"
+        )
+      }
+      console.log(
+        `[KIE.ai] Wan VideoEdit completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      )
+      return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    }
+
     // Standard createTask endpoint for Wan V2V providers (Wan 2.6, Wan Flash)
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
