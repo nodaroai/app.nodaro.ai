@@ -67,7 +67,7 @@ import {
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation } = job.data as {
     jobId: string
-    imageUrl: string
+    imageUrl?: string
     endFrameUrl?: string
     audioUrl?: string
     prompt?: string

@@ -77,7 +77,7 @@ export class ReplicateVideoProvider
   implements ImageToVideoProvider, TextToVideoProvider
 {
   async imageToVideo(
-    imageUrl: string,
+    imageUrl: string | undefined,
     prompt?: string,
     model?: string,
     duration?: number,
