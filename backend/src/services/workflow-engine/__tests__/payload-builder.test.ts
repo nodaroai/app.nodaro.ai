@@ -135,6 +135,23 @@ describe("buildPayload", () => {
       expect(result.payload.videoUrl).toBe("https://v.mp4")
       expect(result.payload.prompt).toBe("make it anime")
     })
+
+    it("forwards wan-videoedit params", () => {
+      const n = node("n1", "video-to-video", {
+        provider: "wan-videoedit",
+        negativePrompt: "no blur",
+        videoEditDuration: "5",
+        audioSetting: "origin",
+        promptExtend: true,
+      })
+      const inputs: ResolvedInputs = { videoUrl: "https://v.mp4", prompt: "edit this" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.provider).toBe("wan-videoedit")
+      expect(result.payload.negativePrompt).toBe("no blur")
+      expect(result.payload.videoEditDuration).toBe("5")
+      expect(result.payload.audioSetting).toBe("origin")
+      expect(result.payload.promptExtend).toBe(true)
+    })
   })
 
   // --- Audio ---

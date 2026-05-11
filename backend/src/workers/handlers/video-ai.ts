@@ -227,7 +227,11 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 }
 
 const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx) {
-  const { videoUrl, prompt, provider, duration, resolution, audio, multiShots, aspectRatio, seed, referenceImageUrl } = job.data as {
+  const {
+    videoUrl, prompt, provider, duration, resolution, audio, multiShots,
+    aspectRatio, seed, referenceImageUrl,
+    negativePrompt, videoEditDuration, audioSetting, promptExtend,
+  } = job.data as {
     jobId: string
     videoUrl: string
     prompt?: string
@@ -239,6 +243,10 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     aspectRatio?: string
     seed?: number
     referenceImageUrl?: string
+    negativePrompt?: string
+    videoEditDuration?: string
+    audioSetting?: "auto" | "origin"
+    promptExtend?: boolean
   }
   console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${provider ?? "wan"})`)
 
@@ -254,6 +262,10 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
       aspectRatio,
       seed,
       referenceImageUrl,
+      negativePrompt,
+      videoEditDuration,
+      audioSetting,
+      promptExtend,
     }),
   )
   await setJobProgress(job, ctx.jobId, 50)
