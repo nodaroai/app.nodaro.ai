@@ -104,6 +104,11 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // Bare "elevenlabs" was a legacy alias kept for backwards compat — it
   // resolves at runtime to one of the v2/v3 variants.
   "elevenlabs",
+  // ── Replicate i2v ─────────────────────────────────────────────────────
+  // Kling 3 Omni goes through backend/src/providers/replicate/video.ts,
+  // not the KIE registry. It's in IMAGE_TO_VIDEO_PROVIDERS for Zod/UI but
+  // dispatched via the replicate provider directly in the i2v worker.
+  "kling-3-omni",
 ])
 
 /**
