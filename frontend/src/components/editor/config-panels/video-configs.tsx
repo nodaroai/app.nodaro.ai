@@ -148,7 +148,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
-      {/* Seedance 2 input mode toggle */}
       {isSeedance2Provider(currentI2VProvider) && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Input Mode</Label>
@@ -160,7 +159,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
                   key={mode}
                   type="button"
                   className={`flex-1 py-1 text-xs font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}
-                  onClick={() => onUpdate({ seedance2InputMode: mode })}
+                  onClick={() => { if (!active) onUpdate({ seedance2InputMode: mode }) }}
                 >
                   {mode === "frames" ? "Frames" : "References"}
                 </button>
