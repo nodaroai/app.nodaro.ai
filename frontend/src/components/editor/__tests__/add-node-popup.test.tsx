@@ -32,6 +32,7 @@ vi.mock("lucide-react", () => {
     Camera: I, Hourglass: I, Cpu: I, LayoutDashboard: I, HandMetal: I,
     Zap: I,
     Activity: I, Piano: I, User: I, MessageCircle: I,
+    ScanFace: I,
   }
 })
 
