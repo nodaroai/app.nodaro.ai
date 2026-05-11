@@ -31,6 +31,7 @@ import {
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
+  faceSwapApi,
   generateSceneGraph,
   renderVideoWithSceneGraph,
   renderVideoWithPlan,
@@ -106,6 +107,7 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
+  FaceSwapData,
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
@@ -3043,6 +3045,27 @@ export function executeNode(
         }),
       "generatedVideoUrl",
       "Extend Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "face-swap") {
+    const fsData = node.data as unknown as FaceSwapData;
+    const faceImageUrl = (inputs.faceImageUrl as string | undefined) ?? (inputs.imageUrl as string | undefined);
+    const videoUrl = inputs.videoUrl as string | undefined;
+    if (!faceImageUrl) {
+      toast.error(`Node "${fsData.label}": no face image connected. Use the orange handle.`);
+      return Promise.reject(new Error("No face image"));
+    }
+    if (!videoUrl) {
+      toast.error(`Node "${fsData.label}": no video connected. Use the pink handle.`);
+      return Promise.reject(new Error("No video"));
+    }
+    return runProcessingNode(
+      node.id,
+      () => faceSwapApi({ faceImageUrl, videoUrl, provider: fsData.provider }),
+      "generatedVideoUrl",
+      "Face Swap",
       ctx,
     );
   }

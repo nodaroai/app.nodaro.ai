@@ -22,7 +22,7 @@ export const generateVideoBody = z.object({
   provider: z.enum(IMAGE_TO_VIDEO_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
-  mode: z.enum(["pro", "std"]).optional(),
+  mode: z.enum(["pro", "std", "4K"]).optional(),
   sound: z.boolean().optional(),
   negativePrompt: z.string().max(2500).optional(),
   motionPrompt: z.string().max(2500).optional(),

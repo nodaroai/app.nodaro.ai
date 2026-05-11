@@ -342,7 +342,7 @@ async function runKling3(
     ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
     : 5
   const sound = options?.sound ?? true
-  const mode = (options?.mode as "std" | "pro") ?? "pro"
+  const mode = (options?.mode as "std" | "pro" | "4K") ?? "pro"
   const result = await kling3Generate({
     prompt,
     imageUrls,

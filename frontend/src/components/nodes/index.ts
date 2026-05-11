@@ -120,6 +120,7 @@ import { SpeechToVideoNode } from "./speech-to-video-node";
 import { MotionTransferNode } from "./motion-transfer-node";
 import { VideoUpscaleNode } from "./video-upscale-node";
 import { ExtendVideoNode } from "./extend-video-node";
+import { FaceSwapNode } from "./face-swap-node";
 import { SaveToStorageNode } from "./save-to-storage-node";
 import { WebhookOutputNode } from "./webhook-output-node";
 import { SceneNode } from "./scene-node";
@@ -267,6 +268,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "manual-edit": ManualEditNode,
   "video-upscale": VideoUpscaleNode,
   "extend-video": ExtendVideoNode,
+  "face-swap": FaceSwapNode,
   // Output
   "save-to-storage": SaveToStorageNode,
   "webhook-output": WebhookOutputNode,

@@ -2548,6 +2548,23 @@ export async function extendVideo(params: {
   return res.json()
 }
 
+export async function faceSwapApi(params: {
+  faceImageUrl: string
+  videoUrl: string
+  provider?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/face-swap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start face swap")
+  }
+  return res.json()
+}
+
 // --- Render Video (Remotion) ---
 
 export async function renderVideoWithSceneGraph(params: {

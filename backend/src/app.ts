@@ -57,6 +57,7 @@ import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
+import { faceSwapRoutes } from "./routes/face-swap.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
@@ -260,6 +261,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminSettingsRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)
+  await app.register(faceSwapRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)

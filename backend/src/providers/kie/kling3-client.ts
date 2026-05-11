@@ -24,7 +24,7 @@ export interface Kling3Params {
   sound?: boolean
   duration?: string | number
   aspectRatio?: string
-  mode?: "std" | "pro"
+  mode?: "std" | "pro" | "4K"
   multiShots?: boolean
   multiPrompt?: Array<{ prompt: string; duration: number }>
   klingElements?: Array<{ name: string; description: string; type?: "image" | "video"; element_input_urls?: string[]; element_input_video_urls?: string[] }>

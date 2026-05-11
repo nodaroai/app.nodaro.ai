@@ -103,6 +103,7 @@ import {
   Piano,
   User,
   MessageCircle,
+  ScanFace,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -637,6 +638,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "extend-video",
     label: "Extend Video",
     icon: <FastForward className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+  },
+  {
+    type: "face-swap",
+    label: "Face Swap",
+    icon: <ScanFace className="h-4 w-4" />,
     category: "AI",
     group: "Video",
   },

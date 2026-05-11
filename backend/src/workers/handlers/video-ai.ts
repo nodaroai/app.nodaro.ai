@@ -13,6 +13,7 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers
 
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
+import { replicateFaceSwap } from "../../providers/replicate/face-swap.js"
 import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import {
@@ -711,6 +712,38 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
+const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
+  const { faceImageUrl, videoUrl } = job.data as {
+    jobId: string
+    faceImageUrl: string
+    videoUrl: string
+  }
+  console.log(`[worker] face-swap ${ctx.jobId}`)
+
+  const outputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, async () => {
+    const { videoUrl: out } = await replicateFaceSwap(faceImageUrl, videoUrl)
+    return out
+  })
+  await setJobProgress(job, ctx.jobId, 50)
+
+  const r2Url = await uploadVideoMaybeWatermark(outputUrl, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
+    provider: "roop",
+    provider_cost: null,
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+}
+
 export const videoAIHandlers: Record<string, HandlerFn> = {
   "image-to-video": handleImageToVideo,
   "video-to-video": handleVideoToVideo,
@@ -720,4 +753,5 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "motion-transfer": handleMotionTransfer,
   "video-upscale": handleVideoUpscale,
   "extend-video": handleExtendVideo,
+  "face-swap": handleFaceSwap,
 }

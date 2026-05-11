@@ -290,6 +290,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "face-swap",
   "suno-music-video",
   "combine-videos",
   "merge-video-audio",
@@ -310,6 +311,7 @@ export interface FrontendResolvedInputs {
   prompt?: string;
   imageUrl?: string;
   videoUrl?: string;
+  faceImageUrl?: string;
   videoUrls?: string[];
   videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
   audioUrl?: string;
@@ -382,7 +384,7 @@ const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
  *  this set is purposefully scoped to llm-chat reference routing.) */
 const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "image-to-video", "text-to-video", "video-to-video",
-  "extend-video", "trim-video", "combine-videos", "upload-video",
+  "extend-video", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
   "video-upscale", "video-composer", "merge-video-audio",
@@ -754,6 +756,13 @@ export function resolveNodeInputs(
     }
 
     // --- Handle-specific routing takes priority (matches backend) ---
+    if (node.type === "face-swap") {
+      if (srcEdge.targetHandle === "face") {
+        inputs.faceImageUrl = output;
+        continue;
+      }
+      // "in" handle → videoUrl (fall through to normal video routing below)
+    }
     if (srcEdge.targetHandle === "startFrame") {
       inputs.startFrameUrl = output;
       continue;
