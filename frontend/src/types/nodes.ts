@@ -1525,6 +1525,10 @@ export type VideoToVideoData = {
   // Wan Flash only
   audio?: boolean
   multiShots?: boolean
+  // Wan 2.7 VideoEdit params
+  videoEditDuration?: "0" | "5" | "10"
+  audioSetting?: "auto" | "origin"
+  promptExtend?: boolean
   // Runway Aleph params
   aspectRatio?: string
   seed?: number

@@ -123,6 +123,7 @@ export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: st
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
   { value: "happyhorse-edit", label: "HappyHorse Edit", desc: "Video-to-video editing, up to 60s input" },
+  { value: "wan-videoedit", label: "Wan 2.7 VideoEdit", desc: "Guided video editing with reference image support" },
   { value: "wan", label: "Wan 2.6", desc: "High quality video-to-video" },
   { value: "wan-flash", label: "Wan 2.6 Flash", desc: "Fast V2V with audio & multi-shot" },
 ]
