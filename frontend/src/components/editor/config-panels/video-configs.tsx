@@ -746,6 +746,17 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
   const isAleph = provider === "runway-aleph"
+  const isVideoEdit = provider === "wan-videoedit"
+
+  useEffect(() => {
+    if (!isVideoEdit) {
+      const updates: Partial<VideoToVideoData> = {}
+      if (data.videoEditDuration !== undefined) updates.videoEditDuration = undefined
+      if (data.audioSetting !== undefined) updates.audioSetting = undefined
+      if (data.promptExtend !== undefined) updates.promptExtend = undefined
+      if (Object.keys(updates).length > 0) onUpdate(updates)
+    }
+  }, [isVideoEdit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectedImages = useMemo(() => {
     return sources.filter((s) => V2V_IMAGE_TYPES.includes(s.type)).map((s) => ({
@@ -858,6 +869,80 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
                 ))}
               </SelectContent>
             </Select>
+          </MappableField>
+          <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              type="number"
+              min={0}
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value ? Number(e.target.value) : undefined })}
+              placeholder="Random"
+            />
+          </MappableField>
+        </>
+      )}
+
+      {/* Wan 2.7 VideoEdit: Duration, Resolution, Audio Setting, Prompt Extend, Negative Prompt, Seed */}
+      {isVideoEdit && (
+        <>
+          <MappableField field="videoEditDuration" label="Duration" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.videoEditDuration || "0"}
+              onValueChange={(v) => onUpdate({ videoEditDuration: v as "0" | "5" | "10" })}
+            >
+              <SelectTrigger aria-label="Duration"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Auto</SelectItem>
+                <SelectItem value="5">5 seconds</SelectItem>
+                <SelectItem value="10">10 seconds</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="v2vResolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.v2vResolution || "1080p"}
+              onValueChange={(v) => onUpdate({ v2vResolution: v as "720p" | "1080p" })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {V2V_RESOLUTION_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="audioSetting" label="Audio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.audioSetting || "auto"}
+              onValueChange={(v) => onUpdate({ audioSetting: v as "auto" | "origin" })}
+            >
+              <SelectTrigger aria-label="Audio Setting"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto (AI-generated)</SelectItem>
+                <SelectItem value="origin">Original audio</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="v2vPromptExtend"
+              checked={data.promptExtend || false}
+              onChange={(e) => onUpdate({ promptExtend: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="v2vPromptExtend" className="text-xs">Expand prompt with AI</label>
+          </div>
+          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <TagTextarea
+              value={data.negativePrompt || ""}
+              onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
+              placeholder="What to avoid..."
+              rows={2}
+              nodeRefs={nodeRefs}
+              displayMode={variableDisplayMode}
+              refMap={refMap}
+            />
           </MappableField>
           <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
