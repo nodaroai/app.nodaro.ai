@@ -749,13 +749,19 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   const isVideoEdit = provider === "wan-videoedit"
 
   useEffect(() => {
-    if (!isVideoEdit) {
-      const updates: Partial<VideoToVideoData> = {}
+    const updates: Partial<VideoToVideoData> = {}
+    if (isVideoEdit) {
+      // Snap any stale/invalid values that would fail route Zod validation
+      if (!["0", "5", "10"].includes(data.videoEditDuration as string)) updates.videoEditDuration = "0"
+      if (data.audioSetting !== undefined && !["auto", "origin"].includes(data.audioSetting)) updates.audioSetting = undefined
+      if (!["720p", "1080p"].includes(data.v2vResolution as string)) updates.v2vResolution = "1080p"
+    } else {
+      // Clear wan-videoedit-exclusive fields when switching to another provider
       if (data.videoEditDuration !== undefined) updates.videoEditDuration = undefined
       if (data.audioSetting !== undefined) updates.audioSetting = undefined
       if (data.promptExtend !== undefined) updates.promptExtend = undefined
-      if (Object.keys(updates).length > 0) onUpdate(updates)
     }
+    if (Object.keys(updates).length > 0) onUpdate(updates)
   }, [isVideoEdit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const connectedImages = useMemo(() => {
