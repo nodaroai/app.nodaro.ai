@@ -181,6 +181,20 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedImageUrl as string | undefined)
     );
   }
+  // Generate-mask has dual output handles: "image" (passthrough source) +
+  // "mask" (the generated PNG). The bespoke per-result shape is
+  // { imageUrl, maskUrl } (not GeneratedResult.url) so this case must come
+  // BEFORE any generic image-node fallthrough that reads `results[i].url`.
+  if (type === "generate-mask") {
+    const results =
+      (data.generatedResults as Array<{ imageUrl: string; maskUrl: string }> | undefined) ?? [];
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
+    const active = results[activeIndex];
+    if (sourceHandle === "mask") {
+      return active?.maskUrl ?? (data.generatedMaskUrl as string | undefined);
+    }
+    return active?.imageUrl ?? (data.generatedImageUrl as string | undefined);
+  }
   if (type === "generate-image") {
     const results =
       (data.generatedResults as GeneratedResult[] | undefined) ?? [];

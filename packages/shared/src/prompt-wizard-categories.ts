@@ -194,6 +194,9 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
   },
+  "generate-mask": {
+    "grounded-sam": "Text-prompted segmentation — isolates the subject you describe in words (Grounding DINO + Segment Anything)",
+  },
   "text-to-video": {
     "minimax": "Versatile, good motion quality, reliable",
     "veo3": "Google's latest, photorealistic, audio generation support",

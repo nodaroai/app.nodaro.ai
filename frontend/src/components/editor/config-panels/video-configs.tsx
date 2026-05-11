@@ -113,7 +113,10 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   }, [sources])
 
 
-  const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
+  const maxRefImages = data.provider === "grok-i2v" ? 6 : data.provider === "kling-3-omni" ? 7 : 3
+
+  const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
+  const seedance2Conflict = isSeedance2Provider(data.provider || "seedance-2-fast") && hasEndFrame && connectedRefImages.length > 0
 
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
@@ -192,6 +195,11 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
+          {seedance2Conflict && (
+            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
+              Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
+            </div>
+          )}
           <div className="flex flex-wrap gap-1.5">
             {connectedRefImages.map((img) => (
               <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
@@ -474,6 +482,53 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             placeholder="Things to avoid..."
           />
         </MappableField>
+      )}
+
+      {data.provider === "kling-3-omni" && (
+        <>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={[
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "1:1", label: "1:1 (Square)" },
+              ]}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div>
+            <Label className="text-xs">Quality</Label>
+            <Select
+              value={data.resolution || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="720p">Standard (720p)</SelectItem>
+                <SelectItem value="1080p">Pro (1080p)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="kling3OmniAudio"
+              checked={data.generateAudio !== false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="kling3OmniAudio" className="text-xs">Generate Audio</label>
+          </div>
+          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Textarea
+              rows={2}
+              value={(data as Record<string, unknown>).negativePrompt as string || ""}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+              placeholder="Things to avoid..."
+            />
+          </MappableField>
+        </>
       )}
 
       {data.provider === "grok-i2v" && (

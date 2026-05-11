@@ -14,6 +14,8 @@ import { runVeoExtendTask, runVeo1080pTask, runVeo4kTask } from "../../providers
 import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { replicateFaceSwap } from "../../providers/replicate/face-swap.js"
+import { runGroundedSam } from "../../providers/replicate/grounded-sam.js"
+import { config } from "../../lib/config.js"
 import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import {
@@ -756,6 +758,44 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
+const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx) {
+  const { imageUrl, prompt, threshold } = job.data as {
+    jobId: string
+    imageUrl: string
+    prompt: string
+    threshold?: number
+  }
+  console.log(`[worker] generate-mask ${ctx.jobId}: "${prompt}" (threshold: ${threshold ?? 0.3})`)
+
+  // Grounded SAM doesn't expose live progress — wrap in a ramp so the widget
+  // bar moves while the segmentation runs.
+  const maskOutputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 80 }, () =>
+    runGroundedSam(imageUrl, prompt, threshold ?? 0.3, config.REPLICATE_API_TOKEN),
+  )
+  await setJobProgress(job, ctx.jobId, 85)
+
+  // Upload the mask PNG to R2. Masks are intermediate artifacts (consumed by a
+  // downstream inpainting node), not gallery content — never watermark them or
+  // a watermark overlay would corrupt the binary mask.
+  const maskUrl = await uploadToR2(maskOutputUrl, ctx.jobId, "image", ctx.jobUserId)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    // Store BOTH the original image (passthrough — unchanged from input) and
+    // the generated mask so a downstream Mask Painter / inpainting node can
+    // consume them together.
+    output_data: { imageUrl, maskUrl },
+    provider: "grounded-sam",
+    provider_cost: null,
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: mask=${maskUrl}`)
+}
+
 export const videoAIHandlers: Record<string, HandlerFn> = {
   "image-to-video": handleImageToVideo,
   "video-to-video": handleVideoToVideo,
@@ -766,4 +806,5 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "video-upscale": handleVideoUpscale,
   "extend-video": handleExtendVideo,
   "face-swap": handleFaceSwap,
+  "generate-mask": handleGenerateMask,
 }

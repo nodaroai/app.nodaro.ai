@@ -33,6 +33,8 @@ const editImageBody = z.object({
   style: z.string().max(500).optional(),
   seed: z.number().int().min(0).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(13).optional(),
+  // Optional inpainting mask (forwarded as mask_url to the provider; only consumed by providers that support it)
+  maskUrl: safeUrlSchema.optional(),
 }).refine(
   (data) => {
     if (data.provider === "grok-upscale") {
@@ -57,7 +59,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls } = parsed.data
+    const { imageUrl, taskId, prompt, provider, upscaleFactor, targetResolution, aspectRatio, negativePrompt, style, seed, referenceImageUrls, maskUrl } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -116,6 +118,7 @@ export async function editImageRoutes(app: FastifyInstance) {
       style,
       seed,
       referenceImageUrls,
+      maskUrl,
       usageLogId,
     })
 

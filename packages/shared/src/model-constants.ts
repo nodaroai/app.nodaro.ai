@@ -281,6 +281,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "happyhorse-i2v",
   "happyhorse-ref2v",
   "runway-kie",
+  "kling-3-omni",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -529,6 +530,7 @@ export const GUIDANCE_SCALE_SUPPORT: Record<string, { min: number; max: number; 
  */
 export const DURATION_PRICED_PROVIDERS = new Set([
   "kling-3.0",
+  "kling-3-omni",
   "kling",
   "kling-turbo",
   "kling-master",
@@ -609,6 +611,7 @@ export const VEO_RESOLUTION_TIERED_PROVIDERS = new Set<string>([
  */
 export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio" | "duration+mode" | "duration+resolution+ref"> = {
   "kling-3.0": "duration+audio",
+  "kling-3-omni": "duration",
   "kling": "duration+audio",
   "kling-turbo": "duration",
   "kling-master": "duration",
@@ -629,6 +632,11 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
  */
 export const VIDEO_DURATION_TIERS: Record<string, Array<{ maxSeconds: number; suffix: string }>> = {
   "kling-3.0": [
+    { maxSeconds: 5, suffix: "5s" },
+    { maxSeconds: 10, suffix: "10s" },
+    { maxSeconds: 15, suffix: "15s" },
+  ],
+  "kling-3-omni": [
     { maxSeconds: 5, suffix: "5s" },
     { maxSeconds: 10, suffix: "10s" },
     { maxSeconds: 15, suffix: "15s" },

@@ -92,6 +92,7 @@ export function runEditImage(
     style?: string
     seed?: number
     referenceImageUrls?: string[]
+    maskUrl?: string
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(

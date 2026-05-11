@@ -377,7 +377,7 @@ const SUNO_TRACK_NODE_TYPES = new Set([
  *  llm-chat reference arrays. Names must match SceneNodeType in types/nodes.ts. */
 const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
   "generate-image", "modify-image", "upscale-image", "remove-background",
-  "upload-image", "extract-frame",
+  "upload-image", "extract-frame", "generate-mask",
 ]);
 /** Node types whose primary output is a video URL. (Disjoint from
  *  VIDEO_OUTPUT_NODE_TYPES above, which is also used for kieTaskId routing —
@@ -1059,6 +1059,28 @@ export function resolveNodeInputs(
         ];
       } else if (node.type === "text-to-audio") {
         inputs.prompt = (src.data as GenerateImageData).prompt ?? "";
+      } else if (node.type === "manual-edit") {
+        appendManualEditAsset(inputs, src.id, output, "image");
+      } else {
+        inputs.imageUrl = output;
+      }
+    } else if (src.type === "generate-mask") {
+      // generate-mask emits a dual-handle image output: "image" = passthrough
+      // source image, "mask" = generated PNG. The "mask" handle is wired to a
+      // downstream "mask" target handle (routed earlier via
+      // srcEdge.targetHandle === "mask" → inputs.maskUrl). The "image" handle
+      // is a regular image source — route same as generate-image.
+      if (
+        node.type === "generate-image" ||
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
+      ) {
+        inputs.referenceImageUrls = [
+          ...(inputs.referenceImageUrls ?? []),
+          output,
+        ];
       } else if (node.type === "manual-edit") {
         appendManualEditAsset(inputs, src.id, output, "image");
       } else {

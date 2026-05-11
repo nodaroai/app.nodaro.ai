@@ -92,6 +92,7 @@ Generate, edit, and transform images using 20+ AI providers.
 | [Generate Image](./ai-image/generate-image.md) | AI image generation from text (21 providers) | Create images from prompts with style, aspect ratio, and quality controls |
 | [Edit Image](./ai-image/edit-image.md) | Upscale, remove background, or AI-edit images | Enhance, upscale, or modify existing images |
 | [Image to Image](./ai-image/image-to-image.md) | Transform image with AI prompt (15 providers) | Style transfer, inpainting, reframing, or prompt-guided transformation |
+| [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
 | [Describe Image](./ai-image/image-to-text.md) | Extract text description from image | Auto-caption images, extract prompts from art, accessibility |
 
 ---

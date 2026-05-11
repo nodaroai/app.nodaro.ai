@@ -155,6 +155,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "nano-banana-edit":  { provider: "KIE.ai",    providerCostUsd: 0.020,  markupPct: 25 }, // 4 KIE cr
   "topaz-image-upscale": { provider: "KIE.ai",  providerCostUsd: 0.050,  markupPct: 25 }, // 10 KIE cr (2K default)
   "grok-upscale":      { provider: "KIE.ai",    providerCostUsd: 0.050,  markupPct: 25 }, // 10 KIE cr (360p→720p)
+  "generate-mask":     { provider: "Replicate", providerCostUsd: 0.032,  markupPct: 25 }, // 2 cr — adirik/grounded-sam (Grounding DINO + SAM)
   // ── Image-to-Image ──
   "flux-i2i":          { provider: "KIE.ai",    providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr (Flux 2 Flex i2i 1K)
   "flux-pro-i2i":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (flux-2 pro i2i 1K)

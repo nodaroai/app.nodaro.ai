@@ -226,6 +226,10 @@ describe("EXECUTABLE_TYPES — new nodes", () => {
     expect(EXECUTABLE_TYPES.has("image-to-image")).toBe(true)
   })
 
+  it("contains generate-mask", () => {
+    expect(EXECUTABLE_TYPES.has("generate-mask")).toBe(true)
+  })
+
 })
 
 // ---------------------------------------------------------------------------
