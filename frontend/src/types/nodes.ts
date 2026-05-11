@@ -1450,6 +1450,7 @@ export type ImageToVideoData = {
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
+  seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
