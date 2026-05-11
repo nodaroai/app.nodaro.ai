@@ -954,7 +954,7 @@ export const KIE_MOTION_TRANSFER_MODELS: Record<string, KieModelConfig> = {
 
   // Kling 3.0 Motion Control - uses createTask endpoint
   // character_orientation: "image" or "video"
-  // mode: "std" (720p) or "pro" (1080p)
+  // mode: "720p" or "1080p" (same as kling-2.6/motion-control, NOT "std"/"pro")
   // background_source: "input_video" or "input_image" (default: input_video)
   ***REDACTED-OSS-SCRUB***
   "kling-3.0": {

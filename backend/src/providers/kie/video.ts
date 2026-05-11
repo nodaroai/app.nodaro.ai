@@ -1077,14 +1077,15 @@ export class KieVideoProvider
       // Auto-trim video if it exceeds the 30-second motion-transfer limit
       const effectiveVideoUrl = await ensureVideoDuration(videoUrl, MOTION_TRANSFER_MAX_VIDEO_SECONDS)
 
-      // Kling 3.0 uses "std"/"pro" mode (NOT "720p"/"1080p" like Kling 2.6)
-      const kling3Mode = resolution === "1080p" ? "pro" : "std"
+      // motion-control uses "720p"/"1080p" (same as kling-2.6/motion-control),
+      // NOT "std"/"pro" (which is for kling-3.0/video generation)
+      const motionMode = resolution === "1080p" ? "1080p" : "720p"
 
       const input: Record<string, unknown> = {
         input_urls: [effectiveImageUrl],
         video_urls: [effectiveVideoUrl],
         character_orientation: characterOrientation,
-        mode: kling3Mode,
+        mode: motionMode,
       }
 
       // Always send background_source explicitly — KIE defaults to input_image if omitted
