@@ -225,5 +225,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-10 (Wan 2.7 + HappyHorse KIE models; Kling 3 Studio motionPrompt fix)*
-*Version: 2.7.0*
+*Last updated: 2026-05-11 (Wan 2.7 VideoEdit V2V provider: audioSetting, promptExtend, videoEditDuration, negativePrompt; 32 cr)*
+*Version: 2.8.0*
