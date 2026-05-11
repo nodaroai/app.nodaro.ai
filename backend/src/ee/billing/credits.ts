@@ -264,6 +264,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Video-to-Video / Motion ──
   "wan": 22,                     // 70 KIE cr, $0.35 (V2V 5s 720p)
   ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
   "wan-t2v": 33,                 // 104.5 KIE cr, $0.5225 (T2V 5s 1080p default)
   "wan-turbo-t2v": 25,           // 80 KIE cr, $0.40 (T2V 5s 720p default)
   // Wan 2.7 T2I — 1K/2K/4K (estimated, adjust after audit-credits post-ship)

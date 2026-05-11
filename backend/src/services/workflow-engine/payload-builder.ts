@@ -1157,6 +1157,10 @@ export function buildPayload(
           aspectRatio: data.aspectRatio as string | undefined,
           seed: data.seed as number | undefined,
           referenceImageUrl: (typeof resolvedInputs.referenceImageUrls === "string" ? resolvedInputs.referenceImageUrls : Array.isArray(resolvedInputs.referenceImageUrls) ? resolvedInputs.referenceImageUrls[0] : undefined) as string | undefined,
+          negativePrompt: data.negativePrompt as string | undefined,
+          videoEditDuration: data.videoEditDuration as string | undefined,
+          audioSetting: data.audioSetting as string | undefined,
+          promptExtend: data.promptExtend as boolean | undefined,
           usageLogId,
         },
       }

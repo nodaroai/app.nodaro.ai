@@ -989,6 +989,11 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
   aspectRatio?: string
   seed?: number
   referenceImageUrl?: string
+  // Wan video edit (wan-videoedit) params
+  negativePrompt?: string
+  videoEditDuration?: string
+  audioSetting?: string
+  promptExtend?: boolean
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, prompt, provider, ...options }
   if (userId) body.userId = userId

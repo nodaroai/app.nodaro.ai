@@ -1046,6 +1046,17 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["v2v", "fast"],
     pricing: [{ identifier: "wan-flash", credits: 13 }],
   },
+  "wan-videoedit": {
+    id: "wan-videoedit",
+    kind: "video",
+    modes: ["v2v"] as const,
+    family: "Alibaba",
+    label: "Wan 2.7 VideoEdit",
+    description: "Guided video editing with optional reference image, audio control, and prompt expansion.",
+    useCases: ["v2v", "restyle", "reference"],
+    resolutions: ["720p", "1080p"],
+    pricing: [{ identifier: "wan-videoedit", credits: 32 }],
+  },
   // ── Wan 2.7 ──
   "wan-2.7": {
     id: "wan-2.7",

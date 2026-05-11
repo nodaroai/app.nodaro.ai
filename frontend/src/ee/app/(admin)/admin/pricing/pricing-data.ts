@@ -194,6 +194,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // ── Video-to-Video / Motion ──
   "wan":               { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // 70 KIE cr (V2V 5s 720p)
   "wan-flash":         { provider: "KIE.ai",    providerCostUsd: 0.200, markupPct: 25 },  // ~40 KIE cr (Flash V2V, faster)
+  "wan-videoedit":     { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // 100 KIE cr (2.7 VideoEdit, guided edit)
   "wan-t2v":           { provider: "KIE.ai",    providerCostUsd: 0.5225, markupPct: 25 }, // 104.5 KIE cr (T2V 5s 1080p)
   "wan-turbo-t2v":     { provider: "KIE.ai",    providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr (T2V 5s 720p)
   "wan-animate-move":  { provider: "KIE.ai",    providerCostUsd: 0.510, markupPct: 25 },  // 102 KIE cr (480p default)

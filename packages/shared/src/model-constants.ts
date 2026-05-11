@@ -320,6 +320,7 @@ export type TextToVideoProvider = typeof TEXT_TO_VIDEO_PROVIDERS[number]
 export const VIDEO_TO_VIDEO_PROVIDERS = [
   "wan",
   "wan-flash",
+  "wan-videoedit",
   "luma-modify",
   "runway-aleph",
   "happyhorse-edit",

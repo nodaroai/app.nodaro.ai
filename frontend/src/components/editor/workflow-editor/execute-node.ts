@@ -1217,6 +1217,11 @@ export function executeNode(
         aspectRatio: v2vData.aspectRatio,
         seed: v2vData.seed,
         referenceImageUrl: typeof inputs.referenceImageUrls === "string" ? inputs.referenceImageUrls : Array.isArray(inputs.referenceImageUrls) ? inputs.referenceImageUrls[0] : undefined,
+        // Wan video edit (wan-videoedit) params
+        negativePrompt: v2vData.negativePrompt,
+        videoEditDuration: v2vData.videoEditDuration,
+        audioSetting: v2vData.audioSetting,
+        promptExtend: v2vData.promptExtend,
       },
     );
   }

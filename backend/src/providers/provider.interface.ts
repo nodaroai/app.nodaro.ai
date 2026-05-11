@@ -73,6 +73,10 @@ export interface ProviderOptions {
   referenceImageUrl?: string // Runway Aleph style reference image
   audio?: boolean            // Wan Flash: generate with audio (affects pricing)
   duration?: string          // Wan V2V duration: "5" or "10" seconds
+  // Wan 2.7 VideoEdit params
+  audioSetting?: "auto" | "origin" // How to handle source audio
+  promptExtend?: boolean           // AI-enhanced prompt expansion
+  videoEditDuration?: string       // "0" = auto, "5", "10" (seconds)
 }
 
 // Each provider implements the capabilities it supports

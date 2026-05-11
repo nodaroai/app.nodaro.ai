@@ -901,6 +901,20 @@ export const KIE_VIDEO_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     extraParams: {},
   },
 
+  // Wan 2.7 VideoEdit — guided video editing with optional reference image
+  // See: docs.kie.ai/market/wan/2-7-videoedit
+  // Supports: video_url, prompt, negative_prompt, resolution (720p/1080p),
+  //   aspect_ratio, duration (0=auto or 2-10s), audio_setting (auto/origin),
+  //   prompt_extend (bool), seed, reference_image (optional single URL)
+  ***REDACTED-OSS-SCRUB***
+  "wan-videoedit": {
+    model: "wan/2-7-videoedit",
+    credits: 100,
+    cost: 0.50,
+    imageParam: "reference_image",
+    extraParams: {},
+  },
+
   // Luma Modify - special endpoint: /api/v1/modify/generate
   // See: docs.kie.ai/luma-api/generate-luma-modify-video.md
   // English prompts only, input video max 500MB/10s
