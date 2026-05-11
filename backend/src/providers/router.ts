@@ -168,7 +168,7 @@ export async function editImage(
 }
 
 export async function imageToVideo(
-  imageUrl: string,
+  imageUrl: string | undefined,
   model: string,
   prompt?: string,
   duration?: number,

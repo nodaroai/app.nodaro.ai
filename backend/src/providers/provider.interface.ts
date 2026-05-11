@@ -97,7 +97,7 @@ export interface ImageEditingProvider {
 
 export interface ImageToVideoProvider {
   imageToVideo(
-    imageUrl: string,
+    imageUrl: string | undefined,
     prompt?: string,
     model?: string,
     duration?: number,

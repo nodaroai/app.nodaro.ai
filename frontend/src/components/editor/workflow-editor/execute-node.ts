@@ -1041,9 +1041,13 @@ export function executeNode(
     }
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
-    // VEO reference mode doesn't use start frame — skip the requirement
+    // Resolve reference image URLs early so we can use them in the start-frame check below
+    const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
+
+    // VEO reference mode and Seedance 2 reference-only mode don't require a start frame
     const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
-    if (!startFrameUrl && !isVeoRefMode) {
+    const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "") && (referenceImageUrls?.length ?? 0) > 0
+    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly) {
       const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
       toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
       return Promise.reject(new Error("No start frame image"));
@@ -1082,8 +1086,6 @@ export function executeNode(
     }
 
     if (audioUrl && !audioUrl.startsWith("http")) audioUrl = undefined;
-
-    const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
 
     // Manual wins — see gen-image note above.
     let prompt = (resolveTextRefs(i2vData.prompt?.trim() || undefined, refMap) ?? inputs.prompt) as string | undefined;

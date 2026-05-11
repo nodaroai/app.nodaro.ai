@@ -378,7 +378,7 @@ export class KieVideoProvider
     LipSyncProvider
 {
   async imageToVideo(
-    imageUrl: string,
+    imageUrl: string | undefined,
     prompt?: string,
     model?: string,
     duration?: number,
@@ -435,14 +435,14 @@ export class KieVideoProvider
       if (provider === "wan-i2v") {
         i2vConstraints.minDimension = 256
       }
-      effectiveImageUrl = await ensureImageForProvider(imageUrl, provider, i2vConstraints)
+      effectiveImageUrl = await ensureImageForProvider(imageUrl!, provider, i2vConstraints)
     }
 
     // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
     if (provider === "kling-3.0") {
       const imageUrls = (endFrameUrl && !options?.multiShots)
-        ? [effectiveImageUrl, endFrameUrl]
-        : [effectiveImageUrl]
+        ? [effectiveImageUrl!, endFrameUrl]
+        : [effectiveImageUrl!]
       return runKling3(
         modelConfig,
         prompt ?? "smooth cinematic motion",
@@ -460,8 +460,8 @@ export class KieVideoProvider
         imageUrls = options.referenceImageUrls.slice(0, 3)
       } else {
         imageUrls = endFrameUrl
-          ? [imageUrl, endFrameUrl]
-          : [imageUrl]
+          ? [imageUrl!, endFrameUrl]
+          : [imageUrl!]
       }
       const veoResult = await runVeoTask(
         modelConfig.model,
@@ -535,17 +535,23 @@ export class KieVideoProvider
       `[KIE.ai] Using image parameter: ${imageParamName}`
     )
 
-    if (imageParamName === "image_urls" || imageParamName === "input_urls" || imageParamName === "reference_image") {
-      // Array format for kling, grok, seedance, wan-i2v, happyhorse-i2v, happyhorse-ref2v
-      input[imageParamName] = [effectiveImageUrl]
-    } else {
-      // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master, wan-2.7-i2v
-      input[imageParamName] = effectiveImageUrl
+    // Only set the image param when we actually have a start frame URL.
+    // Seedance 2 reference-only mode omits first_frame_url intentionally.
+    if (effectiveImageUrl) {
+      if (imageParamName === "image_urls" || imageParamName === "input_urls" || imageParamName === "reference_image") {
+        // Array format for kling, grok, seedance, wan-i2v, happyhorse-i2v, happyhorse-ref2v
+        input[imageParamName] = [effectiveImageUrl]
+      } else {
+        // Single URL format for hailuo, kling-turbo, bytedance, wan-turbo, kling-master, wan-2.7-i2v
+        input[imageParamName] = effectiveImageUrl
+      }
     }
 
     // Merge reference images for models that support multi-image input
     if (modelConfig.maxRefImages && options?.referenceImageUrls?.length) {
-      const merged = [effectiveImageUrl, ...options.referenceImageUrls]
+      const merged = effectiveImageUrl
+        ? [effectiveImageUrl, ...options.referenceImageUrls]
+        : [...options.referenceImageUrls]
       input[imageParamName] = merged.slice(0, modelConfig.maxRefImages)
     }
 

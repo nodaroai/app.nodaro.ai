@@ -128,9 +128,13 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const hasMultimodalRef = isSeedance2Provider(provider) && ((referenceVideoUrls?.length ?? 0) > 0 || (referenceAudioUrls?.length ?? 0) > 0)
+    const hasMultimodalRef = isSeedance2Provider(provider) && (
+      (referenceVideoUrls?.length ?? 0) > 0 ||
+      (referenceAudioUrls?.length ?? 0) > 0 ||
+      (referenceImageUrls?.length ?? 0) > 0
+    )
 
-    // imageUrl is required for all modes except VEO REFERENCE_2_VIDEO or Seedance 2 multimodal ref
+    // imageUrl is required for all modes except VEO REFERENCE_2_VIDEO or Seedance 2 ref-only mode
     if (!imageUrl && generationType !== "REFERENCE_2_VIDEO" && !hasMultimodalRef) {
       return reply.status(400).send({
         error: { code: "validation_error", message: "imageUrl is required" },
