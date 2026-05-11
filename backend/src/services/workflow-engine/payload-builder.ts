@@ -1160,6 +1160,21 @@ export function buildPayload(
       }
     }
 
+    case "face-swap": {
+      return {
+        jobName: "face-swap",
+        queueName: "video-generation",
+        modelIdentifier: "roop-face-swap",
+        payload: {
+          jobId,
+          faceImageUrl: data.faceImageUrl,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          provider: (data.provider as string) ?? "roop",
+          usageLogId,
+        },
+      }
+    }
+
     case "lip-sync": {
       const provider = (data.provider as string) ?? "kling-avatar"
       // infinitalk is tier-priced by resolution — `/v1/lip-sync` reserves

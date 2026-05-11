@@ -31,6 +31,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { completeTask, _activeTaskIds, getTask } from "./tasks.js"
 import { executionEvents, type ExecutionEvent } from "../execution-events.js"
 import type { NodeExecutionStatus } from "../../services/workflow-engine/types.js"
+import { supabase } from "../supabase.js"
 
 const POLL_INTERVAL_MS = 1000
 
@@ -190,7 +191,6 @@ async function runPollCycle(server: McpServer): Promise<void> {
   const taskIds = _activeTaskIds()
   if (taskIds.length === 0) return
 
-  const { supabase } = await import("../supabase.js")
   const { data, error } = await supabase
     .from("jobs")
     .select("id, status, progress")

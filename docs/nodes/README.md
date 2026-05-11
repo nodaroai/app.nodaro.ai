@@ -106,6 +106,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Text to Video](./ai-video/text-to-video.md) | Generate video from text prompt (15 providers) | Create video directly from text descriptions |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |
 | [Lip Sync](./ai-video/lip-sync.md) | Sync audio to character face | Create talking head videos from portrait + audio |
+| [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
 | [Sora Storyboard](./ai-video/sora-storyboard.md) | Multi-shot video from scene descriptions | Create multi-scene video with per-shot control |
 | [Motion Transfer](./ai-video/motion-transfer.md) | Apply video motion to static character | Transfer movement from reference video to character image |
