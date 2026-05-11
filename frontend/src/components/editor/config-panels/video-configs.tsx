@@ -26,6 +26,7 @@ import type {
   VideoUpscaleData,
   ExtendVideoData,
   SpeechToVideoData,
+  FaceSwapData,
   GeneratedScript,
   GeneratedScriptResult,
 } from "@/types/nodes"
@@ -1574,6 +1575,19 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+    </div>
+  )
+}
+
+export function FaceSwapConfig({ data: _data, onUpdate: _onUpdate }: ConfigProps<FaceSwapData>) {
+  useEffect(() => { prefetchModelCredits(["roop-face-swap"]) }, [])
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground px-1">
+        Replaces the face in a video with the face from a reference image.
+        Connect a face image to the orange handle and a video to the pink handle.
+        Powered by Roop (Replicate) — {getCachedCredits("roop-face-swap") ?? 16} CR per run.
+      </p>
     </div>
   )
 }

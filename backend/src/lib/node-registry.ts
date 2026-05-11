@@ -159,6 +159,22 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 5,
   },
 
+  {
+    type: "face-swap",
+    label: "Face Swap",
+    category: "ai-video",
+    description: "Replace the face in a video with a face from a reference image.",
+    outputType: "video",
+    creditCost: 16,
+    providers: ["roop"],
+    inputSchema: {
+      fields: [
+        { key: "faceImageUrl", type: "image-url", required: true },
+        { key: "videoUrl", type: "video-url", required: true },
+      ],
+    },
+  },
+
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },

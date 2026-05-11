@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -116,6 +116,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "motion-transfer", label: "Motion Transfer", icon: <Waypoints className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "extend-video", label: "Extend Video", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "face-swap", label: "Face Swap", icon: <ScanFace className="h-4 w-4" />, category: "AI", group: "Video" },
   // AI — Audio & Speech
   { type: "text-to-speech", label: "Text to Speech", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   { type: "text-to-audio", label: "Text to Audio", icon: <Volume2 className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },

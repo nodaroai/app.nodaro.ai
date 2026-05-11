@@ -90,6 +90,7 @@ import {
   VideoUpscaleConfig,
   ExtendVideoConfig,
   SpeechToVideoConfig,
+  FaceSwapConfig,
   TextToVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
@@ -183,7 +184,7 @@ import {
   ResultsGallery,
 } from "./config-panels"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -291,6 +292,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "transcode-video": "Transcode Video",
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
+  "face-swap": "Face Swap",
   "speech-to-video": "Speech to Video",
   "video-upscale": "Upscale Video",
   "combine-text": "Combine Text",
@@ -336,7 +338,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
-  "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
+  "video-upscale", "extend-video", "face-swap", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "ai-writer", "llm-chat", "web-scrape",
@@ -496,6 +498,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "ai-writer": return <AIWriterConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
+    case "face-swap": return <FaceSwapConfig {...configProps} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />

@@ -437,6 +437,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sadtalker": 9,
   "video-upscale": 19,
   "extend-video": 40,
+  "roop-face-swap": 16,           // $0.25 Replicate × 1.25 / $0.02
   "transcribe": 4,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 5,

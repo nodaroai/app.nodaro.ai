@@ -326,6 +326,12 @@ export const VIDEO_TO_VIDEO_PROVIDERS = [
 ] as const
 export type VideoToVideoProvider = typeof VIDEO_TO_VIDEO_PROVIDERS[number]
 
+/** Face swap providers */
+export const FACE_SWAP_PROVIDERS = [
+  "roop",
+] as const
+export type FaceSwapProvider = typeof FACE_SWAP_PROVIDERS[number]
+
 /** Video upscale providers */
 export const VIDEO_UPSCALE_PROVIDERS = [
   "topaz",

@@ -3,7 +3,7 @@ import type {
   ImageI2IProvider, ImageGenProvider, ImageEditProvider,
   ModifyImageProvider, UpscaleImageProvider,
   ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
-  VideoUpscaleProvider, ExtendVideoProvider, TtsProvider,
+  VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle,
@@ -1660,6 +1660,22 @@ export type ExtendVideoData = {
   currentJobId?: string
   currentJobProgress?: number
   kieTaskId?: string              // KIE task ID from upstream video node (required)
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+}
+
+export type FaceSwapData = {
+  [key: string]: unknown
+  label: string
+  provider: FaceSwapProvider
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -3429,6 +3445,7 @@ export type SceneNodeData =
   | MotionTransferData
   | VideoUpscaleData
   | ExtendVideoData
+  | FaceSwapData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
@@ -3579,6 +3596,7 @@ export type SceneNodeType =
   | "motion-transfer"
   | "video-upscale"
   | "extend-video"
+  | "face-swap"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -5084,6 +5102,23 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
     ],
+  },
+  {
+    type: "face-swap",
+    label: "Face Swap",
+    category: "ai",
+    creditCost: 16,
+    inputs: ["face", "in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Face Swap",
+      provider: "roop",
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as FaceSwapData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
   },
   // Output
   {
