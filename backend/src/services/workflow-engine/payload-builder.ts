@@ -1166,6 +1166,21 @@ export function buildPayload(
       }
     }
 
+    case "generate-mask": {
+      return {
+        jobName: "generate-mask",
+        queueName: "video-generation",
+        modelIdentifier: "generate-mask",
+        payload: {
+          jobId,
+          imageUrl: resolvedInputs.imageUrl || (data.generatedImageUrl as string | undefined),
+          prompt: data.prompt as string,
+          threshold: (data.threshold as number | undefined) ?? 0.3,
+          usageLogId,
+        },
+      }
+    }
+
     case "face-swap": {
       return {
         jobName: "face-swap",
