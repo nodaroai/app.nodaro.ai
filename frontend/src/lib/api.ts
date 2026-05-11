@@ -215,6 +215,7 @@ export async function editImage(
     style?: string
     seed?: number
     referenceImageUrls?: string[]
+    maskUrl?: string
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl }
@@ -247,6 +248,9 @@ export async function editImage(
   }
   if (options?.referenceImageUrls?.length) {
     body.referenceImageUrls = options.referenceImageUrls
+  }
+  if (options?.maskUrl) {
+    body.maskUrl = options.maskUrl
   }
   const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
     method: "POST",
@@ -2568,6 +2572,25 @@ export async function faceSwapApi(params: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start face swap")
+  }
+  return res.json()
+}
+
+// --- Generate Mask (Grounded SAM segmentation) ---
+
+export async function generateMask(params: {
+  imageUrl: string
+  prompt: string
+  threshold?: number
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-mask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start mask generation")
   }
   return res.json()
 }

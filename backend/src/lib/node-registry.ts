@@ -175,6 +175,23 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
 
+  {
+    type: "generate-mask",
+    label: "Generate Mask",
+    category: "ai-image",
+    description: "Produce a binary segmentation mask for a subject described by a text prompt (Grounded SAM).",
+    outputType: "image",
+    creditCost: 2,
+    providers: ["grounded-sam"],
+    capabilities: ["segmentation", "inpainting-prep"],
+    inputSchema: {
+      fields: [
+        { key: "imageUrl", type: "image-url", required: true },
+        { key: "prompt", type: "text", required: true },
+      ],
+    },
+  },
+
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },

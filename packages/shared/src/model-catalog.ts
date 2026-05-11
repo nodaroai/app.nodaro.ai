@@ -901,6 +901,25 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "kling-master:10s", credits: 80 },
     ],
   },
+  "kling-3-omni": {
+    id: "kling-3-omni",
+    kind: "video",
+    modes: ["i2v"] as const,
+    family: "Kuaishou",
+    label: "Kling 3 Omni",
+    description: "Kling 3 Omni via Replicate — 3-15s, 720p/1080p, end frame + reference images, native audio.",
+    useCases: ["motion", "cinematic", "reference"],
+    features: ["end-frame", "reference-image"],
+    durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    resolutions: ["720p", "1080p"],
+    aspectRatios: VIDEO_RATIOS_HVS,
+    pricing: [
+      { identifier: "kling-3-omni", credits: 32, note: "5s 720p default" },
+      { identifier: "kling-3-omni:5s", credits: 32 },
+      { identifier: "kling-3-omni:10s", credits: 63 },
+      { identifier: "kling-3-omni:15s", credits: 94 },
+    ],
+  },
 
   // ── xAI Grok video ──
   "grok-i2v": {

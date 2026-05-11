@@ -56,7 +56,20 @@ vi.mock("@/lib/config.js", () => ({
 
 vi.mock("@/lib/url-validator.js", async () => {
   const { z } = await import("zod")
-  return { safeUrlSchema: z.string().url() }
+  // Mirror the real safeUrlSchema's protocol gate so SSRF-style payloads
+  // (javascript:, data:, file:) are rejected the way they would be in prod.
+  const safeUrlSchema = z
+    .string()
+    .url()
+    .refine((url) => {
+      try {
+        const { protocol } = new URL(url)
+        return protocol === "http:" || protocol === "https:"
+      } catch {
+        return false
+      }
+    })
+  return { safeUrlSchema }
 })
 
 // ---------------------------------------------------------------------------
@@ -199,6 +212,42 @@ describe("POST /v1/edit-image", () => {
         provider: "recraft-upscale",
       })
     )
+  })
+
+  it("accepts maskUrl as optional field and enqueues job", async () => {
+    mockJobInsert({ data: { id: "job-mask-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://example.com/image.png",
+        prompt: "replace the sky",
+        maskUrl: "https://example.com/mask.png",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-mask-1")
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "edit-image",
+      expect.objectContaining({ maskUrl: "https://example.com/mask.png" }),
+    )
+  })
+
+  it("returns 400 when maskUrl is not a safe URL", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/edit-image",
+      payload: {
+        imageUrl: "https://example.com/image.png",
+        prompt: "test",
+        maskUrl: "javascript:alert(1)",
+        userId: "00000000-0000-4000-8000-000000000001",
+      },
+    })
+    expect(res.statusCode).toBe(400)
   })
 
   it("returns 500 when job insert fails", async () => {

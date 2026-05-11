@@ -95,6 +95,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "wan-2.7-i2v",    label: "Wan 2.7",            desc: "Wan 2.7 I2V, 2–15s, 720p/1080p, start+end frame" },
   { value: "happyhorse-i2v",  label: "HappyHorse I2V",    desc: "3–15s, 720p/1080p, single start frame" },
   { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
+  { value: "kling-3-omni", label: "Kling 3 Omni", desc: "Replicate, 3–15s, 720p/1080p, end frame + up to 7 reference images" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -279,6 +280,7 @@ export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   "bytedance-pro-fast": 9, "kling-master": 50, "runway-kie": 4,
   "wan-2.7-i2v": 24, "wan-2.7-t2v": 24,
   "happyhorse": 16, "happyhorse-i2v": 16, "happyhorse-ref2v": 19, "happyhorse-edit": 25,
+  "kling-3-omni": 32,
 }
 
 /** Aspect ratio options supported by Seedance 2.0 (includes 4:3, 3:4, 21:9, adaptive). */

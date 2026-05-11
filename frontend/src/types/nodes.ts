@@ -1291,6 +1291,7 @@ export type EditImageData = {
   negativePrompt?: string
   style?: string
   seed?: number
+  maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
   fieldMappings: FieldMappings
@@ -1683,6 +1684,26 @@ export type FaceSwapData = {
   currentJobProgress?: number
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
+}
+
+// Generate Mask: text-prompted segmentation (Grounded SAM via Replicate).
+// Produces a binary mask PNG isolating the subject described by `prompt`,
+// while passing through the original image so a downstream Mask Painter /
+// inpainting node can consume the image + mask pair together.
+export type GenerateMaskData = {
+  [key: string]: unknown
+  label: string
+  prompt: string
+  threshold?: number
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedMaskUrl?: string
+  generatedImageUrl?: string
+  generatedResults?: Array<{ imageUrl: string; maskUrl: string }>
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
 }
 
 export type QACheckData = {
@@ -3451,6 +3472,7 @@ export type SceneNodeData =
   | VideoUpscaleData
   | ExtendVideoData
   | FaceSwapData
+  | GenerateMaskData
   | SaveToStorageData
   | WebhookOutputData
   | SceneNodeDataType
@@ -3602,6 +3624,7 @@ export type SceneNodeType =
   | "video-upscale"
   | "extend-video"
   | "face-swap"
+  | "generate-mask"
   | "save-to-storage"
   | "webhook-output"
   | "scene"
@@ -5124,6 +5147,28 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as FaceSwapData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+  },
+  {
+    type: "generate-mask",
+    label: "Generate Mask",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["image"],
+    outputs: ["image", "mask"],
+    width: 220,
+    defaultData: {
+      label: "Generate Mask",
+      prompt: "",
+      threshold: 0.3,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as GenerateMaskData,
+    exposableOutputs: [
+      { key: "image", label: "Image", outputType: "image" as const },
+      { key: "mask", label: "Mask", outputType: "image" as const },
+    ],
   },
   // Output
   {

@@ -63,6 +63,14 @@ const VIDEO_MODEL_CONFIGS: Record<string, ReplicateVideoModelConfig> =
       imageParam: "image",
       endFrameParam: "end_image", // pika supports end frame
     },
+    "kling-3-omni": {
+      model: "kwaivgi/kling-v3-omni-video",
+      imageParam: "start_image",
+      endFrameParam: "end_image",
+      durationParam: "duration",
+      validDurations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      extraInput: { generate_audio: true, aspect_ratio: "16:9", mode: "standard" },
+    },
   }
 
 const TEXT_TO_VIDEO_MODELS: Record<string, string> = {
@@ -115,6 +123,22 @@ export class ReplicateVideoProvider
     // Replicate doesn't host the Lite tier, so it's not branched here)
     if (resolvedModel === "veo3" || resolvedModel === "veo3.1") {
       extraInput.generate_audio = true
+    }
+
+    // Kling 3 Omni: mode derives from resolution; plus audio, aspect_ratio,
+    // negative_prompt, and reference_images from ProviderOptions.
+    if (resolvedModel === "kling-3-omni") {
+      extraInput.mode = options?.resolution === "1080p" ? "pro" : "standard"
+      if (options?.aspectRatio && ["16:9", "9:16", "1:1"].includes(options.aspectRatio)) {
+        extraInput.aspect_ratio = options.aspectRatio
+      }
+      extraInput.generate_audio = options?.generateAudio !== false
+      if (options?.negativePrompt) {
+        extraInput.negative_prompt = options.negativePrompt
+      }
+      if (options?.referenceImageUrls && options.referenceImageUrls.length > 0) {
+        extraInput.reference_images = options.referenceImageUrls.slice(0, 7)
+      }
     }
 
     // Handle duration parameter

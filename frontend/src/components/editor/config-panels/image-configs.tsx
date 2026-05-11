@@ -26,6 +26,7 @@ import type {
   ModifyImageData,
   UpscaleImageData,
   RemoveBackgroundData,
+  GenerateMaskData,
   CharacterDefinition,
   ManualReferenceImage,
   ImageProvider,
@@ -1132,6 +1133,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
                 isOpen={showMaskPainter}
                 onClose={() => setShowMaskPainter(false)}
                 imageUrl={sourceImageUrl}
+                initialMaskUrl={data.maskUrl}
                 onSave={(maskUrl) => onUpdate({ maskUrl })}
               />
             </Suspense>
@@ -1371,6 +1373,43 @@ export function RemoveBackgroundConfig({ data }: ConfigProps<RemoveBackgroundDat
       <p className="text-xs text-muted-foreground px-1">
         Automatically removes the background from the input image, leaving a transparent PNG.
       </p>
+    </div>
+  )
+}
+
+export function GenerateMaskConfig({ data, onUpdate }: ConfigProps<GenerateMaskData>) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground px-1">
+        Generates a binary segmentation mask from a text prompt (Grounded SAM). Connect an input image and describe the subject to mask.
+      </p>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Describe what to mask</label>
+        <Textarea
+          rows={2}
+          placeholder={`e.g. "the blonde woman", "the red car", "the background"`}
+          value={data.prompt ?? ""}
+          onChange={(e) => onUpdate({ prompt: e.target.value })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-muted-foreground">Detection threshold</label>
+          <span className="text-xs text-muted-foreground">{(data.threshold ?? 0.3).toFixed(2)}</span>
+        </div>
+        <input
+          type="range"
+          min={0.05}
+          max={0.95}
+          step={0.05}
+          value={data.threshold ?? 0.3}
+          onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) })}
+          className="w-full accent-[#ff0073]"
+        />
+        <p className="text-[10px] text-muted-foreground">Lower = more permissive, higher = stricter matching</p>
+      </div>
     </div>
   )
 }

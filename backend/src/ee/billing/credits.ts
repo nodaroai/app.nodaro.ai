@@ -253,6 +253,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Kling Master duration-tiered pricing
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  "kling-3-omni": 32,            // Replicate, ~$0.50 est (5s 720p fallback)
+  // Kling 3 Omni duration-tiered pricing (Replicate, estimated — actual cost tracked via predict_time)
+  "kling-3-omni:5s": 32,         // ~$0.50 est
+  "kling-3-omni:10s": 63,        // ~$1.00 est
+  "kling-3-omni:15s": 94,        // ~$1.50 est
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
   // ── Video Extend ──
   ***REDACTED-OSS-SCRUB***
@@ -439,6 +444,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-upscale": 19,
   "extend-video": 40,
   "roop-face-swap": 16,           // $0.25 Replicate × 1.25 / $0.02
+  "generate-mask": 2,             // adirik/grounded-sam (Replicate) — segmentation mask
   "transcribe": 4,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 5,

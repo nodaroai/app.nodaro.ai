@@ -41,6 +41,7 @@ const replicateInfo: ProviderInfo = {
       "veo3",
       "veo3.1",
       "kling",
+      "kling-3-omni",
       "runway",
       "pika",
     ],

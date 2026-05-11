@@ -84,6 +84,7 @@ import {
   ModifyImageConfig,
   UpscaleImageConfig,
   RemoveBackgroundConfig,
+  GenerateMaskConfig,
   ImageToVideoConfig,
   VideoToVideoConfig,
   MotionTransferConfig,
@@ -243,6 +244,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "modify-image": "Modify Image",
   "upscale-image": "Upscale Image",
   "remove-background": "Remove Background",
+  "generate-mask": "Generate Mask",
   "image-to-video": "Image to Video",
   "video-to-video": "Video to Video",
   "text-to-video": "Text to Video",
@@ -335,7 +337,7 @@ export function getNodeTypeDisplayName(type: string): string {
 }
 
 export const GENERATE_BUTTON_TYPES = new Set([
-  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background",
+  "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask",
   "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "face-swap", "suno-generate", "suno-cover", "suno-extend",
@@ -450,6 +452,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "modify-image": return <ModifyImageConfig {...configProps} nodeId={selectedNodeId} />
     case "upscale-image": return <UpscaleImageConfig {...configProps} />
     case "remove-background": return <RemoveBackgroundConfig {...configProps} />
+    case "generate-mask": return <GenerateMaskConfig {...configProps} />
     case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
       ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
       : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />

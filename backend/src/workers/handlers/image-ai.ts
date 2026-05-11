@@ -69,7 +69,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
-  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed } = job.data as {
+  const { imageUrl, taskId, prompt, provider, upscaleFactor, aspectRatio, negativePrompt, style, seed, maskUrl } = job.data as {
     jobId: string
     imageUrl?: string
     taskId?: string
@@ -80,6 +80,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     negativePrompt?: string
     style?: string
     seed?: number
+    maskUrl?: string
   }
   const resolvedProvider = provider ?? "recraft-upscale"
   // grok-upscale takes a prior Grok task_id instead of an image URL; the KIE
@@ -103,6 +104,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
     ...(aspectRatio && { image_size: aspectRatio }),
     ...(negativePrompt && { negative_prompt: negativePrompt }),
     ...(seed != null && { seed }),
+    ...(maskUrl && { mask_url: maskUrl }),
   }
   const hasExtraParams = Object.keys(extraParams).length > 0
 

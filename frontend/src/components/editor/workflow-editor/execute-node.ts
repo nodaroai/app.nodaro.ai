@@ -32,6 +32,7 @@ import {
   videoUpscaleApi,
   extendVideo,
   faceSwapApi,
+  generateMask,
   generateSceneGraph,
   renderVideoWithSceneGraph,
   renderVideoWithPlan,
@@ -108,6 +109,7 @@ import type {
   VideoUpscaleData,
   ExtendVideoData,
   FaceSwapData,
+  GenerateMaskData,
   VideoComposerData,
   AfterEffectsData,
   LottieOverlayData,
@@ -731,6 +733,17 @@ export function executeNode(
     // Collect reference images for nano-banana-edit
     const editRefUrls = orderedImageUrls.filter((url) => url !== imageUrl);
 
+    // Resolve mask from handle or painted mask (edge-connected wins)
+    let maskUrl: string | undefined;
+    const maskEdge = edges.find(
+      (e) => e.target === node.id && e.targetHandle === "mask",
+    );
+    if (maskEdge) {
+      const maskNode = nodes.find((n) => n.id === maskEdge.source);
+      if (maskNode) maskUrl = extractNodeOutput(maskNode);
+    }
+    if (!maskUrl) maskUrl = editData.maskUrl;
+
     setUserPromptTemplate(editData.prompt?.trim() || undefined);
     return runEditImage(node.id, imageUrl, ctx, prompt, provider, {
       upscaleFactor: editData.upscaleFactor,
@@ -740,6 +753,7 @@ export function executeNode(
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : editData.style,
       seed: editData.seed,
       referenceImageUrls: editRefUrls.length > 0 ? editRefUrls : undefined,
+      maskUrl,
     });
   }
 
@@ -3080,6 +3094,161 @@ export function executeNode(
       "Face Swap",
       ctx,
     );
+  }
+
+  if (node.type === "generate-mask") {
+    const maskData = node.data as GenerateMaskData;
+    const imageUrl = inputs.imageUrl as string | undefined;
+    const prompt = (maskData.prompt ?? "").trim();
+    if (!imageUrl) {
+      toast.error(`Node "${maskData.label}": no image connected. Wire an image into the left handle.`);
+      return Promise.reject(new Error("No image"));
+    }
+    if (!prompt) {
+      toast.error(`Node "${maskData.label}": prompt is required.`);
+      return Promise.reject(new Error("No prompt"));
+    }
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      currentJobProgress: 0,
+      currentJobId: undefined,
+    });
+    setUserPromptTemplate(undefined);
+    // Custom poll loop: this node's `generatedResults` use a bespoke
+    // `{ imageUrl, maskUrl }` shape (not the standard `GeneratedResult.url`),
+    // and the job's `output_data` returns BOTH the passthrough image URL and
+    // the generated mask PNG — neither of which fits `pollJobWithNodeUpdate`'s
+    // single-URL contract.
+    return new Promise<string>((resolve, reject) => {
+      generateMask({ imageUrl, prompt, threshold: maskData.threshold })
+        .then(({ jobId }) => {
+          guardedToast.info("Generate Mask started", { description: `Job ID: ${jobId}` });
+          updateNodeData(node.id, { currentJobId: jobId });
+          let pollFailures = 0;
+          const poll = ctx.trackInterval(
+            setInterval(async () => {
+              if (ctx.isWorkflowStale()) {
+                ctx.untrackInterval(poll);
+                reject(new WorkflowStaleError());
+                return;
+              }
+              try {
+                const job = await getJobStatus(jobId);
+                pollFailures = 0;
+                if (job.status === "processing" && job.progress != null) {
+                  updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                }
+                if (job.status === "completed") {
+                  ctx.untrackInterval(poll);
+                  const od = (job.output_data ?? {}) as Record<string, unknown>;
+                  const outImageUrl = od.imageUrl as string | undefined;
+                  const outMaskUrl = od.maskUrl as string | undefined;
+                  if (!outImageUrl || !outMaskUrl) {
+                    const errMsg = "Generate Mask: missing imageUrl/maskUrl in output";
+                    updateNodeData(node.id, {
+                      executionStatus: "failed",
+                      errorMessage: errMsg,
+                      currentJobId: undefined,
+                      currentJobProgress: undefined,
+                    });
+                    guardedToast.error("Generate Mask failed", { description: errMsg });
+                    reject(new Error(errMsg));
+                    return;
+                  }
+                  const existingResults =
+                    ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
+                      ?.generatedResults as Array<{ imageUrl: string; maskUrl: string }> | undefined) ?? [];
+                  // The bespoke result shape doesn't carry width/height — the
+                  // backend worker only returns { imageUrl, maskUrl } in
+                  // output_data and the GenerateMaskData type doesn't model
+                  // dimensions on each entry. Skip them per Task 10 spec
+                  // ("if dimensions aren't available at write time, skip").
+                  const newResult = { imageUrl: outImageUrl, maskUrl: outMaskUrl };
+                  updateNodeData(node.id, {
+                    executionStatus: "completed",
+                    generatedImageUrl: outImageUrl,
+                    generatedMaskUrl: outMaskUrl,
+                    generatedResults: [newResult, ...existingResults],
+                    activeResultIndex: 0,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.success("Generate Mask complete");
+                  resolve(outMaskUrl);
+                } else if (job.status === "failed") {
+                  ctx.untrackInterval(poll);
+                  const errMsg = job.error_message ?? "Unknown error";
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: errMsg,
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Generate Mask failed", { description: errMsg });
+                  reject(new Error(errMsg));
+                }
+              } catch (err) {
+                pollFailures++;
+                if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                  ctx.untrackInterval(poll);
+                  // Final verification: the job may have completed while polling was failing
+                  try {
+                    const finalJob = await getJobStatus(jobId);
+                    if (finalJob.status === "completed") {
+                      const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
+                      const outImageUrl = od.imageUrl as string | undefined;
+                      const outMaskUrl = od.maskUrl as string | undefined;
+                      if (outImageUrl && outMaskUrl) {
+                        const existingResults =
+                          ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
+                            ?.generatedResults as Array<{ imageUrl: string; maskUrl: string }> | undefined) ?? [];
+                        const newResult = { imageUrl: outImageUrl, maskUrl: outMaskUrl };
+                        updateNodeData(node.id, {
+                          executionStatus: "completed",
+                          generatedImageUrl: outImageUrl,
+                          generatedMaskUrl: outMaskUrl,
+                          generatedResults: [newResult, ...existingResults],
+                          activeResultIndex: 0,
+                          currentJobId: undefined,
+                          currentJobProgress: undefined,
+                          errorMessage: undefined,
+                        });
+                        guardedToast.success("Generate Mask complete");
+                        resolve(outMaskUrl);
+                        return;
+                      }
+                    }
+                  } catch {
+                    // ignore — proceed to failure
+                  }
+                  updateNodeData(node.id, {
+                    executionStatus: "failed",
+                    errorMessage: "Failed to check status — network error",
+                    currentJobId: undefined,
+                    currentJobProgress: undefined,
+                  });
+                  guardedToast.error("Failed to check Generate Mask status");
+                  reject(err);
+                }
+              }
+            }, 2000),
+          );
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error("Failed to start Generate Mask", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
   }
 
   if (node.type === "combine-videos") {

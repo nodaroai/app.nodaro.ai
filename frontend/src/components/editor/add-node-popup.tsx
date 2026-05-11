@@ -104,6 +104,7 @@ import {
   User,
   MessageCircle,
   ScanFace,
+  VenetianMask,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -581,6 +582,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "remove-background",
     label: "Remove Background",
     icon: <Eraser className="h-4 w-4" />,
+    category: "AI",
+    group: "Image",
+  },
+  {
+    type: "generate-mask",
+    label: "Generate Mask",
+    icon: <VenetianMask className="h-4 w-4" />,
     category: "AI",
     group: "Image",
   },

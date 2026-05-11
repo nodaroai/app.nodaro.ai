@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil, Aperture } from "lucide-react"
+import { Wand2, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil, Aperture, Layers } from "lucide-react"
 import { HandleIcon } from "./handle-icon"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
@@ -92,7 +92,8 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "mask", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
+        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
         { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -203,8 +204,18 @@ function EditImageNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </div>
+    {/* Mask input handle icon */}
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#a855f7]"
+      style={{ top: "calc(100% - 50px)", left: "-29px", transform: "translateY(-50%)" }}
+    >
+      <Layers className="w-3.5 h-3.5 text-white" />
+      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#a855f7] text-[#a855f7] text-[8px] font-black flex items-center justify-center">
+        +
+      </div>
+    </div>
     {/* Cinematography input handle icon */}
-    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 50px)" label="Cinematography" />
+    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 80px)" label="Cinematography" />
     {/* Output handle icon */}
     <div
       className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"

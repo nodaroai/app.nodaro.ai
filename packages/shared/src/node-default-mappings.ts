@@ -181,6 +181,7 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "happyhorse-i2v":      { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse-ref2v":    { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "happyhorse-edit":     { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  "kling-3-omni":        { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-videoedit":       { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
 }
 

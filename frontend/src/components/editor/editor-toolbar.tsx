@@ -195,6 +195,16 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.executionStatus = undefined
           break
 
+        case "generate-mask":
+          // Clear generated mask + image results, keep prompt and threshold
+          data.generatedResults = []
+          data.generatedMaskUrl = undefined
+          data.generatedImageUrl = undefined
+          data.activeResultIndex = 0
+          data.executionStatus = undefined
+          data.currentJobId = undefined
+          break
+
         case "image-to-video":
         case "video-to-video":
         case "text-to-video":
