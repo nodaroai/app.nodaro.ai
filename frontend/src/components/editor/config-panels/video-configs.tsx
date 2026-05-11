@@ -115,8 +115,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
   const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
-  const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
-
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
   }
