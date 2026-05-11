@@ -975,7 +975,7 @@ export class KieVideoProvider
       if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
       // duration: 0 = auto-detect, 2-10 = target seconds
       const durStr = options?.videoEditDuration ?? "0"
-      input.duration = parseInt(durStr, 10)
+      input.duration = Number(durStr)
       if (options?.audioSetting) input.audio_setting = options.audioSetting
       if (options?.promptExtend !== undefined) input.prompt_extend = options.promptExtend
       if (options?.seed !== undefined && options.seed >= 0) input.seed = options.seed
