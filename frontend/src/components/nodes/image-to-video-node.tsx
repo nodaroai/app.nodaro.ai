@@ -157,12 +157,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const supportsEndFrame = nodeData.provider !== undefined && PROVIDERS_WITH_END_FRAME.includes(nodeData.provider)
   const isKling3 = nodeData.provider === "kling-3.0"
   const isKling3MultiShot = isKling3 && nodeData.multiShot
-  const showEndFrame = supportsEndFrame && !isKling3MultiShot
   const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(provider)
   const isVeo = provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite"
   const isVeoRefMode = isVeo && nodeData.veoMode === "reference"
-  const showReferences = supportsReferences && (!isVeo || isVeoRefMode)
-  const showStartFrame = !isVeoRefMode
+  const isSeedance2 = isSeedance2Provider(provider)
+  const s2Mode = isSeedance2 ? (nodeData.seedance2InputMode ?? "frames") : null
+  const showStartFrame = !isVeoRefMode && s2Mode !== "references"
+  const showEndFrame = supportsEndFrame && !isKling3MultiShot && s2Mode !== "references"
+  const showReferences = supportsReferences && (!isVeo || isVeoRefMode) && (!isSeedance2 || s2Mode === "references")
   const referencesConnectionCount = edges.filter(e => e.target === id && e.targetHandle === "references").length
   const referencesTop = 445 * 0.70
 
@@ -250,7 +252,6 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))
   }
 
-  const isSeedance2 = isSeedance2Provider(provider)
   const refVideosTop = 445 * 0.82
   const refAudioTop = 445 * 0.92
 
@@ -260,14 +261,14 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     ...((showEndFrame && showStartFrame) ? [{ id: "endFrame", type: "target" as const, position: Position.Left, customStyle: { top: `${endFrameTop}px`, left: '-29px' }, hideHandle: true }] : []),
     { id: "audio", type: "target" as const, position: Position.Left, customStyle: { top: `${audioTop}px`, left: '-29px' }, hideHandle: true },
     ...(showReferences ? [{ id: "references", type: "target" as const, position: Position.Left, customStyle: { top: `${referencesTop}px`, left: '-29px' }, hideHandle: true }] : []),
-    ...(isSeedance2 ? [
+    ...(isSeedance2 && s2Mode === "references" ? [
       // Ref-video/ref-audio handles — capacity limit (×N) is now shown in
       // the config panel's model box, not inline on the node.
       { id: "reference-videos", type: "target" as const, position: Position.Left, top: `${refVideosTop}px`, customStyle: { top: `${refVideosTop}px`, left: '-29px' }, hideHandle: true },
       { id: "reference-audio", type: "target" as const, position: Position.Left, top: `${refAudioTop}px`, customStyle: { top: `${refAudioTop}px`, left: '-29px' }, hideHandle: true },
     ] : []),
     { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: `${videoTop}px`, right: '-29px' }, hideHandle: true },
-  ], [cinematographyTop, startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2])
+  ], [cinematographyTop, startFrameTop, endFrameTop, audioTop, referencesTop, refVideosTop, refAudioTop, videoTop, activeUrl, showConfig, showEndFrame, showStartFrame, showReferences, isSeedance2, s2Mode])
 
   // Re-register handles with React Flow when they change — edges to new handles render unreliably otherwise
   const updateNodeInternals = useUpdateNodeInternals()
@@ -275,7 +276,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeInternals(id)
   }, [id, handles.length, updateNodeInternals])
 
-  const hasSeedance2Ref = isSeedance2 && edges.some((e) => e.target === id && (e.targetHandle === "reference-videos" || e.targetHandle === "reference-audio"))
+  const hasSeedance2Ref = isSeedance2 && s2Mode === "references" && edges.some((e) => e.target === id && (e.targetHandle === "reference-videos" || e.targetHandle === "reference-audio"))
   const hasAnyConnection = startFrameInfo || endFrameInfo || audioInfo || (showReferences && referencesConnectionCount > 0) || hasSeedance2Ref
 
   return (

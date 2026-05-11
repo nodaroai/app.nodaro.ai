@@ -115,9 +115,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
   const maxRefImages = data.provider === "grok-i2v" ? 6 : 3
 
-  const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
-  const seedance2Conflict = isSeedance2Provider(data.provider || "seedance-2-fast") && hasEndFrame && connectedRefImages.length > 0
-
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
   }
@@ -151,6 +148,28 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
+      {/* Seedance 2 input mode toggle */}
+      {isSeedance2Provider(currentI2VProvider) && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Input Mode</Label>
+          <div className="flex rounded-md border border-border overflow-hidden">
+            {(["frames", "references"] as const).map((mode) => {
+              const active = (data.seedance2InputMode ?? "frames") === mode
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`flex-1 py-1 text-xs font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => onUpdate({ seedance2InputMode: mode })}
+                >
+                  {mode === "frames" ? "Frames" : "References"}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* VEO mode toggle */}
       {isVeo && (
         <div className="flex flex-col gap-1.5">
@@ -174,11 +193,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
-          {seedance2Conflict && (
-            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
-              Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
-            </div>
-          )}
           <div className="flex flex-wrap gap-1.5">
             {connectedRefImages.map((img) => (
               <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
@@ -597,10 +611,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               className="rounded border-muted-foreground/40"
             />
             <label htmlFor="seedance2Nsfw" className="text-xs">NSFW Content Filter</label>
-          </div>
-          <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 text-[11px] leading-snug text-amber-200/90">
-            <strong className="font-semibold">Tip:</strong> reference images, videos, and audio cannot be combined
-            with start/end frame inputs on Seedance 2. Connect either frames OR references, not both.
           </div>
         </>
       )}

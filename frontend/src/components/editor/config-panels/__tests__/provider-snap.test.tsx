@@ -504,6 +504,40 @@ describe("ImageToVideoConfig — provider-snap useEffect", () => {
   })
 })
 
+describe("ImageToVideoConfig — Seedance 2 input mode toggle", () => {
+  it("renders the Input Mode segmented control for seedance-2-fast", () => {
+    const onUpdate = vi.fn()
+    const data = baseImageToVideoData({ provider: "seedance-2-fast" })
+    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(getByText("Frames")).toBeTruthy()
+    expect(getByText("References")).toBeTruthy()
+  })
+
+  it("does not render the Input Mode toggle for non-Seedance-2 providers", () => {
+    const onUpdate = vi.fn()
+    const data = baseImageToVideoData({ provider: "minimax" })
+    const { queryByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(queryByText("Frames")).toBeNull()
+    expect(queryByText("References")).toBeNull()
+  })
+
+  it("calls onUpdate with seedance2InputMode: 'references' when References button clicked", async () => {
+    const onUpdate = vi.fn()
+    const data = baseImageToVideoData({ provider: "seedance-2-fast", seedance2InputMode: "frames" })
+    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+    getByText("References").click()
+    expect(onUpdate).toHaveBeenCalledWith({ seedance2InputMode: "references" })
+  })
+
+  it("calls onUpdate with seedance2InputMode: 'frames' when Frames button clicked while in references mode", async () => {
+    const onUpdate = vi.fn()
+    const data = baseImageToVideoData({ provider: "seedance-2-fast", seedance2InputMode: "references" })
+    const { getByText } = render(<ImageToVideoConfig {...commonProps(onUpdate, data)} />)
+    getByText("Frames").click()
+    expect(onUpdate).toHaveBeenCalledWith({ seedance2InputMode: "frames" })
+  })
+})
+
 // =============================================================================
 // TextToVideoConfig
 // =============================================================================
