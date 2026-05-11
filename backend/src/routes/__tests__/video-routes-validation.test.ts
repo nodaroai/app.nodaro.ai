@@ -57,6 +57,7 @@ import { videoUpscaleRoutes } from "../video-upscale.js"
 import { motionTransferRoutes } from "../motion-transfer.js"
 import { lipSyncRoutes } from "../lip-sync.js"
 import { speechToVideoRoutes } from "../speech-to-video.js"
+import { videoToVideoRoutes } from "../video-to-video.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -443,6 +444,75 @@ describe("POST /v1/speech-to-video — Zod validation", () => {
 
   it("rejects numFrames 15 (below lower bound)", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/speech-to-video", payload: { ...validBody, numFrames: 15 } })
+    expect(res.statusCode).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 6. video-to-video — wan-videoedit params
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/video-to-video — wan-videoedit Zod validation", () => {
+  let app: FastifyInstance
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    app = createApp(videoToVideoRoutes)
+    await app.register(async (i) => { await videoToVideoRoutes(i) })
+    await app.ready()
+  })
+
+  afterEach(async () => { await app.close() })
+
+  const validBody = {
+    videoUrl: "https://example.com/v.mp4",
+    provider: "wan-videoedit",
+    prompt: "remove the background",
+    negativePrompt: "blur, artifacts",
+    videoEditDuration: "5",
+    audioSetting: "auto",
+    promptExtend: true,
+    userId: "user-123",
+  }
+
+  it("accepts a valid wan-videoedit body with all new fields", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: validBody })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-1")
+  })
+
+  it("accepts videoEditDuration '0'", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, videoEditDuration: "0" } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts videoEditDuration '10'", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, videoEditDuration: "10" } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("accepts audioSetting 'origin'", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, audioSetting: "origin" } })
+    expect(res.statusCode).not.toBe(400)
+  })
+
+  it("rejects invalid audioSetting", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, audioSetting: "invalid-value" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects videoEditDuration not in enum", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, videoEditDuration: "99" } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects negativePrompt longer than 500 chars", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, negativePrompt: "x".repeat(501) } })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("rejects non-boolean promptExtend", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/video-to-video", payload: { ...validBody, promptExtend: "yes" } })
     expect(res.statusCode).toBe(400)
   })
 })

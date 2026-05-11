@@ -24,6 +24,11 @@ const videoToVideoBody = z.object({
   aspectRatio: z.enum(["16:9", "9:16", "4:3", "3:4", "1:1", "21:9"]).optional(),
   seed: z.number().int().min(0).optional(),
   referenceImageUrl: safeUrlSchema.optional(),
+  // wan-videoedit params
+  negativePrompt: z.string().max(500).optional(),
+  videoEditDuration: z.enum(["0", "5", "10"]).optional(),
+  audioSetting: z.enum(["auto", "origin"]).optional(),
+  promptExtend: z.boolean().optional(),
 })
 
 export async function videoToVideoRoutes(app: FastifyInstance) {
@@ -35,7 +40,7 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { videoUrl, prompt, provider, duration, resolution, audio, multiShots, aspectRatio, seed, referenceImageUrl } = parsed.data
+    const { videoUrl, prompt, provider, duration, resolution, audio, multiShots, aspectRatio, seed, referenceImageUrl, negativePrompt, videoEditDuration, audioSetting, promptExtend } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -79,6 +84,10 @@ export async function videoToVideoRoutes(app: FastifyInstance) {
       aspectRatio,
       seed,
       referenceImageUrl,
+      negativePrompt,
+      videoEditDuration,
+      audioSetting,
+      promptExtend,
       usageLogId,
     })
 
