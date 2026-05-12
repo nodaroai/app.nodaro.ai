@@ -394,7 +394,9 @@ export async function workflowRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    const rawNodes = (wf.nodes ?? []) as Record<string, unknown>[]
+    const rawNodes = ((wf.nodes ?? []) as unknown[]).filter(
+      (n): n is Record<string, unknown> => n !== null && typeof n === "object"
+    )
     const exportNodes = includeAssets ? rawNodes : stripExportContent(rawNodes as any)
 
     const result: WorkflowExport = {
@@ -420,15 +422,20 @@ export async function workflowRoutes(app: FastifyInstance) {
 
       const [charsRes, objsRes, locsRes] = await Promise.all([
         characterIds.length > 0
-          ? supabase.from("characters").select("id, node_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations").in("id", characterIds)
+          ? supabase.from("characters").select("id, node_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations").in("id", characterIds).eq("user_id", req.userId)
           : Promise.resolve({ data: [], error: null }),
         objectIds.length > 0
-          ? supabase.from("objects").select("id, node_id, name, description, style, source_image_url, angles, materials, variations").in("id", objectIds)
+          ? supabase.from("objects").select("id, node_id, name, description, style, source_image_url, angles, materials, variations").in("id", objectIds).eq("user_id", req.userId)
           : Promise.resolve({ data: [], error: null }),
         locationIds.length > 0
-          ? supabase.from("locations").select("id, node_id, name, description, style, source_image_url, time_of_day, weather, angles").in("id", locationIds)
+          ? supabase.from("locations").select("id, node_id, name, description, style, source_image_url, time_of_day, weather, angles").in("id", locationIds).eq("user_id", req.userId)
           : Promise.resolve({ data: [], error: null }),
       ])
+
+      if (charsRes.error || objsRes.error || locsRes.error) {
+        const msg = (charsRes.error ?? objsRes.error ?? locsRes.error)?.message
+        return reply.status(500).send({ error: { code: "internal_error", message: msg } })
+      }
 
       result.assets = {
         characters: (charsRes.data ?? []).map((c: any) => ({

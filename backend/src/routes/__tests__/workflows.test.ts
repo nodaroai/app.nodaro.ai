@@ -753,18 +753,20 @@ describe("GET /v1/workflows/:id/export", () => {
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: workflowWithChar, error: null }),
     }
-    // `.in(...)` is the terminal call → the chain resolves like a thenable.
+    // `.eq(...)` is now the terminal call (after `.in()`) → the chain resolves like a thenable.
     // Use a real thenable (invokes `resolve`), not `mockResolvedValue` (which
     // only returns a promise and ignores the callbacks `await`/`Promise.all` pass).
     const charChain = {
       select: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
       then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
         resolve({ data: [CHAR_ROW], error: null }),
     }
     const emptyChain = {
       select: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
       then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
         resolve({ data: [], error: null }),
     }
