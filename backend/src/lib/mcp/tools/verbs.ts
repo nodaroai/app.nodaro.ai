@@ -25,9 +25,6 @@ export type RegisterVerbsOpts = RegisterOpts
  *  6. Return a JSON-RPC tool result whose `_meta.task_id` carries the job id
  *     for v1.2 progress streaming and for the client to poll via `tasks/get`.
  *
- * Notes on omissions:
- *  - `swap_face` is intentionally NOT registered because the underlying
- *    `/v1/swap-face` route does not exist in the codebase. v1.2+ may revisit.
  */
 export function registerVerbs(opts: RegisterVerbsOpts): void {
   registerImageVerbs(opts)
