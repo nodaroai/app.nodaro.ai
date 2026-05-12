@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { stripExportContent, type WorkflowExport } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
@@ -72,6 +73,13 @@ const updateWorkflowBody = z.object({
   settings: z.record(z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
   thumbnailUrl: z.string().url().nullable().optional(),
+})
+
+const exportWorkflowQuery = z.object({
+  assets: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
 })
 
 const WORKFLOW_META_COLS =
@@ -348,6 +356,101 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
 
     return { success: true }
+  })
+
+  // Export workflow as portable JSON bundle
+  app.get("/v1/workflows/:id/export", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+    }
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "workflows:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+
+    const paramsParsed = workflowIdParams.safeParse(req.params)
+    if (!paramsParsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid workflow ID" } })
+    }
+    const queryParsed = exportWorkflowQuery.safeParse(req.query)
+    if (!queryParsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid query" } })
+    }
+
+    const { id } = paramsParsed.data
+    const includeAssets = queryParsed.data.assets
+
+    const { data: wf, error } = await supabase
+      .from("workflows")
+      .select(WORKFLOW_FULL_COLS)
+      .eq("id", id)
+      .eq("user_id", req.userId)
+      .single()
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return reply.status(404).send({ error: { code: "not_found", message: "Workflow not found" } })
+      }
+      return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
+    }
+
+    const rawNodes = (wf.nodes ?? []) as Record<string, unknown>[]
+    const exportNodes = includeAssets ? rawNodes : stripExportContent(rawNodes as any)
+
+    const result: WorkflowExport = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      name: wf.name as string,
+      nodes: exportNodes as any,
+      edges: (wf.edges ?? []) as any,
+      settings: (wf.settings ?? {}) as Record<string, unknown>,
+    }
+
+    if (includeAssets) {
+      const characterIds: string[] = []
+      const objectIds: string[] = []
+      const locationIds: string[] = []
+
+      for (const node of rawNodes) {
+        const data = (node.data ?? {}) as Record<string, unknown>
+        if (node.type === "character" && data.characterDbId) characterIds.push(data.characterDbId as string)
+        if (node.type === "object" && data.objectDbId) objectIds.push(data.objectDbId as string)
+        if (node.type === "location" && data.locationDbId) locationIds.push(data.locationDbId as string)
+      }
+
+      const [charsRes, objsRes, locsRes] = await Promise.all([
+        characterIds.length > 0
+          ? supabase.from("characters").select("id, node_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations").in("id", characterIds)
+          : Promise.resolve({ data: [], error: null }),
+        objectIds.length > 0
+          ? supabase.from("objects").select("id, node_id, name, description, style, source_image_url, angles, materials, variations").in("id", objectIds)
+          : Promise.resolve({ data: [], error: null }),
+        locationIds.length > 0
+          ? supabase.from("locations").select("id, node_id, name, description, style, source_image_url, time_of_day, weather, angles").in("id", locationIds)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+
+      result.assets = {
+        characters: (charsRes.data ?? []).map((c: any) => ({
+          id: c.id, nodeId: c.node_id, name: c.name, description: c.description,
+          gender: c.gender, style: c.style, baseOutfit: c.base_outfit,
+          sourceImageUrl: c.source_image_url, expressions: c.expressions ?? [],
+          poses: c.poses ?? [], lightingVariations: c.lighting_variations ?? [],
+        })),
+        objects: (objsRes.data ?? []).map((o: any) => ({
+          id: o.id, nodeId: o.node_id, name: o.name, description: o.description,
+          style: o.style, sourceImageUrl: o.source_image_url,
+          angles: o.angles ?? [], materials: o.materials ?? [], variations: o.variations ?? [],
+        })),
+        locations: (locsRes.data ?? []).map((l: any) => ({
+          id: l.id, nodeId: l.node_id, name: l.name, description: l.description,
+          style: l.style, sourceImageUrl: l.source_image_url,
+          timeOfDay: l.time_of_day ?? [], weather: l.weather ?? [], angles: l.angles ?? [],
+        })),
+      }
+    }
+
+    return reply.send(result)
   })
 
   // Run workflow — handled by workflow-execution.ts route

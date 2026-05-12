@@ -678,3 +678,111 @@ describe("cross-tenant denial", () => {
 
 // POST /v1/workflows/:id/run — now handled by workflow-execution routes
 // (tested in workflow-execution.test.ts if present)
+
+// ---------------------------------------------------------------------------
+// GET /v1/workflows/:id/export
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/workflows/:id/export", () => {
+  const CHAR_ROW = {
+    id: "char-1",
+    node_id: "n-char",
+    name: "Hero",
+    description: null,
+    gender: "male",
+    style: null,
+    base_outfit: null,
+    source_image_url: null,
+    expressions: [],
+    poses: [],
+    lighting_variations: [],
+  }
+
+  it("returns 401 when no auth", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("returns 404 when workflow not found", async () => {
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("returns template export (no assets) by default", async () => {
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.version).toBe(1)
+    expect(body.name).toBe("My Workflow")
+    expect(body.assets).toBeUndefined()
+    expect(body.exportedAt).toBeDefined()
+  })
+
+  it("includes assets when assets=true and entities exist", async () => {
+    const workflowWithChar = {
+      ...DB_WORKFLOW_FULL,
+      nodes: [{ id: "n-char", type: "character", data: { characterDbId: "char-1" } }],
+    }
+    const workflowChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: workflowWithChar, error: null }),
+    }
+    // `.in(...)` is the terminal call → the chain resolves like a thenable.
+    // Use a real thenable (invokes `resolve`), not `mockResolvedValue` (which
+    // only returns a promise and ignores the callbacks `await`/`Promise.all` pass).
+    const charChain = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+        resolve({ data: [CHAR_ROW], error: null }),
+    }
+    const emptyChain = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+        resolve({ data: [], error: null }),
+    }
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(workflowChain as any)
+      .mockReturnValueOnce(charChain as any)
+      .mockReturnValueOnce(emptyChain as any)
+      .mockReturnValueOnce(emptyChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export?assets=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.assets.characters).toHaveLength(1)
+    expect(body.assets.characters[0].id).toBe("char-1")
+    expect(body.assets.objects).toHaveLength(0)
+  })
+})
