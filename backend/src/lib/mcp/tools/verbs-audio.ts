@@ -60,19 +60,19 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Music",
       description:
         "Generate a music track from a text prompt. Returns a job_id.\n\n" +
-        "**Picking a model**: Default `suno-v5` is the latest — best vocal " +
-        "quality, full songs with lyrics. `suno` is the v4 alias (same price). " +
-        "`minimax` is an alternative for short instrumental loops. For " +
-        "instrumental tracks set `instrumental: true`; for songs with vocals " +
+        "**Picking a model**: Default `suno-v5-5` is the latest — best vocal " +
+        "quality, full songs with lyrics. `suno-v5` is the prior V5 generation. " +
+        "`suno` is the v4 alias. `minimax` is an alternative for short instrumental loops. " +
+        "For instrumental tracks set `instrumental: true`; for songs with vocals " +
         "provide `lyrics`.",
       inputSchema: {
         prompt: z.string().min(1).max(8000),
         model: z
-          .enum(["suno-v5", "suno", "minimax"])
-          .default("suno-v5")
+          .enum(["suno-v5-5", "suno-v5", "suno", "minimax"])
+          .default("suno-v5-5")
           .describe(
-            "Music model. Suno v5 (default) is latest with best vocal quality; " +
-            "Suno v4 (id `suno`) is the prior generation; MiniMax for short loops.",
+            "Music model. suno-v5-5 (default) is latest with best quality; " +
+            "suno-v5 is prior V5; suno is v4; minimax for short instrumental loops.",
           ),
         duration: z.number().min(1).max(30).optional(),
         instrumental: z.boolean().optional(),
@@ -106,9 +106,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // Suno and MiniMax live behind different backend routes — Suno has
       // its own /v1/suno/generate (with internal version select) while
       // MiniMax goes through /v1/generate-music. Dispatch by model id.
-      const isSuno = args.model === "suno" || args.model === "suno-v5"
+      const isSuno = args.model === "suno" || args.model === "suno-v5" || args.model === "suno-v5-5"
       const url = isSuno ? "/v1/suno/generate" : "/v1/generate-music"
-      const sunoVersion = args.model === "suno-v5" ? "V5" : "V4"
+      const sunoVersion = args.model === "suno-v5-5" ? "V5_5" : args.model === "suno-v5" ? "V5" : "V4"
       const payload = isSuno
         ? {
             prompt: args.prompt,
