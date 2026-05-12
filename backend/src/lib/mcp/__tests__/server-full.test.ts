@@ -80,11 +80,13 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("generate_location")).toBe(true)
     expect(names.has("generate_object")).toBe(true)
 
-    // 11 utility tools (jobs / workflows / components / apps / models / credits)
+    // utility tools (jobs / workflows / projects / components / apps / models / credits)
     expect(names.has("list_jobs")).toBe(true)
     expect(names.has("get_job")).toBe(true)
     expect(names.has("list_workflows")).toBe(true)
     expect(names.has("run_workflow")).toBe(true)
+    expect(names.has("list_projects")).toBe(true)
+    expect(names.has("get_project")).toBe(true)
     expect(names.has("list_components")).toBe(true)
     expect(names.has("run_component")).toBe(true)
     expect(names.has("list_apps")).toBe(true)
@@ -135,8 +137,8 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("upload_audio")).toBe(false)
     expect(names.has("upload_video")).toBe(false)
 
-    // Sanity: ping + verbs + jobs + workflows + gallery + 9 upload tools +
-    // app tools (list_apps, get_app_inputs, run_app, delete_app_run).
+    // Sanity: ping + verbs + jobs + workflows + projects + gallery + 9 upload
+    // tools + app tools (list_apps, get_app_inputs, run_app, delete_app_run).
     // Upper bound has headroom for future tool additions; bump when adding
     // a new tool family rather than tracking every single tool.
     expect(tools.length).toBeGreaterThanOrEqual(28)

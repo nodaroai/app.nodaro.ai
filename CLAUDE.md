@@ -227,5 +227,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-13 (combine-videos: probe + unify clip resolution before xfade/concat — letterbox every clip to the most common (W,H) target to stop "input link parameters do not match" failures)*
-*Version: 2.8.2*
+*Last updated: 2026-05-13 (combine-videos: probe + unify clip resolution before xfade/concat; MCP: list_projects + get_project discovery tools; workflow export/import routes + MCP tools + CLI + SDK)*
+*Version: 2.9.0*

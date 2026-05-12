@@ -115,6 +115,9 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // Tools confirmed parameter-less by manual inspection. Most "list_*" tools
   // accept pagination params (limit/cursor/search) and are NOT in this set.
   "check_balance",
+  // Projects are few per user (one folder per workspace area), so the list
+  // tool intentionally returns all of them — no pagination/filter params.
+  "list_projects",
 ])
 
 // ---------------------------------------------------------------------------
