@@ -182,7 +182,7 @@ describe("POST /v1/suno/generate", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns jobId on success (default model V5)", async () => {
+  it("returns jobId on success (default model V5_5)", async () => {
     const res = await authedPost("/v1/suno/generate", { prompt: "A happy song" })
     expect(res.statusCode).toBe(200)
     expect(res.json().jobId).toBe(TEST_JOB_ID)
@@ -191,7 +191,7 @@ describe("POST /v1/suno/generate", () => {
       expect.objectContaining({
         jobId: TEST_JOB_ID,
         prompt: "A happy song",
-        model: "V5",
+        model: "V5_5",
       }),
     )
   })
@@ -560,12 +560,12 @@ describe("POST /v1/suno/add-instrumental", () => {
       expect.objectContaining({
         taskId: "task-1",
         audioId: "audio-1",
-        model: "V5",
+        model: "V5_5",
       }),
     )
   })
 
-  it("validates model is V4_5PLUS or V5 only", async () => {
+  it("validates model is V4_5PLUS, V5, or V5_5 only", async () => {
     const res = await authedPost("/v1/suno/add-instrumental", {
       taskId: "task-1",
       audioId: "audio-1",

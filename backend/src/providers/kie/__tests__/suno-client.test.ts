@@ -110,7 +110,7 @@ function recordInfoSuccess(taskId = "t-1", tracks?: Array<Record<string, unknown
 // ===========================================================================
 
 describe("sunoGenerate — create-task body shape", () => {
-  it("posts to /api/v1/generate with required fields + default model V5", async () => {
+  it("posts to /api/v1/generate with required fields + default model V5_5", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -123,7 +123,7 @@ describe("sunoGenerate — create-task body shape", () => {
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body).toMatchObject({
       prompt: "a happy song",
-      model: "V5",
+      model: "V5_5",
       customMode: false,
       instrumental: false,
       callBackUrl: "https://callback.placeholder",
@@ -442,7 +442,7 @@ describe("sunoCover", () => {
     expect(body.prompt).toBe("p")
   })
 
-  it("default model V5 + customMode false + instrumental false", async () => {
+  it("default model V5_5 + customMode false + instrumental false", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -450,7 +450,7 @@ describe("sunoCover", () => {
     await withTimers(() => sunoCover({ prompt: "p", uploadUrl: "u" }))
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
-    expect(body.model).toBe("V5")
+    expect(body.model).toBe("V5_5")
     expect(body.customMode).toBe(false)
     expect(body.instrumental).toBe(false)
   })
@@ -845,7 +845,7 @@ describe("sunoMashup", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/mashup`)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.upload_url_list).toEqual(["https://a.mp3", "https://b.mp3"])
-    expect(body.model).toBe("V5") // default
+    expect(body.model).toBe("V5_5") // default
   })
 })
 
@@ -957,7 +957,7 @@ describe("sunoStyleBoost", () => {
 // ===========================================================================
 
 describe("sunoAddInstrumental", () => {
-  it("posts to /api/v1/generate/add-instrumental with default model V5", async () => {
+  it("posts to /api/v1/generate/add-instrumental with default model V5_5", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ code: 0, data: { taskId: "t" } }))
       .mockResolvedValueOnce(recordInfoSuccess())
@@ -969,7 +969,7 @@ describe("sunoAddInstrumental", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${KIE_API_BASE}/api/v1/generate/add-instrumental`)
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.taskId).toBe("src")
-    expect(body.model).toBe("V5")
+    expect(body.model).toBe("V5_5")
   })
 
   it("respects V4_5PLUS model override", async () => {

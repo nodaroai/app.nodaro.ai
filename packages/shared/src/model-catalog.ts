@@ -1563,6 +1563,16 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Newer Suno v5 — better vocal quality, more genres. Same price as v4.",
     useCases: ["music", "song", "vocals", "premium"],
     pricing: [{ identifier: "suno-v5", credits: 4, note: "per generation" }],
+  },
+  "suno-v5_5": {
+    id: "suno-v5_5",
+    kind: "audio",
+    modes: ["music"] as const,
+    family: "Suno",
+    label: "Suno v5.5",
+    description: "Suno v5.5 — latest model with improved audio quality and expressiveness.",
+    useCases: ["music", "song", "vocals", "premium"],
+    pricing: [{ identifier: "suno-v5_5", credits: 4, note: "per generation" }],
     featured: true,
   },
 }
