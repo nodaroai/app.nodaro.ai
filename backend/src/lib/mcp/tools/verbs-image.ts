@@ -523,6 +523,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
     )
   }
+  if (!passesGate(session, executeGate)) return
 
   // ── image_to_image ──
   server.registerTool(
