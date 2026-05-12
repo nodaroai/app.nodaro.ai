@@ -481,6 +481,7 @@ export const SUNO_MODELS = [
   "V4_5PLUS",
   "V4_5ALL",
   "V5",
+  "V5_5",
 ] as const
 export type SunoModel = typeof SUNO_MODELS[number]
 

@@ -294,7 +294,7 @@ export function SunoGenerateConfig({ data, onUpdate, sources, fieldMappings, onM
         <p className="text-xs text-muted-foreground mt-1">{data.prompt.length}/3000</p>
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoGenerateData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -418,7 +418,7 @@ export function SunoCoverConfig({ data, onUpdate, sources, fieldMappings, onMapF
         <Input value={data.uploadUrl ?? ""} onChange={(e) => onUpdate({ uploadUrl: e.target.value })} placeholder="URL of the audio to cover (or connect an audio node)" />
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoCoverData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -516,7 +516,7 @@ export function SunoExtendConfig({ data, onUpdate, sources, fieldMappings, onMap
         <p className="text-xs text-muted-foreground mt-1">{(data.prompt ?? "").length}/5000</p>
       </MappableField>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -654,7 +654,7 @@ export function SunoMashupConfig({ data, onUpdate, sources, fieldMappings, onMap
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Combine two audio tracks into a mashup. Connect two audio sources to the left handles.</p>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoMashupData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (
@@ -739,10 +739,10 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Add instrumental accompaniment to a track. Connect an audio source.</p>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5").map((m) => (
+            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5" || m.value === "V5_5").map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
@@ -758,10 +758,10 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Add vocals to an instrumental track. Connect an audio source.</p>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5").map((m) => (
+            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5" || m.value === "V5_5").map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
@@ -786,7 +786,7 @@ export function SunoUploadExtendConfig({ data, onUpdate, sources, fieldMappings,
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">Extend a track from uploaded audio. Connect an audio source.</p>
       <MappableField field="model" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.model || "V5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
+        <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoUploadExtendData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
             {SUNO_MODELS.map((m) => (

@@ -12,7 +12,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5")
-const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5"]).optional().default("V5")
+const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5", "V5_5"]).optional().default("V5_5")
 
 const sunoGenerateBody = z.object({
   prompt: z.string().min(1).max(3000),
@@ -150,7 +150,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-generate"
+        const m = body?.model as string; return m === "V5_5" ? "suno-v5_5" : m === "V5" ? "suno-v5" : "suno-generate"
       }),
     },
     async (req, reply) => {
@@ -193,7 +193,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-generate"
+      const creditType = model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : "suno-generate"
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -225,7 +225,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-cover"
+        const m = body?.model as string; return m === "V5_5" ? "suno-v5_5" : m === "V5" ? "suno-v5" : "suno-cover"
       }),
     },
     async (req, reply) => {
@@ -267,7 +267,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-cover"
+      const creditType = model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : "suno-cover"
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -297,7 +297,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-extend"
+        const m = body?.model as string; return m === "V5_5" ? "suno-v5_5" : m === "V5" ? "suno-v5" : "suno-extend"
       }),
     },
     async (req, reply) => {
@@ -339,7 +339,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-extend"
+      const creditType = model === "V5_5" ? "suno-v5_5" : model === "V5" ? "suno-v5" : "suno-extend"
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
