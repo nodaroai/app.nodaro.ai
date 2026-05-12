@@ -298,7 +298,7 @@ export async function sunoGenerate(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   // Build request body
   const body: Record<string, unknown> = {
@@ -388,7 +388,7 @@ export async function sunoCover(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     prompt: params.prompt,
@@ -475,7 +475,7 @@ export async function sunoExtend(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     audioId: params.audioId,
@@ -1201,7 +1201,7 @@ export async function sunoMashup(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     upload_url_list: params.uploadUrlList,
@@ -1459,7 +1459,7 @@ export async function sunoAddInstrumental(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     taskId: params.taskId,
@@ -1543,7 +1543,7 @@ export async function sunoAddVocals(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     taskId: params.taskId,
@@ -1788,7 +1788,7 @@ export async function sunoUploadExtend(
     )
   }
 
-  const model = params.model ?? "V5"
+  const model = params.model ?? "V5_5"
 
   const body: Record<string, unknown> = {
     upload_url: params.uploadUrl,
