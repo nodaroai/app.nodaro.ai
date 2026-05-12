@@ -18,6 +18,8 @@ export interface McpSession {
    * Unused in v1.0; the field exists so the type is stable across the v1.x line.
    */
   progressTokens?: Map<string, string>
+  /** Cached mcp-project id — set by ensureMcpProject() on first call, reused thereafter. */
+  mcpProjectId?: string
 }
 
 export function newSession(opts: {
