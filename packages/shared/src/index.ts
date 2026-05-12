@@ -62,6 +62,8 @@ export {
   GUIDANCE_SCALE_SUPPORT,
   SEEDANCE_2_REF_LIMITS,
   isSeedance2Provider,
+  VEO_PROVIDERS,
+  isVeoProvider,
 } from "./model-constants.js"
 
 export type {
