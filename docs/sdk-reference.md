@@ -300,6 +300,33 @@ const { executionId } = await client.workflows.run(id, { nodeIds: ["node-1"] })
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
 Requires `workflows:execute` scope when called via OAuth.
 
+#### `export(workflowId, opts?)`
+
+```ts
+export(workflowId: string, opts?: { assets?: boolean }): Promise<{ data: WorkflowExport }>
+```
+
+Exports a workflow as a portable JSON bundle. Pass `opts.assets = true` to
+include character/object/location entity data in the bundle.
+
+```ts
+const { data: bundle } = await client.workflows.export(workflowId, { assets: true })
+```
+
+#### `import(input)`
+
+```ts
+import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow }>
+```
+
+Imports a `WorkflowExport` bundle into the specified project. Re-creates any
+bundled assets (characters, objects, locations) under your account. Returns the
+full record of the newly created workflow.
+
+```ts
+const { data: wf } = await client.workflows.import({ ...bundle, projectId })
+```
+
 ---
 
 ### `client.projects`

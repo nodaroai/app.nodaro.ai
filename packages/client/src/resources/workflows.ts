@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { GenericNode, GenericEdge } from "@nodaro/shared"
+import type { GenericNode, GenericEdge, WorkflowExport } from "@nodaro/shared"
 
 /**
  * Workflow metadata + (when fetched as a single record) full nodes/edges/settings.
@@ -121,5 +121,31 @@ export class WorkflowsResource {
       `/v1/workflows/${encodeURIComponent(id)}/run`,
       { body: params },
     )
+  }
+
+  /**
+   * Export a workflow as a portable JSON bundle.
+   * Pass `opts.assets = true` to include character/object/location entity data.
+   */
+  export(
+    workflowId: string,
+    opts?: { assets?: boolean },
+  ): Promise<{ data: WorkflowExport }> {
+    return this.client.request(
+      "GET",
+      `/v1/workflows/${encodeURIComponent(workflowId)}/export`,
+      { query: { assets: opts?.assets ?? false } },
+    )
+  }
+
+  /**
+   * Import a `WorkflowExport` bundle into the specified project.
+   * Re-creates any bundled assets (characters, objects, locations) under your account.
+   */
+  import(input: WorkflowExport & { projectId: string }): Promise<{ data: Workflow }> {
+    const { projectId, ...workflowJson } = input
+    return this.client.request("POST", "/v1/workflows/import", {
+      body: { projectId, workflow_json: workflowJson },
+    })
   }
 }
