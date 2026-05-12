@@ -1064,6 +1064,11 @@ export const KIE_MUSIC_MODELS: Record<string, KieModelConfig> = {
     credits: 12,
     ***REDACTED-OSS-SCRUB***
   },
+  "suno-v5_5": {
+    model: "suno/v5_5",
+    credits: 12,
+    ***REDACTED-OSS-SCRUB***
+  },
 }
 
 // =============================================================================

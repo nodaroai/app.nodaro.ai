@@ -1936,7 +1936,7 @@ export type SunoStyleBoostData = {
 export type SunoAddInstrumentalData = {
   [key: string]: unknown
   label: string
-  model: "V4_5PLUS" | "V5"
+  model: "V4_5PLUS" | "V5" | "V5_5"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1950,7 +1950,7 @@ export type SunoAddInstrumentalData = {
 export type SunoAddVocalsData = {
   [key: string]: unknown
   label: string
-  model: "V4_5PLUS" | "V5"
+  model: "V4_5PLUS" | "V5" | "V5_5"
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -4458,7 +4458,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Generate", prompt: "", model: "V5", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
+    defaultData: { label: "Suno Generate", prompt: "", model: "V5_5", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoGenerateData,
   },
   {
     type: "suno-cover",
@@ -4467,7 +4467,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Cover", prompt: "", model: "V5", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
+    defaultData: { label: "Suno Cover", prompt: "", model: "V5_5", uploadUrl: "", lyrics: "", style: "", title: "", negativeStyle: "", fieldMappings: {} } as SunoCoverData,
   },
   {
     type: "suno-extend",
@@ -4476,7 +4476,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["in"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V5", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
+    defaultData: { label: "Suno Extend", audioId: "", defaultParamFlag: true, prompt: "", model: "V5_5", style: "", title: "", continueAt: 0, negativeStyle: "", fieldMappings: {} } as SunoExtendData,
   },
   {
     type: "suno-lyrics",
@@ -4512,7 +4512,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio1", "audio2"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Mashup", model: "V5", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
+    defaultData: { label: "Suno Mashup", model: "V5_5", customMode: false, style: "", title: "", negativeStyle: "", vocalGender: "", fieldMappings: {} } as SunoMashupData,
   },
   {
     type: "suno-replace-section",
@@ -4539,7 +4539,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Add Instrumental", model: "V5", fieldMappings: {} } as SunoAddInstrumentalData,
+    defaultData: { label: "Suno Add Instrumental", model: "V5_5", fieldMappings: {} } as SunoAddInstrumentalData,
   },
   {
     type: "suno-add-vocals",
@@ -4548,7 +4548,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Add Vocals", model: "V5", fieldMappings: {} } as SunoAddVocalsData,
+    defaultData: { label: "Suno Add Vocals", model: "V5_5", fieldMappings: {} } as SunoAddVocalsData,
   },
   {
     type: "suno-convert-wav",
@@ -4566,7 +4566,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 4,
     inputs: ["audio"],
     outputs: ["audio"],
-    defaultData: { label: "Suno Upload Extend", prompt: "", model: "V5", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
+    defaultData: { label: "Suno Upload Extend", prompt: "", model: "V5_5", style: "", title: "", negativeStyle: "", vocalGender: "", continueAt: 0, defaultParamFlag: true, fieldMappings: {} } as SunoUploadExtendData,
   },
   {
     type: "transcribe",

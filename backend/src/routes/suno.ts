@@ -6,13 +6,19 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { SUNO_MODELS } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 import { sunoStyleBoost } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 
-const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5")
-const sunoAddTrackModelEnum = z.enum(["V4_5PLUS", "V5"]).optional().default("V5")
+const sunoModelEnum = z.enum(SUNO_MODELS).optional().default("V5_5")
+const sunoAddTrackModelEnum = z.enum(SUNO_ADD_TRACK_MODELS).optional().default("V5_5")
+
+function sunoModelCreditType(model: string | undefined, fallback: string): string {
+  if (model === "V5_5") return "suno-v5_5"
+  if (model === "V5") return "suno-v5"
+  return fallback
+}
 
 const sunoGenerateBody = z.object({
   prompt: z.string().min(1).max(3000),
@@ -150,7 +156,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-generate"
+        return sunoModelCreditType(body?.model as string, "suno-generate")
       }),
     },
     async (req, reply) => {
@@ -193,7 +199,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-generate"
+      const creditType = sunoModelCreditType(model, "suno-generate")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -225,7 +231,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-cover"
+        return sunoModelCreditType(body?.model as string, "suno-cover")
       }),
     },
     async (req, reply) => {
@@ -267,7 +273,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-cover"
+      const creditType = sunoModelCreditType(model, "suno-cover")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
@@ -297,7 +303,7 @@ export async function sunoRoutes(app: FastifyInstance) {
     {
       preHandler: creditGuard((req) => {
         const body = req.body as Record<string, unknown>
-        return (body?.model as string) === "V5" ? "suno-v5" : "suno-extend"
+        return sunoModelCreditType(body?.model as string, "suno-extend")
       }),
     },
     async (req, reply) => {
@@ -339,7 +345,7 @@ export async function sunoRoutes(app: FastifyInstance) {
         })
       }
 
-      const creditType = model === "V5" ? "suno-v5" : "suno-extend"
+      const creditType = sunoModelCreditType(model, "suno-extend")
       const reservation = await reserveCreditsForJob(req, reply, job.id, creditType)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId

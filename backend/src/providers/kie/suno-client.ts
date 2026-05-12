@@ -12,6 +12,9 @@
 
 import { config } from "../../lib/config.js"
 import { KIE_API_BASE, createSanitizedError, sleep, pollDelay } from "./client.js"
+import type { SunoModel, SunoAddTrackModel } from "@nodaro/shared"
+
+export type { SunoModel, SunoAddTrackModel }
 
 // =============================================================================
 // CONSTANTS
@@ -25,8 +28,6 @@ const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 // TYPES
 // =============================================================================
 
-export type SunoModel = "V4" | "V4_5" | "V4_5PLUS" | "V4_5ALL" | "V5"
-export type SunoAddTrackModel = "V4_5PLUS" | "V5"
 
 export interface SunoGenerateParams {
   /** Song description (simple mode) or ignored when custom lyrics provided */

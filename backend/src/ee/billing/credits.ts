@@ -343,6 +343,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   "suno": 4,                     // 12 KIE cr, $0.06 (per generation, V4 default)
   "suno-v5": 4,                  // 12 KIE cr, $0.06 (V5, same KIE cost as V4)
+  "suno-v5_5": 4,                // 12 KIE cr, $0.06 (V5.5)
   "suno-generate": 4,            // 12 KIE cr (V4 default)
   "suno-cover": 4,               // 12 KIE cr
   "suno-extend": 4,              // 12 KIE cr
@@ -1534,9 +1535,12 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
     return buildLlmCreditIdentifier("llm-chat", llmModel)
   }
 
-  // Suno generate/cover/extend use "model" field (V4/V5)
+  // Suno generate/cover/extend use "model" field (V4/V5/V5_5)
   if (nodeType.startsWith("suno-") && nodeType !== "suno-lyrics" && nodeType !== "suno-separate" && nodeType !== "suno-music-video") {
-    return (data.model as string) === "V5" ? "suno-v5" : nodeType
+    const m = data.model as string
+    if (m === "V5_5") return "suno-v5_5"
+    if (m === "V5") return "suno-v5"
+    return nodeType
   }
 
   // Suno separate: "split_stem" costs more

@@ -332,7 +332,8 @@ export const SUNO_MODELS: readonly { value: string; label: string; desc: string 
   { value: "V4_5", label: "Suno V4.5", desc: "Improved quality and coherence" },
   { value: "V4_5ALL", label: "Suno V4.5 All", desc: "Full instrument + vocal generation" },
   { value: "V4_5PLUS", label: "Suno V4.5 Plus", desc: "Extended duration support" },
-  { value: "V5", label: "Suno V5", desc: "Latest, highest quality" },
+  { value: "V5", label: "Suno V5", desc: "Superior musical expression, faster generation" },
+  { value: "V5_5", label: "Suno V5.5", desc: "Custom models tailored to unique taste" },
 ]
 
 export const MOTION_TRANSFER_MODELS: readonly { value: MotionTransferProviderType; label: string; desc: string }[] = [
