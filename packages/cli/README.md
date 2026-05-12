@@ -84,6 +84,11 @@ nodaro projects get <id>
 
 nodaro workflows list --project <projectId>
 nodaro workflows get <id>
+nodaro workflows create --project <projectId> --name <name> [--file bundle.json]
+nodaro workflows update <id> [--name <name>] [--file nodes-edges.json]
+nodaro workflows delete <id>
+nodaro workflows export <id> [--with-assets] [--output bundle.json]   # → stdout if no --output
+nodaro workflows import <file> --project <projectId>
 nodaro workflows run <id>                # prints execution id, returns immediately
 nodaro workflows run <id> --watch        # follow until completed/failed/cancelled
 nodaro workflows run <id> --node n1 n2   # run only specific nodes
