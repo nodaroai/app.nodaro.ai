@@ -10,6 +10,7 @@ import {
   parseFailure,
   jobResultWithWidget,
 } from "./_verb-helpers.js"
+import { SUNO_MODELS, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -1188,6 +1189,557 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "audio",
         widgetData: { prompt: promptHint, model: "trim-audio" },
       })
+    },
+  )
+
+  // ── text_to_audio (sound effects) ──
+  server.registerTool(
+    "text_to_audio",
+    {
+      title: "Generate Sound Effect",
+      description:
+        "Generate a sound effect (SFX) from a text prompt using ElevenLabs. " +
+        "Returns a job_id. Use for foley, ambience, UI sounds, etc. — NOT for " +
+        "speech (use generate_speech) or music (use generate_music).",
+      inputSchema: {
+        prompt: z.string().min(1).max(2000).describe("Describe the sound effect (e.g. 'thunderstorm with heavy rain')."),
+        duration: z.number().min(0.5).max(30).optional().describe("Duration in seconds (0.5–30). Defaults to model choice."),
+        loop: z.boolean().optional().describe("Whether the output should loop seamlessly."),
+        prompt_influence: z.number().min(0).max(1).optional().describe("How strongly the prompt guides generation (0–1)."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        prompt: args.prompt,
+        ...(args.duration !== undefined ? { duration: args.duration } : {}),
+        ...(args.loop !== undefined ? { loop: args.loop } : {}),
+        ...(args.prompt_influence !== undefined ? { promptInfluence: args.prompt_influence } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/text-to-audio",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "sound effect", session, widgetKind: "audio", widgetData: { prompt: args.prompt, model: "elevenlabs-sfx" } })
+    },
+  )
+
+  // ── audio_isolation ──
+  server.registerTool(
+    "audio_isolation",
+    {
+      title: "Isolate Audio",
+      description:
+        "Remove background noise and isolate the primary audio (speech, vocals, " +
+        "or instrument) from a mixed audio or video file. Returns a job_id with " +
+        "a clean audio output.",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/audio-isolation",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { audioUrl, mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "audio isolation", session, widgetKind: "audio", widgetData: { prompt: "(isolate audio)", model: "audio-isolation" } })
+    },
+  )
+
+  // ── transcribe ──
+  server.registerTool(
+    "transcribe",
+    {
+      title: "Transcribe Audio",
+      description:
+        "Transcribe speech from an audio or video file to text using ElevenLabs STT. " +
+        "Returns a job_id; the transcript text is in the job output.",
+      inputSchema: {
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+        language: z.string().max(10).optional().describe("BCP-47 language code (e.g. 'en', 'es', 'fr'). Auto-detected when omitted."),
+        diarize: z.boolean().optional().describe("Label each speaker (speaker 1, speaker 2, …). Default false."),
+        tag_audio_events: z.boolean().optional().describe("Annotate non-speech events like [laughter], [music]. Default false."),
+        word_timestamps: z.boolean().optional().describe("Include per-word start/end timestamps. Default false."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id." }], isError: true }
+      const payload: Record<string, unknown> = {
+        audioUrl,
+        ...(args.language ? { language: args.language } : {}),
+        ...(args.diarize !== undefined ? { diarize: args.diarize } : {}),
+        ...(args.tag_audio_events !== undefined ? { tagAudioEvents: args.tag_audio_events } : {}),
+        ...(args.word_timestamps !== undefined ? { wordTimestamps: args.word_timestamps } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/transcribe",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "transcribe", session, widgetKind: "generic", widgetData: { prompt: "(transcribe)", model: "elevenlabs-stt" } })
+    },
+  )
+
+  // ── voice_remix ──
+  server.registerTool(
+    "voice_remix",
+    {
+      title: "Voice Remix",
+      description:
+        "Generate speech from text using a natural-language voice description " +
+        "(instead of a voice_id). Great for one-off voices without cloning — " +
+        "describe the voice and the text to speak.",
+      inputSchema: {
+        text: z.string().min(1).max(5000).describe("Text to speak."),
+        voice_description: z.string().min(1).max(1000).describe("Natural-language description of the voice (e.g. 'a warm, mid-40s British woman with a calm news-anchor tone')."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/voice-remix",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { text: args.text, voiceDescription: args.voice_description, mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "voice remix", session, widgetKind: "audio", widgetData: { prompt: args.text.slice(0, 80), model: "voice-remix" } })
+    },
+  )
+
+  // ── suno_generate ──
+  server.registerTool(
+    "suno_generate",
+    {
+      title: "Suno Generate",
+      description:
+        "Generate an original song with Suno AI. Returns a job_id. The job " +
+        "output contains sunoTaskId + sunoTrackId needed by follow-up tools " +
+        "(suno_extend, suno_cover, suno_separate_stems, etc.).\n\n" +
+        "**Custom mode** (`custom_mode: true`): supply `lyrics` and `style` " +
+        "explicitly — Suno uses them verbatim instead of generating them from " +
+        "the prompt.\n\n" +
+        `Models: ${SUNO_MODELS.join(", ")}. Default V5_5.`,
+      inputSchema: {
+        prompt: z.string().min(1).max(3000).describe("Song description or inspiration prompt."),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
+        style: z.string().max(500).optional().describe("Musical style tags (e.g. 'lo-fi hip-hop, melancholy, piano')."),
+        title: z.string().max(200).optional(),
+        lyrics: z.string().max(3000).optional().describe("Full lyrics (only used when custom_mode=true)."),
+        negative_style: z.string().max(500).optional().describe("Styles to avoid."),
+        vocal_gender: z.enum(["male", "female"]).optional(),
+        custom_mode: z.boolean().optional().describe("When true, uses prompt as style descriptor and lyrics verbatim."),
+        instrumental: z.boolean().optional().describe("Generate instrumental only (no vocals)."),
+        style_weight: z.number().min(0).max(1).optional(),
+        weirdness: z.number().min(0).max(1).optional(),
+        audio_weight: z.number().min(0).max(1).optional(),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        prompt: args.prompt,
+        model: args.model ?? "V5_5",
+        ...(args.style ? { style: args.style } : {}),
+        ...(args.title ? { title: args.title } : {}),
+        ...(args.lyrics ? { lyrics: args.lyrics } : {}),
+        ...(args.negative_style ? { negativeStyle: args.negative_style } : {}),
+        ...(args.vocal_gender ? { vocalGender: args.vocal_gender } : {}),
+        ...(args.custom_mode !== undefined ? { customMode: args.custom_mode } : {}),
+        ...(args.instrumental !== undefined ? { instrumental: args.instrumental } : {}),
+        ...(args.style_weight !== undefined ? { styleWeight: args.style_weight } : {}),
+        ...(args.weirdness !== undefined ? { weirdnessConstraint: args.weirdness } : {}),
+        ...(args.audio_weight !== undefined ? { audioWeight: args.audio_weight } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/generate",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno generate", session, widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "V5_5" } })
+    },
+  )
+
+  // ── suno_lyrics ──
+  server.registerTool(
+    "suno_lyrics",
+    {
+      title: "Suno Generate Lyrics",
+      description:
+        "Generate song lyrics from a prompt using Suno AI. Returns a job_id; " +
+        "the lyrics text is in the job output. Use the result as `lyrics` in " +
+        "suno_generate (custom_mode: true) for full control.",
+      inputSchema: {
+        prompt: z.string().min(1).max(1000).describe("Topic or theme for the lyrics (e.g. 'a heartbreak ballad about summer')."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/lyrics",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { prompt: args.prompt, mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno lyrics", session, widgetKind: "generic", widgetData: { prompt: args.prompt, model: "suno-lyrics" } })
+    },
+  )
+
+  // ── suno_mashup ──
+  server.registerTool(
+    "suno_mashup",
+    {
+      title: "Suno Mashup",
+      description:
+        "Blend two audio tracks into a mashup using Suno AI. Both inputs must be " +
+        "public URLs or Nodaro audio asset ids. Returns a job_id.",
+      inputSchema: {
+        audio_url_1: z.string().url().optional().describe("First track URL."),
+        audio_asset_id_1: z.string().optional().describe("First track Nodaro audio job id."),
+        audio_url_2: z.string().url().optional().describe("Second track URL."),
+        audio_asset_id_2: z.string().optional().describe("Second track Nodaro audio job id."),
+        style: z.string().max(500).optional(),
+        title: z.string().max(200).optional(),
+        negative_style: z.string().max(500).optional(),
+        vocal_gender: z.enum(["male", "female"]).optional(),
+        custom_mode: z.boolean().optional(),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const url1 =
+        args.audio_url_1 ??
+        (args.audio_asset_id_1 ? await resolveAssetId({ assetId: args.audio_asset_id_1, userId: session.userId, expectedKind: "audio" }) : null)
+      const url2 =
+        args.audio_url_2 ??
+        (args.audio_asset_id_2 ? await resolveAssetId({ assetId: args.audio_asset_id_2, userId: session.userId, expectedKind: "audio" }) : null)
+      if (!url1 || !url2) return { content: [{ type: "text" as const, text: "Two audio sources are required (audio_url_1 + audio_url_2 or asset ids)." }], isError: true }
+      const payload: Record<string, unknown> = {
+        uploadUrlList: [url1, url2],
+        ...(args.style ? { style: args.style } : {}),
+        ...(args.title ? { title: args.title } : {}),
+        ...(args.negative_style ? { negativeStyle: args.negative_style } : {}),
+        ...(args.vocal_gender ? { vocalGender: args.vocal_gender } : {}),
+        ...(args.custom_mode !== undefined ? { customMode: args.custom_mode } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/mashup",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno mashup", session, widgetKind: "audio", widgetData: { prompt: "(mashup)", model: "suno-mashup" } })
+    },
+  )
+
+  // ── suno_replace_section ──
+  server.registerTool(
+    "suno_replace_section",
+    {
+      title: "Suno Replace Section",
+      description:
+        "Replace a time segment of a Suno-generated track with newly generated content. " +
+        "Pass the Nodaro audio_asset_id of a Suno track. infill_end_s must be ≥ infill_start_s + 6.",
+      inputSchema: {
+        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
+        infill_start_s: z.number().min(0).describe("Start time in seconds of the region to replace."),
+        infill_end_s: z.number().min(6).max(60).describe("End time in seconds (must be ≥ start + 6, max 60)."),
+        prompt: z.string().min(1).max(3000).describe("Description of what to generate for the replaced region."),
+        tags: z.string().max(500).describe("Style tags for the replacement segment."),
+        title: z.string().max(200).optional(),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
+      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}. Pass a Suno track job id.` }], isError: true }
+      const payload: Record<string, unknown> = {
+        taskId: ids.sunoTaskId,
+        audioId: ids.sunoTrackId,
+        infillStartS: args.infill_start_s,
+        infillEndS: args.infill_end_s,
+        prompt: args.prompt,
+        tags: args.tags,
+        ...(args.title ? { title: args.title } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/replace-section",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno replace section", session, widgetKind: "audio", widgetData: { prompt: args.prompt.slice(0, 60), model: "suno-replace-section" } })
+    },
+  )
+
+  // ── suno_style_boost ──
+  server.registerTool(
+    "suno_style_boost",
+    {
+      title: "Suno Style Boost",
+      description:
+        "Enhance a Suno style/genre description using AI to produce richer style tags. " +
+        "Returns a job_id; the improved style string is in the job output. Use the result " +
+        "as `style` in suno_generate.",
+      inputSchema: {
+        content: z.string().min(1).max(3000).describe("Style description to enhance (e.g. 'lo-fi chill')."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/style-boost",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { content: args.content, mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno style boost", session, widgetKind: "generic", widgetData: { prompt: args.content.slice(0, 60), model: "suno-style-boost" } })
+    },
+  )
+
+  // ── suno_add_instrumental ──
+  server.registerTool(
+    "suno_add_instrumental",
+    {
+      title: "Suno Add Instrumental",
+      description:
+        "Add an AI-generated instrumental layer to a Suno track. " +
+        "Pass the Nodaro audio_asset_id of a Suno generation.",
+      inputSchema: {
+        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
+        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the new layer. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
+      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/add-instrumental",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno add instrumental", session, widgetKind: "audio", widgetData: { prompt: "(add instrumental)", model: args.model ?? "V5_5" } })
+    },
+  )
+
+  // ── suno_add_vocals ──
+  server.registerTool(
+    "suno_add_vocals",
+    {
+      title: "Suno Add Vocals",
+      description:
+        "Add AI-generated vocals to an existing Suno instrumental track. " +
+        "Pass the Nodaro audio_asset_id of a Suno generation.",
+      inputSchema: {
+        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
+        model: z.enum(SUNO_ADD_TRACK_MODELS).optional().describe(`Suno model for the vocals. Options: ${SUNO_ADD_TRACK_MODELS.join(", ")}. Default V5_5.`),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
+      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/add-vocals",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, model: args.model ?? "V5_5", mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno add vocals", session, widgetKind: "audio", widgetData: { prompt: "(add vocals)", model: args.model ?? "V5_5" } })
+    },
+  )
+
+  // ── suno_convert_wav ──
+  server.registerTool(
+    "suno_convert_wav",
+    {
+      title: "Suno Convert to WAV",
+      description:
+        "Convert a Suno-generated track to lossless WAV format. " +
+        "Pass the Nodaro audio_asset_id of a Suno generation. Returns a job_id with WAV output.",
+      inputSchema: {
+        audio_asset_id: z.string().min(1).describe("Nodaro audio job id of a Suno track."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const ids = await resolveSunoIds(args.audio_asset_id, session.userId)
+      if (!ids) return { content: [{ type: "text" as const, text: `No Suno ids found for asset ${args.audio_asset_id}.` }], isError: true }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/convert-wav",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { taskId: ids.sunoTaskId, audioId: ids.sunoTrackId, mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno convert WAV", session, widgetKind: "audio", widgetData: { prompt: "(convert to WAV)", model: "suno-convert-wav" } })
+    },
+  )
+
+  // ── suno_upload_extend ──
+  server.registerTool(
+    "suno_upload_extend",
+    {
+      title: "Suno Upload & Extend",
+      description:
+        "Extend an externally uploaded audio track using Suno AI (not a prior Suno " +
+        "generation — use suno_extend for that). Provide a public URL to the audio file " +
+        "and a continue_at timestamp in seconds.",
+      inputSchema: {
+        audio_url: z.string().url().describe("Public URL of the audio file to extend."),
+        continue_at: z.number().min(0).describe("Timestamp (seconds) from which Suno continues generating."),
+        model: z.enum(SUNO_MODELS).optional().describe(`Suno model. Default V5_5. Options: ${SUNO_MODELS.join(", ")}.`),
+        style: z.string().max(500).optional(),
+        title: z.string().max(200).optional(),
+        negative_style: z.string().max(500).optional(),
+        vocal_gender: z.enum(["male", "female"]).optional(),
+        use_default_params: z.boolean().optional().describe("Use Suno defaults instead of the supplied style/title. Default false."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-audio",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-audio", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        uploadUrl: args.audio_url,
+        continueAt: args.continue_at,
+        model: args.model ?? "V5_5",
+        defaultParamFlag: args.use_default_params ?? false,
+        ...(args.style ? { style: args.style } : {}),
+        ...(args.title ? { title: args.title } : {}),
+        ...(args.negative_style ? { negativeStyle: args.negative_style } : {}),
+        ...(args.vocal_gender ? { vocalGender: args.vocal_gender } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/suno/upload-extend",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "Suno upload extend", session, widgetKind: "audio", widgetData: { prompt: "(upload extend)", model: args.model ?? "V5_5" } })
     },
   )
 }

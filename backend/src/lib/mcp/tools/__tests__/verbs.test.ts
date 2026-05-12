@@ -237,6 +237,19 @@ describe("animate_image verb", () => {
     expect(received.body?.referenceAudioUrls).toBeUndefined()
   })
 
+  it("forwards seedance2_input_mode to payload", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-video", { jobId: "j-sd2-mode" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "animate_image", {
+      image_url: "https://x/y.png",
+      model: "seedance-2",
+      seedance2_input_mode: "references",
+      reference_image_urls: ["https://cdn/ref.jpg"],
+    })
+    expect(received.body?.seedance2InputMode).toBe("references")
+  })
+
   it("rejects reference_video_urls + end_frame_url combination with isError", async () => {
     const { fastify } = stubRoute("POST", "/v1/generate-video", { jobId: "j-conflict" })
     const server = buildServer()

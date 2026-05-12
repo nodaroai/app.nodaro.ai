@@ -523,4 +523,302 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
       },
     )
   }
+
+  // ── image_to_image ──
+  server.registerTool(
+    "image_to_image",
+    {
+      title: "Image to Image",
+      description:
+        "Transform an image guided by a text prompt (img2img). Supports style " +
+        "transfer, re-styling, inpainting with a mask, and multi-reference " +
+        "composition. Returns a job_id.\n\n" +
+        "**Recommended models**: nano-banana (default, fast+cheap), nano-banana-2, " +
+        "flux-kontext (photorealistic edits), gpt-image-i2i (creative repaints), " +
+        "flux-i2i, ideogram-remix. Call `list_models { kind: \"image\", mode: \"i2i\" }` " +
+        "for the full list.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Source image URL."),
+        image_asset_id: z.string().optional().describe("Nodaro image job id."),
+        prompt: z.string().min(1).max(2000).describe("Transformation description."),
+        model: z.string().optional().describe(
+          `img2img model. Default nano-banana. Options: ${I2I_MODEL_IDS.join(", ")}. Unknown values fall back to nano-banana.`,
+        ),
+        reference_image_urls: z.array(z.string()).max(13).optional().describe("Extra reference images (URLs or Nodaro asset ids) for multi-ref models."),
+        resolution: z.enum(["1K", "2K", "4K"]).optional(),
+        quality: z.enum(["medium", "high", "basic"]).optional(),
+        strength: z.number().min(0).max(1).optional().describe("How much the prompt overrides the source image (0=subtle, 1=full repaint)."),
+        aspect_ratio: z.string().optional(),
+        negative_prompt: z.string().max(5000).optional(),
+        seed: z.number().int().min(0).optional(),
+        mask_url: z.string().url().optional().describe("Inpainting mask image URL (white=edit, black=keep)."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        prompt: z.string().optional(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-image", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
+
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        prompt: args.prompt,
+        provider: args.model ?? "nano-banana",
+        ...(args.reference_image_urls?.length ? { referenceImageUrls: args.reference_image_urls } : {}),
+        ...(args.resolution ? { resolution: args.resolution } : {}),
+        ...(args.quality ? { quality: args.quality } : {}),
+        ...(args.strength !== undefined ? { strength: args.strength } : {}),
+        ...(args.aspect_ratio ? { aspectRatio: args.aspect_ratio } : {}),
+        ...(args.negative_prompt ? { negativePrompt: args.negative_prompt } : {}),
+        ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "image to image", session, widgetKind: "image", widgetData: { prompt: args.prompt, model: args.model ?? "nano-banana" } })
+    },
+  )
+
+  // ── edit_image ──
+  server.registerTool(
+    "edit_image",
+    {
+      title: "Edit Image",
+      description:
+        "Upscale, remove background, or apply AI edits to an image. Returns a job_id.\n\n" +
+        "**Models by operation**:\n" +
+        "  • `recraft-upscale` (default) — high-quality upscale, no prompt needed.\n" +
+        "  • `topaz-image-upscale` — Topaz AI upscale (1×/2×/4×).\n" +
+        "  • `recraft-remove-bg` — remove background, returns PNG with transparency.\n" +
+        "  • `nano-banana-edit` — AI-guided edit with a prompt (inpainting/outpainting).\n" +
+        "  • `grok-upscale` — Grok creative upscale (pass kie_task_id from prior Grok generation instead of image_url).",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Source image URL (all providers except grok-upscale)."),
+        image_asset_id: z.string().optional().describe("Nodaro image job id."),
+        model: z.enum(["recraft-upscale", "topaz-image-upscale", "recraft-remove-bg", "nano-banana-edit", "grok-upscale"]).optional().describe("Edit operation. Default recraft-upscale."),
+        upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor (for topaz-image-upscale). Default 2."),
+        target_resolution: z.enum(["2K", "4K", "8K"]).optional().describe("Target output resolution."),
+        prompt: z.string().max(2000).optional().describe("Edit prompt (required for nano-banana-edit)."),
+        kie_task_id: z.string().optional().describe("KIE task id from prior Grok generation (required for grok-upscale instead of image_url)."),
+        negative_prompt: z.string().max(5000).optional(),
+        style: z.string().max(500).optional(),
+        seed: z.number().int().min(0).optional(),
+        mask_url: z.string().url().optional().describe("Inpainting mask (white=edit). Used by nano-banana-edit."),
+      },
+      outputSchema: {
+        jobId: z.string(),
+        model: z.string().optional(),
+        outputUrl: z.string().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-image", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const provider = args.model ?? "recraft-upscale"
+      const isGrokUpscale = provider === "grok-upscale"
+
+      if (isGrokUpscale && !args.kie_task_id) {
+        return { content: [{ type: "text" as const, text: "grok-upscale requires kie_task_id from the original Grok image generation." }], isError: true }
+      }
+      if (provider === "nano-banana-edit" && !args.prompt) {
+        return { content: [{ type: "text" as const, text: "nano-banana-edit requires a prompt." }], isError: true }
+      }
+
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!isGrokUpscale && !imageUrl) {
+        return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
+      }
+
+      const payload: Record<string, unknown> = {
+        provider,
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(args.kie_task_id ? { taskId: args.kie_task_id } : {}),
+        ...(args.upscale_factor ? { upscaleFactor: args.upscale_factor } : {}),
+        ...(args.target_resolution ? { targetResolution: args.target_resolution } : {}),
+        ...(args.prompt ? { prompt: args.prompt } : {}),
+        ...(args.negative_prompt ? { negativePrompt: args.negative_prompt } : {}),
+        ...(args.style ? { style: args.style } : {}),
+        ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        ...(args.mask_url ? { maskUrl: args.mask_url } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/edit-image",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "edit image", session, widgetKind: "image", widgetData: { prompt: args.prompt ?? `(${provider})`, model: provider } })
+    },
+  )
+
+  // ── generate_mask ──
+  server.registerTool(
+    "generate_mask",
+    {
+      title: "Generate Mask",
+      description:
+        "Generate a binary segmentation mask for an image by describing what to select. " +
+        "Returns a job_id with a black-and-white PNG mask (white=selected region). " +
+        "Use the mask with edit_image or image_to_image for inpainting.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Source image URL."),
+        image_asset_id: z.string().optional().describe("Nodaro image job id."),
+        prompt: z.string().min(1).max(500).describe("What to mask (e.g. 'the person' or 'sky and clouds')."),
+        threshold: z.number().min(0).max(1).optional().describe("Segmentation confidence threshold (0–1). Default 0.3."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-image",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-image", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        prompt: args.prompt,
+        ...(args.threshold !== undefined ? { threshold: args.threshold } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/generate-mask",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "generate mask", session, widgetKind: "image", widgetData: { prompt: args.prompt, model: "generate-mask" } })
+    },
+  )
+
+  // ── image_to_text ──
+  server.registerTool(
+    "image_to_text",
+    {
+      title: "Image to Text",
+      description:
+        "Describe or analyse an image using a vision LLM. Returns a job_id; " +
+        "the description is in the job output text. Use for captions, alt-text, " +
+        "scene analysis, or custom questions about the image.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Image URL to describe."),
+        image_asset_id: z.string().optional().describe("Nodaro image job id."),
+        detail_level: z.enum(["brief", "detailed", "comprehensive"]).optional().describe("How much detail to include. Default detailed."),
+        custom_prompt: z.string().max(2000).optional().describe("Override the default system prompt with a specific question (e.g. 'List all text visible in the image')."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id." }], isError: true }
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        ...(args.detail_level ? { detailLevel: args.detail_level } : {}),
+        ...(args.custom_prompt ? { customPrompt: args.custom_prompt } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/image-to-text/describe",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "image to text", session, widgetKind: "generic", widgetData: { prompt: args.custom_prompt ?? `(${args.detail_level ?? "detailed"} description)`, model: "image-to-text" } })
+    },
+  )
+
+  // ── generate_script ──
+  server.registerTool(
+    "generate_script",
+    {
+      title: "Generate Script",
+      description:
+        "Generate a structured video script from a text prompt using an LLM. " +
+        "Returns a job_id; the script text is in the job output. Use the scenes " +
+        "to drive a sequence of generate_image or generate_video calls.\n\n" +
+        "Models: gemini (default), claude, gpt.",
+      inputSchema: {
+        prompt: z.string().min(1).max(10000).describe("High-level description of the video (topic, style, audience, etc.)."),
+        scene_count: z.number().int().min(1).max(20).optional().describe("Number of scenes. Default determined by model."),
+        tone: z.string().max(200).optional().describe("Tone/mood of the script (e.g. 'dramatic', 'lighthearted')."),
+        target_duration: z.number().int().min(5).max(600).optional().describe("Approximate total video duration in seconds."),
+        model: z.enum(["gemini", "claude", "gpt"]).optional().describe("LLM to use. Default gemini."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        prompt: args.prompt,
+        ...(args.scene_count !== undefined ? { sceneCount: args.scene_count } : {}),
+        ...(args.tone ? { tone: args.tone } : {}),
+        ...(args.target_duration !== undefined ? { targetDuration: args.target_duration } : {}),
+        ...(args.model ? { provider: args.model } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/generate-script",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "generate script", session, widgetKind: "generic", widgetData: { prompt: args.prompt.slice(0, 80), model: args.model ?? "gemini" } })
+    },
+  )
 }

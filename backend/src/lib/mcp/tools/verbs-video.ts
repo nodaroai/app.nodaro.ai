@@ -209,11 +209,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "AND end frame, pick a model whose `features` includes `end-frame` (VEO, " +
         "MiniMax, Hailuo Standard, Bytedance Lite, Kling Turbo, Seedance). " +
         "Default `veo3.1` is the best price/quality balance with native audio.\n\n" +
-        "**Seedance 2 only**: pass `reference_video_urls` / `reference_audio_urls` " +
-        "for style transfer or soundtrack-driven motion (max 3 each), or " +
-        "`reference_image_urls` for extra reference images beyond `image_url` " +
-        "(max 9). Multimodal refs cannot be combined with `end_frame_url` — " +
-        "choose one mode.\n\n" +
+        "**Seedance 2 modes** (use `seedance2_input_mode` to switch explicitly):\n" +
+        "  • `'frames'` (default) — start/end-frame mode: provide `image_url` as " +
+        "the first frame and optionally `end_frame_url` as the last frame.\n" +
+        "  • `'references'` — reference-media mode: provide up to 9 reference images " +
+        "via `reference_image_urls`, up to 3 reference videos via `reference_video_urls` " +
+        "(style/motion transfer), and/or up to 3 audio clips via `reference_audio_urls` " +
+        "(soundtrack-driven motion). `image_url` / `end_frame_url` are ignored in " +
+        "this mode. Reference videos/audio cannot be combined with `end_frame_url`.\n\n" +
         "**Perfect loop** (the canonical recipe — three calls):\n" +
         "  1. `animate_image` with `model: \"veo3.1\"`, `sound: false`, and the " +
         "**same image** as both `image_url` (start) and `end_frame_url` (or the " +
@@ -279,8 +282,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .max(SEEDANCE_2_REF_LIMITS.images)
           .optional()
           .describe(
-            "Seedance 2 only: extra reference images (URLs or Nodaro asset IDs) " +
-            "beyond `image_url`. Resolved server-side. Silently ignored on other providers.",
+            "Seedance 2 only: reference images (URLs or Nodaro asset IDs) used in " +
+            "'references' mode. Max 9. Resolved server-side. Silently ignored on other providers.",
           ),
         reference_video_urls: z
           .array(z.string())
@@ -288,7 +291,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Seedance 2 only: reference videos for style/motion transfer (URLs or " +
-            "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
+            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode.",
           ),
         reference_audio_urls: z
           .array(z.string())
@@ -296,7 +299,15 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Seedance 2 only: reference audio for soundtrack-driven motion (URLs or " +
-            "Nodaro asset IDs). Mutually exclusive with end_frame_url / end_frame_asset_id.",
+            "Nodaro asset IDs). Max 3. Used in 'references' mode; ignored in 'frames' mode.",
+          ),
+        seedance2_input_mode: z
+          .enum(["frames", "references"])
+          .optional()
+          .describe(
+            "Seedance 2 only: 'frames' = start/end-frame mode (use image_url + end_frame_url); " +
+            "'references' = reference-media mode (use reference_image_urls / reference_video_urls / reference_audio_urls). " +
+            "Silently ignored on other providers.",
           ),
         loop_trim: z.object({
           enabled: z.boolean(),
@@ -417,6 +428,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(refImageUrls.length ? { referenceImageUrls: refImageUrls } : {}),
         ...(refVideoUrls.length ? { referenceVideoUrls: refVideoUrls } : {}),
         ...(refAudioUrls.length ? { referenceAudioUrls: refAudioUrls } : {}),
+        ...(args.seedance2_input_mode !== undefined ? { seedance2InputMode: args.seedance2_input_mode } : {}),
         // Pass through only when explicitly set so the route's default (true)
         // applies when the caller doesn't specify. Worker still gates on
         // `provider === "veo3.1"` — non-veo3.1 jobs ignore this flag.
@@ -1752,6 +1764,182 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           resolution,
         },
       })
+    },
+  )
+
+  // ── face_swap ──
+  server.registerTool(
+    "face_swap",
+    {
+      title: "Face Swap",
+      description:
+        "Replace the face in a video with a face from a reference image. " +
+        "Provide the source video and a portrait image whose face will be transplanted. " +
+        "Returns a job_id with the face-swapped video.",
+      inputSchema: {
+        video_url: z.string().url().optional().describe("Source video URL."),
+        video_asset_id: z.string().optional().describe("Nodaro video job id."),
+        face_image_url: z.string().url().optional().describe("Portrait image whose face to use."),
+        face_image_asset_id: z.string().optional().describe("Nodaro image job id for the face."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })
+          : null)
+      if (!videoUrl) return { content: [{ type: "text" as const, text: "Pass video_url or video_asset_id." }], isError: true }
+
+      const faceImageUrl =
+        args.face_image_url ??
+        (args.face_image_asset_id
+          ? await resolveAssetId({ assetId: args.face_image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!faceImageUrl) return { content: [{ type: "text" as const, text: "Pass face_image_url or face_image_asset_id (portrait for the replacement face)." }], isError: true }
+
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/face-swap",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload: { videoUrl, faceImageUrl, provider: "roop", mcp_client: session.clientName, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "face swap", session, widgetKind: "video", widgetData: { prompt: "(face swap)", model: "roop" } })
+    },
+  )
+
+  // ── video_upscale ──
+  server.registerTool(
+    "video_upscale",
+    {
+      title: "Video Upscale",
+      description:
+        "Upscale a video to higher resolution using Topaz AI or VEO upscale. " +
+        "Returns a job_id with the enhanced video.\n\n" +
+        "**Models**:\n" +
+        "  • `topaz` (default) — Topaz AI upscale, 1×/2×/4× factor.\n" +
+        "  • `veo-1080p` — VEO upscale to 1080p (requires kie_task_id from original VEO generation).\n" +
+        "  • `veo-4k` — VEO upscale to 4K (requires kie_task_id from original VEO generation).",
+      inputSchema: {
+        video_url: z.string().url().optional().describe("Source video URL (required for topaz)."),
+        video_asset_id: z.string().optional().describe("Nodaro video job id (required for topaz)."),
+        model: z.enum(["topaz", "veo-1080p", "veo-4k"]).optional().describe("Upscale model. Default topaz."),
+        upscale_factor: z.enum(["1", "2", "4"]).optional().describe("Upscale factor for topaz (1×/2×/4×). Default 2."),
+        kie_task_id: z.string().optional().describe("KIE task id from the original VEO generation — required for veo-1080p / veo-4k."),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const provider = args.model ?? "topaz"
+      const isVeo = provider === "veo-1080p" || provider === "veo-4k"
+
+      if (isVeo && !args.kie_task_id) {
+        return { content: [{ type: "text" as const, text: "veo-1080p and veo-4k require kie_task_id from the original VEO generation." }], isError: true }
+      }
+
+      const videoUrl =
+        args.video_url ??
+        (args.video_asset_id
+          ? await resolveAssetId({ assetId: args.video_asset_id, userId: session.userId, expectedKind: "video" })
+          : null)
+      if (!isVeo && !videoUrl) {
+        return { content: [{ type: "text" as const, text: "Pass video_url or video_asset_id." }], isError: true }
+      }
+
+      const payload: Record<string, unknown> = {
+        provider,
+        upscaleFactor: args.upscale_factor ?? "2",
+        ...(videoUrl ? { videoUrl } : {}),
+        ...(args.kie_task_id ? { kieTaskId: args.kie_task_id } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/video-upscale",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "video upscale", session, widgetKind: "video", widgetData: { prompt: `(upscale ${args.upscale_factor ?? "2"}×)`, model: provider } })
+    },
+  )
+
+  // ── speech_to_video ──
+  server.registerTool(
+    "speech_to_video",
+    {
+      title: "Speech to Video",
+      description:
+        "Animate a portrait image to speak a line of audio (Wan SpeechToVideo / Wan S2V). " +
+        "Provide a portrait image and an audio clip — the face will be lip-synced and " +
+        "animated to match the speech. Returns a job_id.",
+      inputSchema: {
+        image_url: z.string().url().optional().describe("Portrait image URL."),
+        image_asset_id: z.string().optional().describe("Nodaro image job id."),
+        audio_url: z.string().url().optional().describe("Speech audio URL."),
+        audio_asset_id: z.string().optional().describe("Nodaro audio job id."),
+        prompt: z.string().min(1).max(2500).describe("Motion/scene description to guide the animation."),
+        resolution: z.enum(["480p", "580p", "720p"]).optional().describe("Output resolution. Default 480p."),
+        negative_prompt: z.string().max(2500).optional(),
+      },
+      outputSchema: { jobId: z.string(), outputUrl: z.string().optional() },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: {
+        "ui/resourceUri": "ui://nodaro/widget/v3/job-video",
+        ui: { resourceUri: "ui://nodaro/widget/v3/job-video", visibility: ["model", "app"] },
+      },
+    },
+    async (args) => {
+      const imageUrl =
+        args.image_url ??
+        (args.image_asset_id
+          ? await resolveAssetId({ assetId: args.image_asset_id, userId: session.userId, expectedKind: "image" })
+          : null)
+      if (!imageUrl) return { content: [{ type: "text" as const, text: "Pass image_url or image_asset_id (portrait)." }], isError: true }
+
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id
+          ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" })
+          : null)
+      if (!audioUrl) return { content: [{ type: "text" as const, text: "Pass audio_url or audio_asset_id (speech)." }], isError: true }
+
+      const payload: Record<string, unknown> = {
+        imageUrl,
+        audioUrl,
+        prompt: args.prompt,
+        resolution: args.resolution ?? "480p",
+        ...(args.negative_prompt ? { negativePrompt: args.negative_prompt } : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/speech-to-video",
+        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      return jobResultWithWidget({ jobId, label: "speech to video", session, widgetKind: "video", widgetData: { prompt: args.prompt.slice(0, 80), model: "wan-s2v", resolution: args.resolution ?? "480p" } })
     },
   )
 }
