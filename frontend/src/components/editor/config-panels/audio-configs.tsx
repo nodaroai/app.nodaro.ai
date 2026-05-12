@@ -58,13 +58,14 @@ import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
-import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode } from "@nodaro/shared"
+import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
 import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
 // Hoisted to avoid creating a fresh empty array on every render — preserves
 // referential equality so memoised children don't re-run.
 const EMPTY_EDGES: ReadonlyArray<WorkflowEdge> = []
+const SUNO_ADD_TRACK_MODEL_OPTIONS = SUNO_MODELS.filter(m => (SUNO_ADD_TRACK_MODELS as readonly string[]).includes(m.value))
 
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<TextToSpeechData>) {
   const textSource = data.textSource || "connected"
@@ -742,7 +743,7 @@ export function SunoAddInstrumentalConfig({ data, onUpdate, sources, fieldMappin
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddInstrumentalData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5" || m.value === "V5_5").map((m) => (
+            {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>
@@ -761,7 +762,7 @@ export function SunoAddVocalsConfig({ data, onUpdate, sources, fieldMappings, on
         <Select value={data.model || "V5_5"} onValueChange={(v) => onUpdate({ model: v as SunoAddVocalsData["model"] })}>
           <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
           <SelectContent>
-            {SUNO_MODELS.filter(m => m.value === "V4_5PLUS" || m.value === "V5" || m.value === "V5_5").map((m) => (
+            {SUNO_ADD_TRACK_MODEL_OPTIONS.map((m) => (
               <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
             ))}
           </SelectContent>

@@ -485,6 +485,10 @@ export const SUNO_MODELS = [
 ] as const
 export type SunoModel = typeof SUNO_MODELS[number]
 
+/** Suno models that support add-instrumental / add-vocals operations */
+export const SUNO_ADD_TRACK_MODELS = ["V4_5PLUS", "V5", "V5_5"] as const
+export type SunoAddTrackModel = typeof SUNO_ADD_TRACK_MODELS[number]
+
 /** Voice design models */
 export const VOICE_DESIGN_MODELS = [
   "eleven_ttv_v3",
