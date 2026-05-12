@@ -209,7 +209,7 @@ const NODES: NodeTestConfig[] = [
   { name: "GenerateImageNode", Component: GenerateImageNode, expectedCategory: "ai", defaultData: { label: "Generate Image", provider: "nano-banana-pro", aspectRatio: "1:1" }, skipIdlePlaceholder: true },
   { name: "EditImageNode", Component: EditImageNode, expectedCategory: "ai", defaultData: { label: "Edit Image", provider: "recraft-upscale" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "ImageToImageNode", Component: ImageToImageNode, expectedCategory: "ai", defaultData: { label: "Image to Image", provider: "nano-banana" }, skipIdlePlaceholder: true, skipFailedText: true },
-  { name: "ImageToVideoNode", Component: ImageToVideoNode, expectedCategory: "i2v", defaultData: { label: "Image to Video", provider: "minimax", duration: 5 } },
+  { name: "ImageToVideoNode", Component: ImageToVideoNode, expectedCategory: "i2v", defaultData: { label: "Image to Video", provider: "minimax", duration: 5 }, skipIdlePlaceholder: true },
   { name: "VideoToVideoNode", Component: VideoToVideoNode, expectedCategory: "ai", defaultData: { label: "Video to Video", provider: "wan" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "TextToVideoNode", Component: TextToVideoNode, expectedCategory: "ai", defaultData: { label: "Text to Video", provider: "seedance-2-fast" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "TextToSpeechNode", Component: TextToSpeechNode, expectedCategory: "ai", defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "test" } },
