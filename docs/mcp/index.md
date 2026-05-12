@@ -37,6 +37,10 @@ OAuth flow under the hood: see [OAuth flow](../oauth-flow.md). MCP-specific
 client onboarding lives here; the OAuth handshake itself is the same
 authorization-code + PKCE flow Nodaro uses for any third-party app.
 
+## Tool reference
+
+See [tools.md](./tools.md) for the full list of tools, inputs, and scope requirements — including project discovery (`list_projects`, `get_project`) and workflow JSON editing (`get_workflow_json`, `update_workflow_json`, `export_workflow`, `import_workflow`).
+
 ## Troubleshooting
 
 See [troubleshooting](./troubleshooting.md).
