@@ -16,7 +16,7 @@ import type {
   ProviderResult,
   ProviderOptions,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -212,6 +212,14 @@ interface ImageConstraints {
   minAspectRatio?: number
   /** Maximum aspect ratio (width/height) */
   maxAspectRatio?: number
+  /**
+   * Re-encode to JPEG even when the source format is otherwise accepted.
+   * Drops the alpha channel and shrinks the file — needed for the MiniMax/Hailuo
+   * backend, which 500s on large RGBA PNGs despite the docs only listing a 10MB cap.
+   */
+  forceJpeg?: boolean
+  /** Downscale (preserving aspect ratio) so neither side exceeds this many pixels. */
+  maxDimension?: number
 }
 
 /**
@@ -220,6 +228,8 @@ interface ImageConstraints {
  * - Kling 3.0: JPEG/PNG only (auto-converts WebP/GIF to JPEG)
  * - Wan 2.6 I2V: min 256×256px
  * - Kling 2.6 motion: min 300px, aspect ratio 2:5–5:2
+ * - Hailuo/MiniMax I2V: re-encode to JPEG (drops alpha) — backend 500s on large RGBA PNGs
+ * - All KIE I2V: longest side capped (caller passes maxDimension, currently 2048px)
  * - All: max 10 MB (progressive JPEG compression + resize)
  *
  * Returns the original URL if no processing is needed, or a new R2 URL.
@@ -276,37 +286,50 @@ async function ensureImageForProvider(
     }
   }
 
-  const needsConversion = !acceptedFormats.has(format)
+  const maxDim = constraints?.maxDimension
+  const needsConversion =
+    !acceptedFormats.has(format) || (constraints?.forceJpeg === true && format !== "jpeg")
   const needsCompress = buffer.length > IMAGE_MAX_BYTES
+  const needsResize = maxDim !== undefined && (width > maxDim || height > maxDim)
 
-  if (!needsConversion && !needsCompress) {
+  if (!needsConversion && !needsCompress && !needsResize) {
     return imageUrl
   }
 
   console.log(
     `[KIE.ai] Image preprocessing for ${provider}: format=${format}, size=${(buffer.length / 1024 / 1024).toFixed(1)}MB, ${width}×${height}` +
-    `${needsConversion ? ` → converting to JPEG (${format} not accepted)` : ""}` +
+    `${needsConversion ? ` → converting to JPEG${acceptedFormats.has(format) ? " (forced)" : ` (${format} not accepted)`}` : ""}` +
+    `${needsResize ? ` → downscaling to ≤${maxDim}px` : ""}` +
     `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
   )
 
+  // Base pipeline: optionally cap the longest side, preserving aspect ratio.
+  const pipeline = () => {
+    const s = sharp(buffer)
+    return maxDim !== undefined
+      ? s.resize(maxDim, maxDim, { fit: "inside", withoutEnlargement: true })
+      : s
+  }
+
   // Convert to JPEG — good balance of compatibility and compression
   let quality = 90
-  let converted = await sharp(buffer)
+  let converted = await pipeline()
     .jpeg({ quality, mozjpeg: true })
     .toBuffer()
 
   // If still over 10 MB, progressively lower quality
   while (converted.length > IMAGE_MAX_BYTES && quality > 50) {
     quality -= 10
-    converted = await sharp(buffer)
+    converted = await pipeline()
       .jpeg({ quality, mozjpeg: true })
       .toBuffer()
   }
 
-  // If still over limit after quality reduction, resize down
+  // If still over limit after quality reduction, resize down further
   if (converted.length > IMAGE_MAX_BYTES) {
+    const effectiveWidth = maxDim !== undefined ? Math.min(width, maxDim) : width
     const scale = Math.sqrt(IMAGE_MAX_BYTES / converted.length)
-    const newWidth = Math.round(width * scale)
+    const newWidth = Math.round(effectiveWidth * scale)
     converted = await sharp(buffer)
       .resize(newWidth)
       .jpeg({ quality: 80, mozjpeg: true })
@@ -426,22 +449,30 @@ export class KieVideoProvider
       `[KIE.ai] ==============================================`
     )
 
-    // Auto-convert image format if provider requires it:
-    // - Kling 3.0: JPEG/PNG only (no WebP)
-    // - Wan 2.6: min 256×256px
+    // Normalize input frames before handing them to KIE — see ensureImageForProvider.
+    // The Hailuo/MiniMax backend returns "internal error" on large RGBA PNGs even
+    // though its docs only list a 10MB cap, so re-encode those to JPEG; cap every
+    // i2v input at 2048px regardless. VEO and Runway-KIE go straight through (own
+    // endpoints, and they reference `imageUrl`/`endFrameUrl` directly below).
     let effectiveImageUrl = imageUrl
-    if (provider === "kling-3.0" || provider === "wan-i2v") {
-      const i2vConstraints: ImageConstraints = { context: "Video generation" }
-      if (provider === "wan-i2v") {
-        i2vConstraints.minDimension = 256
-      }
-      effectiveImageUrl = await ensureImageForProvider(imageUrl!, provider, i2vConstraints)
+    let effectiveEndFrameUrl = endFrameUrl
+    const usesRawImageUrls = isVeoProvider(provider) || provider === "runway-kie"
+    if (!usesRawImageUrls) {
+      const i2vConstraints: ImageConstraints = { context: "Video generation", maxDimension: 2048 }
+      if (provider === "wan-i2v") i2vConstraints.minDimension = 256
+      if (modelConfig.model.startsWith("hailuo/")) i2vConstraints.forceJpeg = true
+      const [normImage, normEnd] = await Promise.all([
+        imageUrl ? ensureImageForProvider(imageUrl, provider, i2vConstraints) : imageUrl,
+        endFrameUrl ? ensureImageForProvider(endFrameUrl, provider, i2vConstraints) : endFrameUrl,
+      ])
+      effectiveImageUrl = normImage
+      effectiveEndFrameUrl = normEnd
     }
 
     // Kling 3.0 uses the unified createTask/getTaskDetail endpoints
     if (provider === "kling-3.0") {
-      const imageUrls = (endFrameUrl && !options?.multiShots)
-        ? [effectiveImageUrl!, endFrameUrl]
+      const imageUrls = (effectiveEndFrameUrl && !options?.multiShots)
+        ? [effectiveImageUrl!, effectiveEndFrameUrl]
         : [effectiveImageUrl!]
       return runKling3(
         modelConfig,
@@ -454,7 +485,7 @@ export class KieVideoProvider
     }
 
     // VEO3 uses a special API endpoint
-    if (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite") {
+    if (isVeoProvider(provider)) {
       let imageUrls: string[]
       if (options?.generationType === "REFERENCE_2_VIDEO" && options?.referenceImageUrls?.length) {
         imageUrls = options.referenceImageUrls.slice(0, 3)
@@ -564,17 +595,17 @@ export class KieVideoProvider
       input.duration = String(snapped)
     }
 
-    if (endFrameUrl) {
+    if (effectiveEndFrameUrl) {
       if (provider === "seedance") {
-        input.input_urls = [effectiveImageUrl, endFrameUrl]
+        input.input_urls = [effectiveImageUrl, effectiveEndFrameUrl]
       } else if (isSeedance2Provider(provider) || provider === "wan-2.7-i2v") {
-        input.last_frame_url = endFrameUrl
+        input.last_frame_url = effectiveEndFrameUrl
       } else if (provider === "kling-turbo") {
-        input.tail_image_url = endFrameUrl
+        input.tail_image_url = effectiveEndFrameUrl
       } else if (provider === "minimax" || provider === "hailuo-standard" || provider === "bytedance-lite") {
-        input.end_image_url = endFrameUrl
+        input.end_image_url = effectiveEndFrameUrl
       } else {
-        input.end_frame = endFrameUrl
+        input.end_frame = effectiveEndFrameUrl
       }
     }
 
@@ -727,7 +758,7 @@ export class KieVideoProvider
     }
 
     // VEO3/VEO3.1 uses a special API endpoint
-    if (provider === "veo3" || provider === "veo3.1" || provider === "veo3_lite") {
+    if (isVeoProvider(provider)) {
       const veoResult = await runVeoTask(
         modelConfig.model,
         prompt,

@@ -562,6 +562,20 @@ export function isSeedance2Provider(provider: string | undefined): boolean {
   return !!provider && SEEDANCE_2_PROVIDERS.has(provider)
 }
 
+/**
+ * Google VEO family (Quality / Fast / Lite). VEO goes through its own KIE
+ * endpoint and image-handling path, so callers branch on this in several places.
+ */
+export const VEO_PROVIDERS = new Set<string>([
+  "veo3",
+  "veo3.1",
+  "veo3_lite",
+])
+
+export function isVeoProvider(provider: string | undefined): boolean {
+  return !!provider && VEO_PROVIDERS.has(provider)
+}
+
 /** KIE.ai limits for Seedance 2.0 multimodal reference arrays. */
 export const SEEDANCE_2_REF_LIMITS = {
   images: 9,

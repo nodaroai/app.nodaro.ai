@@ -11,7 +11,21 @@ const mocks = vi.hoisted(() => {
     (msg: string, ctx: string) => new Error(`[${ctx}] ${msg}`),
   )
   const mockKling3Generate = vi.fn()
-  return { mockRunKieTask, mockRunVeoTask, mockCreateSanitizedError, mockKling3Generate }
+  const mockUploadBufferToR2 = vi.fn()
+  // Mutable so a test can simulate a PNG / oversized image driving conversion.
+  const sharpMeta: { format: string; width: number; height: number } = {
+    format: "jpeg",
+    width: 1024,
+    height: 1024,
+  }
+  return {
+    mockRunKieTask,
+    mockRunVeoTask,
+    mockCreateSanitizedError,
+    mockKling3Generate,
+    mockUploadBufferToR2,
+    sharpMeta,
+  }
 })
 
 vi.mock("../client.js", () => ({
@@ -30,11 +44,23 @@ vi.mock("../models.js", async () => {
   return actual
 })
 
-// Mock sharp so ensureImageForProvider doesn't need real image data
+vi.mock("../../../lib/storage.js", () => ({
+  uploadBufferToR2: mocks.mockUploadBufferToR2,
+}))
+
+// Mock sharp so ensureImageForProvider doesn't need real image data. The chain
+// is intentionally permissive — resize/jpeg return `this`, toBuffer returns a
+// tiny fake JPEG — so the conversion path can run without real image bytes.
 vi.mock("sharp", () => {
-  const mockSharp = () => ({
-    metadata: () => Promise.resolve({ format: "jpeg", width: 1024, height: 1024 }),
-  })
+  const makeChain = () => {
+    const chain: Record<string, unknown> = {}
+    chain.metadata = () => Promise.resolve({ ...mocks.sharpMeta })
+    chain.resize = () => chain
+    chain.jpeg = () => chain
+    chain.toBuffer = () => Promise.resolve(Buffer.from("converted-jpeg-data"))
+    return chain
+  }
+  const mockSharp = () => makeChain()
   mockSharp.default = mockSharp
   return { default: mockSharp }
 })
@@ -53,6 +79,11 @@ let provider: KieVideoProvider
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Reset the sharp metadata to "small JPEG" — i.e. nothing to convert.
+  Object.assign(mocks.sharpMeta, { format: "jpeg", width: 1024, height: 1024 })
+  mocks.mockUploadBufferToR2.mockResolvedValue(
+    "https://cdn.nodaro.ai/images/provider-converted-test.jpg",
+  )
   // Mock global fetch for ensureImageForProvider (returns a tiny fake buffer)
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true,
@@ -291,6 +322,56 @@ describe("KieVideoProvider.imageToVideo", () => {
     })
     const r2 = await provider.imageToVideo("https://img.png", "test", "kling-turbo")
     expect(r2.cost).toBe(0.21)
+  })
+
+  // -------------------------------------------------------------------------
+  // Input image normalization (Hailuo/MiniMax 500s on big RGBA PNGs; every
+  // i2v model gets the >2048px cap regardless).
+  // -------------------------------------------------------------------------
+
+  it("re-encodes a large RGBA PNG to JPEG before sending to hailuo-2.3", async () => {
+    Object.assign(mocks.sharpMeta, { format: "png", width: 2752, height: 1536 })
+    mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.nodaro.ai/images/conv-h23.jpg")
+    await provider.imageToVideo("https://cdn.nodaro.ai/images/orig.png", "test", "hailuo-2.3")
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledOnce()
+    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(input.image_url).toBe("https://cdn.nodaro.ai/images/conv-h23.jpg")
+  })
+
+  it("re-encodes a large RGBA PNG to JPEG before sending to hailuo-2.3-pro", async () => {
+    Object.assign(mocks.sharpMeta, { format: "png", width: 3000, height: 2000 })
+    mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.nodaro.ai/images/conv-h23pro.jpg")
+    await provider.imageToVideo("https://cdn.nodaro.ai/images/orig.png", "test", "hailuo-2.3-pro")
+    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(input.image_url).toBe("https://cdn.nodaro.ai/images/conv-h23pro.jpg")
+  })
+
+  it("passes an already-small JPEG through unchanged for hailuo-2.3", async () => {
+    // beforeEach leaves sharpMeta as a 1024×1024 JPEG — nothing to do.
+    await provider.imageToVideo("https://cdn.nodaro.ai/images/small.jpg", "test", "hailuo-2.3")
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect(input.image_url).toBe("https://cdn.nodaro.ai/images/small.jpg")
+  })
+
+  it("downscales an oversized image even for a non-Hailuo provider (kling)", async () => {
+    Object.assign(mocks.sharpMeta, { format: "jpeg", width: 4096, height: 2160 })
+    mocks.mockUploadBufferToR2.mockResolvedValue("https://cdn.nodaro.ai/images/conv-kling.jpg")
+    await provider.imageToVideo("https://cdn.nodaro.ai/images/big.jpg", "test", "kling")
+    const input = mocks.mockRunKieTask.mock.calls[0][1] as Record<string, unknown>
+    expect((input.image_urls as string[])[0]).toBe("https://cdn.nodaro.ai/images/conv-kling.jpg")
+  })
+
+  it("does not touch input images for VEO (separate endpoint)", async () => {
+    Object.assign(mocks.sharpMeta, { format: "png", width: 4096, height: 4096 })
+    await provider.imageToVideo("https://cdn.nodaro.ai/images/big.png", "test", "veo3")
+    expect(mocks.mockUploadBufferToR2).not.toHaveBeenCalled()
+    expect(mocks.mockRunVeoTask).toHaveBeenCalledWith(
+      "veo3",
+      "test",
+      ["https://cdn.nodaro.ai/images/big.png"],
+      expect.any(Object),
+    )
   })
 })
 
