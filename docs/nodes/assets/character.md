@@ -36,7 +36,7 @@ In addition to the base portrait and identity settings, a character holds the fo
 | `expressions` | Image references for facial expressions (neutral, smile, angry, surprised, sad, talking, laughing, …). |
 | `poses` | Image references for body positions and stances (standing, walking, sitting, running, …). |
 | `motions` | Short **video clips** of the character in motion, generated from the portrait via image-to-video providers. |
-| `angles` | Reference views — front / side / back angles of the character. (A sub-section of the Appearance tab.) |
+| `angles` | Reference views — front, 3/4 left, left profile, right profile, 3/4 right, back angles of the character. (A sub-section of the Appearance tab.) |
 | `lightingVariations` | The character under different lighting conditions — daylight / night / dramatic. (A sub-section of the Appearance tab.) |
 | `voice` | An ElevenLabs voice (the same voice library used by Text to Speech nodes) plus a free-form "voice traits" description. |
 | `personality` | Four free-form text fields: Mood / Temperament, Speech Style, Movement Style, Behavioral Notes. |
@@ -50,7 +50,7 @@ In addition to the base portrait and identity settings, a character holds the fo
 | Expressions | images | image models | Facial/emotional variations (neutral, smile, angry, surprised, sad, talking, laughing, …). |
 | Poses | images | image models | Body positions and stances (standing, walking, sitting, running, crouching, pointing, …). |
 | Motions | video clips | image-to-video (Kling / Wan) | Short video clips of the character in motion (walking, running, waving, dancing, …). Requires a portrait first. |
-| Reference Views (Angles) | images | image models | Front / side / back views of the character. Sub-section of the **Appearance** tab. |
+| Reference Views (Angles) | images | image models | Six standard angles — front, 3/4 left, left profile, right profile, 3/4 right, back. Sub-section of the **Appearance** tab. |
 | Lighting Variations | images | image models | The character under daylight / night / dramatic lighting. Sub-section of the **Appearance** tab. |
 
 ## Character Studio
@@ -59,7 +59,7 @@ The Character Studio is a full-screen modal where you build and manage everythin
 - The **⬡ Studio** button on the canvas node, or
 - The **Open Character Studio** button in the config panel.
 
-All edits inside the studio are staged locally — nothing is written until you click **Save**, which persists the character to the database *and* updates the canvas node. **Close** asks for confirmation if there are unsaved changes.
+The studio **auto-saves** as you work. Identity fields (name, description, gender, style, base outfit, voice traits, personality) are persisted ~600ms after the last keystroke. Generated assets are persisted by the **backend itself** at completion — every Generate call passes the character's DB id along with the request, and the worker writes the resulting image/clip directly to the character row when the job finishes. That means **if you close the tab or refresh mid-generation, the asset still lands on the character** the next time you open the studio. A small "Saving… / Saved" indicator in the header reflects the current state. There is no Save button.
 
 The studio organizes everything into grouped vertical tabs:
 
@@ -67,14 +67,14 @@ The studio organizes everything into grouped vertical tabs:
 
 Portrait controls for the character itself: name, description, gender, style, base outfit, an optional reference image URL, an image-model picker, and a **Generate Portrait** button. Below the portrait are two sub-sections:
 
-- **Reference Views** — an angles grid (front / side / back) with preset chips, a free-form prompt, an image-model picker, and Generate.
+- **Reference Views** — an angles grid (front, 3/4 left, left profile, right profile, 3/4 right, back) with preset chips, a free-form prompt, an image-model picker, and Generate.
 - **Lighting Variations** — a lighting grid (daylight / night / dramatic) with the same pattern.
 
 ### Visuals → Expressions, Poses, Motions
 
-- **Expressions** — image references. Presets: neutral, smile, angry, surprised, sad, talking, laughing, disgusted, fearful, smirk, crying. Each card has an inline-editable name (the "tag"), an ✏ img2img-refine action (Replace or Add-as-new), and a ✕ delete. The generation bar has preset chips, a free-form custom prompt, an image-model picker (nano-banana, nano-banana-2, flux, gpt-image, imagen4, ideogram, qwen), a **Generate** button, and a **⟳ Generate All** button that queues every missing preset (it confirms first when 4+ jobs would be submitted).
+- **Expressions** — image references. Presets: neutral, smile, angry, surprised, sad, talking, laughing, disgusted, fearful, smirk, crying. Each card has an inline-editable name (the "tag"), three regen actions (↻ regenerate same / ＋ add variation / ✏ img2img refine), and a ✕ delete. The generation bar has preset chips, a free-form custom prompt, a curated top-tier image-model picker (`nano-banana-pro` default, `nano-banana-2`, `gpt-image-2`, `seedream`), a **Generate** button, and a **⟳ Generate All** button that queues every missing preset (it confirms first when 4+ jobs would be submitted). Every Generate button shows the current model's credit cost inline (e.g. **Generate (6 CR)** / **Generate All (24 CR)**); preset chips show a small cost subscript so it's clear what each tap costs.
 - **Poses** — same layout as Expressions. Presets: standing, walking, sitting, running, crouching, pointing, fighting stance, jumping, turning.
-- **Motions** — short **video clips** generated from the portrait via image-to-video providers (Kling / Wan: `kling`, `kling-turbo`, `kling-3.0`, `wan-i2v`, `wan-2.7-i2v`). Requires a portrait first — without one, Generate is disabled with a tooltip. Cards show video thumbnails with a ▶ overlay, an editable name, and a ✕ delete; there is **no** img2img refine on motions (video refinement is a future release) and **no** "Generate All". Presets: walking, running, waving, sitting down, fighting stance, jumping, turning around, dancing, talking gesture.
+- **Motions** — short **video clips** generated from the portrait via image-to-video providers (Kling / Wan: `kling`, `kling-turbo`, `kling-3.0`, `wan-i2v`, `wan-2.7-i2v`). Requires a portrait first — without one, Generate is disabled with a tooltip. Cards show video thumbnails with a ▶ overlay, an editable name, ↻ regenerate same / ＋ add variation buttons, and a ✕ delete; there is **no** img2img refine on motions (video refinement is a future release) and **no** "Generate All". The Generate button shows the current motion provider's credit cost inline. Presets: walking, running, waving, sitting down, fighting stance, jumping, turning around, dancing, talking gesture.
 
 ### Character → Voice, Personality
 
@@ -85,8 +85,10 @@ Portrait controls for the character itself: name, description, gender, style, ba
 
 ### Common patterns
 
-- **Generation bar** (on every visual tab): preset chips for one-tap generation of common variants, a free-form custom prompt for anything else, a model picker, and Generate. Expressions and Poses also have **⟳ Generate All**.
+- **Generation bar** (on every visual tab): preset chips for one-tap generation of common variants, a free-form custom prompt for anything else, a model picker, and Generate. Expressions and Poses also have **⟳ Generate All**. Every Generate / Generate All / preset chip shows the current model's credit cost inline.
 - **Inline-editable names**: every asset card's name is editable — it's the tag that identifies that expression/pose/motion.
+- **↻ Regenerate same**: re-fire the same variant on an existing card (e.g. another *smile*); replaces the card on completion.
+- **＋ Add variation**: re-fire the same variant but append the result as a new card (so you can compare versions of, say, *smile* side-by-side).
 - **✏ img2img refine** (image assets only): refine an existing expression/pose/angle/lighting image with a prompt, choosing whether to **Replace** the card or **Add as new**.
 - **↑ Import**: each visual tab can import an existing media URL directly (no generation job) — images for image tabs, video URLs for Motions.
 
@@ -102,7 +104,8 @@ Portrait controls for the character itself: name, description, gender, style, ba
 - **Generate the portrait first.** It's the reference image for expressions, poses, and motions — generating assets before there's a portrait gives inconsistent results, and Motions can't be generated at all without one.
 - Write a detailed description covering facial features, body type, hair, and clothing for the most consistent results.
 - Use a reference image URL when you need the character to match a specific look.
-- Use **✏ img2img refine** to iterate on a specific expression or pose without regenerating from scratch — "Add as new" keeps the original while you compare.
+- If you don't like a generated expression or pose, use **↻ Regenerate same** to get another shot at the same variant, or **＋ Add variation** to keep the existing card and compare a fresh take side-by-side.
+- Use **✏ img2img refine** when you want to *modify* an existing image with a prompt (e.g. "more intense smile") rather than re-roll from scratch — "Add as new" keeps the original while you compare.
 - Curate the asset names. They're the tags that identify each expression/pose/motion and will drive smarter automatic downstream selection in a future release.
 - Use the same style setting across all characters in a project for visual coherence.
 - Set Voice and Personality now even though they aren't auto-applied yet — the data travels with the character.

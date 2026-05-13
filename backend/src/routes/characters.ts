@@ -10,6 +10,11 @@ const upsertCharacterBody = z.object({
   nodeId: z.string().min(1),
   workflowId: z.string().uuid().optional(),
   projectId: z.string().uuid().optional(),
+  // On UPDATE, a field that's `undefined` (omitted from the request body)
+  // means "don't touch this column" — Character Studio relies on this so its
+  // debounced auto-save can write identity fields without overwriting asset
+  // arrays that the worker is concurrently appending to. INSERT always uses
+  // the full row (with sensible defaults).
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   gender: z.string().max(50).optional(),
@@ -177,6 +182,50 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
+    if (id) {
+      // UPDATE: only touch columns the caller explicitly sent. `name` is
+      // always present in the schema, so it always updates. All other fields
+      // are `undefined` when omitted → we skip them, letting the worker's
+      // auto-attach writes survive a concurrent debounce save.
+      const patch: Record<string, unknown> = {
+        name,
+        updated_at: new Date().toISOString(),
+      }
+      if (description !== undefined) patch.description = description ?? null
+      if (gender !== undefined) patch.gender = gender ?? null
+      if (style !== undefined) patch.style = style ?? null
+      if (baseOutfit !== undefined) patch.base_outfit = baseOutfit ?? null
+      if (sourceImageUrl !== undefined) patch.source_image_url = sourceImageUrl ?? null
+      if (expressions !== undefined) patch.expressions = expressions
+      if (poses !== undefined) patch.poses = poses
+      if (lightingVariations !== undefined) patch.lighting_variations = lightingVariations
+      if (angles !== undefined) patch.angles = angles
+      if (motions !== undefined) patch.motions = motions
+      if (voice !== undefined) patch.voice = voice ?? null
+      if (personality !== undefined) patch.personality = personality ?? null
+      // node_id / workflow_id / project_id are set on insert and intentionally
+      // not patched here — the studio cannot legitimately move a row.
+
+      // Scope by user_id so a caller cannot overwrite another user's row by
+      // passing their id (the update would otherwise rewrite user_id to the
+      // caller, silently stealing the record).
+      const { data: updated, error } = await supabase
+        .from("characters")
+        .update(patch)
+        .eq("id", id)
+        .eq("user_id", userId)
+        .select("id")
+        .single()
+
+      if (error) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: error.message },
+        })
+      }
+      return { id: updated.id }
+    }
+
+    // Insert new — full row with sensible defaults for arrays/nullable fields.
     const row = {
       user_id: userId,
       node_id: nodeId,
@@ -197,28 +246,6 @@ export async function characterRoutes(app: FastifyInstance) {
       personality: personality ?? null,
       updated_at: new Date().toISOString(),
     }
-
-    if (id) {
-      // Update existing. Scope by user_id so a caller cannot overwrite another
-      // user's row by passing their id (the update would otherwise rewrite
-      // user_id to the caller, silently stealing the record).
-      const { data: updated, error } = await supabase
-        .from("characters")
-        .update(row)
-        .eq("id", id)
-        .eq("user_id", userId)
-        .select("id")
-        .single()
-
-      if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
-      }
-      return { id: updated.id }
-    }
-
-    // Insert new
     const { data: created, error } = await supabase
       .from("characters")
       .insert(row)

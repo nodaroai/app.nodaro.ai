@@ -1,11 +1,15 @@
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
+import { toast } from "sonner"
 import { generateCharacterAsset, modifyImage } from "@/lib/api"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { GenerationBar } from "./generation-bar"
 
-const IMAGE_MODELS = ["nano-banana", "nano-banana-2", "flux", "gpt-image", "imagen4", "ideogram", "qwen"] as const
+// Curated top-tier image models for character work. Drop budget/older options — the studio is
+// opinionated about quality and these all produce high-fidelity character output by default.
+export const IMAGE_MODELS = ["nano-banana-pro", "nano-banana-2", "gpt-image-2", "seedream"] as const
+export const DEFAULT_IMAGE_MODEL: (typeof IMAGE_MODELS)[number] = "nano-banana-pro"
 
 const EXPRESSION_PRESETS = [
   "neutral",
@@ -25,6 +29,16 @@ const EXPRESSION_PRESETS = [
 // Appearance tab's Angles + Lighting sub-sections. Hence assetType/arrayField span all 4 image types.
 export type ImageAssetType = "expressions" | "poses" | "angles" | "lighting"
 export type ImageArrayField = "expressions" | "poses" | "angles" | "lightingVariations"
+
+// Map the frontend `arrayField` (CharacterNodeData camelCase) to the DB column
+// the worker writes to. Only `lightingVariations` differs from its column name
+// (`lighting_variations`); the others are 1:1.
+const ARRAY_FIELD_TO_COLUMN: Record<ImageArrayField, "expressions" | "poses" | "angles" | "lighting_variations"> = {
+  expressions: "expressions",
+  poses: "poses",
+  angles: "angles",
+  lightingVariations: "lighting_variations",
+}
 
 export function ImageAssetTab({
   state,
@@ -48,9 +62,25 @@ export function ImageAssetTab({
 }) {
   const items = (state.staged[arrayField] as { name: string; url: string }[]) ?? []
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === assetType)
+  // Track the currently-selected model so AssetCards and regen handlers use the same cost basis
+  // as whatever the user picked in the GenerationBar.
+  const [currentModel, setCurrentModel] = useState<string>(DEFAULT_IMAGE_MODEL)
+  const presetSet = new Set(presets.map((p) => p.toLowerCase()))
+  const attachToColumn = ARRAY_FIELD_TO_COLUMN[arrayField]
 
   const handleGenerate = useCallback(
     async (text: string, isPreset: boolean, model: string) => {
+      // Lazy-create the character row on first generation so the worker has a
+      // target for auto-attach. If the user hasn't given the character a name
+      // yet, ensureSaved throws — surface as a toast and bail.
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      const attachName = isPreset ? text : text.substring(0, 100)
       const { jobId } = await generateCharacterAsset({
         assetType: isPreset ? assetType : "custom",
         variant: isPreset ? text : text.substring(0, 100),
@@ -62,38 +92,97 @@ export function ImageAssetTab({
         baseOutfit: state.staged.baseOutfit,
         sourceImageUrl: state.staged.sourceImageUrl || undefined,
         provider: model,
+        attachToCharacterId: characterId,
+        attachToColumn,
+        attachName,
       })
-      jobs.track(jobId, assetType, isPreset ? text : text.substring(0, 100))
+      jobs.track(jobId, assetType, attachName)
     },
-    [state, jobs, assetType],
+    [state, jobs, assetType, attachToColumn],
   )
 
   const handleGenerateAll = useCallback(async () => {
     const existing = new Set(items.map((i) => i.name.toLowerCase()))
     const missing = presets.filter((p) => !existing.has(p.toLowerCase()))
-    if (missing.length >= 4 && !window.confirm(`This will use approximately ${missing.length * 5} credits. Continue?`)) return
+    if (missing.length >= 4 && !window.confirm(`This will generate ${missing.length} ${title.toLowerCase()}. Continue?`)) return
     for (const p of missing) {
       // fire sequentially so the credit guard isn't slammed; await the request, not the job
-      await handleGenerate(p, true, IMAGE_MODELS[0])
+      await handleGenerate(p, true, currentModel)
     }
-  }, [items, presets, handleGenerate])
+  }, [items, presets, handleGenerate, currentModel, title])
 
   const handleRefine = useCallback(
     async (idx: number, refinementPrompt: string, mode: "replace" | "add") => {
       const asset = items[idx]
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
+      if (mode === "replace") {
+        // Remove the old card immediately; the worker auto-attach will land
+        // the new image as a fresh entry on the row.
+        state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)
+      }
       const { jobId } = await modifyImage(
         asset.url,
         refinementPrompt,
-        state.staged.provider ?? "nano-banana",
+        currentModel,
         undefined,
         state.staged.sourceImageUrl ? [state.staged.sourceImageUrl] : undefined,
+        {
+          attachToCharacterId: characterId,
+          attachToColumn,
+          attachName: trackName,
+        },
       )
-      // For "replace" we still append on completion and the user can delete the old one — keeping it simple.
-      // Track with the asset name so the resolved card lands in the array.
-      jobs.track(jobId, assetType, mode === "replace" ? asset.name : `${asset.name} (v)`)
+      jobs.track(jobId, assetType, trackName)
     },
-    [items, state, jobs, assetType],
+    [items, state, jobs, assetType, arrayField, currentModel, attachToColumn],
   )
+
+  const handleRegenerate = useCallback(
+    async (idx: number, mode: "replace" | "add") => {
+      const asset = items[idx]
+      const isPreset = presetSet.has(asset.name.toLowerCase())
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      // "replace" deletes the old card immediately; the new generation lands as a fresh card on
+      // completion. "add" leaves the old one in place and appends with a "(v)" suffix.
+      if (mode === "replace") {
+        state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)
+      }
+      const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
+      const { jobId } = await generateCharacterAsset({
+        assetType: isPreset ? assetType : "custom",
+        variant: isPreset ? asset.name : asset.name.substring(0, 100),
+        userPrompt: isPreset ? undefined : asset.name,
+        name: state.staged.characterName,
+        description: state.staged.description,
+        gender: state.staged.gender,
+        style: state.staged.style,
+        baseOutfit: state.staged.baseOutfit,
+        sourceImageUrl: state.staged.sourceImageUrl || undefined,
+        provider: currentModel,
+        attachToCharacterId: characterId,
+        attachToColumn,
+        attachName: trackName,
+      })
+      jobs.track(jobId, assetType, trackName)
+    },
+    [items, state, jobs, assetType, arrayField, currentModel, presetSet, attachToColumn],
+  )
+
+  const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
+  const missingCount = presets.filter((p) => !existingNames.has(p.toLowerCase())).length
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -114,8 +203,10 @@ export function ImageAssetTab({
             <AssetCard
               key={`${item.url}-${idx}`}
               item={item}
+              costModel={currentModel}
               onDelete={() => state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)}
               onRefine={(p, mode) => handleRefine(idx, p, mode)}
+              onRegenerate={(mode) => handleRegenerate(idx, mode)}
               onRename={(newName) =>
                 state.patch({ [arrayField]: items.map((it, i) => (i === idx ? { ...it, name: newName } : it)) } as never)
               }
@@ -133,7 +224,7 @@ export function ImageAssetTab({
             className="rounded-md border border-dashed border-[#334155] aspect-[3/4] flex items-center justify-center text-slate-500 text-xl"
             onClick={() => {
               const p = window.prompt(`New ${title.toLowerCase()} prompt:`)
-              if (p) handleGenerate(p, false, IMAGE_MODELS[0])
+              if (p) handleGenerate(p, false, currentModel)
             }}
           >
             +
@@ -143,10 +234,12 @@ export function ImageAssetTab({
       <GenerationBar
         presets={presets}
         models={IMAGE_MODELS}
-        defaultModel={IMAGE_MODELS[0]}
+        defaultModel={DEFAULT_IMAGE_MODEL}
         customPlaceholder={`Custom ${title.toLowerCase()}: e.g. "winking with a raised eyebrow, playful"`}
         onGenerate={handleGenerate}
         onGenerateAll={handleGenerateAll}
+        generateAllCount={missingCount}
+        onModelChange={setCurrentModel}
       />
     </div>
   )

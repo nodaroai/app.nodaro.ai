@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react"
-import { toast } from "sonner"
-import { useCharacterStudio } from "./use-character-studio"
+import { useCharacterStudio, type SaveStatus } from "./use-character-studio"
 import { useCharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
 import { ExpressionsTab } from "./expressions-tab"
@@ -19,13 +18,6 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   lighting: "lightingVariations",
   motions: "motions",
 }
-const STATUS_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
-  expressions: "expressionStatus",
-  poses: "poseStatus",
-  angles: "anglesStatus",
-  lighting: "lightingStatus",
-  motions: "motionStatus",
-}
 
 export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onClose: () => void }) {
   const studio = useCharacterStudio(nodeId)
@@ -37,6 +29,12 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
       if (!studio) return
       const field = ASSET_FIELD[a.assetType]
       const arr = (studio.staged[field] as { name: string; url: string }[] | undefined) ?? []
+      // Local merge for instant UX. The backend has also auto-attached the asset
+      // to the characters row (see worker entity.ts), so this debounced save
+      // will be a no-op patch for the array but still flushes other staged
+      // fields. De-duplicates by URL so we don't append twice when a refetch
+      // races with a poll completion.
+      if (arr.some((it) => it.url === a.url)) return
       studio.patch({ [field]: [...arr, { name: a.name, url: a.url }] } as Partial<CharacterNodeData>)
     },
     [studio],
@@ -49,28 +47,6 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
   const jobs = useCharacterStudioJobs(onResolved, onFailed)
 
   if (!studio) return null
-
-  const handleSave = async () => {
-    if (!studio.staged.characterName.trim()) {
-      toast.error("Give the character a name before saving.")
-      return
-    }
-    // Stamp *Status = "running" for any asset type with pending jobs, so the canvas node
-    // shows a spinner for in-flight asset generation after the modal is saved/closed.
-    const running = jobs.runningTypes()
-    const statusPatch: Partial<CharacterNodeData> = {}
-    for (const t of running) (statusPatch as Record<string, unknown>)[STATUS_FIELD[t]] = "running"
-    try {
-      await studio.save(Object.keys(statusPatch).length > 0 ? statusPatch : undefined)
-    } catch {
-      toast.error("Failed to save character.")
-    }
-  }
-
-  const handleClose = () => {
-    if (studio.isDirty && !window.confirm("Discard unsaved changes?")) return
-    onClose()
-  }
 
   const counts = {
     expr: studio.staged.expressions.length,
@@ -124,14 +100,9 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
             </div>
           </div>
         </div>
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={handleSave}
-            className="text-[10px] bg-[#1e3a5f] border border-[#3b82f644] rounded px-3 py-1.5 text-[#93c5fd]"
-          >
-            Save
-          </button>
-          <button onClick={handleClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
+        <div className="flex gap-3 items-center">
+          <SaveIndicator status={studio.saveStatus} />
+          <button onClick={onClose} className="text-[10px] bg-[#1e293b] rounded px-3 py-1.5 text-slate-400">
             ✕ Close
           </button>
         </div>
@@ -158,6 +129,22 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
         <div className="flex-1 flex flex-col overflow-hidden">{tabBody}</div>
       </div>
     </div>
+  )
+}
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  if (status === "idle") return null
+  const { dot, text } =
+    status === "saving"
+      ? { dot: "bg-amber-500 animate-pulse", text: "Saving…" }
+      : status === "saved"
+        ? { dot: "bg-emerald-500", text: "Saved" }
+        : { dot: "bg-red-500", text: "Save failed" }
+  return (
+    <span className="flex items-center gap-1.5 text-[10px] text-slate-400">
+      <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+      {text}
+    </span>
   )
 }
 

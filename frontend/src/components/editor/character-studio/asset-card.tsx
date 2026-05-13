@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 
 export interface AssetCardItem {
   readonly name: string
@@ -11,14 +12,21 @@ interface AssetCardProps {
   readonly onDelete: () => void
   /** undefined → no refine button (e.g. motions in Phase 1) */
   readonly onRefine?: (refinementPrompt: string, mode: "replace" | "add") => void
+  /** undefined → no regen buttons. "replace" deletes the current card and regenerates same variant;
+   *  "add" appends a fresh variation as a new card. */
+  readonly onRegenerate?: (mode: "replace" | "add") => void
   /** undefined → name label is read-only; defined → label becomes inline-editable */
   readonly onRename?: (newName: string) => void
   readonly errored?: boolean
+  /** Model identifier used to look up CR cost for the regen + refine buttons. */
+  readonly costModel?: string
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRename, errored }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
+  const cost = useModelCredits(costModel, 0)
+  const costLabel = cost > 0 ? ` (${cost} CR)` : ""
 
   return (
     <div className="relative rounded-md overflow-hidden bg-[#1a1d27] group">
@@ -38,9 +46,27 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRename, errored
       <div className="px-2 py-1.5 flex items-center justify-between gap-1.5">
         <NameLabel name={item.name} onRename={onRename} />
         <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+          {onRegenerate && (
+            <button
+              title={`regenerate same — replace${costLabel}`}
+              className="text-[11px] text-slate-500 hover:text-slate-200"
+              onClick={() => onRegenerate("replace")}
+            >
+              ↻
+            </button>
+          )}
+          {onRegenerate && (
+            <button
+              title={`add variation${costLabel}`}
+              className="text-[11px] text-slate-500 hover:text-slate-200"
+              onClick={() => onRegenerate("add")}
+            >
+              ＋
+            </button>
+          )}
           {onRefine && (
             <button
-              title="img2img refine"
+              title={`img2img refine${costLabel}`}
               className="text-[11px] text-slate-500 hover:text-slate-200"
               onClick={() => setRefining((v) => !v)}
             >
@@ -74,7 +100,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRename, errored
                 setPrompt("")
               }}
             >
-              Replace
+              Replace{costLabel}
             </button>
             <button
               className="flex-1 text-[10px] bg-[#1e293b] text-slate-300 rounded px-2 py-1"
@@ -84,7 +110,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRename, errored
                 setPrompt("")
               }}
             >
-              Add as new
+              Add as new{costLabel}
             </button>
           </div>
         </div>

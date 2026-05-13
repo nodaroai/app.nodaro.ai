@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { generateCharacter, getJobStatus } from "@/lib/api"
+import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
-import { ImageAssetTab } from "./expressions-tab"
+import { ImageAssetTab, IMAGE_MODELS, DEFAULT_IMAGE_MODEL } from "./expressions-tab"
 
-const ANGLE_PRESETS = ["front", "side", "back"] as const
+const ANGLE_PRESETS = ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"] as const
 const LIGHTING_PRESETS = ["daylight", "night", "dramatic"] as const
-const IMAGE_MODELS = ["nano-banana", "nano-banana-2", "flux", "gpt-image", "imagen4", "ideogram", "qwen"] as const
 
 const POLL_MS = 2000
 
@@ -23,6 +24,8 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
   const [genBusy, setGenBusy] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const s = state.staged
+  const portraitProvider = s.provider ?? DEFAULT_IMAGE_MODEL
+  const portraitCost = useModelCredits(portraitProvider, 0)
 
   // clear any in-flight poll if the modal/tab unmounts mid-generation
   useEffect(() => {
@@ -43,6 +46,14 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
 
   const generatePortrait = async () => {
     setGenBusy(true)
+    let characterId: string
+    try {
+      characterId = await state.ensureSaved()
+    } catch (e) {
+      setGenBusy(false)
+      toast.error(e instanceof Error ? e.message : "Could not save character.")
+      return
+    }
     try {
       const { jobId } = await generateCharacter({
         name: s.characterName,
@@ -51,7 +62,8 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
         style: s.style,
         baseOutfit: s.baseOutfit,
         sourceImageUrl: s.sourceImageUrl || undefined,
-        provider: s.provider,
+        provider: portraitProvider,
+        attachToCharacterId: characterId,
       })
       // one-off poll — settle on completed / failed
       stopPoll()
@@ -62,6 +74,9 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
             stopPoll()
             setGenBusy(false)
             const url = (job.output_data as { imageUrl?: string } | undefined)?.imageUrl
+            // Worker has already written this to characters.source_image_url
+            // via setCharacterPortrait — the local patch here is just for
+            // instant UX before the next refetch.
             if (url) state.patch({ sourceImageUrl: url })
           } else if (job.status === "failed") {
             stopPoll()
@@ -138,7 +153,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         />
         <select
-          value={s.provider ?? "nano-banana"}
+          value={portraitProvider}
           onChange={(e) => state.patch({ provider: e.target.value })}
           className="block text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         >
@@ -153,7 +168,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           onClick={generatePortrait}
           className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
         >
-          {genBusy ? "Generating…" : "Generate Portrait"}
+          {genBusy ? "Generating…" : `Generate Portrait${portraitCost > 0 ? ` (${portraitCost} CR)` : ""}`}
         </button>
       </div>
 
@@ -166,7 +181,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           arrayField="angles"
           presets={ANGLE_PRESETS}
           title="Angles"
-          description="front / side / back reference views"
+          description="front, 3/4, profile (L/R), and back reference views"
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">

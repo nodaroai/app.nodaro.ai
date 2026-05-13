@@ -283,6 +283,10 @@ export async function imageToImage(
     renderingSpeed?: string
     guidanceScale?: number
     maskUrl?: string
+    /** Character Studio auto-attach (optional). */
+    attachToCharacterId?: string
+    attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+    attachName?: string
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }
@@ -304,6 +308,9 @@ export async function imageToImage(
   if (options?.renderingSpeed) body.renderingSpeed = options.renderingSpeed
   if (options?.guidanceScale != null) body.guidanceScale = options.guidanceScale
   if (options?.maskUrl) body.maskUrl = options.maskUrl
+  if (options?.attachToCharacterId) body.attachToCharacterId = options.attachToCharacterId
+  if (options?.attachToColumn) body.attachToColumn = options.attachToColumn
+  if (options?.attachName) body.attachName = options.attachName
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -335,6 +342,11 @@ export async function modifyImage(
     guidanceScale?: number
     maskUrl?: string
     style?: string
+    /** Character Studio auto-attach (only honored on the /v1/image-to-image path —
+     *  /v1/edit-image / nano-banana-edit doesn't currently auto-attach). */
+    attachToCharacterId?: string
+    attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+    attachName?: string
   }
 ): Promise<{ jobId: string }> {
   // nano-banana-edit routes through /v1/edit-image
@@ -378,6 +390,8 @@ export async function generateCharacter(data: {
   sourceImageUrl?: string
   provider?: string
   userId?: string
+  /** Character Studio: worker writes the resulting URL to this character's source_image_url after generation. */
+  attachToCharacterId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
@@ -403,6 +417,11 @@ export async function generateCharacterAsset(data: {
   provider?: string
   userPrompt?: string
   userId?: string
+  /** Character Studio auto-attach: when all three are set, the worker appends
+   *  {name: attachName, url: <result>} to this column on the user's character row. */
+  attachToCharacterId?: string
+  attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+  attachName?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
@@ -425,6 +444,9 @@ export async function generateCharacterMotion(params: {
   gender?: string
   style?: string
   baseOutfit?: string
+  /** Character Studio auto-attach: target column is implicit ("motions"). */
+  attachToCharacterId?: string
+  attachName?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-motion`, {
     method: "POST",
@@ -466,6 +488,37 @@ export async function saveCharacter(data: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to save character")
+  }
+  return res.json()
+}
+
+/**
+ * Fetch a single character row by ID. Used by the Character Studio to refresh
+ * staged state with backend-attached assets (results of in-flight generations
+ * that landed on the row directly while the studio was closed).
+ */
+export async function getCharacter(id: string): Promise<{
+  id: string
+  name: string
+  description: string | null
+  gender: string | null
+  style: string | null
+  baseOutfit: string | null
+  sourceImageUrl: string | null
+  expressions: { name: string; url: string }[] | null
+  poses: { name: string; url: string }[] | null
+  lightingVariations: { name: string; url: string }[] | null
+  angles: { name: string; url: string }[] | null
+  motions: { name: string; url: string }[] | null
+  voice: { voiceId: string; voiceName: string; traits: string } | null
+  personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+}> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(id)}`, {
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to load character")
   }
   return res.json()
 }

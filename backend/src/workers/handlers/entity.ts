@@ -11,6 +11,12 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
+import {
+  attachAssetToCharacter,
+  setCharacterPortrait,
+  resolveAssetColumn,
+  type CharacterAssetColumn,
+} from "../../lib/character-auto-attach.js"
 
 interface EntityImageJobData {
   jobId: string
@@ -18,6 +24,13 @@ interface EntityImageJobData {
   sourceImageUrl?: string
   assetType?: string
   provider?: string
+  // Character Studio auto-attach (best-effort). When set, after the image is
+  // generated and stored on the jobs row, the result URL is also written
+  // directly to the user's characters row — so closing the studio mid-job
+  // doesn't orphan the result. See `lib/character-auto-attach.ts`.
+  attachToCharacterId?: string
+  attachToColumn?: string // "expressions" | "poses" | "angles" | "lighting_variations" | undefined
+  attachName?: string
 }
 
 function makeEntityImageHandler(
@@ -25,7 +38,8 @@ function makeEntityImageHandler(
   opts?: { aspectRatio?: string; includeAssetType?: boolean },
 ): HandlerFn {
   return async function entityImageHandler(job: Job, ctx: JobContext) {
-    const { prompt, sourceImageUrl, assetType, provider } = job.data as EntityImageJobData
+    const data = job.data as EntityImageJobData
+    const { prompt, sourceImageUrl, assetType, provider, attachToCharacterId, attachToColumn, attachName } = data
     const resolvedProvider = provider ?? "nano-banana"
 
     if (opts?.includeAssetType) {
@@ -58,6 +72,29 @@ function makeEntityImageHandler(
     if (!ok) return
 
     await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
+
+    // Best-effort: write the result back onto the user's character row so the
+    // Studio reflects it across page reloads (even if the user closed the tab
+    // mid-generation). Logs and continues on failure — credits are already
+    // committed and the job row holds the URL as the ultimate source.
+    if (attachToCharacterId && ctx.jobUserId) {
+      if (logPrefix === "generate-character") {
+        // Portrait → source_image_url
+        await setCharacterPortrait({ characterId: attachToCharacterId, userId: ctx.jobUserId, url: r2Url })
+      } else if (attachToColumn && attachName) {
+        const column: CharacterAssetColumn | null = resolveAssetColumn(attachToColumn)
+        if (column) {
+          await attachAssetToCharacter({
+            characterId: attachToCharacterId,
+            userId: ctx.jobUserId,
+            column,
+            name: attachName,
+            url: r2Url,
+          })
+        }
+      }
+    }
+
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
   }
 }
@@ -89,11 +126,13 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
 }
 
 const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCharacterMotion(job, ctx) {
-  const { prompt, sourceImageUrl, provider } = job.data as {
+  const { prompt, sourceImageUrl, provider, attachToCharacterId, attachName } = job.data as {
     jobId: string
     prompt: string
     sourceImageUrl: string
     provider?: string
+    attachToCharacterId?: string
+    attachName?: string
   }
   const resolvedProvider = provider ?? "kling"
   console.log(`[worker] generate-character-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
@@ -115,6 +154,18 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
   if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
+
+  // Best-effort attach to characters.motions[]
+  if (attachToCharacterId && attachName && ctx.jobUserId) {
+    await attachAssetToCharacter({
+      characterId: attachToCharacterId,
+      userId: ctx.jobUserId,
+      column: "motions",
+      name: attachName,
+      url: r2Url,
+    })
+  }
+
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 

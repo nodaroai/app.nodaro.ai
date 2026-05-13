@@ -15,7 +15,7 @@ const VARIANTS: Record<string, readonly string[]> = {
   expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking", "laughing", "disgusted", "fearful", "smirk", "crying"],
   poses: ["standing", "walking", "sitting", "running", "crouching", "pointing", "fighting stance", "jumping", "turning"],
   lighting: ["daylight", "night", "dramatic"],
-  angles: ["front", "side", "back"],
+  angles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"],
 }
 
 const generateCharacterAssetBody = z.object({
@@ -30,6 +30,15 @@ const generateCharacterAssetBody = z.object({
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
+  // Character Studio auto-attach: when all three are set, the worker appends
+  // `{name: attachName, url: <result>}` to the named JSONB array column on the
+  // user's character row after generation. `attachToColumn` is the *DB column*
+  // (e.g. "lighting_variations"), separate from the prompt-builder `assetType`
+  // — important for custom prompts where assetType="custom" but the asset
+  // still belongs in expressions / poses / angles / lighting_variations.
+  attachToCharacterId: z.string().uuid().optional(),
+  attachToColumn: z.enum(["expressions", "poses", "angles", "lighting_variations"]).optional(),
+  attachName: z.string().min(1).max(200).optional(),
 })
 
 function buildVariantPrompt(
@@ -90,7 +99,10 @@ function buildVariantPrompt(
   if (assetType === "angles") {
     const angleMap: Record<string, string> = {
       front: "front view, facing camera directly",
-      side: "side profile view, looking to the right",
+      "3/4 left": "three-quarter view, body angled 45 degrees toward the left of the frame, face partially visible",
+      "left profile": "left profile view, body and face turned to the left, full side silhouette of the face visible",
+      "right profile": "right profile view, body and face turned to the right, full side silhouette of the face visible",
+      "3/4 right": "three-quarter view, body angled 45 degrees toward the right of the frame, face partially visible",
       back: "back view, facing away from camera",
     }
     const angle = angleMap[variant] ?? `${variant} view`
@@ -173,6 +185,9 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       assetType,
       variant,
       provider: parsed.data.provider,
+      attachToCharacterId: parsed.data.attachToCharacterId,
+      attachToColumn: parsed.data.attachToColumn,
+      attachName: parsed.data.attachName,
       usageLogId,
     })
 
