@@ -6,6 +6,7 @@ import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { GenerationBar } from "./generation-bar"
+import { PendingCard } from "./pending-card"
 
 const MOTION_PRESETS = [
   "walking",
@@ -138,12 +139,14 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
             />
           ))}
           {pendingForType.map(([jobId, m]) => (
-            <div key={jobId} className="rounded-md overflow-hidden bg-[#1a1d27] border border-[#f59e0b33]">
-              <div className="aspect-[3/4] flex items-center justify-center bg-gradient-to-br from-[#241e10] to-[#2a2410]">
-                <div className="w-5 h-5 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin" />
-              </div>
-              <div className="px-2 py-1.5 text-[10px] text-[#f59e0b] truncate">{m.name}…</div>
-            </div>
+            <PendingCard
+              key={jobId}
+              jobId={jobId}
+              name={m.name}
+              progress={m.progress}
+              theme="motion"
+              onCancel={jobs.cancel}
+            />
           ))}
         </div>
       </div>
