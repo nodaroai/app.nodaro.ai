@@ -227,5 +227,5 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
-*Last updated: 2026-05-13 (combine-videos: probe + unify clip resolution before xfade/concat; MCP: list_projects + get_project discovery tools + 9 workflow tools scoped to "mcp" project via ensureMcpProject; workflow export/import routes + CLI + SDK)*
-*Version: 2.10.0*
+*Last updated: 2026-05-13 (character-studio: curated top-tier image models + per-button CR cost display + regen/variation buttons + 6 standard angles (front, 3/4 left, left/right profile, 3/4 right, back); backend worker auto-attaches generated assets directly to `characters` row via `append_character_asset` RPC (migration 111) so closing the page mid-generation no longer orphans results; studio auto-saves identity fields on a 600ms debounce — Save button removed; combine-videos: probe + unify clip resolution before xfade/concat; MCP: list_projects + get_project discovery tools + 9 workflow tools scoped to "mcp" project via ensureMcpProject; workflow export/import routes + CLI + SDK)*
+*Version: 2.11.0*

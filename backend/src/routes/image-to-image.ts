@@ -33,6 +33,12 @@ const imageToImageBody = z.object({
   renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
   guidanceScale: z.number().min(0).max(30).optional(),
   maskUrl: safeUrlSchema.optional(),
+  // Character Studio auto-attach (optional; ignored for non-studio callers).
+  // When all three are present, the worker appends `{name: attachName, url}` to
+  // the user's character row column after the refine completes.
+  attachToCharacterId: z.string().uuid().optional(),
+  attachToColumn: z.enum(["expressions", "poses", "angles", "lighting_variations"]).optional(),
+  attachName: z.string().min(1).max(200).optional(),
 })
 
 export async function imageToImageRoutes(app: FastifyInstance) {
@@ -101,6 +107,9 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       renderingSpeed,
       guidanceScale,
       maskUrl,
+      attachToCharacterId: parsed.data.attachToCharacterId,
+      attachToColumn: parsed.data.attachToColumn,
+      attachName: parsed.data.attachName,
       usageLogId,
     })
 

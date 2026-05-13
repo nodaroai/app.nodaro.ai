@@ -20,6 +20,10 @@ const generateCharacterBody = z.object({
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
+  // Character Studio auto-attach: when set, the worker writes the resulting
+  // image URL to `characters.source_image_url` on this row after generation
+  // succeeds. Lets the studio survive page closes mid-generation.
+  attachToCharacterId: z.string().uuid().optional(),
 })
 
 export async function generateCharacterRoutes(app: FastifyInstance) {
@@ -74,6 +78,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       prompt,
       sourceImageUrl,
       provider: parsed.data.provider,
+      attachToCharacterId: parsed.data.attachToCharacterId,
       usageLogId,
     })
 

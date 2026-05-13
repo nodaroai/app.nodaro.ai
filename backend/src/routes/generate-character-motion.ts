@@ -20,6 +20,10 @@ export const generateCharacterMotionBody = z.object({
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
   userId: z.string().uuid().optional(),
+  // Character Studio auto-attach: target column is implicit ("motions"); just
+  // pass the character DB id + display name.
+  attachToCharacterId: z.string().uuid().optional(),
+  attachName: z.string().min(1).max(200).optional(),
 })
 
 export async function generateCharacterMotionRoutes(app: FastifyInstance) {
@@ -73,6 +77,8 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
       prompt,
       sourceImageUrl: parsed.data.sourceImageUrl,
       provider: parsed.data.provider ?? "kling",
+      attachToCharacterId: parsed.data.attachToCharacterId,
+      attachName: parsed.data.attachName,
       usageLogId,
     })
 

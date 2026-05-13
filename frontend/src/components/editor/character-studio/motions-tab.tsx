@@ -1,4 +1,5 @@
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
+import { toast } from "sonner"
 import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
 import { generateCharacterMotion } from "@/lib/api"
 import type { CharacterStudioState } from "./use-character-studio"
@@ -18,6 +19,8 @@ const MOTION_PRESETS = [
   "talking gesture",
 ] as const
 
+const DEFAULT_MOTION_PROVIDER: (typeof CHARACTER_MOTION_PROVIDERS)[number] = "kling"
+
 /**
  * Motions tab — short i2v video clips generated from the staged portrait.
  *
@@ -36,10 +39,18 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
+  const [currentModel, setCurrentModel] = useState<string>(DEFAULT_MOTION_PROVIDER)
 
   const handleGenerate = useCallback(
     async (text: string, _isPreset: boolean, model: string) => {
       if (!state.staged.sourceImageUrl) return
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
       const { jobId } = await generateCharacterMotion({
         motionPrompt: text,
         sourceImageUrl: state.staged.sourceImageUrl,
@@ -49,10 +60,44 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
         gender: state.staged.gender,
         style: state.staged.style,
         baseOutfit: state.staged.baseOutfit,
+        attachToCharacterId: characterId,
+        attachName: text,
       })
       jobs.track(jobId, "motions", text)
     },
     [state, jobs],
+  )
+
+  const handleRegenerate = useCallback(
+    async (idx: number, mode: "replace" | "add") => {
+      if (!state.staged.sourceImageUrl) return
+      const asset = items[idx]
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      if (mode === "replace") {
+        state.patch({ motions: items.filter((_, i) => i !== idx) })
+      }
+      const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
+      const { jobId } = await generateCharacterMotion({
+        motionPrompt: asset.name,
+        sourceImageUrl: state.staged.sourceImageUrl,
+        provider: currentModel,
+        name: state.staged.characterName,
+        description: state.staged.description,
+        gender: state.staged.gender,
+        style: state.staged.style,
+        baseOutfit: state.staged.baseOutfit,
+        attachToCharacterId: characterId,
+        attachName: trackName,
+      })
+      jobs.track(jobId, "motions", trackName)
+    },
+    [items, state, jobs, currentModel],
   )
 
   return (
@@ -84,7 +129,9 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
               key={`${item.url}-${idx}`}
               item={item}
               isVideo
+              costModel={currentModel}
               onDelete={() => state.patch({ motions: items.filter((_, i) => i !== idx) })}
+              onRegenerate={hasPortrait ? (mode) => handleRegenerate(idx, mode) : undefined}
               onRename={(newName) =>
                 state.patch({ motions: items.map((it, i) => (i === idx ? { ...it, name: newName } : it)) })
               }
@@ -103,11 +150,12 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
       <GenerationBar
         presets={MOTION_PRESETS}
         models={CHARACTER_MOTION_PROVIDERS}
-        defaultModel="kling"
+        defaultModel={DEFAULT_MOTION_PROVIDER}
         disabled={!hasPortrait}
         disabledHint="Generate a portrait first."
         customPlaceholder='Custom motion: e.g. "walking confidently toward camera"'
         onGenerate={handleGenerate}
+        onModelChange={setCurrentModel}
       />
     </div>
   )

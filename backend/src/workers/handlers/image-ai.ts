@@ -9,6 +9,7 @@ import {
   startProgressRamp,
   type HandlerFn,
 } from "../shared.js"
+import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = job.data as {
@@ -136,7 +137,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
@@ -151,6 +152,11 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     renderingSpeed?: string
     guidanceScale?: number
     maskUrl?: string
+    // Character Studio auto-attach. Best-effort: result lands in jobs.output_data
+    // regardless; failures to attach are logged and ignored.
+    attachToCharacterId?: string
+    attachToColumn?: string
+    attachName?: string
   }
   const resolvedProvider = provider ?? "nano-banana"
   // Combine main image with additional reference images (e.g., from Location/Character nodes)
@@ -197,6 +203,20 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
+
+  if (attachToCharacterId && attachToColumn && attachName && ctx.jobUserId) {
+    const column = resolveAssetColumn(attachToColumn)
+    if (column) {
+      await attachAssetToCharacter({
+        characterId: attachToCharacterId,
+        userId: ctx.jobUserId,
+        column,
+        name: attachName,
+        url: r2Url,
+      })
+    }
+  }
+
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
