@@ -496,6 +496,10 @@ export async function saveCharacter(data: {
  * Fetch a single character row by ID. Used by the Character Studio to refresh
  * staged state with backend-attached assets (results of in-flight generations
  * that landed on the row directly while the studio was closed).
+ *
+ * `pendingJobs` is a snapshot of in-flight generation jobs still targeting
+ * this character — used to re-mount spinners after the studio was closed
+ * during generation. Empty for fresh characters with no jobs running.
  */
 export async function getCharacter(id: string): Promise<{
   id: string
@@ -512,6 +516,7 @@ export async function getCharacter(id: string): Promise<{
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }[]
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(id)}`, {
     headers: { ...await getAuthHeaders() },

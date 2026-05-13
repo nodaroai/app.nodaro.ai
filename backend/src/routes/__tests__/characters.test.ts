@@ -94,6 +94,26 @@ const CAMEL_CHARACTER = {
   updatedAt: "2026-01-01T00:00:00Z",
 }
 
+// GET /v1/characters/:id now appends pendingJobs; the listing endpoint does not.
+const CAMEL_CHARACTER_WITH_PENDING = { ...CAMEL_CHARACTER, pendingJobs: [] }
+
+/**
+ * Build a chain for the GET /:id route's secondary `jobs` query
+ * (`.from("jobs").select().eq().in().filter()`). Resolves to `{ data, error }`
+ * via a thenable so the route can `await` it.
+ */
+function mockJobsPendingChain(result: { data: unknown; error: unknown } = { data: [], error: null }) {
+  const chain: Record<string, unknown> = {
+    eq: vi.fn().mockReturnThis(),
+    in: vi.fn().mockReturnThis(),
+    filter: vi.fn().mockReturnThis(),
+  }
+  ;(chain as { then: (resolve: (value: unknown) => unknown) => unknown }).then = (resolve) =>
+    Promise.resolve(result).then(resolve)
+  const mockSelect = vi.fn().mockReturnValue(chain)
+  return { mockSelect, chain }
+}
+
 /** Build a thenable chain for `supabase.from().select().order()` with optional `.eq()` */
 function mockListChain(result: { data: unknown; error: unknown }) {
   const chainable: Record<string, unknown> = {
@@ -210,8 +230,14 @@ describe("GET /v1/characters/:id", () => {
   })
 
   it("returns 200 with camelCase data and scopes by user_id", async () => {
-    const { mockSelect, chain } = getByIdChain({ data: DB_CHARACTER, error: null })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    // The handler issues two queries — characters row, then jobs pending. Mock
+    // by table name so we route each `.from()` call to its own chain.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobsPendingChain = mockJobsPendingChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobsPendingChain.mockSelect } as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
 
     const res = await app.inject({
       method: "GET",
@@ -220,9 +246,83 @@ describe("GET /v1/characters/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual(CAMEL_CHARACTER)
-    expect(chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
-    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(res.json()).toEqual(CAMEL_CHARACTER_WITH_PENDING)
+    expect(charsByIdChain.chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(charsByIdChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    // Pending-jobs query scopes by user + status + character id.
+    expect(jobsPendingChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(jobsPendingChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
+    expect(jobsPendingChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>attachToCharacterId",
+      "eq",
+      TEST_CHARACTER_ID,
+    )
+  })
+
+  it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobsPendingChain = mockJobsPendingChain({
+      data: [
+        // Asset job, expressions column — should surface as assetType:"expressions"
+        {
+          id: "job-1",
+          input_data: {
+            type: "generate-character-asset",
+            attachToCharacterId: TEST_CHARACTER_ID,
+            attachToColumn: "expressions",
+            attachName: "smile",
+          },
+        },
+        // lighting_variations column → assetType:"lighting" (frontend name)
+        {
+          id: "job-2",
+          input_data: {
+            type: "generate-character-asset",
+            attachToCharacterId: TEST_CHARACTER_ID,
+            attachToColumn: "lighting_variations",
+            attachName: "dramatic",
+          },
+        },
+        // Motion job → assetType:"motions"
+        {
+          id: "job-3",
+          input_data: {
+            type: "generate-character-motion",
+            attachToCharacterId: TEST_CHARACTER_ID,
+            attachName: "walking",
+          },
+        },
+        // Portrait → not surfaced (Appearance tab has its own poll)
+        {
+          id: "job-4",
+          input_data: {
+            type: "generate-character",
+            attachToCharacterId: TEST_CHARACTER_ID,
+            attachName: "portrait",
+          },
+        },
+        // Missing attachName → skipped
+        { id: "job-5", input_data: { type: "generate-character-asset", attachToCharacterId: TEST_CHARACTER_ID, attachToColumn: "poses" } },
+      ],
+      error: null,
+    })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobsPendingChain.mockSelect } as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().pendingJobs).toEqual([
+      { jobId: "job-1", assetType: "expressions", name: "smile" },
+      { jobId: "job-2", assetType: "lighting", name: "dramatic" },
+      { jobId: "job-3", assetType: "motions", name: "walking" },
+    ])
   })
 
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {
