@@ -1,10 +1,15 @@
 "use client"
 
-import { useEffect, useRef, useMemo } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2 } from "lucide-react"
+import { useEffect, useRef, useMemo, useState } from "react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus } from "lucide-react"
+import { toast } from "sonner"
 import { useReactFlow } from "@xyflow/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { NODE_DEFINITIONS } from "@/types/nodes"
+import { NODE_DEFINITIONS, type CharacterNodeData } from "@/types/nodes"
+import { duplicateCharacter } from "@/lib/api"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/lib/query-keys"
+import { useAuth } from "@/hooks/use-auth"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -25,8 +30,12 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
+  const projectId = useWorkflowStore((s) => s.projectId)
   const { screenToFlowPosition } = useReactFlow()
+  const queryClient = useQueryClient()
+  const { user } = useAuth()
   const ref = useRef<HTMLDivElement>(null)
+  const [forking, setForking] = useState(false)
 
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
@@ -40,6 +49,16 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     const node = nodes.find((n) => n.id === nodeId)
     if (!node) return false
     return (node.data as Record<string, unknown>).executionStatus === "running"
+  }, [nodeId, nodes])
+
+  /** "Duplicate as new character" is only meaningful on a character node that
+   *  already has a DB id (i.e. the row exists). Without a DB id there's nothing
+   *  to fork — the regular Duplicate handles that case. */
+  const characterDbId = useMemo<string | null>(() => {
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node || node.type !== "character") return null
+    const dbId = (node.data as CharacterNodeData).characterDbId
+    return dbId && dbId.length > 0 ? dbId : null
   }, [nodeId, nodes])
 
   const isSkipped = useMemo(() => {
@@ -149,6 +168,52 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
     onClose()
   }
 
+  /**
+   * Fork into a brand-new character row. Default Duplicate clones the canvas
+   * node and clears `characterDbId` (use-workflow-store.duplicateNode), which
+   * means the new node will lazy-insert a row on first generate — but using
+   * the SAME name as the source, which then 409s on the unique constraint.
+   * This action duplicates the node AND eagerly creates the new DB row with
+   * an auto-suffixed "(copy)" name, rewiring the new node to point at it.
+   */
+  async function handleDuplicateAsNewCharacter() {
+    if (!characterDbId) return
+    setForking(true)
+    try {
+      const flowPos = screenToFlowPosition({ x, y })
+      // duplicateNode returns void, so diff node ids before/after to find the
+      // freshly-created node. (Modifying the store action's signature to
+      // return the new id would be a sweeping change for one caller.)
+      const before = new Set(useWorkflowStore.getState().nodes.map((n) => n.id))
+      duplicateNode(nodeId, flowPos)
+      const freshNode = useWorkflowStore
+        .getState()
+        .nodes.find((n) => !before.has(n.id) && n.type === "character")
+      if (!freshNode) {
+        toast.error("Couldn't duplicate node.")
+        return
+      }
+      const { id: newDbId, name } = await duplicateCharacter(characterDbId, {
+        nodeId: freshNode.id,
+        projectId: projectId ?? undefined,
+      })
+      // Rewire the freshly-duplicated node to point at the new row.
+      updateNodeWithData(
+        freshNode.id,
+        {},
+        { characterDbId: newDbId, characterName: name },
+      )
+      // Library list needs to refresh so the new character shows up.
+      queryClient.invalidateQueries({ queryKey: queryKeys.assets.characters(projectId ?? undefined, user?.id) })
+      toast.success(`Forked to '${name}'`)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to duplicate as new character.")
+    } finally {
+      setForking(false)
+      onClose()
+    }
+  }
+
   function handleDelete() {
     deleteNode(nodeId)
     onClose()
@@ -247,6 +312,17 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         Duplicate
         <span className="ml-auto text-xs text-muted-foreground">Ctrl+D</span>
       </button>
+      {characterDbId && (
+        <button
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left disabled:opacity-50"
+          onClick={handleDuplicateAsNewCharacter}
+          disabled={forking}
+          title="Create an independent character (default Duplicate shares the same library entry)"
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          {forking ? "Forking…" : "Duplicate as new character"}
+        </button>
+      )}
       <button
         className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-left text-destructive"
         onClick={handleDelete}

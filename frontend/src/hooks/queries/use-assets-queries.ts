@@ -26,6 +26,24 @@ export function useCharacters(projectId?: string, userId?: string) {
   })
 }
 
+/**
+ * Archived ("soft-deleted") characters for the library's Archive tab.
+ * Keyed separately from useCharacters so the active list cache isn't
+ * polluted; on archive/restore, invalidate both.
+ */
+export function useArchivedCharacters(projectId?: string, userId?: string) {
+  return useQuery({
+    queryKey: [...queryKeys.assets.characters(projectId, userId), "archived"],
+    queryFn: async () => {
+      const { listArchivedCharacters } = await import("@/lib/api")
+      return listArchivedCharacters(projectId)
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+    select: (data) => data.characters,
+  })
+}
+
 // --- Objects ---
 export function useObjects(projectId?: string, userId?: string) {
   return useQuery({

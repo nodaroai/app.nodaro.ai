@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react"
-import { Play, Loader2, Sparkles, Upload } from "lucide-react"
+import { Play, Loader2, Sparkles, Upload, UserCircle, ChevronDown, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +22,10 @@ import {
 } from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
+import { CachedImage } from "@/components/ui/cached-image"
+import { useCharacters } from "@/hooks/queries/use-assets-queries"
+import { useAuth } from "@/hooks/use-auth"
+import type { DbCharacter } from "@/lib/api"
 import type {
   CharacterNodeData,
   FaceNodeData,
@@ -70,6 +74,30 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
         </div>
       </div>
 
+      {/* Replace / pick from library. Lets the user re-bind this canvas node
+          to a different character without opening the gallery sidebar first. */}
+      <ReplaceCharacterPicker
+        currentDbId={data.characterDbId || null}
+        onPick={(picked) =>
+          onUpdate({
+            characterDbId: picked.id,
+            characterName: picked.name,
+            description: picked.description ?? "",
+            gender: (picked.gender as CharacterNodeData["gender"]) ?? "other",
+            style: (picked.style as CharacterNodeData["style"]) ?? "realistic",
+            baseOutfit: picked.baseOutfit ?? "",
+            sourceImageUrl: picked.sourceImageUrl ?? "",
+            expressions: picked.expressions ?? [],
+            poses: picked.poses ?? [],
+            lightingVariations: picked.lightingVariations ?? [],
+            angles: picked.angles ?? [],
+            motions: picked.motions ?? [],
+            voice: picked.voice ?? undefined,
+            personality: picked.personality ?? undefined,
+          })
+        }
+      />
+
       <button
         type="button"
         onClick={() => nodeId && setCharacterStudioNodeId(nodeId)}
@@ -116,6 +144,108 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           />
         </MappableField>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Compact "Replace character" button that opens a dropdown listing all active
+ * characters in the user's library. Picking one re-binds this node's
+ * `characterDbId` + populates every field from the picked row — useful when a
+ * user wants to drop a Character node and reuse a library entry without going
+ * through the gallery sidebar. Hidden state (assets, voice, personality) is
+ * copied wholesale so the studio shows the picked character as soon as it opens.
+ */
+function ReplaceCharacterPicker({
+  currentDbId,
+  onPick,
+}: {
+  currentDbId: string | null
+  onPick: (c: DbCharacter) => void
+}) {
+  const { user } = useAuth()
+  const projectId = useWorkflowStore((s) => s.projectId)
+  const { data: characters = [], isLoading } = useCharacters(projectId ?? undefined, user?.id)
+  const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState("")
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [open])
+
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    if (!q) return characters
+    return characters.filter((c) => c.name.toLowerCase().includes(q))
+  }, [characters, filter])
+
+  const label = currentDbId ? "Replace from library" : "Pick from library"
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 text-[11px] bg-muted/30 border border-border rounded-md px-3 py-2 hover:bg-muted/50 transition-colors"
+      >
+        <UserCircle className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="flex-1 text-left text-muted-foreground">{label}</span>
+        <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-30 mt-1 left-0 right-0 bg-popover border rounded-md shadow-lg max-h-[280px] flex flex-col">
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Search characters…"
+            autoFocus
+            className="text-[11px] bg-transparent border-b px-3 py-2 outline-none placeholder:text-muted-foreground"
+          />
+          <div className="flex-1 overflow-y-auto py-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Loading…
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="px-3 py-4 text-[11px] text-muted-foreground text-center">
+                {characters.length === 0 ? "No saved characters yet" : "No matches"}
+              </div>
+            ) : (
+              filtered.map((c) => {
+                const isCurrent = c.id === currentDbId
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      onPick(c)
+                      setOpen(false)
+                      setFilter("")
+                    }}
+                    className={`flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-accent ${isCurrent ? "bg-accent/40" : ""}`}
+                  >
+                    {c.sourceImageUrl ? (
+                      <CachedImage src={c.sourceImageUrl} alt={c.name} className="w-7 h-7 rounded object-cover" thumbnail thumbnailWidth={56} />
+                    ) : (
+                      <div className="w-7 h-7 rounded bg-muted flex items-center justify-center">
+                        <UserCircle className="h-4 w-4 text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <span className="flex-1 text-[11px] truncate">{c.name}</span>
+                    {isCurrent && <Check className="h-3.5 w-3.5 text-primary" />}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
