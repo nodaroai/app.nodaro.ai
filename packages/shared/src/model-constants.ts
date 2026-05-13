@@ -737,3 +737,14 @@ export const MOTION_DURATION_TIERS: ReadonlyArray<{ maxSeconds: number; suffix: 
   { maxSeconds: 15, suffix: "15s" },
   { maxSeconds: 30, suffix: "30s" },
 ]
+
+/** Curated i2v providers compatible with character portrait reference input.
+ *  Subset of IMAGE_TO_VIDEO_PROVIDERS — excludes text-to-video-only models. */
+export const CHARACTER_MOTION_PROVIDERS = [
+  "kling",
+  "kling-turbo",
+  "kling-3.0",
+  "wan-i2v",
+  "wan-2.7-i2v",
+] as const
+export type CharacterMotionProvider = typeof CHARACTER_MOTION_PROVIDERS[number]

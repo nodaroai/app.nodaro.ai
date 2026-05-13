@@ -223,7 +223,7 @@ Create reusable character, object, location, and face assets with multiple varia
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Create Character](./assets/character.md) | Multi-pose/expression character assets | Define characters with angles, expressions, poses, lighting |
+| [Create Character](./assets/character.md) | Multi-variation character assets, built in the full-screen Character Studio | Define characters with expressions, poses, motions, lighting, voice, and personality |
 | [Create Object](./assets/object.md) | Object with angles, materials, variations | Define props with multiple viewing angles and material options |
 | [Create Location](./assets/location.md) | Environment with time/weather variations | Define settings with time-of-day and weather variations |
 | [Create Face](./assets/face.md) | Facial asset for lip-sync and replacement | Maintain facial identity across generated images and video |

@@ -400,6 +400,7 @@ export async function generateCharacterAsset(data: {
   baseOutfit?: string
   sourceImageUrl?: string
   provider?: string
+  userPrompt?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
@@ -410,6 +411,28 @@ export async function generateCharacterAsset(data: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start character asset generation")
+  }
+  return res.json()
+}
+
+export async function generateCharacterMotion(params: {
+  motionPrompt: string
+  sourceImageUrl: string
+  provider?: string
+  name: string
+  description?: string
+  gender?: string
+  style?: string
+  baseOutfit?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-character-motion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to generate character motion")
   }
   return res.json()
 }
@@ -429,6 +452,10 @@ export async function saveCharacter(data: {
   expressions?: { name: string; url: string }[]
   poses?: { name: string; url: string }[]
   lightingVariations?: { name: string; url: string }[]
+  angles?:      { name: string; url: string }[]
+  motions?:     { name: string; url: string }[]
+  voice?:       { voiceId: string; voiceName: string; traits: string } | null
+  personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters`, {
     method: "POST",

@@ -111,6 +111,10 @@ export function runCharacterGeneration(
                   expressions: currentData?.expressions ?? [],
                   poses: currentData?.poses ?? [],
                   lightingVariations: currentData?.lightingVariations ?? [],
+                  angles: currentData?.angles ?? [],
+                  motions: currentData?.motions ?? [],
+                  voice: currentData?.voice ?? null,
+                  personality: currentData?.personality ?? null,
                 })
                   .then(({ id: dbId }) => {
                     if (!currentData?.characterDbId) {
@@ -735,6 +739,10 @@ export async function handleGenerateCharacterAsset(
               expressions: latestData.expressions ?? [],
               poses: latestData.poses ?? [],
               lightingVariations: latestData.lightingVariations ?? [],
+              angles: latestData.angles ?? [],
+              motions: latestData.motions ?? [],
+              voice: latestData.voice ?? null,
+              personality: latestData.personality ?? null,
             }).catch(() => {});
           },
         );

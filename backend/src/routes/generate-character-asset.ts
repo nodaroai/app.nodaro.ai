@@ -12,8 +12,8 @@ import { formatZodError } from "../lib/zod-error.js"
 const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
 
 const VARIANTS: Record<string, readonly string[]> = {
-  expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking"],
-  poses: ["standing", "walking", "sitting", "running"],
+  expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking", "laughing", "disgusted", "fearful", "smirk", "crying"],
+  poses: ["standing", "walking", "sitting", "running", "crouching", "pointing", "fighting stance", "jumping", "turning"],
   lighting: ["daylight", "night", "dramatic"],
   angles: ["front", "side", "back"],
 }
@@ -36,10 +36,11 @@ function buildVariantPrompt(
   assetType: string,
   variant: string,
   name: string,
-  description?: string,
-  gender?: string,
-  style?: string,
-  baseOutfit?: string,
+  description: string | undefined,
+  gender: string | undefined,
+  style: string | undefined,
+  baseOutfit: string | undefined,
+  userPrompt?: string,
 ): string {
   const genderDesc = gender ?? "character"
   const outfitPart = baseOutfit ? `, wearing ${baseOutfit}` : ""
@@ -49,7 +50,7 @@ function buildVariantPrompt(
   const base = `Single ${genderDesc} character ${name}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, white/plain background, no text, no labels, no watermarks.`
 
   if (assetType === "custom") {
-    return `${variant}. ${base}`
+    return `${userPrompt ?? variant}. ${base}`
   }
 
   if (assetType === "expressions") {
@@ -60,6 +61,11 @@ function buildVariantPrompt(
       surprised: "wide eyes, mouth slightly open, surprised expression",
       sad: "sad downcast expression, slightly lowered gaze",
       talking: "mouth open mid-speech, expressive face",
+      laughing: "laughing openly, head tilted back, joyful",
+      disgusted: "disgusted expression, nose wrinkled, lip curled",
+      fearful: "fearful expression, wide eyes, tense",
+      smirk: "subtle smirk, one corner of mouth raised, confident",
+      crying: "crying, tears, distressed expression",
     }
     const expr = expressionMap[variant] ?? `${variant} expression`
     return `Portrait headshot of ${name}, ${expr}. ${base}`
@@ -71,6 +77,11 @@ function buildVariantPrompt(
       walking: "walking mid-stride, natural gait",
       sitting: "sitting on a chair, relaxed posture",
       running: "running action pose, dynamic movement",
+      crouching: "crouching low, knees bent, ready",
+      pointing: "pointing forward with one arm extended",
+      "fighting stance": "fighting stance, fists raised, weight balanced",
+      jumping: "mid-jump, both feet off the ground, dynamic",
+      turning: "turning to look over the shoulder, body in three-quarter view",
     }
     const pose = poseMap[variant] ?? `${variant} pose`
     return `Full body view of ${name}, ${pose}. FULL BODY visible including feet. ${base}`
@@ -128,7 +139,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
 
     const modelIdentifier = parsed.data.provider
 
-    const prompt = buildVariantPrompt(assetType, variant, name, description, gender, style, baseOutfit)
+    const prompt = buildVariantPrompt(assetType, variant, name, description, gender, style, baseOutfit, parsed.data.userPrompt)
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase

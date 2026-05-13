@@ -433,6 +433,9 @@ interface WorkflowState {
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
   readonly autoOpenEditorNodeId: string | null
   readonly setAutoOpenEditorNodeId: (id: string | null) => void
+  /** Node ID whose Character Studio modal is open (null = closed). UI-only. */
+  readonly characterStudioNodeId: string | null
+  readonly setCharacterStudioNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
@@ -1336,6 +1339,34 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { ...n, data: newData as typeof n.data }
     })
 
+    // Migrate legacy CharacterNodeData:
+    //  - Backfill the Phase-1 Character Studio fields (motions / motionStatus /
+    //    voice / personality) on character nodes saved before they existed.
+    //  - One-way, non-destructive migration of the deprecated `customVariations`
+    //    array into `expressions`: each `{ prompt, url }` whose url is not
+    //    already an expression becomes `{ name: prompt.substring(0,50), url }`,
+    //    then `customVariations` is emptied. The field itself stays for compat.
+    migratedNodes = migratedNodes.map((n) => {
+      if (n.type !== "character") return n
+      const data = n.data as Record<string, unknown>
+      const newData = { ...data } as Record<string, unknown>
+      newData.motions = (data.motions as unknown[] | undefined) ?? []
+      newData.motionStatus = (data.motionStatus as string | undefined) ?? "idle"
+      newData.voice = (data.voice as unknown) ?? null
+      newData.personality = (data.personality as unknown) ?? null
+      const cv = (data.customVariations ?? []) as Array<{ prompt: string; url: string }>
+      if (cv.length > 0) {
+        const existing = (data.expressions ?? []) as Array<{ name: string; url: string }>
+        const existingUrls = new Set(existing.map((e) => e.url))
+        const migrated = cv
+          .filter((item) => !existingUrls.has(item.url))
+          .map((item) => ({ name: item.prompt.substring(0, 50), url: item.url }))
+        newData.expressions = [...existing, ...migrated]
+        newData.customVariations = []
+      }
+      return { ...n, data: newData as typeof n.data }
+    })
+
     // Strip fixed width from teleport nodes so they auto-size
     migratedNodes = migratedNodes.map((n) =>
       (n.type === "teleport-send" || n.type === "teleport-receive") && n.width
@@ -1506,6 +1537,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setExpandStoryboard: (fn) => set({ expandStoryboard: fn }),
   autoOpenEditorNodeId: null,
   setAutoOpenEditorNodeId: (id) => set({ autoOpenEditorNodeId: id }),
+  characterStudioNodeId: null,
+  setCharacterStudioNodeId: (id) => set({ characterStudioNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,

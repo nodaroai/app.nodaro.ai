@@ -62,6 +62,7 @@ export {
   GUIDANCE_SCALE_SUPPORT,
   SEEDANCE_2_REF_LIMITS,
   isSeedance2Provider,
+  CHARACTER_MOTION_PROVIDERS,
   VEO_PROVIDERS,
   isVeoProvider,
 } from "./model-constants.js"
@@ -90,6 +91,7 @@ export type {
   VoiceDesignModel,
   ModifyImageProvider,
   UpscaleImageProvider,
+  CharacterMotionProvider,
 } from "./model-constants.js"
 
 export {
@@ -231,11 +233,13 @@ export {
   buildObjectPrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
+  buildMotionPrompt,
   type EntityStyle,
   type CharacterPromptInput,
   type ObjectPromptInput,
   type LocationPromptInput,
   type FacePromptInput,
+  type CharacterMotionPromptInput,
 } from "./entity-prompts.js"
 
 export type { ExposableField, ExposableOutput, PresentationItem } from "./presentation-types.js"

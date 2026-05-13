@@ -4,6 +4,7 @@ import {
   buildObjectPrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
+  buildMotionPrompt,
 } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {
@@ -96,5 +97,24 @@ describe("buildFaceTemplateInputs", () => {
     const inputs = buildFaceTemplateInputs({ name: "Solo" })
     expect(inputs.description).toBe("Solo")
     expect(inputs.style).toBe("realistic")
+  })
+})
+
+describe("buildMotionPrompt", () => {
+  it("composes character base + motion + style", () => {
+    const out = buildMotionPrompt({
+      name: "Alex",
+      gender: "male",
+      description: "tall, dark hair",
+      style: "realistic",
+      baseOutfit: "leather jacket",
+      motionPrompt: "walking confidently",
+    })
+    expect(out).toBe("Alex, male, tall, dark hair, wearing leather jacket, walking confidently. realistic style.")
+  })
+
+  it("defaults style to realistic and omits outfit when missing", () => {
+    const out = buildMotionPrompt({ name: "Mia", motionPrompt: "waving" })
+    expect(out).toBe("Mia, waving. realistic style.")
   })
 })

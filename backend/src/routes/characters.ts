@@ -19,6 +19,10 @@ const upsertCharacterBody = z.object({
   expressions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   poses: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   lightingVariations: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
+  personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
 })
 
 const deleteCharacterParams = z.object({
@@ -48,7 +52,7 @@ export async function characterRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("characters")
-      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
+      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, motions, voice, personality, created_at, updated_at")
       .order("created_at", { ascending: false })
 
     if (projectId) {
@@ -81,6 +85,10 @@ export async function characterRoutes(app: FastifyInstance) {
       expressions: c.expressions,
       poses: c.poses,
       lightingVariations: c.lighting_variations,
+      angles: c.angles,
+      motions: c.motions,
+      voice: c.voice,
+      personality: c.personality,
       createdAt: c.created_at,
       updatedAt: c.updated_at,
     }))
@@ -111,7 +119,7 @@ export async function characterRoutes(app: FastifyInstance) {
 
     const { data, error } = await supabase
       .from("characters")
-      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, created_at, updated_at")
+      .select("id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, motions, voice, personality, created_at, updated_at")
       .eq("id", id)
       .eq("user_id", userId)
       .single()
@@ -142,6 +150,10 @@ export async function characterRoutes(app: FastifyInstance) {
       expressions: data.expressions,
       poses: data.poses,
       lightingVariations: data.lighting_variations,
+      angles: data.angles,
+      motions: data.motions,
+      voice: data.voice,
+      personality: data.personality,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     }
@@ -156,7 +168,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -179,6 +191,10 @@ export async function characterRoutes(app: FastifyInstance) {
       expressions: expressions ?? [],
       poses: poses ?? [],
       lighting_variations: lightingVariations ?? [],
+      angles: angles ?? [],
+      motions: motions ?? [],
+      voice: voice ?? null,
+      personality: personality ?? null,
       updated_at: new Date().toISOString(),
     }
 
