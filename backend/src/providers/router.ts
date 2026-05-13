@@ -266,7 +266,8 @@ export async function lipSync(
   audioUrl: string,
   model: string,
   prompt?: string,
-  resolution?: string
+  resolution?: string,
+  audioDurationSec?: number
 ): Promise<RouteResult> {
   return routeAndExecute(
     "lip-sync",
@@ -274,7 +275,7 @@ export async function lipSync(
     "lipSync",
     async (instance) => {
       const p = resolveModule<LipSyncProvider>(instance, "video")
-      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution)
+      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec)
     }
   )
 }

@@ -217,8 +217,21 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "kling-motion":      { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // alias for motion-transfer
   "kling-3.0-motion":  { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 12 cr/sec × 10s (kling 3.0 720p)
   // ── Lip Sync ──
-  "kling-avatar":      { provider: "KIE.ai",    providerCostUsd: 0.560, markupPct: 25 },  // 8 KIE cr/sec × ~14s (Standard 720p)
-  "kling-avatar-pro":  { provider: "KIE.ai",    providerCostUsd: 1.120, markupPct: 25 },  // 16 KIE cr/sec × ~14s (Pro 1080p)
+  // Kling AI Avatar 2.0 (May 2026): max audio 5min, billed per-second
+  // (8 KIE cr/sec Standard 720p, 16 KIE cr/sec Pro 1080p). Composite identifiers
+  // `<provider>:<bucket>s` cover the 15/30/60/120/300s reservation buckets.
+  "kling-avatar":          { provider: "KIE.ai",    providerCostUsd: 0.560, markupPct: 25 },  // legacy ~14s default
+  "kling-avatar:15s":      { provider: "KIE.ai",    providerCostUsd: 0.600, markupPct: 25 },  // 15s × 8 KIE cr/sec
+  "kling-avatar:30s":      { provider: "KIE.ai",    providerCostUsd: 1.200, markupPct: 25 },
+  "kling-avatar:60s":      { provider: "KIE.ai",    providerCostUsd: 2.400, markupPct: 25 },
+  "kling-avatar:120s":     { provider: "KIE.ai",    providerCostUsd: 4.800, markupPct: 25 },
+  "kling-avatar:300s":     { provider: "KIE.ai",    providerCostUsd: 12.000, markupPct: 25 }, // 5-min ceiling
+  "kling-avatar-pro":      { provider: "KIE.ai",    providerCostUsd: 1.120, markupPct: 25 },  // legacy ~14s default
+  "kling-avatar-pro:15s":  { provider: "KIE.ai",    providerCostUsd: 1.200, markupPct: 25 },  // 15s × 16 KIE cr/sec
+  "kling-avatar-pro:30s":  { provider: "KIE.ai",    providerCostUsd: 2.400, markupPct: 25 },
+  "kling-avatar-pro:60s":  { provider: "KIE.ai",    providerCostUsd: 4.800, markupPct: 25 },
+  "kling-avatar-pro:120s": { provider: "KIE.ai",    providerCostUsd: 9.600, markupPct: 25 },
+  "kling-avatar-pro:300s": { provider: "KIE.ai",    providerCostUsd: 24.000, markupPct: 25 }, // 5-min ceiling
   "infinitalk":        { provider: "KIE.ai",    providerCostUsd: 0.525, markupPct: 25 },  // 3–12 KIE cr/sec × ~14s (avg 480p/720p)
   "hailuo-avatar":     { provider: "KIE.ai",    providerCostUsd: 0.350, markupPct: 25 },  // estimated
   // ── Audio / TTS / Music ──

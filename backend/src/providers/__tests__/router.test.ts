@@ -366,10 +366,10 @@ describe("typed wrapper dispatch", () => {
     const fn = vi.fn().mockResolvedValue({ url: "u", cost: 0 })
     setupSuccessfulCall("video", "lipSync", fn)
 
-    await lipSync("img", "audio", "kling-avatar", "motion-prompt", "720p")
+    await lipSync("img", "audio", "kling-avatar", "motion-prompt", "720p", 42)
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("lip-sync", "kling-avatar")
-    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p")
+    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p", 42)
   })
 
   it("generateMusic routes via music-generation capability + audio submodule", async () => {

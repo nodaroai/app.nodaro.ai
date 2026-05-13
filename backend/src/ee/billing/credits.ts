@@ -330,8 +330,23 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   // ── Lip Sync ──
-  "kling-avatar": 28,            // 112 KIE cr, $0.56 (8 cr/sec * ~14s)
-  "kling-avatar-pro": 56,        // 224 KIE cr, $1.12 (16 cr/sec * ~14s)
+  // Kling AI Avatar 2.0 (May 2026) supports up to 5min audio, billed per-second
+  // by KIE at 8 cr/sec (Standard, 720p) and 16 cr/sec (Pro, 1080p).
+  // Composite identifiers `<provider>:<bucket>s` map to ceil(bucket × Nodaro-rate).
+  // Nodaro rates: 2 cr/sec Standard, 4 cr/sec Pro (matches pre-upgrade ~14s flat).
+  // Bare keys remain for back-compat — callers without audioDurationSec hit them.
+  "kling-avatar": 28,             // legacy default ~14s
+  "kling-avatar:15s": 30,         // 15s × 2 cr/sec
+  "kling-avatar:30s": 60,         // 30s × 2 cr/sec
+  "kling-avatar:60s": 120,        // 60s × 2 cr/sec
+  "kling-avatar:120s": 240,       // 120s × 2 cr/sec
+  "kling-avatar:300s": 600,       // 300s × 2 cr/sec — 5-min ceiling
+  "kling-avatar-pro": 56,         // legacy default ~14s
+  "kling-avatar-pro:15s": 60,     // 15s × 4 cr/sec
+  "kling-avatar-pro:30s": 120,    // 30s × 4 cr/sec
+  "kling-avatar-pro:60s": 240,    // 60s × 4 cr/sec
+  "kling-avatar-pro:120s": 480,   // 120s × 4 cr/sec
+  "kling-avatar-pro:300s": 1200,  // 300s × 4 cr/sec — 5-min ceiling
   ***REDACTED-OSS-SCRUB***
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05

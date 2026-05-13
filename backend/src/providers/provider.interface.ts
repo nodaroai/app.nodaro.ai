@@ -157,7 +157,8 @@ export interface LipSyncProvider {
     audioUrl: string,
     prompt?: string,
     model?: string,
-    resolution?: string
+    resolution?: string,
+    audioDurationSec?: number
   ): Promise<ProviderResult>
 }
 
