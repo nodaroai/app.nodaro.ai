@@ -36,9 +36,8 @@ const FlowTemplatesDialog = lazy(() => import("./flow-templates-dialog").then(m 
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import {
-  getCharacterById,
-  getObjectById,
-  getLocationById,
+  exportWorkflow,
+  importWorkflow,
   saveCharacter,
   saveObject,
   saveLocation,
@@ -47,6 +46,7 @@ import {
   type DbLocation,
 } from "@/lib/api"
 import { createClient } from "@/lib/supabase"
+import type { WorkflowExport } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
 
 type EditorTab = "editor" | "present" | "executions" | "cost"
@@ -78,13 +78,11 @@ interface ExportedWorkflow {
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const isDirty = useWorkflowStore((s) => s.isDirty)
   const saveStatus = useWorkflowStore((s) => s.saveStatus)
   const saveError = useWorkflowStore((s) => s.saveError)
   const workflowId = useWorkflowStore((s) => s.workflowId)
-  const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
   const project = useProjectsStore((s) =>
     projectId ? s.projects.find((p) => p.id === projectId) : undefined,
   )
@@ -121,416 +119,24 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     }
   }, [saveStatus, isDirty])
 
-  // Strip generated content from nodes for template export
-  const stripGeneratedContent = (nodesToStrip: WorkflowNode[]): WorkflowNode[] => {
-    return nodesToStrip.map(node => {
-      // Use a mutable copy with loose typing for modifications
-      const data = { ...node.data } as Record<string, unknown>
-
-      switch (node.type) {
-        case "character":
-          // Clear character generated content
-          data.sourceImageUrl = undefined
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.expressions = []
-          data.poses = []
-          data.lightingVariations = []
-          data.angles = []
-          data.customVariations = []
-          data.motions = []
-          data.motionStatus = "idle"
-          data.voice = null
-          data.personality = null
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "object":
-          // Clear object generated content
-          data.sourceImageUrl = undefined
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.angles = []
-          data.materials = []
-          data.variations = []
-          data.customVariations = []
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "location":
-          // Clear location generated content
-          data.sourceImageUrl = undefined
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.timeOfDay = []
-          data.weather = []
-          data.angles = []
-          data.customVariations = []
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "extract-frame":
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "generate-image":
-        case "modify-image":
-          // Clear generated image results, keep settings
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          data.referenceImageUrls = undefined
-          data.referenceImageOrder = undefined
-          data.connectedMediaOrder = undefined
-          break
-
-        case "upscale-image":
-        case "remove-background":
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "generate-mask":
-          // Clear generated mask + image results, keep prompt and threshold
-          data.generatedResults = []
-          data.generatedMaskUrl = undefined
-          data.generatedImageUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          data.currentJobId = undefined
-          break
-
-        case "image-to-video":
-        case "video-to-video":
-        case "text-to-video":
-        case "extend-video":
-        case "face-swap":
-          // Clear generated video results, keep settings
-          data.generatedResults = []
-          data.generatedVideoUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          data.connectedImageOrder = undefined
-          break
-
-        case "generate-script":
-          // Clear generated script results, keep settings
-          data.generatedResults = []
-          data.generatedScript = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "text-to-speech":
-          // Clear generated audio results, keep settings
-          data.generatedResults = []
-          data.generatedAudioUrl = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "generate-music":
-        case "text-to-audio":
-        case "text-to-dialogue":
-        case "voice-changer":
-        case "dubbing":
-        case "voice-remix":
-        case "voice-design":
-        case "suno-mashup":
-        case "suno-replace-section":
-        case "suno-add-instrumental":
-        case "suno-add-vocals":
-        case "suno-convert-wav":
-        case "suno-upload-extend":
-          // Clear generated audio results, keep settings
-          data.generatedResults = []
-          data.generatedAudioUrl = undefined
-          data.generatedVoiceId = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "suno-style-boost":
-          data.generatedResults = []
-          data.generatedText = undefined
-          data.activeResultIndex = 0
-          data.executionStatus = undefined
-          break
-
-        case "scene":
-          // Clear scene generated content
-          data.generatedResults = []
-          data.generatedImageUrl = undefined
-          data.generatedVideoResults = []
-          data.generatedVideoUrl = undefined
-          data.activeResultIndex = 0
-          data.activeVideoResultIndex = 0
-          data.executionStatus = undefined
-          data.videoExecutionStatus = undefined
-          // Clear dialogue audio
-          if (Array.isArray(data.dialogue)) {
-            data.dialogue = (data.dialogue as Array<Record<string, unknown>>).map(d => ({
-              ...d,
-              generatedAudioResults: [],
-              activeAudioIndex: 0,
-            }))
-          }
-          break
-
-        case "upload-image":
-        case "upload-video":
-          // Clear uploaded content
-          data.assetId = undefined
-          data.url = undefined
-          data.thumbnailUrl = undefined
-          break
-
-        case "youtube-video":
-          data.youtubeUrl = ""
-          data.videoId = ""
-          data.title = ""
-          data.thumbnailUrl = ""
-          break
-
-        case "transcribe":
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.generatedText = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "image-to-text":
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.generatedText = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "web-scrape":
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.generatedJson = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "extract-field":
-          data.extractedText = undefined
-          data.__listResults = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "json-process":
-          data.processedResult = undefined
-          data.__listResults = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "filter-list":
-        case "deduplicate":
-        case "merge-lists":
-        case "sort-list":
-          data.listResults = undefined
-          data.__listResults = undefined
-          data.__listTotal = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "forced-alignment":
-          data.alignmentResults = []
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "llm-chat":
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.generatedText = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "ai-writer":
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.generatedText = undefined
-          data.generatedItems = undefined
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          break
-
-        case "sub-workflow-input":
-        case "sub-workflow-output":
-          // No generated content to strip
-          break
-
-        case "sub-workflow":
-          data.executionStatus = "idle"
-          data.errorMessage = undefined
-          data.outputResults = undefined
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          data.subWorkflowProgress = undefined
-          break
-
-        case "component":
-          data.executionStatus = "idle"
-          data.errorMessage = undefined
-          data.outputResults = undefined
-          data.generatedResults = []
-          data.activeResultIndex = 0
-          break
-
-        case "webhook-trigger":
-        case "schedule-trigger":
-          break
-
-        case "instagram-post":
-        case "tiktok-post":
-        case "youtube-upload":
-        case "linkedin-post":
-        case "x-post":
-        case "facebook-post":
-        case "telegram-post":
-          data.executionStatus = undefined
-          data.errorMessage = undefined
-          data.platformPostId = undefined
-          data.platformPostUrl = undefined
-          break
-
-        case "telegram-trigger":
-          data.isActive = false
-          break
-
-        case "teleport-send":
-        case "teleport-receive":
-          data.result = undefined
-          data.executionStatus = undefined
-          break
-
-        case "router":
-          data.activeRoutes = undefined
-          data.routeOutputs = undefined
-          data.executionStatus = undefined
-          break
-
-        default:
-          // For any other node type, clear common generated fields
-          if ('generatedResults' in data) {
-            data.generatedResults = []
-          }
-          if ('activeResultIndex' in data) {
-            data.activeResultIndex = 0
-          }
-          if ('executionStatus' in data) {
-            data.executionStatus = undefined
-          }
-          break
-      }
-
-      return { ...node, data } as WorkflowNode
-    })
-  }
-
   const handleExport = useCallback(async (includeAssets: boolean) => {
+    if (!workflowId || workflowId.startsWith("temp-")) {
+      toast.error("Save the workflow before exporting")
+      return
+    }
     setExporting(true)
     try {
-      // For template export, strip all generated content from nodes
-      const exportNodes = includeAssets ? nodes : stripGeneratedContent(nodes)
-
-      const hasFlowTemplates = Object.keys(flowTemplates).length > 0
-
-      const workflowData: ExportedWorkflow = {
-        name: workflowName || "Untitled Workflow",
-        nodes: exportNodes,
-        edges,
-        ...(hasFlowTemplates ? { settings: { flowPromptTemplates: flowTemplates } } : {}),
-        exportedAt: new Date().toISOString(),
-        version: "1.0",
-      }
-
-      if (includeAssets) {
-        // Collect all referenced asset IDs from nodes
-        const characterIds = new Set<string>()
-        const objectIds = new Set<string>()
-        const locationIds = new Set<string>()
-
-        for (const node of nodes) {
-          if (node.type === "character") {
-            const data = node.data as CharacterNodeData
-            if (data.characterDbId) {
-              characterIds.add(data.characterDbId)
-            }
-          } else if (node.type === "object") {
-            const data = node.data as ObjectNodeData
-            if (data.objectDbId) {
-              objectIds.add(data.objectDbId)
-            }
-          } else if (node.type === "location") {
-            const data = node.data as LocationNodeData
-            if (data.locationDbId) {
-              locationIds.add(data.locationDbId)
-            }
-          }
-        }
-
-        // Fetch full asset data from database
-        const characters: DbCharacter[] = []
-        const objects: DbObject[] = []
-        const locations: DbLocation[] = []
-
-        for (const id of characterIds) {
-          try {
-            const char = await getCharacterById(id)
-            if (char) characters.push(char)
-          } catch (err) {
-            // Silently skip — export continues with remaining entities
-          }
-        }
-
-        for (const id of objectIds) {
-          try {
-            const obj = await getObjectById(id)
-            if (obj) objects.push(obj)
-          } catch (err) {
-            // Silently skip — export continues with remaining entities
-          }
-        }
-
-        for (const id of locationIds) {
-          try {
-            const loc = await getLocationById(id)
-            if (loc) locations.push(loc)
-          } catch (err) {
-            // Silently skip — export continues with remaining entities
-          }
-        }
-
-        if (characters.length > 0 || objects.length > 0 || locations.length > 0) {
-          workflowData.assets = { characters, objects, locations }
-        }
-      }
+      // Backend builds the portable bundle: with `assets` it inlines referenced
+      // characters/objects/locations; without it, generated/transient content is
+      // stripped from nodes server-side (stripExportContent in @nodaro/shared).
+      const workflowData = await exportWorkflow(workflowId, { assets: includeAssets })
 
       // Download as JSON file
       const blob = new Blob([JSON.stringify(workflowData, null, 2)], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      const safeName = (workflowName || "workflow").replace(/[^a-z0-9]/gi, "-").toLowerCase()
+      const safeName = (workflowName || workflowData.name || "workflow").replace(/[^a-z0-9]/gi, "-").toLowerCase()
       a.download = `${safeName}-${includeAssets ? "with-assets" : "template"}.json`
       document.body.appendChild(a)
       a.click()
@@ -543,7 +149,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     } finally {
       setExporting(false)
     }
-  }, [nodes, edges, workflowName, flowTemplates])
+  }, [workflowId, workflowName])
 
   function parseWorkflowJson(jsonStr: string): ExportedWorkflow {
     const raw = JSON.parse(jsonStr) as Record<string, unknown>
@@ -585,29 +191,54 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
     }
   }, [])
 
-  const handleImport = useCallback(async (mode: "new" | "inject") => {
-    const data = pendingImportData
-    if (!data) return
-    setPendingImportData(null)
+  // Build the portable WorkflowExport payload the backend expects from a parsed
+  // file/clipboard blob. Coerces the version (older exports used "1.0") and lets
+  // the backend Zod schema strip any extra asset fields (category, userId, …).
+  function toWorkflowExportPayload(data: ExportedWorkflow): WorkflowExport {
+    const name = ((data.name || "Untitled Workflow") + " (Imported)").slice(0, 200)
+    return {
+      version: 1,
+      exportedAt: typeof data.exportedAt === "string" ? data.exportedAt : new Date().toISOString(),
+      name,
+      nodes: data.nodes as unknown as WorkflowExport["nodes"],
+      edges: data.edges as unknown as WorkflowExport["edges"],
+      ...(data.settings ? { settings: data.settings } : {}),
+      ...(data.assets ? { assets: data.assets as unknown as WorkflowExport["assets"] } : {}),
+    }
+  }
 
+  const handleImportAsNew = useCallback(async (data: ExportedWorkflow) => {
+    setImporting(true)
     try {
-      setImporting(true)
+      // Backend re-creates bundled assets under the caller and remaps the entity
+      // DB-id references on nodes, then inserts a fresh workflow row.
+      const created = await importWorkflow({ ...toWorkflowExportPayload(data), projectId: projectId! })
+      const assetCount = (data.assets?.characters.length ?? 0) + (data.assets?.objects.length ?? 0) + (data.assets?.locations.length ?? 0)
+      toast.success(assetCount > 0 ? `Imported workflow with ${assetCount} assets` : "Imported workflow")
+      onNavigate?.(`/projects/${created.projectId}/workflows/${created.id}`)
+    } catch (err) {
+      toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
+    } finally {
+      setImporting(false)
+    }
+  }, [projectId, onNavigate])
 
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const uid = user?.id
-
+  // Inject mode merges the imported nodes onto the *current* canvas (no new
+  // workflow row). Bundled assets are re-created via the backend asset routes;
+  // node/edge id remapping and the offset layout are pure client-side work.
+  const handleInject = useCallback(async (data: ExportedWorkflow) => {
+    setImporting(true)
+    try {
       let nodesToImport = [...data.nodes]
       const assetIdMap: Record<string, string> = {}
 
-      // Import assets if they exist
       if (data.assets) {
         const { characters, objects, locations } = data.assets
 
         for (const char of characters || []) {
           try {
             const result = await saveCharacter({
-              userId: uid, nodeId: char.nodeId, projectId: projectId,
+              nodeId: char.nodeId, projectId,
               name: char.name, description: char.description ?? undefined,
               gender: char.gender ?? undefined, style: char.style ?? undefined,
               baseOutfit: char.baseOutfit ?? undefined, sourceImageUrl: char.sourceImageUrl ?? undefined,
@@ -615,13 +246,13 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
               lightingVariations: char.lightingVariations ?? [],
             })
             assetIdMap[char.id] = result.id
-          } catch { /* skip */ }
+          } catch { /* skip — inject continues with remaining assets */ }
         }
 
         for (const obj of objects || []) {
           try {
             const result = await saveObject({
-              userId: uid, nodeId: obj.nodeId, projectId: projectId,
+              nodeId: obj.nodeId, projectId,
               name: obj.name, description: obj.description ?? undefined,
               category: obj.category ?? undefined, style: obj.style ?? undefined,
               sourceImageUrl: obj.sourceImageUrl ?? undefined,
@@ -635,7 +266,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         for (const loc of locations || []) {
           try {
             const result = await saveLocation({
-              userId: uid, nodeId: loc.nodeId, projectId: projectId,
+              nodeId: loc.nodeId, projectId,
               name: loc.name, description: loc.description ?? undefined,
               category: loc.category ?? undefined, style: loc.style ?? undefined,
               sourceImageUrl: loc.sourceImageUrl ?? undefined,
@@ -646,7 +277,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           } catch { /* skip */ }
         }
 
-        // Update node references to use new asset IDs
+        // Point node references at the freshly-created asset rows.
         nodesToImport = nodesToImport.map(node => {
           if (node.type === "character") {
             const nd = node.data as CharacterNodeData
@@ -665,7 +296,7 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         })
       }
 
-      // Generate new node IDs to avoid conflicts
+      // Generate new node IDs to avoid conflicts with the existing canvas.
       const nodeIdMap: Record<string, string> = {}
       nodesToImport = nodesToImport.map(node => {
         const newId = `${node.type}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -702,60 +333,56 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
       const importedFlowTemplates =
         (data.settings?.flowPromptTemplates as Record<string, string> | undefined) ?? {}
 
-      if (mode === "new") {
-        const importedName = (data.name || "Untitled Workflow") + " (Imported)"
-        loadWorkflow(
-          workflowId || `temp-${Date.now()}`,
-          importedName,
-          nodesToImport,
-          edgesToImport,
-          undefined,
-          Object.keys(importedFlowTemplates).length > 0 ? importedFlowTemplates : undefined,
-        )
-      } else {
-        // Inject: offset imported nodes to the right of existing nodes
-        const state = useWorkflowStore.getState()
-        let offsetX = 0
-        if (state.nodes.length > 0 && nodesToImport.length > 0) {
-          const maxX = Math.max(...state.nodes.map(n => n.position.x + (n.measured?.width ?? 260)))
-          const minX = Math.min(...nodesToImport.map(n => n.position.x))
-          offsetX = maxX - minX + 100
-        }
+      // Inject: offset imported nodes to the right of existing nodes
+      const state = useWorkflowStore.getState()
+      let offsetX = 0
+      if (state.nodes.length > 0 && nodesToImport.length > 0) {
+        const maxX = Math.max(...state.nodes.map(n => n.position.x + (n.measured?.width ?? 260)))
+        const minX = Math.min(...nodesToImport.map(n => n.position.x))
+        offsetX = maxX - minX + 100
+      }
 
-        const offsetNodes = nodesToImport.map(n => ({
-          ...n,
-          position: { x: n.position.x + offsetX, y: n.position.y },
-        }))
+      const offsetNodes = nodesToImport.map(n => ({
+        ...n,
+        position: { x: n.position.x + offsetX, y: n.position.y },
+      }))
 
-        useWorkflowStore.setState({
-          nodes: [...state.nodes, ...offsetNodes],
-          edges: [...state.edges, ...edgesToImport],
-          isDirty: true,
+      useWorkflowStore.setState({
+        nodes: [...state.nodes, ...offsetNodes],
+        edges: [...state.edges, ...edgesToImport],
+        isDirty: true,
+      })
+
+      if (Object.keys(importedFlowTemplates).length > 0) {
+        state.setFlowPromptTemplates({
+          ...state.flowPromptTemplates,
+          ...importedFlowTemplates,
         })
-
-        // Merge flow templates if any
-        if (Object.keys(importedFlowTemplates).length > 0) {
-          state.setFlowPromptTemplates({
-            ...state.flowPromptTemplates,
-            ...importedFlowTemplates,
-          })
-        }
       }
 
       const assetCount = Object.keys(assetIdMap).length
-      toast.success(
-        mode === "inject"
-          ? `Added ${nodesToImport.length} nodes to workflow${assetCount > 0 ? ` with ${assetCount} assets` : ""}`
-          : assetCount > 0
-            ? `Imported workflow with ${assetCount} assets`
-            : "Imported workflow"
-      )
+      toast.success(`Added ${nodesToImport.length} nodes to workflow${assetCount > 0 ? ` with ${assetCount} assets` : ""}`)
     } catch (err) {
       toast.error("Import failed: " + (err instanceof Error ? err.message : "Unknown error"))
     } finally {
       setImporting(false)
     }
-  }, [pendingImportData, projectId, workflowId, loadWorkflow])
+  }, [projectId])
+
+  const handleImport = useCallback((mode: "new" | "inject") => {
+    const data = pendingImportData
+    if (!data) return
+    setPendingImportData(null)
+    if (mode === "new") {
+      if (!projectId) {
+        toast.error("Open a project to import a workflow")
+        return
+      }
+      void handleImportAsNew(data)
+    } else {
+      void handleInject(data)
+    }
+  }, [pendingImportData, projectId, handleImportAsNew, handleInject])
 
   return (
     <div className="flex items-center justify-between gap-2 px-2 sm:px-4 h-[41px] border-b border-gray-200 dark:border-border bg-white dark:bg-card">
