@@ -20,3 +20,4 @@ venv/
 coverage/
 .DS_Store
 .playwright-mcp/
+supabase/.temp/

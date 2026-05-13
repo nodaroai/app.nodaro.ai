@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { render, screen, fireEvent } from "@testing-library/react"
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
@@ -52,10 +52,12 @@ vi.mock("../run-node-button", () => ({
   RunNodeButton: (props: any) => <div data-testid="run-node-button" data-credits={props.credits} />,
 }))
 
+const setCharacterStudioNodeIdMock = vi.fn()
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({
     updateNodeData: () => {},
     runSingleNode: () => {},
+    setCharacterStudioNodeId: setCharacterStudioNodeIdMock,
     nodes: [],
     edges: [],
   }),
@@ -154,6 +156,10 @@ function renderLocationNode(overrides: Record<string, unknown> = {}) {
 // ---------------------------------------------------------------------------
 
 describe("CharacterNode", () => {
+  beforeEach(() => {
+    setCharacterStudioNodeIdMock.mockClear()
+  })
+
   it("renders without crashing in idle state", () => {
     renderCharacterNode()
     expect(screen.getByTestId("base-node")).toBeInTheDocument()
@@ -180,7 +186,7 @@ describe("CharacterNode", () => {
     expect(refHandle).toHaveAttribute("data-position", "right")
   })
 
-  it("shows idle placeholder with border-dashed element", () => {
+  it("shows portrait placeholder with border-dashed element when no sourceImageUrl", () => {
     const { container } = renderCharacterNode()
     const placeholder = container.querySelector(".border-dashed")
     expect(placeholder).toBeInTheDocument()
@@ -191,14 +197,14 @@ describe("CharacterNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-is-running", "true")
   })
 
-  it("shows Failed text in failed state", () => {
-    renderCharacterNode({ data: { label: "Character", style: "realistic", gender: "male", characterName: "Hero", executionStatus: "failed", characters: [], objects: [] } })
-    expect(screen.getByText("Failed")).toBeInTheDocument()
+  it("shows spinner when an asset (motion) is generating", () => {
+    renderCharacterNode({ data: { label: "Character", style: "realistic", gender: "male", characterName: "Hero", motionStatus: "running", characters: [], objects: [] } })
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-is-running", "true")
   })
 
-  it("shows style label", () => {
+  it("shows style and gender", () => {
     renderCharacterNode()
-    expect(screen.getByText("Realistic")).toBeInTheDocument()
+    expect(screen.getByText("realistic · male")).toBeInTheDocument()
   })
 
   it("shows characterName text", () => {
@@ -206,9 +212,32 @@ describe("CharacterNode", () => {
     expect(screen.getByText("Hero")).toBeInTheDocument()
   })
 
-  it("shows gender", () => {
+  it("falls back to 'Unnamed' when no characterName", () => {
+    renderCharacterNode({ data: { label: "Character", style: "realistic", gender: "male", characters: [], objects: [] } })
+    expect(screen.getByText("Unnamed")).toBeInTheDocument()
+  })
+
+  it("shows asset badge counts (Expr / Poses / Motions)", () => {
+    renderCharacterNode({
+      data: {
+        label: "Character", style: "realistic", gender: "male", characterName: "Hero",
+        expressions: [{ name: "a", url: "x" }, { name: "b", url: "y" }],
+        poses: [{ name: "p", url: "z" }],
+        motions: [{ name: "m", url: "v" }, { name: "m2", url: "v2" }, { name: "m3", url: "v3" }],
+        characters: [], objects: [],
+      },
+    })
+    expect(screen.getByText("Expr 2")).toBeInTheDocument()
+    expect(screen.getByText("Poses 1")).toBeInTheDocument()
+    expect(screen.getByText("Motions 3")).toBeInTheDocument()
+  })
+
+  it("renders the Studio button and opens the studio for this node on click", () => {
     renderCharacterNode()
-    expect(screen.getByText("male")).toBeInTheDocument()
+    const btn = screen.getByRole("button", { name: "Open Character Studio" })
+    expect(btn).toBeInTheDocument()
+    fireEvent.click(btn)
+    expect(setCharacterStudioNodeIdMock).toHaveBeenCalledWith("node-1")
   })
 })
 

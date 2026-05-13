@@ -84,3 +84,19 @@ export function buildFaceTemplateInputs(input: FacePromptInput): {
   const descParts = [input.name, input.description].filter(Boolean).join(", ")
   return { description: descParts, style: input.style ?? "realistic" }
 }
+
+export interface CharacterMotionPromptInput {
+  name: string
+  description?: string
+  gender?: string
+  style?: EntityStyle | string
+  baseOutfit?: string
+  motionPrompt: string
+}
+
+export function buildMotionPrompt(input: CharacterMotionPromptInput): string {
+  const charDesc = [input.name, input.gender, input.description].filter(Boolean).join(", ")
+  const outfitDesc = input.baseOutfit ? `, wearing ${input.baseOutfit}` : ""
+  const styleDesc = input.style ?? "realistic"
+  return `${charDesc}${outfitDesc}, ${input.motionPrompt}. ${styleDesc} style.`
+}

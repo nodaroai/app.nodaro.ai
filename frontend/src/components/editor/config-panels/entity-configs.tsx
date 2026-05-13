@@ -31,8 +31,6 @@ import type {
   GeneratedScriptResult,
 } from "@/types/nodes"
 import {
-  CharacterAssetButton,
-  CharacterAssetGrid,
   ObjectAssetButton,
   ObjectAssetGrid,
   LocationAssetButton,
@@ -53,315 +51,71 @@ import { WeaponPicker } from "./weapon-picker"
 import { getWeapon } from "@nodaro/shared"
 import type { ConfigProps } from "./types"
 
-export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<CharacterNodeData>) {
-  const generateAsset = useWorkflowStore((s) => s.generateCharacterAssetFn)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const charMediaEditor = useMediaEditor({
-    onComplete: async (results) => {
-      const result = results[0]
-      if (!result) return
-      const url = result.processedUrl ?? result.uploadResult.url
-      onUpdate({ sourceImageUrl: url })
-      setUploading(false)
-    },
-    onCancel: () => setUploading(false),
-  })
+type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
 
-  useEffect(() => {
-    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
-  }, [])
-  const creditCost = useModelCredits(data.provider || "nano-banana")
+export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: CharacterConfigProps) {
+  const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)
 
-  const hasPortrait = Boolean(
-    ((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl,
-  )
-  const isRunning = data.executionStatus === "running"
-
-  const scriptCharSource = sources.find(
-    (s) => s.type === "generate-script" && s.sourceHandle === "characters"
-  )
-  const scriptCharacters = useMemo(() => {
-    if (!scriptCharSource?.nodeData) return []
-    const sd = scriptCharSource.nodeData as Record<string, unknown>
-    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
-    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
-    const script = results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
-    if (!script?.scenes) return []
-    const seen = new Map<string, { name: string; description: string }>()
-    for (const scene of script.scenes) {
-      if (!scene.characters) continue
-      for (const c of scene.characters) {
-        if (typeof c === "string") {
-          const key = c.toLowerCase()
-          if (!seen.has(key)) seen.set(key, { name: c, description: "" })
-        } else {
-          const key = c.name.toLowerCase()
-          if (!seen.has(key)) seen.set(key, { name: c.name, description: c.description })
-        }
-      }
-    }
-    return Array.from(seen.values())
-  }, [scriptCharSource])
-
-  const existingNames = useMemo(() => {
-    const names: string[] = []
-    for (const n of nodes) {
-      if (n.type === "character" && n.id !== selectedNodeId) {
-        const nd = n.data as CharacterNodeData
-        if (nd.characterName) names.push(nd.characterName)
-      }
-    }
-    return names
-  }, [nodes, selectedNodeId])
-
-  function handleNameChange(newName: string) {
-    if (!newName) {
-      onUpdate({ characterName: newName })
-      return
-    }
-    const baseName = newName
-    let finalName = baseName
-    let version = 2
-    const wasVersioned = existingNames.includes(baseName)
-    while (existingNames.includes(finalName)) {
-      finalName = `${baseName} (${version})`
-      version++
-    }
-    if (wasVersioned) {
-      onUpdate({
-        characterName: finalName,
-        sourceImageUrl: "",
-        generatedResults: [],
-        activeResultIndex: 0,
-        executionStatus: "idle",
-      })
-    } else {
-      onUpdate({ characterName: finalName })
-    }
-  }
-
-  const duplicateWarning = useMemo(() => {
-    if (!data.characterName) return null
-    if (data.characterDbId) return null
-    const exactMatch = existingNames.includes(data.characterName)
-    if (exactMatch) return `A character named "${data.characterName}" already exists. It will be auto-versioned on blur.`
-    return null
-  }, [data.characterName, data.characterDbId, existingNames])
-
-  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    charMediaEditor.openEditor([file])
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  function handleGenerateAsset(assetType: "expressions" | "poses" | "lighting" | "angles") {
-    if (!selectedNodeId || !generateAsset) return
-    generateAsset(selectedNodeId, assetType)
-  }
+  const exprCount = (data.expressions ?? []).length
+  const poseCount = (data.poses ?? []).length
+  const motionCount = (data.motions ?? []).length
 
   return (
-    <div className="flex flex-col gap-3">
-      {scriptCharacters.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">From Script</Label>
+    <div className="flex flex-col gap-4">
+      <div>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Character</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.characterName || "Unnamed"}</div>
+        <div className="text-[10px] text-muted-foreground">
+          {data.style} · {data.gender} · {exprCount} expr · {poseCount} poses · {motionCount} motions
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => nodeId && setCharacterStudioNodeId(nodeId)}
+        className="w-full text-left bg-[#1e3a5f] border border-[#3b82f644] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#234670] transition-colors disabled:opacity-50"
+        disabled={!nodeId}
+        aria-label="Open Character Studio"
+      >
+        <span className="text-base leading-none">⬡</span>
+        <span>
+          <span className="block text-[11px] font-semibold text-[#93c5fd]">Open Character Studio</span>
+          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, voice &amp; personality</span>
+        </span>
+        <span className="ml-auto text-[#3b82f6]">→</span>
+      </button>
+
+      <div className="border-t border-border pt-3 flex flex-col gap-3">
+        {/* Identity Lock — kept verbatim from the pre-studio CharacterConfig */}
+        <div>
+          <Label htmlFor="char-identity-lock">Identity Lock</Label>
           <Select
-            value={data.scriptCharacterIndex != null ? String(data.scriptCharacterIndex) : ""}
-            onValueChange={(v) => {
-              const idx = Number(v)
-              const char = scriptCharacters[idx]
-              if (char) {
-                onUpdate({
-                  scriptCharacterIndex: idx,
-                  characterName: char.name,
-                  description: char.description,
-                } as any)
-              }
-            }}
+            value={data.identityLock ?? "soft"}
+            onValueChange={(v) => onUpdate({ identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })}
           >
-            <SelectTrigger><SelectValue placeholder="Select character..." /></SelectTrigger>
+            <SelectTrigger id="char-identity-lock"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {scriptCharacters.map((c, i) => (
-                <SelectItem key={i} value={String(i)}>{c.name}</SelectItem>
-              ))}
+              <SelectItem value="off">Off — model may reinterpret the face</SelectItem>
+              <SelectItem value="soft">Soft — preserve overall likeness (default)</SelectItem>
+              <SelectItem value="strict">Strict — clamp facial identity to the reference</SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Applied when this Character feeds downstream image / video generation.
+          </p>
         </div>
-      )}
-      <MappableField field="characterName" label="Character Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input
-          id="char-name"
-          value={data.characterName}
-          onChange={(e) => onUpdate({ characterName: e.target.value })}
-          onBlur={(e) => handleNameChange(e.target.value)}
-          placeholder="e.g. Sir Aldric (use {} to inject input)"
-        />
-        {duplicateWarning && (
-          <p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>
-        )}
-      </MappableField>
-      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
-          id="char-desc"
-          value={data.description}
-          onChange={(e) => onUpdate({ description: e.target.value })}
-          placeholder="A brave knight in his 30s with blonde hair... (use {} to inject input)"
-          rows={3}
-        />
-      </MappableField>
-      <div>
-        <Label htmlFor="char-gender">Gender</Label>
-        <Select value={data.gender} onValueChange={(v) => onUpdate({ gender: v as CharacterNodeData["gender"] })}>
-          <SelectTrigger id="char-gender"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="male">Male</SelectItem>
-            <SelectItem value="female">Female</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="char-style">Style</Label>
-        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as CharacterNodeData["style"] })}>
-          <SelectTrigger id="char-style"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="realistic">Realistic</SelectItem>
-            <SelectItem value="anime">Anime</SelectItem>
-            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
-            <SelectItem value="illustration">Illustration</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="char-identity-lock">Identity Lock</Label>
-        <Select
-          value={data.identityLock ?? "soft"}
-          onValueChange={(v) => onUpdate({ identityLock: v as NonNullable<CharacterNodeData["identityLock"]> })}
-        >
-          <SelectTrigger id="char-identity-lock"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="off">Off — model may reinterpret the face</SelectItem>
-            <SelectItem value="soft">Soft — preserve overall likeness (default)</SelectItem>
-            <SelectItem value="strict">Strict — clamp facial identity to the reference</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground mt-0.5">
-          Applied when this Character feeds downstream image / video generation.
-        </p>
-      </div>
-      <MappableField field="baseOutfit" label="Base Outfit" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea
-          id="char-outfit"
-          value={data.baseOutfit}
-          onChange={(e) => onUpdate({ baseOutfit: e.target.value })}
-          placeholder="Steel plate armor with blue cape... (use {} to inject input)"
-          rows={2}
-        />
-      </MappableField>
 
-      <div>
-        <Label htmlFor="char-image">Reference Image</Label>
-        <div className="flex gap-1.5">
+        {/* Field Mappings — keep the {} input-injection mapping for the Character Name,
+            the one referenceable field that survives the move to the studio. */}
+        <MappableField field="characterName" label="Character Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Input
-            id="char-image"
-            value={data.sourceImageUrl}
-            onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })}
-            placeholder="https://... or upload"
-            className="flex-1"
+            id="char-name"
+            value={data.characterName}
+            onChange={(e) => onUpdate({ characterName: e.target.value })}
+            placeholder="e.g. Sir Aldric (use {} to inject input)"
           />
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif" className="hidden" onChange={handleUploadImage} />
-          <Button variant="outline" size="icon" className="shrink-0 h-9 w-9" disabled={uploading} onClick={() => fileInputRef.current?.click()} title="Upload image from computer" aria-label="Upload image from computer">
-            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          </Button>
-        </div>
+        </MappableField>
       </div>
-
-      <MappableField field="provider" label="Image Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
-          <SelectTrigger className="h-8 text-xs" aria-label="Image model"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999] max-h-72">
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
-      </MappableField>
-      <ModelDescriptionHint modelId={data.provider} />
-
-      <Separator />
-
-      <Button
-        size="sm"
-        className="w-full text-xs h-8 text-white hover:opacity-90"
-        style={{ backgroundColor: '#ff0073' }}
-        disabled={isRunning || !data.characterName}
-        onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
-      >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Portrait{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
-      </Button>
-
-      <Separator />
-
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold uppercase text-muted-foreground">Character Assets</Label>
-        {!hasPortrait && (
-          <p className="text-[10px] text-muted-foreground">Generate or upload a main portrait first, then generate assets below.</p>
-        )}
-
-        <Accordion type="multiple" className="w-full">
-          <AccordionItem value="angles">
-            <AccordionTrigger className="text-xs py-1.5">Angles ({(data.angles ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <CharacterAssetButton label="Generate Angles" status={data.anglesStatus ?? "idle"} itemCount={(data.angles ?? []).length} onClick={() => handleGenerateAsset("angles")} disabled={!hasPortrait} />
-              <CharacterAssetGrid items={data.angles ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="expressions">
-            <AccordionTrigger className="text-xs py-1.5">Expressions ({(data.expressions ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <CharacterAssetButton label="Generate Expressions" status={data.expressionStatus ?? "idle"} itemCount={(data.expressions ?? []).length} onClick={() => handleGenerateAsset("expressions")} disabled={!hasPortrait} />
-              <CharacterAssetGrid items={data.expressions ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="poses">
-            <AccordionTrigger className="text-xs py-1.5">Poses ({(data.poses ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <CharacterAssetButton label="Generate Poses" status={data.poseStatus ?? "idle"} itemCount={(data.poses ?? []).length} onClick={() => handleGenerateAsset("poses")} disabled={!hasPortrait} />
-              <CharacterAssetGrid items={data.poses ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="lighting">
-            <AccordionTrigger className="text-xs py-1.5">Lighting ({(data.lightingVariations ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <CharacterAssetButton label="Generate Lighting" status={data.lightingStatus ?? "idle"} itemCount={(data.lightingVariations ?? []).length} onClick={() => handleGenerateAsset("lighting")} disabled={!hasPortrait} />
-              <CharacterAssetGrid items={data.lightingVariations ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full text-xs h-8 mt-1"
-          disabled={!hasPortrait || data.expressionStatus === "running" || data.poseStatus === "running" || data.lightingStatus === "running" || data.anglesStatus === "running" || !data.characterName}
-          onClick={() => {
-            handleGenerateAsset("angles")
-            setTimeout(() => handleGenerateAsset("expressions"), 500)
-            setTimeout(() => handleGenerateAsset("poses"), 1000)
-            setTimeout(() => handleGenerateAsset("lighting"), 1500)
-          }}
-        >
-          <Sparkles className="w-3 h-3 mr-1.5" />
-          Generate All Assets
-        </Button>
-      </div>
-
-      <MediaEditorModal editor={charMediaEditor} />
     </div>
   )
 }

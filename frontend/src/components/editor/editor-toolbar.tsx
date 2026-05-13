@@ -138,6 +138,10 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
           data.lightingVariations = []
           data.angles = []
           data.customVariations = []
+          data.motions = []
+          data.motionStatus = "idle"
+          data.voice = null
+          data.personality = null
           data.activeResultIndex = 0
           data.executionStatus = undefined
           break

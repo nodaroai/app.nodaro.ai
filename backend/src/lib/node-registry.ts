@@ -215,7 +215,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
   { type: "split-text", label: "Split Text", category: "control", description: "Split text by delimiter.", outputType: "text" },
 
-  { type: "character", label: "Character", category: "entity", description: "Reusable character definition with reference image.", outputType: "data" },
+  { type: "character", label: "Character", category: "entity", description: "Reusable character — portrait, expressions, poses, motion clips, voice & personality, edited in the full-screen Character Studio.", outputType: "data" },
   { type: "face", label: "Face", category: "entity", description: "Reusable face reference.", outputType: "data" },
   { type: "object", label: "Object", category: "entity", description: "Reusable object reference.", outputType: "data" },
   { type: "location", label: "Location", category: "entity", description: "Reusable location reference.", outputType: "data" },

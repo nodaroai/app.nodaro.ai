@@ -45,6 +45,7 @@ import { imageProxyRoutes } from "./routes/image-proxy.js"
 import { generateCharacterRoutes } from "./routes/generate-character.js"
 import { generateFaceRoutes } from "./routes/generate-face.js"
 import { generateCharacterAssetRoutes } from "./routes/generate-character-asset.js"
+import { generateCharacterMotionRoutes } from "./routes/generate-character-motion.js"
 import { splitImageRoutes } from "./routes/split-image.js"
 import { characterRoutes } from "./routes/characters.js"
 import { faceRoutes } from "./routes/faces.js"
@@ -250,6 +251,7 @@ export async function buildApp() {
   await app.register(generateCharacterRoutes)
   await app.register(generateFaceRoutes)
   await app.register(generateCharacterAssetRoutes)
+  await app.register(generateCharacterMotionRoutes)
   await app.register(splitImageRoutes)
   await app.register(characterRoutes)
   await app.register(faceRoutes)

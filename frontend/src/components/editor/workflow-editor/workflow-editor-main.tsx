@@ -67,6 +67,7 @@ import type { ManualEditData, GeneratedResult } from "@/types/nodes";
 const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m => ({ default: m.FreeCutEditorModal })));
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
+const CharacterStudioModal = lazy(() => import("../character-studio"));
 
 interface WorkflowEditorProps {
   readonly projectId?: string;
@@ -214,6 +215,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   const imageEdit = useWorkflowStore((s) => s.imageEdit);
   const closeImageEdit = useWorkflowStore((s) => s.closeImageEdit);
+
+  // ---------------------------------------------------------------------------
+  // Character Studio modal (full-screen entity editor opened from character node)
+  // ---------------------------------------------------------------------------
+
+  const characterStudioNodeId = useWorkflowStore((s) => s.characterStudioNodeId);
+  const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId);
 
   const imageEditUrl = imageEdit?.imageUrl ?? "";
   const imageEditDesignStateUrl = imageEdit?.designStateUrl;
@@ -1142,6 +1150,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
             designStateUrl={imageEditDesignStateUrl}
             onSaveComplete={handleImageEditSave}
             onClose={handleImageEditClose}
+          />
+        </Suspense>
+      )}
+
+      {characterStudioNodeId && (
+        <Suspense fallback={null}>
+          <CharacterStudioModal
+            nodeId={characterStudioNodeId}
+            onClose={() => setCharacterStudioNodeId(null)}
           />
         </Suspense>
       )}

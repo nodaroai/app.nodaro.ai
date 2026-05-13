@@ -35,6 +35,7 @@ import { generateVideoBody } from "../generate-video.js"
 import { textToVideoBody } from "../text-to-video.js"
 import { textToSpeechBody } from "../text-to-speech.js"
 import { extractFrameBody } from "../extract-frame.js"
+import { generateCharacterMotionBody } from "../generate-character-motion.js"
 
 // ---------------------------------------------------------------------------
 // generate-image — POST /v1/generate-image
@@ -274,6 +275,79 @@ describe("extract-frame — frontend payload × backend Zod", () => {
         videoUrl: "https://r2.test/clip.mp4",
         mode: "timestamp",
         timestamp: -1,
+      }).success,
+    ).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// generate-character-motion — POST /v1/generate-character-motion
+//
+// Frontend construction (frontend/src/lib/api.ts::generateCharacterMotion):
+//   body: { motionPrompt, sourceImageUrl, ?provider, name, ?description,
+//           ?gender, ?style, ?baseOutfit }
+// ---------------------------------------------------------------------------
+
+describe("generate-character-motion — frontend payload × backend Zod", () => {
+  it("minimal: motionPrompt + sourceImageUrl + name", () => {
+    const result = generateCharacterMotionBody.safeParse({
+      motionPrompt: "walking confidently",
+      sourceImageUrl: "https://r2.test/portrait.png",
+      name: "Alex",
+    })
+    expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true)
+  })
+
+  it("full: provider + all optional character fields", () => {
+    const result = generateCharacterMotionBody.safeParse({
+      motionPrompt: "waving at the camera",
+      sourceImageUrl: "https://r2.test/portrait.png",
+      provider: "wan-2.7-i2v",
+      name: "Mia",
+      description: "tall, dark hair",
+      gender: "female",
+      style: "realistic",
+      baseOutfit: "leather jacket",
+    })
+    expect(result.success, result.success ? "" : JSON.stringify(result.error.issues)).toBe(true)
+  })
+
+  it("rejects: missing name", () => {
+    expect(
+      generateCharacterMotionBody.safeParse({
+        motionPrompt: "walking",
+        sourceImageUrl: "https://r2.test/portrait.png",
+      }).success,
+    ).toBe(false)
+  })
+
+  it("rejects: empty motionPrompt", () => {
+    expect(
+      generateCharacterMotionBody.safeParse({
+        motionPrompt: "",
+        sourceImageUrl: "https://r2.test/portrait.png",
+        name: "Alex",
+      }).success,
+    ).toBe(false)
+  })
+
+  it("rejects: unknown provider", () => {
+    expect(
+      generateCharacterMotionBody.safeParse({
+        motionPrompt: "walking",
+        sourceImageUrl: "https://r2.test/portrait.png",
+        name: "Alex",
+        provider: "veo3" as never,
+      }).success,
+    ).toBe(false)
+  })
+
+  it("rejects: non-http sourceImageUrl", () => {
+    expect(
+      generateCharacterMotionBody.safeParse({
+        motionPrompt: "walking",
+        sourceImageUrl: "ftp://r2.test/portrait.png",
+        name: "Alex",
       }).success,
     ).toBe(false)
   })

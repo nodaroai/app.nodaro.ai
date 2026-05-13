@@ -2671,6 +2671,19 @@ export interface CharacterAssetItem {
 
 export type CharacterAssetType = "expressions" | "poses" | "lighting" | "angles" | "custom"
 
+export interface CharacterVoice {
+  voiceId: string      // ElevenLabs voice ID
+  voiceName: string    // display name (e.g. "Rachel")
+  traits: string       // free-form descriptive traits ("deep, calm, British accent")
+}
+
+export interface CharacterPersonality {
+  mood: string              // "serious and focused"
+  speechStyle: string       // "speaks in short, direct sentences"
+  movementStyle: string     // "confident, deliberate movement"
+  behavioralNotes: string   // "responds aggressively when challenged"
+}
+
 export type CharacterNodeData = {
   [key: string]: unknown
   label: string
@@ -2715,6 +2728,12 @@ export type CharacterNodeData = {
   anglesStatus: "idle" | "running" | "completed" | "failed"
   // Custom variations
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+  // Motion video clips (i2v) — reuses { name, url }
+  motions: CharacterAssetItem[]
+  motionStatus: "idle" | "running" | "completed" | "failed"
+  // Voice + personality (Phase 1: stored only; Phase 2: auto-injected downstream)
+  voice: CharacterVoice | null
+  personality: CharacterPersonality | null
 }
 
 // --- Object Node Data ---
@@ -5226,6 +5245,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       lightingStatus: "idle",
       anglesStatus: "idle",
       customVariations: [],
+      motions: [],
+      motionStatus: "idle",
+      voice: null,
+      personality: null,
     } as CharacterNodeData,
   },
   // Face
