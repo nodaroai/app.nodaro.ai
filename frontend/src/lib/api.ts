@@ -2428,6 +2428,7 @@ export async function lipSyncApi(
   userId?: string,
   opts: {
     videoUrl?: string
+    audioDurationSec?: number
     guidanceScale?: number
     inferenceSteps?: number
     seed?: number
@@ -2449,6 +2450,7 @@ export async function lipSyncApi(
   if (provider) body.provider = provider
   if (resolution) body.resolution = resolution
   if (userId) body.userId = userId
+  if (opts.audioDurationSec !== undefined) body.audioDurationSec = opts.audioDurationSec
   if (opts.guidanceScale !== undefined) body.guidanceScale = opts.guidanceScale
   if (opts.inferenceSteps !== undefined) body.inferenceSteps = opts.inferenceSteps
   if (opts.seed !== undefined) body.seed = opts.seed

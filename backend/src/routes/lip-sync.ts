@@ -6,7 +6,7 @@ import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, buildLipSyncCreditId } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const lipSyncBody = z.object({
@@ -18,6 +18,10 @@ const lipSyncBody = z.object({
   provider: z.enum(LIP_SYNC_PROVIDERS).optional(),
   // 1080p only valid for seedance-2 / seedance-2-fast; infinitalk caps at 720p.
   resolution: z.enum(["480p", "720p", "1080p"]).optional(),
+  // Audio length in seconds — drives per-second credit reservation for
+  // kling-avatar(-pro). If absent, we reserve the worst-case 5-min bucket
+  // and refund the unused credits after the worker reconciles actual cost.
+  audioDurationSec: z.number().min(0.1).max(600).optional(),
   // LatentSync params
   guidanceScale: z.number().min(1).max(3).optional(),
   inferenceSteps: z.number().int().min(20).max(50).optional(),
@@ -53,6 +57,13 @@ export async function lipSyncRoutes(app: FastifyInstance) {
         const res = (body?.resolution as string) ?? "720p"
         return `${provider}:8s:${res}-ref`
       }
+      // Kling AI Avatar 2.0 — per-second billing, bucketed by audio length.
+      // Missing audioDurationSec falls back to the 5-min bucket (worst case);
+      // worker refunds the diff once actual KIE costTime is known.
+      if (provider === "kling-avatar" || provider === "kling-avatar-pro") {
+        const dur = typeof body?.audioDurationSec === "number" ? body.audioDurationSec : undefined
+        return buildLipSyncCreditId(provider, dur)
+      }
       return provider
     }),
   }, async (req, reply) => {
@@ -65,6 +76,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
 
     const {
       imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
+      audioDurationSec,
       guidanceScale, inferenceSteps, seed,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,
@@ -107,7 +119,9 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       ? `infinitalk:${resolution ?? "720p"}`
       : baseProvider === "seedance-2" || baseProvider === "seedance-2-fast"
         ? `${baseProvider}:8s:${resolution ?? "720p"}-ref`
-        : baseProvider
+        : baseProvider === "kling-avatar" || baseProvider === "kling-avatar-pro"
+          ? buildLipSyncCreditId(baseProvider, audioDurationSec)
+          : baseProvider
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
@@ -120,6 +134,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
       prompt,
       provider: baseProvider,
       resolution,
+      audioDurationSec,
       guidanceScale, inferenceSteps, seed,
       pads, smooth, fps, resizeFactor,
       enhancer, preprocess, still, poseStyle, expressionScale,

@@ -1564,6 +1564,10 @@ export type LipSyncData = {
   selectedImageNodeId?: string   // ID of node selected for portrait/face image
   selectedVideoNodeId?: string   // ID of node selected for video input
   selectedAudioNodeId?: string   // ID of node selected for audio track
+  // Measured length of the resolved audio (seconds). Drives per-second
+  // credit reservation for kling-avatar(-pro); probed client-side via
+  // HTMLAudioElement metadata when the audio URL changes.
+  audioDurationSec?: number
   // LatentSync params
   guidanceScale?: number
   inferenceSteps?: number

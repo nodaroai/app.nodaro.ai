@@ -22,7 +22,9 @@ import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LipSyncData, GeneratedResult } from "@/types/nodes"
-import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS } from "@nodaro/shared"
+import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
+import { probeAudioDuration } from "@/lib/audio-duration"
+import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 
 // Node types that output images (for portrait/face)
 const IMAGE_OUTPUT_TYPES = [
@@ -137,9 +139,13 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   }, [id, updateNodeData])
 
   const lipSyncProvider = nodeData.provider ?? "kling-avatar"
-  const creditModelId = lipSyncProvider === "infinitalk"
-    ? `infinitalk:${nodeData.resolution ?? "720p"}`
-    : lipSyncProvider
+  const creditModelId = useMemo(() => {
+    if (lipSyncProvider === "infinitalk") return `infinitalk:${nodeData.resolution ?? "720p"}`
+    if (isPerSecondLipSyncProvider(lipSyncProvider)) {
+      return buildLipSyncCreditId(lipSyncProvider, nodeData.audioDurationSec)
+    }
+    return lipSyncProvider
+  }, [lipSyncProvider, nodeData.resolution, nodeData.audioDurationSec])
   const credits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
 
   // Get all connected nodes to this node (deduplicated by node ID)
@@ -261,6 +267,23 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const selectedImage = imageNodes.find((n) => n.id === nodeData.selectedImageNodeId)
   const selectedAudio = audioNodes.find((n) => n.id === nodeData.selectedAudioNodeId)
   const selectedVideo = videoNodes.find((n) => n.id === nodeData.selectedVideoNodeId)
+
+  // Probe the upstream audio's duration so the credit display + per-second
+  // reservation reflect actual length. Cached per URL in audio-duration.ts.
+  const upstreamAudioUrl = useMemo(() => {
+    if (!selectedAudio) return undefined
+    return extractNodeOutput(selectedAudio as never)
+  }, [selectedAudio])
+  useEffect(() => {
+    if (!upstreamAudioUrl) return
+    let cancelled = false
+    probeAudioDuration(upstreamAudioUrl).then((seconds) => {
+      if (cancelled || seconds === undefined) return
+      if (seconds === nodeData.audioDurationSec) return
+      updateNodeData(id, { audioDurationSec: seconds })
+    })
+    return () => { cancelled = true }
+  }, [upstreamAudioUrl, nodeData.audioDurationSec, id, updateNodeData])
 
   const needsVideoInput = VIDEO_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)
   const needsImageInput = !needsVideoInput && !FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS.has(lipSyncProvider as never)

@@ -247,6 +247,16 @@ export type { ExposableField, ExposableOutput, PresentationItem } from "./presen
 
 export { calculateMonetizationMarkup, calculateMonetizedCost } from "./monetization.js"
 
+export {
+  LIP_SYNC_DURATION_BUCKETS,
+  LIP_SYNC_MAX_AUDIO_SECONDS,
+  pickLipSyncBucket,
+  getLipSyncMaxAudioSeconds,
+  isPerSecondLipSyncProvider,
+  buildLipSyncCreditId,
+} from "./lip-sync-pricing.js"
+export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
+
 export { splitByLoopDelimiter, spliceDelimitedRows, NO_SPLIT_DELIMITER } from "./loop-delimiter.js"
 
 export {

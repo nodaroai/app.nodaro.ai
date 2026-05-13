@@ -378,6 +378,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   const {
     imageUrl, videoUrl, audioUrl, prompt, provider, resolution,
+    audioDurationSec,
     guidanceScale, inferenceSteps, seed,
     pads, smooth, fps, resizeFactor,
     enhancer, preprocess, still, poseStyle, expressionScale,
@@ -389,6 +390,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     prompt?: string
     provider?: string
     resolution?: string
+    audioDurationSec?: number
     guidanceScale?: number
     inferenceSteps?: number
     seed?: number
@@ -466,8 +468,9 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
     resultProviderUsed = result.providerUsed
     resultMeta = result
   } else {
-    // KIE path (existing)
-    const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution)
+    // KIE path (existing) — audioDurationSec drives per-second pricing for
+    // kling-avatar(-pro) and selects the longer poll budget for >30s runs.
+    const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution, audioDurationSec)
     resultUrl = result.url
     resultCost = result.cost
     resultDisplayCost = result.displayCost

@@ -214,6 +214,7 @@ import { sortListItems } from "@nodaro/shared";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
+import { probeAudioDuration } from "@/lib/audio-duration";
 import { getEffectiveSunoCustomMode } from "@nodaro/shared";
 import { applyMediaOrder } from "../config-panels/connected-media-list";
 import {
@@ -2842,8 +2843,21 @@ export function executeNode(
     setUserPromptTemplate(lsData.prompt?.trim() || undefined);
     return runProcessingNode(
       node.id,
-      () =>
-        lipSyncApi(
+      async () => {
+        // Probe the audio duration so kling-avatar(-pro) gets per-second
+        // pricing instead of the worst-case 5-min reservation. Use the
+        // cached value on node data if present; otherwise probe via
+        // HTMLAudioElement metadata and persist the result.
+        let audioDurationSec: number | undefined = typeof lsData.audioDurationSec === "number"
+          ? lsData.audioDurationSec
+          : undefined;
+        if (audioDurationSec === undefined && audioUrl) {
+          audioDurationSec = await probeAudioDuration(audioUrl);
+          if (audioDurationSec !== undefined) {
+            useWorkflowStore.getState().updateNodeData(node.id, { audioDurationSec });
+          }
+        }
+        return lipSyncApi(
           needsVideo ? undefined : (imageUrl || undefined),
           audioUrl!,
           lsData.prompt || "A person talking naturally",
@@ -2852,6 +2866,7 @@ export function executeNode(
           ctx.userId,
           {
             videoUrl: videoUrl || undefined,
+            audioDurationSec,
             guidanceScale: lsData.guidanceScale,
             inferenceSteps: lsData.inferenceSteps,
             seed: lsData.seed,
@@ -2865,7 +2880,8 @@ export function executeNode(
             poseStyle: lsData.poseStyle,
             expressionScale: lsData.expressionScale,
           },
-        ),
+        );
+      },
       "generatedVideoUrl",
       "Lip Sync",
       ctx,

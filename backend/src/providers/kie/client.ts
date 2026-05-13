@@ -22,6 +22,9 @@ export const POLL_INTERVAL_MS = 2000 // Used by kling3-client
 // With exponential backoff: ~15 min total for 120 attempts
 export const MAX_POLL_ATTEMPTS = 120
 export const MAX_POLL_ATTEMPTS_VIDEO = 120
+// Kling AI Avatar 2.0 accepts up to 5min audio; KIE warns long generations
+// can take "tens of minutes". 360 attempts × ~10s cap ≈ 1 hour ceiling.
+export const MAX_POLL_ATTEMPTS_LIP_SYNC_LONG = 360
 
 // =============================================================================
 // ERROR SANITIZATION (Cloud edition: don't expose "KIE.ai" to customers)

@@ -16,12 +16,13 @@ import type {
   ProviderResult,
   ProviderOptions,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
   runVeoTask,
   MAX_POLL_ATTEMPTS_VIDEO,
+  MAX_POLL_ATTEMPTS_LIP_SYNC_LONG,
 } from "./client.js"
 import { kling3Generate } from "./kling3-client.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
@@ -71,10 +72,14 @@ function applySeedance2Params(
   return { hasMultimodalRef: refVideos.length > 0 || refAudios.length > 0 }
 }
 
-// Max audio duration (seconds) per lip-sync model
-// KIE.ai lip-sync models enforce a 15-second limit; use 14.5s to avoid
-// edge cases where ffprobe and KIE.ai measure duration slightly differently
-const LIP_SYNC_MAX_AUDIO_SECONDS = 14.5
+// Audio-duration cap per lip-sync provider (seconds).
+// Kling AI Avatar 2.0 raised its limit to 5min (May 2026). InfiniTalk still
+// enforces a 15s cap upstream. Subtract a small safety margin so ffprobe /
+// KIE.ai rounding never trips the upstream rejection.
+const LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC = 0.5
+function lipSyncAudioCapFor(provider: string): number {
+  return getLipSyncMaxAudioSeconds(provider) - LIP_SYNC_AUDIO_SAFETY_MARGIN_SEC
+}
 
 /**
  * If audio exceeds the model's max duration, trim it with FFmpeg
@@ -1341,7 +1346,8 @@ export class KieVideoProvider
     audioUrl: string,
     prompt?: string,
     model?: string,
-    resolution?: string
+    resolution?: string,
+    audioDurationSec?: number
   ): Promise<ProviderResult> {
     const provider = model ?? "kling-avatar"
     const modelConfig = KIE_LIP_SYNC_MODELS[provider]
@@ -1359,8 +1365,10 @@ export class KieVideoProvider
       `[KIE.ai] Image: ${imageUrl}, Audio: ${audioUrl}`
     )
 
-    // Auto-trim audio if it exceeds the 15-second lip-sync limit
-    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, LIP_SYNC_MAX_AUDIO_SECONDS)
+    // Auto-trim audio to the provider's upstream cap (300s for kling-avatar(-pro),
+    // 15s for infinitalk).
+    const audioCapSec = lipSyncAudioCapFor(provider)
+    const effectiveAudioUrl = await ensureAudioDuration(audioUrl, audioCapSec)
 
     // Start with extra params from config
     const input: Record<string, unknown> = {
@@ -1377,10 +1385,21 @@ export class KieVideoProvider
       input.resolution = resolution
     }
 
+    // Long-audio kling-avatar runs can take "tens of minutes" per KIE's
+    // 2026-05-11 upgrade notes — extend the poll budget for those providers.
+    // We use the long budget whenever the requested audio exceeds 30s so
+    // shorter runs still fail fast.
+    const isLongCapableProvider = provider === "kling-avatar" || provider === "kling-avatar-pro"
+    const usesLongBudget = isLongCapableProvider && (audioDurationSec === undefined || audioDurationSec > 30)
+    const pollAttempts = usesLongBudget ? MAX_POLL_ATTEMPTS_LIP_SYNC_LONG : MAX_POLL_ATTEMPTS_VIDEO
+    if (audioDurationSec !== undefined) {
+      console.log(`[KIE.ai] Lip-sync audio duration: ${audioDurationSec.toFixed(1)}s, poll budget: ${pollAttempts}`)
+    }
+
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      pollAttempts
     )
 
     const videoUrl =
