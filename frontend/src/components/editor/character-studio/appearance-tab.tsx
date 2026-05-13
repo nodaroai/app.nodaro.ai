@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { X } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
-import { generateCharacter, getJobStatus } from "@/lib/api"
+import { cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
@@ -23,6 +24,11 @@ const POLL_MS = 2000
  */
 export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
   const [genBusy, setGenBusy] = useState(false)
+  // Track the in-flight portrait job so the user can cancel + see progress.
+  // Lives outside `useCharacterStudioJobs` because the portrait result writes
+  // to a single column (`source_image_url`), not a JSONB array, so the hook's
+  // resolved-asset shape doesn't fit.
+  const [portraitJob, setPortraitJob] = useState<{ jobId: string; progress: number } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const s = state.staged
   const portraitProvider = s.provider ?? DEFAULT_IMAGE_MODEL
@@ -42,6 +48,20 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
     if (pollRef.current) {
       clearInterval(pollRef.current)
       pollRef.current = null
+    }
+  }
+
+  const cancelPortrait = async () => {
+    if (!portraitJob) return
+    const { jobId } = portraitJob
+    // Stop polling + clear UI state immediately for snappy cancel.
+    stopPoll()
+    setPortraitJob(null)
+    setGenBusy(false)
+    try {
+      await cancelJob(jobId)
+    } catch {
+      // Best-effort — if the worker writes the result anyway, the next refetch picks it up.
     }
   }
 
@@ -66,7 +86,8 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
         provider: portraitProvider,
         attachToCharacterId: characterId,
       })
-      // one-off poll — settle on completed / failed
+      setPortraitJob({ jobId, progress: 0 })
+      // one-off poll — settle on completed / failed / cancelled
       stopPoll()
       pollRef.current = setInterval(async () => {
         try {
@@ -74,14 +95,18 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           if (job.status === "completed") {
             stopPoll()
             setGenBusy(false)
+            setPortraitJob(null)
             const url = (job.output_data as { imageUrl?: string } | undefined)?.imageUrl
             // Worker has already written this to characters.source_image_url
             // via setCharacterPortrait — the local patch here is just for
             // instant UX before the next refetch.
             if (url) state.patch({ sourceImageUrl: url })
-          } else if (job.status === "failed") {
+          } else if (job.status === "failed" || job.status === "cancelled") {
             stopPoll()
             setGenBusy(false)
+            setPortraitJob(null)
+          } else if (typeof job.progress === "number") {
+            setPortraitJob((cur) => (cur ? { ...cur, progress: job.progress } : cur))
           }
         } catch {
           /* transient — retry next tick */
@@ -89,6 +114,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       }, POLL_MS)
     } catch {
       setGenBusy(false)
+      setPortraitJob(null)
     }
   }
 
@@ -162,13 +188,36 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
             </option>
           ))}
         </select>
-        <button
-          disabled={genBusy}
-          onClick={generatePortrait}
-          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
-        >
-          {genBusy ? "Generating…" : `Generate Portrait${portraitCost > 0 ? ` (${portraitCost} CR)` : ""}`}
-        </button>
+        {portraitJob ? (
+          <div className="flex items-center gap-2 max-w-sm">
+            <div className="flex-1 h-7 bg-[#13161f] border border-[#3b82f644] rounded overflow-hidden relative">
+              {/* progress bar */}
+              <div
+                className="absolute inset-y-0 left-0 bg-[#3b82f6]/30 transition-all"
+                style={{ width: `${Math.max(0, Math.min(100, portraitJob.progress))}%` }}
+              />
+              <div className="relative h-full flex items-center justify-center text-[10px] text-[#93c5fd] tabular-nums">
+                Generating portrait… {Math.round(portraitJob.progress)}%
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={cancelPortrait}
+              title="Cancel portrait generation"
+              className="h-7 w-7 flex items-center justify-center bg-[#1e293b] hover:bg-red-500/70 rounded text-slate-300 hover:text-white transition"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            disabled={genBusy}
+            onClick={generatePortrait}
+            className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
+          >
+            {`Generate Portrait${portraitCost > 0 ? ` (${portraitCost} CR)` : ""}`}
+          </button>
+        )}
       </div>
 
       <div className="border-t border-[#1e293b] pt-4">

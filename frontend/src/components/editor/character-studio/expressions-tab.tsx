@@ -5,6 +5,7 @@ import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { GenerationBar } from "./generation-bar"
+import { PendingCard } from "./pending-card"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
 // opinionated about quality and these all produce high-fidelity character output by default.
@@ -213,12 +214,14 @@ export function ImageAssetTab({
             />
           ))}
           {pendingForType.map(([jobId, m]) => (
-            <div key={jobId} className="rounded-md overflow-hidden bg-[#1a1d27] border border-[#3b82f633]">
-              <div className="aspect-[3/4] flex items-center justify-center bg-gradient-to-br from-[#1a2035] to-[#1e2845]">
-                <div className="w-5 h-5 border-2 border-[#3b82f6] border-t-transparent rounded-full animate-spin" />
-              </div>
-              <div className="px-2 py-1.5 text-[10px] text-[#3b82f6] truncate">{m.name}…</div>
-            </div>
+            <PendingCard
+              key={jobId}
+              jobId={jobId}
+              name={m.name}
+              progress={m.progress}
+              theme="image"
+              onCancel={jobs.cancel}
+            />
           ))}
           <button
             className="rounded-md border border-dashed border-[#334155] aspect-[3/4] flex items-center justify-center text-slate-500 text-xl"
