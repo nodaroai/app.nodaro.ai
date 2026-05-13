@@ -658,24 +658,37 @@ describe("stripAudio", () => {
 // ===========================================================================
 
 describe("normalizeVideoForCombine", () => {
-  it("forces fps=24 + even dimensions + h264/yuv420p + AAC", async () => {
+  it("forces fps=24 + scale/pad to the target resolution + h264/yuv420p + AAC", async () => {
     execFileOnce("")
 
-    await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4")
+    await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1280, 720)
 
     const args = execArgs()
     const vfIdx = args.indexOf("-vf")
     expect(args[vfIdx + 1]).toContain("fps=24")
-    expect(args[vfIdx + 1]).toContain("scale=trunc(iw/2)*2:trunc(ih/2)*2")
+    expect(args[vfIdx + 1]).toContain("scale=1280:720:force_original_aspect_ratio=decrease")
+    expect(args[vfIdx + 1]).toContain("pad=1280:720")
+    expect(args[vfIdx + 1]).toContain("setsar=1")
     expect(args).toContain("libx264")
     expect(args).toContain("yuv420p")
     expect(args).toContain("aac")
   })
 
+  it("rounds odd target dimensions down to even", async () => {
+    execFileOnce("")
+
+    await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 865, 497)
+
+    const args = execArgs()
+    const vfIdx = args.indexOf("-vf")
+    expect(args[vfIdx + 1]).toContain("scale=864:496:force_original_aspect_ratio=decrease")
+    expect(args[vfIdx + 1]).toContain("pad=864:496")
+  })
+
   it("returns outputPath", async () => {
     execFileOnce("")
 
-    const result = await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4")
+    const result = await normalizeVideoForCombine("/tmp/in.mp4", "/tmp/out.mp4", 1920, 1080)
 
     expect(result).toBe("/tmp/out.mp4")
   })
