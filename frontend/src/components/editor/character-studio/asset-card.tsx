@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
+import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { copyToClipboard } from "@/lib/utils"
 
 export interface AssetCardItem {
   readonly name: string
@@ -20,9 +22,13 @@ interface AssetCardProps {
   readonly errored?: boolean
   /** Model identifier used to look up CR cost for the regen + refine buttons. */
   readonly costModel?: string
+  /** Called when the user clicks the Enlarge button. Caller manages the
+   *  lightbox + decides which list to navigate across. Image-only — omit
+   *  for video items. */
+  readonly onEnlarge?: () => void
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
@@ -41,6 +47,40 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
         )}
         {errored && (
           <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>
+        )}
+        {/* Top-left hover overlay: matches the pattern used by canvas nodes
+            (upload-image-node, generate-image-node, …). Image-only — videos
+            already preview inline so the lightbox would be redundant; the
+            video provider's URL isn't useful to copy as text. */}
+        {!isVideo && (
+          <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            {onEnlarge && (
+              <button
+                type="button"
+                aria-label="Enlarge"
+                title="Enlarge"
+                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEnlarge()
+                }}
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Copy URL"
+              title="Copy URL"
+              className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                copyToClipboard(item.url, "URL copied")
+              }}
+            >
+              <LinkIcon className="w-3 h-3" />
+            </button>
+          </div>
         )}
       </div>
       <div className="px-2 py-1.5 flex items-center justify-between gap-1.5">
