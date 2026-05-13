@@ -112,6 +112,15 @@ function stubAudioStreamProbes(count: number, hasAudio = true) {
   }
 }
 
+/** Stub the resolution probes combineVideos runs up front (one per input
+ *  clip, to pick a uniform target). Call this first when a test queues other
+ *  runFfprobe responses, so it doesn't consume the resolution stubs. */
+function stubResolutionProbes(count: number, res = "1280x720") {
+  for (let i = 0; i < count; i++) {
+    mocks.runFfprobe.mockResolvedValueOnce(res)
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.createWorkDir.mockResolvedValue("/tmp/work")
@@ -144,6 +153,25 @@ describe("combineVideos — pre-processing", () => {
     expect(mocks.normalizeVideoForCombine.mock.calls[0][1]).toBe("/tmp/work/normalized_0.mp4")
   })
 
+  it("normalizes every clip to the most common resolution (so xfade/concat see uniform inputs)", async () => {
+    // 2 clips at 1280x720, one odd 864x496 → target is the majority.
+    mocks.runFfprobe.mockImplementation(async (probeArgs: unknown) => {
+      const args = probeArgs as string[]
+      const path = args[args.length - 1]
+      return path.endsWith("input_1.mp4") ? "864x496" : "1280x720"
+    })
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"], transition: "cut",
+    }))
+
+    expect(mocks.normalizeVideoForCombine).toHaveBeenCalledTimes(3)
+    for (const call of mocks.normalizeVideoForCombine.mock.calls) {
+      expect(call[2]).toBe(1280) // targetWidth
+      expect(call[3]).toBe(720) // targetHeight
+    }
+  })
+
   it("cleans up workDir on download failure", async () => {
     mocks.downloadFile.mockRejectedValueOnce(new Error("404"))
     await expect(combineVideos(defaultOptions())).rejects.toThrow()
@@ -157,8 +185,9 @@ describe("combineVideos — pre-processing", () => {
 
 describe("combineVideos — frame trim", () => {
   it("trims start and end when trimStartFrames + trimEndFrames > 0 (fps probe + ffmpeg trim)", async () => {
-    // Order: 2 clips × (fps probe, then duration probe before trim)
-    // For 'cut' transition we don't probe durations again afterward.
+    // Order: 2 resolution probes (target pick) → then 2 clips × (fps probe,
+    // then duration probe before trim). 'cut' doesn't probe durations again.
+    stubResolutionProbes(2)
     mocks.runFfprobe
       .mockResolvedValueOnce("30/1") // fps for clip 0
       .mockResolvedValueOnce("30/1") // fps for clip 1
@@ -180,6 +209,7 @@ describe("combineVideos — frame trim", () => {
   })
 
   it("skips trim when start+end exceeds clip duration (no extra ffmpeg call)", async () => {
+    stubResolutionProbes(2)
     mocks.runFfprobe
       .mockResolvedValueOnce("30/1")
       .mockResolvedValueOnce("30/1")
@@ -199,6 +229,7 @@ describe("combineVideos — frame trim", () => {
   })
 
   it("falls back to fps=24 when fps probe yields invalid fraction", async () => {
+    stubResolutionProbes(2)
     mocks.runFfprobe
       .mockResolvedValueOnce("invalid") // fps clip 0
       .mockResolvedValueOnce("invalid") // fps clip 1
@@ -269,15 +300,15 @@ describe("combineVideos — cut transition", () => {
 // ===========================================================================
 
 describe("combineVideos — dip transitions", () => {
-  it("dip-to-black: generates a black color clip BETWEEN inputs (resolution from clip 0)", async () => {
+  it("dip-to-black: generates a black color clip BETWEEN inputs at the target resolution", async () => {
     // 2 clips → 1 black clip in between (3 total)
     // Probe order:
-    //   - resolution probe of clip 0 → "1920x1080"
+    //   - 2 resolution probes (target pick) → both "1920x1080"
     //   - then 3 duration probes for [clip0, black, clip1]
     //   - then 3 audio-stream probes for keep mode
-    mocks.runFfprobe.mockResolvedValueOnce("1920x1080")
+    stubResolutionProbes(2, "1920x1080")
     mocks.getVideoDuration
-      .mockResolvedValueOnce(5) // clip 0 (after dip injection probe)
+      .mockResolvedValueOnce(5) // clip 0
       .mockResolvedValueOnce(0.5) // black clip
       .mockResolvedValueOnce(5) // clip 1
     stubAudioStreamProbes(3, true)
@@ -303,7 +334,7 @@ describe("combineVideos — dip transitions", () => {
   })
 
   it("dip-to-white: uses white color in the lavfi source", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("1280x720")
+    stubResolutionProbes(2, "1280x720")
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(0.5)
@@ -324,7 +355,7 @@ describe("combineVideos — dip transitions", () => {
   })
 
   it("falls back to 1920x1080 resolution when probe returns garbage", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("garbage")
+    stubResolutionProbes(2, "garbage")
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(0.5)
@@ -343,7 +374,7 @@ describe("combineVideos — dip transitions", () => {
   })
 
   it("uses xfade transition='fade' for dip-to-black/white", async () => {
-    mocks.runFfprobe.mockResolvedValueOnce("1920x1080")
+    stubResolutionProbes(2, "1920x1080")
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(0.5)
@@ -366,6 +397,7 @@ describe("combineVideos — dip transitions", () => {
 
 describe("combineVideos — xfade transitions", () => {
   it("fade: chains xfade across all clips with output [vout]", async () => {
+    stubResolutionProbes(3)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -386,6 +418,7 @@ describe("combineVideos — xfade transitions", () => {
   })
 
   it("dissolve: maps to xfade transition='fade' (per resolveXfadeTransition)", async () => {
+    stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -401,6 +434,7 @@ describe("combineVideos — xfade transitions", () => {
 
   it("clamps transition duration to 90% of shortest clip", async () => {
     // Shortest clip is 0.5s → 0.5*0.9 = 0.45s allowed.
+    stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(0.5)
       .mockResolvedValueOnce(5)
@@ -416,6 +450,7 @@ describe("combineVideos — xfade transitions", () => {
   })
 
   it("uses requested transition duration when shorter than 90% of min clip", async () => {
+    stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(10)
@@ -434,6 +469,7 @@ describe("combineVideos — xfade transitions", () => {
     // 3 clips, all 5s, transition 1s
     // offset 0 = 5 - 1 = 4
     // offset 1 = (4 + 5) - 1 = 8
+    stubResolutionProbes(3)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -521,6 +557,7 @@ describe("combineVideos — audioMode for xfade transitions", () => {
   })
 
   it("audioMode=keep: concats audio streams with concat filter", async () => {
+    stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)

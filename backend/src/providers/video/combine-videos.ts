@@ -121,18 +121,54 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
 }
 
 /**
- * Probe the resolution of a video file (width x height).
+ * Probe the resolution of a video file (width x height). Falls back to
+ * 1920x1080 if the probe fails or returns something unparseable — a missing
+ * resolution shouldn't abort the whole combine.
  */
 async function getVideoResolution(filePath: string): Promise<{ width: number; height: number }> {
-  const output = await runFfprobe([
-    "-v", "error",
-    "-select_streams", "v:0",
-    "-show_entries", "stream=width,height",
-    "-of", "csv=p=0:s=x",
-    filePath,
-  ])
-  const [w, h] = output.trim().split("x").map(Number)
-  return { width: w || 1920, height: h || 1080 }
+  try {
+    const output = await runFfprobe([
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height",
+      "-of", "csv=p=0:s=x",
+      filePath,
+    ])
+    const [w, h] = output.trim().split("x").map(Number)
+    return { width: w || 1920, height: h || 1080 }
+  } catch {
+    return { width: 1920, height: 1080 }
+  }
+}
+
+/**
+ * Pick the resolution every clip will be normalized to before combining.
+ * xfade/acrossfade and the concat filter all require identical input
+ * dimensions, so one odd-sized clip in the set would otherwise abort the
+ * whole job. We take the most common (width, height) — ties broken by
+ * largest area — so the common case (all clips already match) is a no-op,
+ * and a lone mismatched clip gets letterboxed to fit the majority.
+ */
+async function pickTargetResolution(
+  paths: readonly string[],
+): Promise<{ width: number; height: number }> {
+  const resolutions = await Promise.all(paths.map(getVideoResolution))
+  const tally = new Map<string, { width: number; height: number; count: number }>()
+  for (const r of resolutions) {
+    const key = `${r.width}x${r.height}`
+    const entry = tally.get(key)
+    if (entry) entry.count++
+    else tally.set(key, { width: r.width, height: r.height, count: 1 })
+  }
+  let best = { width: 1920, height: 1080, count: 0 }
+  for (const e of tally.values()) {
+    const better =
+      e.count > best.count ||
+      (e.count === best.count && e.width * e.height > best.width * best.height)
+    if (better) best = e
+  }
+  // normalizeVideoForCombine rounds to even for yuv420p, so we don't here.
+  return { width: best.width, height: best.height }
 }
 
 /**
@@ -199,14 +235,24 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
   const workDir = await createWorkDir("combine")
 
   try {
-    // Download all clips
-    const inputPaths: string[] = []
+    // Download all clips first, then probe their resolutions so the whole set
+    // can be normalized to one target — xfade/acrossfade/concat all reject
+    // mismatched input dimensions.
+    const rawPaths: string[] = []
     for (let i = 0; i < videoUrls.length; i++) {
-      const inputPath = join(workDir, `input_${i}.mp4`)
+      const rawPath = join(workDir, `input_${i}.mp4`)
       console.log(`[combineVideos] Downloading video ${i + 1}/${videoUrls.length}`)
-      await downloadFile(videoUrls[i], inputPath)
+      await downloadFile(videoUrls[i], rawPath)
+      rawPaths.push(rawPath)
+    }
+
+    const target = await pickTargetResolution(rawPaths)
+    console.log(`[combineVideos] Normalizing ${rawPaths.length} clips to ${target.width}x${target.height}`)
+
+    const inputPaths: string[] = []
+    for (let i = 0; i < rawPaths.length; i++) {
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
-      await normalizeVideoForCombine(inputPath, normalizedPath)
+      await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height)
       const trimmedPath = await trimClipFrames(normalizedPath, workDir, i, trimStartFrames, trimEndFrames)
       inputPaths.push(trimmedPath)
     }
@@ -235,7 +281,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     let clipPaths = [...inputPaths]
     if (transition === "dip-to-black" || transition === "dip-to-white") {
       const color = transition === "dip-to-black" ? "black" : "white"
-      const { width, height } = await getVideoResolution(inputPaths[0])
+      const { width, height } = target
       const dipDuration = transitionDuration
       const expandedPaths: string[] = []
 

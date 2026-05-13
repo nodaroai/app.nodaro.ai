@@ -275,10 +275,25 @@ export async function stripAudio(inputPath: string, outputPath: string): Promise
   return outputPath
 }
 
-export async function normalizeVideoForCombine(inputPath: string, outputPath: string): Promise<string> {
+/**
+ * Re-encode a clip to a uniform format for combining: fps=24, h264/yuv420p,
+ * AAC audio, and — crucially — scaled and letterboxed to exactly
+ * `targetWidth`×`targetHeight`. xfade/acrossfade and the concat filter all
+ * require every input to share the same resolution, so a single odd-sized
+ * clip would otherwise abort the whole combine.
+ */
+export async function normalizeVideoForCombine(
+  inputPath: string,
+  outputPath: string,
+  targetWidth: number,
+  targetHeight: number,
+): Promise<string> {
+  // Output dimensions must be even for yuv420p.
+  const w = targetWidth - (targetWidth % 2)
+  const h = targetHeight - (targetHeight % 2)
   await runFfmpeg([
     "-y", "-i", inputPath,
-    "-vf", "fps=24,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-vf", `fps=24,scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1`,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "fast", "-crf", "23",
     "-c:a", "aac", "-b:a", "128k",
     "-movflags", "+faststart",
