@@ -84,6 +84,9 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.appCreditsAllowance as number) ?? 0,
     )
   }
+  if (errObj?.code === "name_taken") {
+    throw new CharacterNameTakenError((errObj.message as string) ?? "Name already in use.")
+  }
   throw new Error((errObj?.message as string) ?? fallback)
 }
 
@@ -617,7 +620,12 @@ export async function generateFace(data: {
   return res.json()
 }
 
-export async function deleteCharacter(characterId: string): Promise<{ success: boolean }> {
+/**
+ * Archives the character (soft delete). The row stays in the DB and any
+ * canvas node pointing at it keeps loading; the library list hides it.
+ * Restore via `restoreCharacter(id)`.
+ */
+export async function deleteCharacter(characterId: string): Promise<{ success: boolean; archived?: boolean }> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
@@ -625,9 +633,81 @@ export async function deleteCharacter(characterId: string): Promise<{ success: b
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete character")
+    throwApiError(err, "Failed to archive character")
   }
   return res.json()
+}
+
+export async function restoreCharacter(characterId: string): Promise<{ id: string; name: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to restore character")
+  }
+  return res.json()
+}
+
+/**
+ * Forks the character into a new row with a " (copy)" suffix. Asset URLs are
+ * shared (same R2 references); regenerate to diverge. Pass `nodeId` to bind
+ * the new row to the spawning canvas node.
+ */
+export async function duplicateCharacter(
+  characterId: string,
+  opts: { nodeId?: string; projectId?: string } = {},
+): Promise<{ id: string; name: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/duplicate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(opts),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to duplicate character")
+  }
+  return res.json()
+}
+
+export async function getCharacterUsage(
+  characterId: string,
+): Promise<{ workflowCount: number; workflows: { id: string; name: string }[] }> {
+  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/usage`, {
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to load character usage")
+  }
+  return res.json()
+}
+
+/** List of archived characters for the library's "Archive" tab. */
+export async function listArchivedCharacters(projectId?: string): Promise<{ characters: DbCharacter[] }> {
+  const qs = new URLSearchParams({ archived: "true" })
+  if (projectId) qs.set("projectId", projectId)
+  const res = await fetch(`${API_BASE_URL}/v1/characters?${qs.toString()}`, {
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to load archived characters")
+  }
+  return res.json()
+}
+
+/**
+ * Thrown by saveCharacter when the backend returns 409 (name conflict —
+ * unique-per-user constraint). Callers should show a toast and let the user
+ * rename. Subclasses Error so it can be caught with `e instanceof CharacterNameTakenError`.
+ */
+export class CharacterNameTakenError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "CharacterNameTakenError"
+  }
 }
 
 export interface DbCharacter {
@@ -644,6 +724,11 @@ export interface DbCharacter {
   expressions: { name: string; url: string }[]
   poses: { name: string; url: string }[]
   lightingVariations: { name: string; url: string }[]
+  angles?: { name: string; url: string }[]
+  motions?: { name: string; url: string }[]
+  voice?: { voiceId: string; voiceName: string; traits: string } | null
+  personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  deletedAt?: string | null
   createdAt: string
   updatedAt: string
 }

@@ -114,16 +114,33 @@ function mockJobsPendingChain(result: { data: unknown; error: unknown } = { data
   return { mockSelect, chain }
 }
 
-/** Build a thenable chain for `supabase.from().select().order()` with optional `.eq()` */
+/**
+ * Build a thenable chain for `supabase.from().select().order().eq().is()` etc.
+ * The list route now applies a `deleted_at IS NULL` filter via `.is()` and an
+ * optional `.not()` for the archived view, so the chain mock supports those.
+ */
 function mockListChain(result: { data: unknown; error: unknown }) {
   const chainable: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
   }
   // Make chainable thenable so `await query` resolves
   chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => Promise.resolve(result).then(resolve)
   const mockOrder = vi.fn().mockReturnValue(chainable)
   const mockSelect = vi.fn().mockReturnValue({ order: mockOrder })
   return { mockSelect, mockOrder, chainable }
+}
+
+/**
+ * Build a chain for the soft-delete UPDATE used by `DELETE /v1/characters/:id`:
+ * `supabase.from("characters").update({ deleted_at: ... }).eq().eq()`.
+ */
+function mockSoftDeleteChain(result: { data?: unknown; error: unknown }) {
+  const eq2 = vi.fn().mockResolvedValue(result)
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+  const mockUpdate = vi.fn().mockReturnValue({ eq: eq1 })
+  return { mockUpdate, eq1, eq2 }
 }
 
 let app: FastifyInstance
@@ -468,17 +485,10 @@ describe("POST /v1/characters", () => {
 // DELETE /v1/characters/:id
 // ---------------------------------------------------------------------------
 
-describe("DELETE /v1/characters/:id", () => {
-  function deleteChain(result: { error: unknown }) {
-    const chain: Record<string, unknown> = {
-      eq: vi.fn().mockReturnThis(),
-      then: (resolve: (value: { error: unknown }) => unknown) =>
-        Promise.resolve(result).then(resolve),
-    }
-    const mockDelete = vi.fn().mockReturnValue(chain)
-    return { mockDelete, chain }
-  }
-
+// DELETE is now a SOFT delete (sets `deleted_at`), so the test asserts the
+// route issues an UPDATE rather than a DELETE, and the response payload
+// carries `archived: true` for callers that want to distinguish.
+describe("DELETE /v1/characters/:id (soft delete)", () => {
   it("returns 401 when unauthenticated", async () => {
     const res = await app.inject({
       method: "DELETE",
@@ -488,9 +498,9 @@ describe("DELETE /v1/characters/:id", () => {
     expect(res.json().error.code).toBe("unauthorized")
   })
 
-  it("returns 200 on success and scopes by user_id", async () => {
-    const { mockDelete, chain } = deleteChain({ error: null })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  it("returns 200 on success and scopes by user_id; sets deleted_at via UPDATE", async () => {
+    const { mockUpdate, eq1, eq2 } = mockSoftDeleteChain({ error: null })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "DELETE",
@@ -499,14 +509,18 @@ describe("DELETE /v1/characters/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json().success).toBe(true)
-    expect(chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
-    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(res.json()).toEqual({ success: true, archived: true })
+    // Verify the update payload sets deleted_at (don't pin to exact timestamp).
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String), updated_at: expect.any(String) }),
+    )
+    expect(eq1).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(eq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
   it("returns 500 on DB error", async () => {
-    const { mockDelete } = deleteChain({ error: { message: "FK constraint" } })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    const { mockUpdate } = mockSoftDeleteChain({ error: { message: "constraint violation" } })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "DELETE",

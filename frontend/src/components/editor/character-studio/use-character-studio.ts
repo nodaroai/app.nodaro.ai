@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getCharacter, saveCharacter } from "@/lib/api"
+import { CharacterNameTakenError, getCharacter, saveCharacter } from "@/lib/api"
 import type { CharacterNodeData } from "@/types/nodes"
 
 /**
@@ -228,7 +229,19 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
       try {
         await saveCharacter(buildUpdatePayload(nodeId, snapshot, dirtySnapshot))
         setSaveStatus("saved")
-      } catch {
+      } catch (e) {
+        if (e instanceof CharacterNameTakenError) {
+          // Surface the conflict; keep the user's typing in local state so they
+          // can edit. Don't re-add `characterName` to dirty — let the next
+          // character-name patch trigger a save attempt instead of looping.
+          toast.error(e.message)
+          dirtySnapshot.delete("sourceImageUrl" as never)
+          // The fields that DIDN'T fail are still unsaved; flag them as dirty
+          // so the next debounce flushes them on subsequent edits.
+          for (const f of dirtySnapshot) dirtyRef.current.add(f)
+          setSaveStatus("error")
+          return
+        }
         // Restore the dirty set on failure so the next debounce retries.
         for (const f of dirtySnapshot) dirtyRef.current.add(f)
         setSaveStatus("error")
@@ -318,6 +331,16 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
     ensureInFlightRef.current = op
     try {
       return await op
+    } catch (e) {
+      // If the very first insert collides on name (the user typed something
+      // already in use before clicking Generate), the auto-numbered placeholder
+      // path wouldn't be taken — only a user-supplied name reaches this branch.
+      // Surface and rethrow so the calling Generate handler can bail.
+      if (e instanceof CharacterNameTakenError) {
+        toast.error(e.message)
+        setSaveStatus("error")
+      }
+      throw e
     } finally {
       ensureInFlightRef.current = null
     }
