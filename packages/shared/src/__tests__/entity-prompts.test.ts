@@ -5,6 +5,7 @@ import {
   buildLocationPrompt,
   buildFaceTemplateInputs,
   buildMotionPrompt,
+  PLACEHOLDER_CHARACTER_NAME,
 } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {
@@ -37,6 +38,18 @@ describe("buildCharacterPrompt", () => {
     const prompt = buildCharacterPrompt({ name: "Solo" })
     // Should just have "Solo," — no extra commas for missing fields
     expect(prompt).toMatch(/^Solo,/)
+  })
+
+  it("drops the auto-assigned placeholder name from the prompt", () => {
+    // Character Studio auto-assigns PLACEHOLDER_CHARACTER_NAME when the user
+    // clicks Generate before naming. The string must not reach the model.
+    const prompt = buildCharacterPrompt({
+      name: PLACEHOLDER_CHARACTER_NAME,
+      gender: "female",
+      description: "red hair",
+    })
+    expect(prompt).not.toContain(PLACEHOLDER_CHARACTER_NAME)
+    expect(prompt).toMatch(/^female, red hair,/)
   })
 })
 
@@ -116,5 +129,11 @@ describe("buildMotionPrompt", () => {
   it("defaults style to realistic and omits outfit when missing", () => {
     const out = buildMotionPrompt({ name: "Mia", motionPrompt: "waving" })
     expect(out).toBe("Mia, waving. realistic style.")
+  })
+
+  it("drops the placeholder name; bare motion prompt is the result", () => {
+    const out = buildMotionPrompt({ name: PLACEHOLDER_CHARACTER_NAME, motionPrompt: "waving" })
+    expect(out).not.toContain(PLACEHOLDER_CHARACTER_NAME)
+    expect(out).toBe("waving. realistic style.")
   })
 })

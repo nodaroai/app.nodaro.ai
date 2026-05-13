@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { generateCharacter, getJobStatus } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { CharacterStudioState } from "./use-character-studio"
@@ -106,11 +107,9 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
             no portrait
           </div>
         )}
-        <input
-          value={s.characterName}
-          onChange={(e) => state.patch({ characterName: e.target.value })}
-          placeholder="Character name"
-          className="block w-full max-w-sm text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+        <NameInput
+          name={s.characterName}
+          onChange={(v) => state.patch({ characterName: v })}
         />
         <textarea
           value={s.description}
@@ -164,7 +163,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           ))}
         </select>
         <button
-          disabled={genBusy || !s.characterName.trim()}
+          disabled={genBusy}
           onClick={generatePortrait}
           className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
         >
@@ -196,6 +195,34 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           description="daylight / night / dramatic"
         />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Name input with a rename cue when the character is using the auto-assigned
+ * placeholder. The input renders the placeholder name in dimmed text + shows
+ * a "↻ Click to rename" microcopy beneath; once the user starts typing, the
+ * field switches to normal styling. The actual value is cleared from the
+ * input visually when it matches the placeholder so users see an empty field
+ * to type into (the placeholder string remains in state — that's what flows
+ * to the DB and prompts).
+ */
+function NameInput({ name, onChange }: { name: string; onChange: (v: string) => void }) {
+  const isPlaceholder = name === PLACEHOLDER_CHARACTER_NAME
+  return (
+    <div className="space-y-1 max-w-sm">
+      <input
+        value={isPlaceholder ? "" : name}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={isPlaceholder ? `${PLACEHOLDER_CHARACTER_NAME} — click to rename` : "Character name"}
+        className={`block w-full text-[11px] bg-[#13161f] border rounded px-2 py-1 text-slate-200 ${
+          isPlaceholder ? "border-[#3b82f644] placeholder:text-[#3b82f699]" : "border-[#334155]"
+        }`}
+      />
+      {isPlaceholder && (
+        <div className="text-[9px] text-[#3b82f699]">↻ Give your character a name — it'll also clean up the gallery.</div>
+      )}
     </div>
   )
 }

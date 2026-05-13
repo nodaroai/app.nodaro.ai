@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getCharacter, saveCharacter } from "@/lib/api"
 import type { CharacterNodeData } from "@/types/nodes"
@@ -58,7 +59,8 @@ export interface CharacterStudioState {
   /** Shallow merge into staged, mirror to canvas, and schedule a debounced PATCH. */
   patch: (p: Partial<CharacterNodeData>) => void
   /** Returns the persisted character DB id, creating the row first if needed.
-   *  Throws if the character has no name yet (callers should surface a toast). */
+   *  If the user hasn't typed a name yet, auto-assigns PLACEHOLDER_CHARACTER_NAME
+   *  (prompt builders strip it; the Appearance tab shows a rename cue). */
   ensureSaved: () => Promise<string>
 }
 
@@ -267,8 +269,18 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
       }
       return current.characterDbId
     }
-    if (!current.characterName.trim()) {
-      throw new Error("Give the character a name before generating.")
+    // Auto-assign a placeholder name on first generate so the click feels
+    // instant — `characters.name` is NOT NULL and the Zod min(1) would
+    // otherwise reject the insert. Prompt builders strip this exact value
+    // (see PLACEHOLDER_CHARACTER_NAME in @nodaro/shared) so the literal
+    // string never reaches the model. The Appearance tab dims/labels the
+    // name field as a rename cue.
+    const namedCurrent: CharacterNodeData = current.characterName.trim()
+      ? current
+      : { ...current, characterName: PLACEHOLDER_CHARACTER_NAME }
+    if (namedCurrent !== current) {
+      setStaged(namedCurrent)
+      updateNodeData(nodeId, { characterName: namedCurrent.characterName })
     }
     // Race guard: if a parallel ensureSaved() is already creating the row,
     // wait for it instead of starting a second insert.
@@ -281,7 +293,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
       setSaveStatus("saving")
       // INSERT carries the full row — clear the dirty set since it's all in.
       dirtyRef.current = new Set()
-      const { id: dbId } = await saveCharacter(buildInsertPayload(nodeId, current))
+      const { id: dbId } = await saveCharacter(buildInsertPayload(nodeId, namedCurrent))
       setStaged((prev) => (prev ? { ...prev, characterDbId: dbId } : prev))
       updateNodeData(nodeId, { characterDbId: dbId })
       setSaveStatus("saved")
