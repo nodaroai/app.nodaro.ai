@@ -16,6 +16,16 @@ interface ProjectRow {
   created_at: string
 }
 
+function err(text: string) {
+  return { content: [{ type: "text" as const, text }], isError: true as const }
+}
+
+function ok(payload: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
+  }
+}
+
 /**
  * Build a `projectId → workflowCount` map for the given project ids, scoped to
  * the session user. Returns counts via a single `select("project_id")` over the
@@ -32,12 +42,11 @@ async function workflowCountsByProject(
     .select("project_id")
     .eq("user_id", userId)
     .in("project_id", projectIds)
+  if (error || !data) return {}
   const counts: Record<string, number> = {}
-  if (error || !data) return counts
   for (const row of data as Array<{ project_id: string | null }>) {
     const pid = row.project_id
-    if (!pid) continue
-    counts[pid] = (counts[pid] ?? 0) + 1
+    if (pid) counts[pid] = (counts[pid] ?? 0) + 1
   }
   return counts
 }
@@ -82,21 +91,13 @@ export function registerProjectTools(server: McpServer, session: McpSession): vo
         .select("id, name, description, created_at")
         .eq("user_id", session.userId)
         .order("name", { ascending: true })
-      if (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${error.message}` }],
-          isError: true,
-        }
-      }
+      if (error) return err(`Error: ${error.message}`)
       const rows = (data ?? []) as ProjectRow[]
       const counts = await workflowCountsByProject(
         session.userId,
         rows.map((r) => r.id),
       )
-      const shaped = rows.map((p) => shapeProject(p, counts[p.id] ?? 0))
-      return {
-        content: [{ type: "text", text: JSON.stringify({ data: shaped }, null, 2) }],
-      }
+      return ok({ data: rows.map((p) => shapeProject(p, counts[p.id] ?? 0)) })
     },
   )
 
@@ -113,38 +114,18 @@ export function registerProjectTools(server: McpServer, session: McpSession): vo
     },
     async (args) => {
       const key = args.project_id
-      let query = supabase
+      const filterColumn = UUID_RE.test(key) ? "id" : "name"
+      const { data, error } = await supabase
         .from("projects")
         .select("id, name, description, created_at")
         .eq("user_id", session.userId)
-      query = UUID_RE.test(key) ? query.eq("id", key) : query.eq("name", key)
-      const { data, error } = await query.maybeSingle()
-      if (error) {
-        return {
-          content: [{ type: "text", text: `Error: ${error.message}` }],
-          isError: true,
-        }
-      }
-      if (!data) {
-        return {
-          content: [{ type: "text", text: `Project "${key}" not found` }],
-          isError: true,
-        }
-      }
+        .eq(filterColumn, key)
+        .maybeSingle()
+      if (error) return err(`Error: ${error.message}`)
+      if (!data) return err(`Project "${key}" not found`)
       const project = data as ProjectRow
       const counts = await workflowCountsByProject(session.userId, [project.id])
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { data: shapeProject(project, counts[project.id] ?? 0) },
-              null,
-              2,
-            ),
-          },
-        ],
-      }
+      return ok({ data: shapeProject(project, counts[project.id] ?? 0) })
     },
   )
 }

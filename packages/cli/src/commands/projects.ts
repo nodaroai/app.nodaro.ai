@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, warn, type OutputOpts } from "../output.js"
+import { emit, success, table, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -86,8 +86,7 @@ export function projectsCommand(): Command {
     .action(async (id: string, opts: { name?: string; description?: string } & GlobalOpts) => {
       try {
         if (opts.name === undefined && opts.description === undefined) {
-          warn("nothing to update — provide --name and/or --description")
-          process.exit(1)
+          throw new Error("nothing to update — provide --name and/or --description")
         }
         const client = buildClient(opts.profile)
         const result = await client.projects.update(id, {

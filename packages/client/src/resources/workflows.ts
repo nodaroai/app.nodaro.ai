@@ -6,7 +6,7 @@ import type { GenericNode, GenericEdge, WorkflowExport } from "@nodaro/shared"
  *
  * The list endpoint returns metadata only; `get`, `create`, and `update` return the
  * full record. `nodes`, `edges`, `settings`, and `sourcePrompt` are present only on
- * full records.
+ * full records and omitted in list responses.
  */
 export interface Workflow {
   id: string
@@ -18,13 +18,9 @@ export interface Workflow {
   isTemplate?: boolean
   version?: number
   thumbnailUrl?: string | null
-  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
   nodes?: GenericNode[]
-  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
   edges?: GenericEdge[]
-  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
   settings?: Record<string, unknown>
-  /** Present on full record reads (`get`, `create`, `update`); omitted in list responses. */
   sourcePrompt?: string | null
   createdAt: string
   updatedAt: string

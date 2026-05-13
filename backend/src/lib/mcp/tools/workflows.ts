@@ -12,6 +12,14 @@ import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
+import {
+  asObjectArray,
+  collectAssetIds,
+  fetchExportAssets,
+  reCreateAssets,
+  remapNodeAssetIds,
+  workflowExportSchema,
+} from "../../workflow-assets.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const writeGate: ToolGate = { required: ["workflows:write"] }
@@ -33,76 +41,6 @@ function ok(text: string, structuredContent?: Record<string, unknown>) {
     ? { content: [{ type: "text" as const, text }], structuredContent }
     : { content: [{ type: "text" as const, text }] }
 }
-
-/** Coerce a stored `nodes`/`edges` jsonb column into an array of plain objects. */
-function asObjectArray(value: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(value)) return []
-  return value.filter(
-    (v): v is Record<string, unknown> => v !== null && typeof v === "object",
-  )
-}
-
-interface AssetVariant {
-  name: string
-  url: string
-}
-
-const assetVariantSchema = z.object({ name: z.string(), url: z.string() })
-
-const exportCharacterSchema = z.object({
-  id: z.string(),
-  nodeId: z.string(),
-  name: z.string(),
-  description: z.string().nullish(),
-  gender: z.string().nullish(),
-  style: z.string().nullish(),
-  baseOutfit: z.string().nullish(),
-  sourceImageUrl: z.string().nullish(),
-  expressions: z.array(assetVariantSchema).optional(),
-  poses: z.array(assetVariantSchema).optional(),
-  lightingVariations: z.array(assetVariantSchema).optional(),
-})
-
-const exportObjectSchema = z.object({
-  id: z.string(),
-  nodeId: z.string(),
-  name: z.string(),
-  description: z.string().nullish(),
-  style: z.string().nullish(),
-  sourceImageUrl: z.string().nullish(),
-  angles: z.array(assetVariantSchema).optional(),
-  materials: z.array(assetVariantSchema).optional(),
-  variations: z.array(assetVariantSchema).optional(),
-})
-
-const exportLocationSchema = z.object({
-  id: z.string(),
-  nodeId: z.string(),
-  name: z.string(),
-  description: z.string().nullish(),
-  style: z.string().nullish(),
-  sourceImageUrl: z.string().nullish(),
-  timeOfDay: z.array(assetVariantSchema).optional(),
-  weather: z.array(assetVariantSchema).optional(),
-  angles: z.array(assetVariantSchema).optional(),
-})
-
-/** Mirrors `workflowExportSchema` in `backend/src/routes/workflows.ts`. */
-const workflowExportSchema = z.object({
-  version: z.literal(1),
-  exportedAt: z.string().optional(),
-  name: z.string().min(1).max(200),
-  nodes: z.array(z.record(z.unknown())),
-  edges: z.array(z.record(z.unknown())),
-  settings: z.record(z.unknown()).optional(),
-  assets: z
-    .object({
-      characters: z.array(exportCharacterSchema),
-      objects: z.array(exportObjectSchema),
-      locations: z.array(exportLocationSchema),
-    })
-    .optional(),
-})
 
 /**
  * Workflow tools.
@@ -253,120 +191,24 @@ export function registerWorkflows({
         if (error) return err(`Error: ${error.message}`)
         if (!wf) return err("Workflow not found")
 
-        const rawNodes = asObjectArray((wf as Record<string, unknown>).nodes)
-        const exportNodes = includeAssets
-          ? rawNodes
-          : stripExportContent(rawNodes as unknown as GenericNode[])
-
+        const row = wf as Record<string, unknown>
+        const rawNodes = asObjectArray(row.nodes)
         const result: WorkflowExport = {
           version: 1,
           exportedAt: new Date().toISOString(),
-          name: (wf as Record<string, unknown>).name as string,
-          nodes: exportNodes as unknown as GenericNode[],
-          edges: ((wf as Record<string, unknown>).edges ??
-            []) as WorkflowExport["edges"],
-          settings: ((wf as Record<string, unknown>).settings ?? {}) as Record<
-            string,
-            unknown
-          >,
+          name: row.name as string,
+          nodes: (includeAssets
+            ? rawNodes
+            : stripExportContent(rawNodes as unknown as GenericNode[])) as unknown as GenericNode[],
+          edges: (row.edges ?? []) as WorkflowExport["edges"],
+          settings: (row.settings ?? {}) as Record<string, unknown>,
         }
 
         if (includeAssets) {
-          const characterIds: string[] = []
-          const objectIds: string[] = []
-          const locationIds: string[] = []
-          for (const node of rawNodes) {
-            const data = (node.data ?? {}) as Record<string, unknown>
-            if (node.type === "character" && typeof data.characterDbId === "string")
-              characterIds.push(data.characterDbId)
-            if (node.type === "object" && typeof data.objectDbId === "string")
-              objectIds.push(data.objectDbId)
-            if (node.type === "location" && typeof data.locationDbId === "string")
-              locationIds.push(data.locationDbId)
-          }
-
-          const [charsRes, objsRes, locsRes] = await Promise.all([
-            characterIds.length > 0
-              ? supabase
-                  .from("characters")
-                  .select(
-                    "id, node_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations",
-                  )
-                  .in("id", characterIds)
-                  .eq("user_id", session.userId)
-              : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-            objectIds.length > 0
-              ? supabase
-                  .from("objects")
-                  .select(
-                    "id, node_id, name, description, style, source_image_url, angles, materials, variations",
-                  )
-                  .in("id", objectIds)
-                  .eq("user_id", session.userId)
-              : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-            locationIds.length > 0
-              ? supabase
-                  .from("locations")
-                  .select(
-                    "id, node_id, name, description, style, source_image_url, time_of_day, weather, angles",
-                  )
-                  .in("id", locationIds)
-                  .eq("user_id", session.userId)
-              : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-          ])
-          if (charsRes.error || objsRes.error || locsRes.error) {
-            const msg = (charsRes.error ?? objsRes.error ?? locsRes.error)?.message
-            return err(`Error: ${msg}`)
-          }
-
-          const cv = (v: unknown): AssetVariant[] =>
-            Array.isArray(v) ? (v as AssetVariant[]) : []
-          result.assets = {
-            characters: (charsRes.data ?? []).map((c) => {
-              const r = c as Record<string, unknown>
-              return {
-                id: r.id as string,
-                nodeId: r.node_id as string,
-                name: r.name as string,
-                description: (r.description ?? null) as string | null,
-                gender: (r.gender ?? null) as string | null,
-                style: (r.style ?? null) as string | null,
-                baseOutfit: (r.base_outfit ?? null) as string | null,
-                sourceImageUrl: (r.source_image_url ?? null) as string | null,
-                expressions: cv(r.expressions),
-                poses: cv(r.poses),
-                lightingVariations: cv(r.lighting_variations),
-              }
-            }),
-            objects: (objsRes.data ?? []).map((o) => {
-              const r = o as Record<string, unknown>
-              return {
-                id: r.id as string,
-                nodeId: r.node_id as string,
-                name: r.name as string,
-                description: (r.description ?? null) as string | null,
-                style: (r.style ?? null) as string | null,
-                sourceImageUrl: (r.source_image_url ?? null) as string | null,
-                angles: cv(r.angles),
-                materials: cv(r.materials),
-                variations: cv(r.variations),
-              }
-            }),
-            locations: (locsRes.data ?? []).map((l) => {
-              const r = l as Record<string, unknown>
-              return {
-                id: r.id as string,
-                nodeId: r.node_id as string,
-                name: r.name as string,
-                description: (r.description ?? null) as string | null,
-                style: (r.style ?? null) as string | null,
-                sourceImageUrl: (r.source_image_url ?? null) as string | null,
-                timeOfDay: cv(r.time_of_day),
-                weather: cv(r.weather),
-                angles: cv(r.angles),
-              }
-            }),
-          }
+          const ids = collectAssetIds(rawNodes)
+          const assetsResult = await fetchExportAssets(ids, session.userId)
+          if ("error" in assetsResult) return err(`Error: ${assetsResult.error}`)
+          result.assets = assetsResult
         }
 
         return ok(JSON.stringify(result, null, 2))
@@ -479,10 +321,10 @@ export function registerWorkflows({
           .maybeSingle()
         if (lookupError) return err(`Error: ${lookupError.message}`)
         if (!existing) return err("Workflow not found in mcp project")
-        const row = existing as Record<string, unknown>
+        const existingRow = existing as Record<string, unknown>
         if (
           args.expected_updated_at !== undefined &&
-          row.updated_at !== args.expected_updated_at
+          existingRow.updated_at !== args.expected_updated_at
         ) {
           return err(
             "Workflow was modified since you last read it. Fetch the latest JSON with get_workflow_json and retry.",
@@ -538,90 +380,17 @@ export function registerWorkflows({
         const mcpProjectId = await ensureMcpProject(session)
 
         // Re-create bundled assets, mapping old DB id → new DB id (node_id preserved).
-        const assetIdMap = new Map<string, string>()
+        let assetIdMap: ReadonlyMap<string, string> = new Map()
         if (wf.assets) {
-          for (const c of wf.assets.characters) {
-            const { data: created, error } = await supabase
-              .from("characters")
-              .insert({
-                user_id: session.userId,
-                node_id: c.nodeId,
-                project_id: mcpProjectId,
-                name: c.name,
-                description: c.description ?? null,
-                gender: c.gender ?? null,
-                style: c.style ?? null,
-                base_outfit: c.baseOutfit ?? null,
-                source_image_url: c.sourceImageUrl ?? null,
-                expressions: c.expressions ?? [],
-                poses: c.poses ?? [],
-                lighting_variations: c.lightingVariations ?? [],
-              })
-              .select("id")
-              .single()
-            if (error || !created) {
-              return err(`Error creating character: ${error?.message ?? "unknown"}`)
-            }
-            assetIdMap.set(c.id, (created as Record<string, unknown>).id as string)
-          }
-          for (const o of wf.assets.objects) {
-            const { data: created, error } = await supabase
-              .from("objects")
-              .insert({
-                user_id: session.userId,
-                node_id: o.nodeId,
-                project_id: mcpProjectId,
-                name: o.name,
-                description: o.description ?? null,
-                style: o.style ?? null,
-                source_image_url: o.sourceImageUrl ?? null,
-                angles: o.angles ?? [],
-                materials: o.materials ?? [],
-                variations: o.variations ?? [],
-              })
-              .select("id")
-              .single()
-            if (error || !created) {
-              return err(`Error creating object: ${error?.message ?? "unknown"}`)
-            }
-            assetIdMap.set(o.id, (created as Record<string, unknown>).id as string)
-          }
-          for (const l of wf.assets.locations) {
-            const { data: created, error } = await supabase
-              .from("locations")
-              .insert({
-                user_id: session.userId,
-                node_id: l.nodeId,
-                project_id: mcpProjectId,
-                name: l.name,
-                description: l.description ?? null,
-                style: l.style ?? null,
-                source_image_url: l.sourceImageUrl ?? null,
-                time_of_day: l.timeOfDay ?? [],
-                weather: l.weather ?? [],
-                angles: l.angles ?? [],
-              })
-              .select("id")
-              .single()
-            if (error || !created) {
-              return err(`Error creating location: ${error?.message ?? "unknown"}`)
-            }
-            assetIdMap.set(l.id, (created as Record<string, unknown>).id as string)
+          const result = await reCreateAssets(wf.assets, session.userId, mcpProjectId)
+          if (result instanceof Map) {
+            assetIdMap = result
+          } else {
+            return err(`Error creating ${result.error.kind}: ${result.error.message}`)
           }
         }
 
-        // Remap entity DB-id references on nodes to the freshly-created rows.
-        const remappedNodes = wf.nodes.map((node) => {
-          const n = node as Record<string, unknown>
-          const data = { ...((n.data ?? {}) as Record<string, unknown>) }
-          for (const field of ["characterDbId", "objectDbId", "locationDbId"] as const) {
-            const oldId = data[field]
-            if (typeof oldId === "string" && assetIdMap.has(oldId)) {
-              data[field] = assetIdMap.get(oldId)
-            }
-          }
-          return { ...n, data }
-        })
+        const remappedNodes = remapNodeAssetIds(wf.nodes, assetIdMap)
 
         const { data: newWorkflow, error: wfError } = await supabase
           .from("workflows")
@@ -670,13 +439,13 @@ export function registerWorkflows({
           destructiveHint: false,
           openWorldHint: true,
         },
-      _meta: {
-        "ui/resourceUri": "ui://nodaro/widget/v3/workflow",
-        ui: {
-          resourceUri: "ui://nodaro/widget/v3/workflow",
-          visibility: ["model", "app"],
+        _meta: {
+          "ui/resourceUri": "ui://nodaro/widget/v3/workflow",
+          ui: {
+            resourceUri: "ui://nodaro/widget/v3/workflow",
+            visibility: ["model", "app"],
+          },
         },
-      },
       },
       async (args) => {
         const mcpProjectId = await ensureMcpProject(session)
@@ -718,7 +487,8 @@ export function registerWorkflows({
           return err(`Submitted but couldn't parse execution_id: ${res.body}`)
         }
 
-        const workflowName = ((wfRow as Record<string, unknown>).name as string | undefined) ?? "Workflow"
+        const workflowName =
+          ((wfRow as Record<string, unknown>).name as string | undefined) ?? "Workflow"
 
         registerTask({ taskId: executionId, userId: session.userId, kind: "workflow" })
 
