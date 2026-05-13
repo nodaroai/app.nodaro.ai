@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useCharacterStudio, type SaveStatus } from "./use-character-studio"
 import { useCharacterStudioJobs, type StudioAssetType } from "./use-character-studio-jobs"
 import { AppearanceTab } from "./appearance-tab"
@@ -45,6 +45,19 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
   }, [])
 
   const jobs = useCharacterStudioJobs(onResolved, onFailed)
+
+  // Re-mount spinner cards for jobs that were in flight when the studio was
+  // closed in a previous session. The backend returns them in the refetch on
+  // open; we seed the local pending Map exactly once per modal mount, and the
+  // hook's normal polling takes it from there.
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (seededRef.current) return
+    const seeds = studio?.initialPendingJobs
+    if (!seeds) return
+    seededRef.current = true
+    for (const s of seeds) jobs.track(s.jobId, s.assetType, s.name)
+  }, [studio?.initialPendingJobs, jobs])
 
   if (!studio) return null
 

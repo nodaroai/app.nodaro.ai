@@ -140,6 +140,38 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
+    // Find any asset-generation jobs still in flight for this character so the
+    // Character Studio can re-attach spinners on reopen (jobs survive page
+    // closes because the worker auto-attaches to the row at completion — this
+    // query is purely for the UX of "spinner reappears" continuity).
+    const { data: pendingRows } = await supabase
+      .from("jobs")
+      .select("id, input_data")
+      .eq("user_id", userId)
+      .in("status", ["pending", "running"])
+      .filter("input_data->>attachToCharacterId", "eq", id)
+
+    type PendingJob = { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }
+    const pendingJobs: PendingJob[] = []
+    for (const row of pendingRows ?? []) {
+      const inp = (row.input_data ?? {}) as Record<string, unknown>
+      const jobType = typeof inp.type === "string" ? inp.type : undefined
+      const attachName = typeof inp.attachName === "string" ? inp.attachName : undefined
+      if (!attachName) continue
+      let assetType: PendingJob["assetType"] | null = null
+      if (jobType === "generate-character-motion") {
+        assetType = "motions"
+      } else if (jobType === "generate-character-asset" || jobType === "image-to-image") {
+        const col = typeof inp.attachToColumn === "string" ? inp.attachToColumn : undefined
+        if (col === "expressions" || col === "poses" || col === "angles") assetType = col
+        else if (col === "lighting_variations") assetType = "lighting"
+      }
+      // generate-character (portrait) writes source_image_url directly — the
+      // Appearance tab has its own one-off poll, so we don't surface it here.
+      if (!assetType) continue
+      pendingJobs.push({ jobId: row.id, assetType, name: attachName })
+    }
+
     // Transform snake_case to camelCase for frontend
     return {
       id: data.id,
@@ -159,6 +191,7 @@ export async function characterRoutes(app: FastifyInstance) {
       motions: data.motions,
       voice: data.voice,
       personality: data.personality,
+      pendingJobs,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     }

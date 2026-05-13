@@ -52,10 +52,21 @@ const DIRTY_TRACKED_FIELDS: ReadonlySet<DirtyTrackedField> = new Set([
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
+export type StudioPendingJobSeed = {
+  jobId: string
+  assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"
+  name: string
+}
+
 export interface CharacterStudioState {
   staged: CharacterNodeData
   /** Saves are async; this surfaces the latest result for a status indicator. */
   saveStatus: SaveStatus
+  /** In-flight generation jobs returned by the most recent refetch on open,
+   *  to be seeded into useCharacterStudioJobs so spinners reappear after a
+   *  page close. Modal consumes once via useEffect; the array is stable per
+   *  refetch so the seeding effect runs exactly once. */
+  initialPendingJobs: StudioPendingJobSeed[] | null
   /** Shallow merge into staged, mirror to canvas, and schedule a debounced PATCH. */
   patch: (p: Partial<CharacterNodeData>) => void
   /** Returns the persisted character DB id, creating the row first if needed.
@@ -116,6 +127,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
 
   const [staged, setStaged] = useState<CharacterNodeData | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
+  const [initialPendingJobs, setInitialPendingJobs] = useState<StudioPendingJobSeed[] | null>(null)
 
   // Latest staged kept in a ref so the debounced timer captures fresh values
   // without resetting on every keystroke.
@@ -170,6 +182,10 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
           updateNodeData(nodeId, merged)
           return merged
         })
+        // Surface any in-flight jobs found by the backend so the modal can
+        // re-hydrate spinner cards. Empty array is fine; the modal's seeding
+        // effect no-ops when there's nothing to track.
+        setInitialPendingJobs(fresh.pendingJobs ?? [])
       } catch {
         // Non-fatal: studio still works off staged local state.
       }
@@ -308,5 +324,5 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
   }, [nodeId, updateNodeData, flushSave])
 
   if (!staged) return null
-  return { staged, saveStatus, patch, ensureSaved }
+  return { staged, saveStatus, initialPendingJobs, patch, ensureSaved }
 }
