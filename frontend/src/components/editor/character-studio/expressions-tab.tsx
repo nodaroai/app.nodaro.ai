@@ -6,6 +6,7 @@ import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { GenerationBar } from "./generation-bar"
 import { PendingCard } from "./pending-card"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
 // opinionated about quality and these all produce high-fidelity character output by default.
@@ -66,6 +67,10 @@ export function ImageAssetTab({
   // Track the currently-selected model so AssetCards and regen handlers use the same cost basis
   // as whatever the user picked in the GenerationBar.
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_IMAGE_MODEL)
+  // Fullscreen-lightbox index. Null = closed. The arrows on the lightbox cycle
+  // through THIS tab's items, so each tab opens an isolated viewer (you don't
+  // accidentally arrow from an expression into a pose).
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const presetSet = new Set(presets.map((p) => p.toLowerCase()))
   const attachToColumn = ARRAY_FIELD_TO_COLUMN[arrayField]
 
@@ -208,6 +213,7 @@ export function ImageAssetTab({
               onDelete={() => state.patch({ [arrayField]: items.filter((_, i) => i !== idx) } as never)}
               onRefine={(p, mode) => handleRefine(idx, p, mode)}
               onRegenerate={(mode) => handleRegenerate(idx, mode)}
+              onEnlarge={() => setLightboxIndex(idx)}
               onRename={(newName) =>
                 state.patch({ [arrayField]: items.map((it, i) => (i === idx ? { ...it, name: newName } : it)) } as never)
               }
@@ -243,6 +249,11 @@ export function ImageAssetTab({
         onGenerateAll={handleGenerateAll}
         generateAllCount={missingCount}
         onModelChange={setCurrentModel}
+      />
+      <MultiImageLightbox
+        items={items.map((it) => ({ url: it.url, alt: it.name }))}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
       />
     </div>
   )

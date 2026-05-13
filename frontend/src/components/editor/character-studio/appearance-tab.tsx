@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { X } from "lucide-react"
+import { Link as LinkIcon, Maximize2, X } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { copyToClipboard } from "@/lib/utils"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { ImageAssetTab, IMAGE_MODELS, DEFAULT_IMAGE_MODEL } from "./expressions-tab"
@@ -24,6 +26,7 @@ const POLL_MS = 2000
  */
 export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
   const [genBusy, setGenBusy] = useState(false)
+  const [portraitLightboxOpen, setPortraitLightboxOpen] = useState(false)
   // Track the in-flight portrait job so the user can cancel + see progress.
   // Lives outside `useCharacterStudioJobs` because the portrait result writes
   // to a single column (`source_image_url`), not a JSONB array, so the hook's
@@ -123,11 +126,33 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       <div className="space-y-2.5">
         <div className="text-[9px] uppercase tracking-wide text-slate-500">Portrait</div>
         {s.sourceImageUrl ? (
-          <img
-            src={s.sourceImageUrl}
-            alt="portrait"
-            className="w-40 h-52 object-cover rounded-md border border-[#334155]"
-          />
+          <div className="relative w-40 h-52 group">
+            <img
+              src={s.sourceImageUrl}
+              alt="portrait"
+              className="w-full h-full object-cover rounded-md border border-[#334155]"
+            />
+            <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                type="button"
+                aria-label="Enlarge"
+                title="Enlarge"
+                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={() => setPortraitLightboxOpen(true)}
+              >
+                <Maximize2 className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                aria-label="Copy URL"
+                title="Copy URL"
+                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+                onClick={() => copyToClipboard(s.sourceImageUrl, "URL copied")}
+              >
+                <LinkIcon className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="w-40 h-52 rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-slate-500">
             no portrait
@@ -244,6 +269,13 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           description="daylight / night / dramatic"
         />
       </div>
+      {/* Portrait lightbox — single-image set. Angles and Lighting render
+          their own lightboxes via ImageAssetTab, scoped to each sub-grid. */}
+      <MultiImageLightbox
+        items={s.sourceImageUrl ? [{ url: s.sourceImageUrl, alt: "Portrait" }] : []}
+        startIndex={portraitLightboxOpen && s.sourceImageUrl ? 0 : null}
+        onClose={() => setPortraitLightboxOpen(false)}
+      />
     </div>
   )
 }
