@@ -7,6 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
@@ -55,8 +56,13 @@ function buildVariantPrompt(
   const outfitPart = baseOutfit ? `, wearing ${baseOutfit}` : ""
   const descPart = description ? `, ${description}` : ""
   const styleDesc = style ?? "realistic"
+  // Drop the auto-assigned placeholder name from the prompt so we don't ask
+  // providers to render "Single male character Untitled character …". The
+  // description carries the visual identity until the user renames.
+  const trimmedName = name.trim()
+  const namePart = trimmedName && trimmedName !== PLACEHOLDER_CHARACTER_NAME ? ` ${trimmedName}` : ""
 
-  const base = `Single ${genderDesc} character ${name}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, white/plain background, no text, no labels, no watermarks.`
+  const base = `Single ${genderDesc} character${namePart}${descPart}${outfitPart}. ${styleDesc} art style, 4k, highly detailed, white/plain background, no text, no labels, no watermarks.`
 
   if (assetType === "custom") {
     return `${userPrompt ?? variant}. ${base}`
@@ -77,7 +83,8 @@ function buildVariantPrompt(
       crying: "crying, tears, distressed expression",
     }
     const expr = expressionMap[variant] ?? `${variant} expression`
-    return `Portrait headshot of ${name}, ${expr}. ${base}`
+    const subject = namePart ? namePart.trim() : "the character"
+    return `Portrait headshot of ${subject}, ${expr}. ${base}`
   }
 
   if (assetType === "poses") {
@@ -93,7 +100,8 @@ function buildVariantPrompt(
       turning: "turning to look over the shoulder, body in three-quarter view",
     }
     const pose = poseMap[variant] ?? `${variant} pose`
-    return `Full body view of ${name}, ${pose}. FULL BODY visible including feet. ${base}`
+    const subject = namePart ? namePart.trim() : "the character"
+    return `Full body view of ${subject}, ${pose}. FULL BODY visible including feet. ${base}`
   }
 
   if (assetType === "angles") {
@@ -106,7 +114,8 @@ function buildVariantPrompt(
       back: "back view, facing away from camera",
     }
     const angle = angleMap[variant] ?? `${variant} view`
-    return `Full body view of ${name}, ${angle}, same neutral standing pose. FULL BODY visible including feet. ${base}`
+    const subject = namePart ? namePart.trim() : "the character"
+    return `Full body view of ${subject}, ${angle}, same neutral standing pose. FULL BODY visible including feet. ${base}`
   }
 
   // lighting
@@ -116,7 +125,8 @@ function buildVariantPrompt(
     dramatic: "dramatic side lighting, cinematic single light source, high contrast",
   }
   const light = lightMap[variant] ?? `${variant} lighting`
-  return `Full body view of ${name}, same neutral standing pose. ${light}. FULL BODY visible. ${base}`
+  const subject = namePart ? namePart.trim() : "the character"
+  return `Full body view of ${subject}, same neutral standing pose. ${light}. FULL BODY visible. ${base}`
 }
 
 export async function generateCharacterAssetRoutes(app: FastifyInstance) {

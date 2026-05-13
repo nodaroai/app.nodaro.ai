@@ -12,6 +12,20 @@
 
 export type EntityStyle = "realistic" | "anime" | "3d-pixar" | "illustration"
 
+/**
+ * Reserved name the Character Studio auto-assigns when a user clicks Generate
+ * before naming the character. Treated as "no name" by prompt builders so the
+ * literal string "Untitled character" never leaks into a generation prompt.
+ * Frontend stays in sync via `@nodaro/shared`.
+ */
+export const PLACEHOLDER_CHARACTER_NAME = "Untitled character"
+
+function effectiveName(name: string): string | undefined {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === PLACEHOLDER_CHARACTER_NAME) return undefined
+  return trimmed
+}
+
 export interface CharacterPromptInput {
   name: string
   description?: string
@@ -21,7 +35,7 @@ export interface CharacterPromptInput {
 }
 
 export function buildCharacterPrompt(input: CharacterPromptInput): string {
-  const charDesc = [input.name, input.gender, input.description].filter(Boolean).join(", ")
+  const charDesc = [effectiveName(input.name), input.gender, input.description].filter(Boolean).join(", ")
   const outfitDesc = input.baseOutfit ? `, wearing ${input.baseOutfit}` : ""
   const styleDesc = input.style ?? "realistic"
   return [
@@ -95,8 +109,9 @@ export interface CharacterMotionPromptInput {
 }
 
 export function buildMotionPrompt(input: CharacterMotionPromptInput): string {
-  const charDesc = [input.name, input.gender, input.description].filter(Boolean).join(", ")
+  const charDesc = [effectiveName(input.name), input.gender, input.description].filter(Boolean).join(", ")
   const outfitDesc = input.baseOutfit ? `, wearing ${input.baseOutfit}` : ""
   const styleDesc = input.style ?? "realistic"
-  return `${charDesc}${outfitDesc}, ${input.motionPrompt}. ${styleDesc} style.`
+  const charPart = charDesc ? `${charDesc}${outfitDesc}, ` : ""
+  return `${charPart}${input.motionPrompt}. ${styleDesc} style.`
 }

@@ -234,6 +234,7 @@ export {
   buildLocationPrompt,
   buildFaceTemplateInputs,
   buildMotionPrompt,
+  PLACEHOLDER_CHARACTER_NAME,
   type EntityStyle,
   type CharacterPromptInput,
   type ObjectPromptInput,
