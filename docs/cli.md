@@ -95,10 +95,18 @@ nodaro auth logout [--profile <name>]
 # Projects
 nodaro projects list [--json]
 nodaro projects get <id> [--json]
+nodaro projects create --name <name> [--description <desc>] [--json]
+nodaro projects update <id> [--name <name>] [--description <desc>] [--json]
+nodaro projects delete <id> [--json]
 
 # Workflows
 nodaro workflows list --project <projectId> [--json]
 nodaro workflows get <id>
+nodaro workflows create --project <projectId> --name <name> [--file bundle.json] [--json]
+nodaro workflows update <id> [--name <name>] [--file nodes-edges.json] [--json]
+nodaro workflows delete <id> [--json]
+nodaro workflows export <id> [--with-assets] [--output bundle.json]
+nodaro workflows import <file> --project <projectId> [--json]
 nodaro workflows run <id> [--watch] [--node n1 n2 ...] [--json]
 
 # Apps — workflows wrapped in a curated UI

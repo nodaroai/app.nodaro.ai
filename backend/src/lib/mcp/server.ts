@@ -5,6 +5,7 @@ import { passesGate, type ToolGate } from "./tool-schemas.js"
 import { registerVerbs } from "./tools/verbs.js"
 import { registerJobs } from "./tools/jobs.js"
 import { registerWorkflows } from "./tools/workflows.js"
+import { registerProjectTools } from "./tools/projects.js"
 import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
@@ -100,6 +101,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerVerbs({ server, session, fastify: opts.fastify })
   registerJobs({ server, session, fastify: opts.fastify })
   registerWorkflows({ server, session, fastify: opts.fastify })
+  registerProjectTools(server, session)
   registerComponents({ server, session, fastify: opts.fastify })
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })

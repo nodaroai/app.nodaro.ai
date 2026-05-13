@@ -815,3 +815,11 @@ export {
   type I18nCatalogId,
   type SidecarLoader,
 } from "./i18n/index.js"
+
+export type {
+  WorkflowExport,
+  WorkflowExportCharacter,
+  WorkflowExportObject,
+  WorkflowExportLocation,
+} from "./workflow-export.js"
+export { stripExportContent } from "./workflow-export.js"

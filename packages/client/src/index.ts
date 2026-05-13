@@ -20,7 +20,14 @@ export {
 } from "./errors.js"
 
 // Re-export selected types from @nodaro/shared for convenience
-export type { GenericNode, GenericEdge } from "@nodaro/shared"
+export type {
+  GenericNode,
+  GenericEdge,
+  WorkflowExport,
+  WorkflowExportCharacter,
+  WorkflowExportObject,
+  WorkflowExportLocation,
+} from "@nodaro/shared"
 
 // --- Resource classes (re-exported so consumers can typecheck `client.workflows`, etc.) ---
 export { WorkflowsResource } from "./resources/workflows.js"

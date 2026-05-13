@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
+import type { WorkflowExport } from "@nodaro/shared"
 
 export const API_BASE_URL = ''
 
@@ -3503,6 +3504,55 @@ export async function getWorkflowInterface(workflowId: string): Promise<{ routes
     throwApiError(err, "Failed to fetch workflow interface")
   }
   const json = await res.json()
+  return json.data
+}
+
+// ---------------------------------------------------------------------------
+// Workflow export / import — delegate the heavy lifting (asset fetch on export,
+// asset re-creation + entity-id remapping on import) to the backend instead of
+// running DB queries in the browser.
+// ---------------------------------------------------------------------------
+
+/** Fetch a portable JSON bundle for a workflow. `assets` includes bundled characters/objects/locations. */
+export async function exportWorkflow(
+  workflowId: string,
+  opts?: { assets?: boolean },
+): Promise<WorkflowExport> {
+  const assets = opts?.assets ?? false
+  const res = await fetch(
+    `${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/export?assets=${assets}`,
+    { headers: await getAuthHeaders() },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to export workflow")
+  }
+  return res.json() as Promise<WorkflowExport>
+}
+
+/** Shape returned by `POST /v1/workflows/import` (camelCase, mirrors the backend `WorkflowFull` serializer). */
+export interface ImportedWorkflow {
+  id: string
+  projectId: string
+  userId: string
+  name: string
+  nodes: unknown[]
+  edges: unknown[]
+  settings: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+/** Import a workflow bundle into a project — re-creates bundled assets and returns the new workflow. */
+export async function importWorkflow(
+  input: WorkflowExport & { projectId: string },
+): Promise<ImportedWorkflow> {
+  const { projectId, ...workflow_json } = input
+  const json = await apiRequest<{ data: ImportedWorkflow }>(
+    `/v1/workflows/import`,
+    "Failed to import workflow",
+    { method: "POST", body: { projectId, workflow_json } },
+  )
   return json.data
 }
 

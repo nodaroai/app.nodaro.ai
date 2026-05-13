@@ -50,4 +50,53 @@ describe("workflows resource", () => {
     })
     await expect(c.workflows.get("missing")).rejects.toBeInstanceOf(NotFoundError)
   })
+
+  it("export GETs /v1/workflows/:id/export with assets=false by default", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { version: 1 } }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.workflows.export("wf-1")
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/workflows/wf-1/export?assets=false")
+    expect(init.method).toBe("GET")
+  })
+
+  it("export passes assets=true through the query string", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { version: 1 } }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.workflows.export("wf-1", { assets: true })
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/workflows/wf-1/export?assets=true",
+    )
+  })
+
+  it("import POSTs to /v1/workflows/import with projectId + workflow_json", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: { id: "wf-2" } }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const bundle = {
+      version: 1 as const,
+      exportedAt: "2026-01-01T00:00:00Z",
+      name: "Imported Flow",
+      nodes: [],
+      edges: [],
+    }
+    await c.workflows.import({ projectId: "proj-1", ...bundle })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://api.example.com/v1/workflows/import")
+    expect(init.method).toBe("POST")
+    const body = JSON.parse(init.body)
+    expect(body).toEqual({ projectId: "proj-1", workflow_json: bundle })
+    expect(body.workflow_json.projectId).toBeUndefined()
+  })
 })

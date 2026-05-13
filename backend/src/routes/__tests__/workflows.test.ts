@@ -678,3 +678,271 @@ describe("cross-tenant denial", () => {
 
 // POST /v1/workflows/:id/run — now handled by workflow-execution routes
 // (tested in workflow-execution.test.ts if present)
+
+// ---------------------------------------------------------------------------
+// GET /v1/workflows/:id/export
+// ---------------------------------------------------------------------------
+
+describe("GET /v1/workflows/:id/export", () => {
+  const CHAR_ROW = {
+    id: "char-1",
+    node_id: "n-char",
+    name: "Hero",
+    description: null,
+    gender: "male",
+    style: null,
+    base_outfit: null,
+    source_image_url: null,
+    expressions: [],
+    poses: [],
+    lighting_variations: [],
+  }
+
+  it("returns 401 when no auth", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("returns 404 when workflow not found", async () => {
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: null, error: { code: "PGRST116" } }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("returns template export (no assets) by default", async () => {
+    const mockChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: DB_WORKFLOW_FULL, error: null }),
+    }
+    vi.mocked(supabase.from).mockReturnValue(mockChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.version).toBe(1)
+    expect(body.name).toBe("My Workflow")
+    expect(body.assets).toBeUndefined()
+    expect(body.exportedAt).toBeDefined()
+  })
+
+  it("includes assets when assets=true and entities exist", async () => {
+    const workflowWithChar = {
+      ...DB_WORKFLOW_FULL,
+      nodes: [{ id: "n-char", type: "character", data: { characterDbId: "char-1" } }],
+    }
+    const workflowChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: workflowWithChar, error: null }),
+    }
+    // `.eq(...)` is now the terminal call (after `.in()`) → the chain resolves like a thenable.
+    // Use a real thenable (invokes `resolve`), not `mockResolvedValue` (which
+    // only returns a promise and ignores the callbacks `await`/`Promise.all` pass).
+    const charChain = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+        resolve({ data: [CHAR_ROW], error: null }),
+    }
+    const emptyChain = {
+      select: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (v: { data: unknown[]; error: null }) => unknown) =>
+        resolve({ data: [], error: null }),
+    }
+    // Only 2 supabase.from calls happen: workflows + characters.
+    // objectIds and locationIds are empty, so those use Promise.resolve — no from() call.
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(workflowChain as any)
+      .mockReturnValueOnce(charChain as any)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/export?assets=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    const body = JSON.parse(res.body)
+    expect(body.assets.characters).toHaveLength(1)
+    expect(body.assets.characters[0].id).toBe("char-1")
+    expect(body.assets.objects).toHaveLength(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /v1/workflows/import
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/workflows/import", () => {
+  const IMPORT_WF_JSON = {
+    version: 1,
+    exportedAt: "2026-01-01T00:00:00Z",
+    name: "Imported WF",
+    nodes: [{ id: "n1", type: "generate-image", data: {} }],
+    edges: [{ source: "n1", target: "n2" }],
+    settings: { autoSave: true },
+  }
+
+  const IMPORT_WF_JSON_WITH_ASSETS = {
+    version: 1,
+    exportedAt: "2026-01-01T00:00:00Z",
+    name: "Imported WF With Assets",
+    nodes: [
+      { id: "n-char", type: "character", data: { characterDbId: "old-char-1", name: "Hero" } },
+      { id: "n-obj", type: "object", data: { objectDbId: "old-obj-1" } },
+      { id: "n-loc", type: "location", data: { locationDbId: "old-loc-1" } },
+      { id: "n-img", type: "generate-image", data: {} },
+    ],
+    edges: [{ source: "n-char", target: "n-img" }],
+    settings: {},
+    assets: {
+      characters: [{ id: "old-char-1", nodeId: "n-char", name: "Hero", gender: "male" }],
+      objects: [{ id: "old-obj-1", nodeId: "n-obj", name: "Sword" }],
+      locations: [{ id: "old-loc-1", nodeId: "n-loc", name: "Castle" }],
+    },
+  }
+
+  function projectChain(data: unknown, error: unknown = null) {
+    return {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data, error }),
+    }
+  }
+
+  function insertIdChain(id: string) {
+    return {
+      insert: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { id }, error: null }),
+    }
+  }
+
+  it("returns 401 when unauthenticated", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/import",
+      payload: { projectId: TEST_PROJECT_ID, workflow_json: IMPORT_WF_JSON },
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("returns 400 when projectId is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/import",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { workflow_json: IMPORT_WF_JSON },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 404 when project not found or not owned by user", async () => {
+    vi.mocked(supabase.from).mockReturnValueOnce(
+      projectChain(null, { code: "PGRST116", message: "no rows" }) as never
+    )
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/import",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: TEST_PROJECT_ID, workflow_json: IMPORT_WF_JSON },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("imports a workflow without assets and returns 201", async () => {
+    const newRow = {
+      ...DB_WORKFLOW_FULL,
+      name: "Imported WF",
+      nodes: IMPORT_WF_JSON.nodes,
+      edges: IMPORT_WF_JSON.edges,
+      settings: IMPORT_WF_JSON.settings,
+    }
+    const insertFn = vi.fn().mockReturnThis()
+    const workflowChain = {
+      insert: insertFn,
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: newRow, error: null }),
+    }
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID }) as never)
+      .mockReturnValueOnce(workflowChain as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/import",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: TEST_PROJECT_ID, workflow_json: IMPORT_WF_JSON },
+    })
+
+    expect(res.statusCode).toBe(201)
+    const body = res.json()
+    expect(body.data.name).toBe("Imported WF")
+    expect(body.data.projectId).toBe(TEST_PROJECT_ID)
+    expect(body.data.userId).toBe(TEST_USER_ID)
+    expect(insertFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        project_id: TEST_PROJECT_ID,
+        user_id: TEST_USER_ID,
+        name: "Imported WF",
+      })
+    )
+  })
+
+  it("imports a workflow with assets and remaps entity DB ids on nodes", async () => {
+    const newRow = { ...DB_WORKFLOW_FULL, name: "Imported WF With Assets" }
+    const wfInsertFn = vi.fn().mockReturnThis()
+    const workflowChain = {
+      insert: wfInsertFn,
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: newRow, error: null }),
+    }
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(projectChain({ id: TEST_PROJECT_ID, user_id: TEST_USER_ID }) as never)
+      .mockReturnValueOnce(insertIdChain("new-char-1") as never)
+      .mockReturnValueOnce(insertIdChain("new-obj-1") as never)
+      .mockReturnValueOnce(insertIdChain("new-loc-1") as never)
+      .mockReturnValueOnce(workflowChain as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/import",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { projectId: TEST_PROJECT_ID, workflow_json: IMPORT_WF_JSON_WITH_ASSETS },
+    })
+
+    expect(res.statusCode).toBe(201)
+
+    const insertArg = wfInsertFn.mock.calls[0][0] as {
+      nodes: Array<{ id: string; data: Record<string, unknown> }>
+    }
+    const byId = Object.fromEntries(insertArg.nodes.map((n) => [n.id, n]))
+    expect(byId["n-char"].data.characterDbId).toBe("new-char-1")
+    expect(byId["n-obj"].data.objectDbId).toBe("new-obj-1")
+    expect(byId["n-loc"].data.locationDbId).toBe("new-loc-1")
+    expect(byId["n-char"].data.name).toBe("Hero")
+    expect(byId["n-img"].data).toEqual({})
+  })
+})
