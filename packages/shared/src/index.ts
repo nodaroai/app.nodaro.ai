@@ -835,9 +835,4 @@ export type {
 } from "./workflow-export.js"
 export { stripExportContent } from "./workflow-export.js"
 
-export {
-  validateSubWorkflowRoutes,
-  type SubWorkflowPort as ValidatedSubWorkflowPort,
-  type ValidationError as SubWorkflowValidationError,
-  type ValidationResult as SubWorkflowValidationResult,
-} from "./sub-workflow-validation.js"
+export { validateSubWorkflowRoutes } from "./sub-workflow-validation.js"

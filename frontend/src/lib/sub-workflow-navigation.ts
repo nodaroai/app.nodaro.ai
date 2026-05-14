@@ -14,7 +14,6 @@ export interface OpenSubWorkflowArgs {
   readonly childWorkflowId: string
   readonly childWorkflowName: string
   readonly childProjectId: string
-  readonly sourceNodeId: string | null
   /** `useNavigate()` from react-router. Caller supplies it so this stays a pure function. */
   readonly navigate: (href: string) => void
   /** Optional query-string suffix (e.g. `"?focusType=sub-workflow-input"`). */
@@ -31,7 +30,7 @@ export interface OpenSubWorkflowArgs {
  * - Navigates to `/projects/<childProjectId>/workflows/<childWorkflowId>`.
  */
 export function openSubWorkflow(args: OpenSubWorkflowArgs): void {
-  const { childWorkflowId, childWorkflowName, childProjectId, sourceNodeId, navigate, extraQuery } = args
+  const { childWorkflowId, childWorkflowName, childProjectId, navigate, extraQuery } = args
 
   const store = useSubWorkflowStack.getState()
   const wfStore = useWorkflowStore.getState()
@@ -42,7 +41,6 @@ export function openSubWorkflow(args: OpenSubWorkflowArgs): void {
       store.setRoot({
         workflowId: wfStore.workflowId,
         workflowName: wfStore.workflowName,
-        sourceNodeId: null,
       })
     }
   }
@@ -50,7 +48,6 @@ export function openSubWorkflow(args: OpenSubWorkflowArgs): void {
   store.push({
     workflowId: childWorkflowId,
     workflowName: childWorkflowName || "Untitled Workflow",
-    sourceNodeId,
   })
 
   navigate(`/projects/${childProjectId}/workflows/${childWorkflowId}${extraQuery ?? ""}`)

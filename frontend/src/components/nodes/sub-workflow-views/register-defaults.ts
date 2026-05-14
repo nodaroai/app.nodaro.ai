@@ -1,8 +1,8 @@
 import { PortsView } from "./ports-view"
-import { registerSubWorkflowViewMode } from "./view-mode-registry"
+import { DEFAULT_VIEW_MODE_ID, registerSubWorkflowViewMode } from "./view-mode-registry"
 
 registerSubWorkflowViewMode({
-  id: "default",
+  id: DEFAULT_VIEW_MODE_ID,
   label: "Ports",
   description: "Show input/output port handles + status + preview",
   Component: PortsView,

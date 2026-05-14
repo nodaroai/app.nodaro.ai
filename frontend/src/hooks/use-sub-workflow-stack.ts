@@ -3,7 +3,6 @@ import { create } from "zustand"
 export interface SubWorkflowStackFrame {
   readonly workflowId: string
   readonly workflowName: string
-  readonly sourceNodeId: string | null  // The sub-workflow node in the parent that opened this child
 }
 
 interface SubWorkflowStackState {

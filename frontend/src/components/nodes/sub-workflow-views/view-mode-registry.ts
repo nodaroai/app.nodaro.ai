@@ -1,6 +1,8 @@
 import type { ComponentType } from "react"
 import type { SubWorkflowData } from "@/types/nodes"
 
+export const DEFAULT_VIEW_MODE_ID = "default"
+
 export interface SubWorkflowViewProps {
   readonly nodeId: string
   readonly data: SubWorkflowData
@@ -24,11 +26,9 @@ export function registerSubWorkflowViewMode(mode: SubWorkflowViewMode): void {
 }
 
 export function getSubWorkflowViewMode(id: string | undefined): SubWorkflowViewMode {
-  return registry.get(id ?? "default") ?? registry.get("default")!
+  return registry.get(id ?? DEFAULT_VIEW_MODE_ID) ?? registry.get(DEFAULT_VIEW_MODE_ID)!
 }
 
 export function listSubWorkflowViewModes(): readonly SubWorkflowViewMode[] {
   return [...registry.values()]
 }
-
-export const DEFAULT_VIEW_MODE_ID = "default"

@@ -11,10 +11,8 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { getSubWorkflowViewMode } from "./sub-workflow-views/view-mode-registry"
-// Side-effect: registers the default "Ports" view mode. Keep this explicit
-// import — the previous WorkflowViewerModal import transitively initialized
-// the registry; with that gone, we need this here so getSubWorkflowViewMode()
-// finds the default mode the first time a sub-workflow node renders.
+// Side-effect: registers the default Ports view. Required here (not just in
+// nodes/index.ts) so direct importers like unit tests get a working node.
 import "./sub-workflow-views/register-defaults"
 import type { SubWorkflowData, SubWorkflowPort } from "@/types/nodes"
 
@@ -104,7 +102,6 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
       childWorkflowId: nodeData.referencedWorkflowId,
       childWorkflowName: nodeData.referencedWorkflowName ?? "Untitled Workflow",
       childProjectId,
-      sourceNodeId: id,
       navigate,
     })
   }

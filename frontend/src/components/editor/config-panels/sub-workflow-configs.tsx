@@ -21,7 +21,7 @@ import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { createChildSubWorkflow } from "@/lib/api"
-import { listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
+import { DEFAULT_VIEW_MODE_ID, listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
 
 // ---------- Shared: Ports Editor ----------
 
@@ -257,7 +257,7 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 
 // ---------- Sub-Workflow Config (Caller Node) ----------
 
-export function SubWorkflowConfig({ data, onUpdate, nodeId }: ConfigProps<SubWorkflowData> & { readonly nodeId?: string }) {
+export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowData>) {
   const nodeData = data as SubWorkflowData
   const navigate = useNavigateWithGuard()
   const projectId = useWorkflowStore((s) => s.projectId)
@@ -370,7 +370,6 @@ export function SubWorkflowConfig({ data, onUpdate, nodeId }: ConfigProps<SubWor
                 childWorkflowId: child.id,
                 childWorkflowName: child.name,
                 childProjectId: child.projectId,
-                sourceNodeId: nodeId ?? null,
                 navigate,
               })
             } catch (err) {
@@ -492,7 +491,6 @@ export function SubWorkflowConfig({ data, onUpdate, nodeId }: ConfigProps<SubWor
                   childWorkflowId: nodeData.referencedWorkflowId,
                   childWorkflowName: nodeData.referencedWorkflowName ?? wf?.name ?? "Untitled Workflow",
                   childProjectId: pid,
-                  sourceNodeId: null,
                   navigate,
                   extraQuery: "?focusType=sub-workflow-input",
                 })
@@ -515,7 +513,7 @@ export function SubWorkflowConfig({ data, onUpdate, nodeId }: ConfigProps<SubWor
       <div>
         <Label className="text-xs font-medium">View mode</Label>
         <Select
-          value={nodeData.viewMode ?? "default"}
+          value={nodeData.viewMode ?? DEFAULT_VIEW_MODE_ID}
           onValueChange={(v) => onUpdate({ viewMode: v })}
         >
           <SelectTrigger className="mt-1 h-8 text-xs">
