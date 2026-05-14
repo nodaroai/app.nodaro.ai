@@ -2,7 +2,7 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 import { generateCharacterAsset, modifyImage } from "@/lib/api"
 import type { CharacterStudioState } from "./use-character-studio"
-import type { CharacterStudioJobs } from "./use-character-studio-jobs"
+import type { CharacterStudioJobs, StudioAssetType } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
 import { AssetGenPanel, type AssetGenSubmission } from "./asset-gen-panel"
 import { GenerationBar } from "./generation-bar"
@@ -30,18 +30,48 @@ const EXPRESSION_PRESETS = [
 ] as const
 
 // Reusable image-asset grid + generation bar. Used by Expressions, Poses, and (compactly) the
-// Appearance tab's Angles + Lighting sub-sections. Hence assetType/arrayField span all 4 image types.
-export type ImageAssetType = "expressions" | "poses" | "angles" | "lighting"
-export type ImageArrayField = "expressions" | "poses" | "angles" | "lightingVariations"
+// Appearance tab's Head/Body Angles + Lighting sub-sections. The angles surface was split
+// into head + body in migration 118 — `headAngles` writes to the legacy `angles` column
+// (now semantically head-and-shoulders) and `bodyAngles` writes to the new `body_angles`
+// column with full-body T-pose framing.
+export type ImageAssetType =
+  | "expressions"
+  | "poses"
+  | "angles"        // legacy alias (still accepted by the backend route)
+  | "headAngles"
+  | "bodyAngles"
+  | "lighting"
+export type ImageArrayField =
+  | "expressions"
+  | "poses"
+  | "angles"
+  | "bodyAngles"
+  | "lightingVariations"
 
 // Map the frontend `arrayField` (CharacterNodeData camelCase) to the DB column
-// the worker writes to. Only `lightingVariations` differs from its column name
-// (`lighting_variations`); the others are 1:1.
-const ARRAY_FIELD_TO_COLUMN: Record<ImageArrayField, "expressions" | "poses" | "angles" | "lighting_variations"> = {
+// the worker writes to. Most are 1:1; `lightingVariations` → `lighting_variations`
+// and `bodyAngles` → `body_angles` are the snake_case exceptions.
+const ARRAY_FIELD_TO_COLUMN: Record<
+  ImageArrayField,
+  "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
+> = {
   expressions: "expressions",
   poses: "poses",
   angles: "angles",
+  bodyAngles: "body_angles",
   lightingVariations: "lighting_variations",
+}
+
+// Map `arrayField` → `StudioAssetType` for jobs.track. The studio uses the
+// arrayField as the canonical "where does this asset live" identity, so the
+// tracking type follows that. (The route's prompt-shaping `assetType` is a
+// separate concept — see ImageAssetType above.)
+const ARRAY_FIELD_TO_TRACKING_TYPE: Record<ImageArrayField, StudioAssetType> = {
+  expressions: "expressions",
+  poses: "poses",
+  angles: "angles",
+  bodyAngles: "bodyAngles",
+  lightingVariations: "lighting",
 }
 
 export function ImageAssetTab({
@@ -70,7 +100,8 @@ export function ImageAssetTab({
   onSwitchToAppearance?: () => void
 }) {
   const items = (state.staged[arrayField] as { name: string; url: string }[]) ?? []
-  const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === assetType)
+  const trackingAssetType = ARRAY_FIELD_TO_TRACKING_TYPE[arrayField]
+  const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === trackingAssetType)
   // Track the currently-selected model so AssetCards and regen handlers use the same cost basis
   // as whatever the user picked in the GenerationBar.
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_IMAGE_MODEL)
@@ -115,9 +146,9 @@ export function ImageAssetTab({
         attachToColumn,
         attachName,
       })
-      jobs.track(jobId, assetType, attachName)
+      jobs.track(jobId, trackingAssetType, attachName)
     },
-    [state, jobs, assetType, attachToColumn],
+    [state, jobs, assetType, attachToColumn, trackingAssetType],
   )
 
   const handleGenerateAll = useCallback(async () => {
@@ -158,9 +189,9 @@ export function ImageAssetTab({
           attachName: trackName,
         },
       )
-      jobs.track(jobId, assetType, trackName)
+      jobs.track(jobId, trackingAssetType, trackName)
     },
-    [items, state, jobs, assetType, arrayField, currentModel, attachToColumn],
+    [items, state, jobs, assetType, arrayField, currentModel, attachToColumn, trackingAssetType],
   )
 
   const handleRegenerate = useCallback(
@@ -195,9 +226,9 @@ export function ImageAssetTab({
         attachToColumn,
         attachName: trackName,
       })
-      jobs.track(jobId, assetType, trackName)
+      jobs.track(jobId, trackingAssetType, trackName)
     },
-    [items, state, jobs, assetType, arrayField, currentModel, presetSet, attachToColumn],
+    [items, state, jobs, assetType, arrayField, currentModel, presetSet, attachToColumn, trackingAssetType],
   )
 
   // Custom-prompt generation path (Identity Foundation v2). Routes through
@@ -234,12 +265,12 @@ export function ImageAssetTab({
           attachName: variant,
           realLifeRefs: submission.realLifeRefs,
         })
-        jobs.track(jobId, assetType, variant)
+        jobs.track(jobId, trackingAssetType, variant)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Generation failed.")
       }
     },
-    [state, jobs, assetType, currentModel, attachToColumn],
+    [state, jobs, assetType, currentModel, attachToColumn, trackingAssetType],
   )
 
   const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
