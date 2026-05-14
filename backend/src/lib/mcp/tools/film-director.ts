@@ -35,13 +35,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 
 /**
- * Embedded fallback — verbatim copy of SKILL.md v1.0.3. The unit test
+ * Embedded fallback — verbatim copy of SKILL.md v1.0.4. The unit test
  * `film-director.test.ts` (`embedded constant matches on-disk SKILL.md`)
  * fails if this drifts from the canonical file. Bump both together.
  */
 export const FALLBACK_SKILL_CONTENT = `---
 name: nodaro-film-director
-version: 1.0.3
+version: 1.0.4
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -161,6 +161,23 @@ Lay nodes out left-to-right with \`x\` increasing by ~340 per stage and \`y\` se
 If you need a node type not listed above — STOP and ask the user. Do not invent.
 
 ## Stage 0 — Initialize the live workspace
+
+### Step 0.1: Preload all required MCP tools
+
+Many Nodaro MCP tools are "deferred" — their schemas aren't loaded in your session by default. Before any other step, batch-load every tool the workflow needs using ToolSearch with the EXACT selector syntax:
+
+\`\`\`
+ToolSearch
+  query: select:create_workflow,update_workflow_json,get_workflow,generate_image,animate_image,extract_frame,generate_music,combine_videos,merge_video_audio,trim_video
+\`\`\`
+
+This pre-loads all 10 tools in one call. After this, every subsequent stage can call its tools directly without further ToolSearch.
+
+NEVER use keyword search like \`query: "image generation"\` — it returns the closest match, NOT the exact tool you need. Always use \`select:<exact_name>\` with comma-separated names.
+
+If a later stage requires an opt-in tool (e.g., \`generate_character\`, \`generate_location\`, \`text_to_speech\`, \`lip_sync\` for the rare full-pipeline flow), load it with another \`select:\` call AT THAT POINT, not preemptively.
+
+### Step 0.2: Create the workflow
 
 Before any creative work, call \`create_workflow({ name: "<user's working title or 'Untitled Film'>" })\` and capture the returned \`workflowId\`. Tell the user:
 
@@ -337,6 +354,7 @@ The workflow is already on the user's canvas — it was assembled incrementally 
 ## What you do NOT do
 
 - Use any node type outside the strict 8-node whitelist without first asking the user and getting explicit approval
+- Search for MCP tools by keyword (e.g., \`query: "image"\`). Always use \`query: "select:<exact_name>"\` with ToolSearch — keyword search returns near-matches, not the exact tool you need.
 - Generate without showing the draft first
 - Animate shots in parallel
 - Skip the storyboard cohesion review
