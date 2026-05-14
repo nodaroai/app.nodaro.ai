@@ -31,6 +31,10 @@ Sign in with your Nodaro account, consent, and the tools appear inline.
 - [Goose](./connecting-goose.md)
 - [Build your own MCP-compatible client](./build-your-own-client.md)
 
+## Skills
+
+- [Film Director](./film-director.md) — Claude Skill that drives a 10-stage director workflow (script → characters → storyboard → animation → audio → final cut) and assembles an editable Nodaro workflow on your canvas in real-time
+
 ## Under the hood
 
 OAuth flow under the hood: see [OAuth flow](../oauth-flow.md). MCP-specific

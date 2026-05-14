@@ -30,6 +30,7 @@ const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
+import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
@@ -536,12 +537,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => clearTimeout(timer)
   }, [isMobile, nodes, selectNode])
 
+  // Camera auto-pan: when new nodes are added to the canvas (e.g. by the
+  // Film Director skill's per-stage update_workflow_json calls), pan the
+  // viewport toward them — but yield to the user for 2s after any manual
+  // pan/zoom so the camera doesn't fight the user. See use-camera-auto-pan.ts.
+  const cameraAutoPan = useCameraAutoPan(nodes)
+
   const handleMoveStart = useCallback(() => {
+    // Tell the auto-pan hook the user just initiated a pan/zoom — it
+    // will suppress its next auto-pan for ~2s.
+    cameraAutoPan.onMove()
     // User-initiated pan/zoom exits focus mode (ignore our own animation)
     if (isMobile && focusMode && !focusAnimatingRef.current) {
       setFocusMode(false)
     }
-  }, [isMobile, focusMode])
+  }, [cameraAutoPan, isMobile, focusMode])
 
   const handleMoveEnd = useCallback(() => {
     setSavedViewport(getViewport())

@@ -7,6 +7,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
+import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
 
 type AnimatedFlowEdgeData = {
   isRunning?: boolean       // Output animation: source node is running (pink)
@@ -93,6 +94,10 @@ function AnimatedFlowEdgeComponent({
   const zoom = useStore((s) => s.transform[2])
   const [showModeMenu, setShowModeMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  // Film Director D2: stretch new edges in over 500ms on first mount.
+  // Idempotent per-edge-id (module-level Set), so existing edges loaded
+  // from a saved workflow don't replay the animation.
+  const edgeInsertAnim = useEdgeInsertAnimation(id)
 
   // Close dropdown when edge is deselected
   useEffect(() => {
@@ -215,7 +220,7 @@ function AnimatedFlowEdgeComponent({
   return (
     <>
       {/* Base edge line */}
-      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: selected ? 3 : (style as CSSProperties)?.strokeWidth, stroke: selected ? "#ff0073" : (style as CSSProperties)?.stroke } as CSSProperties} markerEnd={markerEnd as string | undefined} />
+      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: selected ? 3 : (style as CSSProperties)?.strokeWidth, stroke: selected ? "#ff0073" : (style as CSSProperties)?.stroke, ...edgeInsertAnim.style } as CSSProperties} markerEnd={markerEnd as string | undefined} />
 
       {/* SVG filters for glow effects */}
       <defs>
