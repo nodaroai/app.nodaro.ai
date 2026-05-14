@@ -200,4 +200,175 @@ describe("POST /v1/generate-image", () => {
     const body = res.json()
     expect(body.error.code).toBe("internal_error")
   })
+
+  // -------------------------------------------------------------------------
+  // Identity injection — injectCharacterContext + attachToCharacterId append
+  // the character's canonical_description + an identity-preserve suffix to
+  // the prompt that gets sent to the worker. Default off (no DB lookup, no
+  // prompt mutation, no characters table query).
+  // -------------------------------------------------------------------------
+
+  describe("identity injection (injectCharacterContext)", () => {
+    const CHARACTER_ID = "00000000-0000-4000-8000-0000000000aa"
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    function setupSupabaseMock(opts: {
+      charRow?: { canonical_description: string | null; description: string | null; name: string | null } | null
+      charError?: { code?: string } | null
+    }) {
+      const charSingle = vi.fn().mockResolvedValue({
+        data: opts.charRow ?? null,
+        error: opts.charError ?? null,
+      })
+      const charIs = vi.fn().mockReturnValue({ single: charSingle })
+      const charEq2 = vi.fn().mockReturnValue({ is: charIs })
+      const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
+      const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
+
+      const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+      const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
+      const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
+
+      const fromMock = vi.mocked(supabase.from)
+      fromMock.mockImplementation((table: string) => {
+        if (table === "characters") return { select: charSelect } as never
+        if (table === "jobs") return { insert: jobInsert } as never
+        return {} as never
+      })
+      return { charSelect, charEq1, charEq2, charIs, charSingle, jobInsert, fromMock }
+    }
+
+    it("does NOT query characters when injectCharacterContext is omitted (default off)", async () => {
+      const { fromMock } = setupSupabaseMock({ charRow: { canonical_description: "ignored", description: null, name: "Kira" } })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: { prompt: "a portrait", userId: VALID_UUID },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const tablesQueried = fromMock.mock.calls.map((c) => c[0])
+      expect(tablesQueried).not.toContain("characters")
+      // Prompt stays untouched.
+      const queuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      expect(queuedPayload.prompt).toBe("a portrait")
+    })
+
+    it("does NOT query characters when injectCharacterContext=true but attachToCharacterId is absent", async () => {
+      const { fromMock } = setupSupabaseMock({ charRow: { canonical_description: "ignored", description: null, name: "Kira" } })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const tablesQueried = fromMock.mock.calls.map((c) => c[0])
+      expect(tablesQueried).not.toContain("characters")
+    })
+
+    it("appends canonical_description + identity-preserve suffix to the worker prompt", async () => {
+      setupSupabaseMock({
+        charRow: {
+          canonical_description: "A woman in her late 20s with shoulder-length auburn hair, warm hazel eyes, fair skin with light freckles.",
+          description: null,
+          name: "Kira",
+        },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "standing in a sunlit garden",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: CHARACTER_ID,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const queuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      const queuedPrompt = queuedPayload.prompt as string
+      expect(queuedPrompt).toContain("standing in a sunlit garden")
+      expect(queuedPrompt).toContain("warm hazel eyes")
+      expect(queuedPrompt).toContain("auburn hair")
+      expect(queuedPrompt).toContain("same person")
+    })
+
+    it("falls back to description when canonical_description is empty", async () => {
+      setupSupabaseMock({
+        charRow: {
+          canonical_description: "",
+          description: "Tall older man with kind eyes and a deep voice.",
+          name: "Aldric",
+        },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "sitting by the fire",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: CHARACTER_ID,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const queuedPrompt = (vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>).prompt as string
+      expect(queuedPrompt).toContain("Tall older man with kind eyes")
+    })
+
+    it("does NOT inject when both canonical_description and description are empty (skip name-only)", async () => {
+      setupSupabaseMock({
+        charRow: { canonical_description: "", description: null, name: "Kira" },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: CHARACTER_ID,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const queuedPrompt = (vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>).prompt as string
+      // No identity-preserve suffix — pure passthrough.
+      expect(queuedPrompt).toBe("a portrait")
+      expect(queuedPrompt).not.toContain("same person")
+    })
+
+    it("scopes the characters lookup by user_id (defense in depth IDOR)", async () => {
+      const { charEq1, charEq2, charIs } = setupSupabaseMock({
+        charRow: { canonical_description: "ignored", description: null, name: "Kira" },
+      })
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: CHARACTER_ID,
+        },
+      })
+
+      expect(charEq1).toHaveBeenCalledWith("id", CHARACTER_ID)
+      expect(charEq2).toHaveBeenCalledWith("user_id", VALID_UUID)
+      expect(charIs).toHaveBeenCalledWith("deleted_at", null)
+    })
+  })
 })
