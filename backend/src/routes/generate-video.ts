@@ -60,8 +60,19 @@ export const generateVideoBody = z.object({
   // non-English creative direction). Has no effect on non-VEO providers.
   enableTranslation: z.boolean().optional(),
   seedance2InputMode: z.enum(["frames", "references"]).optional(),
+  // Identity injection (image-to-video). When the upstream Character node
+  // has its "Inject identity description in downstream prompts" toggle
+  // enabled, the frontend / DAG executor passes injectCharacterContext +
+  // attachToCharacterId so the route appends the character's
+  // canonical_description (with an identity-preserve suffix) to the prompt
+  // before reservation and worker enqueue. Default off.
+  injectCharacterContext: z.boolean().optional().default(false),
+  attachToCharacterId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
 })
+
+const IDENTITY_PRESERVE_SUFFIX =
+  "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
 export async function generateVideoRoutes(app: FastifyInstance) {
   app.post("/v1/generate-video", {
@@ -113,7 +124,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode } = parsed.data
+    let prompt = rawPrompt
 
     // Seedance 2: strip inputs that belong to the inactive mode — hidden handles leave
     // stale edges that still resolve and would otherwise send conflicting params to KIE
@@ -136,6 +148,40 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    // Identity injection — when enabled + a character is referenced, append
+    // the canonical_description (with description fallback) plus an
+    // identity-preserve suffix to the prompt. Off by default.
+    if (parsed.data.injectCharacterContext && parsed.data.attachToCharacterId) {
+      const { data: char } = await supabase
+        .from("characters")
+        .select("canonical_description, description, name")
+        .eq("id", parsed.data.attachToCharacterId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .single()
+      if (char) {
+        const canonical = typeof char.canonical_description === "string" ? char.canonical_description.trim() : ""
+        const desc = typeof char.description === "string" ? char.description.trim() : ""
+        const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
+        if (identityText.length > 0) {
+          const base = (prompt ?? "").trim()
+          // image-to-video prompt is optional — start from empty if absent.
+          prompt = base.length > 0
+            ? `${base}\n\n${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
+            : `${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
+          // Mirror the final prompt into parsed.data so buildJobInputData
+          // captures it in jobs.input_data.
+          parsed.data.prompt = prompt
+          if (prompt.length > 2000) {
+            req.log.warn(
+              { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
+              "[image-to-video] character context injection produced a long prompt; consider trimming canonicalDescription",
+            )
+          }
+        }
+      }
     }
 
     const hasMultimodalRef = isS2 && (
