@@ -15,7 +15,10 @@
  * structure to the user's workflow when called with `workflowId`.
  *
  * Idempotent: safe to re-run. Looks up by (user_id, project_id, name).
- * On second+ runs with identical TEMPLATE_GRAPH, no DB writes happen.
+ * On second+ runs with identical TEMPLATE_GRAPH, no DB writes happen. On
+ * updates, ONLY the fields whose stable-stringify differs are written —
+ * hand-edits to other columns (e.g., a manually-toggled `is_template`
+ * flag) are preserved.
  *
  * Required env vars:
  *   SUPABASE_URL              — Supabase project URL
@@ -23,9 +26,17 @@
  *   NODARO_SYSTEM_USER_ID     — UUID of the system account that owns the
  *                                "nodaro-internal" project. Must already
  *                                exist as a row in `public.profiles`.
+ *                                Validated as a UUID at startup — a
+ *                                malformed value fails fast with a clear
+ *                                error message (was an opaque pg error).
  *
  * Usage:
  *   cd backend && npx tsx scripts/seed-film-template-workflow.ts
+ *   cd backend && npx tsx scripts/seed-film-template-workflow.ts --dry-run
+ *
+ * `--dry-run` prints the would-be insert/update payload (truncated) without
+ * writing to the database. Useful for verifying changes before running on
+ * production.
  *
  * NOTE on schema:
  * The `public.workflows` table does NOT have a `slug` column. Spec drafts
@@ -47,289 +58,25 @@
  * Everything else (generate_image / image_to_video / generate_character /
  * voice_design / suno_generate / lip_sync / combine_videos / …) is reached
  * by calling the matching MCP tool, which builds the right node itself.
+ *
+ * The pure template constant + helper functions live in
+ * `backend/src/lib/film-template.ts` so they can be unit-tested without
+ * pulling in this script's I/O side effects.
  */
 import "dotenv/config"
-import { createClient } from "@supabase/supabase-js"
-
-// ── Env wiring ──────────────────────────────────────────────
-
-const SUPABASE_URL = process.env.SUPABASE_URL
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-const SYSTEM_USER_ID = process.env.NODARO_SYSTEM_USER_ID
-
-if (!SUPABASE_URL) {
-  console.error("Missing env var: SUPABASE_URL")
-  process.exit(1)
-}
-if (!SUPABASE_KEY) {
-  console.error("Missing env var: SUPABASE_SERVICE_ROLE_KEY")
-  process.exit(1)
-}
-if (!SYSTEM_USER_ID) {
-  console.error(
-    "Missing env var: NODARO_SYSTEM_USER_ID (UUID of the system account that owns the nodaro-internal project)",
-  )
-  process.exit(1)
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
-})
-
-// ── Constants ───────────────────────────────────────────────
-
-const PROJECT_NAME = "nodaro-internal"
-const WORKFLOW_NAME = "Film Director — Reference Template"
-const WORKFLOW_DESCRIPTION =
-  "Reference workflow demonstrating manually-constructed node types for " +
-  "the Film Director skill (spec §5.4 Layer 2). Seeded by " +
-  "backend/scripts/seed-film-template-workflow.ts. Do not edit by hand — " +
-  "re-run the seed script to update."
-
-// ── Template graph ──────────────────────────────────────────
-//
-// React Flow v12 node shape: { id, type, position: {x, y}, data, ... }.
-// Backend stores nodes/edges as separate JSONB columns (`workflows.nodes`,
-// `workflows.edges`). Each `data._description` field is read by the skill,
-// not the runtime — it's a hint for Claude explaining the node's role.
-
-interface TemplateNode {
-  id: string
-  type: string
-  position: { x: number; y: number }
-  data: Record<string, unknown>
-  width?: number
-  height?: number
-}
-
-interface TemplateEdge {
-  id: string
-  source: string
-  sourceHandle?: string
-  target: string
-  targetHandle?: string
-}
-
-const TEMPLATE_NODES: readonly TemplateNode[] = [
-  // ── Stage 1: Script display ──────────────────────────────
-  {
-    id: "tpl_script_display",
-    type: "text-prompt",
-    position: { x: 0, y: 0 },
-    data: {
-      _description:
-        "Stage 1 'Script display' node. After the user approves the " +
-        "screenplay, the skill writes the full text here so the canvas " +
-        "shows the script as the first artifact. Use this exact shape: " +
-        "type='text-prompt', data.text=<screenplay string>, " +
-        "data.label='Script', data.variables={}.",
-      label: "Script",
-      text:
-        "FADE IN:\n\n" +
-        "EXT. SEASIDE CLIFF — GOLDEN HOUR\n\n" +
-        "A lone figure stands at the edge, wind catching their coat. " +
-        "They look out over the water, unmoving.\n\n" +
-        "FADE OUT.",
-      variables: {},
-    },
-    width: 360,
-    height: 220,
-  },
-
-  // ── Stage 2: Shot list (table) ───────────────────────────
-  {
-    id: "tpl_shot_list",
-    type: "list",
-    position: { x: 440, y: 0 },
-    data: {
-      _description:
-        "Stage 2 'Shot list' node. Each row is one shot. Columns: " +
-        "shot_number (text), description (text), duration_s (text), " +
-        "camera (text), notes (text). The skill writes the approved " +
-        "shot list here after Stage 2 negotiation.",
-      label: "Shot List",
-      columns: [
-        { id: "col_shot", name: "Shot", handleId: "col_shot", type: "text" },
-        { id: "col_desc", name: "Description", handleId: "col_desc", type: "text" },
-        { id: "col_dur", name: "Duration (s)", handleId: "col_dur", type: "text" },
-        { id: "col_cam", name: "Camera", handleId: "col_cam", type: "text" },
-        { id: "col_notes", name: "Notes", handleId: "col_notes", type: "text" },
-      ],
-      rows: [
-        ["1", "Wide establishing — cliff at golden hour", "5", "Wide, static", "Anchor frame for sequence"],
-        ["2", "Medium — figure's back, wind in coat", "4", "Medium, slight push-in", "Match cliff geo from shot 1"],
-        ["3", "Close — face in profile, eyes on horizon", "3", "Close-up, static", "Same lighting key"],
-      ],
-      fieldMappings: {},
-      viewMode: "list",
-    },
-    width: 720,
-    height: 320,
-  },
-
-  // ── Director annotations ─────────────────────────────────
-  {
-    id: "tpl_sticky_note",
-    type: "sticky-note",
-    position: { x: 0, y: 320 },
-    data: {
-      _description:
-        "Free-form annotation. Use one or more sticky notes for director " +
-        "notes (continuity reminders, lighting cues, post-pipeline TODOs). " +
-        "Color hex is free-form; default dark navy with white text. " +
-        "Width/height define the canvas footprint in pixels.",
-      label: "Director Notes",
-      text:
-        "Continuity:\n" +
-        "• Shot 1 → Shot 2: match cliff geometry and sun angle.\n" +
-        "• Shot 2 → Shot 3: identical key-light direction.\n" +
-        "\n" +
-        "Audio:\n" +
-        "• Score: ambient strings, low register.\n" +
-        "• SFX: wind bed across all three shots.",
-      color: "#2d2d44",
-      textColor: "#ffffff",
-      width: 360,
-      height: 260,
-      fontSize: "base",
-      bold: false,
-      italic: false,
-      alignment: "left",
-    },
-    width: 360,
-    height: 260,
-  },
-
-  // ── Utility: combine-text (stitch prompts) ───────────────
-  {
-    id: "tpl_combine_text",
-    type: "combine-text",
-    position: { x: 440, y: 380 },
-    data: {
-      _description:
-        "Utility that joins multiple upstream text outputs into one " +
-        "string. Useful when a prompt is composed from several Text " +
-        "Prompt nodes (e.g., character description + setting + camera). " +
-        "Auto-executes — no Run button needed.",
-      label: "Combine Prompt Parts",
-      separator: "newline",
-      customSeparator: "",
-      combinedText: "",
-    },
-    width: 320,
-    height: 160,
-  },
-
-  // ── Utility: split-text (script → per-shot rows) ─────────
-  {
-    id: "tpl_split_text",
-    type: "split-text",
-    position: { x: 800, y: 380 },
-    data: {
-      _description:
-        "Utility that splits a multi-line string into individual rows " +
-        "that downstream list/loop nodes can iterate over. Default " +
-        "separator is newline. Auto-executes.",
-      label: "Split Script Into Shots",
-      separator: "double-newline",
-      customSeparator: "",
-      trimWhitespace: true,
-      removeEmpty: true,
-    },
-    width: 320,
-    height: 160,
-  },
-
-  // ── Preview pane (review canvas) ─────────────────────────
-  {
-    id: "tpl_preview",
-    type: "preview",
-    position: { x: 1160, y: 380 },
-    data: {
-      _description:
-        "Read-only collector that displays whatever upstream nodes " +
-        "feed it (text, images, video, audio). Use one Preview at the " +
-        "end of each stage so the user can sanity-check the artifacts " +
-        "before moving on. `previewItems` and `itemOrder` are populated " +
-        "by the runtime — start them empty.",
-      label: "Review Pane",
-      previewItems: [],
-      itemOrder: [],
-    },
-    width: 480,
-    height: 320,
-  },
-
-  // ── Per-shot scene container ─────────────────────────────
-  {
-    id: "tpl_scene_example",
-    type: "scene",
-    position: { x: 0, y: 720 },
-    data: {
-      _description:
-        "Per-shot 'Scene' container — holds the full creative brief for " +
-        "one shot (duration, framing, lens, lighting, mood, dialogue). " +
-        "The skill spawns one Scene node per row of the Shot List. The " +
-        "generated_* fields are runtime-only; start them empty/idle so " +
-        "the canvas shows the node in its un-run state.",
-      label: "Scene 1",
-      sceneName: "Cliff — Wide Establishing",
-      sceneNumber: 1,
-      duration: 5,
-      summary: "Lone figure on seaside cliff at golden hour. Wide static.",
-      characters: [],
-      dialogue: [],
-      locations: [],
-      timeOfDay: "sunset",
-      weather: "clear",
-      lighting: "natural",
-      objects: [],
-      aspectRatio: "16:9",
-      shotType: "wide",
-      cameraAngle: "eye-level",
-      cameraMovement: "static",
-      depthOfField: "deep",
-      lensType: "wide",
-      mood: ["contemplative"],
-      colorPalette: ["amber", "teal"],
-      visualStyle: "cinematic",
-      narration: "",
-      musicMood: "ambient-strings",
-      soundEffects: ["wind"],
-      transitionIn: "cut",
-      transitionOut: "cut",
-      directorNotes: "Anchor frame; match geometry into shot 2.",
-      referenceUrls: [],
-      generatedPrompt: "",
-      executionStatus: "idle",
-      generatedResults: [],
-      activeResultIndex: 0,
-      generatedImageUrl: "",
-      fieldMappings: {},
-      sourceScriptNodeId: "",
-      sourceSceneIndex: -1,
-      autoSyncWithScript: false,
-      audioAssignments: [],
-      videoProvider: "minimax",
-      generatedVideoResults: [],
-      activeVideoResultIndex: 0,
-      generatedVideoUrl: "",
-      videoExecutionStatus: "idle",
-    },
-    width: 480,
-    height: 600,
-  },
-] as const
-
-// No edges in the template — its purpose is structural reference, not flow.
-// The skill builds edges itself when wiring real workflows together.
-const TEMPLATE_EDGES: readonly TemplateEdge[] = [] as const
-
-const TEMPLATE_SETTINGS = {
-  _description:
-    "Settings for the Film Director reference template. Empty by " +
-    "design — the skill does not depend on workflow-level settings.",
-} as const
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
+import {
+  PROJECT_NAME,
+  TEMPLATE_EDGES,
+  TEMPLATE_NODES,
+  TEMPLATE_SETTINGS,
+  UUID_REGEX,
+  WORKFLOW_DESCRIPTION,
+  WORKFLOW_NAME,
+  type WorkflowRow,
+  diffWorkflow,
+  graphIsUnchanged,
+} from "../src/lib/film-template.js"
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -338,20 +85,16 @@ interface ProjectRow {
   name: string
 }
 
-interface WorkflowRow {
-  id: string
-  nodes: unknown
-  edges: unknown
-  settings: unknown
-  description: string | null
-}
-
-async function ensureProject(): Promise<ProjectRow> {
+async function ensureProject(
+  supabase: SupabaseClient,
+  systemUserId: string,
+  dryRun: boolean,
+): Promise<ProjectRow> {
   console.log(`Looking up "${PROJECT_NAME}" project for system user…`)
   const { data: existing, error: selectError } = await supabase
     .from("projects")
     .select("id, name")
-    .eq("user_id", SYSTEM_USER_ID)
+    .eq("user_id", systemUserId)
     .eq("name", PROJECT_NAME)
     .maybeSingle()
 
@@ -364,17 +107,24 @@ async function ensureProject(): Promise<ProjectRow> {
   }
 
   console.log(`  → Not found, creating…`)
+  const insertPayload = {
+    user_id: systemUserId,
+    name: PROJECT_NAME,
+    description:
+      "Internal project that owns canonical reference workflows used " +
+      "by Nodaro skills (e.g., the Film Director template). Not " +
+      "user-facing.",
+    settings: {},
+  }
+
+  if (dryRun) {
+    console.log(`  → [DRY RUN] would INSERT projects:`, truncate(insertPayload))
+    return { id: "00000000-0000-0000-0000-000000000000", name: PROJECT_NAME }
+  }
+
   const { data: created, error: insertError } = await supabase
     .from("projects")
-    .insert({
-      user_id: SYSTEM_USER_ID,
-      name: PROJECT_NAME,
-      description:
-        "Internal project that owns canonical reference workflows used " +
-        "by Nodaro skills (e.g., the Film Director template). Not " +
-        "user-facing.",
-      settings: {},
-    })
+    .insert(insertPayload)
     .select("id, name")
     .single()
 
@@ -387,37 +137,23 @@ async function ensureProject(): Promise<ProjectRow> {
   return created as ProjectRow
 }
 
-function stableStringify(value: unknown): string {
-  // Deep stable sort keys so we can compare against DB rows even if the
-  // jsonb roundtrip re-orders fields. Doesn't sort arrays — order matters
-  // for the React Flow graph.
-  return JSON.stringify(value, function replacer(_, v: unknown): unknown {
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      const ordered: Record<string, unknown> = {}
-      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
-        ordered[k] = (v as Record<string, unknown>)[k]
-      }
-      return ordered
-    }
-    return v
-  })
+/** Truncate a payload preview for dry-run logging — keeps logs readable. */
+function truncate(payload: Record<string, unknown>, max = 240): string {
+  const json = JSON.stringify(payload)
+  return json.length <= max ? json : `${json.slice(0, max)}… (${json.length} chars total)`
 }
 
-function graphIsUnchanged(existing: WorkflowRow): boolean {
-  return (
-    stableStringify(existing.nodes) === stableStringify(TEMPLATE_NODES) &&
-    stableStringify(existing.edges) === stableStringify(TEMPLATE_EDGES) &&
-    stableStringify(existing.settings) === stableStringify(TEMPLATE_SETTINGS) &&
-    existing.description === WORKFLOW_DESCRIPTION
-  )
-}
-
-async function upsertWorkflow(projectId: string): Promise<{ id: string; created: boolean; changed: boolean }> {
+async function upsertWorkflow(
+  supabase: SupabaseClient,
+  systemUserId: string,
+  projectId: string,
+  dryRun: boolean,
+): Promise<{ id: string; created: boolean; changed: boolean }> {
   console.log(`Upserting workflow "${WORKFLOW_NAME}"…`)
   const { data: existing, error: selectError } = await supabase
     .from("workflows")
     .select("id, nodes, edges, settings, description")
-    .eq("user_id", SYSTEM_USER_ID)
+    .eq("user_id", systemUserId)
     .eq("project_id", projectId)
     .eq("name", WORKFLOW_NAME)
     .maybeSingle()
@@ -432,16 +168,37 @@ async function upsertWorkflow(projectId: string): Promise<{ id: string; created:
       console.log(`  → No changes (already seeded) ✓  (id=${row.id})`)
       return { id: row.id, created: false, changed: false }
     }
-    console.log(`  → Found existing workflow ${row.id}, applying update…`)
+
+    // Build a minimal UPDATE payload: only include fields that actually
+    // differ. Preserves hand-edits to columns this script doesn't manage.
+    const diff = diffWorkflow(row)
+    const updates: Record<string, unknown> = {}
+    if (diff.descriptionChanged) updates.description = WORKFLOW_DESCRIPTION
+    if (diff.nodesChanged) updates.nodes = TEMPLATE_NODES
+    if (diff.edgesChanged) updates.edges = TEMPLATE_EDGES
+    if (diff.settingsChanged) updates.settings = TEMPLATE_SETTINGS
+
+    if (Object.keys(updates).length === 0) {
+      // Defensive: graphIsUnchanged() said no, but diffWorkflow() says
+      // nothing differs. The two helpers should agree — log + skip.
+      console.log(`  → No changes after diff (already seeded) ✓  (id=${row.id})`)
+      return { id: row.id, created: false, changed: false }
+    }
+
+    updates.updated_at = new Date().toISOString()
+    const changedFields = Object.keys(updates).filter((k) => k !== "updated_at")
+    console.log(
+      `  → Found existing workflow ${row.id}, updating fields: [${changedFields.join(", ")}]…`,
+    )
+
+    if (dryRun) {
+      console.log(`  → [DRY RUN] would UPDATE workflows id=${row.id}:`, truncate(updates))
+      return { id: row.id, created: false, changed: true }
+    }
+
     const { error: updateError } = await supabase
       .from("workflows")
-      .update({
-        nodes: TEMPLATE_NODES,
-        edges: TEMPLATE_EDGES,
-        settings: TEMPLATE_SETTINGS,
-        description: WORKFLOW_DESCRIPTION,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", row.id)
 
     if (updateError) {
@@ -452,17 +209,24 @@ async function upsertWorkflow(projectId: string): Promise<{ id: string; created:
   }
 
   console.log(`  → Not found, inserting…`)
+  const insertPayload = {
+    user_id: systemUserId,
+    project_id: projectId,
+    name: WORKFLOW_NAME,
+    description: WORKFLOW_DESCRIPTION,
+    nodes: TEMPLATE_NODES,
+    edges: TEMPLATE_EDGES,
+    settings: TEMPLATE_SETTINGS,
+  }
+
+  if (dryRun) {
+    console.log(`  → [DRY RUN] would INSERT workflows:`, truncate(insertPayload))
+    return { id: "00000000-0000-0000-0000-000000000000", created: true, changed: true }
+  }
+
   const { data: created, error: insertError } = await supabase
     .from("workflows")
-    .insert({
-      user_id: SYSTEM_USER_ID,
-      project_id: projectId,
-      name: WORKFLOW_NAME,
-      description: WORKFLOW_DESCRIPTION,
-      nodes: TEMPLATE_NODES,
-      edges: TEMPLATE_EDGES,
-      settings: TEMPLATE_SETTINGS,
-    })
+    .insert(insertPayload)
     .select("id")
     .single()
 
@@ -479,16 +243,61 @@ async function upsertWorkflow(projectId: string): Promise<{ id: string; created:
 // ── Main ────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  // CLI args
+  const DRY_RUN = process.argv.includes("--dry-run")
+
+  // Env wiring
+  const SUPABASE_URL = process.env.SUPABASE_URL
+  const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const SYSTEM_USER_ID = process.env.NODARO_SYSTEM_USER_ID
+
+  if (!SUPABASE_URL) {
+    console.error("Missing env var: SUPABASE_URL")
+    process.exit(1)
+  }
+  if (!SUPABASE_KEY) {
+    console.error("Missing env var: SUPABASE_SERVICE_ROLE_KEY")
+    process.exit(1)
+  }
+  if (!SYSTEM_USER_ID) {
+    console.error(
+      "Missing env var: NODARO_SYSTEM_USER_ID (UUID of the system account that owns the nodaro-internal project)",
+    )
+    process.exit(1)
+  }
+
+  // Validate UUID format up front — a malformed value otherwise reaches
+  // Supabase and returns an opaque `invalid input syntax for type uuid`
+  // error that operators have struggled to debug.
+  if (!UUID_REGEX.test(SYSTEM_USER_ID)) {
+    console.error(
+      `Malformed env var NODARO_SYSTEM_USER_ID: "${SYSTEM_USER_ID}"\n` +
+        `   Expected a UUID like "550e8400-e29b-41d4-a716-446655440000".\n` +
+        `   Find or create a Nodaro user in the profiles table and copy its id.`,
+    )
+    process.exit(1)
+  }
+
+  if (DRY_RUN) {
+    console.log("DRY RUN MODE — no DB writes will occur\n")
+  }
+
   console.log("Seeding Film Director reference template workflow…")
   console.log(`  System user: ${SYSTEM_USER_ID}`)
   console.log(`  Project:     ${PROJECT_NAME}`)
   console.log(`  Workflow:    ${WORKFLOW_NAME}\n`)
 
-  const project = await ensureProject()
-  const result = await upsertWorkflow(project.id)
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  const project = await ensureProject(supabase, SYSTEM_USER_ID, DRY_RUN)
+  const result = await upsertWorkflow(supabase, SYSTEM_USER_ID, project.id, DRY_RUN)
 
   console.log("")
-  if (result.created) {
+  if (DRY_RUN) {
+    console.log(`Dry run complete ✓ (no writes performed)`)
+  } else if (result.created) {
     console.log(`Seeded ✓ (created workflow ${result.id})`)
   } else if (result.changed) {
     console.log(`Seeded ✓ (updated workflow ${result.id})`)
@@ -496,8 +305,10 @@ async function main(): Promise<void> {
     console.log(`No changes (already seeded) ✓ (workflow ${result.id})`)
   }
   console.log("")
-  console.log(`Skill should reference this workflow by UUID:`)
-  console.log(`  ${result.id}`)
+  if (!DRY_RUN) {
+    console.log(`Skill should reference this workflow by UUID:`)
+    console.log(`  ${result.id}`)
+  }
 }
 
 main().catch((err: unknown) => {
