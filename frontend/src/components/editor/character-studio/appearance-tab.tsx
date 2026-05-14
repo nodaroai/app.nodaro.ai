@@ -75,6 +75,11 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
   }
 
   const generatePortrait = async (count: CandidateCount) => {
+    // Stop any in-flight polls from a prior generation BEFORE kicking off the
+    // next batch — otherwise the about-to-be-replaced candidates keep ticking
+    // silently against `getJobStatus` until each old job hits a terminal state.
+    // On a stuck provider this leaks intervals and wastes API calls.
+    stopAllPolls()
     setGenBusy(true)
     let characterId: string
     try {
@@ -269,7 +274,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           onPromptFragment={(fragment) =>
             state.patch({
               seedPrompt: (s.seedPrompt ?? "").trim()
-                ? `${s.seedPrompt}\n${fragment}`
+                ? `${(s.seedPrompt ?? "").trimEnd()}\n${fragment}`
                 : fragment,
             })
           }
