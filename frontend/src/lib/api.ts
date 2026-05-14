@@ -179,6 +179,13 @@ export async function generateImage(
   renderingSpeed?: string,
   styleType?: string,
   expandPrompt?: boolean,
+  identity?: {
+    /** When true, the backend appends the character's canonical_description
+     *  + identity-preserve suffix to the prompt. Requires attachToCharacterId. */
+    injectCharacterContext?: boolean
+    /** Character row id (uuid). Looked up by the backend scoped to the caller. */
+    attachToCharacterId?: string
+  },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -216,6 +223,12 @@ export async function generateImage(
   }
   if (userId) {
     body.userId = userId
+  }
+  if (identity?.injectCharacterContext) {
+    body.injectCharacterContext = true
+  }
+  if (identity?.attachToCharacterId) {
+    body.attachToCharacterId = identity.attachToCharacterId
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
@@ -315,6 +328,10 @@ export async function imageToImage(
     attachToCharacterId?: string
     attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
     attachName?: string
+    /** When true, the backend appends the character's canonical_description
+     *  + identity-preserve suffix to the prompt (non-studio path; studio
+     *  path is unaffected — see backend route). Requires attachToCharacterId. */
+    injectCharacterContext?: boolean
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, prompt }
@@ -339,6 +356,7 @@ export async function imageToImage(
   if (options?.attachToCharacterId) body.attachToCharacterId = options.attachToCharacterId
   if (options?.attachToColumn) body.attachToColumn = options.attachToColumn
   if (options?.attachName) body.attachName = options.attachName
+  if (options?.injectCharacterContext) body.injectCharacterContext = true
   const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1256,6 +1274,10 @@ export interface GenerateVideoOptions {
     framesToTest?: number
     quality?: "lossless" | "precise"
   }
+  /** When true, the backend appends the character's canonical_description +
+   *  identity-preserve suffix to the prompt. Requires attachToCharacterId. */
+  injectCharacterContext?: boolean
+  attachToCharacterId?: string
   userId?: string
 }
 
@@ -1304,6 +1326,12 @@ export async function generateVideo(
       seedance2InputMode: opts.seedance2InputMode,
       enableTranslation: opts.enableTranslation,
       loopTrim: opts.loopTrim,
+    }
+    if (opts.injectCharacterContext) {
+      body.injectCharacterContext = true
+    }
+    if (opts.attachToCharacterId) {
+      body.attachToCharacterId = opts.attachToCharacterId
     }
     if (opts.userId) {
       body.userId = opts.userId
