@@ -20,6 +20,7 @@ import {
 import type { ExposableField, ExposableOutput } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { IdentityMeta } from "@nodaro/shared"
+import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "location" | "utility"
@@ -2738,6 +2739,16 @@ export type CharacterNodeData = {
   // Voice + personality (Phase 1: stored only; Phase 2: auto-injected downstream)
   voice: CharacterVoice | null
   personality: CharacterPersonality | null
+  // Real-life reference photos uploaded by the user (face, body, outfit, etc.) — routed
+  // per-asset-target via `routePhotosForAsset` in `@/lib/reference-photo-routing`.
+  readonly referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
+  // Frozen seed prompt captured at first sheet generation — keeps later regens consistent.
+  readonly seedPrompt?: string
+  // LLM-authored canonical likeness description, derived from referencePhotos + identity fields.
+  readonly canonicalDescription?: string
+  // Per-variant cache of real-life reference URLs used at last generation (key = variant id,
+  // e.g. expression/pose/angle/lighting slug); used to detect stale renders when refs change.
+  readonly realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
 }
 
 // --- Object Node Data ---

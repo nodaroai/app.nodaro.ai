@@ -5,8 +5,10 @@ import { generateCharacterMotion } from "@/lib/api"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
+import { AssetGenPanel, type AssetGenSubmission } from "./asset-gen-panel"
 import { GenerationBar } from "./generation-bar"
 import { PendingCard } from "./pending-card"
+import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 
 const MOTION_PRESETS = [
   "walking",
@@ -36,11 +38,23 @@ const DEFAULT_MOTION_PROVIDER: (typeof CHARACTER_MOTION_PROVIDERS)[number] = "kl
  *
  * `onRename` makes each card's name label inline-editable, matching the Expressions/Poses tabs.
  */
-export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
+export function MotionsTab({
+  state,
+  jobs,
+  onSwitchToAppearance,
+}: {
+  state: CharacterStudioState
+  jobs: CharacterStudioJobs
+  onSwitchToAppearance?: () => void
+}) {
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
   const [currentModel, setCurrentModel] = useState<string>(DEFAULT_MOTION_PROVIDER)
+  // Identity Foundation v2: AssetGenPanel + per-variant real-life refs drawer.
+  // Same UX as Expressions/Poses — see expressions-tab.tsx for parity notes.
+  const [genPanelOpen, setGenPanelOpen] = useState(false)
+  const [refsDrawerOpen, setRefsDrawerOpen] = useState(false)
 
   const handleGenerate = useCallback(
     async (text: string, _isPreset: boolean, model: string) => {
@@ -101,8 +115,67 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
     [items, state, jobs, currentModel],
   )
 
+  // Custom-prompt generation path (Identity Foundation v2). Routes through
+  // generateCharacterMotion; the panel's `description` + `motionDescription`
+  // override the character-level description for this generation, and
+  // `realLifeRefs` bias the i2v provider when supported. When both description
+  // fields are empty the backend asks Claude Sonnet for a combined draft.
+  const fireCustomGen = useCallback(
+    async (submission: AssetGenSubmission) => {
+      if (!state.staged.sourceImageUrl) return
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      const variant = submission.userPrompt.slice(0, 100) || "custom"
+      try {
+        const { jobId } = await generateCharacterMotion({
+          motionPrompt: submission.userPrompt,
+          sourceImageUrl: state.staged.sourceImageUrl,
+          provider: currentModel,
+          name: state.staged.characterName,
+          description: submission.description || state.staged.description,
+          motionDescription: submission.motionDescription,
+          gender: state.staged.gender,
+          style: state.staged.style,
+          baseOutfit: state.staged.baseOutfit,
+          attachToCharacterId: characterId,
+          attachName: variant,
+          realLifeRefs: submission.realLifeRefs,
+        })
+        jobs.track(jobId, "motions", variant)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Generation failed.")
+      }
+    },
+    [state, jobs, currentModel],
+  )
+
+  // Portrait-required gate (PR 2 Task 18). Motions has its own UI (no shared ImageAssetTab) so
+  // the gate is duplicated here. The CTA replaces the entire tab body when the modal wires a
+  // switch callback and the portrait is missing.
+  if (!hasPortrait && onSwitchToAppearance) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
+        <div className="text-[11px] text-amber-300 mb-2">
+          Generate a portrait first to enable asset generations.
+        </div>
+        <button
+          type="button"
+          onClick={onSwitchToAppearance}
+          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
+        >
+          Open Appearance tab
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-200">Motions</div>
@@ -110,20 +183,33 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
             Short video clips generated from the portrait (Kling / Wan i2v)
           </div>
         </div>
-        <button
-          onClick={() => {
-            const url = window.prompt("Paste a video URL to import as a motion clip:")?.trim()
-            if (url) state.patch({ motions: [...state.staged.motions, { name: "imported", url }] })
-          }}
-          className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400"
-        >
-          ↑ Import
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setGenPanelOpen(true)}
+            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+          >
+            Custom prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => setRefsDrawerOpen(true)}
+            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+          >
+            Real-life refs
+          </button>
+          <button
+            onClick={() => {
+              const url = window.prompt("Paste a video URL to import as a motion clip:")?.trim()
+              if (url) state.patch({ motions: [...state.staged.motions, { name: "imported", url }] })
+            }}
+            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400"
+          >
+            ↑ Import
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3.5">
-        {!hasPortrait && (
-          <div className="text-[11px] text-slate-500 mb-3">Generate a portrait in the Appearance tab first.</div>
-        )}
         <div className="grid grid-cols-5 gap-2.5">
           {items.map((item, idx) => (
             <AssetCard
@@ -159,6 +245,25 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
         customPlaceholder='Custom motion: e.g. "walking confidently toward camera"'
         onGenerate={handleGenerate}
         onModelChange={setCurrentModel}
+      />
+      <AssetGenPanel
+        open={genPanelOpen}
+        onClose={() => setGenPanelOpen(false)}
+        onGenerate={(submission) => {
+          setGenPanelOpen(false)
+          void fireCustomGen(submission)
+        }}
+        assetType="motions"
+        characterId={state.staged.characterDbId ?? ""}
+        canonicalDescription={state.staged.canonicalDescription}
+      />
+      <PerVariantRealLifeRefsDrawer
+        open={refsDrawerOpen}
+        onClose={() => setRefsDrawerOpen(false)}
+        title="Real-life refs · Motions"
+        variants={MOTION_PRESETS}
+        refsByVariant={state.staged.realLifeRefsByVariant ?? {}}
+        onChange={(next) => state.patch({ realLifeRefsByVariant: next })}
       />
     </div>
   )

@@ -14,7 +14,15 @@ const POSE_PRESETS = [
   "turning",
 ] as const
 
-export function PosesTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
+export function PosesTab({
+  state,
+  jobs,
+  onSwitchToAppearance,
+}: {
+  state: CharacterStudioState
+  jobs: CharacterStudioJobs
+  onSwitchToAppearance?: () => void
+}) {
   return (
     <ImageAssetTab
       state={state}
@@ -28,6 +36,7 @@ export function PosesTab({ state, jobs }: { state: CharacterStudioState; jobs: C
         const url = window.prompt("Paste an image URL to import as a pose:")?.trim()
         if (url) state.patch({ poses: [...state.staged.poses, { name: "imported", url }] })
       }}
+      onSwitchToAppearance={onSwitchToAppearance}
     />
   )
 }
