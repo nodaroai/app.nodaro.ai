@@ -326,7 +326,7 @@ export async function imageToImage(
     maskUrl?: string
     /** Character Studio auto-attach (optional). */
     attachToCharacterId?: string
-    attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+    attachToColumn?: "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
     attachName?: string
     /** When true, the backend appends the character's canonical_description
      *  + identity-preserve suffix to the prompt (non-studio path; studio
@@ -391,7 +391,7 @@ export async function modifyImage(
     /** Character Studio auto-attach (only honored on the /v1/image-to-image path —
      *  /v1/edit-image / nano-banana-edit doesn't currently auto-attach). */
     attachToCharacterId?: string
-    attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+    attachToColumn?: "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
     attachName?: string
   }
 ): Promise<{ jobId: string }> {
@@ -445,7 +445,7 @@ export async function generateCharacter(data: {
   /** Character Studio (Task 6): reference photos tagged by camera angle/kind. */
   referencePhotos?: Array<{
     url: string
-    kind: "front" | "sideLeft" | "sideRight" | "threeQuarterLeft" | "threeQuarterRight" | "fullBody" | "other"
+    kind: "frontFace" | "sideLeft" | "sideRight" | "threeQuarterLeft" | "threeQuarterRight" | "frontBody" | "other"
   }>
 }): Promise<{ jobId: string; jobIds: string[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
@@ -461,7 +461,14 @@ export async function generateCharacter(data: {
 }
 
 export async function generateCharacterAsset(data: {
-  assetType: "expressions" | "poses" | "lighting" | "angles" | "custom"
+  assetType:
+    | "expressions"
+    | "poses"
+    | "lighting"
+    | "angles"
+    | "headAngles"
+    | "bodyAngles"
+    | "custom"
   variant: string
   name: string
   description?: string
@@ -475,7 +482,7 @@ export async function generateCharacterAsset(data: {
   /** Character Studio auto-attach: when all three are set, the worker appends
    *  {name: attachName, url: <result>} to this column on the user's character row. */
   attachToCharacterId?: string
-  attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
+  attachToColumn?: "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
   attachName?: string
   /** Per-asset extras (Identity Foundation v2). When `description` is omitted
    *  the backend asks Claude Sonnet for a draft scoped to the character's
@@ -542,6 +549,7 @@ export async function saveCharacter(data: {
   poses?: { name: string; url: string }[]
   lightingVariations?: { name: string; url: string }[]
   angles?:      { name: string; url: string }[]
+  bodyAngles?:  { name: string; url: string }[]
   motions?:     { name: string; url: string }[]
   voice?:       { voiceId: string; voiceName: string; traits: string } | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
@@ -583,6 +591,7 @@ export async function getCharacter(id: string): Promise<{
   poses: { name: string; url: string }[] | null
   lightingVariations: { name: string; url: string }[] | null
   angles: { name: string; url: string }[] | null
+  bodyAngles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
@@ -590,7 +599,7 @@ export async function getCharacter(id: string): Promise<{
   seedPrompt?: string
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
-  pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }[]
+  pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"; name: string }[]
   readonly portraitCandidates?: ReadonlyArray<{
     readonly jobId: string
     readonly status: string

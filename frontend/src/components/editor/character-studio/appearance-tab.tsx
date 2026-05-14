@@ -21,7 +21,10 @@ import { CanonicalDescriptionExpander } from "./canonical-description-expander"
 import { PersonPickerExpander } from "./person-picker-expander"
 import { SeedPromptTextarea } from "./seed-prompt-textarea"
 
-const ANGLE_PRESETS = ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"] as const
+// Head angles drop "back" (back-of-head is rarely useful as a likeness ref);
+// body angles keep all 6 since back-body views matter for character sheets.
+const HEAD_ANGLE_PRESETS = ["front", "3/4 left", "left profile", "right profile", "3/4 right"] as const
+const BODY_ANGLE_PRESETS = ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"] as const
 const LIGHTING_PRESETS = ["daylight", "night", "dramatic"] as const
 
 const POLL_MS = 2000
@@ -350,15 +353,27 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       </div>
 
       <div className="border-t border-[#1e293b] pt-4">
-        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">Reference Views</div>
+        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">Head / Face Angles</div>
         <ImageAssetTab
           state={state}
           jobs={jobs}
-          assetType="angles"
+          assetType="headAngles"
           arrayField="angles"
-          presets={ANGLE_PRESETS}
-          title="Angles"
-          description="front, 3/4, profile (L/R), and back reference views"
+          presets={HEAD_ANGLE_PRESETS}
+          title="Head Angles"
+          description="head-and-shoulders portraits at different angles"
+        />
+      </div>
+      <div className="border-t border-[#1e293b] pt-4">
+        <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-2">Body Angles</div>
+        <ImageAssetTab
+          state={state}
+          jobs={jobs}
+          assetType="bodyAngles"
+          arrayField="bodyAngles"
+          presets={BODY_ANGLE_PRESETS}
+          title="Body Angles"
+          description="full-body T-pose at different angles"
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">

@@ -32,6 +32,8 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
+import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
+import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
@@ -559,6 +561,64 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     onAppendNodes: (newNodes) => setNodes((nds) => [...nds, ...newNodes]),
     onAppendEdges: (newEdges) => setEdges((eds) => [...eds, ...newEdges]),
   })
+
+  // ── Playwright dev-only test helper (D4b) ───────────────────────────────
+  // Exposes a small object on `window.__nodaroTest` so the
+  // `frontend/playwright/tests/film-director-canvas-build.spec.ts` regression
+  // suite can drive the editor deterministically — bypassing the real
+  // MCP/Supabase write path that is far too slow for unit-grade visual
+  // regression. Gated on `import.meta.env.DEV` so the production bundle
+  // tree-shakes this entire effect out.
+  //
+  // Shape matches the spec's `NodaroTestApi` interface (positional args):
+  //   batchAddNodesAndEdges(nodes, edges) — appends nodes + edges to RF state
+  //   getViewport()                       — returns { x, y, zoom }
+  //   resetSeen()                         — clears the D1/D2 module-level
+  //                                         seen-sets so animations replay
+  //                                         on rerun (D3's seen-set is per-
+  //                                         instance and resets naturally on
+  //                                         remount, so it's not exposed).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    interface NodaroTestNodeInput {
+      readonly id: string
+      readonly type: string
+      readonly position: { readonly x: number; readonly y: number }
+      readonly data?: Record<string, unknown>
+    }
+    interface NodaroTestEdgeInput {
+      readonly id: string
+      readonly source: string
+      readonly target: string
+      readonly sourceHandle?: string
+      readonly targetHandle?: string
+    }
+    const helper = {
+      batchAddNodesAndEdges: (
+        newNodes: ReadonlyArray<NodaroTestNodeInput>,
+        newEdges: ReadonlyArray<NodaroTestEdgeInput>,
+      ) => {
+        if (newNodes.length > 0) {
+          // Cast: the spec's input shape is structurally compatible with
+          // React Flow's Node, but TS can't prove the narrower SceneNodeType
+          // union — the helper is unit-test-only so the cast is sound.
+          setNodes((nds) => [...nds, ...(newNodes as unknown as WorkflowNode[])])
+        }
+        if (newEdges.length > 0) {
+          setEdges((eds) => [...eds, ...(newEdges as unknown as WorkflowEdge[])])
+        }
+      },
+      getViewport: () => getViewport(),
+      resetSeen: () => {
+        __resetSeenNodesForTests()
+        __resetSeenEdgesForTests()
+      },
+    }
+    ;(window as unknown as { __nodaroTest?: typeof helper }).__nodaroTest = helper
+    return () => {
+      delete (window as unknown as { __nodaroTest?: typeof helper }).__nodaroTest
+    }
+  }, [setNodes, setEdges, getViewport])
 
   const handleMoveStart = useCallback(() => {
     // Tell the auto-pan hook the user just initiated a pan/zoom — it

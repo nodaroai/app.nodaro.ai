@@ -51,6 +51,7 @@ type DirtyTrackedField =
   | "expressions"
   | "poses"
   | "angles"
+  | "bodyAngles"
   | "lightingVariations"
   | "motions"
 
@@ -61,6 +62,7 @@ const DIRTY_TRACKED_FIELDS: ReadonlySet<DirtyTrackedField> = new Set([
   "expressions",
   "poses",
   "angles",
+  "bodyAngles",
   "lightingVariations",
   "motions",
 ])
@@ -69,7 +71,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error"
 
 export type StudioPendingJobSeed = {
   jobId: string
-  assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"
+  assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"
   name: string
 }
 
@@ -113,6 +115,7 @@ function buildInsertPayload(nodeId: string, d: CharacterNodeData) {
     poses: d.poses,
     lightingVariations: d.lightingVariations,
     angles: d.angles,
+    bodyAngles: d.bodyAngles,
     motions: d.motions,
     voice: d.voice,
     personality: d.personality,
@@ -147,6 +150,7 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
   if (dirty.has("expressions")) payload.expressions = d.expressions
   if (dirty.has("poses")) payload.poses = d.poses
   if (dirty.has("angles")) payload.angles = d.angles
+  if (dirty.has("bodyAngles")) payload.bodyAngles = d.bodyAngles
   if (dirty.has("lightingVariations")) payload.lightingVariations = d.lightingVariations
   if (dirty.has("motions")) payload.motions = d.motions
   if (dirty.has("canonicalDescription")) payload.canonicalDescription = d.canonicalDescription
@@ -210,6 +214,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
             poses: fresh.poses ?? prev.poses,
             lightingVariations: fresh.lightingVariations ?? prev.lightingVariations,
             angles: fresh.angles ?? prev.angles,
+            bodyAngles: fresh.bodyAngles ?? prev.bodyAngles,
             motions: fresh.motions ?? prev.motions,
             voice: fresh.voice ?? prev.voice,
             personality: fresh.personality ?? prev.personality,

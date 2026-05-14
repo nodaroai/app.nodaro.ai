@@ -14,7 +14,14 @@ interface AssetGenPanelProps {
   readonly open: boolean
   readonly onClose: () => void
   readonly onGenerate: (submission: AssetGenSubmission) => void
-  readonly assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"
+  readonly assetType:
+    | "expressions"
+    | "poses"
+    | "angles"
+    | "headAngles"
+    | "bodyAngles"
+    | "lighting"
+    | "motions"
   readonly characterId: string
   readonly canonicalDescription?: string
 }

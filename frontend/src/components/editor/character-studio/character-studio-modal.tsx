@@ -15,6 +15,7 @@ const ASSET_FIELD: Record<StudioAssetType, keyof CharacterNodeData> = {
   expressions: "expressions",
   poses: "poses",
   angles: "angles",
+  bodyAngles: "bodyAngles",
   lighting: "lightingVariations",
   motions: "motions",
 }

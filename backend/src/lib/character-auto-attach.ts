@@ -2,13 +2,15 @@ import { supabase } from "./supabase.js"
 
 /**
  * Columns on `characters` that hold JSONB arrays of `{name, url}` items.
- * Kept in sync with migration 111's `append_character_asset` whitelist.
+ * Kept in sync with the `append_character_asset` RPC whitelist (migration 111,
+ * extended in 118 to include `body_angles`).
  */
 export type CharacterAssetColumn =
   | "expressions"
   | "poses"
   | "lighting_variations"
   | "angles"
+  | "body_angles"
   | "motions"
 
 const VALID_ASSET_COLUMNS: ReadonlySet<CharacterAssetColumn> = new Set([
@@ -16,6 +18,7 @@ const VALID_ASSET_COLUMNS: ReadonlySet<CharacterAssetColumn> = new Set([
   "poses",
   "lighting_variations",
   "angles",
+  "body_angles",
   "motions",
 ])
 

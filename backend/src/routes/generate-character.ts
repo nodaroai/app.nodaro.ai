@@ -34,13 +34,16 @@ const generateCharacterBody = z
       .array(
         z.object({
           url: safeUrlSchema,
+          // Migration 118 renamed the two ambiguous kinds:
+          //   front    → frontFace  (face-level shot)
+          //   fullBody → frontBody  (full-body T-pose shot)
           kind: z.enum([
-            "front",
+            "frontFace",
             "sideLeft",
             "sideRight",
             "threeQuarterLeft",
             "threeQuarterRight",
-            "fullBody",
+            "frontBody",
             "other",
           ]),
         }),
