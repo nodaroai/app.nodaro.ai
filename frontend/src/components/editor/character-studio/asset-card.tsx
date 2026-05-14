@@ -46,17 +46,43 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
   const costLabel = cost > 0 ? ` (${cost} CR)` : ""
+  // Video preview: rewind + play on mouse-enter, pause + rewind on mouse-leave.
+  // `muted`+`playsInline` are required for the browser to honor a JS-driven
+  // play() outside a click handler. We catch the play() rejection promise
+  // (some browsers reject when the tab is backgrounded or autoplay policy
+  // intervenes) so the hover doesn't throw to the console. The previous "▶"
+  // overlay was a lie — it implied click-to-play but had no handler.
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const handleMouseEnter = () => {
+    if (!isVideo || !videoRef.current) return
+    videoRef.current.currentTime = 0
+    void videoRef.current.play().catch(() => {})
+  }
+  const handleMouseLeave = () => {
+    if (!isVideo || !videoRef.current) return
+    videoRef.current.pause()
+    videoRef.current.currentTime = 0
+  }
 
   return (
-    <div className="relative rounded-md overflow-hidden bg-[#1a1d27] group">
+    <div
+      className="relative rounded-md overflow-hidden bg-[#1a1d27] group"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="aspect-[3/4] bg-gradient-to-br from-[#1e2535] to-[#252836] flex items-center justify-center">
         {isVideo ? (
-          <video src={item.url} className="w-full h-full object-cover" muted playsInline />
+          <video
+            ref={videoRef}
+            src={item.url}
+            className="w-full h-full object-cover"
+            muted
+            playsInline
+            loop
+            preload="metadata"
+          />
         ) : (
           <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
-        )}
-        {isVideo && (
-          <span className="absolute inset-0 flex items-center justify-center text-white/80 pointer-events-none">▶</span>
         )}
         {errored && (
           <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>
