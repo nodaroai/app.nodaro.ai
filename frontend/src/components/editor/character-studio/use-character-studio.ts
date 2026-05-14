@@ -76,6 +76,10 @@ export type StudioPendingJobSeed = {
 }
 
 export interface CharacterStudioState {
+  /** Canvas node id that opened this studio — i.e. the source character node.
+   *  Tabs use this when injecting assets onto the canvas so the new node lands
+   *  near its source, and the "default asset" feature is per-canvas-node. */
+  nodeId: string
   staged: CharacterNodeData
   /** Saves are async; this surfaces the latest result for a status indicator. */
   saveStatus: SaveStatus
@@ -398,6 +402,7 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
 
   if (!staged) return null
   return {
+    nodeId,
     staged,
     saveStatus,
     initialPendingJobs,

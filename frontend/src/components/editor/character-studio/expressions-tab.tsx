@@ -9,6 +9,7 @@ import { GenerationBar } from "./generation-bar"
 import { PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
+import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
 // opinionated about quality and these all produce high-fidelity character output by default.
@@ -336,6 +337,11 @@ export function ImageAssetTab({
               onRefine={(p, mode) => handleRefine(idx, p, mode)}
               onRegenerate={(mode) => handleRegenerate(idx, mode)}
               onEnlarge={() => setLightboxIndex(idx)}
+              onInjectToCanvas={() =>
+                injectAssetAsCanvasNode({ sourceCharacterNodeId: state.nodeId, item, isVideo: false })
+              }
+              onSetAsDefault={() => setCharacterNodeDefaultAsset(state.staged, state.patch, item)}
+              isDefault={state.staged.defaultAssetUrl === item.url}
               onRename={(newName) =>
                 state.patch({ [arrayField]: items.map((it, i) => (i === idx ? { ...it, name: newName } : it)) } as never)
               }

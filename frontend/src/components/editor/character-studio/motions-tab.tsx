@@ -10,6 +10,7 @@ import { GenerationBar } from "./generation-bar"
 import { PendingCard } from "./pending-card"
 import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
+import { injectAssetAsCanvasNode, setCharacterNodeDefaultAsset } from "./inject-helpers"
 
 const MOTION_PRESETS = [
   "walking",
@@ -224,6 +225,11 @@ export function MotionsTab({
               onDelete={() => state.patch({ motions: items.filter((_, i) => i !== idx) })}
               onRegenerate={hasPortrait ? (mode) => handleRegenerate(idx, mode) : undefined}
               onEnlarge={() => setLightboxIndex(idx)}
+              onInjectToCanvas={() =>
+                injectAssetAsCanvasNode({ sourceCharacterNodeId: state.nodeId, item, isVideo: true })
+              }
+              onSetAsDefault={() => setCharacterNodeDefaultAsset(state.staged, state.patch, item)}
+              isDefault={state.staged.defaultAssetUrl === item.url}
               onRename={(newName) =>
                 state.patch({ motions: items.map((it, i) => (i === idx ? { ...it, name: newName } : it)) })
               }

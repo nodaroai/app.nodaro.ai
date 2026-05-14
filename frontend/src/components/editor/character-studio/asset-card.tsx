@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Link as LinkIcon, Maximize2 } from "lucide-react"
+import { Link as LinkIcon, Maximize2, Plus, Star } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { AiHelperButton } from "@/components/ui/ai-helper-button"
@@ -39,9 +39,21 @@ interface AssetCardProps {
   /** When provided, shows the ✨ AI helper next to the description textarea. The
    *  helper resolves to the suggested string and is wired to `onDescriptionChange`. */
   readonly onSuggestDescription?: () => Promise<string>
+  /** Inject-to-canvas: creates a new `upload-image` (or `upload-video` for
+   *  motions) node on the workflow canvas pre-filled with this asset's URL.
+   *  Caller owns node placement + workflow-store side-effects; the studio
+   *  modal stays open after a click so the user can inject multiple assets. */
+  readonly onInjectToCanvas?: () => void
+  /** Set-as-default: marks this asset as the character node's canvas
+   *  thumbnail. Per-canvas-node (NOT per-character-DB-row). Toggle-style —
+   *  click on the active default clears it back to the portrait. */
+  readonly onSetAsDefault?: () => void
+  /** When true, the ★ button renders highlighted (yellow) to indicate this
+   *  card is the active default for the character node. */
+  readonly isDefault?: boolean
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription, onInjectToCanvas, onSetAsDefault, isDefault }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
@@ -121,9 +133,44 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           </button>
         </div>
       </div>
+      {/* Always-visible default indicator: when this card is the active
+          default, render a small filled star at the top-right of the image
+          so the user can see it without hovering. The action-row toggle
+          below (also a Star) is the click target — this is just a marker. */}
+      {isDefault && (
+        <span
+          aria-hidden
+          className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-black/40 backdrop-blur-sm border border-yellow-400/50 text-yellow-400 shadow-sm pointer-events-none"
+        >
+          <Star className="w-3 h-3" fill="currentColor" />
+        </span>
+      )}
       <div className="px-2 py-1.5 flex items-center justify-between gap-1.5">
         <NameLabel name={item.name} onRename={onRename} />
-        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition shrink-0">
+          {onSetAsDefault && (
+            <button
+              type="button"
+              title={isDefault ? "Default — click to unset" : "Set as default for this character node"}
+              aria-pressed={isDefault}
+              className={`flex items-center justify-center transition ${
+                isDefault ? "text-yellow-400" : "text-slate-500 hover:text-yellow-300"
+              }`}
+              onClick={onSetAsDefault}
+            >
+              <Star className="w-3 h-3" fill={isDefault ? "currentColor" : "none"} />
+            </button>
+          )}
+          {onInjectToCanvas && (
+            <button
+              type="button"
+              title="Add as node on canvas"
+              className="flex items-center justify-center text-slate-500 hover:text-sky-300 transition"
+              onClick={onInjectToCanvas}
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          )}
           {onRegenerate && (
             <button
               title={`regenerate same — replace${costLabel}`}
