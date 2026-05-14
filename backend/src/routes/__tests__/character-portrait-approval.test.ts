@@ -32,12 +32,15 @@ beforeEach(async () => {
 afterEach(async () => { await app.close() })
 
 describe("POST /v1/characters/:id/approve-portrait", () => {
-  // Helper: stub the chained .from("jobs").select("...").eq("id", ...).single() pattern
+  // Helper: stub the chained
+  //   .from("jobs").select("...").eq("id", ...).eq("user_id", ...).single()
+  // pattern — defense-in-depth scoping by user_id (tenant-scope lint).
   function mockJobFetch(result: { data: unknown; error: unknown }) {
     const single = vi.fn().mockResolvedValue(result)
-    const eq = vi.fn().mockReturnValue({ single })
-    const select = vi.fn().mockReturnValue({ eq })
-    return { select, eq, single }
+    const eq2 = vi.fn().mockReturnValue({ single })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const select = vi.fn().mockReturnValue({ eq: eq1 })
+    return { select, eq1, eq2, single }
   }
 
   // Helper: stub the chained
@@ -87,10 +90,10 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
   })
 
   it("returns 404 when candidate belongs to another user", async () => {
-    const jobChain = mockJobFetch({
-      data: { id: TEST_JOB_ID, user_id: "other-user", status: "completed", output_data: { imageUrl: "x" } },
-      error: null,
-    })
+    // The route scopes the lookup by user_id in the WHERE clause, so a
+    // cross-user candidateJobId returns no row (semantically identical to
+    // "not found" from the caller's POV — defense-in-depth tenant scope).
+    const jobChain = mockJobFetch({ data: null, error: { code: "PGRST116" } })
     vi.mocked(supabase.from).mockReturnValueOnce({ select: jobChain.select } as never)
 
     const res = await app.inject({
@@ -101,7 +104,10 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     })
     expect(res.statusCode).toBe(404)
     // Cross-user candidate must short-circuit BEFORE the LLM is called and
-    // BEFORE we touch the characters table.
+    // BEFORE we touch the characters table. Verify the WHERE chain enforced
+    // user_id scoping.
+    expect(jobChain.eq1).toHaveBeenCalledWith("id", TEST_JOB_ID)
+    expect(jobChain.eq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(vi.mocked(llmComplete)).not.toHaveBeenCalled()
     expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(supabase.from)).toHaveBeenCalledWith("jobs")

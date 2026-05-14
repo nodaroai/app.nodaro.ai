@@ -107,14 +107,12 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
 
     const { data: job, error: fetchErr } = await supabase
       .from("jobs")
-      .select("id, user_id, status, output_data")
+      .select("id, status, output_data")
       .eq("id", body.data.candidateJobId)
+      .eq("user_id", req.userId)
       .single()
 
     if (fetchErr || !job) {
-      return reply.status(404).send({ error: { code: "not_found", message: "Candidate not found" } })
-    }
-    if (job.user_id !== req.userId) {
       return reply.status(404).send({ error: { code: "not_found", message: "Candidate not found" } })
     }
     if (job.status !== "completed") {
