@@ -722,7 +722,7 @@ function FlowTutorialsTab() {
 
       {/* 2-step picker / attach dialog */}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
           {step === 1 ? (
             <PickerStep
               search={pickerSearch}
@@ -864,67 +864,65 @@ function PickerStep({
           show a "Tutorial" badge.
         </DialogDescription>
       </DialogHeader>
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search by name, description, or tag..."
-            className="pl-8"
-          />
-        </div>
-        <div className="border rounded-lg max-h-[420px] overflow-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-            </div>
-          ) : templates.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              No templates matched "{debounced}"
-            </div>
-          ) : (
-            <ul className="divide-y">
-              {templates.map((t) => (
-                <li key={t.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(t)}
-                    className={cn(
-                      "w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3",
-                      t.isTutorial && "bg-amber-50/30 dark:bg-amber-500/5",
-                    )}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium truncate">{t.name}</p>
-                        {t.isTutorial && (
-                          <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">
-                            already tutorial
-                          </Badge>
-                        )}
-                        {t.isListed && (
-                          <Badge variant="outline" className="text-[10px]">Listed</Badge>
-                        )}
-                      </div>
-                      {t.description && (
-                        <p className="text-xs text-muted-foreground truncate">{t.description}</p>
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search by name, description, or tag..."
+          className="pl-8"
+        />
+      </div>
+      <div className="flex-1 min-h-0 border rounded-lg overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            No templates matched "{debounced}"
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {templates.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(t)}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors flex items-center gap-3",
+                    t.isTutorial && "bg-amber-50/30 dark:bg-amber-500/5",
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{t.name}</p>
+                      {t.isTutorial && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">
+                          already tutorial
+                        </Badge>
                       )}
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        by {t.creatorDisplayName ?? t.creatorId.slice(0, 8)}
-                        {" · "}
-                        <span className="capitalize">{t.complexity}</span>
-                        {" · "}
-                        {t.nodeCount} nodes
-                      </p>
+                      {t.isListed && (
+                        <Badge variant="outline" className="text-[10px]">Listed</Badge>
+                      )}
                     </div>
-                    <ComplexityBadge complexity={t.complexity} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                    {t.description && (
+                      <p className="text-xs text-muted-foreground truncate">{t.description}</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      by {t.creatorDisplayName ?? t.creatorId.slice(0, 8)}
+                      {" · "}
+                      <span className="capitalize">{t.complexity}</span>
+                      {" · "}
+                      {t.nodeCount} nodes
+                    </p>
+                  </div>
+                  <ComplexityBadge complexity={t.complexity} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={onClose}>
