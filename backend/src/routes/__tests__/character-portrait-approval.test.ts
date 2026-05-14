@@ -8,6 +8,12 @@ vi.mock("../../lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
 }))
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
+// CI has no .env so config.KIE_API_KEY / ANTHROPIC_API_KEY are empty strings,
+// which trips the route's 503 provider_unavailable preflight before any test
+// logic runs. Mock the keys as truthy so the preflight passes.
+vi.mock("../../lib/config.js", () => ({
+  config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
+}))
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
 const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000002"

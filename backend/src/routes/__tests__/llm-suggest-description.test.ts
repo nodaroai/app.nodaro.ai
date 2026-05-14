@@ -6,6 +6,13 @@ import { llmComplete } from "../../lib/llm-client.js"
 vi.mock("../../lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
 }))
+// CI has no .env so config.KIE_API_KEY / ANTHROPIC_API_KEY are empty strings,
+// which trips the route's 503 provider_unavailable preflight before any test
+// logic runs. Mock the keys as truthy so the preflight passes; the dedicated
+// 503 test below overrides this with vi.doMock + dynamic re-import.
+vi.mock("../../lib/config.js", () => ({
+  config: { KIE_API_KEY: "test-key", ANTHROPIC_API_KEY: "test-key" },
+}))
 
 const TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
 
