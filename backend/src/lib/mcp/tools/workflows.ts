@@ -68,13 +68,14 @@ export function registerWorkflows({
       {
         title: "List Workflows",
         description:
-          "List the workflows in the mcp project (the project MCP tools manage). Workflows in your other projects are not visible here — use export_workflow + import_workflow to bring one in. By default returns only top-level workflows; pass `include_sub_workflows: true` to also surface nested sub-workflows owned by other containers.",
+          "List the workflows in the mcp project (the project MCP tools manage). Workflows in your other projects are not visible here — use export_workflow + import_workflow to bring one in. By default returns only top-level workflows; pass `include_sub_workflows: true` to also surface child sub-workflows.",
         inputSchema: {
           limit: z.number().int().min(1).max(100).optional(),
           cursor: z.string().optional().describe("ISO `created_at` from a prior result"),
           include_sub_workflows: z
             .boolean()
             .optional()
+            .default(false)
             .describe(
               "Include child sub-workflows (workflows with parent_workflow_id) in the result. Defaults to false — only top-level workflows are returned.",
             ),
