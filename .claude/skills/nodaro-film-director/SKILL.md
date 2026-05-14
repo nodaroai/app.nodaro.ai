@@ -1,6 +1,6 @@
 ---
 name: nodaro-film-director
-version: 1.0.7
+version: 1.0.8
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -106,7 +106,11 @@ Pure data-display node. Each column is a typed field; each row is one entry. No 
       { "id": "action",  "name": "Action", "handleId": "col_action",  "type": "text" },
       { "id": "duration", "name": "Duration", "handleId": "col_duration", "type": "text" }
     ],
-    "rows": [["1", "Hero enters frame from left", "3"], ["2", "Hero raises rifle", "2"]],
+    "rows": [
+      ["1", "Hero enters frame from left, suits up in cockpit", "5"],
+      ["2", "Banking turn through canyon, tracers streak past", "5"],
+      ["3", "Vertical climb into golden sunlight, cut to black", "5"]
+    ],
     "viewMode": "list",
     "fieldMappings": {}
   } }
@@ -114,9 +118,56 @@ Pure data-display node. Each column is a typed field; each row is one entry. No 
 
 **Required fields:** `label`, `columns`, `rows`, `fieldMappings: {}`. Each column needs `id`, `name`, `handleId` (use `col_<id>`), and `type` (one of `"text" | "image-url" | "video-url" | "audio-url" | "json"`).
 
-**`viewMode`:** valid values are `"list" | "gallery" | "packed"`. For a shot list table, use `"list"` (renders rows linearly with all columns visible). Use `"gallery"` for image-heavy data, `"packed"` for compressed display.
+**Each row in `rows` MUST be a fresh, distinct string array** — one per shot/entry. Do NOT repeat the same row reference. Example of CORRECT row data (3 distinct rows for a 3-shot trailer):
+
+```json
+"rows": [
+  ["1", "Hero enters frame from left, suits up in cockpit", "5"],
+  ["2", "Banking turn through canyon, tracers streak past", "5"],
+  ["3", "Vertical climb into golden sunlight, cut to black", "5"]
+]
+```
+
+WRONG (frontend renders all rows as the first one):
+
+```json
+"rows": [
+  ["1", "Hero enters", "5"],
+  ["1", "Hero enters", "5"],
+  ["1", "Hero enters", "5"]
+]
+```
+
+The number of cells in each row MUST match the number of columns. If you have 5 columns, each row needs exactly 5 strings.
+
+**`viewMode` controls visual layout:**
+- `"list"` (RECOMMENDED for shot lists) — vertical-stacked rows; each row shows its columns horizontally. This IS the "table" view despite the name. Use for any tabular data with mixed column types.
+- `"packed"` — compressed tile-grid; ignores row structure, packs cells into a configurable grid. Good for large image sets where you want to see everything at once.
+- `"gallery"` — image-heavy gallery view. Default when all columns are `image-url` type. Use for image-only collections.
+
+If omitted, the frontend defaults to `"gallery"` ONLY when every column is image-url; otherwise defaults to `"list"`. **Always set `"viewMode": "list"` explicitly for shot lists** so the rendering doesn't change if you add an image column later.
 
 **Common gotcha:** if you accidentally use `type: "list"` (the single-column type) with a multi-column `columns` array, the frontend may render only the first column or display in an unintended layout. Always use `type: "loop"` for multi-column data.
+
+#### Wiring edges from column outputs
+
+**Wiring edges from a Table column to a downstream node:**
+
+Each column on a `loop` (Table) node exposes a SOURCE handle whose id is the column's `handleId` (e.g., `col_shot_id`). To wire that column's values as a list into another node, the edge's `sourceHandle` MUST be the column's `handleId`:
+
+```json
+{
+  "id": "edge-shot-action-to-scene1",
+  "source": "shotlist-1",
+  "sourceHandle": "col_action",
+  "target": "scene-1",
+  "targetHandle": "in"
+}
+```
+
+This makes `scene-1` receive the list of action values (one per row in the table). Downstream nodes that support list-input (e.g., a loop or per-row generation) will fan out over the column values; non-list-aware nodes get the first value.
+
+If you omit `sourceHandle`, the edge connects to the default node output (the empty top-level "out" handle), NOT a column — that's why Claude's prior attempts didn't propagate the right data.
 
 #### 3. `generate-image` — Stage 5, scene composition
 
