@@ -459,6 +459,11 @@ export async function generateCharacterAsset(data: {
   attachToCharacterId?: string
   attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
   attachName?: string
+  /** Per-asset extras (Identity Foundation v2). When `description` is omitted
+   *  the backend asks Claude Sonnet for a draft scoped to the character's
+   *  canonical description + assetType/variant. `realLifeRefs` (up to 5) are
+   *  passed to the worker to bias the generation. */
+  realLifeRefs?: ReadonlyArray<string>
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
@@ -484,6 +489,12 @@ export async function generateCharacterMotion(params: {
   /** Character Studio auto-attach: target column is implicit ("motions"). */
   attachToCharacterId?: string
   attachName?: string
+  /** Per-asset extras (Identity Foundation v2). When `description` and
+   *  `motionDescription` are both omitted the backend asks Claude Sonnet for a
+   *  combined draft. `realLifeRefs` (up to 5) are passed to the worker to bias
+   *  the generation. */
+  motionDescription?: string
+  realLifeRefs?: ReadonlyArray<string>
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-motion`, {
     method: "POST",
