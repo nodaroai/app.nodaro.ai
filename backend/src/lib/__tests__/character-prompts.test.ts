@@ -46,6 +46,37 @@ describe("buildAssetPromptText", () => {
     expect(prompt).not.toContain("null")
   })
 
+  it("inserts the assetType framing fragment for poses", () => {
+    const prompt = buildAssetPromptText({
+      canonicalDescription: "Kira",
+      assetDescription: "walking confidently",
+      variantOrPrompt: "walking",
+      assetType: "poses",
+    })
+    expect(prompt).toContain("full body visible including feet")
+  })
+
+  it("omits framing for unknown assetType (e.g. custom)", () => {
+    const prompt = buildAssetPromptText({
+      canonicalDescription: "Kira",
+      assetDescription: "warm smile",
+      variantOrPrompt: "smile",
+      assetType: "custom",
+    })
+    expect(prompt).not.toContain("portrait headshot")
+    expect(prompt).not.toContain("full body")
+  })
+
+  it("strips trailing periods from fragments so the output has no double-periods", () => {
+    const prompt = buildAssetPromptText({
+      canonicalDescription: "Kira: late 20s.",
+      assetDescription: "warm smile.",
+      variantOrPrompt: "smile",
+      assetType: "expressions",
+    })
+    expect(prompt).not.toMatch(/\.\s*\./)
+  })
+
   it("uses motion scaffolding for motions and includes motionDescription when provided", () => {
     const prompt = buildMotionPromptText({
       canonicalDescription: "Kira: …",
@@ -56,5 +87,15 @@ describe("buildAssetPromptText", () => {
     expect(prompt).toContain("walking confidently forward")
     expect(prompt).toContain("smooth stride")
     expect(prompt).toContain(ASSET_MOTION_SCAFFOLDING)
+  })
+
+  it("strips trailing periods from motion fragments", () => {
+    const prompt = buildMotionPromptText({
+      canonicalDescription: "Kira.",
+      assetDescription: "walking.",
+      motionDescription: "smooth stride.",
+      variantOrPrompt: "walking",
+    })
+    expect(prompt).not.toMatch(/\.\s*\./)
   })
 })

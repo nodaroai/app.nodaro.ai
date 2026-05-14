@@ -16,6 +16,9 @@ export const ASSET_STILL_SCAFFOLDING =
 export const ASSET_MOTION_SCAFFOLDING =
   "smooth motion, natural movement, no text, no labels, no watermarks"
 
+// Framing fragments per asset type. "custom" is intentionally absent — when
+// users supply their own free-form prompt, framing is their responsibility,
+// so we don't impose one. Unknown assetTypes fall through to no framing.
 const ASSET_FRAMING_BY_TYPE: Record<string, string> = {
   expressions: "portrait headshot",
   poses: "full body visible including feet",
@@ -29,8 +32,12 @@ function nonEmpty(s: string | null | undefined): string | null {
   return trimmed.length === 0 ? null : trimmed
 }
 
+function stripTrailingPeriod(s: string): string {
+  return s.replace(/\.+$/, "")
+}
+
 export function buildPortraitPrompt(args: { seedPrompt: string }): string {
-  const seed = args.seedPrompt.trim()
+  const seed = stripTrailingPeriod(args.seedPrompt.trim())
   return `${seed}. ${PORTRAIT_SCAFFOLDING}.`
 }
 
@@ -48,7 +55,9 @@ export function buildAssetPromptText(args: {
     args.variantOrPrompt.trim(),
     framing,
     ASSET_STILL_SCAFFOLDING,
-  ].filter((p): p is string => p !== null && p.length > 0)
+  ]
+    .filter((p): p is string => p !== null && p.length > 0)
+    .map(stripTrailingPeriod)
   return parts.join(". ") + "."
 }
 
@@ -66,6 +75,8 @@ export function buildMotionPromptText(args: {
     motion,
     args.variantOrPrompt.trim(),
     ASSET_MOTION_SCAFFOLDING,
-  ].filter((p): p is string => p !== null && p.length > 0)
+  ]
+    .filter((p): p is string => p !== null && p.length > 0)
+    .map(stripTrailingPeriod)
   return parts.join(". ") + "."
 }
