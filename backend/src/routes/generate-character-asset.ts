@@ -195,6 +195,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
         .select("source_image_url, canonical_description")
         .eq("id", parsed.data.attachToCharacterId)
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .single()
 
       if (charErr || !char) {

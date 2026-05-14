@@ -278,33 +278,41 @@ export async function characterRoutes(app: FastifyInstance) {
       // so the Character Studio can re-attach spinners on reopen (jobs survive
       // page closes because the worker auto-attaches to the row at completion
       // — this query is purely for the UX of "spinner reappears" continuity).
+      // limit(50) caps the response under a stuck-worker scenario where a user
+      // has dozens of orphaned pending rows — the studio only renders a small
+      // grid of spinners, never the full set.
       supabase
         .from("jobs")
         .select("id, input_data")
         .eq("user_id", userId)
         .in("status", ["pending", "running"])
-        .filter("input_data->>attachToCharacterId", "eq", id),
+        .filter("input_data->>attachToCharacterId", "eq", id)
+        .limit(50),
       // portraitCandidates: in-flight `generate-character` jobs for THIS row.
       // The studio polls this bucket to keep the Appearance tab's "generating
       // portrait" tile responsive across reloads. URL may be undefined while
       // the job is still pending; the worker writes `output_data.imageUrl`
       // once it has uploaded the R2 result (often before the final commit
-      // completes), so we surface it as soon as it's there.
+      // completes), so we surface it as soon as it's there. limit(50) is the
+      // same defensive cap as pendingJobs above.
       supabase
         .from("jobs")
         .select("id, status, progress, output_data, input_data")
         .eq("user_id", userId)
         .in("status", ["pending", "running"])
         .filter("input_data->>type", "eq", "generate-character")
-        .filter("input_data->>attachToCharacterId", "eq", id),
+        .filter("input_data->>attachToCharacterId", "eq", id)
+        .limit(50),
       // previousCandidates: recently-completed `generate-character` jobs for
       // THIS row, with URL ≠ current portrait, within the last 7 days. We
       // over-fetch (limit 10) to absorb URL-collisions with the active portrait
       // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
       // ORDER BY created_at DESC so the user sees their latest alternatives.
+      // We project `imageUrl` directly via JSONB path so we don't drag the
+      // whole `output_data` blob across the wire.
       supabase
         .from("jobs")
-        .select("id, output_data, created_at")
+        .select("id, image_url:output_data->>imageUrl, created_at")
         .eq("user_id", userId)
         .eq("status", "completed")
         .filter("input_data->>type", "eq", "generate-character")
@@ -353,8 +361,10 @@ export async function characterRoutes(app: FastifyInstance) {
     type PreviousCandidate = { jobId: string; url: string; createdAt: string }
     const previousCandidates: PreviousCandidate[] = (previousCompletedRows ?? [])
       .map((row) => {
-        const out = (row.output_data ?? null) as Record<string, unknown> | null
-        const u = out?.imageUrl
+        // image_url is the projected alias from `output_data->>imageUrl` in the
+        // SELECT above. ->> always yields text|null so we still defend against
+        // non-string and currentPortrait-collisions in JS.
+        const u = (row as { image_url?: unknown }).image_url
         if (typeof u !== "string" || u === currentPortrait) return null
         return { jobId: row.id as string, url: u, createdAt: row.created_at as string }
       })

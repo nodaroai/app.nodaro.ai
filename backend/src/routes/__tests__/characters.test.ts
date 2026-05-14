@@ -505,22 +505,17 @@ describe("GET /v1/characters/:id", () => {
   // limit 5. The DB fetches 10; JS filters by URL and trims to 5.
   // -------------------------------------------------------------------------
   it("returns previousCandidates (completed generate-character jobs, URL != current portrait)", async () => {
+    // The route now projects the imageUrl JSONB path directly via
+    // `image_url:output_data->>imageUrl` so we don't drag the whole
+    // output_data blob across the wire. Test fixtures mirror that shape.
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
     const jobs = mockGetByIdJobs(
       { data: [], error: null },
       { data: [], error: null },
       {
         data: [
-          {
-            id: "job-prev-1",
-            output_data: { imageUrl: "https://r2/v1.png" },
-            created_at: "2026-05-13T12:00:00Z",
-          },
-          {
-            id: "job-prev-2",
-            output_data: { imageUrl: "https://r2/v2.png" },
-            created_at: "2026-05-12T12:00:00Z",
-          },
+          { id: "job-prev-1", image_url: "https://r2/v1.png", created_at: "2026-05-13T12:00:00Z" },
+          { id: "job-prev-2", image_url: "https://r2/v2.png", created_at: "2026-05-12T12:00:00Z" },
         ],
         error: null,
       },
@@ -561,7 +556,7 @@ describe("GET /v1/characters/:id", () => {
   })
 
   it("previousCandidates excludes the current portrait URL", async () => {
-    // If a completed job's `output_data.imageUrl` is what's CURRENTLY set as
+    // If a completed job's image URL is what's CURRENTLY set as
     // `characters.source_image_url`, it should NOT appear in previousCandidates
     // — the user-facing concept is "alternatives to the current portrait".
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
@@ -574,12 +569,12 @@ describe("GET /v1/characters/:id", () => {
           {
             id: "job-prev-current",
             // Same as DB_CHARACTER.source_image_url — must be filtered out.
-            output_data: { imageUrl: currentPortrait },
+            image_url: currentPortrait,
             created_at: "2026-05-13T12:00:00Z",
           },
           {
             id: "job-prev-alt",
-            output_data: { imageUrl: "https://r2/alt.png" },
+            image_url: "https://r2/alt.png",
             created_at: "2026-05-12T12:00:00Z",
           },
         ],
@@ -609,7 +604,7 @@ describe("GET /v1/characters/:id", () => {
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
     const candidates = Array.from({ length: 7 }, (_, i) => ({
       id: `job-prev-${i}`,
-      output_data: { imageUrl: `https://r2/v${i}.png` },
+      image_url: `https://r2/v${i}.png`,
       created_at: `2026-05-${String(13 - i).padStart(2, "0")}T12:00:00Z`,
     }))
     const jobs = mockGetByIdJobs(
@@ -636,19 +631,19 @@ describe("GET /v1/characters/:id", () => {
     expect((prev[4] as { jobId: string }).jobId).toBe("job-prev-4")
   })
 
-  it("previousCandidates excludes rows whose output_data lacks a string imageUrl", async () => {
-    // Defensive: a completed job with no `output_data.imageUrl` (e.g. an
-    // edge-case provider response) must not poison the bucket.
+  it("previousCandidates excludes rows whose image_url projection is null/missing", async () => {
+    // Defensive: a completed job with no image URL (e.g. an edge-case provider
+    // response where output_data lacks imageUrl) must not poison the bucket.
+    // ->> projects to text|null so missing/non-string entries surface as null.
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
     const jobs = mockGetByIdJobs(
       { data: [], error: null },
       { data: [], error: null },
       {
         data: [
-          { id: "job-null", output_data: null, created_at: "2026-05-13T12:00:00Z" },
-          { id: "job-missing-key", output_data: {}, created_at: "2026-05-13T11:00:00Z" },
-          { id: "job-non-string", output_data: { imageUrl: 42 }, created_at: "2026-05-13T10:00:00Z" },
-          { id: "job-ok", output_data: { imageUrl: "https://r2/ok.png" }, created_at: "2026-05-13T09:00:00Z" },
+          { id: "job-null", image_url: null, created_at: "2026-05-13T12:00:00Z" },
+          { id: "job-missing-key", image_url: null, created_at: "2026-05-13T11:00:00Z" },
+          { id: "job-ok", image_url: "https://r2/ok.png", created_at: "2026-05-13T09:00:00Z" },
         ],
         error: null,
       },

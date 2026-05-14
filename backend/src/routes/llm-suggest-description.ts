@@ -86,9 +86,12 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
-    if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+    // llmComplete is called with modelId="claude-sonnet-4.6" which routes
+    // through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM call
+    // 502s mid-request — gate it here with a clean 503 instead.
+    if (!config.ANTHROPIC_API_KEY) {
       return reply.status(503).send({
-        error: { code: "provider_unavailable", message: "LLM API key not configured" },
+        error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
       })
     }
     const { system, user, options } = PROMPTS[parsed.data.kind](parsed.data.context)

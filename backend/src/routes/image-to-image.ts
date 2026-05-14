@@ -4,7 +4,7 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
@@ -60,7 +60,7 @@ const imageToImageBody = z.object({
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {
     const body = req.body as Record<string, unknown>
-    const provider = (body?.provider as string) ?? "nano-banana"
+    const provider = extractProvider(req.body, "nano-banana")
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
@@ -91,22 +91,22 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // this and keep their existing behavior end-to-end.
     //
     // Two gates + one inline LLM draft + one privacy override fire here:
-    //   1. Portrait-required gate: character must exist (404 cross-user)
-    //      and have a non-null source_image_url (400 portrait_required).
+    //   1. Portrait-required gate: character must exist (404 cross-user
+    //      OR soft-deleted) and have a non-null source_image_url (400
+    //      portrait_required).
     //   2. Studio-gated LLM draft of `description` when the caller omitted
     //      it — non-fatal on failure (continue with description undefined).
     //   3. force_private: true on the job row, unconditional.
     //   4. description + realLifeRefs forwarded to the worker payload.
     // ─────────────────────────────────────────────────────────────────────
-    let isStudioPath = false
-    if (parsed.data.attachToCharacterId) {
-      isStudioPath = true
-
+    const isStudioPath = parsed.data.attachToCharacterId !== undefined
+    if (isStudioPath) {
       const { data: char, error: charErr } = await supabase
         .from("characters")
         .select("source_image_url, canonical_description")
-        .eq("id", parsed.data.attachToCharacterId)
+        .eq("id", parsed.data.attachToCharacterId!)
         .eq("user_id", userId)
+        .is("deleted_at", null)
         .single()
 
       if (charErr || !char) {

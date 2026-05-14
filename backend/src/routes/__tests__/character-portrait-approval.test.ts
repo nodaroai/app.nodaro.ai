@@ -79,11 +79,18 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
   })
 
   it("returns 400 when candidate is not completed", async () => {
+    // approve-portrait now issues the candidate fetch and character pre-fetch
+    // in parallel via Promise.all (both must succeed before LLM). Both mocks
+    // must be set up; the route still evaluates candidate first.
     const jobChain = mockJobFetch({
       data: { id: TEST_JOB_ID, user_id: TEST_USER_ID, status: "running", output_data: null },
       error: null,
     })
-    vi.mocked(supabase.from).mockReturnValueOnce({ select: jobChain.select } as never)
+    const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobChain.select } as never
+      return { select: charPreFetch.select } as never
+    })
 
     const res = await app.inject({
       method: "POST",
@@ -99,8 +106,15 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     // The route scopes the lookup by user_id in the WHERE clause, so a
     // cross-user candidateJobId returns no row (semantically identical to
     // "not found" from the caller's POV — defense-in-depth tenant scope).
+    // Note: the route now issues candidate + character fetches in parallel,
+    // so the characters mock must also be in place even though the failure
+    // is on the candidate side. LLM + UPDATE must NOT run.
     const jobChain = mockJobFetch({ data: null, error: { code: "PGRST116" } })
-    vi.mocked(supabase.from).mockReturnValueOnce({ select: jobChain.select } as never)
+    const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobChain.select } as never
+      return { select: charPreFetch.select } as never
+    })
 
     const res = await app.inject({
       method: "POST",
@@ -109,19 +123,21 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
       payload: { candidateJobId: TEST_JOB_ID },
     })
     expect(res.statusCode).toBe(404)
-    // Cross-user candidate must short-circuit BEFORE the LLM is called and
-    // BEFORE we touch the characters table. Verify the WHERE chain enforced
-    // user_id scoping.
+    // Cross-user candidate must short-circuit BEFORE the LLM is called.
+    // Verify the WHERE chain enforced user_id scoping. (We do issue the
+    // characters fetch in parallel now, but neither LLM nor UPDATE runs.)
     expect(jobChain.eq1).toHaveBeenCalledWith("id", TEST_JOB_ID)
     expect(jobChain.eq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     expect(vi.mocked(llmComplete)).not.toHaveBeenCalled()
-    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(supabase.from)).toHaveBeenCalledWith("jobs")
   })
 
   it("returns 404 when candidate doesn't exist", async () => {
     const jobChain = mockJobFetch({ data: null, error: { code: "PGRST116" } })
-    vi.mocked(supabase.from).mockReturnValueOnce({ select: jobChain.select } as never)
+    const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobChain.select } as never
+      return { select: charPreFetch.select } as never
+    })
 
     const res = await app.inject({
       method: "POST",
