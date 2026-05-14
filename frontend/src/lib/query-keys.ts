@@ -133,9 +133,10 @@ export const queryKeys = {
     detail: (id: string) => ["developer-apps", "detail", id] as const,
   },
 
-  // Tutorials
+  // Tutorials (public, grouped video + flow)
   tutorials: {
     all: ["tutorials"] as const,
+    grouped: () => ["tutorials", "grouped"] as const,
   },
 
   // Admin
@@ -194,6 +195,15 @@ export const queryKeys = {
       ["admin", "kie-credits", days] as const,
     llmModels: () => ["admin", "llm-models"] as const,
     tutorials: () => ["admin", "tutorials"] as const,
+    tutorialCategories: () => ["admin", "tutorial-categories"] as const,
+    workflowTemplatesAll: (params: { search?: string; listed?: string; cursor?: string }) =>
+      [
+        "admin",
+        "workflow-templates",
+        params.search ?? "",
+        params.listed ?? "",
+        params.cursor ?? "",
+      ] as const,
     nodeDefaults: () => ["admin", "node-defaults"] as const,
   },
 
