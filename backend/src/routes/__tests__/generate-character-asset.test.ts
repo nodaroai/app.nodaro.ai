@@ -479,6 +479,47 @@ describe("POST /v1/generate-character-asset — v2 behavior", () => {
     expect(enqueuedPayload.sourceImageUrl).toBe("https://example.com/explicit-override.png")
   })
 
+  it("custom asset folds userPrompt into LLM input (NOT just the literal 'custom')", async () => {
+    // Regression: assetType="custom" sends `variant: "custom"` (literal) per
+    // the studio UI. Without folding in userPrompt, the LLM gets
+    // `Variant or prompt: "custom"` — a meaningless input that yields a
+    // useless description. The shared helper must prefer userPrompt for
+    // custom assets.
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman with red hair",
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "custom",
+        variant: "custom", // literal — what the studio UI sends for custom assets
+        name: "Kira",
+        userPrompt: "a stoic warrior with a scar",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "expressions",
+        attachName: "custom-1",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(llmComplete).toHaveBeenCalledTimes(1)
+    const call = vi.mocked(llmComplete).mock.calls[0][0]
+    const userText = typeof call.messages[0].content === "string" ? call.messages[0].content : ""
+    // The fix: userPrompt is folded into the LLM input for custom assets.
+    expect(userText).toContain("a stoic warrior with a scar")
+    // Sanity: the literal "custom" string is NOT used as the variant-or-prompt slot.
+    expect(userText).not.toContain('Variant or prompt: "custom"')
+    // Sanity: shared LLM options applied (maxTokens 400, temperature 0.8).
+    expect(call.maxTokens).toBe(400)
+    expect(call.temperature).toBe(0.8)
+  })
+
   it("description longer than 1000 chars is rejected with validation_error", async () => {
     setupSupabaseMock({
       charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },

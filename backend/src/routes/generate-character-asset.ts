@@ -10,18 +10,11 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
-
-// Keep in sync with the "asset-description" branch of
-// `routes/llm-suggest-description.ts` PROMPTS. The studio uses both:
-//   - the standalone ✨ helper endpoint (llm-suggest-description) when the
-//     user clicks the helper button, and
-//   - this inline draft when the user kicks off a generation without first
-//     filling the description field.
-// Both must produce comparable output, so the system prompt is identical.
-const ASSET_DESCRIPTION_SYSTEM_PROMPT =
-  "You write concise, single-sentence visual descriptions of a character pose / expression / lighting / angle. " +
-  "The description is fed to an image gen model alongside a reference portrait. " +
-  "Be specific about facial muscles, body posture, framing as relevant. ~15–25 words. Output only the description."
+import {
+  ASSET_DESCRIPTION_SYSTEM_PROMPT,
+  ASSET_DESCRIPTION_LLM_OPTIONS,
+  buildAssetDescriptionUserMessage,
+} from "../lib/asset-description-prompt.js"
 
 const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
 
@@ -231,13 +224,15 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
             messages: [
               {
                 role: "user",
-                content:
-                  `Asset type: ${assetType}. Variant or prompt: "${variant}".` +
-                  (canonicalDescription ? `\nCharacter: ${canonicalDescription}` : ""),
+                content: buildAssetDescriptionUserMessage({
+                  assetType,
+                  variant,
+                  userPrompt: parsed.data.userPrompt,
+                  canonicalDescription,
+                }),
               },
             ],
-            maxTokens: 200,
-            temperature: 0.7,
+            ...ASSET_DESCRIPTION_LLM_OPTIONS,
           })
           const text = llm.text.trim()
           if (text.length > 0) parsed.data.description = text

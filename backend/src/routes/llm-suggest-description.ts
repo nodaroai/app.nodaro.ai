@@ -3,6 +3,11 @@ import { z } from "zod"
 import { config } from "../lib/config.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { formatZodError } from "../lib/zod-error.js"
+import {
+  ASSET_DESCRIPTION_SYSTEM_PROMPT,
+  ASSET_DESCRIPTION_LLM_OPTIONS,
+  buildAssetDescriptionUserMessage,
+} from "../lib/asset-description-prompt.js"
 
 /**
  * POST /v1/llm-suggest-description
@@ -26,7 +31,20 @@ const body = z.object({
 
 type Kind = z.infer<typeof KIND>
 
-const PROMPTS: Record<Kind, (ctx: Record<string, unknown>) => { system: string; user: string }> = {
+interface PromptSpec {
+  system: string
+  user: string
+  options: { maxTokens: number; temperature: number }
+}
+
+// Non-asset-description kinds keep their own local options here; they are
+// intentionally NOT shared with the inline asset-description path. The
+// asset-description branch routes through ASSET_DESCRIPTION_LLM_OPTIONS so
+// the standalone helper and the inline draft in generate-character-asset.ts
+// cannot drift.
+const NON_ASSET_LLM_OPTIONS = { maxTokens: 400, temperature: 0.8 } as const
+
+const PROMPTS: Record<Kind, (ctx: Record<string, unknown>) => PromptSpec> = {
   "seed-prompt": (ctx) => ({
     system:
       "You write concise, vivid one-paragraph character descriptions used as image-gen prompts. " +
@@ -35,15 +53,18 @@ const PROMPTS: Record<Kind, (ctx: Record<string, unknown>) => { system: string; 
     user: `Picker dimensions: ${JSON.stringify(ctx.dimensions ?? {})}.${
       ctx.existingPrompt ? `\nExisting prompt to improve: ${ctx.existingPrompt}` : ""
     }`,
+    options: NON_ASSET_LLM_OPTIONS,
   }),
   "asset-description": (ctx) => ({
-    system:
-      "You write concise, single-sentence visual descriptions of a character pose / expression / lighting / angle. " +
-      "The description is fed to an image gen model alongside a reference portrait. " +
-      "Be specific about facial muscles, body posture, framing as relevant. ~15–25 words. Output only the description.",
-    user: `Asset type: ${ctx.assetType}. Variant or prompt: "${ctx.variant ?? ctx.userPrompt}".${
-      ctx.canonicalDescription ? `\nCharacter: ${ctx.canonicalDescription}` : ""
-    }`,
+    system: ASSET_DESCRIPTION_SYSTEM_PROMPT,
+    user: buildAssetDescriptionUserMessage({
+      assetType: typeof ctx.assetType === "string" ? ctx.assetType : "",
+      variant: typeof ctx.variant === "string" ? ctx.variant : undefined,
+      userPrompt: typeof ctx.userPrompt === "string" ? ctx.userPrompt : undefined,
+      canonicalDescription:
+        typeof ctx.canonicalDescription === "string" ? ctx.canonicalDescription : null,
+    }),
+    options: ASSET_DESCRIPTION_LLM_OPTIONS,
   }),
   "motion-description": (ctx) => ({
     system:
@@ -52,6 +73,7 @@ const PROMPTS: Record<Kind, (ctx: Record<string, unknown>) => { system: string; 
     user: `Motion: "${ctx.variant ?? ctx.userPrompt}".${
       ctx.canonicalDescription ? `\nCharacter: ${ctx.canonicalDescription}` : ""
     }`,
+    options: NON_ASSET_LLM_OPTIONS,
   }),
 }
 
@@ -69,14 +91,13 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         error: { code: "provider_unavailable", message: "LLM API key not configured" },
       })
     }
-    const { system, user } = PROMPTS[parsed.data.kind](parsed.data.context)
+    const { system, user, options } = PROMPTS[parsed.data.kind](parsed.data.context)
     try {
       const result = await llmComplete({
         modelId: "claude-sonnet-4.6",
         system,
         messages: [{ role: "user", content: user }],
-        maxTokens: 400,
-        temperature: 0.8,
+        ...options,
       })
       const text = result.text.trim()
       if (!text) {
