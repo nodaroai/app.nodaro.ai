@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { cancelJob, getJobStatus } from "@/lib/api"
 
-export type StudioAssetType = "expressions" | "poses" | "angles" | "lighting" | "motions"
+export type StudioAssetType =
+  | "expressions"
+  | "poses"
+  | "angles"
+  | "bodyAngles"
+  | "lighting"
+  | "motions"
 
 interface PendingJob {
   assetType: StudioAssetType

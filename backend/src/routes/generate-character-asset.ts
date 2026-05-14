@@ -16,13 +16,26 @@ import {
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
 
-const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
+// `headAngles` is an alias for `angles` (the legacy single-surface column,
+// now treated as head-angles in the UI). `bodyAngles` writes to the new
+// `body_angles` column. Both produce different framing in buildVariantPrompt.
+const assetTypeEnum = z.enum([
+  "expressions",
+  "poses",
+  "lighting",
+  "angles",
+  "headAngles",
+  "bodyAngles",
+  "custom",
+])
 
 const VARIANTS: Record<string, readonly string[]> = {
   expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking", "laughing", "disgusted", "fearful", "smirk", "crying"],
   poses: ["standing", "walking", "sitting", "running", "crouching", "pointing", "fighting stance", "jumping", "turning"],
   lighting: ["daylight", "night", "dramatic"],
   angles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"],
+  headAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right"],
+  bodyAngles: ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"],
 }
 
 const generateCharacterAssetBody = z.object({
@@ -52,7 +65,9 @@ const generateCharacterAssetBody = z.object({
   // — important for custom prompts where assetType="custom" but the asset
   // still belongs in expressions / poses / angles / lighting_variations.
   attachToCharacterId: z.string().uuid().optional(),
-  attachToColumn: z.enum(["expressions", "poses", "angles", "lighting_variations"]).optional(),
+  attachToColumn: z
+    .enum(["expressions", "poses", "angles", "body_angles", "lighting_variations"])
+    .optional(),
   attachName: z.string().min(1).max(200).optional(),
 })
 
@@ -118,18 +133,34 @@ function buildVariantPrompt(
     return `Full body view of ${subject}, ${pose}. FULL BODY visible including feet. ${base}`
   }
 
-  if (assetType === "angles") {
+  if (assetType === "angles" || assetType === "headAngles") {
+    // The legacy `angles` column now stores head-and-shoulders portraits.
+    // `headAngles` is the explicit alias; both produce head-portrait framing.
     const angleMap: Record<string, string> = {
       front: "front view, facing camera directly",
-      "3/4 left": "three-quarter view, body angled 45 degrees toward the left of the frame, face partially visible",
-      "left profile": "left profile view, body and face turned to the left, full side silhouette of the face visible",
-      "right profile": "right profile view, body and face turned to the right, full side silhouette of the face visible",
-      "3/4 right": "three-quarter view, body angled 45 degrees toward the right of the frame, face partially visible",
-      back: "back view, facing away from camera",
+      "3/4 left": "three-quarter view, head angled 45 degrees toward the left of the frame, face partially visible",
+      "left profile": "left profile view, head turned to the left, full side silhouette of the face visible",
+      "right profile": "right profile view, head turned to the right, full side silhouette of the face visible",
+      "3/4 right": "three-quarter view, head angled 45 degrees toward the right of the frame, face partially visible",
+      back: "back of head view, facing away from camera",
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"
-    return `Full body view of ${subject}, ${angle}, same neutral standing pose. FULL BODY visible including feet. ${base}`
+    return `Head-and-shoulders portrait of ${subject}, ${angle}, same neutral expression. ${base}`
+  }
+
+  if (assetType === "bodyAngles") {
+    const angleMap: Record<string, string> = {
+      front: "front view, facing camera directly",
+      "3/4 left": "three-quarter view, body angled 45 degrees toward the left of the frame",
+      "left profile": "left profile view, body turned to the left",
+      "right profile": "right profile view, body turned to the right",
+      "3/4 right": "three-quarter view, body angled 45 degrees toward the right of the frame",
+      back: "back view, body facing away from camera",
+    }
+    const angle = angleMap[variant] ?? `${variant} view`
+    const subject = namePart ? namePart.trim() : "the character"
+    return `Full body view of ${subject}, ${angle}, neutral T-pose standing posture. FULL BODY visible including feet, plain background. ${base}`
   }
 
   // lighting

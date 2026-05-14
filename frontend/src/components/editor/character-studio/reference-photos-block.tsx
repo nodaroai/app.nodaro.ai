@@ -21,22 +21,22 @@ import { uploadImage } from "@/lib/api"
  */
 
 const SLOTS: ReadonlyArray<ReferencePhotoKind> = [
-  "front",
+  "frontFace",
   "threeQuarterLeft",
   "sideLeft",
   "sideRight",
   "threeQuarterRight",
-  "fullBody",
+  "frontBody",
   "other",
 ]
 
 const SLOT_LABELS: Record<ReferencePhotoKind, string> = {
-  front: "Front",
+  frontFace: "Face",
   threeQuarterLeft: "3/4 L",
   sideLeft: "Profile L",
   sideRight: "Profile R",
   threeQuarterRight: "3/4 R",
-  fullBody: "Body",
+  frontBody: "Body",
   other: "+",
 }
 

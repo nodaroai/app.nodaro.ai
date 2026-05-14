@@ -256,7 +256,7 @@ describe("POST /v1/generate-character", () => {
       payload: {
         name: "Kira",
         referencePhotos: [
-          { url: "https://example.com/ref-front.png", kind: "front" },
+          { url: "https://example.com/ref-front.png", kind: "frontFace" },
         ],
       },
     })

@@ -2674,7 +2674,14 @@ export interface CharacterAssetItem {
   readonly url: string
 }
 
-export type CharacterAssetType = "expressions" | "poses" | "lighting" | "angles" | "custom"
+export type CharacterAssetType =
+  | "expressions"
+  | "poses"
+  | "lighting"
+  | "angles"
+  | "headAngles"
+  | "bodyAngles"
+  | "custom"
 
 export interface CharacterVoice {
   voiceId: string      // ElevenLabs voice ID
@@ -2725,12 +2732,17 @@ export type CharacterNodeData = {
   expressions: CharacterAssetItem[]
   poses: CharacterAssetItem[]
   lightingVariations: CharacterAssetItem[]
+  // `angles` is the legacy single-surface column; the UI now treats it as
+  // head-and-shoulders portraits (Head Angles). `bodyAngles` (migration 118)
+  // holds full-body T-pose views.
   angles: CharacterAssetItem[]
+  bodyAngles: CharacterAssetItem[]
   // Asset generation status
   expressionStatus: "idle" | "running" | "completed" | "failed"
   poseStatus: "idle" | "running" | "completed" | "failed"
   lightingStatus: "idle" | "running" | "completed" | "failed"
   anglesStatus: "idle" | "running" | "completed" | "failed"
+  bodyAnglesStatus: "idle" | "running" | "completed" | "failed"
   // Custom variations
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
   // Motion video clips (i2v) — reuses { name, url }
@@ -5262,10 +5274,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       poses: [],
       lightingVariations: [],
       angles: [],
+      bodyAngles: [],
       expressionStatus: "idle",
       poseStatus: "idle",
       lightingStatus: "idle",
       anglesStatus: "idle",
+      bodyAnglesStatus: "idle",
       customVariations: [],
       motions: [],
       motionStatus: "idle",

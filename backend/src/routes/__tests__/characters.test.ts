@@ -887,8 +887,8 @@ describe("POST /v1/characters", () => {
         nodeId: "node-1",
         userId: TEST_USER_ID,
         referencePhotos: [
-          { url: "https://example.com/a.png", kind: "front" },
-          { url: "https://example.com/b.png", kind: "front" },
+          { url: "https://example.com/a.png", kind: "frontFace" },
+          { url: "https://example.com/b.png", kind: "frontFace" },
         ],
       },
     })
@@ -1028,12 +1028,12 @@ describe("POST /v1/characters", () => {
         nodeId: "node-1",
         userId: TEST_USER_ID,
         referencePhotos: [
-          { url: "https://example.com/1.png", kind: "front" },
+          { url: "https://example.com/1.png", kind: "frontFace" },
           { url: "https://example.com/2.png", kind: "sideLeft" },
           { url: "https://example.com/3.png", kind: "sideRight" },
           { url: "https://example.com/4.png", kind: "threeQuarterLeft" },
           { url: "https://example.com/5.png", kind: "threeQuarterRight" },
-          { url: "https://example.com/6.png", kind: "fullBody" },
+          { url: "https://example.com/6.png", kind: "frontBody" },
           { url: "https://example.com/7.png", kind: "other" },
           { url: "https://example.com/8.png", kind: "other" },
         ],
@@ -1047,7 +1047,7 @@ describe("POST /v1/characters", () => {
     vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
 
     const photos = [
-      { url: "https://example.com/front.png", kind: "front" },
+      { url: "https://example.com/front.png", kind: "frontFace" },
       { url: "https://example.com/side.png", kind: "sideLeft" },
     ]
     const res = await app.inject({

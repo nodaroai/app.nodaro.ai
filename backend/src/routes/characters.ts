@@ -13,15 +13,20 @@ import { formatZodError } from "../lib/zod-error.js"
  */
 
 // Reference-photo kinds drive the identity-foundation gallery slots. Every
-// `kind` except `"other"` may appear at most once (one front shot, one side
-// shot, etc.); `"other"` is unconstrained so users can attach extra references.
+// `kind` except `"other"` may appear at most once (one front-face shot, one
+// side shot, etc.); `"other"` is unconstrained so users can attach extra
+// references.
+//
+// Migration 118 renamed `front` → `frontFace` and `fullBody` → `frontBody`
+// (the original names were ambiguous — `front` could be face-only or body, and
+// `fullBody` collapsed front-body and back-body into one slot).
 const REFERENCE_PHOTO_KINDS = [
-  "front",
+  "frontFace",
   "sideLeft",
   "sideRight",
   "threeQuarterLeft",
   "threeQuarterRight",
-  "fullBody",
+  "frontBody",
   "other",
 ] as const
 
@@ -51,6 +56,7 @@ const upsertCharacterBody = z.object({
   poses: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   lightingVariations: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  bodyAngles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
@@ -97,7 +103,7 @@ const listCharactersQuery = z.object({
 })
 
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, motions, voice, personality, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, gender, style, base_outfit, source_image_url, expressions, poses, lighting_variations, angles, body_angles, motions, voice, personality, deleted_at, created_at, updated_at"
 
 type CharacterRow = {
   id: string
@@ -114,6 +120,7 @@ type CharacterRow = {
   poses: { name: string; url: string }[] | null
   lighting_variations: { name: string; url: string }[] | null
   angles: { name: string; url: string }[] | null
+  body_angles: { name: string; url: string }[] | null
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
@@ -138,6 +145,7 @@ function toCamel(c: CharacterRow) {
     poses: c.poses,
     lightingVariations: c.lighting_variations,
     angles: c.angles,
+    bodyAngles: c.body_angles,
     motions: c.motions,
     voice: c.voice,
     personality: c.personality,
@@ -326,7 +334,11 @@ export async function characterRoutes(app: FastifyInstance) {
     const { data: portraitPendingRows } = portraitPendingResult
     const { data: previousCompletedRows } = previousCompletedResult
 
-    type PendingJob = { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }
+    type PendingJob = {
+      jobId: string
+      assetType: "expressions" | "poses" | "angles" | "bodyAngles" | "lighting" | "motions"
+      name: string
+    }
     const pendingJobs: PendingJob[] = []
     for (const row of pendingRows ?? []) {
       const inp = (row.input_data ?? {}) as Record<string, unknown>
@@ -339,6 +351,7 @@ export async function characterRoutes(app: FastifyInstance) {
       } else if (jobType === "generate-character-asset" || jobType === "image-to-image") {
         const col = typeof inp.attachToColumn === "string" ? inp.attachToColumn : undefined
         if (col === "expressions" || col === "poses" || col === "angles") assetType = col
+        else if (col === "body_angles") assetType = "bodyAngles"
         else if (col === "lighting_variations") assetType = "lighting"
       }
       if (!assetType) continue
@@ -419,7 +432,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, bodyAngles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -451,6 +464,7 @@ export async function characterRoutes(app: FastifyInstance) {
       if (poses !== undefined) patch.poses = poses
       if (lightingVariations !== undefined) patch.lighting_variations = lightingVariations
       if (angles !== undefined) patch.angles = angles
+      if (bodyAngles !== undefined) patch.body_angles = bodyAngles
       if (motions !== undefined) patch.motions = motions
       if (voice !== undefined) patch.voice = voice ?? null
       if (personality !== undefined) patch.personality = personality ?? null
@@ -491,6 +505,7 @@ export async function characterRoutes(app: FastifyInstance) {
       poses: poses ?? [],
       lighting_variations: lightingVariations ?? [],
       angles: angles ?? [],
+      body_angles: bodyAngles ?? [],
       motions: motions ?? [],
       voice: voice ?? null,
       personality: personality ?? null,
@@ -578,6 +593,7 @@ export async function characterRoutes(app: FastifyInstance) {
       poses: (source as CharacterRow).poses ?? [],
       lighting_variations: (source as CharacterRow).lighting_variations ?? [],
       angles: (source as CharacterRow).angles ?? [],
+      body_angles: (source as CharacterRow).body_angles ?? [],
       motions: (source as CharacterRow).motions ?? [],
       voice: (source as CharacterRow).voice,
       personality: (source as CharacterRow).personality,
