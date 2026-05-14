@@ -24,29 +24,29 @@ COMMENT ON COLUMN public.characters.canonical_description IS
 COMMENT ON COLUMN public.characters.real_life_refs_by_variant IS
   'Per-preset-variant slot of real-life photo refs. Keyed lowercased+trimmed (e.g. "smile"). Max 20 keys, 5 photos each.';
 
--- 2. Backfill existing asset entries — merge new fields into each item rather
---    than replace, so any extra keys past entries carry are preserved.
---    `jsonb_agg(elem || patch) FROM jsonb_array_elements(col) elem` is the idiom.
+-- 2. Backfill existing asset entries — for each item, prefix with our default
+--    patch and let `||`'s right-bias preserve any existing keys. Idiom:
+--    `jsonb_agg(patch || elem)` — patch supplies missing keys, elem wins on conflict.
 
 UPDATE public.characters
 SET
   expressions = COALESCE((
-    SELECT jsonb_agg(elem || '{"description": ""}'::jsonb)
+    SELECT jsonb_agg('{"description": ""}'::jsonb || elem)
     FROM jsonb_array_elements(expressions) elem
   ), '[]'::jsonb),
   poses = COALESCE((
-    SELECT jsonb_agg(elem || '{"description": ""}'::jsonb)
+    SELECT jsonb_agg('{"description": ""}'::jsonb || elem)
     FROM jsonb_array_elements(poses) elem
   ), '[]'::jsonb),
   lighting_variations = COALESCE((
-    SELECT jsonb_agg(elem || '{"description": ""}'::jsonb)
+    SELECT jsonb_agg('{"description": ""}'::jsonb || elem)
     FROM jsonb_array_elements(lighting_variations) elem
   ), '[]'::jsonb),
   angles = COALESCE((
-    SELECT jsonb_agg(elem || '{"description": ""}'::jsonb)
+    SELECT jsonb_agg('{"description": ""}'::jsonb || elem)
     FROM jsonb_array_elements(angles) elem
   ), '[]'::jsonb),
   motions = COALESCE((
-    SELECT jsonb_agg(elem || '{"description": "", "motionDescription": ""}'::jsonb)
+    SELECT jsonb_agg('{"description": "", "motionDescription": ""}'::jsonb || elem)
     FROM jsonb_array_elements(motions) elem
   ), '[]'::jsonb);
