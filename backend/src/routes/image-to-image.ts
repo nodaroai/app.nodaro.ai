@@ -55,7 +55,19 @@ const imageToImageBody = z.object({
   attachToCharacterId: z.string().uuid().optional(),
   attachToColumn: z.enum(["expressions", "poses", "angles", "lighting_variations"]).optional(),
   attachName: z.string().min(1).max(200).optional(),
+  // Identity injection (non-studio path only). When the upstream Character
+  // node has its "Inject identity description in downstream prompts" toggle
+  // enabled, the frontend / DAG executor passes this so the route appends the
+  // character's canonical_description (with an identity-preserve suffix) to
+  // the prompt before reservation + worker enqueue. Default off. Ignored on
+  // the studio path because that flow already drafts a `description` via LLM
+  // and forwards a richer payload — re-injecting canonical here would double
+  // up identity language.
+  injectCharacterContext: z.boolean().optional().default(false),
 })
+
+const IDENTITY_PRESERVE_SUFFIX =
+  "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
 export async function imageToImageRoutes(app: FastifyInstance) {
   app.post("/v1/image-to-image", { preHandler: creditGuard((req) => {
@@ -73,7 +85,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, prompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
+    const { imageUrl, prompt: rawPrompt, provider, referenceImageUrls, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl } = parsed.data
+    let prompt = rawPrompt
     const userId = req.userId
 
     if (!userId) {
@@ -85,10 +98,12 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     // ─────────────────────────────────────────────────────────────────────
-    // Studio path — when attachToCharacterId is set, the caller is the
+    // Studio path — when attachToCharacterId is set AND the caller has NOT
+    // opted in to the simpler injectCharacterContext flow, the caller is the
     // Character Studio refining/regenerating an asset against a character
-    // row. Non-studio callers (workflows, MCP, i2i-as-a-tool) hit none of
-    // this and keep their existing behavior end-to-end.
+    // row. Non-studio callers (workflows / DAG executor / MCP) use
+    // injectCharacterContext to opt into the simpler canonical_description
+    // prompt mutation below and bypass the studio LLM-draft path entirely.
     //
     // Two gates + one inline LLM draft + one privacy override fire here:
     //   1. Portrait-required gate: character must exist (404 cross-user
@@ -99,7 +114,8 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     //   3. force_private: true on the job row, unconditional.
     //   4. description + realLifeRefs forwarded to the worker payload.
     // ─────────────────────────────────────────────────────────────────────
-    const isStudioPath = parsed.data.attachToCharacterId !== undefined
+    const isStudioPath =
+      parsed.data.attachToCharacterId !== undefined && !parsed.data.injectCharacterContext
     if (isStudioPath) {
       const { data: char, error: charErr } = await supabase
         .from("characters")
@@ -154,6 +170,39 @@ export async function imageToImageRoutes(app: FastifyInstance) {
             "[image-to-image] LLM description draft failed",
           )
           // Leave parsed.data.description undefined and continue.
+        }
+      }
+    }
+
+    // Identity injection (non-studio path only). When the Character node has
+    // its injectIdentityInPrompts toggle enabled, the frontend forwards
+    // injectCharacterContext + attachToCharacterId here. We append the
+    // canonical_description (or description fallback) and an identity-preserve
+    // suffix to the prompt BEFORE the job insert so the persisted input_data
+    // and the worker payload both reflect the final prompt.
+    if (!isStudioPath && parsed.data.injectCharacterContext && parsed.data.attachToCharacterId) {
+      const { data: char } = await supabase
+        .from("characters")
+        .select("canonical_description, description, name")
+        .eq("id", parsed.data.attachToCharacterId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .single()
+      if (char) {
+        const canonical = typeof char.canonical_description === "string" ? char.canonical_description.trim() : ""
+        const desc = typeof char.description === "string" ? char.description.trim() : ""
+        const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
+        if (identityText.length > 0) {
+          prompt = `${prompt.trim()}\n\n${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
+          // Mirror the final prompt into parsed.data so buildJobInputData
+          // persists it (input_data is what gallery/debug surfaces read back).
+          parsed.data.prompt = prompt
+          if (prompt.length > 2000) {
+            req.log.warn(
+              { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
+              "[image-to-image] character context injection produced a long prompt; consider trimming canonicalDescription",
+            )
+          }
         }
       }
     }

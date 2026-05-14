@@ -133,6 +133,33 @@ export function CharacterConfig({ data, onUpdate, sources, fieldMappings, onMapF
           </p>
         </div>
 
+        {/* Identity Injection — when enabled, downstream Generate/Modify Image
+            and Image-to-Video nodes receive `injectCharacterContext: true` +
+            the character's DB id, so the backend appends the canonical
+            description + an identity-preserve suffix to the prompt before
+            the model call. Default OFF for backwards-compat. */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="char-inject-identity"
+              checked={data.injectIdentityInPrompts === true}
+              onChange={(e) => onUpdate({ injectIdentityInPrompts: e.target.checked })}
+            />
+            <Label htmlFor="char-inject-identity" className="text-xs">
+              Inject identity description in downstream prompts
+            </Label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            When enabled, downstream image/video nodes wired to this character will use the canonical identity description for better consistency.
+          </p>
+          {data.injectIdentityInPrompts && !(data.canonicalDescription && data.canonicalDescription.trim().length > 0) && (
+            <p className="text-[10px] text-amber-500">
+              No canonical description yet — generate a portrait in the studio first.
+            </p>
+          )}
+        </div>
+
         {/* Field Mappings — keep the {} input-injection mapping for the Character Name,
             the one referenceable field that survives the move to the studio. */}
         <MappableField field="characterName" label="Character Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
