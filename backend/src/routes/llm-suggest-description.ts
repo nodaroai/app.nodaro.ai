@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { config } from "../lib/config.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -63,6 +64,11 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
     }
+    if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+      return reply.status(503).send({
+        error: { code: "provider_unavailable", message: "LLM API key not configured" },
+      })
+    }
     const { system, user } = PROMPTS[parsed.data.kind](parsed.data.context)
     try {
       const result = await llmComplete({
@@ -72,7 +78,13 @@ export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
         maxTokens: 400,
         temperature: 0.8,
       })
-      return { text: result.text.trim() }
+      const text = result.text.trim()
+      if (!text) {
+        return reply.status(502).send({
+          error: { code: "llm_empty_response", message: "LLM returned no text — please retry." },
+        })
+      }
+      return { text }
     } catch (err) {
       const message = err instanceof Error ? err.message : "LLM call failed"
       return reply.status(502).send({ error: { code: "llm_failure", message } })
