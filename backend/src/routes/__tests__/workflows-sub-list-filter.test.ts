@@ -86,7 +86,7 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------
 // Sub-workflow visibility filters
 // ---------------------------------------------------------------------------
-// Migration 115 added a `parent_workflow_id` column to the `workflows` table
+// Migration 116 added a `parent_workflow_id` column to the `workflows` table
 // to model child sub-workflows owned by a SubWorkflowNode container. Child
 // workflows must be hidden from:
 //
