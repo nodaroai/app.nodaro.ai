@@ -82,6 +82,7 @@ import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-he
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { llmChatRoutes } from "./routes/llm-chat.js"
 import { llmSuggestDescriptionRoutes } from "./routes/llm-suggest-description.js"
+import { characterPortraitApprovalRoutes } from "./routes/character-portrait-approval.js"
 import { webScrapeRoutes } from "./routes/web-scrape.js"
 import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
@@ -290,6 +291,7 @@ export async function buildApp() {
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
   await app.register(llmSuggestDescriptionRoutes)
+  await app.register(characterPortraitApprovalRoutes)
   await app.register(webScrapeRoutes)
   await app.register(downloadRoutes)
   await app.register(renderVideoRoutes)
