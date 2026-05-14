@@ -41,7 +41,7 @@ import type { McpSession } from "../session.js"
  */
 export const FALLBACK_SKILL_CONTENT = `---
 name: nodaro-film-director
-version: 1.0.8
+version: 1.0.9
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -536,7 +536,7 @@ For each shot in the shot list, in order:
    - Duration = shot_list.duration_seconds
    - **Provider-specific rules** (see below)
 6. Show the resulting video to the user
-7. If user rejects: ask why, refine motion script, re-animate. **Max 3 retries.** If still rejected after 3: tell the user "we've hit the retry limit on this shot — the result isn't ideal. We can continue and revisit this shot later via Nodaro's canvas, or pause here." Wait for explicit user choice.
+7. If user rejects: ask why, refine motion script, re-animate. **Max 3 retries — this counts USER-REJECTION cycles only, not transport-level retries.** If a tool call fails with a network/API error, handle it via the standard "MCP call fails → ask user to retry or skip" Failure Handling rule and the retry counter stays at 0. If the user has rejected the creative output 3 times: tell them "we've hit the retry limit on this shot — the result isn't ideal. We can continue and revisit this shot later via Nodaro's canvas, or pause here." Wait for explicit user choice.
 8. **Only proceed to next shot after this one is approved.**
 
 **CRITICAL — Canvas attachment data shape:** When you call \`update_workflow_json\` to attach the approved \`image-to-video\` nodes, EACH node MUST include the result fields from the \`image-to-video\` shape above:
