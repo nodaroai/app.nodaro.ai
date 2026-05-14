@@ -18,6 +18,7 @@ import type {
 import { useCallableWorkflows, useWorkflowInterface } from "@/hooks/queries/use-callable-workflows"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
+import { listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
 
 // ---------- Shared: Ports Editor ----------
 
@@ -458,6 +459,26 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           Referenced workflow not found or has no valid routes.
         </div>
       )}
+
+      <div>
+        <Label className="text-xs font-medium">View mode</Label>
+        <Select
+          value={nodeData.viewMode ?? "default"}
+          onValueChange={(v) => onUpdate({ viewMode: v })}
+        >
+          <SelectTrigger className="mt-1 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {listSubWorkflowViewModes().map((mode) => (
+              <SelectItem key={mode.id} value={mode.id}>{mode.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Controls how this container renders on the canvas. Storyboard / Video / Script views will plug in here as they ship in v2.
+        </p>
+      </div>
 
       {viewerOpen && nodeData.referencedWorkflowId && (
         <WorkflowViewerModal
