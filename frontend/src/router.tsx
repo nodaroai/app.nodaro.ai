@@ -70,6 +70,7 @@ const AdminSubscriptions = lazy(() => import("@/ee/app/(admin)/admin/subscriptio
 const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page"))
 const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
 const AdminTutorials = lazy(() => import("@/ee/app/(admin)/admin/tutorials/page"))
+const AdminTutorialCategories = lazy(() => import("@/ee/app/(admin)/admin/tutorial-categories/page"))
 
 function SuspenseWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -106,6 +107,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "subscriptions", element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper> },
       { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
       { path: "node-defaults", element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper> },
+      { path: "tutorial-categories", element: <SuspenseWrapper><AdminTutorialCategories /></SuspenseWrapper> },
       { path: "tutorials", element: <SuspenseWrapper><AdminTutorials /></SuspenseWrapper> },
     ],
   },

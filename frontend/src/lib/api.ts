@@ -61,6 +61,18 @@ export class InsufficientCreditsError extends Error {
   }
 }
 
+export class TutorialCategoryInUseError extends Error {
+  readonly videoCount: number
+  readonly flowCount: number
+
+  constructor(message: string, videoCount: number, flowCount: number) {
+    super(message)
+    this.name = "TutorialCategoryInUseError"
+    this.videoCount = videoCount
+    this.flowCount = flowCount
+  }
+}
+
 /**
  * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
  * Throws InsufficientCreditsError for credit-related 402 errors.
@@ -86,6 +98,13 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   }
   if (errObj?.code === "name_taken") {
     throw new CharacterNameTakenError((errObj.message as string) ?? "Name already in use.")
+  }
+  if (errObj?.code === "category_in_use") {
+    throw new TutorialCategoryInUseError(
+      (errObj.message as string) ?? fallback,
+      (errObj.videoCount as number) ?? 0,
+      (errObj.flowCount as number) ?? 0,
+    )
   }
   throw new Error((errObj?.message as string) ?? fallback)
 }
@@ -5109,32 +5128,135 @@ export async function getTemplateFavorites(): Promise<string[]> {
 }
 
 // --- Tutorials ---
+// After migration 114 the system supports two tutorial flavors sharing one
+// taxonomy: video tutorials (table `tutorials`) and flow tutorials
+// (workflow_templates with 'tutorial' in listed_in[]). The public endpoint
+// returns both grouped by category; admin endpoints manage them separately.
 
-export interface Tutorial {
+/** Shared taxonomy row used by both tutorial flavors. */
+export interface TutorialCategory {
   id: string
-  title: string
+  name: string
+  slug: string
   description: string | null
-  videoUrl: string
-  thumbnailUrl: string | null
-  category: string
   sortOrder: number
   isEnabled: boolean
   createdAt: string
   updatedAt: string
 }
 
-export async function fetchTutorials(category?: string): Promise<Tutorial[]> {
-  const params = category ? `?category=${encodeURIComponent(category)}` : ""
-  const res = await apiRequest<{ data: Tutorial[] }>(
-    `/v1/tutorials${params}`,
+/** Embedded category shape returned alongside admin tutorial rows. */
+export interface TutorialCategoryEmbed {
+  id: string
+  name: string
+  slug: string
+  sortOrder: number
+}
+
+/** Full tutorial row as returned by /v1/admin/tutorials (CRUD endpoints). */
+export interface AdminTutorial {
+  id: string
+  type: "video"
+  title: string
+  description: string | null
+  videoUrl: string
+  thumbnailUrl: string | null
+  categoryId: string
+  category: TutorialCategoryEmbed | null
+  sortOrder: number
+  isEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** Video tutorial inside a grouped category bucket (public GET /v1/tutorials). */
+export interface VideoTutorialItem {
+  id: string
+  type: "video"
+  title: string
+  description: string | null
+  videoUrl: string
+  thumbnailUrl: string | null
+  categoryId: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+/** Flow tutorial inside a grouped category bucket — a workflow_template
+ *  flagged 'tutorial'. Mirrors the backend's toFlowResponse mapping. */
+export interface FlowTutorialItem {
+  id: string
+  type: "flow"
+  templateId: string
+  slug: string | null
+  title: string
+  description: string | null
+  markdownDescription: string | null
+  previewMediaUrl: string | null
+  previewMediaType: "image" | "video" | null
+  complexity: "simple" | "intermediate" | "advanced"
+  estimatedCredits: number
+  nodeTypesUsed: string[]
+  providersUsed: string[]
+  nodeCount: number
+  categoryId: string
+  tutorialSortOrder: number
+  workflowId: string
+  createdAt: string
+}
+
+/** Grouped bucket: one per enabled tutorial_category. */
+export interface TutorialCategoryWithItems {
+  id: string
+  name: string
+  slug: string
+  sortOrder: number
+  videos: VideoTutorialItem[]
+  flows: FlowTutorialItem[]
+}
+
+/** Slim template row returned by the admin cross-user list endpoint. */
+export interface AdminWorkflowTemplateRow {
+  id: string
+  slug: string | null
+  name: string
+  description: string | null
+  listedIn: string[]
+  isListed: boolean
+  isTutorial: boolean
+  tutorialCategoryId: string | null
+  tutorialSortOrder: number
+  isActive: boolean
+  category: string
+  nodeCount: number
+  complexity: "simple" | "intermediate" | "advanced"
+  previewMediaUrl: string | null
+  previewMediaType: "image" | "video" | null
+  creatorId: string
+  creatorDisplayName: string | null
+  cloneCount: number
+  favoriteCount: number
+  createdAt: string
+}
+
+// ---- Public ----
+
+/** GET /v1/tutorials — grouped video + flow tutorials by category. */
+export async function fetchTutorialsGrouped(): Promise<{
+  categories: TutorialCategoryWithItems[]
+}> {
+  return apiRequest<{ categories: TutorialCategoryWithItems[] }>(
+    "/v1/tutorials",
     "Failed to fetch tutorials",
     { skipAuth: true },
   )
-  return res.data
 }
 
-export async function fetchAdminTutorials(): Promise<Tutorial[]> {
-  const res = await apiRequest<{ data: Tutorial[] }>(
+// ---- Admin: video tutorials CRUD ----
+
+export async function fetchAdminTutorials(): Promise<AdminTutorial[]> {
+  const res = await apiRequest<{ data: AdminTutorial[] }>(
     "/v1/admin/tutorials",
     "Failed to fetch tutorials",
   )
@@ -5146,11 +5268,11 @@ export async function createTutorial(data: {
   video_url: string
   description?: string
   thumbnail_url?: string
-  category?: string
+  category_id: string
   sort_order?: number
   is_enabled?: boolean
-}): Promise<Tutorial> {
-  const res = await apiRequest<{ data: Tutorial }>(
+}): Promise<AdminTutorial> {
+  const res = await apiRequest<{ data: AdminTutorial }>(
     "/v1/admin/tutorials",
     "Failed to create tutorial",
     { method: "POST", body: data },
@@ -5163,11 +5285,11 @@ export async function updateTutorial(id: string, data: {
   video_url?: string
   description?: string | null
   thumbnail_url?: string | null
-  category?: string
+  category_id?: string
   sort_order?: number
   is_enabled?: boolean
-}): Promise<Tutorial> {
-  const res = await apiRequest<{ data: Tutorial }>(
+}): Promise<AdminTutorial> {
+  const res = await apiRequest<{ data: AdminTutorial }>(
     `/v1/admin/tutorials/${encodeURIComponent(id)}`,
     "Failed to update tutorial",
     { method: "PATCH", body: data },
@@ -5180,6 +5302,96 @@ export async function deleteTutorial(id: string): Promise<{ success: boolean }> 
     `/v1/admin/tutorials/${encodeURIComponent(id)}`,
     "Failed to delete tutorial",
     { method: "DELETE" },
+  )
+}
+
+// ---- Admin: tutorial categories CRUD ----
+
+export async function fetchAdminTutorialCategories(): Promise<TutorialCategory[]> {
+  const res = await apiRequest<{ data: TutorialCategory[] }>(
+    "/v1/admin/tutorial-categories",
+    "Failed to fetch tutorial categories",
+  )
+  return res.data
+}
+
+export async function createTutorialCategory(data: {
+  name: string
+  slug: string
+  description?: string
+  sort_order?: number
+  is_enabled?: boolean
+}): Promise<TutorialCategory> {
+  const res = await apiRequest<{ data: TutorialCategory }>(
+    "/v1/admin/tutorial-categories",
+    "Failed to create category",
+    { method: "POST", body: data },
+  )
+  return res.data
+}
+
+export async function updateTutorialCategory(
+  id: string,
+  data: {
+    name?: string
+    slug?: string
+    description?: string | null
+    sort_order?: number
+    is_enabled?: boolean
+  },
+): Promise<TutorialCategory> {
+  const res = await apiRequest<{ data: TutorialCategory }>(
+    `/v1/admin/tutorial-categories/${encodeURIComponent(id)}`,
+    "Failed to update category",
+    { method: "PATCH", body: data },
+  )
+  return res.data
+}
+
+/** Throws `TutorialCategoryInUseError` (with videoCount + flowCount) on 409. */
+export async function deleteTutorialCategory(id: string): Promise<{ success: boolean }> {
+  return apiRequest<{ success: boolean }>(
+    `/v1/admin/tutorial-categories/${encodeURIComponent(id)}`,
+    "Failed to delete category",
+    { method: "DELETE" },
+  )
+}
+
+// ---- Admin: cross-user template list + tutorial flag ----
+
+export async function listAdminWorkflowTemplates(params?: {
+  cursor?: string
+  limit?: number
+  search?: string
+  listed?: "marketplace" | "tutorial" | "unlisted"
+}): Promise<{ data: AdminWorkflowTemplateRow[]; nextCursor: string | null }> {
+  const qs = new URLSearchParams()
+  if (params?.cursor) qs.set("cursor", params.cursor)
+  if (params?.limit) qs.set("limit", String(params.limit))
+  if (params?.search) qs.set("search", params.search)
+  if (params?.listed) qs.set("listed", params.listed)
+  const query = qs.toString()
+  return apiRequest<{ data: AdminWorkflowTemplateRow[]; nextCursor: string | null }>(
+    `/v1/admin/workflow-templates${query ? `?${query}` : ""}`,
+    "Failed to list templates",
+  )
+}
+
+export async function toggleTemplateTutorialFlag(
+  templateId: string,
+  data: {
+    isTutorial: boolean
+    tutorialCategoryId?: string
+    tutorialSortOrder?: number
+  },
+): Promise<AdminWorkflowTemplateRow> {
+  const body: Record<string, unknown> = { is_tutorial: data.isTutorial }
+  if (data.tutorialCategoryId !== undefined) body.tutorial_category_id = data.tutorialCategoryId
+  if (data.tutorialSortOrder !== undefined) body.tutorial_sort_order = data.tutorialSortOrder
+  return apiRequest<AdminWorkflowTemplateRow>(
+    `/v1/admin/workflow-templates/${encodeURIComponent(templateId)}/tutorial-flag`,
+    "Failed to update tutorial flag",
+    { method: "PATCH", body },
   )
 }
 
