@@ -18,6 +18,7 @@ import type {
 import { useCallableWorkflows, useWorkflowInterface } from "@/hooks/queries/use-callable-workflows"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
+import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
 
 // ---------- Shared: Ports Editor ----------
@@ -443,7 +444,14 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               const wf = mergedWorkflows.find((w) => w.id === nodeData.referencedWorkflowId)
               const pid = wf?.projectId || projectId
               if (pid && nodeData.referencedWorkflowId) {
-                navigate(`/projects/${pid}/workflows/${nodeData.referencedWorkflowId}?focusType=sub-workflow-input`)
+                openSubWorkflow({
+                  childWorkflowId: nodeData.referencedWorkflowId,
+                  childWorkflowName: nodeData.referencedWorkflowName ?? wf?.name ?? "Untitled Workflow",
+                  childProjectId: pid,
+                  sourceNodeId: null,
+                  navigate,
+                  extraQuery: "?focusType=sub-workflow-input",
+                })
               }
             }}
           >

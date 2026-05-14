@@ -21,6 +21,9 @@ import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { ExecutionsTab } from "../executions-tab";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
+import { SubWorkflowBreadcrumb } from "../sub-workflow-breadcrumb";
+import { useSubWorkflowStack } from "@/hooks/use-sub-workflow-stack";
+import { jumpToBreadcrumb, jumpToBreadcrumbRoot } from "@/lib/sub-workflow-navigation";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useWorkflowPersistence } from "@/hooks/use-workflow-persistence";
@@ -929,6 +932,43 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   // ---------------------------------------------------------------------------
+  // Sub-workflow breadcrumb wiring
+  // ---------------------------------------------------------------------------
+
+  const subWfStack = useSubWorkflowStack((s) => s.stack);
+  const subWfRootFrame = useSubWorkflowStack((s) => s.rootFrame);
+
+  const handleBreadcrumbJumpTo = useCallback(
+    (targetWorkflowId: string) => {
+      jumpToBreadcrumb({
+        workflowId: targetWorkflowId,
+        projectId: projectId ?? "",
+        navigate: navigateWithGuard,
+      });
+    },
+    [projectId, navigateWithGuard],
+  );
+
+  const handleBreadcrumbJumpToRoot = useCallback(() => {
+    if (!subWfRootFrame) return;
+    jumpToBreadcrumbRoot({
+      rootFrame: subWfRootFrame,
+      projectId: projectId ?? "",
+      navigate: navigateWithGuard,
+    });
+  }, [subWfRootFrame, projectId, navigateWithGuard]);
+
+  // When the user lands on the root workflow (URL matches rootFrame), clear
+  // the stack so the breadcrumb disappears. This handles browser back/forward
+  // and direct navigation without leaving a stale breadcrumb.
+  const clearSubWfStack = useSubWorkflowStack((s) => s.clear);
+  useEffect(() => {
+    if (subWfRootFrame && workflowId === subWfRootFrame.workflowId) {
+      clearSubWfStack();
+    }
+  }, [workflowId, subWfRootFrame, clearSubWfStack]);
+
+  // ---------------------------------------------------------------------------
   // JSX
   // ---------------------------------------------------------------------------
 
@@ -943,6 +983,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         activeTab={activeTab}
         onTabChange={setActiveTab}
       />
+
+      {subWfStack.length > 0 && subWfRootFrame && (
+        <SubWorkflowBreadcrumb
+          onJumpTo={handleBreadcrumbJumpTo}
+          onJumpToRoot={handleBreadcrumbJumpToRoot}
+        />
+      )}
 
       <div className="flex-1 relative">
         <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">

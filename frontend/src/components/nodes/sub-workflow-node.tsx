@@ -1,15 +1,17 @@
 "use client"
 
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Workflow, Eye } from "lucide-react"
+import { Workflow, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
-import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { getSubWorkflowViewMode } from "./sub-workflow-views/view-mode-registry"
+import "./sub-workflow-views/register-defaults"
 import type { SubWorkflowData, SubWorkflowPort } from "@/types/nodes"
 
 function buildHandles(
@@ -65,6 +67,8 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
+  const navigate = useNavigate()
+  const projectId = useWorkflowStore((s) => s.projectId)
   const status = nodeData.executionStatus ?? "idle"
 
   const inputPorts = nodeData.routeSnapshot?.inputPorts ?? []
@@ -79,11 +83,27 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeInternals(id)
   }, [id, inputPorts.length, outputPorts.length, updateNodeInternals])
 
-  const [viewerOpen, setViewerOpen] = useState(false)
-
   const nodeMinHeight = Math.max(120, maxPorts * 36 + 60)
 
   const ViewMode = getSubWorkflowViewMode(nodeData.viewMode).Component
+
+  const handleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!nodeData.referencedWorkflowId) return
+    // The node data doesn't store the referenced workflow's projectId
+    // directly. Fall back to the parent workflow's project — sub-workflows
+    // typically live in the same project. If the workflow is in a different
+    // project, the route will still resolve (the editor loads by workflowId).
+    const childProjectId = projectId ?? ""
+    if (!childProjectId) return
+    openSubWorkflow({
+      childWorkflowId: nodeData.referencedWorkflowId,
+      childWorkflowName: nodeData.referencedWorkflowName ?? "Untitled Workflow",
+      childProjectId,
+      sourceNodeId: id,
+      navigate,
+    })
+  }
 
   return (
     <div className="relative group" style={{ maxWidth: '220px', minHeight: `${nodeMinHeight}px` }}>
@@ -121,18 +141,13 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button
           type="button"
-          aria-label="View referenced workflow"
+          aria-label="Edit referenced workflow"
+          title="Edit referenced workflow"
           className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
-          onClick={(e) => { e.stopPropagation(); setViewerOpen(true) }}
+          onClick={handleExpand}
         >
-          <Eye className="w-3.5 h-3.5" />
+          <Expand className="w-3.5 h-3.5" />
         </button>
-      )}
-      {viewerOpen && nodeData.referencedWorkflowId && (
-        <WorkflowViewerModal
-          workflowId={nodeData.referencedWorkflowId}
-          onClose={() => setViewerOpen(false)}
-        />
       )}
     </div>
   )
