@@ -82,6 +82,15 @@ export interface CharacterStudioState {
    *  page close. Modal consumes once via useEffect; the array is stable per
    *  refetch so the seeding effect runs exactly once. */
   initialPendingJobs: StudioPendingJobSeed[] | null
+  /** In-flight `generate-character` jobs found on this character row at
+   *  open-time. The Appearance tab seeds its candidate grid from this and
+   *  resumes polling so spinners reappear when the user re-opens the modal
+   *  mid-generation. */
+  initialPortraitCandidates: ReadonlyArray<{ jobId: string; status: string; progress: number; url?: string }>
+  /** Recently-completed `generate-character` jobs (within 7 days, max 5,
+   *  excluding the currently-approved portrait). Seeds the previous-
+   *  candidates strip so the user can re-approve an earlier candidate. */
+  initialPreviousCandidates: ReadonlyArray<{ jobId: string; url: string; createdAt: string }>
   /** Shallow merge into staged, mirror to canvas, and schedule a debounced PATCH. */
   patch: (p: Partial<CharacterNodeData>) => void
   /** Returns the persisted character DB id, creating the row first if needed.
@@ -152,6 +161,8 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
   const [staged, setStaged] = useState<CharacterNodeData | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [initialPendingJobs, setInitialPendingJobs] = useState<StudioPendingJobSeed[] | null>(null)
+  const [initialPortraitCandidates, setInitialPortraitCandidates] = useState<CharacterStudioState["initialPortraitCandidates"]>([])
+  const [initialPreviousCandidates, setInitialPreviousCandidates] = useState<CharacterStudioState["initialPreviousCandidates"]>([])
 
   // Latest staged kept in a ref so the debounced timer captures fresh values
   // without resetting on every keystroke.
@@ -214,6 +225,13 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
         // re-hydrate spinner cards. Empty array is fine; the modal's seeding
         // effect no-ops when there's nothing to track.
         setInitialPendingJobs(fresh.pendingJobs ?? [])
+        // Portrait-candidate rehydration: in-flight `generate-character` jobs
+        // and the recently-completed-unapproved set. The Appearance tab seeds
+        // its candidate grid + previous strip from these, and resumes polling
+        // on any pending/running candidate so the user sees spinners come back
+        // when re-opening the modal mid-generation.
+        setInitialPortraitCandidates(fresh.portraitCandidates ?? [])
+        setInitialPreviousCandidates(fresh.previousCandidates ?? [])
       } catch {
         // Non-fatal: studio still works off staged local state.
       }
@@ -374,5 +392,13 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
   }, [nodeId, updateNodeData, flushSave])
 
   if (!staged) return null
-  return { staged, saveStatus, initialPendingJobs, patch, ensureSaved }
+  return {
+    staged,
+    saveStatus,
+    initialPendingJobs,
+    initialPortraitCandidates,
+    initialPreviousCandidates,
+    patch,
+    ensureSaved,
+  }
 }

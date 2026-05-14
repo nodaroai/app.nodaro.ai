@@ -562,6 +562,17 @@ export async function getCharacter(id: string): Promise<{
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
   pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }[]
+  readonly portraitCandidates?: ReadonlyArray<{
+    readonly jobId: string
+    readonly status: string
+    readonly progress: number
+    readonly url?: string
+  }>
+  readonly previousCandidates?: ReadonlyArray<{
+    readonly jobId: string
+    readonly url: string
+    readonly createdAt: string
+  }>
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(id)}`, {
     headers: { ...await getAuthHeaders() },

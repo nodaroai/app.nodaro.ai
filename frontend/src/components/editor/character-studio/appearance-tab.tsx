@@ -41,11 +41,22 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
   const [genBusy, setGenBusy] = useState(false)
   const [portraitLightboxOpen, setPortraitLightboxOpen] = useState(false)
   // Multi-candidate portrait state — one entry per in-flight or just-completed
-  // generate-character job. Drives <PortraitCandidateGrid>.
-  const [portraitCandidates, setPortraitCandidates] = useState<PortraitCandidate[]>([])
-  // Previous-approved candidates strip — server-derived (Task 17 will rehydrate
-  // from `GET /v1/characters/:id`). Placeholder empty array for now.
-  const [previousCandidates] = useState<{ jobId: string; url: string; createdAt: string }[]>([])
+  // generate-character job. Drives <PortraitCandidateGrid>. Seeded from the
+  // server's `portraitCandidates` snapshot so spinners reappear when the user
+  // re-opens the modal mid-generation (Task 17).
+  const [portraitCandidates, setPortraitCandidates] = useState<PortraitCandidate[]>(() =>
+    state.initialPortraitCandidates.map((c) => ({
+      jobId: c.jobId,
+      status: c.status as PortraitCandidate["status"],
+      progress: c.progress ?? 0,
+      url: c.url,
+    })),
+  )
+  // Previous-approved candidates strip — server-derived: completed-unapproved
+  // `generate-character` jobs within the last 7 days (max 5).
+  const [previousCandidates, setPreviousCandidates] = useState<
+    ReadonlyArray<{ jobId: string; url: string; createdAt: string }>
+  >(() => state.initialPreviousCandidates)
   // One poll interval per candidate, keyed by jobId. Cleared individually on
   // settle, all cleared on unmount.
   const pollRefMap = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
@@ -60,6 +71,52 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Rehydrate candidates from the server snapshot when the modal opens (or
+  // re-opens after backend rehydration). For any pending/running candidate
+  // in the seed, attach a poll so the grid completes/fails just like a
+  // freshly-kicked-off generation. Skips any jobId we're already polling so
+  // we don't double-poll when this effect re-runs.
+  useEffect(() => {
+    setPortraitCandidates(
+      state.initialPortraitCandidates.map((c) => ({
+        jobId: c.jobId,
+        status: c.status as PortraitCandidate["status"],
+        progress: c.progress ?? 0,
+        url: c.url,
+      })),
+    )
+    setPreviousCandidates(state.initialPreviousCandidates)
+    for (const c of state.initialPortraitCandidates) {
+      if (c.status !== "pending" && c.status !== "running") continue
+      if (pollRefMap.current.has(c.jobId)) continue
+      const jobId = c.jobId
+      const interval = setInterval(async () => {
+        try {
+          const job = await getJobStatus(jobId)
+          setPortraitCandidates((curr) =>
+            curr.map((cur) =>
+              cur.jobId === jobId
+                ? {
+                    ...cur,
+                    status: job.status as PortraitCandidate["status"],
+                    progress: typeof job.progress === "number" ? job.progress : cur.progress,
+                    url: (job.output_data as { imageUrl?: string } | undefined)?.imageUrl,
+                  }
+                : cur,
+            ),
+          )
+          if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+            stopPollFor(jobId)
+          }
+        } catch {
+          /* transient — retry next tick */
+        }
+      }, POLL_MS)
+      pollRefMap.current.set(jobId, interval)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.initialPortraitCandidates, state.initialPreviousCandidates])
 
   const stopPollFor = (jobId: string) => {
     const t = pollRefMap.current.get(jobId)
