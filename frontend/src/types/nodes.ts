@@ -3326,6 +3326,7 @@ export type SubWorkflowData = {
   generatedResults?: GeneratedResult[]
   activeResultIndex?: number
   subWorkflowProgress?: { currentNode: string; completed: number; total: number }
+  viewMode?: string  // Defaults to "default" (Ports view) when undefined.
 }
 
 export type ComponentNodeData = {

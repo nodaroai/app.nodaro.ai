@@ -1,20 +1,20 @@
 "use client"
 
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { Workflow, Loader2, Eye } from "lucide-react"
+import { Workflow, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
-import { ImageLightbox } from "@/components/ui/image-lightbox"
-import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
-import { WorkflowViewerModal } from "@/components/editor/workflow-viewer-modal"
-import { CachedImage } from "@/components/ui/cached-image"
-import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { NodeJobProgress } from "./node-job-progress"
-import type { SubWorkflowData, SubWorkflowPort, GeneratedResult } from "@/types/nodes"
+import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
+import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
+import { getSubWorkflowViewMode } from "./sub-workflow-views/view-mode-registry"
+// Side-effect: registers the default Ports view. Required here (not just in
+// nodes/index.ts) so direct importers like unit tests get a working node.
+import "./sub-workflow-views/register-defaults"
+import type { SubWorkflowData, SubWorkflowPort } from "@/types/nodes"
 
 function buildHandles(
   inputPorts: ReadonlyArray<SubWorkflowPort>,
@@ -68,8 +68,9 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SubWorkflowData
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const useFull = useFullResolution(id)
   const updateNodeInternals = useUpdateNodeInternals()
+  const navigate = useNavigateWithGuard()
+  const projectId = useWorkflowStore((s) => s.projectId)
   const status = nodeData.executionStatus ?? "idle"
 
   const inputPorts = nodeData.routeSnapshot?.inputPorts ?? []
@@ -84,22 +85,26 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeInternals(id)
   }, [id, inputPorts.length, outputPorts.length, updateNodeInternals])
 
-  // Show preview for visible output
-  const visibleOutputPortId = nodeData.routeSnapshot?.visibleOutputPortId
-  const visibleResult = visibleOutputPortId && nodeData.outputResults?.[visibleOutputPortId]
-  const generatedResults = (nodeData.generatedResults ?? []) as GeneratedResult[]
-  const activeIdx = nodeData.activeResultIndex ?? 0
-  const previewUrl = generatedResults[activeIdx]?.url ?? visibleResult
-
-  const progress = nodeData.subWorkflowProgress
-  const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [viewerOpen, setViewerOpen] = useState(false)
-
-  const isImage = typeof previewUrl === "string" && /\.(jpg|jpeg|png|webp|gif)$/i.test(previewUrl)
-  const isVideo = typeof previewUrl === "string" && /\.(mp4|webm|mov)$/i.test(previewUrl)
-  const isAudio = typeof previewUrl === "string" && /\.(mp3|wav|ogg|flac|aac|m4a|webm)$/i.test(previewUrl) && !isVideo
-
   const nodeMinHeight = Math.max(120, maxPorts * 36 + 60)
+
+  const ViewMode = getSubWorkflowViewMode(nodeData.viewMode).Component
+
+  const handleExpand = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!nodeData.referencedWorkflowId) return
+    // The node data doesn't store the referenced workflow's projectId
+    // directly. Fall back to the parent workflow's project — sub-workflows
+    // typically live in the same project. If the workflow is in a different
+    // project, the route will still resolve (the editor loads by workflowId).
+    const childProjectId = projectId ?? ""
+    if (!childProjectId) return
+    openSubWorkflow({
+      childWorkflowId: nodeData.referencedWorkflowId,
+      childWorkflowName: nodeData.referencedWorkflowName ?? "Untitled Workflow",
+      childProjectId,
+      navigate,
+    })
+  }
 
   return (
     <div className="relative group" style={{ maxWidth: '220px', minHeight: `${nodeMinHeight}px` }}>
@@ -125,55 +130,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         minHeight={nodeMinHeight}
       >
         <div style={{ minHeight: `${Math.max(60, maxPorts * 28 + 8)}px` }}>
-          {!nodeData.referencedWorkflowId ? (
-            <p className="text-sm text-muted-foreground">Select a workflow...</p>
-          ) : (
-            <p className="text-xs font-medium truncate">{nodeData.referencedWorkflowName || "Unnamed"}</p>
-          )}
-
-          {status === "running" && progress && (
-            <div className="mt-2">
-              <div className="flex flex-col items-center gap-1.5 text-[10px] text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>{progress.completed}/{progress.total}</span>
-                </div>
-                <NodeJobProgress progress={nodeData.currentJobProgress} />
-              </div>
-              <div className="mt-1 h-1 bg-[#2D2D2D] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#ff0073] transition-all duration-300"
-                  style={{ width: `${progress.total > 0 ? (progress.completed / progress.total) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {status === "failed" && nodeData.errorMessage && (
-            <p className="text-[10px] text-red-400 mt-1 truncate">{nodeData.errorMessage}</p>
-          )}
-
-          {status === "completed" && previewUrl && (
-            isAudio ? (
-              <div className="mt-2">
-                <audio src={previewUrl} crossOrigin="anonymous" controls className="w-full h-8" />
-              </div>
-            ) : (
-              <div className="mt-2 cursor-pointer" onClick={() => setLightboxOpen(true)}>
-                {isImage ? (
-                  <CachedImage src={previewUrl} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail={!useFull} thumbnailWidth={320} />
-                ) : isVideo ? (
-                  generatedResults[activeIdx]?.thumbnailUrl ? (
-                    <CachedImage src={generatedResults[activeIdx]!.thumbnailUrl!} alt="Output" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" thumbnail={!useFull} thumbnailWidth={320} />
-                  ) : (
-                    <video src={previewUrl} crossOrigin="anonymous" className="w-full h-20 object-cover rounded hover:opacity-80 transition-opacity" muted />
-                  )
-                ) : (
-                  <p className="text-[10px] text-muted-foreground truncate">{previewUrl}</p>
-                )}
-              </div>
-            )
-          )}
+          <ViewMode nodeId={id} data={nodeData} selected={selected ?? false} />
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
@@ -185,24 +142,13 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button
           type="button"
-          aria-label="View referenced workflow"
+          aria-label="Edit referenced workflow"
+          title="Edit referenced workflow"
           className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10 p-1 rounded bg-[#1E1E1E]/80 hover:bg-[#2D2D2D] text-white/70 hover:text-white"
-          onClick={(e) => { e.stopPropagation(); setViewerOpen(true) }}
+          onClick={handleExpand}
         >
-          <Eye className="w-3.5 h-3.5" />
+          <Expand className="w-3.5 h-3.5" />
         </button>
-      )}
-      {viewerOpen && nodeData.referencedWorkflowId && (
-        <WorkflowViewerModal
-          workflowId={nodeData.referencedWorkflowId}
-          onClose={() => setViewerOpen(false)}
-        />
-      )}
-      {lightboxOpen && isImage && (
-        <ImageLightbox src={previewUrl as string} onClose={() => setLightboxOpen(false)} />
-      )}
-      {lightboxOpen && isVideo && (
-        <MediaPreviewModal isOpen type="video" url={previewUrl as string} onClose={() => setLightboxOpen(false)} />
       )}
     </div>
   )

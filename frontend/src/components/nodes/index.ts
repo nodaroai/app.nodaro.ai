@@ -1,3 +1,4 @@
+import "./sub-workflow-views/register-defaults";
 import { TextPromptNode } from "./text-prompt-node";
 import { LoopNode } from "./loop-node";
 import { UploadImageNode } from "./upload-image-node";

@@ -3814,6 +3814,33 @@ export async function runWorkflow(workflowId: string, nodeIds?: string[]): Promi
   return res.json() as Promise<{ executionId: string }>
 }
 
+export interface CreatedSubWorkflow {
+  readonly id: string
+  readonly parentWorkflowId: string
+  readonly projectId: string
+  readonly name: string
+  readonly nodes: readonly unknown[]
+  readonly edges: readonly unknown[]
+}
+
+/** Create a child sub-workflow under the given parent workflow. */
+export async function createChildSubWorkflow(
+  parentWorkflowId: string,
+  opts: { readonly name?: string } = {},
+): Promise<CreatedSubWorkflow> {
+  const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(parentWorkflowId)}/sub-workflows`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+    body: JSON.stringify({ name: opts.name ?? "Sub-workflow" }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to create sub-workflow")
+  }
+  const json = await res.json()
+  return json.data as CreatedSubWorkflow
+}
+
 /**
  * Get execution status + node states.
  *

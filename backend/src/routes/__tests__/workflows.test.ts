@@ -96,6 +96,7 @@ const CAMEL_FULL = {
   nodes: [{ id: "n1", type: "generate-image" }],
   edges: [{ source: "n1", target: "n2" }],
   settings: { autoSave: true },
+  parentWorkflowId: null,
 }
 
 let app: FastifyInstance
@@ -149,7 +150,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
 
   it("returns 200 with empty list", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -166,7 +168,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
 
   it("returns 200 with meta-only data (no nodes/edges)", async () => {
     const mockOrder = vi.fn().mockResolvedValue({ data: [DB_WORKFLOW_META], error: null })
-    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
@@ -189,7 +192,8 @@ describe("GET /v1/projects/:projectId/workflows", () => {
       data: null,
       error: { message: "DB down" },
     })
-    const mockEq2 = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+    const mockEq2 = vi.fn().mockReturnValue({ is: mockIs })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
     vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)

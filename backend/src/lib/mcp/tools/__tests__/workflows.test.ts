@@ -30,7 +30,18 @@ beforeEach(() => {
  */
 function chain(result: { data: unknown; error: unknown }) {
   const obj: Record<string, unknown> = {}
-  for (const m of ["select", "eq", "lt", "in", "order", "limit", "insert", "delete", "update"]) {
+  for (const m of [
+    "select",
+    "eq",
+    "is",
+    "lt",
+    "in",
+    "order",
+    "limit",
+    "insert",
+    "delete",
+    "update",
+  ]) {
     obj[m] = vi.fn(() => obj)
   }
   obj.maybeSingle = vi.fn().mockResolvedValue(result)
@@ -78,6 +89,40 @@ describe("list_workflows tool", () => {
     registerWorkflows({ server, session: mcpSession([]), fastify: Fastify() })
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("list_workflows")
+  })
+
+  it("filters out child sub-workflows by default (no include_sub_workflows flag)", async () => {
+    const builder = chain({ data: [], error: null })
+    fromMock.mockReturnValue(builder)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, "list_workflows", {})
+    expect(result.isError).toBeUndefined()
+    // The critical assertion: the parent-workflow-id filter was applied.
+    const isMock = builder.is as ReturnType<typeof vi.fn>
+    expect(isMock).toHaveBeenCalledWith("parent_workflow_id", null)
+  })
+
+  it("filters out child sub-workflows when include_sub_workflows is explicitly false", async () => {
+    const builder = chain({ data: [], error: null })
+    fromMock.mockReturnValue(builder)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, "list_workflows", { include_sub_workflows: false })
+    expect(result.isError).toBeUndefined()
+    const isMock = builder.is as ReturnType<typeof vi.fn>
+    expect(isMock).toHaveBeenCalledWith("parent_workflow_id", null)
+  })
+
+  it("does NOT apply the parent_workflow_id filter when include_sub_workflows is true", async () => {
+    const builder = chain({ data: [], error: null })
+    fromMock.mockReturnValue(builder)
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:read"]), fastify: Fastify() })
+    const result = await callTool(server, "list_workflows", { include_sub_workflows: true })
+    expect(result.isError).toBeUndefined()
+    const isMock = builder.is as ReturnType<typeof vi.fn>
+    expect(isMock).not.toHaveBeenCalled()
   })
 })
 

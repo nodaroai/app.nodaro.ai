@@ -67,13 +67,22 @@ vi.mock("@/hooks/use-workflow-store", () => ({
         runSingleNode: () => {},
         nodes: [],
         edges: [],
+        projectId: "test-project",
       }),
-    { getState: () => ({ nodes: [], edges: [] }) },
+    { getState: () => ({ nodes: [], edges: [], projectId: "test-project" }) },
   ),
 }))
 
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 0,
+}))
+
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
+}))
+
+vi.mock("@/lib/sub-workflow-navigation", () => ({
+  openSubWorkflow: vi.fn(),
 }))
 
 // ---------------------------------------------------------------------------
