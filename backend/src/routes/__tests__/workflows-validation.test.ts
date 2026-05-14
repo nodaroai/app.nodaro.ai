@@ -256,3 +256,204 @@ describe("PATCH /v1/workflows/:id — sub-workflow validation", () => {
     expect(supabase.from).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Sub-workflow creation endpoint
+// ---------------------------------------------------------------------------
+// Task 9 of the SubWorkflowNode v1 plan: POST /v1/workflows/:parentId/sub-workflows
+// creates a child workflow under the parent, seeded with a default
+// input/output route pair sharing a fresh routeId. Ownership of the parent
+// must be enforced — non-owners must get 404 (no info leak).
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/workflows/:parentId/sub-workflows", () => {
+  const TEST_PARENT_ID = "00000000-0000-4000-8000-000000000030"
+  const TEST_CHILD_ID = "00000000-0000-4000-8000-000000000031"
+
+  it("creates a child workflow with parent_workflow_id set + a default seeded route", async () => {
+    // ── Mock #1: parent lookup ─────────────────────────────────────────────
+    // .from("workflows").select(...).eq("id", parentId).eq("user_id", uid).single()
+    const parentSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_PARENT_ID,
+        project_id: TEST_PROJECT_ID,
+        user_id: TEST_USER_ID,
+      },
+      error: null,
+    })
+    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
+    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+    const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
+
+    // ── Mock #2: insert + select + single ──────────────────────────────────
+    const insertCalls: Array<Record<string, unknown>> = []
+    const childSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_CHILD_ID,
+        project_id: TEST_PROJECT_ID,
+        user_id: TEST_USER_ID,
+        parent_workflow_id: TEST_PARENT_ID,
+        name: "Sub-workflow",
+        nodes: [],
+        edges: [],
+        settings: {},
+        source_prompt: null,
+        folder_id: null,
+        description: null,
+        is_template: false,
+        version: 1,
+        thumbnail_url: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+      error: null,
+    })
+    const childSelect = vi.fn().mockReturnValue({ single: childSingle })
+    const childInsert = vi.fn().mockImplementation((row: Record<string, unknown>) => {
+      insertCalls.push(row)
+      return { select: childSelect }
+    })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: parentSelect } as never)
+      .mockReturnValueOnce({ insert: childInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_PARENT_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(201)
+    const body = res.json()
+    expect(body.data.id).toBe(TEST_CHILD_ID)
+    expect(body.data.parentWorkflowId).toBe(TEST_PARENT_ID)
+
+    // Verify parent ownership check
+    expect(parentEq1).toHaveBeenCalledWith("id", TEST_PARENT_ID)
+    expect(parentEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+
+    // Verify the seeded shape was inserted
+    expect(insertCalls).toHaveLength(1)
+    const inserted = insertCalls[0]
+    expect(inserted.parent_workflow_id).toBe(TEST_PARENT_ID)
+    expect(inserted.project_id).toBe(TEST_PROJECT_ID)
+    expect(inserted.user_id).toBe(TEST_USER_ID)
+    expect(inserted.name).toBe("Sub-workflow")
+    expect(inserted.edges).toEqual([])
+    expect(inserted.settings).toEqual({})
+
+    const seededNodes = inserted.nodes as Array<{
+      type: string
+      data: { routeId: string; ports: Array<{ id: string }> }
+    }>
+    expect(Array.isArray(seededNodes)).toBe(true)
+    expect(seededNodes).toHaveLength(2)
+
+    const inputNodes = seededNodes.filter((n) => n.type === "sub-workflow-input")
+    const outputNodes = seededNodes.filter((n) => n.type === "sub-workflow-output")
+    expect(inputNodes).toHaveLength(1)
+    expect(outputNodes).toHaveLength(1)
+    expect(inputNodes[0].data.routeId).toBe(outputNodes[0].data.routeId)
+    expect(typeof inputNodes[0].data.routeId).toBe("string")
+    expect(inputNodes[0].data.routeId.length).toBeGreaterThan(0)
+    expect(inputNodes[0].data.ports).toHaveLength(1)
+    expect(outputNodes[0].data.ports).toHaveLength(1)
+  })
+
+  it("accepts a custom name in the body", async () => {
+    const parentSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_PARENT_ID,
+        project_id: TEST_PROJECT_ID,
+        user_id: TEST_USER_ID,
+      },
+      error: null,
+    })
+    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
+    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+    const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
+
+    const insertCalls: Array<Record<string, unknown>> = []
+    const childSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: TEST_CHILD_ID,
+        project_id: TEST_PROJECT_ID,
+        user_id: TEST_USER_ID,
+        parent_workflow_id: TEST_PARENT_ID,
+        name: "My Custom Name",
+        nodes: [],
+        edges: [],
+        settings: {},
+        source_prompt: null,
+        folder_id: null,
+        description: null,
+        is_template: false,
+        version: 1,
+        thumbnail_url: null,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+      error: null,
+    })
+    const childSelect = vi.fn().mockReturnValue({ single: childSingle })
+    const childInsert = vi.fn().mockImplementation((row: Record<string, unknown>) => {
+      insertCalls.push(row)
+      return { select: childSelect }
+    })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: parentSelect } as never)
+      .mockReturnValueOnce({ insert: childInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_PARENT_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "My Custom Name" },
+    })
+
+    expect(res.statusCode).toBe(201)
+    expect(insertCalls[0].name).toBe("My Custom Name")
+  })
+
+  it("returns 404 when parent workflow does not exist or is not owned by the caller", async () => {
+    const parentSingle = vi.fn().mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "Not found" },
+    })
+    const parentEq2 = vi.fn().mockReturnValue({ single: parentSingle })
+    const parentEq1 = vi.fn().mockReturnValue({ eq: parentEq2 })
+    const parentSelect = vi.fn().mockReturnValue({ eq: parentEq1 })
+
+    vi.mocked(supabase.from).mockReturnValueOnce({ select: parentSelect } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_PARENT_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(404)
+    const body = res.json()
+    expect(body.error.code).toBe("not_found")
+    expect(body.error.message).toMatch(/parent workflow not found/i)
+
+    // The insert chain must NOT have been hit — only the parent select.
+    expect(supabase.from).toHaveBeenCalledTimes(1)
+  })
+
+  it("returns 400 when parentId is not a uuid", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/workflows/not-a-uuid/sub-workflows",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {},
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+})

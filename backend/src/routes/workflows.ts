@@ -101,11 +101,15 @@ const importWorkflowBody = z.object({
   workflow_json: workflowExportSchema,
 })
 
+const createSubWorkflowBody = z.object({
+  name: z.string().min(1).max(200).default("Sub-workflow"),
+})
+
 const WORKFLOW_META_COLS =
   "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, created_at, updated_at"
 
 const WORKFLOW_FULL_COLS =
-  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, created_at, updated_at"
+  "id, project_id, user_id, folder_id, name, description, is_template, version, thumbnail_url, source_prompt, nodes, edges, settings, parent_workflow_id, created_at, updated_at"
 
 function toWorkflowMeta(row: Record<string, unknown>) {
   return {
@@ -130,6 +134,7 @@ function toWorkflowFull(row: Record<string, unknown>) {
     nodes: row.nodes,
     edges: row.edges,
     settings: row.settings,
+    parentWorkflowId: row.parent_workflow_id ?? null,
   }
 }
 
@@ -450,6 +455,77 @@ export async function workflowRoutes(app: FastifyInstance) {
     return reply
       .status(201)
       .send({ data: toWorkflowFull(newWorkflow as Record<string, unknown>) })
+  })
+
+  // Create a child sub-workflow under a parent
+  app.post("/v1/workflows/:parentId/sub-workflows", async (req, reply) => {
+    const userId = authorize(req, reply)
+    if (!userId) return
+
+    const params = parseWith(
+      reply,
+      z.object({ parentId: z.string().uuid() }),
+      req.params,
+      "Invalid parent workflow ID",
+    )
+    if (!params) return
+
+    const body = parseWith(reply, createSubWorkflowBody, req.body ?? {}, "Invalid request")
+    if (!body) return
+
+    // 1. Verify caller owns the parent + grab its project_id
+    const { data: parent, error: parentErr } = await supabase
+      .from("workflows")
+      .select("id, project_id, user_id")
+      .eq("id", params.parentId)
+      .eq("user_id", userId)
+      .single()
+
+    if (parentErr || !parent) return notFound(reply, "Parent workflow not found")
+
+    // 2. Seed a default route — one input + one output sharing a routeId
+    const routeId = crypto.randomUUID()
+    const seededNodes = [
+      {
+        id: `input_${routeId}`,
+        type: "sub-workflow-input",
+        position: { x: 100, y: 200 },
+        data: {
+          label: "Inputs",
+          routeId,
+          ports: [{ id: "in_1", name: "input", mediaType: "any" }],
+        },
+      },
+      {
+        id: `output_${routeId}`,
+        type: "sub-workflow-output",
+        position: { x: 900, y: 200 },
+        data: {
+          label: "Outputs",
+          routeId,
+          ports: [{ id: "out_1", name: "output", mediaType: "any" }],
+          visibleOutputPortId: "out_1",
+        },
+      },
+    ]
+
+    const { data: child, error: childErr } = await supabase
+      .from("workflows")
+      .insert({
+        project_id: parent.project_id,
+        user_id: userId,
+        parent_workflow_id: parent.id,
+        name: body.name,
+        nodes: seededNodes,
+        edges: [],
+        settings: {},
+      })
+      .select(WORKFLOW_FULL_COLS)
+      .single()
+
+    if (childErr) return internalError(reply, childErr.message)
+
+    return reply.status(201).send({ data: toWorkflowFull(child) })
   })
 
   // Run workflow — handled by workflow-execution.ts route
