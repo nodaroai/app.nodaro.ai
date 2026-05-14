@@ -1,5 +1,7 @@
 # Quick Start
 
+> **New here?** The **Tutorials** tab on `/projects` has short videos and hands-on flow tutorials you can clone into your project with one click — a faster path to learning the editor than reading this guide cold. [Tutorials guide](../../../docs/tutorials.md).
+
 ## 1. Create a Project
 
 Navigate to `/projects` and click **New Project**. Give it a name and optional description.
