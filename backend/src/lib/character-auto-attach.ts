@@ -33,29 +33,42 @@ export function resolveAssetColumn(value: string): CharacterAssetColumn | null {
 }
 
 /**
- * Atomic append of `{name, url}` to a JSONB-array column on the user's
- * character row. Survives concurrent completions because the SQL uses
- * `array || new_item` at the DB layer (see migration 111).
+ * Shape of a single JSONB item appended to a character asset column. `name`
+ * + `url` are the minimum (every asset has both); `description`,
+ * `motionDescription`, and `realLifeRefs` are richer Character Studio
+ * fields that travel alongside the asset for downstream prompt enrichment
+ * (see Character Studio PR 1 plan).
+ */
+export interface CharacterAssetItem {
+  name: string
+  url: string
+  description?: string
+  motionDescription?: string
+  realLifeRefs?: string[]
+}
+
+/**
+ * Atomic append of a richer-shape character asset entry to the named JSONB
+ * column. The SQL RPC `append_character_asset` accepts an arbitrary JSONB
+ * `p_item`, so no DB change is required — only this TypeScript shape change.
  *
- * Returns true on success. Failures are logged and swallowed — auto-attach is
- * best-effort: the job result is already in `jobs.output_data`, and the
- * frontend can still surface the asset via its in-flight poll. Throwing here
- * would only orphan the spent credits.
+ * On failure: returns false (logged, swallowed). The job result still lives
+ * on `jobs.output_data`; the frontend's in-flight poll can still resolve.
+ * Throwing here would only orphan committed credits.
  */
 export async function attachAssetToCharacter(args: {
   characterId: string
   userId: string
   column: CharacterAssetColumn
-  name: string
-  url: string
+  item: CharacterAssetItem
 }): Promise<boolean> {
-  const { characterId, userId, column, name, url } = args
+  const { characterId, userId, column, item } = args
   try {
     const { error } = await supabase.rpc("append_character_asset", {
       p_character_id: characterId,
       p_user_id: userId,
       p_column: column,
-      p_item: { name, url },
+      p_item: item,
     })
     if (error) {
       console.warn(

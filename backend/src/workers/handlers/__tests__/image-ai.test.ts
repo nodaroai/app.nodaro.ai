@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
+  const mockAttach = vi.fn().mockResolvedValue(true)
 
   // Supabase chain
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => {
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
     mockUploadImageMaybeWatermark,
+    mockAttach,
     mockFrom,
     mockUpdate,
     mockEq,
@@ -37,6 +39,15 @@ vi.mock("@/lib/supabase.js", () => ({
 vi.mock("@/providers/index.js", () => ({
   generateImage: mocks.mockGenerateImage,
   editImage: mocks.mockEditImage,
+}))
+
+vi.mock("@/lib/character-auto-attach.js", () => ({
+  attachAssetToCharacter: mocks.mockAttach,
+  resolveAssetColumn: (v: string) => {
+    const normalized = v === "lighting" ? "lighting_variations" : v
+    const valid = new Set(["expressions", "poses", "lighting_variations", "angles", "motions"])
+    return valid.has(normalized) ? normalized : null
+  },
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {
@@ -330,5 +341,75 @@ describe("image-to-image handler", () => {
 
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // Character Studio auto-attach (studio path)
+  //
+  // When the route's image-to-image handler is called with
+  // attachToCharacterId + attachToColumn + attachName, the worker forwards
+  // the result to attachAssetToCharacter. Task 9 added description +
+  // realLifeRefs to the worker payload; Task 12 closes the loop here in the
+  // worker by passing those richer fields into the attach helper's `item`.
+  // -------------------------------------------------------------------------
+
+  it("studio path passes description + realLifeRefs to attachAssetToCharacter", async () => {
+    const job = makeJob("image-to-image", {
+      imageUrl: "https://x/portrait.png",
+      prompt: "warmer lighting",
+      provider: "nano-banana-pro",
+      attachToCharacterId: "00000000-0000-0000-0000-000000000abc",
+      attachToColumn: "expressions",
+      attachName: "warm",
+      description: "warm closed-mouth smile, soft golden hour light",
+      realLifeRefs: ["https://x/ref1.jpg"],
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockAttach).toHaveBeenCalledWith(
+      expect.objectContaining({
+        characterId: "00000000-0000-0000-0000-000000000abc",
+        column: "expressions",
+        item: expect.objectContaining({
+          name: "warm",
+          url: "https://r2.example.com/images/job-1.png",
+          description: "warm closed-mouth smile, soft golden hour light",
+          realLifeRefs: ["https://x/ref1.jpg"],
+        }),
+      }),
+    )
+  })
+
+  it("studio path with undefined description / realLifeRefs leaves them undefined on the item", async () => {
+    const job = makeJob("image-to-image", {
+      imageUrl: "https://x/portrait.png",
+      prompt: "stylize",
+      provider: "nano-banana-pro",
+      attachToCharacterId: "00000000-0000-0000-0000-000000000abc",
+      attachToColumn: "expressions",
+      attachName: "warm",
+      // description + realLifeRefs intentionally omitted (route may not
+      // forward them on the non-studio path, or LLM draft may have failed)
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockAttach).toHaveBeenCalledTimes(1)
+    const call = mocks.mockAttach.mock.calls[0]?.[0] as {
+      item: { description?: unknown; realLifeRefs?: unknown }
+    }
+    expect(call.item.description).toBeUndefined()
+    expect(call.item.realLifeRefs).toBeUndefined()
+  })
+
+  it("non-studio path does NOT call attachAssetToCharacter", async () => {
+    const job = makeJob("image-to-image", {
+      imageUrl: "https://x/whatever.png",
+      prompt: "stylize",
+      provider: "nano-banana",
+      // no attachToCharacterId / attachToColumn / attachName
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockAttach).not.toHaveBeenCalled()
   })
 })

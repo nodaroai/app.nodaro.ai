@@ -99,6 +99,11 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
   if (errObj?.code === "name_taken") {
     throw new CharacterNameTakenError((errObj.message as string) ?? "Name already in use.")
   }
+  if (errObj?.code === "portrait_required") {
+    throw new PortraitRequiredError(
+      (errObj.message as string) ?? "Generate a portrait first — open the Appearance tab",
+    )
+  }
   if (errObj?.code === "category_in_use") {
     throw new TutorialCategoryInUseError(
       (errObj.message as string) ?? fallback,
@@ -414,7 +419,16 @@ export async function generateCharacter(data: {
   userId?: string
   /** Character Studio: worker writes the resulting URL to this character's source_image_url after generation. */
   attachToCharacterId?: string
-}): Promise<{ jobId: string }> {
+  /** Character Studio (Task 6): N-portrait batch (1, 2, or 4). Defaults to 1 server-side. */
+  count?: 1 | 2 | 4
+  /** Character Studio (Task 6): seed prompt for variant diversification. */
+  seedPrompt?: string
+  /** Character Studio (Task 6): reference photos tagged by camera angle/kind. */
+  referencePhotos?: Array<{
+    url: string
+    kind: "front" | "sideLeft" | "sideRight" | "threeQuarterLeft" | "threeQuarterRight" | "fullBody" | "other"
+  }>
+}): Promise<{ jobId: string; jobIds: string[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -726,6 +740,20 @@ export class CharacterNameTakenError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "CharacterNameTakenError"
+  }
+}
+
+/**
+ * Thrown when a character-studio API (generate-character-asset / -motion /
+ * image-to-image) returns 400 with code "portrait_required" — the character
+ * has no source portrait yet, so downstream variants/motions/edits can't run.
+ * Callers can catch this specifically to trigger a UX action (e.g., switch
+ * to the Appearance tab); the default behavior is to surface a toast.
+ */
+export class PortraitRequiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "PortraitRequiredError"
   }
 }
 

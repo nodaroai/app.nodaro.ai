@@ -137,7 +137,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
-  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName } = job.data as {
+  const { imageUrl, referenceImageUrls, prompt, provider, resolution, quality, strength, aspectRatio, negativePrompt, seed, renderingSpeed, guidanceScale, maskUrl, attachToCharacterId, attachToColumn, attachName, description, realLifeRefs } = job.data as {
     jobId: string
     imageUrl: string
     referenceImageUrls?: string[]
@@ -157,6 +157,13 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     attachToCharacterId?: string
     attachToColumn?: string
     attachName?: string
+    // Character Studio Identity Foundation (PR 1) — richer asset-item fields
+    // forwarded by the route on the studio path. Both are optional: the route
+    // only includes them when attachToCharacterId is set, and the LLM-drafted
+    // `description` may have failed (route swallows that error). Worker
+    // forwards them straight through to attachAssetToCharacter's `item`.
+    description?: string
+    realLifeRefs?: string[]
   }
   const resolvedProvider = provider ?? "nano-banana"
   // Combine main image with additional reference images (e.g., from Location/Character nodes)
@@ -211,8 +218,12 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
         characterId: attachToCharacterId,
         userId: ctx.jobUserId,
         column,
-        name: attachName,
-        url: r2Url,
+        item: {
+          name: attachName,
+          url: r2Url,
+          description,
+          realLifeRefs,
+        },
       })
     }
   }

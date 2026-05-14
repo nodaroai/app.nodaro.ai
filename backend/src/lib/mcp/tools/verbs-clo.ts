@@ -108,7 +108,19 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         payload,
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
+      // The main /v1/generate-character route returns the dual shape
+      // { jobId, jobIds } (Task 6 of character-studio PR 1). The asset
+      // route still returns { jobId } only. MCP semantics resolve to a
+      // single job result per call (this tool always implies count=1
+      // — exposing `count` is PR 2 frontend territory), so we destructure
+      // both and prefer jobIds[0] when present, falling back to jobId.
+      let parsed: { jobId?: string; jobIds?: string[] } | null = null
+      try {
+        parsed = JSON.parse(res.body) as { jobId?: string; jobIds?: string[] }
+      } catch {
+        // fall through — parseFailure below handles the unparseable case
+      }
+      const jobId = parsed?.jobIds?.[0] ?? parsed?.jobId ?? parseJobId(res.body)
       if (!jobId) return parseFailure(res.body)
       return jobResultWithWidget({
         jobId,

@@ -12,6 +12,24 @@ import { formatZodError } from "../lib/zod-error.js"
  * a stale `characterDbId` keep working.
  */
 
+// Reference-photo kinds drive the identity-foundation gallery slots. Every
+// `kind` except `"other"` may appear at most once (one front shot, one side
+// shot, etc.); `"other"` is unconstrained so users can attach extra references.
+const REFERENCE_PHOTO_KINDS = [
+  "front",
+  "sideLeft",
+  "sideRight",
+  "threeQuarterLeft",
+  "threeQuarterRight",
+  "fullBody",
+  "other",
+] as const
+
+const referencePhoto = z.object({
+  url: safeUrlSchema,
+  kind: z.enum(REFERENCE_PHOTO_KINDS),
+})
+
 const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
@@ -36,6 +54,36 @@ const upsertCharacterBody = z.object({
   motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
+  // Identity-foundation fields (migration 114). Length caps mirror the DB
+  // CHECK constraints so we reject at the boundary with a 400 rather than a
+  // 500 from Postgres. `referencePhotos` further enforces "at most one per
+  // non-`other` kind"; `realLifeRefsByVariant` caps total keys + per-key URLs
+  // so a runaway client can't blow up the row.
+  seedPrompt: z.string().max(2000).optional(),
+  canonicalDescription: z.string().max(4000).optional(),
+  referencePhotos: z
+    .array(referencePhoto)
+    .max(20)
+    .optional()
+    .refine(
+      (arr) => {
+        if (!arr) return true
+        const counts = new Map<string, number>()
+        for (const p of arr) {
+          if (p.kind === "other") continue
+          counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1)
+          if ((counts.get(p.kind) ?? 0) > 1) return false
+        }
+        return true
+      },
+      { message: "Each non-`other` kind may appear at most once" },
+    ),
+  realLifeRefsByVariant: z
+    .record(z.array(safeUrlSchema).max(5))
+    .optional()
+    .refine((obj) => !obj || Object.keys(obj).length <= 20, {
+      message: "real_life_refs_by_variant: max 20 keys",
+    }),
 })
 
 const deleteCharacterParams = z.object({
@@ -219,16 +267,56 @@ export async function characterRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    // Find any asset-generation jobs still in flight for this character so the
-    // Character Studio can re-attach spinners on reopen (jobs survive page
-    // closes because the worker auto-attaches to the row at completion — this
-    // query is purely for the UX of "spinner reappears" continuity).
-    const { data: pendingRows } = await supabase
-      .from("jobs")
-      .select("id, input_data")
-      .eq("user_id", userId)
-      .in("status", ["pending", "running"])
-      .filter("input_data->>attachToCharacterId", "eq", id)
+    // The three buckets below are independent (only previousCandidates needs
+    // the character row's `source_image_url`, already fetched above). Run them
+    // in parallel via Promise.all to shave ~30-150ms of sequential round-trip
+    // latency off the GET /v1/characters/:id path. Per-query semantics are
+    // documented inline below.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const [pendingResult, portraitPendingResult, previousCompletedResult] = await Promise.all([
+      // pendingJobs: asset-generation jobs still in flight for this character
+      // so the Character Studio can re-attach spinners on reopen (jobs survive
+      // page closes because the worker auto-attaches to the row at completion
+      // — this query is purely for the UX of "spinner reappears" continuity).
+      supabase
+        .from("jobs")
+        .select("id, input_data")
+        .eq("user_id", userId)
+        .in("status", ["pending", "running"])
+        .filter("input_data->>attachToCharacterId", "eq", id),
+      // portraitCandidates: in-flight `generate-character` jobs for THIS row.
+      // The studio polls this bucket to keep the Appearance tab's "generating
+      // portrait" tile responsive across reloads. URL may be undefined while
+      // the job is still pending; the worker writes `output_data.imageUrl`
+      // once it has uploaded the R2 result (often before the final commit
+      // completes), so we surface it as soon as it's there.
+      supabase
+        .from("jobs")
+        .select("id, status, progress, output_data, input_data")
+        .eq("user_id", userId)
+        .in("status", ["pending", "running"])
+        .filter("input_data->>type", "eq", "generate-character")
+        .filter("input_data->>attachToCharacterId", "eq", id),
+      // previousCandidates: recently-completed `generate-character` jobs for
+      // THIS row, with URL ≠ current portrait, within the last 7 days. We
+      // over-fetch (limit 10) to absorb URL-collisions with the active portrait
+      // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
+      // ORDER BY created_at DESC so the user sees their latest alternatives.
+      supabase
+        .from("jobs")
+        .select("id, output_data, created_at")
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .filter("input_data->>type", "eq", "generate-character")
+        .filter("input_data->>attachToCharacterId", "eq", id)
+        .gte("created_at", sevenDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(10),
+    ])
+
+    const { data: pendingRows } = pendingResult
+    const { data: portraitPendingRows } = portraitPendingResult
+    const { data: previousCompletedRows } = previousCompletedResult
 
     type PendingJob = { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }
     const pendingJobs: PendingJob[] = []
@@ -249,7 +337,31 @@ export async function characterRoutes(app: FastifyInstance) {
       pendingJobs.push({ jobId: row.id, assetType, name: attachName })
     }
 
-    return { ...toCamel(data as CharacterRow), pendingJobs }
+    type PortraitCandidate = { jobId: string; url: string | undefined; progress: number; status: string }
+    const portraitCandidates: PortraitCandidate[] = (portraitPendingRows ?? []).map((row) => {
+      const out = (row.output_data ?? null) as Record<string, unknown> | null
+      const rawUrl = out?.imageUrl
+      return {
+        jobId: row.id,
+        url: typeof rawUrl === "string" ? rawUrl : undefined,
+        progress: typeof row.progress === "number" ? row.progress : 0,
+        status: row.status,
+      }
+    })
+
+    const currentPortrait = (data as { source_image_url?: string | null }).source_image_url ?? null
+    type PreviousCandidate = { jobId: string; url: string; createdAt: string }
+    const previousCandidates: PreviousCandidate[] = (previousCompletedRows ?? [])
+      .map((row) => {
+        const out = (row.output_data ?? null) as Record<string, unknown> | null
+        const u = out?.imageUrl
+        if (typeof u !== "string" || u === currentPortrait) return null
+        return { jobId: row.id as string, url: u, createdAt: row.created_at as string }
+      })
+      .filter((x): x is PreviousCandidate => x !== null)
+      .slice(0, 5)
+
+    return { ...toCamel(data as CharacterRow), pendingJobs, portraitCandidates, previousCandidates }
   })
 
   // -----------------------------------------------------------------------
@@ -297,12 +409,22 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
+
+    // Normalize per-variant keys before persisting. The column is keyed by a
+    // lowercased+trimmed slug (e.g. "smile") so the UI can look refs up by the
+    // canonical preset id regardless of how the caller spells/spaces the key.
+    // Done once here so both INSERT and UPDATE write the same shape.
+    const normalizedVariantRefs = realLifeRefsByVariant
+      ? Object.fromEntries(
+          Object.entries(realLifeRefsByVariant).map(([k, v]) => [k.toLowerCase().trim(), v]),
+        )
+      : undefined
 
     if (id) {
       // UPDATE: only touch columns the caller explicitly sent.
@@ -322,6 +444,10 @@ export async function characterRoutes(app: FastifyInstance) {
       if (motions !== undefined) patch.motions = motions
       if (voice !== undefined) patch.voice = voice ?? null
       if (personality !== undefined) patch.personality = personality ?? null
+      if (seedPrompt !== undefined) patch.seed_prompt = seedPrompt ?? null
+      if (canonicalDescription !== undefined) patch.canonical_description = canonicalDescription ?? null
+      if (referencePhotos !== undefined) patch.reference_photos = referencePhotos
+      if (normalizedVariantRefs !== undefined) patch.real_life_refs_by_variant = normalizedVariantRefs
 
       const { data: updated, error } = await supabase
         .from("characters")
@@ -358,6 +484,10 @@ export async function characterRoutes(app: FastifyInstance) {
       motions: motions ?? [],
       voice: voice ?? null,
       personality: personality ?? null,
+      seed_prompt: seedPrompt ?? null,
+      canonical_description: canonicalDescription ?? null,
+      reference_photos: referencePhotos ?? [],
+      real_life_refs_by_variant: normalizedVariantRefs ?? {},
       updated_at: new Date().toISOString(),
     }
 
