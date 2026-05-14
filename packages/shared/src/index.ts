@@ -834,3 +834,5 @@ export type {
   WorkflowExportLocation,
 } from "./workflow-export.js"
 export { stripExportContent } from "./workflow-export.js"
+
+export { validateSubWorkflowRoutes } from "./sub-workflow-validation.js"

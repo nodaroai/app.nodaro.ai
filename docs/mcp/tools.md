@@ -110,6 +110,13 @@ Lists workflows in the mcp project, newest first.
 |-------|------|-------|
 | `limit` | integer (1–100) | Default 20 |
 | `cursor` | string | ISO `created_at` from a prior response's `next_cursor`; use for pagination |
+| `include_sub_workflows` | boolean | Default `false`. When `false`, hides workflows with `parent_workflow_id` (child sub-workflows owned by another container). Pass `true` to surface them. |
+
+By default, `list_workflows` returns only top-level workflows — child sub-workflows
+(those owned by a parent container via `parent_workflow_id`) are hidden so the list
+reflects what you would see in the editor's project view. Set
+`include_sub_workflows: true` if you need to enumerate every workflow in the mcp
+project regardless of nesting.
 
 **Response shape:**
 ```json
