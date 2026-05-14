@@ -267,16 +267,56 @@ export async function characterRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "internal_error", message: error.message } })
     }
 
-    // Find any asset-generation jobs still in flight for this character so the
-    // Character Studio can re-attach spinners on reopen (jobs survive page
-    // closes because the worker auto-attaches to the row at completion — this
-    // query is purely for the UX of "spinner reappears" continuity).
-    const { data: pendingRows } = await supabase
-      .from("jobs")
-      .select("id, input_data")
-      .eq("user_id", userId)
-      .in("status", ["pending", "running"])
-      .filter("input_data->>attachToCharacterId", "eq", id)
+    // The three buckets below are independent (only previousCandidates needs
+    // the character row's `source_image_url`, already fetched above). Run them
+    // in parallel via Promise.all to shave ~30-150ms of sequential round-trip
+    // latency off the GET /v1/characters/:id path. Per-query semantics are
+    // documented inline below.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const [pendingResult, portraitPendingResult, previousCompletedResult] = await Promise.all([
+      // pendingJobs: asset-generation jobs still in flight for this character
+      // so the Character Studio can re-attach spinners on reopen (jobs survive
+      // page closes because the worker auto-attaches to the row at completion
+      // — this query is purely for the UX of "spinner reappears" continuity).
+      supabase
+        .from("jobs")
+        .select("id, input_data")
+        .eq("user_id", userId)
+        .in("status", ["pending", "running"])
+        .filter("input_data->>attachToCharacterId", "eq", id),
+      // portraitCandidates: in-flight `generate-character` jobs for THIS row.
+      // The studio polls this bucket to keep the Appearance tab's "generating
+      // portrait" tile responsive across reloads. URL may be undefined while
+      // the job is still pending; the worker writes `output_data.imageUrl`
+      // once it has uploaded the R2 result (often before the final commit
+      // completes), so we surface it as soon as it's there.
+      supabase
+        .from("jobs")
+        .select("id, status, progress, output_data, input_data")
+        .eq("user_id", userId)
+        .in("status", ["pending", "running"])
+        .filter("input_data->>type", "eq", "generate-character")
+        .filter("input_data->>attachToCharacterId", "eq", id),
+      // previousCandidates: recently-completed `generate-character` jobs for
+      // THIS row, with URL ≠ current portrait, within the last 7 days. We
+      // over-fetch (limit 10) to absorb URL-collisions with the active portrait
+      // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
+      // ORDER BY created_at DESC so the user sees their latest alternatives.
+      supabase
+        .from("jobs")
+        .select("id, output_data, created_at")
+        .eq("user_id", userId)
+        .eq("status", "completed")
+        .filter("input_data->>type", "eq", "generate-character")
+        .filter("input_data->>attachToCharacterId", "eq", id)
+        .gte("created_at", sevenDaysAgo)
+        .order("created_at", { ascending: false })
+        .limit(10),
+    ])
+
+    const { data: pendingRows } = pendingResult
+    const { data: portraitPendingRows } = portraitPendingResult
+    const { data: previousCompletedRows } = previousCompletedResult
 
     type PendingJob = { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }
     const pendingJobs: PendingJob[] = []
@@ -297,20 +337,6 @@ export async function characterRoutes(app: FastifyInstance) {
       pendingJobs.push({ jobId: row.id, assetType, name: attachName })
     }
 
-    // portraitCandidates: in-flight `generate-character` jobs for THIS row.
-    // The studio polls this bucket to keep the Appearance tab's "generating
-    // portrait" tile responsive across reloads. URL may be undefined while
-    // the job is still pending; the worker writes `output_data.imageUrl`
-    // once it has uploaded the R2 result (often before the final commit
-    // completes), so we surface it as soon as it's there.
-    const { data: portraitPendingRows } = await supabase
-      .from("jobs")
-      .select("id, status, progress, output_data, input_data")
-      .eq("user_id", userId)
-      .in("status", ["pending", "running"])
-      .filter("input_data->>type", "eq", "generate-character")
-      .filter("input_data->>attachToCharacterId", "eq", id)
-
     type PortraitCandidate = { jobId: string; url: string | undefined; progress: number; status: string }
     const portraitCandidates: PortraitCandidate[] = (portraitPendingRows ?? []).map((row) => {
       const out = (row.output_data ?? null) as Record<string, unknown> | null
@@ -322,23 +348,6 @@ export async function characterRoutes(app: FastifyInstance) {
         status: row.status,
       }
     })
-
-    // previousCandidates: recently-completed `generate-character` jobs for
-    // THIS row, with URL ≠ current portrait, within the last 7 days. We
-    // over-fetch (limit 10) to absorb URL-collisions with the active portrait
-    // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
-    // ORDER BY created_at DESC so the user sees their latest alternatives.
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-    const { data: previousCompletedRows } = await supabase
-      .from("jobs")
-      .select("id, output_data, created_at")
-      .eq("user_id", userId)
-      .eq("status", "completed")
-      .filter("input_data->>type", "eq", "generate-character")
-      .filter("input_data->>attachToCharacterId", "eq", id)
-      .gte("created_at", sevenDaysAgo)
-      .order("created_at", { ascending: false })
-      .limit(10)
 
     const currentPortrait = (data as { source_image_url?: string | null }).source_image_url ?? null
     type PreviousCandidate = { jobId: string; url: string; createdAt: string }
