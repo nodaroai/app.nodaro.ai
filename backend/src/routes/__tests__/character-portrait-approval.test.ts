@@ -40,6 +40,18 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     return { select, eq, single }
   }
 
+  // Helper: stub the chained
+  //   .from("characters").select("id").eq("id", ...).eq("user_id", ...).is("deleted_at", null).single()
+  // pattern used by the approve-portrait pre-fetch.
+  function mockCharPreFetch(result: { data: unknown; error: unknown }) {
+    const single = vi.fn().mockResolvedValue(result)
+    const is = vi.fn().mockReturnValue({ single })
+    const eq2 = vi.fn().mockReturnValue({ is })
+    const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+    const select = vi.fn().mockReturnValue({ eq: eq1 })
+    return { select, eq1, eq2, is, single }
+  }
+
   // Helper: stub the chained .from("characters").update(...).eq().eq() pattern
   function mockCharUpdate(result: { error: unknown } = { error: null }) {
     const eq2 = vi.fn().mockResolvedValue(result)
@@ -88,6 +100,11 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
       payload: { candidateJobId: TEST_JOB_ID },
     })
     expect(res.statusCode).toBe(404)
+    // Cross-user candidate must short-circuit BEFORE the LLM is called and
+    // BEFORE we touch the characters table.
+    expect(vi.mocked(llmComplete)).not.toHaveBeenCalled()
+    expect(vi.mocked(supabase.from)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(supabase.from)).toHaveBeenCalledWith("jobs")
   })
 
   it("returns 404 when candidate doesn't exist", async () => {
@@ -103,15 +120,56 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     expect(res.statusCode).toBe(404)
   })
 
+  it("returns 404 when character belongs to another user and skips LLM + UPDATE", async () => {
+    // Valid candidate the caller owns, but the target characterId is owned by
+    // someone else (or soft-deleted). Pre-fetch returns null -> 404. The LLM
+    // and the characters UPDATE must NOT run — that's the soft-IDOR fix.
+    const portraitUrl = "https://r2.example.com/portrait.jpg"
+    const jobChain = mockJobFetch({
+      data: { id: TEST_JOB_ID, user_id: TEST_USER_ID, status: "completed", output_data: { imageUrl: portraitUrl } },
+      error: null,
+    })
+    const charPreFetch = mockCharPreFetch({ data: null, error: { code: "PGRST116" } })
+    const charUpdate = mockCharUpdate({ error: null })
+    let charCall = 0
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return { select: jobChain.select } as never
+      // Two possible characters interactions: the pre-fetch (select) and the
+      // update. The pre-fetch must come first; the update must NOT happen.
+      charCall++
+      if (charCall === 1) return { select: charPreFetch.select } as never
+      return { update: charUpdate.update } as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/approve-portrait`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { candidateJobId: TEST_JOB_ID },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(vi.mocked(llmComplete)).not.toHaveBeenCalled()
+    expect(charUpdate.update).not.toHaveBeenCalled()
+    // Verify the pre-fetch enforced ownership + not-deleted.
+    expect(charPreFetch.eq1).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(charPreFetch.eq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(charPreFetch.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
   it("returns 200 with { portraitUrl, canonicalDescription } on success", async () => {
     const portraitUrl = "https://r2.example.com/portrait.jpg"
     const jobChain = mockJobFetch({
       data: { id: TEST_JOB_ID, user_id: TEST_USER_ID, status: "completed", output_data: { imageUrl: portraitUrl } },
       error: null,
     })
+    const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
     const charUpdate = mockCharUpdate({ error: null })
+    let charCall = 0
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "jobs") return { select: jobChain.select } as never
+      charCall++
+      if (charCall === 1) return { select: charPreFetch.select } as never
       return { update: charUpdate.update } as never
     })
 
@@ -133,9 +191,13 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
       data: { id: TEST_JOB_ID, user_id: TEST_USER_ID, status: "completed", output_data: { imageUrl: portraitUrl } },
       error: null,
     })
+    const charPreFetch = mockCharPreFetch({ data: { id: TEST_CHARACTER_ID }, error: null })
     const charUpdate = mockCharUpdate({ error: null })
+    let charCall = 0
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "jobs") return { select: jobChain.select } as never
+      charCall++
+      if (charCall === 1) return { select: charPreFetch.select } as never
       return { update: charUpdate.update } as never
     })
 
@@ -147,6 +209,14 @@ describe("POST /v1/characters/:id/approve-portrait", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ portraitUrl, canonicalDescription: null })
+    // Contract: on LLM failure the portrait IS still persisted; only the
+    // description is null. The frontend retries via /llm-caption.
+    expect(charUpdate.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_image_url: portraitUrl,
+        canonical_description: null,
+      }),
+    )
   })
 })
 
