@@ -145,8 +145,12 @@ function setupSupabaseMock(opts: {
     data: opts.charRow ?? null,
     error: opts.charError ?? null,
   })
-  // characters select chain: .select("...").eq("id", ...).eq("user_id", ...).single()
-  const charEq2 = vi.fn().mockReturnValue({ single: charSingle })
+  // characters select chain:
+  //   .select("...").eq("id", ...).eq("user_id", ...).is("deleted_at", null).single()
+  // The `.is("deleted_at", null)` step rejects soft-deleted rows so a soft-deleted
+  // character can't trip a portrait_required false-positive or attach assets.
+  const charIs = vi.fn().mockReturnValue({ single: charSingle })
+  const charEq2 = vi.fn().mockReturnValue({ is: charIs })
   const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
   const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
 
@@ -161,7 +165,7 @@ function setupSupabaseMock(opts: {
     return {} as never
   })
 
-  return { charSelect, charEq1, charEq2, charSingle, jobInsert, jobSelect, jobSingle }
+  return { charSelect, charEq1, charEq2, charIs, charSingle, jobInsert, jobSelect, jobSingle }
 }
 
 // ---------------------------------------------------------------------------

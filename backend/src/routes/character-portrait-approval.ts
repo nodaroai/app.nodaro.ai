@@ -68,9 +68,12 @@ async function captionPortrait(portraitUrl: string): Promise<string | null> {
 }
 
 function checkProvider(reply: FastifyReply): boolean {
-  if (!config.KIE_API_KEY && !config.ANTHROPIC_API_KEY) {
+  // captionPortrait() calls llmComplete with modelId="claude-sonnet-4.6" which
+  // routes through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM
+  // call 502s mid-request — gate it here with a clean 503 instead.
+  if (!config.ANTHROPIC_API_KEY) {
     reply.status(503).send({
-      error: { code: "provider_unavailable", message: "LLM API key not configured" },
+      error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
     })
     return false
   }
@@ -105,13 +108,30 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(body.error) } })
     }
 
-    const { data: job, error: fetchErr } = await supabase
-      .from("jobs")
-      .select("id, status, output_data")
-      .eq("id", body.data.candidateJobId)
-      .eq("user_id", req.userId)
-      .single()
+    // Fire candidate + character fetches in parallel — both must succeed before
+    // the paid (~5-30s) LLM call, and both are scoped by req.userId so a
+    // cross-user candidate or character returns null (mapped to 404 below).
+    // Error evaluation order matches the spec: candidate 404 first, then
+    // candidate not-ready (400), then character 404. Without the character
+    // pre-fetch, PostgREST .update().eq().eq() silently succeeds on zero rows
+    // and we'd leak LLM output for a character the caller doesn't own (soft IDOR).
+    const [candidateResult, characterResult] = await Promise.all([
+      supabase
+        .from("jobs")
+        .select("id, status, output_data")
+        .eq("id", body.data.candidateJobId)
+        .eq("user_id", req.userId)
+        .single(),
+      supabase
+        .from("characters")
+        .select("id")
+        .eq("id", characterId)
+        .eq("user_id", req.userId)
+        .is("deleted_at", null)
+        .single(),
+    ])
 
+    const { data: job, error: fetchErr } = candidateResult
     if (fetchErr || !job) {
       return reply.status(404).send({ error: { code: "not_found", message: "Candidate not found" } })
     }
@@ -125,17 +145,7 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "candidate_not_ready", message: "Candidate has no imageUrl" } })
     }
 
-    // Pre-fetch the character to validate ownership + not-deleted BEFORE the
-    // paid (~5-30s) LLM call. Without this, PostgREST .update().eq().eq()
-    // silently succeeds on zero rows and we leak LLM output for a character
-    // the caller doesn't own (soft IDOR).
-    const { data: charRow, error: charFetchErr } = await supabase
-      .from("characters")
-      .select("id")
-      .eq("id", characterId)
-      .eq("user_id", req.userId)
-      .is("deleted_at", null)
-      .single()
+    const { data: charRow, error: charFetchErr } = characterResult
     if (charFetchErr || !charRow) {
       return reply.status(404).send({ error: { code: "not_found", message: "Character not found" } })
     }
