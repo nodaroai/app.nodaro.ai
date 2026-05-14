@@ -10,6 +10,7 @@ import { useAltKeyStore } from "@/hooks/use-alt-key"
 import { useMobileCanvas } from "@/components/editor/mobile-canvas-context"
 import { CustomHandle } from "./custom-handle"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
+import { useNodeInsertAnimation } from "@/components/editor/workflow-editor/use-node-insert-animation"
 
 export interface HandleConfig {
   readonly id: string
@@ -290,11 +291,18 @@ function BaseNodeComponent({
   // compensation, min/max clamping, aspect-ratio locking, and corner-anchored
   // position adjustment. We no longer need any of that custom code here.
 
+  // Entrance animation: fade-in + scale-up the first time this node id is
+  // seen on the canvas. Powers the Film Director "watch the studio build
+  // itself" UX where each per-stage workflow update reveals new nodes live.
+  // Idempotent — re-mounting an already-seen node is a no-op.
+  const insertStyle = useNodeInsertAnimation(id)
+
   return (
     <>
     <div
       ref={outerRef}
       className="w-full h-full relative flex flex-col"
+      style={insertStyle}
       onMouseEnter={() => {
         if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
         setIsHovered(true)
