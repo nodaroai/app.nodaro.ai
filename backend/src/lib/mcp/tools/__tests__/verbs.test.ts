@@ -530,8 +530,13 @@ describe("download_youtube_audio verb", () => {
 })
 
 describe("generate_character verb", () => {
-  it("calls /v1/generate-character on kind='main'", async () => {
-    const { fastify, received } = stubRoute("POST", "/v1/generate-character", { jobId: "j-c1" })
+  it("calls /v1/generate-character on kind='main' and consumes { jobId, jobIds } shape", async () => {
+    // Backend route returns dual shape after Task 6 of character-studio PR 1.
+    // MCP tool surfaces only the first job id (count=1 implied at this layer).
+    const { fastify, received } = stubRoute("POST", "/v1/generate-character", {
+      jobId: "j-c1",
+      jobIds: ["j-c1"],
+    })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
 
@@ -545,6 +550,26 @@ describe("generate_character verb", () => {
     expect(((result.structuredContent as Record<string, unknown>)?.jobId ?? (result.structuredContent as Record<string, unknown>)?.executionId)).toBe("j-c1")
     expect(received.body?.name).toBe("Aria")
     expect(received.body?.style).toBe("anime")
+  })
+
+  it("prefers jobIds[0] when present", async () => {
+    // Defensive contract — if the backend ever returns a mismatched jobId
+    // and jobIds[0] (shouldn't happen, but guards against drift), the tool
+    // honors jobIds[0] as the authoritative first-job identifier.
+    const { fastify } = stubRoute("POST", "/v1/generate-character", {
+      jobId: "j-stale",
+      jobIds: ["j-fresh"],
+    })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_character", {
+      kind: "main",
+      name: "Aria",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-fresh")
   })
 
   it("calls /v1/generate-character-asset on kind='asset' with asset_type+variant", async () => {
