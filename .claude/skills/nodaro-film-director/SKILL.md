@@ -1,6 +1,6 @@
 ---
 name: nodaro-film-director
-version: 1.0.6
+version: 1.0.7
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -21,7 +21,18 @@ You are a film director helping the user create a cinematic video using Nodaro's
 
 ## Nodaro node shapes reference
 
-> **STRICT NODE TYPE WHITELIST.** When constructing workflow JSON via `update_workflow_json`, you may use ONLY the 8 node types below. If your workflow design seems to need a node type not listed here (e.g., character generation, location generation, modify-image, voice-design, extract-frame, text-to-speech, lip-sync, text-to-audio, or anything else), you MUST ask the user first — say "this design needs `<type>` which isn't in the canonical minimal set; do you want me to use it anyway, or simplify?" Do not invent types or fields under any circumstance. The frontend silently drops unknown types — your workflow appears empty on the canvas if you freelance the shapes.
+> **STRICT NODE TYPE WHITELIST.** When constructing workflow JSON via `update_workflow_json`, you may use ONLY these 8 node types:
+>
+> 1. `text-prompt` (Stage 1)
+> 2. `loop` (Stage 2 shot list — UI label "Table", NOT `list` which is single-column)
+> 3. `generate-image` (Stage 5)
+> 4. `image-to-video` (Stage 6)
+> 5. `generate-music` (Stage 7)
+> 6. `trim-video` (Stage 8)
+> 7. `combine-videos` (Stage 8)
+> 8. `merge-video-audio` (Stage 8)
+>
+> If your workflow design seems to need a node type not listed here (e.g., character generation, location generation, modify-image, voice-design, extract-frame, text-to-speech, lip-sync, text-to-audio, or anything else), you MUST ask the user first — say "this design needs `<type>` which isn't in the canonical minimal set; do you want me to use it anyway, or simplify?" Do not invent types or fields under any circumstance. The frontend silently drops unknown types — your workflow appears empty on the canvas if you freelance the shapes.
 
 A workflow node is a React Flow object:
 
@@ -80,12 +91,14 @@ Pure text display node. No `executionStatus`, no result fields — it just rende
 **Required fields:** `label`, `text`, `variables` (empty object is fine).
 **No `fieldMappings` on this type.**
 
-#### 2. `list` — Stage 2, display the shot list as a table
+#### 2. `loop` (UI label "Table") — Stage 2, shot list / tabular data
 
-Pure data-display node. Each column is a typed field; each row is one shot. No result fields.
+**Use `type: "loop"` for any multi-column tabular data** — shot lists, prop tables, character casting tables, etc. The internal type name is `"loop"` but the UI displays it as **"Table"** in the node palette. (There's also a separate `type: "list"` for SINGLE-column data — do NOT use that for tabular content; it's intended for plain lists like a list of prompts.)
+
+Pure data-display node. Each column is a typed field; each row is one entry. No result fields.
 
 ```json
-{ "id": "shots-1", "type": "list", "position": { "x": 340, "y": 0 },
+{ "id": "shots-1", "type": "loop", "position": { "x": 340, "y": 0 },
   "data": {
     "label": "Shot List",
     "columns": [
@@ -101,7 +114,9 @@ Pure data-display node. Each column is a typed field; each row is one shot. No r
 
 **Required fields:** `label`, `columns`, `rows`, `fieldMappings: {}`. Each column needs `id`, `name`, `handleId` (use `col_<id>`), and `type` (one of `"text" | "image-url" | "video-url" | "audio-url" | "json"`).
 
-**`viewMode` MATTERS:** valid values are `"list" | "gallery" | "packed"`. If you omit it, the frontend defaults to `"gallery"` (image-card layout — WRONG for a shot-list table). **Always set `"viewMode": "list"`** for tabular shot lists. Use `"gallery"` only for image-heavy collections.
+**`viewMode`:** valid values are `"list" | "gallery" | "packed"`. For a shot list table, use `"list"` (renders rows linearly with all columns visible). Use `"gallery"` for image-heavy data, `"packed"` for compressed display.
+
+**Common gotcha:** if you accidentally use `type: "list"` (the single-column type) with a multi-column `columns` array, the frontend may render only the first column or display in an unintended layout. Always use `type: "loop"` for multi-column data.
 
 #### 3. `generate-image` — Stage 5, scene composition
 
@@ -298,7 +313,7 @@ Processing node. **Result field uses `generatedVideoUrl`.** If you trim via the 
 | Node type | Input handles you may target | Common output handles |
 |---|---|---|
 | `text-prompt` | `in` | `text` |
-| `list` | `in` | row-typed |
+| `loop` (UI "Table") | `in` | row-typed |
 | `generate-image` | `in` | `image` |
 | `image-to-video` | `startFrame`, `endFrame`, `audio` | `video` |
 | `generate-music` | `in` | `audio` |
@@ -356,7 +371,7 @@ Convert the approved screenplay into a shot list. Each row has:
 - **continuity_in (string)** — how this shot continues from the previous: "Hero finishes the stride begun in shot 4 — front-on framing"
 - **continuity_out (string)** — what this shot leaves for the next: "Hero raises rifle, beat ends mid-motion"
 
-Show the shot list as a `list` node. Iterate via Q&A until approved.
+Show the shot list as a `loop` node (UI label "Table") — this is the multi-column tabular type. Do NOT use `type: "list"` (that's the single-column variant). Iterate via Q&A until approved.
 
 **Continuity rules:**
 - Two adjacent shots with the same character: explicitly chain action ("running from behind" → "finishing from front")
