@@ -630,4 +630,15 @@ describe("POST /v1/generate-character-motion — Task 8 behavior", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
   })
+
+  it("returns 400 validation_error when neither attachToCharacterId nor sourceImageUrl is provided", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { motionPrompt: "she waves" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
 })

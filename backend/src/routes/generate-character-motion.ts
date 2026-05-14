@@ -40,7 +40,10 @@ export const generateCharacterMotionBody = z.object({
   // pass the character DB id + display name.
   attachToCharacterId: z.string().uuid().optional(),
   attachName: z.string().min(1).max(200).optional(),
-})
+}).refine(
+  (data) => Boolean(data.attachToCharacterId) || Boolean(data.sourceImageUrl),
+  { message: "Provide attachToCharacterId or sourceImageUrl" },
+)
 
 /**
  * System prompt for the dual-output motion LLM draft. Distinct from
@@ -165,11 +168,11 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
                 // key when the input is sparse.
                 if (!userDescription && typeof json.description === "string") {
                   const trimmed = json.description.trim()
-                  if (trimmed.length > 0) parsed.data.description = trimmed
+                  if (trimmed.length > 0) parsed.data.description = trimmed.slice(0, 1000)
                 }
                 if (!userMotionDescription && typeof json.motionDescription === "string") {
                   const trimmed = json.motionDescription.trim()
-                  if (trimmed.length > 0) parsed.data.motionDescription = trimmed
+                  if (trimmed.length > 0) parsed.data.motionDescription = trimmed.slice(0, 500)
                 }
               } catch (parseErr) {
                 req.log.warn(
