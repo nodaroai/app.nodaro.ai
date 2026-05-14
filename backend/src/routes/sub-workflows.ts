@@ -90,6 +90,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
       .from("workflows")
       .select("id, name, project_id, nodes, projects(name)")
       .eq("user_id", req.userId)
+      .is("parent_workflow_id", null)
       .limit(200)
 
     if (projectId) {

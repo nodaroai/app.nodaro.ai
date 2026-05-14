@@ -208,6 +208,7 @@ export async function workflowRoutes(app: FastifyInstance) {
       .select(WORKFLOW_META_COLS)
       .eq("project_id", params.projectId)
       .eq("user_id", userId)
+      .is("parent_workflow_id", null)
       .order("created_at", { ascending: false })
 
     if (error) return internalError(reply, error.message)
