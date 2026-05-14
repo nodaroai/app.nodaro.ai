@@ -297,7 +297,62 @@ export async function characterRoutes(app: FastifyInstance) {
       pendingJobs.push({ jobId: row.id, assetType, name: attachName })
     }
 
-    return { ...toCamel(data as CharacterRow), pendingJobs }
+    // portraitCandidates: in-flight `generate-character` jobs for THIS row.
+    // The studio polls this bucket to keep the Appearance tab's "generating
+    // portrait" tile responsive across reloads. URL may be undefined while
+    // the job is still pending; the worker writes `output_data.imageUrl`
+    // once it has uploaded the R2 result (often before the final commit
+    // completes), so we surface it as soon as it's there.
+    const { data: portraitPendingRows } = await supabase
+      .from("jobs")
+      .select("id, status, progress, output_data, input_data")
+      .eq("user_id", userId)
+      .in("status", ["pending", "running"])
+      .filter("input_data->>type", "eq", "generate-character")
+      .filter("input_data->>attachToCharacterId", "eq", id)
+
+    type PortraitCandidate = { jobId: string; url: string | undefined; progress: number; status: string }
+    const portraitCandidates: PortraitCandidate[] = (portraitPendingRows ?? []).map((row) => {
+      const out = (row.output_data ?? null) as Record<string, unknown> | null
+      const rawUrl = out?.imageUrl
+      return {
+        jobId: row.id,
+        url: typeof rawUrl === "string" ? rawUrl : undefined,
+        progress: typeof row.progress === "number" ? row.progress : 0,
+        status: row.status,
+      }
+    })
+
+    // previousCandidates: recently-completed `generate-character` jobs for
+    // THIS row, with URL ≠ current portrait, within the last 7 days. We
+    // over-fetch (limit 10) to absorb URL-collisions with the active portrait
+    // and the rare row missing `output_data.imageUrl`, then trim to 5 in JS.
+    // ORDER BY created_at DESC so the user sees their latest alternatives.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: previousCompletedRows } = await supabase
+      .from("jobs")
+      .select("id, output_data, created_at")
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .filter("input_data->>type", "eq", "generate-character")
+      .filter("input_data->>attachToCharacterId", "eq", id)
+      .gte("created_at", sevenDaysAgo)
+      .order("created_at", { ascending: false })
+      .limit(10)
+
+    const currentPortrait = (data as { source_image_url?: string | null }).source_image_url ?? null
+    type PreviousCandidate = { jobId: string; url: string; createdAt: string }
+    const previousCandidates: PreviousCandidate[] = (previousCompletedRows ?? [])
+      .map((row) => {
+        const out = (row.output_data ?? null) as Record<string, unknown> | null
+        const u = out?.imageUrl
+        if (typeof u !== "string" || u === currentPortrait) return null
+        return { jobId: row.id as string, url: u, createdAt: row.created_at as string }
+      })
+      .filter((x): x is PreviousCandidate => x !== null)
+      .slice(0, 5)
+
+    return { ...toCamel(data as CharacterRow), pendingJobs, portraitCandidates, previousCandidates }
   })
 
   // -----------------------------------------------------------------------
