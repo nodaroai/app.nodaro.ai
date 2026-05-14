@@ -27,15 +27,27 @@ import type { CharacterNodeData } from "@/types/nodes"
 const AUTOSAVE_DEBOUNCE_MS = 600
 
 /** Frontend-only-managed fields (never written by the worker). Always sent on
- *  an UPDATE so the user sees them persist immediately. */
-const ALWAYS_PATCH_FIELDS = ["characterName", "description", "gender", "style", "baseOutfit", "voice", "personality"] as const
+ *  an UPDATE so the user sees them persist immediately.
+ *
+ *  `referencePhotos` and `seedPrompt` are user-controlled — the worker never
+ *  writes them, so they live here alongside the identity fields. */
+const ALWAYS_PATCH_FIELDS = [
+  "characterName", "description", "gender", "style", "baseOutfit", "voice", "personality",
+  "referencePhotos", "seedPrompt",
+] as const
 
 /** Fields that the WORKER can also write to. The frontend sends them on
  *  UPDATE only when the user explicitly mutated them locally (delete, rename,
  *  import, polled completion). Skipping them otherwise prevents a race where
- *  the debounce save sends a stale array and overwrites a worker append. */
+ *  the debounce save sends a stale array and overwrites a worker append.
+ *
+ *  `canonicalDescription` is worker-written by the approve-portrait route's
+ *  auto-caption step; `realLifeRefsByVariant` is also dirty-tracked so the
+ *  per-variant ref cache can land alongside an asset append without races. */
 type DirtyTrackedField =
   | "sourceImageUrl"
+  | "canonicalDescription"
+  | "realLifeRefsByVariant"
   | "expressions"
   | "poses"
   | "angles"
@@ -44,6 +56,8 @@ type DirtyTrackedField =
 
 const DIRTY_TRACKED_FIELDS: ReadonlySet<DirtyTrackedField> = new Set([
   "sourceImageUrl",
+  "canonicalDescription",
+  "realLifeRefsByVariant",
   "expressions",
   "poses",
   "angles",
@@ -93,12 +107,17 @@ function buildInsertPayload(nodeId: string, d: CharacterNodeData) {
     motions: d.motions,
     voice: d.voice,
     personality: d.personality,
+    referencePhotos: d.referencePhotos,
+    seedPrompt: d.seedPrompt,
+    canonicalDescription: d.canonicalDescription,
+    realLifeRefsByVariant: d.realLifeRefsByVariant,
   }
 }
 
 function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<DirtyTrackedField>) {
   // Always-send identity fields. The route requires `name` (Zod min 1) and
-  // `nodeId`, plus voice/personality are frontend-managed only so safe.
+  // `nodeId`, plus voice/personality/referencePhotos/seedPrompt are
+  // frontend-managed only so safe to always include.
   const payload: Parameters<typeof saveCharacter>[0] = {
     id: d.characterDbId,
     nodeId,
@@ -110,6 +129,8 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
     baseOutfit: d.baseOutfit,
     voice: d.voice,
     personality: d.personality,
+    referencePhotos: d.referencePhotos,
+    seedPrompt: d.seedPrompt,
   }
   // Dirty-only fields (worker also writes these — only send what the user
   // changed in this debounce window to avoid clobbering worker appends).
@@ -119,6 +140,8 @@ function buildUpdatePayload(nodeId: string, d: CharacterNodeData, dirty: Set<Dir
   if (dirty.has("angles")) payload.angles = d.angles
   if (dirty.has("lightingVariations")) payload.lightingVariations = d.lightingVariations
   if (dirty.has("motions")) payload.motions = d.motions
+  if (dirty.has("canonicalDescription")) payload.canonicalDescription = d.canonicalDescription
+  if (dirty.has("realLifeRefsByVariant")) payload.realLifeRefsByVariant = d.realLifeRefsByVariant
   return payload
 }
 
@@ -179,6 +202,10 @@ export function useCharacterStudio(nodeId: string): CharacterStudioState | null 
             motions: fresh.motions ?? prev.motions,
             voice: fresh.voice ?? prev.voice,
             personality: fresh.personality ?? prev.personality,
+            referencePhotos: fresh.referencePhotos ?? prev.referencePhotos,
+            seedPrompt: fresh.seedPrompt ?? prev.seedPrompt,
+            canonicalDescription: fresh.canonicalDescription ?? prev.canonicalDescription,
+            realLifeRefsByVariant: fresh.realLifeRefsByVariant ?? prev.realLifeRefsByVariant,
           }
           updateNodeData(nodeId, merged)
           return merged

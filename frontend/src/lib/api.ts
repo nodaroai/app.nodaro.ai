@@ -3,6 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowExport } from "@nodaro/shared"
+import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
 export const API_BASE_URL = ''
 
@@ -515,6 +516,10 @@ export async function saveCharacter(data: {
   motions?:     { name: string; url: string }[]
   voice?:       { voiceId: string; voiceName: string; traits: string } | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
+  seedPrompt?: string
+  canonicalDescription?: string
+  realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters`, {
     method: "POST",
@@ -552,6 +557,10 @@ export async function getCharacter(id: string): Promise<{
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
+  seedPrompt?: string
+  canonicalDescription?: string
+  realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
   pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }[]
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(id)}`, {
