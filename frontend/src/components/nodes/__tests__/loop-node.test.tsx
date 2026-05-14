@@ -18,7 +18,11 @@ vi.mock("../editable-node-label", () => ({
 }))
 
 vi.mock("../handle-icon", () => ({
-  HandleIcon: () => <div data-testid="handle-icon" />,
+  HandleIcon: ({ label }: { label?: string }) => (
+    <div data-testid="handle-icon" data-label={label ?? ""}>
+      {label && <span data-testid="handle-icon-label">{label}</span>}
+    </div>
+  ),
 }))
 
 vi.mock("../base-node", () => ({
@@ -136,5 +140,25 @@ describe("LoopNode", () => {
     })
     expect(screen.getByTestId("handle-col_a")).toBeInTheDocument()
     expect(screen.getByTestId("handle-col_b")).toBeInTheDocument()
+  })
+
+  it("renders column-name labels next to source handles", () => {
+    renderNode({
+      data: {
+        label: "Table",
+        columns: [
+          { id: "1", name: "Prompt", handleId: "col_a", type: "text" },
+          { id: "2", name: "Hero image", handleId: "col_b", type: "image-url" },
+          { id: "3", name: "Music style", handleId: "col_c", type: "text" },
+        ],
+        rows: [["a", "b", "c"]],
+      },
+    })
+    const handleLabels = screen
+      .getAllByTestId("handle-icon-label")
+      .map((el) => el.textContent)
+    expect(handleLabels).toContain("Prompt")
+    expect(handleLabels).toContain("Hero image")
+    expect(handleLabels).toContain("Music style")
   })
 })

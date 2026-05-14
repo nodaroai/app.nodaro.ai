@@ -94,7 +94,7 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       <HandleIcon icon={<List />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<List />} top="20px" />
+      <HandleIcon icon={<List />} top="20px" label={nodeData.columns?.[0]?.name} />
     </div>
   )
 }

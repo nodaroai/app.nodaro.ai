@@ -1096,7 +1096,13 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
         const colType = col?.type ?? "text"
         const icon = COLUMN_TYPE_ICON[colType] ?? COLUMN_TYPE_ICON.text
         return (
-          <HandleIcon key={h.id} icon={icon} color={HANDLE_COLOR_MAP[colType] ?? "cyan"} top={h.top} />
+          <HandleIcon
+            key={h.id}
+            icon={icon}
+            color={HANDLE_COLOR_MAP[colType] ?? "cyan"}
+            top={h.top}
+            label={col?.name}
+          />
         )
       })}
       <StorageExceededModal
