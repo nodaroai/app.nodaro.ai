@@ -3,6 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowExport } from "@nodaro/shared"
+import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
 export const API_BASE_URL = ''
 
@@ -458,6 +459,11 @@ export async function generateCharacterAsset(data: {
   attachToCharacterId?: string
   attachToColumn?: "expressions" | "poses" | "angles" | "lighting_variations"
   attachName?: string
+  /** Per-asset extras (Identity Foundation v2). When `description` is omitted
+   *  the backend asks Claude Sonnet for a draft scoped to the character's
+   *  canonical description + assetType/variant. `realLifeRefs` (up to 5) are
+   *  passed to the worker to bias the generation. */
+  realLifeRefs?: ReadonlyArray<string>
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
@@ -483,6 +489,12 @@ export async function generateCharacterMotion(params: {
   /** Character Studio auto-attach: target column is implicit ("motions"). */
   attachToCharacterId?: string
   attachName?: string
+  /** Per-asset extras (Identity Foundation v2). When `description` and
+   *  `motionDescription` are both omitted the backend asks Claude Sonnet for a
+   *  combined draft. `realLifeRefs` (up to 5) are passed to the worker to bias
+   *  the generation. */
+  motionDescription?: string
+  realLifeRefs?: ReadonlyArray<string>
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-motion`, {
     method: "POST",
@@ -515,6 +527,10 @@ export async function saveCharacter(data: {
   motions?:     { name: string; url: string }[]
   voice?:       { voiceId: string; voiceName: string; traits: string } | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
+  seedPrompt?: string
+  canonicalDescription?: string
+  realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
 }): Promise<{ id: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters`, {
     method: "POST",
@@ -552,7 +568,22 @@ export async function getCharacter(id: string): Promise<{
   motions: { name: string; url: string }[] | null
   voice: { voiceId: string; voiceName: string; traits: string } | null
   personality: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  referencePhotos?: ReadonlyArray<{ url: string; kind: ReferencePhotoKind }>
+  seedPrompt?: string
+  canonicalDescription?: string
+  realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
   pendingJobs: { jobId: string; assetType: "expressions" | "poses" | "angles" | "lighting" | "motions"; name: string }[]
+  readonly portraitCandidates?: ReadonlyArray<{
+    readonly jobId: string
+    readonly status: string
+    readonly progress: number
+    readonly url?: string
+  }>
+  readonly previousCandidates?: ReadonlyArray<{
+    readonly jobId: string
+    readonly url: string
+    readonly createdAt: string
+  }>
 }> {
   const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(id)}`, {
     headers: { ...await getAuthHeaders() },
@@ -560,6 +591,100 @@ export async function getCharacter(id: string): Promise<{
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to load character")
+  }
+  return res.json()
+}
+
+// ---------------------------------------------------------------------------
+// Character Studio PR 2 — LLM suggest, portrait approval, LLM caption.
+// Wrappers for the backend routes introduced in the PR 1 backend:
+//   - POST /v1/llm-suggest-description
+//   - POST /v1/characters/:id/approve-portrait
+//   - POST /v1/characters/:id/llm-caption
+// ---------------------------------------------------------------------------
+
+export type LlmSuggestKind = "seed-prompt" | "asset-description" | "motion-description"
+
+export interface LlmSuggestContext {
+  // seed-prompt
+  readonly personPicker?: Record<string, unknown>
+  readonly referencePhotos?: ReadonlyArray<{ readonly url: string; readonly kind: string }>
+  readonly gender?: string
+  readonly style?: string
+  readonly baseOutfit?: string
+  // asset-description / motion-description
+  readonly assetType?: string
+  readonly variant?: string
+  readonly userPrompt?: string
+  readonly canonicalDescription?: string
+  readonly motionPrompt?: string
+}
+
+/**
+ * Ask the backend's LLM to suggest a description string for a Character Studio
+ * field (seed prompt, asset description, or motion description). The shape of
+ * `context` depends on `kind` — see `LlmSuggestContext` for the union of
+ * permitted fields.
+ */
+export async function llmSuggestDescription(body: {
+  readonly kind: LlmSuggestKind
+  readonly context: LlmSuggestContext
+}): Promise<{ readonly text: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/llm-suggest-description`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to suggest description")
+  }
+  return res.json()
+}
+
+/**
+ * Approves a portrait candidate (a finished generate-character job) as the
+ * character's canonical source image. The backend copies the job's image URL
+ * to `characters.source_image_url` and, if no `canonical_description` is set
+ * yet, also auto-captions the portrait.
+ */
+export async function approvePortrait(
+  characterId: string,
+  candidateJobId: string,
+): Promise<{ readonly portraitUrl: string; readonly canonicalDescription: string | null }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/approve-portrait`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+      body: JSON.stringify({ candidateJobId }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to approve portrait")
+  }
+  return res.json()
+}
+
+/**
+ * Re-runs the LLM caption pipeline on the character's existing
+ * `source_image_url` to refresh `canonical_description`. Used when the user
+ * wants a fresh caption without re-generating the portrait.
+ */
+export async function llmCaptionPortrait(
+  characterId: string,
+): Promise<{ readonly canonicalDescription: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/llm-caption`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to caption portrait")
   }
   return res.json()
 }
