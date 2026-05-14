@@ -19,10 +19,19 @@ export const ASSET_MOTION_SCAFFOLDING =
 // Framing fragments per asset type. "custom" is intentionally absent — when
 // users supply their own free-form prompt, framing is their responsibility,
 // so we don't impose one. Unknown assetTypes fall through to no framing.
+//
+// `angles` is now treated as head angles (the column was split — see migration
+// 118). `headAngles` is the explicit alias; both produce head-and-shoulders
+// framing. `bodyAngles` writes to the new `body_angles` column and produces
+// full-body T-pose framing. This is a small behavior change for existing
+// characters' future angle gens — they were semantically head angles all along,
+// so the new framing matches the column's new meaning.
 const ASSET_FRAMING_BY_TYPE: Record<string, string> = {
   expressions: "portrait headshot",
   poses: "full body visible including feet",
-  angles: "full body, same neutral standing pose",
+  angles: "head-and-shoulders portrait, same neutral expression",
+  headAngles: "head-and-shoulders portrait, same neutral expression",
+  bodyAngles: "full body T-pose, neutral standing posture, plain background",
   lighting: "full body, same neutral standing pose",
 }
 
