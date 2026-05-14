@@ -564,6 +564,100 @@ export async function getCharacter(id: string): Promise<{
   return res.json()
 }
 
+// ---------------------------------------------------------------------------
+// Character Studio PR 2 — LLM suggest, portrait approval, LLM caption.
+// Wrappers for the backend routes introduced in the PR 1 backend:
+//   - POST /v1/llm-suggest-description
+//   - POST /v1/characters/:id/approve-portrait
+//   - POST /v1/characters/:id/llm-caption
+// ---------------------------------------------------------------------------
+
+export type LlmSuggestKind = "seed-prompt" | "asset-description" | "motion-description"
+
+export interface LlmSuggestContext {
+  // seed-prompt
+  readonly personPicker?: Record<string, unknown>
+  readonly referencePhotos?: ReadonlyArray<{ readonly url: string; readonly kind: string }>
+  readonly gender?: string
+  readonly style?: string
+  readonly baseOutfit?: string
+  // asset-description / motion-description
+  readonly assetType?: string
+  readonly variant?: string
+  readonly userPrompt?: string
+  readonly canonicalDescription?: string
+  readonly motionPrompt?: string
+}
+
+/**
+ * Ask the backend's LLM to suggest a description string for a Character Studio
+ * field (seed prompt, asset description, or motion description). The shape of
+ * `context` depends on `kind` — see `LlmSuggestContext` for the union of
+ * permitted fields.
+ */
+export async function llmSuggestDescription(body: {
+  readonly kind: LlmSuggestKind
+  readonly context: LlmSuggestContext
+}): Promise<{ readonly text: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/llm-suggest-description`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to suggest description")
+  }
+  return res.json()
+}
+
+/**
+ * Approves a portrait candidate (a finished generate-character job) as the
+ * character's canonical source image. The backend copies the job's image URL
+ * to `characters.source_image_url` and, if no `canonical_description` is set
+ * yet, also auto-captions the portrait.
+ */
+export async function approvePortrait(
+  characterId: string,
+  candidateJobId: string,
+): Promise<{ readonly portraitUrl: string; readonly canonicalDescription: string | null }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/approve-portrait`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+      body: JSON.stringify({ candidateJobId }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to approve portrait")
+  }
+  return res.json()
+}
+
+/**
+ * Re-runs the LLM caption pipeline on the character's existing
+ * `source_image_url` to refresh `canonical_description`. Used when the user
+ * wants a fresh caption without re-generating the portrait.
+ */
+export async function llmCaptionPortrait(
+  characterId: string,
+): Promise<{ readonly canonicalDescription: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/llm-caption`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to caption portrait")
+  }
+  return res.json()
+}
+
 // Face DB API functions
 export async function saveFace(data: {
   id?: string
