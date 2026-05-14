@@ -2767,6 +2767,14 @@ export type CharacterNodeData = {
   // canonical description + an identity-preserve suffix to the prompt.
   // Defaults to false (must explicitly opt in per Character node).
   readonly injectIdentityInPrompts?: boolean
+  // Per-CANVAS-NODE default asset selected from the Character Studio's grid
+  // (expression / pose / angle / lighting / motion). Drives the canvas
+  // thumbnail when set (falls back to `sourceImageUrl`). NOT a property of
+  // the underlying `characters` DB row — two character nodes referencing the
+  // same DB character can each have their own default. Frontend-only field;
+  // never sent to `saveCharacter`.
+  readonly defaultAssetUrl?: string
+  readonly defaultAssetName?: string
 }
 
 // --- Object Node Data ---
