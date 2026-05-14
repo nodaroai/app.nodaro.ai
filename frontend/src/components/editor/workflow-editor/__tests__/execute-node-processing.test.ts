@@ -321,6 +321,10 @@ describe("lip-sync", () => {
         provider: "kling-avatar",
         resolution: "720p",
         prompt: "A person talking naturally",
+        // Cached value bypasses probeAudioDuration() — jsdom can't decode
+        // audio metadata so an un-cached call hangs the test on the
+        // loadedmetadata event (8s internal timeout > 5s vitest timeout).
+        audioDurationSec: 15,
       }),
       makeCtx(),
     )
@@ -344,6 +348,7 @@ describe("lip-sync", () => {
       "u1",
       {
         videoUrl: undefined,
+        audioDurationSec: 15,
         guidanceScale: undefined,
         inferenceSteps: undefined,
         seed: undefined,
