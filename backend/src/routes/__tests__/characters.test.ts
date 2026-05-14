@@ -479,6 +479,250 @@ describe("POST /v1/characters", () => {
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
   })
+
+  // -------------------------------------------------------------------------
+  // Identity foundation fields (PR 1 / Task 10): reference_photos, seed_prompt,
+  // canonical_description, real_life_refs_by_variant. Validates Zod refinements
+  // (duplicate-kind reject, length caps, per-variant key/value caps) AND the
+  // handler's lowercase+trim normalization of variant keys before INSERT.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Captures the row passed to `supabase.from("characters").insert(row)` so
+   * the test can assert on its shape. Returns success so the route resolves 200.
+   */
+  function mockInsertCapture() {
+    const captured: { row: Record<string, unknown> | null } = { row: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn((row: Record<string, unknown>) => {
+      captured.row = row
+      return { select: mockSelect }
+    })
+    return { mockInsert, captured }
+  }
+
+  it("rejects reference_photos with duplicate non-`other` kinds (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/a.png", kind: "front" },
+          { url: "https://example.com/b.png", kind: "front" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("accepts multiple `other` kind entries", async () => {
+    const { mockInsert } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/a.png", kind: "other" },
+          { url: "https://example.com/b.png", kind: "other" },
+          { url: "https://example.com/c.png", kind: "other" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects seed_prompt > 2000 chars (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        seedPrompt: "x".repeat(2001),
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects canonical_description > 4000 chars (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        canonicalDescription: "x".repeat(4001),
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("normalizes real_life_refs_by_variant keys to lowercased+trimmed", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: {
+          "  Smile ": ["https://example.com/s1.png"],
+          WALKING: ["https://example.com/w1.png", "https://example.com/w2.png"],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row).not.toBeNull()
+    expect(captured.row?.real_life_refs_by_variant).toEqual({
+      smile: ["https://example.com/s1.png"],
+      walking: ["https://example.com/w1.png", "https://example.com/w2.png"],
+    })
+  })
+
+  it("rejects real_life_refs_by_variant with > 20 keys (400)", async () => {
+    const variants: Record<string, string[]> = {}
+    for (let i = 0; i < 21; i++) {
+      variants[`variant${i}`] = ["https://example.com/x.png"]
+    }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: variants,
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects real_life_refs_by_variant with > 5 urls per key (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: {
+          smile: [
+            "https://example.com/1.png",
+            "https://example.com/2.png",
+            "https://example.com/3.png",
+            "https://example.com/4.png",
+            "https://example.com/5.png",
+            "https://example.com/6.png",
+          ],
+        },
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("accepts reference_photos with all 7 kinds + one extra `other` (8 photos)", async () => {
+    const { mockInsert } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/1.png", kind: "front" },
+          { url: "https://example.com/2.png", kind: "sideLeft" },
+          { url: "https://example.com/3.png", kind: "sideRight" },
+          { url: "https://example.com/4.png", kind: "threeQuarterLeft" },
+          { url: "https://example.com/5.png", kind: "threeQuarterRight" },
+          { url: "https://example.com/6.png", kind: "fullBody" },
+          { url: "https://example.com/7.png", kind: "other" },
+          { url: "https://example.com/8.png", kind: "other" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("persists reference_photos to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const photos = [
+      { url: "https://example.com/front.png", kind: "front" },
+      { url: "https://example.com/side.png", kind: "sideLeft" },
+    ]
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, referencePhotos: photos },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.reference_photos).toEqual(photos)
+  })
+
+  it("persists seed_prompt to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        seedPrompt: "young warrior with dark hair",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.seed_prompt).toBe("young warrior with dark hair")
+  })
+
+  it("persists canonical_description to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        canonicalDescription: "A 25-year-old warrior with short dark hair, green eyes, scar on left cheek...",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.canonical_description).toBe(
+      "A 25-year-old warrior with short dark hair, green eyes, scar on left cheek...",
+    )
+  })
 })
 
 // ---------------------------------------------------------------------------

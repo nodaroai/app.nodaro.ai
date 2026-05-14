@@ -12,6 +12,24 @@ import { formatZodError } from "../lib/zod-error.js"
  * a stale `characterDbId` keep working.
  */
 
+// Reference-photo kinds drive the identity-foundation gallery slots. Every
+// `kind` except `"other"` may appear at most once (one front shot, one side
+// shot, etc.); `"other"` is unconstrained so users can attach extra references.
+const REFERENCE_PHOTO_KINDS = [
+  "front",
+  "sideLeft",
+  "sideRight",
+  "threeQuarterLeft",
+  "threeQuarterRight",
+  "fullBody",
+  "other",
+] as const
+
+const referencePhoto = z.object({
+  url: safeUrlSchema,
+  kind: z.enum(REFERENCE_PHOTO_KINDS),
+})
+
 const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
@@ -36,6 +54,36 @@ const upsertCharacterBody = z.object({
   motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
+  // Identity-foundation fields (migration 114). Length caps mirror the DB
+  // CHECK constraints so we reject at the boundary with a 400 rather than a
+  // 500 from Postgres. `referencePhotos` further enforces "at most one per
+  // non-`other` kind"; `realLifeRefsByVariant` caps total keys + per-key URLs
+  // so a runaway client can't blow up the row.
+  seedPrompt: z.string().max(2000).optional(),
+  canonicalDescription: z.string().max(4000).optional(),
+  referencePhotos: z
+    .array(referencePhoto)
+    .max(20)
+    .optional()
+    .refine(
+      (arr) => {
+        if (!arr) return true
+        const counts = new Map<string, number>()
+        for (const p of arr) {
+          if (p.kind === "other") continue
+          counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1)
+          if ((counts.get(p.kind) ?? 0) > 1) return false
+        }
+        return true
+      },
+      { message: "Each non-`other` kind may appear at most once" },
+    ),
+  realLifeRefsByVariant: z
+    .record(z.array(safeUrlSchema).max(5))
+    .optional()
+    .refine((obj) => !obj || Object.keys(obj).length <= 20, {
+      message: "real_life_refs_by_variant: max 20 keys",
+    }),
 })
 
 const deleteCharacterParams = z.object({
@@ -297,12 +345,22 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality } = parsed.data
+    const { id, nodeId, workflowId, projectId, name, description, gender, style, baseOutfit, sourceImageUrl, expressions, poses, lightingVariations, angles, motions, voice, personality, seedPrompt, canonicalDescription, referencePhotos, realLifeRefsByVariant } = parsed.data
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
+
+    // Normalize per-variant keys before persisting. The column is keyed by a
+    // lowercased+trimmed slug (e.g. "smile") so the UI can look refs up by the
+    // canonical preset id regardless of how the caller spells/spaces the key.
+    // Done once here so both INSERT and UPDATE write the same shape.
+    const normalizedVariantRefs = realLifeRefsByVariant
+      ? Object.fromEntries(
+          Object.entries(realLifeRefsByVariant).map(([k, v]) => [k.toLowerCase().trim(), v]),
+        )
+      : undefined
 
     if (id) {
       // UPDATE: only touch columns the caller explicitly sent.
@@ -322,6 +380,10 @@ export async function characterRoutes(app: FastifyInstance) {
       if (motions !== undefined) patch.motions = motions
       if (voice !== undefined) patch.voice = voice ?? null
       if (personality !== undefined) patch.personality = personality ?? null
+      if (seedPrompt !== undefined) patch.seed_prompt = seedPrompt ?? null
+      if (canonicalDescription !== undefined) patch.canonical_description = canonicalDescription ?? null
+      if (referencePhotos !== undefined) patch.reference_photos = referencePhotos
+      if (normalizedVariantRefs !== undefined) patch.real_life_refs_by_variant = normalizedVariantRefs
 
       const { data: updated, error } = await supabase
         .from("characters")
@@ -358,6 +420,10 @@ export async function characterRoutes(app: FastifyInstance) {
       motions: motions ?? [],
       voice: voice ?? null,
       personality: personality ?? null,
+      seed_prompt: seedPrompt ?? null,
+      canonical_description: canonicalDescription ?? null,
+      reference_photos: referencePhotos ?? [],
+      real_life_refs_by_variant: normalizedVariantRefs ?? {},
       updated_at: new Date().toISOString(),
     }
 
