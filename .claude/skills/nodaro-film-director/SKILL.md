@@ -1,6 +1,6 @@
 ---
 name: nodaro-film-director
-version: 1.0.4
+version: 1.0.5
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -121,22 +121,16 @@ If you need a node type not listed above — STOP and ask the user. Do not inven
 
 ## Stage 0 — Initialize the live workspace
 
-### Step 0.1: Preload all required MCP tools
+### MCP tool availability
 
-Many Nodaro MCP tools are "deferred" — their schemas aren't loaded in your session by default. Before any other step, batch-load every tool the workflow needs using ToolSearch with the EXACT selector syntax:
+Nodaro's MCP tools (`create_workflow`, `update_workflow_json`, `generate_image`, `animate_image`, `extract_frame`, `generate_music`, `combine_videos`, `merge_video_audio`, `trim_video`, and others used in the workflow) are loaded into your session by the user's connected MCP integration. **You do NOT need to preload, discover, or search for them.** Call each tool directly when its stage needs it.
 
-```
-ToolSearch
-  query: select:create_workflow,update_workflow_json,get_workflow,generate_image,animate_image,extract_frame,generate_music,combine_videos,merge_video_audio,trim_video
-```
+If a tool call returns an error like "tool not available" or "unknown tool":
+1. **Do not retry via ToolSearch** — claude.ai-hosted MCP integrations are not indexed by ToolSearch (Anthropic Issue #57033). ToolSearch will return fuzzy matches from other indices, never the Nodaro tool itself.
+2. **Ask the user to wait 5-10 seconds and send a follow-up message** — MCP servers may still be connecting on the first turn (Issue #42148). The deferred tool list refreshes between turns.
+3. **If still unavailable after the second turn**, ask the user to verify their Nodaro MCP integration is connected and toggle it off/on in claude.ai settings to re-initialize.
 
-This pre-loads all 10 tools in one call. After this, every subsequent stage can call its tools directly without further ToolSearch.
-
-NEVER use keyword search like `query: "image generation"` — it returns the closest match, NOT the exact tool you need. Always use `select:<exact_name>` with comma-separated names.
-
-If a later stage requires an opt-in tool (e.g., `generate_character`, `generate_location`, `text_to_speech`, `lip_sync` for the rare full-pipeline flow), load it with another `select:` call AT THAT POINT, not preemptively.
-
-### Step 0.2: Create the workflow
+### Create the workflow
 
 Before any creative work, call `create_workflow({ name: "<user's working title or 'Untitled Film'>" })` and capture the returned `workflowId`. Tell the user:
 
@@ -313,7 +307,7 @@ The workflow is already on the user's canvas — it was assembled incrementally 
 ## What you do NOT do
 
 - Use any node type outside the strict 8-node whitelist without first asking the user and getting explicit approval
-- Search for MCP tools by keyword (e.g., `query: "image"`). Always use `query: "select:<exact_name>"` with ToolSearch — keyword search returns near-matches, not the exact tool you need.
+- Run `ToolSearch query="select:..."` or any other ToolSearch keyword to "find" Nodaro MCP tools — they're already loaded into your session by the user's integration. ToolSearch returns fuzzy matches from indices that don't include claude.ai-hosted MCP servers, so any search will return wrong results. Call Nodaro tools directly by name.
 - Generate without showing the draft first
 - Animate shots in parallel
 - Skip the storyboard cohesion review
