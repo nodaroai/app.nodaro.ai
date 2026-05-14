@@ -35,13 +35,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 
 /**
- * Embedded fallback — verbatim copy of SKILL.md v1.0.5. The unit test
+ * Embedded fallback — verbatim copy of SKILL.md v1.0.6. The unit test
  * `film-director.test.ts` (`embedded constant matches on-disk SKILL.md`)
  * fails if this drifts from the canonical file. Bump both together.
  */
 export const FALLBACK_SKILL_CONTENT = `---
 name: nodaro-film-director
-version: 1.0.5
+version: 1.0.6
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -78,72 +78,261 @@ An edge wires two nodes:
 
 Lay nodes out left-to-right with \`x\` increasing by ~340 per stage and \`y\` separating sibling nodes by ~280. The \`position\` is mandatory.
 
+### Result-field contract (the single most-important rule)
+
+Every generation node in the whitelist (5 of the 8 — \`generate-image\`, \`image-to-video\`, \`generate-music\`, \`combine-videos\`, \`merge-video-audio\`, and to a lesser extent \`trim-video\`) renders its preview by reading **TWO required fields** from \`data\`:
+
+1. **\`executionStatus: "completed"\`** — string literal. Without this set to exactly \`"completed"\`, the frontend treats the node as still pending and renders a blank placeholder. Acceptable values: \`"idle" | "running" | "completed" | "failed"\`. You must write \`"completed"\`.
+2. **\`generated*Url: "<asset URL>"\`** — the EXACT field name varies per node type:
+   - \`generate-image\` → **\`generatedImageUrl\`**
+   - \`image-to-video\` → **\`generatedVideoUrl\`**
+   - \`generate-music\` → **\`generatedAudioUrl\`**
+   - \`trim-video\` → **\`generatedVideoUrl\`**
+   - \`combine-videos\` → **\`generatedVideoUrl\`**
+   - \`merge-video-audio\` → **\`generatedVideoUrl\`**
+   The URL value is the asset URL the generation MCP tool returned (typically the response's \`result.url\`, \`output[0]\`, \`image_url\`, or \`url\` field — read whatever the tool actually returned and put it here under THIS field name).
+
+Optionally (recommended, makes the canvas richer):
+- **\`generatedResults: [{ url, jobId, timestamp }]\`** — array form, lets the user flip between multiple takes. The render code reads \`generatedResults[activeResultIndex]?.url\` first and falls back to \`generated*Url\`. Setting both is safe and the right default.
+- **\`activeResultIndex: 0\`** — which entry in \`generatedResults\` to show. Defaults to 0.
+- **\`currentJobId: "<jobId>"\`** — the jobId from the generation tool's response. Useful for traceability; the frontend doesn't strictly require it.
+
+**Anti-patterns (DO NOT do any of these):**
+- Use \`result.url\`, \`imageUrl\`, \`videoUrl\`, \`audioUrl\`, \`output\`, \`output_url\`, or any other guessed field name for the asset URL. The frontend reads ONLY \`generated*Url\` (with the exact prefix shown above) plus the \`generatedResults[].url\` array path.
+- Omit \`executionStatus\`. Without \`"completed"\`, the node shows a blank placeholder even when the URL is correct.
+- Forget \`fieldMappings: {}\`. Even an empty object is required by every node's data shape.
+- Invent variant field names like \`generatedImage\`, \`imageGenerated\`, \`imageURL\` (capitalized URL), \`videoSrc\`. They are silently ignored.
+
 ### The 8 canonical node types
 
-**1. \`text-prompt\`** — Stage 1, display the approved script on the canvas. Holds plain text content.
+#### 1. \`text-prompt\` — Stage 1, display the approved script
+
+Pure text display node. No \`executionStatus\`, no result fields — it just renders \`data.text\`.
+
 \`\`\`json
 { "id": "script-1", "type": "text-prompt", "position": { "x": 0, "y": 0 },
-  "data": { "label": "Script", "text": "<full screenplay>", "variables": {} } }
+  "data": {
+    "label": "Script",
+    "text": "<full screenplay>",
+    "variables": {}
+  } }
 \`\`\`
 
-**2. \`list\`** — Stage 2, display the shot list as a table. Each column is a typed field; each row is one shot.
+**Required fields:** \`label\`, \`text\`, \`variables\` (empty object is fine).
+**No \`fieldMappings\` on this type.**
+
+#### 2. \`list\` — Stage 2, display the shot list as a table
+
+Pure data-display node. Each column is a typed field; each row is one shot. No result fields.
+
 \`\`\`json
 { "id": "shots-1", "type": "list", "position": { "x": 340, "y": 0 },
-  "data": { "label": "Shot List",
+  "data": {
+    "label": "Shot List",
     "columns": [
       { "id": "shot_id", "name": "Shot", "handleId": "col_shot_id", "type": "text" },
       { "id": "action",  "name": "Action", "handleId": "col_action",  "type": "text" },
       { "id": "duration", "name": "Duration", "handleId": "col_duration", "type": "text" }
     ],
     "rows": [["1", "Hero enters frame from left", "3"], ["2", "Hero raises rifle", "2"]],
-    "fieldMappings": {} } }
+    "viewMode": "list",
+    "fieldMappings": {}
+  } }
 \`\`\`
 
-**3. \`generate-image\`** — Stage 5, scene composition. For the default trailer flow, embed the character description + location description directly in the prompt. Optionally wire reference images into \`in\` if the user has provided any. Replaces the character/location pre-generation stages — you go straight from shot list to scene images.
+**Required fields:** \`label\`, \`columns\`, \`rows\`, \`fieldMappings: {}\`. Each column needs \`id\`, \`name\`, \`handleId\` (use \`col_<id>\`), and \`type\` (one of \`"text" | "image-url" | "video-url" | "audio-url" | "json"\`).
+
+**\`viewMode\` MATTERS:** valid values are \`"list" | "gallery" | "packed"\`. If you omit it, the frontend defaults to \`"gallery"\` (image-card layout — WRONG for a shot-list table). **Always set \`"viewMode": "list"\`** for tabular shot lists. Use \`"gallery"\` only for image-heavy collections.
+
+#### 3. \`generate-image\` — Stage 5, scene composition
+
+For the default trailer flow, embed the character description + location description directly in the prompt. **When you attach this node after running \`generate_image\`, you MUST include the result fields below — without them the canvas shows an empty placeholder.**
+
 \`\`\`json
 { "id": "scene-1", "type": "generate-image", "position": { "x": 680, "y": 0 },
-  "data": { "label": "Shot 1 — Scene", "prompt": "Determined runner late 20s in olive jacket enters sun-dappled pine forest clearing from left, golden hour, cinematic wide shot",
-    "provider": "nano-banana-pro", "model": "gemini-2.5-flash-image",
-    "aspectRatio": "16:9", "style": "", "negativePrompt": "", "fieldMappings": {} } }
+  "data": {
+    "label": "Shot 1 — Scene",
+    "prompt": "<the EXACT prompt you sent to generate_image>",
+    "provider": "nano-banana-pro",
+    "model": "gemini-2.5-flash-image",
+    "style": "",
+    "aspectRatio": "16:9",
+    "negativePrompt": "",
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedImageUrl": "<URL from generate_image response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp, e.g. new Date().toISOString()>" }
+    ],
+    "activeResultIndex": 0,
+    "currentJobId": "<jobId from response>"
+  } }
 \`\`\`
 
-**4. \`image-to-video\`** — Stage 6, shot animation. Wire the scene image into \`startFrame\`. (No \`extract-frame\` in the minimal set — for continuity between shots, embed continuity cues in the next shot's scene prompt instead, or escalate to the user.)
+**REQUIRED for the image to render on canvas:**
+- \`executionStatus: "completed"\` (literal string)
+- \`generatedImageUrl: "<url>"\` — exact field name. NOT \`result.url\`, NOT \`imageUrl\`.
+- \`fieldMappings: {}\` — empty object is fine; must be present.
+
+**Required base fields:** \`label\`, \`prompt\`, \`provider\`, \`model\`, \`style\`, \`aspectRatio\`, \`negativePrompt\`, \`fieldMappings\`.
+
+#### 4. \`image-to-video\` — Stage 6, shot animation
+
+Wire the scene image into the \`startFrame\` input handle via an edge. **Result field uses \`generatedVideoUrl\` (NOT \`generatedImageUrl\`).**
+
 \`\`\`json
 { "id": "anim-1", "type": "image-to-video", "position": { "x": 1020, "y": 0 },
-  "data": { "label": "Shot 1 — Animate", "provider": "seedance-2-fast",
-    "duration": 3, "fieldMappings": {} } }
+  "data": {
+    "label": "Shot 1 — Animate",
+    "provider": "seedance-2-fast",
+    "model": "seedance-2-fast",
+    "duration": 3,
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedVideoUrl": "<URL from animate_image response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
+    ],
+    "activeResultIndex": 0,
+    "currentJobId": "<jobId from response>"
+  } }
 \`\`\`
 
-**5. \`generate-music\`** — Stage 7, the soundtrack. The only audio node in the default flow.
+**REQUIRED for the video to render on canvas:**
+- \`executionStatus: "completed"\`
+- \`generatedVideoUrl: "<url>"\` — NOT \`generatedImageUrl\`, NOT \`videoUrl\`.
+- \`fieldMappings: {}\`
+
+**Required base fields:** \`label\`, \`provider\`, \`model\`, \`duration\`, \`fieldMappings\`.
+
+#### 5. \`generate-music\` — Stage 7, the soundtrack
+
+The only audio node in the default flow. **Result field uses \`generatedAudioUrl\`.**
+
 \`\`\`json
 { "id": "music-1", "type": "generate-music", "position": { "x": 1360, "y": 280 },
-  "data": { "label": "Soundtrack", "prompt": "Tense orchestral build, 90 BPM",
-    "provider": "suno", "duration": 30, "genre": "orchestral", "mood": "tense",
-    "instrumental": true, "lyrics": "", "referenceAudioUrl": "", "referenceYouTubeUrl": "",
-    "referenceSource": "none", "modelVersion": "stereo-large", "fieldMappings": {} } }
+  "data": {
+    "label": "Soundtrack",
+    "prompt": "Tense orchestral build, 90 BPM",
+    "provider": "suno",
+    "duration": 30,
+    "genre": "orchestral",
+    "mood": "tense",
+    "instrumental": true,
+    "lyrics": "",
+    "referenceAudioUrl": "",
+    "referenceYouTubeUrl": "",
+    "referenceSource": "none",
+    "modelVersion": "stereo-large",
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedAudioUrl": "<URL from generate_music response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
+    ],
+    "activeResultIndex": 0
+  } }
 \`\`\`
 
-**6. \`trim-video\`** — Stage 8 step 1, per-shot cut points.
+**REQUIRED for the audio to render on canvas:**
+- \`executionStatus: "completed"\`
+- \`generatedAudioUrl: "<url>"\` — NOT \`audioUrl\`, NOT \`musicUrl\`.
+- \`fieldMappings: {}\`
+
+**Required base fields:** \`label\`, \`prompt\`, \`provider\`, \`duration\`, \`genre\`, \`mood\`, \`instrumental\`, \`lyrics\`, \`referenceAudioUrl\`, \`referenceYouTubeUrl\`, \`referenceSource\`, \`modelVersion\`, \`fieldMappings\`.
+
+#### 6. \`trim-video\` — Stage 8 step 1, per-shot cut points
+
+Processing node. **Result field uses \`generatedVideoUrl\`.** If you trim via the MCP \`trim_video\` tool, capture its output URL. If you're only declaring trim parameters for the canvas (no execution yet), leave the result fields off and \`executionStatus\` will default to \`"idle"\`.
+
 \`\`\`json
 { "id": "trim-1", "type": "trim-video", "position": { "x": 1360, "y": 0 },
-  "data": { "label": "Shot 1 — Trim", "startTime": 0, "endTime": 2.5, "fieldMappings": {} } }
+  "data": {
+    "label": "Shot 1 — Trim",
+    "startTime": 0,
+    "endTime": 2.5,
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedVideoUrl": "<URL from trim_video response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
+    ],
+    "activeResultIndex": 0
+  } }
 \`\`\`
 
-**7. \`combine-videos\`** — Stage 8 step 2, stitch all shot videos together with transitions.
+**REQUIRED for the trimmed clip to render on canvas (if you executed the trim):**
+- \`executionStatus: "completed"\`
+- \`generatedVideoUrl: "<url>"\` (same field name as \`image-to-video\`)
+- \`fieldMappings: {}\`
+
+**Required base fields:** \`label\`, \`startTime\`, \`endTime\`, \`fieldMappings\`.
+
+#### 7. \`combine-videos\` — Stage 8 step 2, stitch all shot videos together
+
+**Result field uses \`generatedVideoUrl\`.**
+
 \`\`\`json
 { "id": "stitch-1", "type": "combine-videos", "position": { "x": 1700, "y": 0 },
-  "data": { "label": "Stitch Shots", "transition": "cut",
-    "transitionDuration": 0.5, "audioMode": "crossfade", "fieldMappings": {} } }
+  "data": {
+    "label": "Stitch Shots",
+    "transition": "cut",
+    "transitionDuration": 0.5,
+    "audioMode": "crossfade",
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedVideoUrl": "<URL from combine_videos response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
+    ],
+    "activeResultIndex": 0
+  } }
 \`\`\`
 
-**8. \`merge-video-audio\`** — Stage 8 step 3, marry the final video with the music track.
+**REQUIRED for the stitched video to render on canvas:**
+- \`executionStatus: "completed"\`
+- \`generatedVideoUrl: "<url>"\`
+- \`fieldMappings: {}\`
+
+**Required base fields:** \`label\`, \`transition\` (one of \`"cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"\`), \`transitionDuration\`, \`audioMode\` (one of \`"keep" | "crossfade" | "remove"\`), \`fieldMappings\`.
+
+#### 8. \`merge-video-audio\` — Stage 8 step 3, marry the final video with the music track
+
+**Result field uses \`generatedVideoUrl\`.**
+
 \`\`\`json
 { "id": "final-1", "type": "merge-video-audio", "position": { "x": 2040, "y": 0 },
-  "data": { "label": "Final Mix", "audioType": "voiceover",
-    "voiceoverVolume": 100, "backgroundVolume": 30,
-    "keepOriginalAudio": true, "originalAudioVolume": 30, "originalAudioRole": "background",
-    "trackSettings": {}, "fieldMappings": {} } }
+  "data": {
+    "label": "Final Mix",
+    "audioType": "voiceover",
+    "voiceoverVolume": 100,
+    "backgroundVolume": 30,
+    "keepOriginalAudio": true,
+    "originalAudioVolume": 30,
+    "originalAudioRole": "background",
+    "trackSettings": {},
+    "fieldMappings": {},
+
+    "executionStatus": "completed",
+    "generatedVideoUrl": "<URL from merge_video_audio response>",
+    "generatedResults": [
+      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
+    ],
+    "activeResultIndex": 0
+  } }
 \`\`\`
+
+**REQUIRED for the final mix to render on canvas:**
+- \`executionStatus: "completed"\`
+- \`generatedVideoUrl: "<url>"\`
+- \`fieldMappings: {}\`
+
+**Required base fields:** \`label\`, \`audioType\` (\`"voiceover" | "background" | "both"\`), \`voiceoverVolume\`, \`backgroundVolume\`, \`keepOriginalAudio\`, \`originalAudioVolume\`, \`originalAudioRole\`, \`trackSettings\`, \`fieldMappings\`.
 
 ### Edge connections (input handles per node)
 
@@ -253,6 +442,15 @@ After ALL scene images are generated:
    - Flag any drift
    - Propose targeted regenerations for problematic shots (rewrite the prompt's character/location clauses for tighter control)
 4. User approves the storyboard before moving to animation
+
+**CRITICAL — Canvas attachment data shape:** When you call \`update_workflow_json\` to attach the approved \`generate-image\` nodes, EACH node MUST include the result fields from the \`generate-image\` shape above:
+- \`executionStatus: "completed"\` (literal string — NOT \`"done"\`, NOT \`"success"\`, NOT omitted)
+- \`generatedImageUrl: "<url>"\` populated from the \`generate_image\` tool's response (look for \`result.url\`, \`output[0]\`, \`image_url\`, or whichever field the tool actually returned — but write it under the name \`generatedImageUrl\` regardless)
+- \`generatedResults: [{ url, jobId, timestamp }]\` mirroring the same URL (optional but recommended)
+- \`fieldMappings: {}\` (required even when empty)
+
+The exact \`generatedImageUrl\` field name MATTERS — \`generatedImageUrl\` for images, not \`imageUrl\`, not \`result.url\`. Using the wrong field name renders an empty placeholder. If you skip \`executionStatus\`, the node renders blank even with a correct URL. The user will see an empty box.
+
 5. \`update_workflow_json\` to attach all approved \`generate-image\` nodes to the canvas in one batch
 
 ## Stage 6 — Shot Animation (sequential, one at a time)
@@ -275,6 +473,14 @@ For each shot in the shot list, in order:
 7. If user rejects: ask why, refine motion script, re-animate. **Max 3 retries.** If still rejected after 3: tell the user "we've hit the retry limit on this shot — the result isn't ideal. We can continue and revisit this shot later via Nodaro's canvas, or pause here." Wait for explicit user choice.
 8. **Only proceed to next shot after this one is approved.**
 
+**CRITICAL — Canvas attachment data shape:** When you call \`update_workflow_json\` to attach the approved \`image-to-video\` nodes, EACH node MUST include the result fields from the \`image-to-video\` shape above:
+- \`executionStatus: "completed"\` (literal string)
+- **\`generatedVideoUrl: "<url>"\`** — note this is \`generatedVideoUrl\` for video nodes, NOT \`generatedImageUrl\`. Using the wrong field name renders a blank placeholder.
+- \`generatedResults: [{ url, jobId, timestamp }]\` (optional but recommended)
+- \`fieldMappings: {}\`
+
+The asset URL location in the \`animate_image\` response varies (typically \`result.url\`, \`output[0]\`, \`video_url\`, or similar) — read whatever the tool returned and put it under the field name \`generatedVideoUrl\`.
+
 After all shots are approved, \`update_workflow_json\` to attach all \`image-to-video\` nodes wired to their upstream \`generate-image\` nodes.
 
 **Provider-specific rules:**
@@ -290,6 +496,13 @@ This stage runs only after every shot's video is approved.
 1. Determine mood + BPM from the script's emotional arc
 2. Call \`generate_music\` (Suno) for the soundtrack
 3. Show, iterate via Q&A until approved
+
+**CRITICAL — Canvas attachment data shape:** When you call \`update_workflow_json\` to attach the approved \`generate-music\` node, the node MUST include the result fields from the \`generate-music\` shape above:
+- \`executionStatus: "completed"\` (literal string)
+- **\`generatedAudioUrl: "<url>"\`** — note this is \`generatedAudioUrl\` for audio nodes. NOT \`audioUrl\`, NOT \`musicUrl\`, NOT \`generatedMusicUrl\`.
+- \`generatedResults: [{ url, jobId, timestamp }]\` (optional but recommended)
+- \`fieldMappings: {}\`
+
 4. \`update_workflow_json\` to attach the \`generate-music\` node
 
 **Editor cut decisions** (still in Stage 7, part of the default flow):
@@ -321,6 +534,14 @@ Await explicit user direction before using any of these node types. If the user 
 4. Show the final video
 5. **User approves or requests changes** (regenerate specific shots, swap music, etc.). **Do not move to wrap-up without explicit approval.** If user requests changes, route back to the appropriate stage (regenerate scene → Stage 5/6; swap music → Stage 7; re-cut → Stage 7 cut decisions) and re-run only the affected nodes — don't restart the whole pipeline.
 
+**CRITICAL — Canvas attachment data shape:** When you call \`update_workflow_json\` to attach the \`trim-video\`, \`combine-videos\`, and \`merge-video-audio\` nodes, EACH node MUST include its result fields:
+- All three node types use **\`generatedVideoUrl\`** for the asset URL (they all output video). Do NOT use \`generatedImageUrl\` or \`generatedAudioUrl\` for any of them.
+- \`executionStatus: "completed"\` (literal string) on each node that has executed.
+- \`generatedResults: [{ url, jobId, timestamp }]\` (optional but recommended)
+- \`fieldMappings: {}\` on every node
+
+If you attach a \`trim-video\`/\`combine-videos\`/\`merge-video-audio\` node WITHOUT executing the underlying operation first (i.e., you're just declaring trim parameters for the user to run later), omit the result fields and leave \`executionStatus\` unset — the node will default to \`"idle"\` and show its configuration. But for the final stage assembly, you should have executed all three and have URLs ready.
+
 \`update_workflow_json\` to attach the \`trim-video\`, \`combine-videos\`, and \`merge-video-audio\` nodes once the final mix is approved.
 
 ## Stage 9 — Deliver (wrap-up)
@@ -349,6 +570,9 @@ The workflow is already on the user's canvas — it was assembled incrementally 
 
 - Use any node type outside the strict 8-node whitelist without first asking the user and getting explicit approval
 - Run \`ToolSearch query="select:..."\` or any other ToolSearch keyword to "find" Nodaro MCP tools — they're already loaded into your session by the user's integration. ToolSearch returns fuzzy matches from indices that don't include claude.ai-hosted MCP servers, so any search will return wrong results. Call Nodaro tools directly by name.
+- Use \`result.url\`, \`imageUrl\`, \`videoUrl\`, \`audioUrl\`, \`output\`, \`output_url\`, or any other guessed field name for the generated asset URL on a node's \`data\`. The correct field is \`generated*Url\` with the exact prefix matching the node type — \`generatedImageUrl\` for \`generate-image\`, \`generatedVideoUrl\` for \`image-to-video\` / \`trim-video\` / \`combine-videos\` / \`merge-video-audio\`, \`generatedAudioUrl\` for \`generate-music\`. Using anything else renders an empty placeholder on the canvas.
+- Omit \`executionStatus\` from generation node data when attaching results. Without \`executionStatus: "completed"\` (literal string), the frontend treats the node as still pending and renders an empty placeholder even when the URL is correct.
+- Forget \`fieldMappings: {}\`. Even an empty object is required by every node's data validation.
 - Generate without showing the draft first
 - Animate shots in parallel
 - Skip the storyboard cohesion review
