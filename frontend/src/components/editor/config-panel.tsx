@@ -549,7 +549,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
-    case "sub-workflow": return <SubWorkflowConfig {...configProps} />
+    case "sub-workflow": return <SubWorkflowConfig {...configProps} nodeId={selectedNodeId} />
     case "component": return <ComponentConfig {...configProps} nodeId={selectedNodeId} />
     case "character": return <CharacterConfig {...configProps} nodeId={selectedNodeId} />
     case "face": return <FaceConfig {...configProps} />
