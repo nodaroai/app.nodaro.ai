@@ -96,6 +96,7 @@ const CAMEL_FULL = {
   nodes: [{ id: "n1", type: "generate-image" }],
   edges: [{ source: "n1", target: "n2" }],
   settings: { autoSave: true },
+  parentWorkflowId: null,
 }
 
 let app: FastifyInstance
