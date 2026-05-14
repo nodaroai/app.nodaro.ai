@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Link as LinkIcon, Maximize2, X } from "lucide-react"
+import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
-import { cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
+import { approvePortrait, cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { ImageAssetTab, IMAGE_MODELS, DEFAULT_IMAGE_MODEL } from "./expressions-tab"
+import { ReferencePhotosBlock } from "./reference-photos-block"
+import { ReferenceCascadeBanner } from "./reference-cascade-banner"
+import {
+  PortraitCandidateGrid,
+  type CandidateCount,
+  type PortraitCandidate,
+} from "./portrait-candidate-grid"
+import { PreviousCandidatesStrip } from "./previous-candidates-strip"
+import { CanonicalDescriptionExpander } from "./canonical-description-expander"
+import { PersonPickerExpander } from "./person-picker-expander"
+import { SeedPromptTextarea } from "./seed-prompt-textarea"
 
 const ANGLE_PRESETS = ["front", "3/4 left", "left profile", "right profile", "3/4 right", "back"] as const
 const LIGHTING_PRESETS = ["daylight", "night", "dramatic"] as const
@@ -19,56 +30,51 @@ const POLL_MS = 2000
  * Appearance ("Identity") tab — the character's portrait + base-identity form controls,
  * plus the Angles and Lighting reference-image sub-sections (both reuse `ImageAssetTab`).
  *
- * Portrait results land on `state.staged.sourceImageUrl` (a single string, not an array), so this
- * tab does its own one-off poll of the generate-character job rather than going through
- * `useCharacterStudioJobs` (which is array-asset focused). The interval id is held in a ref so it
- * can be cleared on unmount.
+ * The portrait flow is multi-candidate: the user picks a count (1/2/4), kicks off N parallel
+ * generate-character jobs, watches them populate a grid, and clicks one to approve as the
+ * canonical portrait. Approving cancels the still-running siblings. Each candidate has its
+ * own poll interval tracked in `pollRefMap`. Approved portraits land on
+ * `state.staged.sourceImageUrl` via the approve-portrait route (the route also returns the
+ * LLM-authored `canonicalDescription` for the expander below).
  */
 export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
   const [genBusy, setGenBusy] = useState(false)
   const [portraitLightboxOpen, setPortraitLightboxOpen] = useState(false)
-  // Track the in-flight portrait job so the user can cancel + see progress.
-  // Lives outside `useCharacterStudioJobs` because the portrait result writes
-  // to a single column (`source_image_url`), not a JSONB array, so the hook's
-  // resolved-asset shape doesn't fit.
-  const [portraitJob, setPortraitJob] = useState<{ jobId: string; progress: number } | null>(null)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Multi-candidate portrait state — one entry per in-flight or just-completed
+  // generate-character job. Drives <PortraitCandidateGrid>.
+  const [portraitCandidates, setPortraitCandidates] = useState<PortraitCandidate[]>([])
+  // Previous-approved candidates strip — server-derived (Task 17 will rehydrate
+  // from `GET /v1/characters/:id`). Placeholder empty array for now.
+  const [previousCandidates] = useState<{ jobId: string; url: string; createdAt: string }[]>([])
+  // One poll interval per candidate, keyed by jobId. Cleared individually on
+  // settle, all cleared on unmount.
+  const pollRefMap = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map())
   const s = state.staged
   const portraitProvider = s.provider ?? DEFAULT_IMAGE_MODEL
   const portraitCost = useModelCredits(portraitProvider, 0)
 
-  // clear any in-flight poll if the modal/tab unmounts mid-generation
+  // Clear any in-flight polls if the modal/tab unmounts mid-generation.
   useEffect(() => {
     return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current)
-        pollRef.current = null
-      }
+      stopAllPolls()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const stopPoll = () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current)
-      pollRef.current = null
+  const stopPollFor = (jobId: string) => {
+    const t = pollRefMap.current.get(jobId)
+    if (t) {
+      clearInterval(t)
+      pollRefMap.current.delete(jobId)
     }
   }
 
-  const cancelPortrait = async () => {
-    if (!portraitJob) return
-    const { jobId } = portraitJob
-    // Stop polling + clear UI state immediately for snappy cancel.
-    stopPoll()
-    setPortraitJob(null)
-    setGenBusy(false)
-    try {
-      await cancelJob(jobId)
-    } catch {
-      // Best-effort — if the worker writes the result anyway, the next refetch picks it up.
-    }
+  const stopAllPolls = () => {
+    for (const t of pollRefMap.current.values()) clearInterval(t)
+    pollRefMap.current.clear()
   }
 
-  const generatePortrait = async () => {
+  const generatePortrait = async (count: CandidateCount) => {
     setGenBusy(true)
     let characterId: string
     try {
@@ -79,7 +85,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       return
     }
     try {
-      const { jobId } = await generateCharacter({
+      const { jobIds } = await generateCharacter({
         name: s.characterName,
         description: s.description,
         gender: s.gender,
@@ -88,76 +94,121 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
         sourceImageUrl: s.sourceImageUrl || undefined,
         provider: portraitProvider,
         attachToCharacterId: characterId,
+        count,
+        seedPrompt: s.seedPrompt,
+        // ReadonlyArray<{url, kind: ReferencePhotoKind}> -> Array<{url, kind: <same union>}>
+        referencePhotos: s.referencePhotos ? [...s.referencePhotos] : undefined,
       })
-      setPortraitJob({ jobId, progress: 0 })
-      // one-off poll — settle on completed / failed / cancelled
-      stopPoll()
-      pollRef.current = setInterval(async () => {
-        try {
-          const job = await getJobStatus(jobId)
-          if (job.status === "completed") {
-            stopPoll()
-            setGenBusy(false)
-            setPortraitJob(null)
-            const url = (job.output_data as { imageUrl?: string } | undefined)?.imageUrl
-            // Worker has already written this to characters.source_image_url
-            // via setCharacterPortrait — the local patch here is just for
-            // instant UX before the next refetch.
-            if (url) state.patch({ sourceImageUrl: url })
-          } else if (job.status === "failed" || job.status === "cancelled") {
-            stopPoll()
-            setGenBusy(false)
-            setPortraitJob(null)
-          } else if (typeof job.progress === "number") {
-            setPortraitJob((cur) => (cur ? { ...cur, progress: job.progress } : cur))
-          }
-        } catch {
-          /* transient — retry next tick */
-        }
-      }, POLL_MS)
-    } catch {
       setGenBusy(false)
-      setPortraitJob(null)
+      setPortraitCandidates(
+        jobIds.map((jobId) => ({ jobId, status: "pending" as const, progress: 0 })),
+      )
+      for (const jobId of jobIds) {
+        const interval = setInterval(async () => {
+          try {
+            const job = await getJobStatus(jobId)
+            setPortraitCandidates((curr) =>
+              curr.map((c) =>
+                c.jobId === jobId
+                  ? {
+                      ...c,
+                      status: job.status as PortraitCandidate["status"],
+                      progress: typeof job.progress === "number" ? job.progress : c.progress,
+                      url: (job.output_data as { imageUrl?: string } | undefined)?.imageUrl,
+                    }
+                  : c,
+              ),
+            )
+            if (
+              job.status === "completed" ||
+              job.status === "failed" ||
+              job.status === "cancelled"
+            ) {
+              stopPollFor(jobId)
+            }
+          } catch {
+            /* transient — retry next tick */
+          }
+        }, POLL_MS)
+        pollRefMap.current.set(jobId, interval)
+      }
+    } catch (e) {
+      setGenBusy(false)
+      toast.error(e instanceof Error ? e.message : "Generation failed.")
+    }
+  }
+
+  const handleApprove = async (jobId: string) => {
+    if (!s.characterDbId) return
+    try {
+      const result = await approvePortrait(s.characterDbId, jobId)
+      state.patch({
+        sourceImageUrl: result.portraitUrl,
+        canonicalDescription: result.canonicalDescription ?? "",
+      })
+      // Cancel any pending/running siblings — approval implicitly discards them.
+      for (const c of portraitCandidates) {
+        if (c.jobId !== jobId && (c.status === "pending" || c.status === "running")) {
+          void cancelJob(c.jobId)
+          stopPollFor(c.jobId)
+        }
+      }
+      setPortraitCandidates([])
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Approval failed — retry?")
     }
   }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-5">
+      <ReferencePhotosBlock
+        photos={s.referencePhotos ?? []}
+        onChange={(next) => state.patch({ referencePhotos: next })}
+      />
+      <ReferenceCascadeBanner
+        visible={false /* TODO Task 7+: derive from referencePhotos changes after first gen */}
+        onDismiss={() => {}}
+      />
+
       <div className="space-y-2.5">
         <div className="text-[9px] uppercase tracking-wide text-slate-500">Portrait</div>
         {s.sourceImageUrl ? (
-          <div className="relative w-40 h-52 group">
-            <img
-              src={s.sourceImageUrl}
-              alt="portrait"
-              className="w-full h-full object-cover rounded-md border border-[#334155]"
-            />
-            <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                type="button"
-                aria-label="Enlarge"
-                title="Enlarge"
-                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={() => setPortraitLightboxOpen(true)}
-              >
-                <Maximize2 className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                aria-label="Copy URL"
-                title="Copy URL"
-                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={() => copyToClipboard(s.sourceImageUrl, "URL copied")}
-              >
-                <LinkIcon className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
+          <ApprovedPortrait
+            url={s.sourceImageUrl}
+            onEnlarge={() => setPortraitLightboxOpen(true)}
+          />
         ) : (
           <div className="w-40 h-52 rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-slate-500">
-            no portrait
+            generate a portrait below
           </div>
         )}
+
+        <PortraitCandidateGrid
+          characterId={s.characterDbId ?? ""}
+          candidates={portraitCandidates}
+          onGenerate={(count) => void generatePortrait(count)}
+          onApprove={(jobId) => void handleApprove(jobId)}
+          onCancelCandidate={(jobId) => {
+            void cancelJob(jobId)
+            stopPollFor(jobId)
+          }}
+          cost={portraitCost}
+          busy={genBusy}
+        />
+
+        <PreviousCandidatesStrip
+          candidates={previousCandidates}
+          onReApprove={(jobId) => void handleApprove(jobId)}
+        />
+
+        {s.characterDbId && (
+          <CanonicalDescriptionExpander
+            characterId={s.characterDbId}
+            value={s.canonicalDescription ?? ""}
+            onChange={(next) => state.patch({ canonicalDescription: next })}
+          />
+        )}
+
         <NameInput
           name={s.characterName}
           onChange={(v) => state.patch({ characterName: v })}
@@ -213,36 +264,27 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
             </option>
           ))}
         </select>
-        {portraitJob ? (
-          <div className="flex items-center gap-2 max-w-sm">
-            <div className="flex-1 h-7 bg-[#13161f] border border-[#3b82f644] rounded overflow-hidden relative">
-              {/* progress bar */}
-              <div
-                className="absolute inset-y-0 left-0 bg-[#3b82f6]/30 transition-all"
-                style={{ width: `${Math.max(0, Math.min(100, portraitJob.progress))}%` }}
-              />
-              <div className="relative h-full flex items-center justify-center text-[10px] text-[#93c5fd] tabular-nums">
-                Generating portrait… {Math.round(portraitJob.progress)}%
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={cancelPortrait}
-              title="Cancel portrait generation"
-              className="h-7 w-7 flex items-center justify-center bg-[#1e293b] hover:bg-red-500/70 rounded text-slate-300 hover:text-white transition"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
-          <button
-            disabled={genBusy}
-            onClick={generatePortrait}
-            className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5 disabled:opacity-40"
-          >
-            {`Generate Portrait${portraitCost > 0 ? ` (${portraitCost} CR)` : ""}`}
-          </button>
-        )}
+
+        <PersonPickerExpander
+          onPromptFragment={(fragment) =>
+            state.patch({
+              seedPrompt: (s.seedPrompt ?? "").trim()
+                ? `${s.seedPrompt}\n${fragment}`
+                : fragment,
+            })
+          }
+        />
+
+        <SeedPromptTextarea
+          value={s.seedPrompt ?? ""}
+          onChange={(next) => state.patch({ seedPrompt: next })}
+          suggestContext={{
+            referencePhotos: s.referencePhotos,
+            gender: s.gender,
+            style: s.style,
+            baseOutfit: s.baseOutfit,
+          }}
+        />
       </div>
 
       <div className="border-t border-[#1e293b] pt-4">
@@ -276,6 +318,43 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
         startIndex={portraitLightboxOpen && s.sourceImageUrl ? 0 : null}
         onClose={() => setPortraitLightboxOpen(false)}
       />
+    </div>
+  )
+}
+
+/**
+ * Approved-portrait tile with hover overlay (Enlarge + Copy URL). Extracted as
+ * its own component for clarity now that the portrait section also renders the
+ * candidate grid + previous-candidates strip below.
+ */
+function ApprovedPortrait({ url, onEnlarge }: { url: string; onEnlarge: () => void }) {
+  return (
+    <div className="relative w-40 h-52 group">
+      <img
+        src={url}
+        alt="portrait"
+        className="w-full h-full object-cover rounded-md border border-[#334155]"
+      />
+      <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          type="button"
+          aria-label="Enlarge"
+          title="Enlarge"
+          className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+          onClick={onEnlarge}
+        >
+          <Maximize2 className="w-3 h-3" />
+        </button>
+        <button
+          type="button"
+          aria-label="Copy URL"
+          title="Copy URL"
+          className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+          onClick={() => copyToClipboard(url, "URL copied")}
+        >
+          <LinkIcon className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   )
 }
