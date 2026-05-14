@@ -524,6 +524,38 @@ describe("POST /v1/generate-character-asset — v2 behavior", () => {
     expect(call.temperature).toBe(0.8)
   })
 
+  it("accepts assetType=bodyAngles + attachToColumn=body_angles (new column added in migration 118)", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/portrait.png", canonical_description: "tall woman" },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "bodyAngles",
+        variant: "front",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachToColumn: "body_angles",
+        attachName: "front",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().jobId).toBe("job-1")
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "generate-character-asset",
+      expect.objectContaining({
+        assetType: "bodyAngles",
+        variant: "front",
+        attachToColumn: "body_angles",
+        attachName: "front",
+      }),
+    )
+  })
+
   it("description longer than 1000 chars is rejected with validation_error", async () => {
     setupSupabaseMock({
       charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
