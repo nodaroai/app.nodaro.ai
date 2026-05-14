@@ -31,6 +31,12 @@ interface EntityImageJobData {
   attachToCharacterId?: string
   attachToColumn?: string // "expressions" | "poses" | "angles" | "lighting_variations" | undefined
   attachName?: string
+  // Richer Character Studio fields that travel alongside the asset for
+  // downstream prompt enrichment. Routes (later tasks) put these on
+  // `job.data`; the worker only reads + forwards them.
+  description?: string
+  motionDescription?: string
+  realLifeRefs?: string[]
 }
 
 function makeEntityImageHandler(
@@ -39,7 +45,18 @@ function makeEntityImageHandler(
 ): HandlerFn {
   return async function entityImageHandler(job: Job, ctx: JobContext) {
     const data = job.data as EntityImageJobData
-    const { prompt, sourceImageUrl, assetType, provider, attachToCharacterId, attachToColumn, attachName } = data
+    const {
+      prompt,
+      sourceImageUrl,
+      assetType,
+      provider,
+      attachToCharacterId,
+      attachToColumn,
+      attachName,
+      description,
+      motionDescription,
+      realLifeRefs,
+    } = data
     const resolvedProvider = provider ?? "nano-banana"
 
     if (opts?.includeAssetType) {
@@ -88,8 +105,13 @@ function makeEntityImageHandler(
             characterId: attachToCharacterId,
             userId: ctx.jobUserId,
             column,
-            name: attachName,
-            url: r2Url,
+            item: {
+              name: attachName,
+              url: r2Url,
+              description,
+              motionDescription,
+              realLifeRefs,
+            },
           })
         }
       }
@@ -126,13 +148,25 @@ const handleGenerateScript: HandlerFn = async function handleGenerateScript(job,
 }
 
 const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCharacterMotion(job, ctx) {
-  const { prompt, sourceImageUrl, provider, attachToCharacterId, attachName } = job.data as {
+  const {
+    prompt,
+    sourceImageUrl,
+    provider,
+    attachToCharacterId,
+    attachName,
+    description,
+    motionDescription,
+    realLifeRefs,
+  } = job.data as {
     jobId: string
     prompt: string
     sourceImageUrl: string
     provider?: string
     attachToCharacterId?: string
     attachName?: string
+    description?: string
+    motionDescription?: string
+    realLifeRefs?: string[]
   }
   const resolvedProvider = provider ?? "kling"
   console.log(`[worker] generate-character-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
@@ -161,8 +195,13 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
       characterId: attachToCharacterId,
       userId: ctx.jobUserId,
       column: "motions",
-      name: attachName,
-      url: r2Url,
+      item: {
+        name: attachName,
+        url: r2Url,
+        description,
+        motionDescription,
+        realLifeRefs,
+      },
     })
   }
 

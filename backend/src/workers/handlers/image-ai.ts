@@ -211,8 +211,10 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
         characterId: attachToCharacterId,
         userId: ctx.jobUserId,
         column,
-        name: attachName,
-        url: r2Url,
+        item: {
+          name: attachName,
+          url: r2Url,
+        },
       })
     }
   }
