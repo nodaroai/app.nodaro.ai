@@ -36,6 +36,14 @@ vi.mock("@/middleware/credit-guard.js", () => ({
   }),
 }))
 
+// Mock the dynamic import path the route uses to load CreditsService for
+// rollback refunds. The route does `await import("../ee/services/credits.js")`
+// in the mid-batch failure path; this mock intercepts that lazy load.
+const mockRefundCredits = vi.fn().mockResolvedValue(undefined)
+vi.mock("@/ee/services/credits.js", () => ({
+  CreditsService: { refundCredits: mockRefundCredits },
+}))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -66,6 +74,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { generateCharacterRoutes } from "../generate-character.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -102,6 +111,10 @@ afterEach(async () => {
  * Build a fresh `from("jobs").insert(...).select("id").single()` chain whose
  * `.single()` resolves with a different job id for each call (job-1, job-2, …).
  * Returns the top-level insert mock so tests can assert on payload + call count.
+ *
+ * Also supports `.delete().in("id", [...])` for rollback paths — the same
+ * `from()` value carries both `.insert(...)` and `.delete()` shapes, which
+ * mirrors how Supabase chains work in the real client.
  */
 function mockJobsInsertChain() {
   const single = vi
@@ -112,7 +125,10 @@ function mockJobsInsertChain() {
     .mockResolvedValueOnce({ data: { id: "job-4" }, error: null })
   const select = vi.fn().mockReturnValue({ single })
   const insert = vi.fn().mockReturnValue({ select })
-  return { insert, select, single }
+  // `.delete().in("id", [...])` returns a thenable that resolves to { error: null }
+  const inFn = vi.fn().mockResolvedValue({ error: null })
+  const del = vi.fn().mockReturnValue({ in: inFn })
+  return { insert, select, single, delete: del, in: inFn }
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +309,7 @@ describe("POST /v1/generate-character", () => {
     expect(insertedPayload.input_data.prompt).toContain("plain background")
   })
 
-  it("returns 500 when job insert fails on the first job", async () => {
+  it("returns 500 when job insert fails on the first job (no credits reserved, no queue.add)", async () => {
     const single = vi.fn().mockResolvedValueOnce({ data: null, error: { message: "DB down" } })
     const select = vi.fn().mockReturnValue({ single })
     const insert = vi.fn().mockReturnValue({ select })
@@ -308,6 +324,80 @@ describe("POST /v1/generate-character", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+    // No credits reserved and nothing enqueued when Phase 1 fails on job 0.
+    expect(videoQueue.add).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+  })
+
+  it("rollback on mid-batch insert failure (count=4, job 2 insert fails)", async () => {
+    // Job 1 succeeds, job 2 fails — must delete the orphan job 1.
+    const single = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { id: "job-1" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "DB blip on job 2" } })
+    const select = vi.fn().mockReturnValue({ single })
+    const insert = vi.fn().mockReturnValue({ select })
+    const inFn = vi.fn().mockResolvedValue({ error: null })
+    const del = vi.fn().mockReturnValue({ in: inFn })
+    vi.mocked(supabase.from).mockReturnValue({ insert, delete: del } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y w", count: 4 },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("internal_error")
+    // Phase 1 cleanup: job-1 deleted, Phase 2 never reached.
+    expect(del).toHaveBeenCalledTimes(1)
+    expect(inFn).toHaveBeenCalledWith("id", ["job-1"])
+    expect(videoQueue.add).not.toHaveBeenCalled()
+    expect(vi.mocked(reserveCreditsForJob)).not.toHaveBeenCalled()
+    expect(mockRefundCredits).not.toHaveBeenCalled()
+  })
+
+  it("rollback on mid-batch credit-reservation failure (count=4, job 2 reservation fails)", async () => {
+    // Phase 1 inserts succeed for all 4 jobs; Phase 2A: reserveCredits succeeds for
+    // job-1, then job-2's reservation fails (reply.sent set). Expect:
+    //   - response = 402 from reserveCreditsForJob's mock
+    //   - mockRefundCredits called once (job-1's log-1)
+    //   - delete("id", ["job-3","job-4"]) — job-2 already deleted by reserveCreditsForJobImpl
+    //   - videoQueue.add NEVER called (Phase 2B unreached)
+    vi.mocked(reserveCreditsForJob)
+      .mockResolvedValueOnce({ usageLogId: "log-1", creditsReserved: 6, watermark: false })
+      .mockImplementationOnce(async (_req, reply) => {
+        reply.status(402).send({ error: { code: "insufficient_credits" } })
+        return undefined
+      })
+
+    const chain = mockJobsInsertChain()
+    vi.mocked(supabase.from).mockReturnValue({
+      insert: chain.insert,
+      delete: chain.delete,
+    } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { name: "Kira", seedPrompt: "y w", count: 4 },
+    })
+
+    expect(res.statusCode).toBe(402)
+    expect(res.json().error.code).toBe("insufficient_credits")
+    // All 4 jobs inserted, but only 2 reservation attempts.
+    expect(chain.insert).toHaveBeenCalledTimes(4)
+    expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledTimes(2)
+    // Refund the one reservation that succeeded.
+    expect(mockRefundCredits).toHaveBeenCalledTimes(1)
+    expect(mockRefundCredits).toHaveBeenCalledWith("log-1")
+    // Orphan delete: jobs 3 & 4 (job-2 already deleted by reserveCreditsForJobImpl).
+    expect(chain.delete).toHaveBeenCalledTimes(1)
+    expect(chain.in).toHaveBeenCalledWith("id", ["job-3", "job-4"])
+    // Critical: nothing enqueued — Phase 2B never reached.
+    expect(videoQueue.add).not.toHaveBeenCalled()
   })
 
   it("enqueues videoQueue with provider, prompt, attachToCharacterId, usageLogId", async () => {
