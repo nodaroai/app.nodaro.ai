@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react"
 import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
+import { AiHelperButton } from "@/components/ui/ai-helper-button"
 
 export interface AssetCardItem {
   readonly name: string
   readonly url: string
+  readonly description?: string
+  readonly motionDescription?: string
 }
 
 interface AssetCardProps {
@@ -26,9 +29,19 @@ interface AssetCardProps {
    *  lightbox + decides which list to navigate across. Image-only — omit
    *  for video items. */
   readonly onEnlarge?: () => void
+  /** Inline description editor. Provide to make the description row click-to-edit;
+   *  omit to keep the card unchanged. The row also surfaces when `item.description`
+   *  is set, regardless of this prop (read-only fallback). */
+  readonly onDescriptionChange?: (next: string) => void
+  /** Optional second-row editor for motion description (video assets). Only renders
+   *  when `item.motionDescription` is defined AND this callback is provided. */
+  readonly onMotionDescriptionChange?: (next: string) => void
+  /** When provided, shows the ✨ AI helper next to the description textarea. The
+   *  helper resolves to the suggested string and is wired to `onDescriptionChange`. */
+  readonly onSuggestDescription?: () => Promise<string>
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
@@ -122,6 +135,17 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
           </button>
         </div>
       </div>
+      {(item.description || onDescriptionChange) && (
+        <div className="px-2 pb-1.5">
+          <DescriptionRow
+            description={item.description ?? ""}
+            motionDescription={item.motionDescription}
+            onDescriptionChange={onDescriptionChange}
+            onMotionDescriptionChange={onMotionDescriptionChange}
+            onSuggestDescription={onSuggestDescription}
+          />
+        </div>
+      )}
       {refining && onRefine && (
         <div className="absolute inset-x-0 bottom-0 bg-[#0d1017]/95 p-2 space-y-1.5">
           <input
@@ -228,5 +252,70 @@ function NameLabel({ name, onRename }: { name: string; onRename?: (newName: stri
       <span className="text-[11px] text-slate-300 truncate">{name}</span>
       <span className="text-[9px] text-slate-600 opacity-0 group-hover:opacity-100 group-hover/name:text-slate-300 transition shrink-0">✎</span>
     </button>
+  )
+}
+
+/**
+ * Inline description editor. Collapsed state shows the description (or "click to add
+ * description" placeholder) as a 2-line clamped italic button; clicking expands into
+ * a textarea + optional ✨ AI helper. When `motionDescription` is defined and its
+ * setter is provided, a second textarea appears for motion-specific copy (video assets).
+ */
+function DescriptionRow({
+  description,
+  motionDescription,
+  onDescriptionChange,
+  onMotionDescriptionChange,
+  onSuggestDescription,
+}: {
+  description: string
+  motionDescription?: string
+  onDescriptionChange?: (next: string) => void
+  onMotionDescriptionChange?: (next: string) => void
+  onSuggestDescription?: () => Promise<string>
+}) {
+  const [editing, setEditing] = useState(false)
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-[10px] text-slate-500 hover:text-slate-300 italic line-clamp-2 w-full text-left"
+      >
+        {description || "click to add description"}
+      </button>
+    )
+  }
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
+        <textarea
+          autoFocus
+          value={description}
+          onChange={(e) => onDescriptionChange?.(e.target.value)}
+          onBlur={() => setEditing(false)}
+          rows={2}
+          maxLength={1000}
+          className="flex-1 text-[10px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+        />
+        {onSuggestDescription && (
+          <AiHelperButton
+            onSuggest={onSuggestDescription}
+            onReplace={(t) => onDescriptionChange?.(t)}
+            title="Suggest description"
+          />
+        )}
+      </div>
+      {motionDescription !== undefined && onMotionDescriptionChange && (
+        <textarea
+          value={motionDescription}
+          onChange={(e) => onMotionDescriptionChange(e.target.value)}
+          placeholder="motion description"
+          rows={1}
+          maxLength={500}
+          className="block w-full text-[10px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
+        />
+      )}
+    </div>
   )
 }
