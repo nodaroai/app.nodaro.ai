@@ -1,7 +1,6 @@
 "use client"
 
 import { memo, useEffect, useMemo } from "react"
-import { useNavigate } from "react-router-dom"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Workflow, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -9,8 +8,13 @@ import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { getSubWorkflowViewMode } from "./sub-workflow-views/view-mode-registry"
+// Side-effect: registers the default "Ports" view mode. Keep this explicit
+// import — the previous WorkflowViewerModal import transitively initialized
+// the registry; with that gone, we need this here so getSubWorkflowViewMode()
+// finds the default mode the first time a sub-workflow node renders.
 import "./sub-workflow-views/register-defaults"
 import type { SubWorkflowData, SubWorkflowPort } from "@/types/nodes"
 
@@ -67,7 +71,7 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
-  const navigate = useNavigate()
+  const navigate = useNavigateWithGuard()
   const projectId = useWorkflowStore((s) => s.projectId)
   const status = nodeData.executionStatus ?? "idle"
 

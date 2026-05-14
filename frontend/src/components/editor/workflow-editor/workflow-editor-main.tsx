@@ -18,6 +18,7 @@ import { ConfigPanel } from "../config-panel";
 import { EditorToolbar } from "../editor-toolbar";
 import { EditorErrorBoundary } from "../editor-error-boundary";
 import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
+import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
@@ -973,6 +974,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
 
   return (
+    <NavigateWithGuardContext.Provider value={navigateWithGuard}>
     <div className="flex flex-col h-screen">
       <EditorToolbar
         projectId={projectId}
@@ -1210,5 +1212,6 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         </Suspense>
       )}
     </div>
+    </NavigateWithGuardContext.Provider>
   );
 }

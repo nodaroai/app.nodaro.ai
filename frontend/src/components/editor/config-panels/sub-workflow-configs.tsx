@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate } from "react-router"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -17,6 +16,7 @@ import type {
 } from "@/types/nodes"
 import { useCallableWorkflows, useWorkflowInterface } from "@/hooks/queries/use-callable-workflows"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
 import { listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
@@ -257,7 +257,7 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 
 export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowData>) {
   const nodeData = data as SubWorkflowData
-  const navigate = useNavigate()
+  const navigate = useNavigateWithGuard()
   const projectId = useWorkflowStore((s) => s.projectId)
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const workflowName = useWorkflowStore((s) => s.workflowName)
