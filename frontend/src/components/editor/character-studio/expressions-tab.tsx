@@ -4,8 +4,10 @@ import { generateCharacterAsset, modifyImage } from "@/lib/api"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
+import { AssetGenPanel, type AssetGenSubmission } from "./asset-gen-panel"
 import { GenerationBar } from "./generation-bar"
 import { PendingCard } from "./pending-card"
+import { PerVariantRealLifeRefsDrawer } from "./per-variant-refs-drawer"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
@@ -76,6 +78,12 @@ export function ImageAssetTab({
   // through THIS tab's items, so each tab opens an isolated viewer (you don't
   // accidentally arrow from an expression into a pose).
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  // Identity Foundation v2: AssetGenPanel for "Custom prompt" path + per-variant
+  // real-life refs drawer. Both are tab-local UI toggles; the actual state
+  // (`realLifeRefsByVariant`) lives on the staged character data so it persists
+  // across renders and saves.
+  const [genPanelOpen, setGenPanelOpen] = useState(false)
+  const [refsDrawerOpen, setRefsDrawerOpen] = useState(false)
   const presetSet = new Set(presets.map((p) => p.toLowerCase()))
   const attachToColumn = ARRAY_FIELD_TO_COLUMN[arrayField]
 
@@ -192,6 +200,48 @@ export function ImageAssetTab({
     [items, state, jobs, assetType, arrayField, currentModel, presetSet, attachToColumn],
   )
 
+  // Custom-prompt generation path (Identity Foundation v2). Routes through
+  // generateCharacterAsset with assetType:"custom" so the route uses
+  // submission.userPrompt as the variant prompt, plus the optional per-asset
+  // `description` and `realLifeRefs` from the AssetGenPanel.
+  const fireCustomGen = useCallback(
+    async (submission: AssetGenSubmission) => {
+      let characterId: string
+      try {
+        characterId = await state.ensureSaved()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save character.")
+        return
+      }
+      const variant = submission.userPrompt.slice(0, 100) || "custom"
+      try {
+        const { jobId } = await generateCharacterAsset({
+          assetType: "custom",
+          variant,
+          userPrompt: submission.userPrompt,
+          name: state.staged.characterName,
+          // Per-asset description from the panel overrides the character-level
+          // description for THIS generation only. When empty the backend will
+          // ask Claude Sonnet for a draft scoped to the canonical description.
+          description: submission.description || state.staged.description,
+          gender: state.staged.gender,
+          style: state.staged.style,
+          baseOutfit: state.staged.baseOutfit,
+          sourceImageUrl: state.staged.sourceImageUrl || undefined,
+          provider: currentModel,
+          attachToCharacterId: characterId,
+          attachToColumn,
+          attachName: variant,
+          realLifeRefs: submission.realLifeRefs,
+        })
+        jobs.track(jobId, assetType, variant)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Generation failed.")
+      }
+    },
+    [state, jobs, assetType, currentModel, attachToColumn],
+  )
+
   const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
   const missingCount = presets.filter((p) => !existingNames.has(p.toLowerCase())).length
 
@@ -216,17 +266,33 @@ export function ImageAssetTab({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden relative">
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-200">{title}</div>
           <div className="text-[10px] text-slate-500 mt-0.5">{description}</div>
         </div>
-        {onImport && (
-          <button onClick={onImport} className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400">
-            ↑ Import
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setGenPanelOpen(true)}
+            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+          >
+            Custom prompt
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => setRefsDrawerOpen(true)}
+            className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-300"
+          >
+            Real-life refs
+          </button>
+          {onImport && (
+            <button onClick={onImport} className="text-[10px] bg-[#1e293b] rounded px-2.5 py-1 text-slate-400">
+              ↑ Import
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3.5">
         <div className="grid grid-cols-5 gap-2.5">
@@ -279,6 +345,25 @@ export function ImageAssetTab({
         items={items.map((it) => ({ url: it.url, alt: it.name }))}
         startIndex={lightboxIndex}
         onClose={() => setLightboxIndex(null)}
+      />
+      <AssetGenPanel
+        open={genPanelOpen}
+        onClose={() => setGenPanelOpen(false)}
+        onGenerate={(submission) => {
+          setGenPanelOpen(false)
+          void fireCustomGen(submission)
+        }}
+        assetType={assetType}
+        characterId={state.staged.characterDbId ?? ""}
+        canonicalDescription={state.staged.canonicalDescription}
+      />
+      <PerVariantRealLifeRefsDrawer
+        open={refsDrawerOpen}
+        onClose={() => setRefsDrawerOpen(false)}
+        title={`Real-life refs · ${title}`}
+        variants={presets}
+        refsByVariant={state.staged.realLifeRefsByVariant ?? {}}
+        onChange={(next) => state.patch({ realLifeRefsByVariant: next })}
       />
     </div>
   )
