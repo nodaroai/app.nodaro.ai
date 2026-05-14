@@ -402,7 +402,7 @@ describe("lip-sync handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
-      "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined,
+      "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
@@ -417,7 +417,7 @@ describe("lip-sync handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
-      "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined,
+      "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
     )
   })
 
@@ -432,7 +432,7 @@ describe("lip-sync handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
-      "https://face.png", "https://speech.mp3", "hailuo-avatar", "talking", "1080p",
+      "https://face.png", "https://speech.mp3", "hailuo-avatar", "talking", "1080p", undefined,
     )
   })
 })
