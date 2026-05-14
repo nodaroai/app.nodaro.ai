@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { routePhotosForAsset, type ReferencePhoto } from "../reference-photo-routing"
 
 const photos: ReferencePhoto[] = [
-  { url: "a.png", kind: "front" },
-  { url: "b.png", kind: "fullBody" },
+  { url: "a.png", kind: "frontFace" },
+  { url: "b.png", kind: "frontBody" },
   { url: "c.png", kind: "other" },
 ]
 
@@ -12,16 +12,16 @@ describe("routePhotosForAsset", () => {
     expect(routePhotosForAsset("portrait", photos).map((p) => p.url)).toEqual(["a.png", "b.png", "c.png"])
   })
 
-  it("expressions returns only kind=front", () => {
+  it("expressions returns only kind=frontFace", () => {
     expect(routePhotosForAsset("expressions", photos).map((p) => p.url)).toEqual(["a.png"])
   })
 
-  it("expressions falls back to ALL when no kind=front exists", () => {
-    const noFront = photos.filter((p) => p.kind !== "front")
+  it("expressions falls back to ALL when no kind=frontFace exists", () => {
+    const noFront = photos.filter((p) => p.kind !== "frontFace")
     expect(routePhotosForAsset("expressions", noFront).map((p) => p.url)).toEqual(["b.png", "c.png"])
   })
 
-  it("poses returns only kind=fullBody", () => {
+  it("poses returns only kind=frontBody", () => {
     expect(routePhotosForAsset("poses", photos).map((p) => p.url)).toEqual(["b.png"])
   })
 
@@ -31,5 +31,27 @@ describe("routePhotosForAsset", () => {
 
   it("returns empty array on empty input", () => {
     expect(routePhotosForAsset("portrait", [])).toEqual([])
+  })
+
+  it("headAngles prefers frontFace + side/3-quarter refs over `other`", () => {
+    const mix: ReferencePhoto[] = [
+      { url: "ff.png", kind: "frontFace" },
+      { url: "sl.png", kind: "sideLeft" },
+      { url: "o.png", kind: "other" },
+    ]
+    expect(routePhotosForAsset("headAngles", mix).map((p) => p.url)).toEqual(["ff.png", "sl.png"])
+  })
+
+  it("bodyAngles prefers frontBody over everything else", () => {
+    const mix: ReferencePhoto[] = [
+      { url: "ff.png", kind: "frontFace" },
+      { url: "fb.png", kind: "frontBody" },
+      { url: "o.png", kind: "other" },
+    ]
+    expect(routePhotosForAsset("bodyAngles", mix).map((p) => p.url)).toEqual(["fb.png"])
+  })
+
+  it("angles (legacy alias) routes the same as headAngles", () => {
+    expect(routePhotosForAsset("angles", photos)).toEqual(routePhotosForAsset("headAngles", photos))
   })
 })
