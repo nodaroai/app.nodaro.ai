@@ -146,9 +146,14 @@ describe("POST /v1/generate-character", () => {
     await app.close()
   })
 
+  // Studio Identity Foundation: schema now requires at least one of
+  // `seedPrompt`, `referencePhotos`, or `description` (in addition to name).
+  // A bare `{ name }` payload is no longer accepted — these tests carry a
+  // description so they exercise non-refine branches (style, length, etc.).
   const validPayload = {
     name: "Warrior",
     userId: UUID,
+    description: "a stoic warrior with a scar",
   }
 
   it("accepts a valid payload", async () => {
@@ -164,7 +169,7 @@ describe("POST /v1/generate-character", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/generate-character",
-      payload: { userId: UUID },
+      payload: { userId: UUID, description: "x" },
     })
     expect(res.statusCode).toBe(400)
   })

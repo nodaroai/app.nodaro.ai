@@ -94,24 +94,59 @@ const CAMEL_CHARACTER = {
   updatedAt: "2026-01-01T00:00:00Z",
 }
 
-// GET /v1/characters/:id now appends pendingJobs; the listing endpoint does not.
-const CAMEL_CHARACTER_WITH_PENDING = { ...CAMEL_CHARACTER, pendingJobs: [] }
+// GET /v1/characters/:id now appends pendingJobs + portraitCandidates +
+// previousCandidates; the listing endpoint does not.
+const CAMEL_CHARACTER_WITH_PENDING = {
+  ...CAMEL_CHARACTER,
+  pendingJobs: [],
+  portraitCandidates: [],
+  previousCandidates: [],
+}
 
 /**
- * Build a chain for the GET /:id route's secondary `jobs` query
- * (`.from("jobs").select().eq().in().filter()`). Resolves to `{ data, error }`
- * via a thenable so the route can `await` it.
+ * Build a chain for any of the GET /:id route's `jobs` queries
+ * (pending-jobs, portrait-candidates, previous-candidates). Each supports the
+ * union of chain methods used by the three queries (`eq`, `in`, `filter`,
+ * `gte`, `order`, `limit`). The thenable resolves to `{ data, error }` so the
+ * route can `await` it.
  */
 function mockJobsPendingChain(result: { data: unknown; error: unknown } = { data: [], error: null }) {
   const chain: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
     in: vi.fn().mockReturnThis(),
     filter: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    order: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
   }
   ;(chain as { then: (resolve: (value: unknown) => unknown) => unknown }).then = (resolve) =>
     Promise.resolve(result).then(resolve)
   const mockSelect = vi.fn().mockReturnValue(chain)
   return { mockSelect, chain }
+}
+
+/**
+ * Route the three sequential `from("jobs")` calls in the GET handler to three
+ * separate chain mocks so each test can stub a distinct return value:
+ *   1. pendingJobs (in-flight asset/motion jobs)
+ *   2. portraitCandidates (pending/running generate-character jobs)
+ *   3. previousCandidates (recent completed generate-character jobs)
+ */
+function mockGetByIdJobs(
+  pending: { data: unknown; error: unknown } = { data: [], error: null },
+  portrait: { data: unknown; error: unknown } = { data: [], error: null },
+  previous: { data: unknown; error: unknown } = { data: [], error: null },
+) {
+  const pendingChain = mockJobsPendingChain(pending)
+  const portraitChain = mockJobsPendingChain(portrait)
+  const previousChain = mockJobsPendingChain(previous)
+  let call = 0
+  function next() {
+    const c = [pendingChain, portraitChain, previousChain][call] ?? previousChain
+    call++
+    return { select: c.mockSelect }
+  }
+  return { pendingChain, portraitChain, previousChain, next }
 }
 
 /**
@@ -247,12 +282,13 @@ describe("GET /v1/characters/:id", () => {
   })
 
   it("returns 200 with camelCase data and scopes by user_id", async () => {
-    // The handler issues two queries — characters row, then jobs pending. Mock
-    // by table name so we route each `.from()` call to its own chain.
+    // The handler issues four queries — characters row, then three jobs
+    // queries (pending, portraitCandidates, previousCandidates). Mock by
+    // table name + call-order so each `.from()` call gets its own chain.
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
-    const jobsPendingChain = mockJobsPendingChain({ data: [], error: null })
+    const jobs = mockGetByIdJobs()
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "jobs") return { select: jobsPendingChain.mockSelect } as never
+      if (table === "jobs") return jobs.next() as never
       return { select: charsByIdChain.mockSelect } as never
     })
 
@@ -267,9 +303,9 @@ describe("GET /v1/characters/:id", () => {
     expect(charsByIdChain.chain.eq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
     expect(charsByIdChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
     // Pending-jobs query scopes by user + status + character id.
-    expect(jobsPendingChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
-    expect(jobsPendingChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
-    expect(jobsPendingChain.chain.filter).toHaveBeenCalledWith(
+    expect(jobs.pendingChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(jobs.pendingChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
+    expect(jobs.pendingChain.chain.filter).toHaveBeenCalledWith(
       "input_data->>attachToCharacterId",
       "eq",
       TEST_CHARACTER_ID,
@@ -278,53 +314,57 @@ describe("GET /v1/characters/:id", () => {
 
   it("maps in-flight jobs to assetType buckets for spinner rehydration", async () => {
     const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
-    const jobsPendingChain = mockJobsPendingChain({
-      data: [
-        // Asset job, expressions column — should surface as assetType:"expressions"
-        {
-          id: "job-1",
-          input_data: {
-            type: "generate-character-asset",
-            attachToCharacterId: TEST_CHARACTER_ID,
-            attachToColumn: "expressions",
-            attachName: "smile",
+    const jobs = mockGetByIdJobs(
+      {
+        data: [
+          // Asset job, expressions column — should surface as assetType:"expressions"
+          {
+            id: "job-1",
+            input_data: {
+              type: "generate-character-asset",
+              attachToCharacterId: TEST_CHARACTER_ID,
+              attachToColumn: "expressions",
+              attachName: "smile",
+            },
           },
-        },
-        // lighting_variations column → assetType:"lighting" (frontend name)
-        {
-          id: "job-2",
-          input_data: {
-            type: "generate-character-asset",
-            attachToCharacterId: TEST_CHARACTER_ID,
-            attachToColumn: "lighting_variations",
-            attachName: "dramatic",
+          // lighting_variations column → assetType:"lighting" (frontend name)
+          {
+            id: "job-2",
+            input_data: {
+              type: "generate-character-asset",
+              attachToCharacterId: TEST_CHARACTER_ID,
+              attachToColumn: "lighting_variations",
+              attachName: "dramatic",
+            },
           },
-        },
-        // Motion job → assetType:"motions"
-        {
-          id: "job-3",
-          input_data: {
-            type: "generate-character-motion",
-            attachToCharacterId: TEST_CHARACTER_ID,
-            attachName: "walking",
+          // Motion job → assetType:"motions"
+          {
+            id: "job-3",
+            input_data: {
+              type: "generate-character-motion",
+              attachToCharacterId: TEST_CHARACTER_ID,
+              attachName: "walking",
+            },
           },
-        },
-        // Portrait → not surfaced (Appearance tab has its own poll)
-        {
-          id: "job-4",
-          input_data: {
-            type: "generate-character",
-            attachToCharacterId: TEST_CHARACTER_ID,
-            attachName: "portrait",
+          // Portrait → not surfaced (Appearance tab has its own poll)
+          {
+            id: "job-4",
+            input_data: {
+              type: "generate-character",
+              attachToCharacterId: TEST_CHARACTER_ID,
+              attachName: "portrait",
+            },
           },
-        },
-        // Missing attachName → skipped
-        { id: "job-5", input_data: { type: "generate-character-asset", attachToCharacterId: TEST_CHARACTER_ID, attachToColumn: "poses" } },
-      ],
-      error: null,
-    })
+          // Missing attachName → skipped
+          { id: "job-5", input_data: { type: "generate-character-asset", attachToCharacterId: TEST_CHARACTER_ID, attachToColumn: "poses" } },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+      { data: [], error: null },
+    )
     vi.mocked(supabase.from).mockImplementation((table: string) => {
-      if (table === "jobs") return { select: jobsPendingChain.mockSelect } as never
+      if (table === "jobs") return jobs.next() as never
       return { select: charsByIdChain.mockSelect } as never
     })
 
@@ -340,6 +380,347 @@ describe("GET /v1/characters/:id", () => {
       { jobId: "job-2", assetType: "lighting", name: "dramatic" },
       { jobId: "job-3", assetType: "motions", name: "walking" },
     ])
+  })
+
+  // -------------------------------------------------------------------------
+  // portraitCandidates: pending/running `generate-character` jobs scoped to
+  // THIS character. The studio re-attaches spinners on reopen by polling
+  // this bucket for in-flight portrait generations.
+  // -------------------------------------------------------------------------
+  it("returns portraitCandidates (pending/running generate-character jobs scoped to this character)", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null }, // pendingJobs
+      {
+        data: [
+          {
+            id: "job-portrait-1",
+            status: "running",
+            progress: 42,
+            output_data: null,
+            input_data: { type: "generate-character", attachToCharacterId: TEST_CHARACTER_ID },
+          },
+          {
+            id: "job-portrait-2",
+            status: "pending",
+            progress: 0,
+            output_data: null,
+            input_data: { type: "generate-character", attachToCharacterId: TEST_CHARACTER_ID },
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null }, // previousCandidates
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().portraitCandidates).toEqual([
+      { jobId: "job-portrait-1", url: undefined, progress: 42, status: "running" },
+      { jobId: "job-portrait-2", url: undefined, progress: 0, status: "pending" },
+    ])
+    // Scope: user + status set + type + character id.
+    expect(jobs.portraitChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(jobs.portraitChain.chain.in).toHaveBeenCalledWith("status", ["pending", "running"])
+    expect(jobs.portraitChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>type",
+      "eq",
+      "generate-character",
+    )
+    expect(jobs.portraitChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>attachToCharacterId",
+      "eq",
+      TEST_CHARACTER_ID,
+    )
+  })
+
+  it("portraitCandidates surfaces output_data.imageUrl when worker has already written it", async () => {
+    // The worker writes `output_data.imageUrl` mid-job (e.g. after R2 upload
+    // but before final commit). Surfacing it lets the studio swap the spinner
+    // for a thumbnail the moment the URL exists.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      {
+        data: [
+          {
+            id: "job-portrait-3",
+            status: "running",
+            progress: 90,
+            output_data: { imageUrl: "https://r2/preview.png" },
+            input_data: { type: "generate-character", attachToCharacterId: TEST_CHARACTER_ID },
+          },
+        ],
+        error: null,
+      },
+      { data: [], error: null },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().portraitCandidates).toEqual([
+      { jobId: "job-portrait-3", url: "https://r2/preview.png", progress: 90, status: "running" },
+    ])
+  })
+
+  it("portraitCandidates empty when no pending jobs", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs() // all three empty
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().portraitCandidates).toEqual([])
+  })
+
+  // -------------------------------------------------------------------------
+  // previousCandidates: completed generate-character jobs for THIS character
+  // with URL ≠ current portrait, within 7 days, ORDER BY created_at DESC,
+  // limit 5. The DB fetches 10; JS filters by URL and trims to 5.
+  // -------------------------------------------------------------------------
+  it("returns previousCandidates (completed generate-character jobs, URL != current portrait)", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          {
+            id: "job-prev-1",
+            output_data: { imageUrl: "https://r2/v1.png" },
+            created_at: "2026-05-13T12:00:00Z",
+          },
+          {
+            id: "job-prev-2",
+            output_data: { imageUrl: "https://r2/v2.png" },
+            created_at: "2026-05-12T12:00:00Z",
+          },
+        ],
+        error: null,
+      },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().previousCandidates).toEqual([
+      { jobId: "job-prev-1", url: "https://r2/v1.png", createdAt: "2026-05-13T12:00:00Z" },
+      { jobId: "job-prev-2", url: "https://r2/v2.png", createdAt: "2026-05-12T12:00:00Z" },
+    ])
+    // Scope: user + status=completed + type + character id + 7-day window +
+    // ORDER BY created_at DESC + limit 10 (then JS-trim to 5).
+    expect(jobs.previousChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(jobs.previousChain.chain.eq).toHaveBeenCalledWith("status", "completed")
+    expect(jobs.previousChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>type",
+      "eq",
+      "generate-character",
+    )
+    expect(jobs.previousChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>attachToCharacterId",
+      "eq",
+      TEST_CHARACTER_ID,
+    )
+    expect(jobs.previousChain.chain.gte).toHaveBeenCalledWith("created_at", expect.any(String))
+    expect(jobs.previousChain.chain.order).toHaveBeenCalledWith("created_at", { ascending: false })
+    expect(jobs.previousChain.chain.limit).toHaveBeenCalledWith(10)
+  })
+
+  it("previousCandidates excludes the current portrait URL", async () => {
+    // If a completed job's `output_data.imageUrl` is what's CURRENTLY set as
+    // `characters.source_image_url`, it should NOT appear in previousCandidates
+    // — the user-facing concept is "alternatives to the current portrait".
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const currentPortrait = DB_CHARACTER.source_image_url
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          {
+            id: "job-prev-current",
+            // Same as DB_CHARACTER.source_image_url — must be filtered out.
+            output_data: { imageUrl: currentPortrait },
+            created_at: "2026-05-13T12:00:00Z",
+          },
+          {
+            id: "job-prev-alt",
+            output_data: { imageUrl: "https://r2/alt.png" },
+            created_at: "2026-05-12T12:00:00Z",
+          },
+        ],
+        error: null,
+      },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().previousCandidates).toEqual([
+      { jobId: "job-prev-alt", url: "https://r2/alt.png", createdAt: "2026-05-12T12:00:00Z" },
+    ])
+  })
+
+  it("previousCandidates trims to 5 most recent after URL≠current filter", async () => {
+    // DB returns up to 10 rows (DESC); after JS-filtering for URL≠current we
+    // keep at most 5. Use 7 distinct URLs to prove the trim, not the order.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const candidates = Array.from({ length: 7 }, (_, i) => ({
+      id: `job-prev-${i}`,
+      output_data: { imageUrl: `https://r2/v${i}.png` },
+      created_at: `2026-05-${String(13 - i).padStart(2, "0")}T12:00:00Z`,
+    }))
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      { data: [], error: null },
+      { data: candidates, error: null },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const prev = res.json().previousCandidates as unknown[]
+    expect(prev).toHaveLength(5)
+    // First 5 (DESC) should be job-prev-0..4
+    expect((prev[0] as { jobId: string }).jobId).toBe("job-prev-0")
+    expect((prev[4] as { jobId: string }).jobId).toBe("job-prev-4")
+  })
+
+  it("previousCandidates excludes rows whose output_data lacks a string imageUrl", async () => {
+    // Defensive: a completed job with no `output_data.imageUrl` (e.g. an
+    // edge-case provider response) must not poison the bucket.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs(
+      { data: [], error: null },
+      { data: [], error: null },
+      {
+        data: [
+          { id: "job-null", output_data: null, created_at: "2026-05-13T12:00:00Z" },
+          { id: "job-missing-key", output_data: {}, created_at: "2026-05-13T11:00:00Z" },
+          { id: "job-non-string", output_data: { imageUrl: 42 }, created_at: "2026-05-13T10:00:00Z" },
+          { id: "job-ok", output_data: { imageUrl: "https://r2/ok.png" }, created_at: "2026-05-13T09:00:00Z" },
+        ],
+        error: null,
+      },
+    )
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().previousCandidates).toEqual([
+      { jobId: "job-ok", url: "https://r2/ok.png", createdAt: "2026-05-13T09:00:00Z" },
+    ])
+  })
+
+  it("previousCandidates empty when no completed jobs in window", async () => {
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs() // all three empty
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().previousCandidates).toEqual([])
+  })
+
+  it("portraitCandidates and previousCandidates both scope by THIS character id (not all user's chars)", async () => {
+    // Security/scope check: even if the DB returned jobs whose
+    // `attachToCharacterId` doesn't match the URL param (shouldn't happen
+    // because we filter server-side, but defensive against a query that
+    // forgets to filter), the route MUST issue the right scope filter.
+    const charsByIdChain = getByIdChain({ data: DB_CHARACTER, error: null })
+    const jobs = mockGetByIdJobs()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "jobs") return jobs.next() as never
+      return { select: charsByIdChain.mockSelect } as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    // Both buckets must filter by THIS character id (not just user_id).
+    expect(jobs.portraitChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>attachToCharacterId",
+      "eq",
+      TEST_CHARACTER_ID,
+    )
+    expect(jobs.previousChain.chain.filter).toHaveBeenCalledWith(
+      "input_data->>attachToCharacterId",
+      "eq",
+      TEST_CHARACTER_ID,
+    )
+    // And both must be user-scoped — never leak another user's jobs.
+    expect(jobs.portraitChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(jobs.previousChain.chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {
@@ -478,6 +859,250 @@ describe("POST /v1/characters", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+
+  // -------------------------------------------------------------------------
+  // Identity foundation fields (PR 1 / Task 10): reference_photos, seed_prompt,
+  // canonical_description, real_life_refs_by_variant. Validates Zod refinements
+  // (duplicate-kind reject, length caps, per-variant key/value caps) AND the
+  // handler's lowercase+trim normalization of variant keys before INSERT.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Captures the row passed to `supabase.from("characters").insert(row)` so
+   * the test can assert on its shape. Returns success so the route resolves 200.
+   */
+  function mockInsertCapture() {
+    const captured: { row: Record<string, unknown> | null } = { row: null }
+    const mockSingle = vi.fn().mockResolvedValue({ data: { id: TEST_CHARACTER_ID }, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockInsert = vi.fn((row: Record<string, unknown>) => {
+      captured.row = row
+      return { select: mockSelect }
+    })
+    return { mockInsert, captured }
+  }
+
+  it("rejects reference_photos with duplicate non-`other` kinds (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/a.png", kind: "front" },
+          { url: "https://example.com/b.png", kind: "front" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("accepts multiple `other` kind entries", async () => {
+    const { mockInsert } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/a.png", kind: "other" },
+          { url: "https://example.com/b.png", kind: "other" },
+          { url: "https://example.com/c.png", kind: "other" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects seed_prompt > 2000 chars (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        seedPrompt: "x".repeat(2001),
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects canonical_description > 4000 chars (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        canonicalDescription: "x".repeat(4001),
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("normalizes real_life_refs_by_variant keys to lowercased+trimmed", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: {
+          "  Smile ": ["https://example.com/s1.png"],
+          WALKING: ["https://example.com/w1.png", "https://example.com/w2.png"],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row).not.toBeNull()
+    expect(captured.row?.real_life_refs_by_variant).toEqual({
+      smile: ["https://example.com/s1.png"],
+      walking: ["https://example.com/w1.png", "https://example.com/w2.png"],
+    })
+  })
+
+  it("rejects real_life_refs_by_variant with > 20 keys (400)", async () => {
+    const variants: Record<string, string[]> = {}
+    for (let i = 0; i < 21; i++) {
+      variants[`variant${i}`] = ["https://example.com/x.png"]
+    }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: variants,
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects real_life_refs_by_variant with > 5 urls per key (400)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        realLifeRefsByVariant: {
+          smile: [
+            "https://example.com/1.png",
+            "https://example.com/2.png",
+            "https://example.com/3.png",
+            "https://example.com/4.png",
+            "https://example.com/5.png",
+            "https://example.com/6.png",
+          ],
+        },
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("accepts reference_photos with all 7 kinds + one extra `other` (8 photos)", async () => {
+    const { mockInsert } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        referencePhotos: [
+          { url: "https://example.com/1.png", kind: "front" },
+          { url: "https://example.com/2.png", kind: "sideLeft" },
+          { url: "https://example.com/3.png", kind: "sideRight" },
+          { url: "https://example.com/4.png", kind: "threeQuarterLeft" },
+          { url: "https://example.com/5.png", kind: "threeQuarterRight" },
+          { url: "https://example.com/6.png", kind: "fullBody" },
+          { url: "https://example.com/7.png", kind: "other" },
+          { url: "https://example.com/8.png", kind: "other" },
+        ],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("persists reference_photos to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const photos = [
+      { url: "https://example.com/front.png", kind: "front" },
+      { url: "https://example.com/side.png", kind: "sideLeft" },
+    ]
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: { name: "Hero", nodeId: "node-1", userId: TEST_USER_ID, referencePhotos: photos },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.reference_photos).toEqual(photos)
+  })
+
+  it("persists seed_prompt to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        seedPrompt: "young warrior with dark hair",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.seed_prompt).toBe("young warrior with dark hair")
+  })
+
+  it("persists canonical_description to insert row", async () => {
+    const { mockInsert, captured } = mockInsertCapture()
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/characters",
+      payload: {
+        name: "Hero",
+        nodeId: "node-1",
+        userId: TEST_USER_ID,
+        canonicalDescription: "A 25-year-old warrior with short dark hair, green eyes, scar on left cheek...",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(captured.row?.canonical_description).toBe(
+      "A 25-year-old warrior with short dark hair, green eyes, scar on left cheek...",
+    )
   })
 })
 

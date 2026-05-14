@@ -102,6 +102,12 @@ const ALLOWED_PATHS = [
   // Tutorials: admin-curated public content.
   /^src\/routes\/tutorials\.ts$/,
 
+  // Character portrait approval: every supabase call is scoped by req.userId
+  // in-handler (.eq("id", id).eq("user_id", req.userId) on jobs + characters).
+  // Service-role required because the route writes to characters.source_image_url
+  // + canonical_description atomically with the candidate read.
+  /^src\/routes\/character-portrait-approval\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]

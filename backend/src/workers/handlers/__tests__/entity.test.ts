@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => {
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
+  const mockAttach = vi.fn().mockResolvedValue(true)
+  const mockSetPortrait = vi.fn().mockResolvedValue(true)
 
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
@@ -23,6 +25,8 @@ const mocks = vi.hoisted(() => {
     mockMarkJobCompleted,
     mockUploadImageMaybeWatermark,
     mockUploadVideoMaybeWatermark,
+    mockAttach,
+    mockSetPortrait,
     mockFrom,
     mockUpdate,
     mockEq,
@@ -32,6 +36,15 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/providers/index.js", () => ({ generateImage: mocks.mockGenerateImage, imageToVideo: mocks.mockImageToVideo }))
 vi.mock("@/providers/script/script-generator.js", () => ({ generateScript: mocks.mockGenerateScript }))
+vi.mock("@/lib/character-auto-attach.js", () => ({
+  attachAssetToCharacter: mocks.mockAttach,
+  setCharacterPortrait: mocks.mockSetPortrait,
+  resolveAssetColumn: (v: string) => {
+    const normalized = v === "lighting" ? "lighting_variations" : v
+    const valid = new Set(["expressions", "poses", "lighting_variations", "angles", "motions"])
+    return valid.has(normalized) ? normalized : null
+  },
+}))
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
   shouldSaveJobResult: mocks.mockShouldSaveJobResult,
@@ -112,6 +125,7 @@ describe("generate-face handler", () => {
 
 describe("generate-character-asset handler", () => {
   const handler = entityHandlers["generate-character-asset"]
+  const TEST_CHARACTER_ID = "00000000-0000-0000-0000-000000000abc"
 
   it("includes assetType in output", async () => {
     const job = makeJob("generate-character-asset", { prompt: "a sword", assetType: "weapon" })
@@ -119,6 +133,29 @@ describe("generate-character-asset handler", () => {
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png", assetType: "weapon" },
     }))
+  })
+
+  it("passes description / motionDescription / realLifeRefs through to attachAssetToCharacter", async () => {
+    const job = makeJob("generate-character-asset", {
+      prompt: "smile prompt",
+      assetType: "expressions",
+      variant: "smile",
+      provider: "nano-banana-pro",
+      attachToCharacterId: TEST_CHARACTER_ID,
+      attachToColumn: "expressions",
+      attachName: "smile",
+      description: "warm closed-mouth smile, slight eye crinkle",
+      realLifeRefs: ["https://example.com/me-smiling.jpg"],
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockAttach).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({
+          description: "warm closed-mouth smile, slight eye crinkle",
+          realLifeRefs: ["https://example.com/me-smiling.jpg"],
+        }),
+      }),
+    )
   })
 })
 
