@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Link as LinkIcon, Maximize2 } from "lucide-react"
+import { Link as LinkIcon, Maximize2, Plus, Star } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { AiHelperButton } from "@/components/ui/ai-helper-button"
@@ -26,8 +26,8 @@ interface AssetCardProps {
   /** Model identifier used to look up CR cost for the regen + refine buttons. */
   readonly costModel?: string
   /** Called when the user clicks the Enlarge button. Caller manages the
-   *  lightbox + decides which list to navigate across. Image-only — omit
-   *  for video items. */
+   *  lightbox + decides which list to navigate across. Works for both
+   *  images and videos — the lightbox supports both kinds. */
   readonly onEnlarge?: () => void
   /** Inline description editor. Provide to make the description row click-to-edit;
    *  omit to keep the card unchanged. The row also surfaces when `item.description`
@@ -39,66 +39,138 @@ interface AssetCardProps {
   /** When provided, shows the ✨ AI helper next to the description textarea. The
    *  helper resolves to the suggested string and is wired to `onDescriptionChange`. */
   readonly onSuggestDescription?: () => Promise<string>
+  /** Inject-to-canvas: creates a new `upload-image` (or `upload-video` for
+   *  motions) node on the workflow canvas pre-filled with this asset's URL.
+   *  Caller owns node placement + workflow-store side-effects; the studio
+   *  modal stays open after a click so the user can inject multiple assets. */
+  readonly onInjectToCanvas?: () => void
+  /** Set-as-default: marks this asset as the character node's canvas
+   *  thumbnail. Per-canvas-node (NOT per-character-DB-row). Toggle-style —
+   *  click on the active default clears it back to the portrait. */
+  readonly onSetAsDefault?: () => void
+  /** When true, the ★ button renders highlighted (yellow) to indicate this
+   *  card is the active default for the character node. */
+  readonly isDefault?: boolean
 }
 
-export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription }: AssetCardProps) {
+export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onRename, errored, costModel, onEnlarge, onDescriptionChange, onMotionDescriptionChange, onSuggestDescription, onInjectToCanvas, onSetAsDefault, isDefault }: AssetCardProps) {
   const [refining, setRefining] = useState(false)
   const [prompt, setPrompt] = useState("")
   const cost = useModelCredits(costModel, 0)
   const costLabel = cost > 0 ? ` (${cost} CR)` : ""
+  // Video preview: rewind + play on mouse-enter, pause + rewind on mouse-leave.
+  // `muted`+`playsInline` are required for the browser to honor a JS-driven
+  // play() outside a click handler. We catch the play() rejection promise
+  // (some browsers reject when the tab is backgrounded or autoplay policy
+  // intervenes) so the hover doesn't throw to the console. The previous "▶"
+  // overlay was a lie — it implied click-to-play but had no handler.
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const handleMouseEnter = () => {
+    if (!isVideo || !videoRef.current) return
+    videoRef.current.currentTime = 0
+    void videoRef.current.play().catch(() => {})
+  }
+  const handleMouseLeave = () => {
+    if (!isVideo || !videoRef.current) return
+    videoRef.current.pause()
+    videoRef.current.currentTime = 0
+  }
 
   return (
-    <div className="relative rounded-md overflow-hidden bg-[#1a1d27] group">
+    <div
+      className="relative rounded-md overflow-hidden bg-[#1a1d27] group"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <div className="aspect-[3/4] bg-gradient-to-br from-[#1e2535] to-[#252836] flex items-center justify-center">
         {isVideo ? (
-          <video src={item.url} className="w-full h-full object-cover" muted playsInline />
+          <video
+            ref={videoRef}
+            src={item.url}
+            className="w-full h-full object-cover"
+            muted
+            playsInline
+            loop
+            preload="metadata"
+          />
         ) : (
           <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
-        )}
-        {isVideo && (
-          <span className="absolute inset-0 flex items-center justify-center text-white/80 pointer-events-none">▶</span>
         )}
         {errored && (
           <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>
         )}
         {/* Top-left hover overlay: matches the pattern used by canvas nodes
-            (upload-image-node, generate-image-node, …). Image-only — videos
-            already preview inline so the lightbox would be redundant; the
-            video provider's URL isn't useful to copy as text. */}
-        {!isVideo && (
-          <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-            {onEnlarge && (
-              <button
-                type="button"
-                aria-label="Enlarge"
-                title="Enlarge"
-                className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onEnlarge()
-                }}
-              >
-                <Maximize2 className="w-3 h-3" />
-              </button>
-            )}
+            (upload-image-node, generate-image-node, …). Renders for both
+            images AND videos — the Enlarge button on videos opens the
+            lightbox in video mode, and Copy URL works equally well for
+            either kind. */}
+        <div className="absolute top-1 left-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          {onEnlarge && (
             <button
               type="button"
-              aria-label="Copy URL"
-              title="Copy URL"
+              aria-label="Enlarge"
+              title="Enlarge"
               className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
               onClick={(e) => {
                 e.stopPropagation()
-                copyToClipboard(item.url, "URL copied")
+                onEnlarge()
               }}
             >
-              <LinkIcon className="w-3 h-3" />
+              <Maximize2 className="w-3 h-3" />
             </button>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            aria-label="Copy URL"
+            title="Copy URL"
+            className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              copyToClipboard(item.url, "URL copied")
+            }}
+          >
+            <LinkIcon className="w-3 h-3" />
+          </button>
+        </div>
       </div>
+      {/* Always-visible default indicator: when this card is the active
+          default, render a small filled star at the top-right of the image
+          so the user can see it without hovering. The action-row toggle
+          below (also a Star) is the click target — this is just a marker. */}
+      {isDefault && (
+        <span
+          aria-hidden
+          className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded-full bg-black/40 backdrop-blur-sm border border-yellow-400/50 text-yellow-400 shadow-sm pointer-events-none"
+        >
+          <Star className="w-3 h-3" fill="currentColor" />
+        </span>
+      )}
       <div className="px-2 py-1.5 flex items-center justify-between gap-1.5">
         <NameLabel name={item.name} onRename={onRename} />
-        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition shrink-0">
+        <div className="flex gap-1.5 items-center opacity-0 group-hover:opacity-100 transition shrink-0">
+          {onSetAsDefault && (
+            <button
+              type="button"
+              title={isDefault ? "Default — click to unset" : "Set as default for this character node"}
+              aria-pressed={isDefault}
+              className={`flex items-center justify-center transition ${
+                isDefault ? "text-yellow-400" : "text-slate-500 hover:text-yellow-300"
+              }`}
+              onClick={onSetAsDefault}
+            >
+              <Star className="w-3 h-3" fill={isDefault ? "currentColor" : "none"} />
+            </button>
+          )}
+          {onInjectToCanvas && (
+            <button
+              type="button"
+              title="Add as node on canvas"
+              className="flex items-center justify-center text-slate-500 hover:text-sky-300 transition"
+              onClick={onInjectToCanvas}
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          )}
           {onRegenerate && (
             <button
               title={`regenerate same — replace${costLabel}`}

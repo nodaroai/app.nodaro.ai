@@ -8,6 +8,9 @@ import { CachedImage } from "@/components/ui/cached-image"
 interface LightboxItem {
   readonly url: string
   readonly alt?: string
+  /** Asset kind. Defaults to "image" — provide "video" to render the URL as
+   *  a controlled <video> element instead of a cached <img>. */
+  readonly kind?: "image" | "video"
 }
 
 interface MultiImageLightboxProps {
@@ -19,8 +22,10 @@ interface MultiImageLightboxProps {
 }
 
 /**
- * Fullscreen image lightbox with prev/next navigation. Wraps `ImageLightbox`
- * with a `{ url }[]` set and lets the user cycle via:
+ * Fullscreen lightbox with prev/next navigation. Each item is either an image
+ * (default) or a video (when `kind: "video"`) — videos render with native
+ * controls, autoplay, loop, and start muted (browsers reject unmuted autoplay).
+ * Lets the user cycle via:
  *   - on-screen ◀ / ▶ buttons
  *   - keyboard ← / → arrows
  *   - Escape to close
@@ -98,13 +103,30 @@ export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLig
         </button>
       )}
 
-      {/* Image */}
-      <CachedImage
-        src={current.url}
-        alt={current.alt ?? "Preview"}
-        className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      />
+      {/* Image or video — `key` forces a fresh element on index change so
+          the new src takes effect even when the same DOM node is reused
+          (otherwise React's reconciler keeps the old video's playback state
+          and the new clip never plays). */}
+      {current.kind === "video" ? (
+        <video
+          key={current.url}
+          src={current.url}
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl bg-black"
+          controls
+          autoPlay
+          loop
+          muted
+          playsInline
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <CachedImage
+          src={current.url}
+          alt={current.alt ?? "Preview"}
+          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        />
+      )}
 
       {/* Next (right edge) */}
       {total > 1 && (

@@ -27,6 +27,21 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const expressionCount = (nodeData.expressions ?? []).length
   const poseCount = (nodeData.poses ?? []).length
   const motionCount = (nodeData.motions ?? []).length
+  // Per-canvas-node default asset (frontend-only). When the user star'd an
+  // asset in the Character Studio, that URL drives the thumbnail here; falls
+  // back to the approved portrait URL otherwise. Two character nodes that
+  // reference the same DB character can show different thumbnails because
+  // `defaultAssetUrl` lives on node data, not the DB row.
+  const thumbnailUrl = nodeData.defaultAssetUrl || nodeData.sourceImageUrl
+  const thumbnailLabel = nodeData.defaultAssetName || nodeData.characterName || "Character"
+  // Whether to render the thumbnail as a <video> rather than a <CachedImage>.
+  // Heuristic: if the default-asset URL is in the node's motions array, OR
+  // its file extension looks like a video, render as video. Otherwise the
+  // CachedImage path takes it (R2 image proxy + thumbnail variants).
+  const isVideoDefault =
+    nodeData.defaultAssetUrl !== undefined &&
+    ((nodeData.motions ?? []).some((m) => m.url === nodeData.defaultAssetUrl) ||
+      /\.(mp4|webm|mov|m4v)(\?|#|$)/i.test(nodeData.defaultAssetUrl))
   const anyAssetRunning =
     nodeData.expressionStatus === "running" ||
     nodeData.poseStatus === "running" ||
@@ -65,17 +80,41 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <span className="ml-auto text-[9px] text-[#3b82f6] bg-[#0f1e40] px-1.5 py-0.5 rounded">entity</span>
       </div>
 
-      {/* Portrait preview */}
+      {/* Portrait preview — uses defaultAssetUrl when the user star'd a
+          studio asset, otherwise falls back to the approved portrait. */}
       <div className="px-2.5 pt-2.5">
-        {nodeData.sourceImageUrl ? (
+        {thumbnailUrl ? (
           <div className="relative">
-            <CachedImage
-              src={nodeData.sourceImageUrl}
-              alt={nodeData.characterName || "Character"}
-              className="w-full h-[110px] object-cover rounded-md border border-[#334155]"
-              thumbnail={!useFull}
-              thumbnailWidth={320}
-            />
+            {isVideoDefault ? (
+              <video
+                src={thumbnailUrl}
+                className="w-full h-[110px] object-cover rounded-md border border-[#334155] bg-black"
+                muted
+                playsInline
+                loop
+                autoPlay
+                preload="metadata"
+              />
+            ) : (
+              <CachedImage
+                src={thumbnailUrl}
+                alt={thumbnailLabel}
+                className="w-full h-[110px] object-cover rounded-md border border-[#334155]"
+                thumbnail={!useFull}
+                thumbnailWidth={320}
+              />
+            )}
+            {nodeData.defaultAssetUrl && (
+              // Small ★ marker so users see at-a-glance this thumbnail is
+              // a chosen default (not the portrait fallback).
+              <span
+                aria-hidden
+                title={`Default: ${nodeData.defaultAssetName ?? ""}`}
+                className="absolute top-1 right-1 px-1 rounded-full bg-black/50 text-[8px] text-yellow-400 leading-tight border border-yellow-400/40"
+              >
+                ★
+              </span>
+            )}
             {status === "running" && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
