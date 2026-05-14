@@ -4,11 +4,24 @@ import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
+import { extractWorkflowId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { llmComplete } from "../lib/llm-client.js"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
+
+// Keep in sync with the "asset-description" branch of
+// `routes/llm-suggest-description.ts` PROMPTS. The studio uses both:
+//   - the standalone ✨ helper endpoint (llm-suggest-description) when the
+//     user clicks the helper button, and
+//   - this inline draft when the user kicks off a generation without first
+//     filling the description field.
+// Both must produce comparable output, so the system prompt is identical.
+const ASSET_DESCRIPTION_SYSTEM_PROMPT =
+  "You write concise, single-sentence visual descriptions of a character pose / expression / lighting / angle. " +
+  "The description is fed to an image gen model alongside a reference portrait. " +
+  "Be specific about facial muscles, body posture, framing as relevant. ~15–25 words. Output only the description."
 
 const assetTypeEnum = z.enum(["expressions", "poses", "lighting", "angles", "custom"])
 
@@ -23,12 +36,20 @@ const generateCharacterAssetBody = z.object({
   assetType: assetTypeEnum,
   variant: z.string().min(1).max(100),
   name: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
+  // Character Studio Identity Foundation (v2): per-asset description, capped
+  // at 1000 chars. When the studio path runs (attachToCharacterId set) and
+  // this field is absent, the route asks Claude Sonnet for a one-sentence
+  // draft scoped to the character's canonical description + asset type/variant.
+  description: z.string().max(1000).optional(),
   userPrompt: z.string().max(8000).optional(),
   gender: z.string().max(50).optional(),
   style: z.enum(["realistic", "anime", "3d-pixar", "illustration"]).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  // Optional real-life reference photos the worker can ship to providers
+  // that support multi-image conditioning. Capped at 5 to keep prompt size
+  // bounded; URLs validated via safeUrlSchema (SSRF gate).
+  realLifeRefs: z.array(safeUrlSchema).max(5).optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
   // Character Studio auto-attach: when all three are set, the worker appends
@@ -131,6 +152,19 @@ function buildVariantPrompt(
 
 export async function generateCharacterAssetRoutes(app: FastifyInstance) {
   app.post("/v1/generate-character-asset", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+    // ─────────────────────────────────────────────────────────────────────
+    // 1. Authentication
+    // ─────────────────────────────────────────────────────────────────────
+    const userId = req.userId
+    if (!userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "userId is required" },
+      })
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 2. Zod validation
+    // ─────────────────────────────────────────────────────────────────────
     const parsed = generateCharacterAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -138,8 +172,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, gender, style, baseOutfit, sourceImageUrl } = parsed.data
-    const userId = req.userId
+    const { assetType, variant, name, gender, style, baseOutfit } = parsed.data
 
     if (assetType !== "custom") {
       const validVariants = VARIANTS[assetType]
@@ -153,22 +186,100 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       }
     }
 
-    if (!userId) {
-      return reply.status(401).send({
-        error: { code: "unauthorized", message: "userId is required" },
-      })
+    // ─────────────────────────────────────────────────────────────────────
+    // 3. Portrait-required gate (studio path only).
+    //    When attachToCharacterId is set we MUST have an anchor portrait
+    //    on the character row — every subsequent asset is generated as an
+    //    image-to-image off that anchor, so a missing portrait would silently
+    //    drop identity. Rejecting here costs nothing: no LLM tokens, no
+    //    credits reserved, no DB writes.
+    // ─────────────────────────────────────────────────────────────────────
+    let canonicalDescription: string | null = null
+    let portraitImageUrl: string | null = null
+    if (parsed.data.attachToCharacterId) {
+      const { data: char, error: charErr } = await supabase
+        .from("characters")
+        .select("source_image_url, canonical_description")
+        .eq("id", parsed.data.attachToCharacterId)
+        .eq("user_id", userId)
+        .single()
+
+      if (charErr || !char) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Character not found" },
+        })
+      }
+      if (!char.source_image_url) {
+        return reply.status(400).send({
+          error: { code: "portrait_required", message: "Generate a portrait first" },
+        })
+      }
+      canonicalDescription = (char.canonical_description as string | null) ?? null
+      portraitImageUrl = char.source_image_url as string
+
+      // ───────────────────────────────────────────────────────────────────
+      // 4. Studio-gated LLM draft of `description` (when caller omitted it).
+      //    Non-fatal on failure: log + proceed with description undefined.
+      //    DO NOT 502 — a transient LLM hiccup must not block the user from
+      //    generating an asset they already configured.
+      // ───────────────────────────────────────────────────────────────────
+      if (!parsed.data.description) {
+        try {
+          const llm = await llmComplete({
+            modelId: "claude-sonnet-4.6",
+            system: ASSET_DESCRIPTION_SYSTEM_PROMPT,
+            messages: [
+              {
+                role: "user",
+                content:
+                  `Asset type: ${assetType}. Variant or prompt: "${variant}".` +
+                  (canonicalDescription ? `\nCharacter: ${canonicalDescription}` : ""),
+              },
+            ],
+            maxTokens: 200,
+            temperature: 0.7,
+          })
+          const text = llm.text.trim()
+          if (text.length > 0) parsed.data.description = text
+        } catch (err) {
+          req.log.warn(
+            { err, characterId: parsed.data.attachToCharacterId, assetType, variant },
+            "[generate-character-asset] LLM description draft failed",
+          )
+          // Leave parsed.data.description undefined and continue.
+        }
+      }
     }
 
     const modelIdentifier = parsed.data.provider
 
-    const prompt = buildVariantPrompt(assetType, variant, name, description, gender, style, baseOutfit, parsed.data.userPrompt)
+    // Use the character's anchor portrait as the i2i source when the studio
+    // path runs, UNLESS the caller passed an explicit sourceImageUrl (their
+    // choice wins). Outside the studio path, behavior is unchanged.
+    const resolvedSourceImageUrl = parsed.data.sourceImageUrl ?? portraitImageUrl ?? undefined
 
+    const prompt = buildVariantPrompt(
+      assetType,
+      variant,
+      name,
+      parsed.data.description,
+      gender,
+      style,
+      baseOutfit,
+      parsed.data.userPrompt,
+    )
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 5. DB insert. `force_private: true` is unconditional — generated
+    //    character assets must never leak to the public gallery, regardless
+    //    of what the caller sends in `forcePrivate`.
+    // ─────────────────────────────────────────────────────────────────────
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
-        force_private: extractForcePrivate(req.body) || undefined,
+        force_private: true,
         user_id: userId,
         status: "pending",
         input_data: { ...buildJobInputData(parsed.data, "generate-character-asset"), prompt },
@@ -177,27 +288,36 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       .select("id")
       .single()
 
-    if (error) {
+    if (error || !job) {
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "internal_error", message: error?.message ?? "Failed to create job" },
       })
     }
 
-    // Reserve credits
+    // ─────────────────────────────────────────────────────────────────────
+    // 6. Reserve credits
+    // ─────────────────────────────────────────────────────────────────────
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 
+    // ─────────────────────────────────────────────────────────────────────
+    // 7. Enqueue worker job. `description` + `realLifeRefs` are passed
+    //    through so the worker's `attachAssetToCharacter` helper (Task 2)
+    //    can persist them on the character row alongside the generated URL.
+    // ─────────────────────────────────────────────────────────────────────
     await videoQueue.add("generate-character-asset", {
       jobId: job.id,
       prompt,
-      sourceImageUrl,
+      sourceImageUrl: resolvedSourceImageUrl,
       assetType,
       variant,
       provider: parsed.data.provider,
       attachToCharacterId: parsed.data.attachToCharacterId,
       attachToColumn: parsed.data.attachToColumn,
       attachName: parsed.data.attachName,
+      description: parsed.data.description,
+      realLifeRefs: parsed.data.realLifeRefs,
       usageLogId,
     })
 
