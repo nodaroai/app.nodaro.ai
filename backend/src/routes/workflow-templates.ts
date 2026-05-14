@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import { getNodeResult, getOutputType } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
+import { copyToTemplatePreview } from "../lib/storage.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
 
@@ -110,6 +112,11 @@ function derivePreviewMedia(
   }
 
   return null
+}
+
+/** Detect media type from a URL's extension. Defaults to "image" when unsure. */
+function detectMediaTypeFromUrl(url: string): "image" | "video" {
+  return /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url) ? "video" : "image"
 }
 
 /** Read listed_in[] from a row defensively (handles legacy rows missing the column). */
@@ -369,7 +376,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Verify user owns the workflow
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id, nodes, edges, settings")
+      .select("id, user_id, nodes, edges, settings, thumbnail_url")
       .eq("id", workflowId)
       .single()
 
@@ -391,14 +398,26 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
     const snapshotNodes = nodes
 
-    // Auto-derive preview media from snapshot nodes if not provided
-    let effectivePreviewUrl = previewMediaUrl ?? null
-    let effectivePreviewType = previewMediaType ?? null
-    if (!effectivePreviewUrl) {
+    // Resolve the source URL for the template preview with priority:
+    //   1. explicit previewMediaUrl from request body
+    //   2. workflows.thumbnail_url — what the user clicked "Set as Thumbnail" on
+    //   3. derivePreviewMedia(nodes) — first node with a result, fallback only
+    // This is just the SOURCE; the actual preview_media_url written to the
+    // template row is a durable COPY at templates/<id>/preview.<ext> below.
+    let sourcePreviewUrl: string | null = previewMediaUrl ?? null
+    let sourcePreviewType: "image" | "video" | null = previewMediaType ?? null
+    if (!sourcePreviewUrl) {
+      const workflowThumb = (workflow.thumbnail_url ?? null) as string | null
+      if (workflowThumb) {
+        sourcePreviewUrl = workflowThumb
+        sourcePreviewType = detectMediaTypeFromUrl(workflowThumb)
+      }
+    }
+    if (!sourcePreviewUrl) {
       const derived = derivePreviewMedia(nodes)
       if (derived) {
-        effectivePreviewUrl = derived.url
-        effectivePreviewType = derived.type
+        sourcePreviewUrl = derived.url
+        sourcePreviewType = derived.type
       }
     }
 
@@ -438,10 +457,30 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         category: category ?? "other",
         output_types: outputTypes ?? [],
         tags: tags ?? [],
-        preview_media_url: effectivePreviewUrl,
-        preview_media_type: effectivePreviewType,
+        // preview_media_url / preview_media_type are set below conditionally:
+        // if we cannot resolve a source URL (asset deleted, no node result),
+        // KEEP the existing values rather than wiping them to null. Re-publish
+        // after deleting the source asset used to silently blank the preview.
         creator_display_name: creatorDisplayName,
         listed_in: nextListed,
+      }
+
+      // Refresh the preview only if we have a fresh source URL. A copy
+      // failure logs and continues — losing one refresh is better than
+      // failing the whole publish over an R2 hiccup.
+      if (sourcePreviewUrl && sourcePreviewType) {
+        try {
+          const durableUrl = await copyToTemplatePreview(
+            sourcePreviewUrl,
+            existingTemplate.id,
+            sourcePreviewType,
+            userId,
+          )
+          updates.preview_media_url = durableUrl
+          updates.preview_media_type = sourcePreviewType
+        } catch (err) {
+          console.error("[templates/publish] preview copy failed (UPDATE):", err)
+        }
       }
 
       // Reset slug only if name changed
@@ -464,6 +503,27 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.send(toCamelCase(updated as Record<string, unknown>))
     }
 
+    // Pre-generate the template ID so the durable preview copy can land at a
+    // stable R2 key (templates/<id>/preview.<ext>) BEFORE the row exists.
+    // The retry loop below only varies the slug — the UUID is fixed.
+    const newTemplateId = randomUUID()
+
+    let durablePreviewUrl: string | null = null
+    let durablePreviewType: "image" | "video" | null = null
+    if (sourcePreviewUrl && sourcePreviewType) {
+      try {
+        durablePreviewUrl = await copyToTemplatePreview(
+          sourcePreviewUrl,
+          newTemplateId,
+          sourcePreviewType,
+          userId,
+        )
+        durablePreviewType = sourcePreviewType
+      } catch (err) {
+        console.error("[templates/publish] preview copy failed (INSERT):", err)
+      }
+    }
+
     // INSERT new template with slug collision retry
     const MAX_SLUG_RETRIES = 5
     let publishedTemplate: Record<string, unknown> | null = null
@@ -476,6 +536,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       const result = await supabase
         .from("workflow_templates")
         .insert({
+          id: newTemplateId,
           workflow_id: workflowId,
           creator_id: userId,
           name,
@@ -493,8 +554,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           category: category ?? "other",
           output_types: outputTypes ?? [],
           tags: tags ?? [],
-          preview_media_url: effectivePreviewUrl,
-          preview_media_type: effectivePreviewType,
+          preview_media_url: durablePreviewUrl,
+          preview_media_type: durablePreviewType,
           listed_in: initialListed,
           creator_display_name: creatorDisplayName,
         })
@@ -672,7 +733,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Strip execution data from snapshot nodes
     const cleanNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
 
-    // Create new workflow in target project
+    // Create new workflow in target project. Inherit the template's durable
+    // preview URL as the cloned workflow's thumbnail so the workflow card is
+    // populated immediately — costs nothing because the URL is shared, stable
+    // R2 storage; cloner doesn't take a copy.
     const workflowName = customName || template.name
     const { data: newWorkflow, error: wfError } = await supabase
       .from("workflows")
@@ -684,6 +748,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         edges: template.snapshot_edges || [],
         settings: template.snapshot_settings || {},
         template_id: template.id,
+        thumbnail_url: template.preview_media_url ?? null,
       })
       .select("id")
       .single()

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, CopyObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
@@ -259,6 +259,126 @@ export async function uploadFileWithKeyToR2(
   await streamToR2(key, createReadStream(filePath), contentType)
   trackStorage(trackUserId, fileStat.size)
   return r2Url(key)
+}
+
+// ---------------------------------------------------------------------------
+// Template preview copy
+// ---------------------------------------------------------------------------
+
+const PREVIEW_EXT_TO_MIME: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  m4v: "video/x-m4v",
+}
+
+/**
+ * Origin-anchored R2 key extractor. Uses startsWith with a trailing slash to
+ * avoid the substring-prefix pitfall (R2_PUBLIC_URL=https://assets.nodaro.ai
+ * would otherwise prefix-match https://assets.nodaro.ai.attacker.com/...).
+ */
+function r2KeyFromOurUrl(url: string): string | null {
+  if (!config.R2_PUBLIC_URL) return null
+  const prefix = config.R2_PUBLIC_URL.endsWith("/")
+    ? config.R2_PUBLIC_URL
+    : config.R2_PUBLIC_URL + "/"
+  if (!url.startsWith(prefix)) return null
+  return url.slice(prefix.length)
+}
+
+function extractExtensionFromUrl(url: string): string | null {
+  try {
+    const path = new URL(url).pathname
+    const dot = path.lastIndexOf(".")
+    if (dot < 0 || dot === path.length - 1) return null
+    const ext = path.slice(dot + 1).toLowerCase()
+    return /^[a-z0-9]{1,5}$/.test(ext) ? ext : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Copy a media URL into a durable template-preview slot.
+ *
+ * Why this exists: workflow_templates.preview_media_url used to store a direct
+ * reference to an in-flow asset URL — if the source node was later deleted and
+ * the template re-published, derivePreviewMedia returned null and the preview
+ * silently disappeared from marketplace/tutorial cards. This helper decouples
+ * the template's preview from any node by writing an independent copy at a
+ * stable key.
+ *
+ * R2-to-R2 path uses CopyObjectCommand — no egress, no re-upload. Foreign URLs
+ * fall back to a bounded safeFetch + streamToR2. Storage is tracked against
+ * the creator (matches who owns the template).
+ *
+ * Idempotent: re-publishing overwrites the same `templates/<id>/preview.<ext>`
+ * key. CDN URL stays stable; edge caches refresh on their own TTL.
+ *
+ * TODO(thumbnails): cap video preview size or convert video previews to a
+ * single-frame poster — currently copies videos at full size. Tracked as a
+ * separate follow-up.
+ */
+export async function copyToTemplatePreview(
+  sourceUrl: string,
+  templateId: string,
+  mediaType: "image" | "video",
+  creatorUserId: string,
+): Promise<string> {
+  const ext = extractExtensionFromUrl(sourceUrl) ?? MEDIA_EXT[mediaType]
+  const destKey = `templates/${templateId}/preview.${ext}`
+  const contentType = PREVIEW_EXT_TO_MIME[ext] ?? MEDIA_MIME[mediaType]
+
+  const sourceKey = r2KeyFromOurUrl(sourceUrl)
+  if (sourceKey) {
+    await s3.send(
+      new CopyObjectCommand({
+        Bucket: config.R2_BUCKET_NAME,
+        Key: destKey,
+        CopySource: `/${config.R2_BUCKET_NAME}/${sourceKey}`,
+        ContentType: contentType,
+        CacheControl: R2_CACHE_CONTROL,
+        MetadataDirective: "REPLACE",
+      }),
+    )
+    // Best-effort size tracking. A HEAD failure shouldn't fail the publish —
+    // the copy already succeeded; quota accounting drifting by one preview is
+    // acceptable.
+    try {
+      const head = await s3.send(
+        new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }),
+      )
+      if (head.ContentLength) trackStorage(creatorUserId, head.ContentLength)
+    } catch (err) {
+      console.error("[copyToTemplatePreview] HEAD failed (storage not tracked):", err)
+    }
+    return r2Url(destKey)
+  }
+
+  // Foreign URL — download and upload, bounded by the standard size cap.
+  const response = await safeFetch(sourceUrl, { timeoutMs: 120_000 })
+  if (!response.ok) {
+    throw new Error(`copyToTemplatePreview: source fetch failed (${response.status})`)
+  }
+  const cap = getSizeLimit(mediaType as FileCategory)
+  const source = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
+  const counter = new SizeLimitedStream(cap)
+  counter.once("error", (err) => {
+    if (!source.destroyed) source.destroy(err)
+  })
+  source.once("error", (err) => {
+    if (!counter.destroyed) counter.destroy(err)
+  })
+  source.pipe(counter)
+
+  await streamToR2(destKey, counter, contentType)
+  trackStorage(creatorUserId, counter.bytesRead)
+  return r2Url(destKey)
 }
 
 export async function deleteFromR2(key: string): Promise<void> {
