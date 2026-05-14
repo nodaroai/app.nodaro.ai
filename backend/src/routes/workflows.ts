@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { stripExportContent, type WorkflowExport } from "@nodaro/shared"
+import {
+  stripExportContent,
+  validateSubWorkflowRoutes,
+  type WorkflowExport,
+} from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
@@ -194,6 +198,23 @@ function parseWith<S extends z.ZodTypeAny>(
 /** Postgrest "no rows" code returned by `.single()`. */
 const PGRST_NOT_FOUND = "PGRST116"
 
+function checkSubWorkflowShape(
+  reply: FastifyReply,
+  nodes: unknown,
+): boolean {
+  if (!Array.isArray(nodes)) return true // nothing to validate
+  const result = validateSubWorkflowRoutes(nodes as Parameters<typeof validateSubWorkflowRoutes>[0])
+  if (result.ok) return true
+  reply.status(400).send({
+    error: {
+      code: "invalid_sub_workflow",
+      message: "Sub-workflow boundary nodes are not in a valid shape",
+      details: result.errors,
+    },
+  })
+  return false
+}
+
 export async function workflowRoutes(app: FastifyInstance) {
   // List workflows for a project
   app.get("/v1/projects/:projectId/workflows", async (req, reply) => {
@@ -225,6 +246,8 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const body = parseWith(reply, createWorkflowBody, req.body, "Invalid request")
     if (!body) return
+
+    if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
 
     const { data, error } = await supabase
       .from("workflows")
@@ -278,6 +301,8 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const body = parseWith(reply, updateWorkflowBody, req.body, "Invalid request")
     if (!body) return
+
+    if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
 
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
