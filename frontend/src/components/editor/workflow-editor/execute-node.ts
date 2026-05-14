@@ -668,6 +668,11 @@ export function executeNode(
       imgData.renderingSpeed || undefined,
       imgData.styleType || undefined,
       imgData.expandPrompt,
+      // Identity injection — populated by node-input-resolver when an upstream
+      // Character node has injectIdentityInPrompts=true + a characterDbId.
+      inputs.injectCharacterContext && inputs.attachToCharacterId
+        ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
+        : undefined,
     );
   }
 
@@ -869,6 +874,13 @@ export function executeNode(
         renderingSpeed: i2iData.renderingSpeed,
         guidanceScale: i2iData.guidanceScale,
         maskUrl,
+        // Identity injection — backend treats injectCharacterContext as the
+        // discriminator that bypasses the studio path, so a workflow caller
+        // wiring a Character node downstream gets the simpler prompt-
+        // mutation behavior instead of the studio's LLM-draft flow.
+        ...(inputs.injectCharacterContext && inputs.attachToCharacterId
+          ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
+          : {}),
       },
     );
   }
@@ -1182,6 +1194,11 @@ export function executeNode(
         seedance2InputMode: i2vData.seedance2InputMode,
         enableTranslation: i2vData.enableTranslation,
         loopTrim: i2vData.loopTrim,
+        // Identity injection — populated by node-input-resolver when an upstream
+        // Character has injectIdentityInPrompts + characterDbId.
+        ...(inputs.injectCharacterContext && inputs.attachToCharacterId
+          ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
+          : {}),
       },
     );
   }

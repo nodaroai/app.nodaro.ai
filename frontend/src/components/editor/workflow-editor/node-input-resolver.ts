@@ -343,6 +343,14 @@ export interface FrontendResolvedInputs {
   componentInputMap?: Record<string, string>;
   systemPrompt?: string;
   inputAssets?: Array<{ nodeId: string; url: string; type: "video" | "image" | "audio" }>;
+  /** When a character upstream has injectIdentityInPrompts enabled AND has a
+   *  characterDbId, the resolver sets this to true. The downstream executor
+   *  (execute-node.ts) then forwards injectCharacterContext + attachToCharacterId
+   *  on the API call, and the backend route appends canonical_description to
+   *  the prompt. Only meaningful for generate-image / image-to-image /
+   *  image-to-video targets. */
+  injectCharacterContext?: boolean;
+  attachToCharacterId?: string;
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -1016,6 +1024,22 @@ export function resolveNodeInputs(
           ...(inputs.referenceImageUrls ?? []),
           output,
         ];
+      }
+      // Identity injection — when the upstream is a Character with its
+      // injectIdentityInPrompts toggle on AND it has a characterDbId,
+      // forward the flag + id so the downstream image / video route
+      // appends canonical_description to the prompt. Only meaningful for
+      // generate-image, image-to-image, modify-image, image-to-video, and
+      // text-to-video targets — the executor reads these fields and
+      // forwards them only on those API calls.
+      if (src.type === "character") {
+        const charData = src.data as Record<string, unknown>;
+        const inject = charData.injectIdentityInPrompts === true;
+        const dbId = typeof charData.characterDbId === "string" ? charData.characterDbId : "";
+        if (inject && dbId.length > 0) {
+          inputs.injectCharacterContext = true;
+          inputs.attachToCharacterId = dbId;
+        }
       }
     } else if (src.type === "upload-video" || src.type === "youtube-video") {
       if (node.type === "suno-cover" && src.type === "youtube-video") {
