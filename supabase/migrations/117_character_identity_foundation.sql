@@ -1,4 +1,4 @@
--- supabase/migrations/114_character_identity_foundation.sql
+-- supabase/migrations/117_character_identity_foundation.sql
 --
 -- Character Studio Identity Foundation redesign — new columns + asset backfill.
 ***REDACTED-OSS-SCRUB***

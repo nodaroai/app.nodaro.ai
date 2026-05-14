@@ -118,6 +118,9 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // Projects are few per user (one folder per workspace area), so the list
   // tool intentionally returns all of them — no pagination/filter params.
   "list_projects",
+  // Pure content-delivery tool — returns the canonical Film Director SKILL.md
+  // verbatim. No knobs, no per-call variation. See film-director.ts.
+  "start_film_director",
 ])
 
 // ---------------------------------------------------------------------------

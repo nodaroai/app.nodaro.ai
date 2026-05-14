@@ -1,9 +1,13 @@
+import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import { getNodeResult, getOutputType } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
+import { copyToTemplatePreview } from "../lib/storage.js"
+import { requireAdmin } from "../ee/middleware/require-admin.js"
+import { hasAdmin } from "../lib/config.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -16,6 +20,12 @@ const VALID_CATEGORIES = [
 
 const VALID_OUTPUT_TYPES = ["image", "video", "audio", "text"] as const
 const VALID_COMPLEXITIES = ["simple", "intermediate", "advanced"] as const
+
+// Listing channels stored in workflow_templates.listed_in[].
+// 'marketplace' = visible in /v1/templates/browse (set by the creator).
+// 'tutorial'    = surfaced in /v1/tutorials (admin-only flag).
+const MARKETPLACE = "marketplace" as const
+const TUTORIAL = "tutorial" as const
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -104,10 +114,30 @@ function derivePreviewMedia(
   return null
 }
 
+/** Detect media type from a URL's extension. Defaults to "image" when unsure. */
+function detectMediaTypeFromUrl(url: string): "image" | "video" {
+  return /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url) ? "video" : "image"
+}
+
+/** Read listed_in[] from a row defensively (handles legacy rows missing the column). */
+function readListedIn(row: Record<string, unknown>): string[] {
+  const v = row.listed_in
+  return Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []
+}
+
+/** Toggle a tag in a listed_in array, returning a NEW array (no mutation). */
+function withTag(listed: string[], tag: string, present: boolean): string[] {
+  const has = listed.includes(tag)
+  if (present && !has) return [...listed, tag]
+  if (!present && has) return listed.filter((t) => t !== tag)
+  return listed
+}
+
 // sanitizeSlugBase, generateSlug, getCreatorDisplayName imported from lib/marketplace-helpers.ts
 
 /** Full camelCase transform for a template row. */
 function toCamelCase(row: Record<string, unknown>) {
+  const listed = readListedIn(row)
   return {
     id: row.id,
     workflowId: row.workflow_id,
@@ -120,7 +150,11 @@ function toCamelCase(row: Record<string, unknown>) {
     snapshotEdges: row.snapshot_edges,
     snapshotSettings: row.snapshot_settings,
     isActive: row.is_active,
-    isListed: row.is_listed,
+    listedIn: listed,
+    isListed: listed.includes(MARKETPLACE),
+    isTutorial: listed.includes(TUTORIAL),
+    tutorialCategoryId: row.tutorial_category_id ?? null,
+    tutorialSortOrder: row.tutorial_sort_order ?? 0,
     estimatedCredits: row.estimated_credits,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -178,6 +212,8 @@ const publishBodySchema = z.object({
   tags: z.array(z.string().max(30)).max(10).optional(),
   previewMediaUrl: z.string().url().optional(),
   previewMediaType: z.enum(["image", "video"]).optional(),
+  // Creator-facing back-compat boolean — toggles only the 'marketplace' tag.
+  // The 'tutorial' tag is admin-only and managed via the tutorial-flag endpoint.
   isListed: z.boolean().optional(),
 })
 
@@ -212,6 +248,19 @@ const cloneBodySchema = z.object({
   name: z.string().min(1).max(100).optional(),
 })
 
+const tutorialFlagBodySchema = z.object({
+  is_tutorial: z.boolean(),
+  tutorial_category_id: z.string().uuid().optional(),
+  tutorial_sort_order: z.number().int().optional(),
+})
+
+const adminListQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  search: z.string().max(100).optional(),
+  listed: z.enum(["marketplace", "tutorial", "unlisted"]).optional(),
+})
+
 // ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
@@ -234,7 +283,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     let query = supabase
       .from("workflow_templates")
       .select(selectCols)
-      .eq("is_listed", true)
+      .contains("listed_in", [MARKETPLACE])
       .eq("is_active", true)
       .limit(limit + 1) // fetch one extra to detect next page
 
@@ -327,7 +376,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Verify user owns the workflow
     const { data: workflow, error: wfError } = await supabase
       .from("workflows")
-      .select("id, user_id, nodes, edges, settings")
+      .select("id, user_id, nodes, edges, settings, thumbnail_url")
       .eq("id", workflowId)
       .single()
 
@@ -349,14 +398,26 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const estimatedCredits = estimateWorkflowCredits(nodes as Array<{ type: string; data?: Record<string, unknown> }>)
     const snapshotNodes = nodes
 
-    // Auto-derive preview media from snapshot nodes if not provided
-    let effectivePreviewUrl = previewMediaUrl ?? null
-    let effectivePreviewType = previewMediaType ?? null
-    if (!effectivePreviewUrl) {
+    // Resolve the source URL for the template preview with priority:
+    //   1. explicit previewMediaUrl from request body
+    //   2. workflows.thumbnail_url — what the user clicked "Set as Thumbnail" on
+    //   3. derivePreviewMedia(nodes) — first node with a result, fallback only
+    // This is just the SOURCE; the actual preview_media_url written to the
+    // template row is a durable COPY at templates/<id>/preview.<ext> below.
+    let sourcePreviewUrl: string | null = previewMediaUrl ?? null
+    let sourcePreviewType: "image" | "video" | null = previewMediaType ?? null
+    if (!sourcePreviewUrl) {
+      const workflowThumb = (workflow.thumbnail_url ?? null) as string | null
+      if (workflowThumb) {
+        sourcePreviewUrl = workflowThumb
+        sourcePreviewType = detectMediaTypeFromUrl(workflowThumb)
+      }
+    }
+    if (!sourcePreviewUrl) {
       const derived = derivePreviewMedia(nodes)
       if (derived) {
-        effectivePreviewUrl = derived.url
-        effectivePreviewType = derived.type
+        sourcePreviewUrl = derived.url
+        sourcePreviewType = derived.type
       }
     }
 
@@ -366,14 +427,21 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Check if template already exists for this workflow + creator
     const { data: existingTemplate } = await supabase
       .from("workflow_templates")
-      .select("id, slug, name, is_listed")
+      .select("id, slug, name, listed_in")
       .eq("workflow_id", workflowId)
       .eq("creator_id", userId)
       .eq("is_active", true)
       .maybeSingle()
 
     if (existingTemplate) {
-      // UPDATE existing template
+      const existingListed = readListedIn(existingTemplate as Record<string, unknown>)
+      // Preserve admin-set 'tutorial' tag across creator re-publishes; only
+      // touch the 'marketplace' tag if the creator explicitly sent isListed.
+      const nextListed =
+        isListed === undefined
+          ? existingListed
+          : withTag(existingListed, MARKETPLACE, isListed)
+
       const updates: Record<string, unknown> = {
         name,
         description: description || null,
@@ -389,10 +457,30 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         category: category ?? "other",
         output_types: outputTypes ?? [],
         tags: tags ?? [],
-        preview_media_url: effectivePreviewUrl,
-        preview_media_type: effectivePreviewType,
+        // preview_media_url / preview_media_type are set below conditionally:
+        // if we cannot resolve a source URL (asset deleted, no node result),
+        // KEEP the existing values rather than wiping them to null. Re-publish
+        // after deleting the source asset used to silently blank the preview.
         creator_display_name: creatorDisplayName,
-        is_listed: isListed ?? existingTemplate.is_listed,
+        listed_in: nextListed,
+      }
+
+      // Refresh the preview only if we have a fresh source URL. A copy
+      // failure logs and continues — losing one refresh is better than
+      // failing the whole publish over an R2 hiccup.
+      if (sourcePreviewUrl && sourcePreviewType) {
+        try {
+          const durableUrl = await copyToTemplatePreview(
+            sourcePreviewUrl,
+            existingTemplate.id,
+            sourcePreviewType,
+            userId,
+          )
+          updates.preview_media_url = durableUrl
+          updates.preview_media_type = sourcePreviewType
+        } catch (err) {
+          console.error("[templates/publish] preview copy failed (UPDATE):", err)
+        }
       }
 
       // Reset slug only if name changed
@@ -415,10 +503,32 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.send(toCamelCase(updated as Record<string, unknown>))
     }
 
+    // Pre-generate the template ID so the durable preview copy can land at a
+    // stable R2 key (templates/<id>/preview.<ext>) BEFORE the row exists.
+    // The retry loop below only varies the slug — the UUID is fixed.
+    const newTemplateId = randomUUID()
+
+    let durablePreviewUrl: string | null = null
+    let durablePreviewType: "image" | "video" | null = null
+    if (sourcePreviewUrl && sourcePreviewType) {
+      try {
+        durablePreviewUrl = await copyToTemplatePreview(
+          sourcePreviewUrl,
+          newTemplateId,
+          sourcePreviewType,
+          userId,
+        )
+        durablePreviewType = sourcePreviewType
+      } catch (err) {
+        console.error("[templates/publish] preview copy failed (INSERT):", err)
+      }
+    }
+
     // INSERT new template with slug collision retry
     const MAX_SLUG_RETRIES = 5
     let publishedTemplate: Record<string, unknown> | null = null
     let insertError: { code?: string; message?: string } | null = null
+    const initialListed = isListed ? [MARKETPLACE] : []
 
     for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
       const slug = generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
@@ -426,6 +536,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       const result = await supabase
         .from("workflow_templates")
         .insert({
+          id: newTemplateId,
           workflow_id: workflowId,
           creator_id: userId,
           name,
@@ -443,9 +554,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           category: category ?? "other",
           output_types: outputTypes ?? [],
           tags: tags ?? [],
-          preview_media_url: effectivePreviewUrl,
-          preview_media_type: effectivePreviewType,
-          is_listed: isListed ?? false,
+          preview_media_url: durablePreviewUrl,
+          preview_media_type: durablePreviewType,
+          listed_in: initialListed,
           creator_display_name: creatorDisplayName,
         })
         .select()
@@ -622,7 +733,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Strip execution data from snapshot nodes
     const cleanNodes = (template.snapshot_nodes || []) as Array<Record<string, unknown>>
 
-    // Create new workflow in target project
+    // Create new workflow in target project. Inherit the template's durable
+    // preview URL as the cloned workflow's thumbnail so the workflow card is
+    // populated immediately — costs nothing because the URL is shared, stable
+    // R2 storage; cloner doesn't take a copy.
     const workflowName = customName || template.name
     const { data: newWorkflow, error: wfError } = await supabase
       .from("workflows")
@@ -634,6 +748,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         edges: template.snapshot_edges || [],
         settings: template.snapshot_settings || {},
         template_id: template.id,
+        thumbnail_url: template.preview_media_url ?? null,
       })
       .select("id")
       .single()
@@ -668,7 +783,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Verify ownership
     const { data: existing, error: fetchError } = await supabase
       .from("workflow_templates")
-      .select("id, creator_id")
+      .select("id, creator_id, listed_in")
       .eq("id", templateId)
       .single()
 
@@ -686,7 +801,10 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     if (body.description !== undefined) updates.description = body.description
     if (body.markdownDescription !== undefined) updates.markdown_description = body.markdownDescription
     if (body.isActive !== undefined) updates.is_active = body.isActive
-    if (body.isListed !== undefined) updates.is_listed = body.isListed
+    if (body.isListed !== undefined) {
+      const existingListed = readListedIn(existing as Record<string, unknown>)
+      updates.listed_in = withTag(existingListed, MARKETPLACE, body.isListed)
+    }
     if (body.category !== undefined) updates.category = body.category
     if (body.outputTypes !== undefined) updates.output_types = body.outputTypes
     if (body.tags !== undefined) updates.tags = body.tags
@@ -745,4 +863,131 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
 
     return reply.send({ success: true })
   })
+
+  // =========================================================================
+  // 10. GET /v1/admin/workflow-templates — Admin list ALL templates
+  //
+  // Admin routes 10 + 11 are gated by hasAdmin() so they never register in
+  // community builds where the `requireAdmin` preHandler would crash on the
+  // missing role table. Static import of requireAdmin is allowlisted in
+  // tools/check-ee-imports.mjs (Phase 3.5 — this whole file will move to a
+  // dynamic-require shim alongside the credit imports).
+  // =========================================================================
+  if (hasAdmin()) {
+  app.get("/v1/admin/workflow-templates", { preHandler: requireAdmin }, async (req, reply) => {
+    const parsed = adminListQuerySchema.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.flatten() })
+    }
+    const { cursor, limit, search, listed } = parsed.data
+
+    const selectCols = "id, slug, name, description, listed_in, tutorial_category_id, tutorial_sort_order, is_active, category, node_count, complexity, preview_media_url, preview_media_type, creator_id, creator_display_name, clone_count, favorite_count, created_at"
+
+    let query = supabase
+      .from("workflow_templates")
+      .select(selectCols)
+      .order("created_at", { ascending: false })
+      .limit(limit + 1)
+
+    if (cursor) query = query.lt("created_at", cursor)
+    if (search) {
+      const tsQuery = search.trim().split(/\s+/).join(" & ")
+      query = query.textSearch("search_vector", tsQuery)
+    }
+    if (listed === "marketplace") query = query.contains("listed_in", [MARKETPLACE])
+    else if (listed === "tutorial") query = query.contains("listed_in", [TUTORIAL])
+    else if (listed === "unlisted") query = query.eq("listed_in", [])
+
+    const { data: rows, error } = await query
+    if (error) {
+      return reply.status(500).send({ error: { code: "internal_error", message: "Failed to list templates" } })
+    }
+
+    const items = (rows ?? []).slice(0, limit)
+    const hasMore = (rows ?? []).length > limit
+    const nextCursor =
+      hasMore && items.length > 0
+        ? ((items[items.length - 1] as Record<string, unknown>).created_at as string)
+        : null
+
+    return reply.send({
+      data: items.map((r: unknown) => toCamelCase(r as Record<string, unknown>)),
+      nextCursor,
+    })
+  })
+
+  // =========================================================================
+  // 11. PATCH /v1/admin/workflow-templates/:id/tutorial-flag — Toggle tutorial
+  // =========================================================================
+  app.patch(
+    "/v1/admin/workflow-templates/:id/tutorial-flag",
+    { preHandler: requireAdmin },
+    async (req, reply) => {
+      const paramResult = z.object({ id: z.string().uuid() }).safeParse(req.params)
+      if (!paramResult.success) {
+        return reply.status(400).send({ error: { code: "validation_error", message: "Invalid template ID" } })
+      }
+      const bodyResult = tutorialFlagBodySchema.safeParse(req.body)
+      if (!bodyResult.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: bodyResult.error.issues[0]?.message ?? "Invalid body" },
+        })
+      }
+
+      const { id } = paramResult.data
+      const { is_tutorial, tutorial_category_id, tutorial_sort_order } = bodyResult.data
+
+      if (is_tutorial && !tutorial_category_id) {
+        return reply.status(400).send({
+          error: {
+            code: "validation_error",
+            message: "tutorial_category_id is required when is_tutorial=true",
+          },
+        })
+      }
+
+      const { data: existing, error: fetchError } = await supabase
+        .from("workflow_templates")
+        .select("id, listed_in, tutorial_category_id, tutorial_sort_order")
+        .eq("id", id)
+        .maybeSingle()
+
+      if (fetchError) {
+        return reply.status(500).send({ error: { code: "internal_error", message: fetchError.message } })
+      }
+      if (!existing) {
+        return reply.status(404).send({ error: { code: "not_found", message: "Template not found" } })
+      }
+
+      const currentListed = readListedIn(existing as Record<string, unknown>)
+      const nextListed = withTag(currentListed, TUTORIAL, is_tutorial)
+
+      const updates: Record<string, unknown> = { listed_in: nextListed }
+      if (is_tutorial) {
+        updates.tutorial_category_id = tutorial_category_id
+        if (tutorial_sort_order !== undefined) updates.tutorial_sort_order = tutorial_sort_order
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("workflow_templates")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (updateError) {
+        if (updateError.code === "23503") {
+          return reply.status(400).send({
+            error: { code: "invalid_category", message: "tutorial_category_id does not reference a known category" },
+          })
+        }
+        return reply
+          .status(500)
+          .send({ error: { code: "internal_error", message: "Failed to update tutorial flag" } })
+      }
+
+      return reply.send(toCamelCase(updated as Record<string, unknown>))
+    },
+  )
+  } // end if (hasAdmin())
 }

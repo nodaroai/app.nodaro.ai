@@ -2,14 +2,14 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { toTutorialResponse } from "../../lib/tutorials-shared.js"
+import { toTutorialResponse, TUTORIAL_SELECT_WITH_CATEGORY } from "../../lib/tutorials-shared.js"
 
 const createBody = z.object({
   title: z.string().min(1),
   video_url: z.string().url(),
   description: z.string().optional(),
   thumbnail_url: z.string().url().optional(),
-  category: z.string().min(1).default("getting-started"),
+  category_id: z.string().uuid(),
   sort_order: z.number().int().default(0),
   is_enabled: z.boolean().default(true),
 })
@@ -19,7 +19,7 @@ const updateBody = z.object({
   video_url: z.string().url().optional(),
   description: z.string().nullable().optional(),
   thumbnail_url: z.string().url().nullable().optional(),
-  category: z.string().min(1).optional(),
+  category_id: z.string().uuid().optional(),
   sort_order: z.number().int().optional(),
   is_enabled: z.boolean().optional(),
 })
@@ -31,7 +31,7 @@ export async function adminTutorialsRoutes(app: FastifyInstance) {
   app.get("/v1/admin/tutorials", { preHandler: requireAdmin }, async (_req, reply) => {
     const { data, error } = await supabase
       .from("tutorials")
-      .select("*")
+      .select(TUTORIAL_SELECT_WITH_CATEGORY)
       .order("sort_order")
 
     if (error) {
@@ -40,7 +40,7 @@ export async function adminTutorialsRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: (data ?? []).map(toTutorialResponse) }
+    return { data: (data ?? []).map((r) => toTutorialResponse(r as Record<string, unknown>)) }
   })
 
   // POST /v1/admin/tutorials — create tutorial
@@ -58,16 +58,21 @@ export async function adminTutorialsRoutes(app: FastifyInstance) {
     const { data, error } = await supabase
       .from("tutorials")
       .insert(result.data)
-      .select("*")
+      .select(TUTORIAL_SELECT_WITH_CATEGORY)
       .single()
 
     if (error) {
+      if (error.code === "23503") {
+        return reply.status(400).send({
+          error: { code: "invalid_category", message: "category_id does not reference a known tutorial category" },
+        })
+      }
       return reply.status(500).send({
         error: { code: "internal_error", message: error.message },
       })
     }
 
-    return { data: toTutorialResponse(data) }
+    return { data: toTutorialResponse(data as Record<string, unknown>) }
   })
 
   // PATCH /v1/admin/tutorials/:id — sparse update
@@ -100,10 +105,15 @@ export async function adminTutorialsRoutes(app: FastifyInstance) {
       .from("tutorials")
       .update(updates)
       .eq("id", paramResult.data.id)
-      .select("*")
+      .select(TUTORIAL_SELECT_WITH_CATEGORY)
       .maybeSingle()
 
     if (error) {
+      if (error.code === "23503") {
+        return reply.status(400).send({
+          error: { code: "invalid_category", message: "category_id does not reference a known tutorial category" },
+        })
+      }
       return reply.status(500).send({
         error: { code: "internal_error", message: error.message },
       })
@@ -115,7 +125,7 @@ export async function adminTutorialsRoutes(app: FastifyInstance) {
       })
     }
 
-    return { data: toTutorialResponse(data) }
+    return { data: toTutorialResponse(data as Record<string, unknown>) }
   })
 
   // DELETE /v1/admin/tutorials/:id — remove tutorial

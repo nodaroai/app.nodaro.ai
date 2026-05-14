@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate } from "react-router"
+import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,11 @@ import type {
 } from "@/types/nodes"
 import { useCallableWorkflows, useWorkflowInterface } from "@/hooks/queries/use-callable-workflows"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { discoverRoutes } from "@/lib/sub-workflow-utils"
+import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
+import { createChildSubWorkflow } from "@/lib/api"
+import { DEFAULT_VIEW_MODE_ID, listSubWorkflowViewModes } from "@/components/nodes/sub-workflow-views/view-mode-registry"
 
 // ---------- Shared: Ports Editor ----------
 
@@ -255,13 +259,14 @@ export function SubWorkflowOutputConfig({ data, onUpdate, nodes }: ConfigProps<S
 
 export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowData>) {
   const nodeData = data as SubWorkflowData
-  const navigate = useNavigate()
+  const navigate = useNavigateWithGuard()
   const projectId = useWorkflowStore((s) => s.projectId)
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const localNodes = useWorkflowStore((s) => s.nodes)
   const [showAllProjects, setShowAllProjects] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
 
   const { data: callableWorkflows, isLoading: isLoadingWorkflows } = useCallableWorkflows(
     showAllProjects ? undefined : (projectId ?? undefined),
@@ -341,6 +346,46 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           value={nodeData.label}
           onChange={(e) => onUpdate({ label: e.target.value })}
         />
+      </div>
+
+      <div>
+        <Label className="text-xs font-medium">Create new sub-workflow</Label>
+        <Button
+          variant="default"
+          size="sm"
+          className="mt-1 w-full h-8 text-xs bg-[#ff0073] hover:bg-[#ff0073]/90 text-white disabled:opacity-50"
+          disabled={!workflowId || creating}
+          onClick={async () => {
+            if (!workflowId || creating) return
+            setCreating(true)
+            try {
+              const child = await createChildSubWorkflow(workflowId, { name: "New sub-workflow" })
+              onUpdate({
+                referencedWorkflowId: child.id,
+                referencedWorkflowName: child.name,
+                selectedRouteId: "",
+                routeSnapshot: null,
+              })
+              openSubWorkflow({
+                childWorkflowId: child.id,
+                childWorkflowName: child.name,
+                childProjectId: child.projectId,
+                navigate,
+              })
+            } catch (err) {
+              console.error("Failed to create sub-workflow:", err)
+              toast.error(err instanceof Error ? err.message : "Failed to create sub-workflow")
+            } finally {
+              setCreating(false)
+            }
+          }}
+        >
+          <Plus className="w-3.5 h-3.5 mr-1.5" />
+          {creating ? "Creating..." : "Create empty sub-workflow"}
+        </Button>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Seeds a new workflow with one input + one output node under this parent. Opens for editing immediately.
+        </p>
       </div>
 
       <div>
@@ -442,7 +487,13 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
               const wf = mergedWorkflows.find((w) => w.id === nodeData.referencedWorkflowId)
               const pid = wf?.projectId || projectId
               if (pid && nodeData.referencedWorkflowId) {
-                navigate(`/projects/${pid}/workflows/${nodeData.referencedWorkflowId}?focusType=sub-workflow-input`)
+                openSubWorkflow({
+                  childWorkflowId: nodeData.referencedWorkflowId,
+                  childWorkflowName: nodeData.referencedWorkflowName ?? wf?.name ?? "Untitled Workflow",
+                  childProjectId: pid,
+                  navigate,
+                  extraQuery: "?focusType=sub-workflow-input",
+                })
               }
             }}
           >
@@ -458,6 +509,26 @@ export function SubWorkflowConfig({ data, onUpdate }: ConfigProps<SubWorkflowDat
           Referenced workflow not found or has no valid routes.
         </div>
       )}
+
+      <div>
+        <Label className="text-xs font-medium">View mode</Label>
+        <Select
+          value={nodeData.viewMode ?? DEFAULT_VIEW_MODE_ID}
+          onValueChange={(v) => onUpdate({ viewMode: v })}
+        >
+          <SelectTrigger className="mt-1 h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {listSubWorkflowViewModes().map((mode) => (
+              <SelectItem key={mode.id} value={mode.id}>{mode.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Controls how this container renders on the canvas. Storyboard / Video / Script views will plug in here as they ship in v2.
+        </p>
+      </div>
 
       {viewerOpen && nodeData.referencedWorkflowId && (
         <WorkflowViewerModal

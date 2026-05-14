@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "flush-queue": "tsx src/scripts/flush-queue.ts",
-    "backfill-video-thumbnails": "tsx src/scripts/backfill-video-thumbnails.ts"
+    "backfill-video-thumbnails": "tsx src/scripts/backfill-video-thumbnails.ts",
+    "backfill-template-previews": "tsx src/scripts/backfill-template-previews.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",

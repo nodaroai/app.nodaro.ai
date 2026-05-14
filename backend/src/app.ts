@@ -134,6 +134,7 @@ import { registerMcpRoute } from "./routes/mcp.js"
 import { adminNodeDefaultsRoutes } from "./ee/routes/admin-node-defaults.js"
 import { tutorialsRoutes } from "./routes/tutorials.js"
 import { adminTutorialsRoutes } from "./ee/routes/admin-tutorials.js"
+import { adminTutorialCategoriesRoutes } from "./ee/routes/admin-tutorial-categories.js"
 import { executionStatsRoutes } from "./routes/execution-stats.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
@@ -343,6 +344,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminNodeDefaultsRoutes)
   await app.register(tutorialsRoutes)
   if (hasAdmin()) await app.register(adminTutorialsRoutes)
+  if (hasAdmin()) await app.register(adminTutorialCategoriesRoutes)
   await app.register(openapiRoutes)
 
   return app

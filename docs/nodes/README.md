@@ -255,7 +255,7 @@ Build modular, reusable workflows with sub-workflow nesting.
 |------|-------------|-------------|
 | [Sub-Workflow Input](./workflow/sub-workflow-input.md) | Define input ports for nested workflow | Create reusable workflow entry points with typed ports |
 | [Sub-Workflow Output](./workflow/sub-workflow-output.md) | Define output ports for nested workflow | Define what a sub-workflow returns to its caller |
-| [Sub-Workflow](./workflow/sub-workflow.md) | Execute another workflow as a step | Compose complex pipelines from reusable workflow modules |
+| [Sub-Workflow](./workflow/sub-workflow.md) | Embed another workflow as a node, with inline editing and breadcrumb nesting | Compose complex pipelines from reusable workflow modules -- create a fresh child or reference an existing standalone workflow |
 
 ---
 
