@@ -36,7 +36,15 @@ const DEFAULT_MOTION_PROVIDER: (typeof CHARACTER_MOTION_PROVIDERS)[number] = "kl
  *
  * `onRename` makes each card's name label inline-editable, matching the Expressions/Poses tabs.
  */
-export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
+export function MotionsTab({
+  state,
+  jobs,
+  onSwitchToAppearance,
+}: {
+  state: CharacterStudioState
+  jobs: CharacterStudioJobs
+  onSwitchToAppearance?: () => void
+}) {
   const hasPortrait = Boolean(state.staged.sourceImageUrl)
   const items = state.staged.motions
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === "motions")
@@ -101,6 +109,26 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
     [items, state, jobs, currentModel],
   )
 
+  // Portrait-required gate (PR 2 Task 18). Motions has its own UI (no shared ImageAssetTab) so
+  // the gate is duplicated here. The CTA replaces the entire tab body when the modal wires a
+  // switch callback and the portrait is missing.
+  if (!hasPortrait && onSwitchToAppearance) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
+        <div className="text-[11px] text-amber-300 mb-2">
+          Generate a portrait first to enable asset generations.
+        </div>
+        <button
+          type="button"
+          onClick={onSwitchToAppearance}
+          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
+        >
+          Open Appearance tab
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
@@ -121,9 +149,6 @@ export function MotionsTab({ state, jobs }: { state: CharacterStudioState; jobs:
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3.5">
-        {!hasPortrait && (
-          <div className="text-[11px] text-slate-500 mb-3">Generate a portrait in the Appearance tab first.</div>
-        )}
         <div className="grid grid-cols-5 gap-2.5">
           {items.map((item, idx) => (
             <AssetCard

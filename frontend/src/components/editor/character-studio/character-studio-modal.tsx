@@ -66,11 +66,12 @@ export function CharacterStudioModal({ nodeId, onClose }: { nodeId: string; onCl
     poses: studio.staged.poses.length,
     motions: studio.staged.motions.length,
   }
+  const switchToAppearance = () => setTab("appearance")
   const tabBody = {
     appearance: <AppearanceTab state={studio} jobs={jobs} />,
-    expressions: <ExpressionsTab state={studio} jobs={jobs} />,
-    poses: <PosesTab state={studio} jobs={jobs} />,
-    motions: <MotionsTab state={studio} jobs={jobs} />,
+    expressions: <ExpressionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
+    poses: <PosesTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
+    motions: <MotionsTab state={studio} jobs={jobs} onSwitchToAppearance={switchToAppearance} />,
     voice: <VoiceTab state={studio} />,
     personality: <PersonalityTab state={studio} />,
   }[tab]

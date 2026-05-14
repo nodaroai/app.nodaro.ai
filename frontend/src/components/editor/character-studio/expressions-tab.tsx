@@ -51,6 +51,7 @@ export function ImageAssetTab({
   title,
   description,
   onImport,
+  onSwitchToAppearance,
 }: {
   state: CharacterStudioState
   jobs: CharacterStudioJobs
@@ -61,6 +62,10 @@ export function ImageAssetTab({
   description: string
   /** optional Import handler — opens the gallery picker; see Task 14 Step 1b */
   onImport?: () => void
+  /** When provided, the tab gates generation on `sourceImageUrl` and offers a CTA to switch back
+   *  to the Appearance tab. Omitted by the Angles + Lighting embeds inside Appearance — those are
+   *  already on the Appearance tab and don't need the gate. See PR 2 Task 18. */
+  onSwitchToAppearance?: () => void
 }) {
   const items = (state.staged[arrayField] as { name: string; url: string }[]) ?? []
   const pendingForType = Array.from(jobs.pending.entries()).filter(([, m]) => m.assetType === assetType)
@@ -190,6 +195,26 @@ export function ImageAssetTab({
   const existingNames = new Set(items.map((i) => i.name.toLowerCase()))
   const missingCount = presets.filter((p) => !existingNames.has(p.toLowerCase())).length
 
+  // Portrait-required gate (PR 2 Task 18). Only applies when the parent has wired a switch
+  // callback — the Angles + Lighting embeds inside the Appearance tab omit it so they keep
+  // working without a portrait (they're contextually part of the Appearance flow).
+  if (!state.staged.sourceImageUrl && onSwitchToAppearance) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center px-3 py-6 text-center">
+        <div className="text-[11px] text-amber-300 mb-2">
+          Generate a portrait first to enable asset generations.
+        </div>
+        <button
+          type="button"
+          onClick={onSwitchToAppearance}
+          className="text-[10px] bg-[#3b82f6] text-white rounded px-3 py-1.5"
+        >
+          Open Appearance tab
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="px-4.5 pt-3 pb-2 border-b border-[#1e293b] flex items-center justify-between">
@@ -259,7 +284,15 @@ export function ImageAssetTab({
   )
 }
 
-export function ExpressionsTab({ state, jobs }: { state: CharacterStudioState; jobs: CharacterStudioJobs }) {
+export function ExpressionsTab({
+  state,
+  jobs,
+  onSwitchToAppearance,
+}: {
+  state: CharacterStudioState
+  jobs: CharacterStudioJobs
+  onSwitchToAppearance?: () => void
+}) {
   return (
     <ImageAssetTab
       state={state}
@@ -273,6 +306,7 @@ export function ExpressionsTab({ state, jobs }: { state: CharacterStudioState; j
         const url = window.prompt("Paste an image URL to import as an expression:")?.trim()
         if (url) state.patch({ expressions: [...state.staged.expressions, { name: "imported", url }] })
       }}
+      onSwitchToAppearance={onSwitchToAppearance}
     />
   )
 }
