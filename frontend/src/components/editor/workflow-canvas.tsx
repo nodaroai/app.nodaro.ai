@@ -31,6 +31,7 @@ import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
+import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
@@ -392,7 +393,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
-  const { screenToFlowPosition, setNodes, getNode, setCenter, fitView, getViewport, setViewport } = useReactFlow()
+  const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport } = useReactFlow()
   const savedViewport = useWorkflowStore((s) => s.savedViewport)
   const setSavedViewport = useWorkflowStore((s) => s.setSavedViewport)
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
@@ -542,6 +543,22 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // viewport toward them — but yield to the user for 2s after any manual
   // pan/zoom so the camera doesn't fight the user. See use-camera-auto-pan.ts.
   const cameraAutoPan = useCameraAutoPan(nodes)
+
+  // Realtime live-canvas sync: external writers (MCP / Film Director skill
+  // via update_workflow_json) mutate the workflows row directly in the DB.
+  // Subscribe to Postgres UPDATE events for the open workflow id and
+  // append-only diff new nodes/edges into React Flow. The id-keyed mount
+  // animations (D1 node fade-in, D2 edge stretch) and D3 camera auto-pan
+  // naturally fire for the appended items because they're seeing those
+  // ids for the first time. See use-workflow-realtime-sync.ts.
+  const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
+  useWorkflowRealtimeSync({
+    workflowId: realtimeWorkflowId,
+    getCurrentNodes: () => getNodes(),
+    getCurrentEdges: () => getEdges(),
+    onAppendNodes: (newNodes) => setNodes((nds) => [...nds, ...newNodes]),
+    onAppendEdges: (newEdges) => setEdges((eds) => [...eds, ...newEdges]),
+  })
 
   const handleMoveStart = useCallback(() => {
     // Tell the auto-pan hook the user just initiated a pan/zoom — it
