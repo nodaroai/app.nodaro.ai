@@ -187,7 +187,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names).not.toContain("list_apps")
   })
 
-  it("with no scopes, registers only the unscoped tools (ping, list_models)", async () => {
+  it("with no scopes, registers only the unscoped tools (ping, list_models, start_film_director)", async () => {
     const fastify = Fastify()
     const server = await buildMcpServer({
       userId: "u1",
@@ -200,10 +200,14 @@ describe("buildMcpServer full catalog (v1.1)", () => {
 
     expect(names).toContain("ping")
     expect(names).toContain("list_models")
+    // start_film_director is intentionally ungated — pure content delivery
+    // (returns the canonical SKILL.md). Universal visibility is the whole
+    // point, since skill discovery is per-client and unreliable.
+    expect(names).toContain("start_film_director")
     expect(names).not.toContain("list_jobs")
     expect(names).not.toContain("generate_image")
     expect(names).not.toContain("check_balance")
-    expect(tools).toHaveLength(2)
+    expect(tools).toHaveLength(3)
   })
 
   it("v3.0: dynamic per-user tools dropped — list_apps + get_app_inputs + run_app cover the same surface", async () => {
