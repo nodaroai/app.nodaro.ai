@@ -51,6 +51,13 @@ export function runImageGeneration(
   renderingSpeed?: string,
   styleType?: string,
   expandPrompt?: boolean,
+  identity?: {
+    /** Forward injectCharacterContext + attachToCharacterId to the
+     *  /v1/generate-image route — backend appends the character's
+     *  canonical_description to the prompt. */
+    injectCharacterContext?: boolean
+    attachToCharacterId?: string
+  },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -69,6 +76,7 @@ export function runImageGeneration(
         renderingSpeed,
         styleType,
         expandPrompt,
+        identity,
       ),
     "generatedImageUrl",
     "Image generation",
@@ -123,6 +131,11 @@ export function runImageToImage(
     renderingSpeed?: string
     guidanceScale?: number
     maskUrl?: string
+    /** Forward injectCharacterContext + attachToCharacterId to the
+     *  /v1/image-to-image route — backend (non-studio path) appends the
+     *  character's canonical_description to the prompt. */
+    injectCharacterContext?: boolean
+    attachToCharacterId?: string
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -245,6 +258,11 @@ export function runVideoGeneration(
       quality?: "lossless" | "precise";
     };
     seedance2InputMode?: "frames" | "references";
+    /** Forward injectCharacterContext + attachToCharacterId to the
+     *  /v1/generate-video route — backend appends the character's
+     *  canonical_description to the prompt. */
+    injectCharacterContext?: boolean;
+    attachToCharacterId?: string;
   },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -280,6 +298,8 @@ export function runVideoGeneration(
         seedance2InputMode: extras?.seedance2InputMode,
         enableTranslation: extras?.enableTranslation,
         loopTrim: extras?.loopTrim,
+        injectCharacterContext: extras?.injectCharacterContext,
+        attachToCharacterId: extras?.attachToCharacterId,
         userId: ctx.userId,
       }),
     "generatedVideoUrl",

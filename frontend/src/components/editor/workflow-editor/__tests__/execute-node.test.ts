@@ -523,6 +523,9 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
+      // identity (trailing arg) — undefined when no upstream Character has
+      // injectIdentityInPrompts enabled.
+      undefined,
     )
   })
 
@@ -548,6 +551,8 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
+      // identity (trailing arg).
       undefined,
     )
   })

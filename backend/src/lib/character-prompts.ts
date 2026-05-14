@@ -11,10 +11,10 @@ export const PORTRAIT_SCAFFOLDING =
   "4k portrait, plain background, studio lighting, neutral expression unless described otherwise, no text, no labels, no watermarks"
 
 export const ASSET_STILL_SCAFFOLDING =
-  "4k highly detailed, plain background, no text, no labels, no watermarks"
+  "The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, proportions, and unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Ultra-detailed, 8K quality, cinematic framing, plain background, no text, no labels, no watermarks"
 
 export const ASSET_MOTION_SCAFFOLDING =
-  "smooth motion, natural movement, no text, no labels, no watermarks"
+  "The subject must remain exactly the same person — preserve facial identity, bone structure, eye color, hair color, skin tone, and proportions. Smooth motion, natural movement, no text, no labels, no watermarks"
 
 // Framing fragments per asset type. "custom" is intentionally absent — when
 // users supply their own free-form prompt, framing is their responsibility,

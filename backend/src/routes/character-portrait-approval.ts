@@ -36,10 +36,18 @@ const approveBody = z.object({ candidateJobId: z.string().uuid() })
 
 const CAPTION_SYSTEM =
   "You write rich, ~80–120-word visual descriptions of a character based on their portrait. " +
-  "Cover: face shape, skin tone, eyes (color, shape), nose, mouth, hair (color, style, length), distinctive features, " +
-  "build, apparent age, demeanor. Be specific. Avoid clothing unless distinctive. " +
-  "This description gets passed to image-gen models alongside the portrait to maintain identity consistency. " +
-  "Output only the description; no preamble."
+  "Output a single flowing paragraph (NOT a structured list) that ALWAYS names: " +
+  "eye color (e.g. brown, blue, hazel, green), " +
+  "hair color (e.g. black, blonde, auburn, grey), " +
+  "hair style (length, texture, distinctive style), " +
+  "skin tone, " +
+  "approximate age range, " +
+  "build (slim, athletic, heavy-set, etc.), " +
+  "and any distinctive features (scars, tattoos, glasses, freckles, jewelry). " +
+  "Be specific and concrete — if any of these traits are not clearly visible in the portrait, infer the most likely value rather than omitting it. " +
+  "Avoid clothing unless distinctive. " +
+  "This description gets passed to image-gen models alongside the portrait to maintain identity consistency, so every named trait matters. " +
+  "Output the description only, no preamble."
 
 /**
  * Run the LLM caption for a portrait URL. Re-throws on failure so the caller

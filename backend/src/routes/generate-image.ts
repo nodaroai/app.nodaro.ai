@@ -60,8 +60,18 @@ export const generateImageBody = z.object({
   renderingSpeed: z.enum(["TURBO", "BALANCED", "QUALITY"]).optional(),
   styleType: z.string().optional(),
   expandPrompt: z.boolean().optional(),
+  // Identity injection: when the upstream Character node has its
+  // "Inject identity description in downstream prompts" toggle enabled, the
+  // frontend / DAG executor passes these so the route appends the character's
+  // canonical_description (with an identity-preserve suffix) to the prompt
+  // before reservation and worker enqueue. Default off — must be explicit.
+  injectCharacterContext: z.boolean().optional().default(false),
+  attachToCharacterId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
 })
+
+const IDENTITY_PRESERVE_SUFFIX =
+  "The subject must remain exactly the same person — preserve facial identity, eye color, hair color, skin tone, and unique features."
 
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", { preHandler: creditGuard((req) => {
@@ -95,7 +105,38 @@ export async function generateImageRoutes(app: FastifyInstance) {
 
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
-    const prompt = descSuffix ? `${rawPrompt}\n${descSuffix}` : rawPrompt
+    let prompt = descSuffix ? `${rawPrompt}\n${descSuffix}` : rawPrompt
+
+    // Identity injection — when enabled + a character is referenced, append the
+    // canonical description (with description / nothing fallback) plus an
+    // identity-preserve suffix to the prompt. Off by default; the user must
+    // explicitly opt in per Character node (see CharacterNodeData.injectIdentityInPrompts).
+    if (parsed.data.injectCharacterContext && parsed.data.attachToCharacterId) {
+      const { data: char } = await supabase
+        .from("characters")
+        .select("canonical_description, description, name")
+        .eq("id", parsed.data.attachToCharacterId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .single()
+      if (char) {
+        // Degradation chain: canonical_description -> description.
+        // We deliberately skip the `name`-only case — injecting just the
+        // character's name adds zero identity signal and pollutes the prompt.
+        const canonical = typeof char.canonical_description === "string" ? char.canonical_description.trim() : ""
+        const desc = typeof char.description === "string" ? char.description.trim() : ""
+        const identityText = canonical.length > 0 ? canonical : (desc.length > 0 ? desc : "")
+        if (identityText.length > 0) {
+          prompt = `${prompt.trim()}\n\n${identityText}\n\n${IDENTITY_PRESERVE_SUFFIX}`
+          if (prompt.length > 2000) {
+            req.log.warn(
+              { characterId: parsed.data.attachToCharacterId, finalPromptLength: prompt.length },
+              "[generate-image] character context injection produced a long prompt; consider trimming canonicalDescription",
+            )
+          }
+        }
+      }
+    }
 
     // Auto-route T2I providers to their i2i sibling when the user actually
     // addresses reference images in the prompt. Without this, T2I models

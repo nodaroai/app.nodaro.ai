@@ -752,4 +752,148 @@ describe("POST /v1/image-to-image", () => {
       expect(enqueuedPayload.imageUrl).toBe("https://example.com/explicit-source.png")
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Identity injection (NON-studio path) — injectCharacterContext +
+  // attachToCharacterId append canonical_description to the worker prompt.
+  // The studio path is intentionally exempt (it already drafts a `description`
+  // via LLM and forwards a richer payload).
+  //
+  // Studio vs non-studio gate: studio = `attachToCharacterId && !injectCharacterContext`.
+  // When a DAG executor / workflow wires a Character node downstream, it sets
+  // both flags so the simpler injection path runs instead of the studio LLM
+  // draft.
+  // ---------------------------------------------------------------------------
+
+  describe("identity injection (non-studio path)", () => {
+    const NS_CHARACTER_ID = "00000000-0000-4000-8000-0000000000bb"
+
+    function setupSupabaseInjectMock(opts: {
+      charRow?: { canonical_description: string | null; description: string | null; name: string | null } | null
+    }) {
+      const charSingle = vi.fn().mockResolvedValue({ data: opts.charRow ?? null, error: null })
+      const charIs = vi.fn().mockReturnValue({ single: charSingle })
+      const charEq2 = vi.fn().mockReturnValue({ is: charIs })
+      const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
+      const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
+
+      const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+      const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
+      const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
+
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "characters") return { select: charSelect } as never
+        if (table === "jobs") return { insert: jobInsert } as never
+        return {} as never
+      })
+      return { charSelect, charEq1, charEq2, charIs, jobInsert }
+    }
+
+    it("appends canonical_description + identity-preserve suffix to the worker prompt", async () => {
+      setupSupabaseInjectMock({
+        charRow: {
+          canonical_description: "A woman with auburn hair and warm hazel eyes.",
+          description: null,
+          name: "Kira",
+        },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/source.png",
+          prompt: "Make her smile gently",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: NS_CHARACTER_ID,
+          // No studio fields (attachToColumn/attachName) — workflow caller.
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      // Non-studio path triggered (injectCharacterContext=true defeats studio).
+      // No LLM call — pure DB lookup + prompt concat.
+      expect(llmComplete).not.toHaveBeenCalled()
+      const queued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      const queuedPrompt = queued.prompt as string
+      expect(queuedPrompt).toContain("Make her smile gently")
+      expect(queuedPrompt).toContain("auburn hair")
+      expect(queuedPrompt).toContain("warm hazel eyes")
+      expect(queuedPrompt).toContain("same person")
+      // force_private NOT set — non-studio path keeps default privacy.
+      expect((queued as Record<string, unknown>).force_private).toBeUndefined()
+    })
+
+    it("falls back to description when canonical_description is empty", async () => {
+      setupSupabaseInjectMock({
+        charRow: {
+          canonical_description: "",
+          description: "Athletic build, brown eyes, short black hair.",
+          name: "Aldric",
+        },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/source.png",
+          prompt: "in motion",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: NS_CHARACTER_ID,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const queuedPrompt = (vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>).prompt as string
+      expect(queuedPrompt).toContain("Athletic build")
+    })
+
+    it("does NOT inject when both canonical_description and description are empty (skip name-only)", async () => {
+      setupSupabaseInjectMock({
+        charRow: { canonical_description: "", description: null, name: "Kira" },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/source.png",
+          prompt: "stylize",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: NS_CHARACTER_ID,
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const queuedPrompt = (vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>).prompt as string
+      expect(queuedPrompt).toBe("stylize")
+      expect(queuedPrompt).not.toContain("same person")
+    })
+
+    it("scopes the characters lookup by user_id (defense in depth IDOR)", async () => {
+      const { charEq1, charEq2, charIs } = setupSupabaseInjectMock({
+        charRow: { canonical_description: "ignored", description: null, name: "Kira" },
+      })
+
+      await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/source.png",
+          prompt: "stylize",
+          userId: VALID_UUID,
+          injectCharacterContext: true,
+          attachToCharacterId: NS_CHARACTER_ID,
+        },
+      })
+
+      expect(charEq1).toHaveBeenCalledWith("id", NS_CHARACTER_ID)
+      expect(charEq2).toHaveBeenCalledWith("user_id", VALID_UUID)
+      expect(charIs).toHaveBeenCalledWith("deleted_at", null)
+    })
+  })
 })
