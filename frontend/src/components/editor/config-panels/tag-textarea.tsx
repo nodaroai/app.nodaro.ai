@@ -163,17 +163,26 @@ export function TagTextarea(props: TagTextareaProps) {
     }))
   }, [nodeRefs])
 
-  // Hierarchical autocomplete for the `@` trigger:
+  // Hybrid autocomplete for the `@` trigger:
   //
-  //   Root view: 1 entry per character (canonical thumbnail + name) + the
-  //              non-character refs (uploaded / wired-image) inline at the
-  //              bottom. Selecting a character drills in instead of inserting.
+  //   Empty filter (just `@` typed): HIERARCHICAL root view — 1 entry per
+  //              character (canonical thumbnail + name) + non-character refs
+  //              (uploaded / wired-image) as ordinary leaves. Selecting a
+  //              character drills in instead of inserting.
   //
-  //   Drill-in:  "← back (Name)" row + that character's variants. Selecting a
-  //              variant inserts `@<char>:<variant>` and closes the popup.
+  //   Drill-in: "← back (Name)" row + that character's variants. Selecting a
+  //              variant inserts `@<char>:N:<variant>` and closes the popup.
   //
-  // Non-character refs (`source !== "character"`) bypass the drill-in
-  // entirely and use the legacy `{image:N:role}` token.
+  //   Non-empty filter (user typed something after `@`): FLAT search — every
+  //              character ref (canonical + variants) plus matching
+  //              non-character refs, filtered by character name, variant name,
+  //              character slug, or variant slug. Each row shows the full path
+  //              ("Kira / smile") so users distinguish identically-named
+  //              variants across characters. Drill-in is bypassed; selecting
+  //              a result inserts directly.
+  //
+  // Non-character refs (`source !== "character"`) always use the legacy
+  // `{image:N:role}` token in both modes.
   const refImageSuggestions = useMemo((): SuggestionItem[] => {
     if (!referenceImages || referenceImages.length === 0) return []
 
@@ -188,6 +197,75 @@ export function TagTextarea(props: TagTextareaProps) {
       } else {
         nonCharacterItems.push(item)
       }
+    }
+
+    const q = filterText.trim().toLowerCase()
+
+    // FLAT SEARCH MODE — when the user has typed something after `@`,
+    // surface every character ref (canonical + variants) so typing
+    // `@smile` finds Kira's smile expression directly. Filter matches
+    // character name, variant name, character slug, or variant slug.
+    if (q.length > 0) {
+      const flatCategory = "Search"
+      const matches: SuggestionItem[] = []
+      for (const [slug, group] of characterGroups) {
+        const canonical = group.find((i) => !i.variantSlug) ?? group[0]
+        const charName = (canonical.label || slug).toLowerCase()
+        for (const v of group) {
+          const variantName = (v.variantDisplayName ?? "").toLowerCase()
+          const variantSlug = (v.variantSlug ?? "").toLowerCase()
+          const fullSlug = v.variantSlug ? `${slug}:${variantName}` : slug
+          // Legacy hyphen form (e.g. "kira-smile") for compatibility with users
+          // who type the old slug shape.
+          const legacySlug = v.variantSlug ? `${slug}-${variantSlug}` : slug
+          if (
+            charName.includes(q)
+            || variantName.includes(q)
+            || slug.toLowerCase().includes(q)
+            || variantSlug.includes(q)
+            || fullSlug.includes(q)
+            || legacySlug.includes(q)
+          ) {
+            // Render the full path ("Kira / smile") in flat-search mode so
+            // users distinguish identically-named variants across characters.
+            // The render layer appends `/ variantDisplayName` when present,
+            // so we MUST omit variantDisplayName here to avoid double-suffix
+            // ("Kira / smile / smile"). The canonical ref drops the suffix.
+            const displayLabel = v.variantDisplayName && v.variantDisplayName !== "canonical"
+              ? `${canonical.label} / ${v.variantDisplayName}`
+              : canonical.label
+            matches.push({
+              kind: "variant",
+              tag: v.variantSlug
+                ? `@${v.characterSlug}:${v.variantSlug}`
+                : `@${v.characterSlug}`,
+              label: displayLabel,
+              category: flatCategory,
+              thumbnailUrl: v.url,
+              // Intentionally omitted: see displayLabel comment.
+              characterSlug: v.characterSlug,
+            })
+          }
+        }
+      }
+      // Non-character refs filtered by label, index, or default-label.
+      const nonCharMatches: SuggestionItem[] = []
+      for (const r of nonCharacterItems) {
+        if (
+          r.label.toLowerCase().includes(q)
+          || String(r.index).includes(q)
+          || r.defaultLabel.toLowerCase().includes(q)
+        ) {
+          nonCharMatches.push({
+            kind: "leaf",
+            tag: `{image:${r.index}:${r.defaultLabel}}`,
+            label: `#${r.index} ${r.label}`,
+            category: REF_IMAGE_SOURCE_LABEL[r.source],
+            thumbnailUrl: r.url,
+          })
+        }
+      }
+      return [...matches, ...nonCharMatches]
     }
 
     // Drill-in view: that character's variants + back row.
@@ -220,8 +298,7 @@ export function TagTextarea(props: TagTextareaProps) {
       ]
     }
 
-    // Root view: one entry per character (using canonical row or fallback)
-    // + non-character refs as ordinary leaves.
+    // Root view (empty filter): one entry per character + non-character refs.
     const characterRoots: SuggestionItem[] = []
     for (const [slug, items] of characterGroups) {
       const canonical = items.find((i) => !i.variantSlug) ?? items[0]
@@ -245,17 +322,24 @@ export function TagTextarea(props: TagTextareaProps) {
       thumbnailUrl: r.url,
     }))
     return [...nonCharacterLeaves, ...characterRoots]
-  }, [referenceImages, drillCharacterSlug])
+  }, [referenceImages, drillCharacterSlug, filterText])
 
+  // Filter character-aware suggestions internally (the memo above already
+  // applies the query in flat-search mode and ignores it in root/drill mode).
+  // Apply the legacy substring filter to non-`@` suggestions so audio tags,
+  // SSML breaks, and node refs still respect the filter.
   const filtered = useMemo(() => {
     if (!showDropdown || !triggerInfo) return []
     const q = filterText.toLowerCase()
 
+    if (triggerInfo.char === "@") {
+      // refImageSuggestions already applied query-aware filtering.
+      return refImageSuggestions
+    }
+
     let items: readonly SuggestionItem[]
     if (triggerInfo.char === "{") {
       items = nodeRefSuggestions
-    } else if (triggerInfo.char === "@") {
-      items = refImageSuggestions
     } else if (tagMode === "suno") {
       if (!customTags) return []
       if (triggerInfo.char === "<") return []
@@ -590,6 +674,16 @@ export function TagTextarea(props: TagTextareaProps) {
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [showDropdown, dismiss])
+
+  // Hybrid mode orthogonality: when the user types a non-empty filter while
+  // drilled into a character, reset the drill state so the flat-search results
+  // aren't masked by the drill bucket. Clearing the filter back to empty
+  // resumes the hierarchical root view automatically (drill stays null).
+  useEffect(() => {
+    if (filterText.trim().length > 0 && drillCharacterSlug) {
+      setDrillCharacterSlug(null)
+    }
+  }, [filterText, drillCharacterSlug])
 
   // Clear transient insert-time warning after 4 seconds
   useEffect(() => {
