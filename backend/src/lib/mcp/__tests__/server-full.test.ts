@@ -110,6 +110,10 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("get_asset")).toBe(true)
     expect(names.has("display_asset")).toBe(true)
 
+    // character discovery tools (assets:read)
+    expect(names.has("list_characters")).toBe(true)
+    expect(names.has("get_character")).toBe(true)
+
     // swap_face is intentionally absent — no /v1/swap-face route exists.
     expect(names.has("swap_face")).toBe(false)
 
@@ -180,6 +184,8 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     // Must NOT include assets:read tools
     expect(names).not.toContain("browse_gallery")
     expect(names).not.toContain("favorite_asset")
+    expect(names).not.toContain("list_characters")
+    expect(names).not.toContain("get_character")
     // Must NOT include credits:read tools
     expect(names).not.toContain("check_balance")
     expect(names).not.toContain("credit_transactions")

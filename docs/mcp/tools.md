@@ -14,7 +14,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
 | `workflows:execute` | `run_workflow` |
 | `jobs:read` | `list_jobs`, `get_job` |
-| `assets:read` | `browse_gallery`, `list_favorites`, `get_asset` |
+| `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
 | `assets:write` | `favorite_asset` |
 | `generation:write` | All generation verbs (`generate_image`, `generate_video`, etc.) |
 
@@ -333,3 +333,150 @@ registers an async task for progress tracking.
 **Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
 the jobs/executions tools or the SDK to poll for completion. MCP clients that
 support the `tasks/*` API and widget rendering will show live progress inline.
+
+---
+
+## Character tools
+
+Character tools surface the caller's saved characters from Character Studio so
+an LLM client can pick the right asset URL to pass as a reference image into
+a subsequent generation call. They are **read-only**: editing characters still
+flows through the web app or the REST API.
+
+The intended workflow is:
+
+1. Call `list_characters` to discover which characters are available, with
+   their asset counts and short identity copy.
+2. Call `get_character(id)` for the character(s) you want to use, which
+   returns every expression / pose / motion / angle / lighting variant with
+   its URL.
+3. Pick the URL that matches the user's intent (e.g. an expression named
+   `"smile"` or `"laughing"`) and pass it as a reference image into
+   `generate_image`, `image_to_image`, or `generate_video`.
+
+Both tools are scoped to the calling user — characters owned by other users
+are invisible. Archived characters are excluded.
+
+### `list_characters`
+
+Lists the caller's characters with summary fields, ordered by most recently
+updated.
+
+**Scope:** `assets:read`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `limit` | integer | Optional. Max characters to return. Default 50, max 100. |
+
+**Response shape:**
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Kira",
+      "description": "freckled redhead protagonist",
+      "canonicalDescription": "young woman with auburn hair and green eyes…",
+      "portraitUrl": "https://example.com/kira-portrait.png",
+      "seedPrompt": "kira portrait",
+      "gender": "female",
+      "style": "photoreal",
+      "baseOutfit": "denim jacket",
+      "assetCounts": {
+        "expressions": 5,
+        "poses": 3,
+        "motions": 2,
+        "angles": 1,
+        "bodyAngles": 0,
+        "lightingVariations": 0
+      },
+      "updatedAt": "2026-05-10T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### `get_character`
+
+Returns full asset detail for one character. Use the `id` from
+`list_characters`.
+
+**Scope:** `assets:read`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID string | The character's id, from `list_characters` |
+
+**Response shape:**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Kira",
+    "description": "freckled redhead protagonist",
+    "canonicalDescription": "young woman with auburn hair and green eyes…",
+    "portraitUrl": "https://example.com/kira-portrait.png",
+    "seedPrompt": "kira portrait",
+    "gender": "female",
+    "style": "photoreal",
+    "baseOutfit": "denim jacket",
+    "expressions": [
+      { "name": "smile", "url": "https://example.com/kira-smile.png" },
+      { "name": "frown", "url": "https://example.com/kira-frown.png" }
+    ],
+    "poses": [
+      { "name": "standing", "url": "https://example.com/kira-stand.png" }
+    ],
+    "motions": [
+      { "name": "wave", "url": "https://example.com/kira-wave.mp4" }
+    ],
+    "angles": [
+      { "name": "profile-left", "url": "https://example.com/kira-profile.png" }
+    ],
+    "bodyAngles": [],
+    "lightingVariations": [
+      { "name": "golden-hour", "url": "https://example.com/kira-golden.png" }
+    ],
+    "referencePhotos": [
+      { "url": "https://example.com/kira-ref-1.jpg", "kind": "frontFace" }
+    ],
+    "realLifeRefsByVariant": {
+      "smile": ["https://example.com/laugh-ref.jpg"]
+    },
+    "createdAt": "2026-04-01T00:00:00.000Z",
+    "updatedAt": "2026-05-10T00:00:00.000Z"
+  }
+}
+```
+
+Returns an error if the id doesn't resolve to a character owned by the caller.
+
+**Example walkthrough** ("make a photo of Kira smiling and Shira laughing at
+the park"):
+
+```jsonc
+// Step 1 — discover available characters
+list_characters({})
+// → { data: [{ id: "kira-uuid", name: "Kira", … }, { id: "shira-uuid", name: "Shira", … }] }
+
+// Step 2 — fetch Kira's full detail
+get_character({ id: "kira-uuid" })
+// → { data: { expressions: [{ name: "smile", url: "https://…/kira-smile.png" }, …], … } }
+
+// Step 3 — fetch Shira's full detail
+get_character({ id: "shira-uuid" })
+// → { data: { expressions: [{ name: "laughing", url: "https://…/shira-laugh.png" }, …], … } }
+
+// Step 4 — generate the composite scene with both URLs as references
+generate_image({
+  prompt: "Kira smiling and Shira laughing in a sunlit park",
+  reference_images: [
+    "https://…/kira-smile.png",
+    "https://…/shira-laugh.png"
+  ]
+})
+```
