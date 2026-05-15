@@ -29,15 +29,15 @@ const kiraSmile: ConnectedReference = {
 }
 
 describe("buildImagePrompt with @-mentions", () => {
-  it("resolves @kira-smile to URL + appends variant description", () => {
+  it("resolves @kira:smile to URL + appends variant description", () => {
     const result = buildImagePrompt({
-      prompt: "make her dance, @kira-smile",
+      prompt: "make her dance, @kira:smile",
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical, kiraSmile],
     })
     expect(result.referenceImageUrls).toContain("https://r2/kira-smile.png")
     expect(result.prompt).toContain("warm closed-mouth smile")
-    expect(result.prompt).not.toMatch(/@kira-smile\b/)
+    expect(result.prompt).not.toMatch(/@kira:smile\b/)
   })
 
   it("resolves bare @kira to canonical entry", () => {
@@ -52,7 +52,7 @@ describe("buildImagePrompt with @-mentions", () => {
 
   it("dedupes canonical description when character appears in multiple tokens", () => {
     const result = buildImagePrompt({
-      prompt: "@kira looks at her own @kira-smile",
+      prompt: "@kira looks at her own @kira:smile",
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical, kiraSmile],
     })

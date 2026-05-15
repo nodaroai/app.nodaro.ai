@@ -125,11 +125,12 @@ export function TagTextarea(props: TagTextareaProps) {
   const refImageSuggestions = useMemo((): SuggestionItem[] => {
     if (!referenceImages || referenceImages.length === 0) return []
     return referenceImages.map((r) => {
-      // Character refs use slug-based @<character>(-<variant>)? tokens; everything else
+      // Character refs use slug-based @<character>(:<variant>)? tokens; everything else
       // keeps the legacy {image:N:role} positional token so existing prompts keep working.
+      // Colon separator is unambiguous (each side may contain dashes).
       const isCharacterMention = r.source === "character" && r.characterSlug
       const tag = isCharacterMention
-        ? (r.variantSlug ? `@${r.characterSlug}-${r.variantSlug}` : `@${r.characterSlug}`)
+        ? (r.variantSlug ? `@${r.characterSlug}:${r.variantSlug}` : `@${r.characterSlug}`)
         : `{image:${r.index}:${r.defaultLabel}}`
       return {
         tag,
