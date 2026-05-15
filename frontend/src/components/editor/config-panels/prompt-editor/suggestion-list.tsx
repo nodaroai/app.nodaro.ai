@@ -23,34 +23,45 @@ interface SuggestionListProps {
 }
 
 /**
- * Display row discriminator. The dropdown is a hierarchical picker:
+ * Display row discriminator. The dropdown is a hybrid picker:
  *
  *   - "back":            top row inside drill-in view, pops back to root
  *   - "character-root":  one row per character at root view; clicking drills in
- *   - "variant":         leaf variant inside drill-in view; clicking inserts
+ *   - "variant":         leaf variant — inside drill-in view OR a flat-search
+ *                        result. `flatSearch=true` opts the row into the
+ *                        "Kira / smile" full-path label.
  *   - "image-ref":       non-character ref (uploaded / wired-image), inserted directly
  */
 type DisplayRow =
   | { kind: "back"; characterName: string }
   | { kind: "character-root"; item: RefImageItem; variantCount: number; characterSlug: string }
-  | { kind: "variant"; item: RefImageItem }
+  | { kind: "variant"; item: RefImageItem; flatSearch?: boolean; characterLabel?: string }
   | { kind: "image-ref"; item: RefImageItem }
 
 /**
- * Dropdown shown when the user types `@`. Hierarchical picker:
+ * Dropdown shown when the user types `@`. Hybrid picker:
  *
- *   Root view: 1 entry per character (canonical thumbnail + name) + the
- *              non-character refs (uploaded / wired-image) inline at the
- *              bottom. Selecting a character drills in instead of inserting.
+ *   Empty query (just `@` typed): HIERARCHICAL root view — 1 entry per
+ *              character (canonical thumbnail + name) + non-character refs
+ *              (uploaded / wired-image) inline at the bottom. Selecting a
+ *              character drills in instead of inserting.
  *
  *   Drill-in:  "← back (Name)" row + that character's variants. Selecting a
  *              variant fires `command(item)` and the parent inserts
  *              `@<char>:<N>(:<variant>)?` plain text into the editor.
  *
- * Non-character refs (`source !== "character"`) bypass the drill-in entirely
- * and use the legacy `{image:N:role}` TipTap node insertion.
+ *   Non-empty query (user typed something after `@`): FLAT search — every
+ *              character ref (canonical + variants) plus matching
+ *              non-character refs, filtered by character name, variant name,
+ *              character slug, or variant slug. Each row shows the full path
+ *              ("Kira / smile") so users distinguish identically-named
+ *              variants across characters. Drill-in is bypassed; selecting a
+ *              result inserts directly.
  *
- * Mirrors `TagTextarea`'s hierarchical UX so generate-image / image-to-image /
+ * Non-character refs (`source !== "character"`) always use the legacy
+ * `{image:N:role}` TipTap node insertion in both modes.
+ *
+ * Mirrors `TagTextarea`'s hybrid UX so generate-image / image-to-image /
  * modify-image have identical @-mention semantics to image-to-video.
  */
 export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListProps>(
@@ -80,6 +91,50 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     // Compute the rows to display based on drill state + query.
     const displayRows = useMemo<DisplayRow[]>(() => {
       const q = query.trim().toLowerCase()
+
+      // FLAT SEARCH MODE — when the user has typed something after `@`,
+      // surface every character ref (canonical + variants) so typing `@smile`
+      // finds Kira's smile expression directly. Filter matches character
+      // name, variant name, character slug, or variant slug. Drill-in is
+      // bypassed; each row shows the full path ("Kira / smile").
+      if (q.length > 0) {
+        const rows: DisplayRow[] = []
+        for (const [slug, group] of characterGroups) {
+          const canonical = group.find((i) => !i.variantSlug) ?? group[0]
+          const charLabel = canonical.label || slug
+          const charName = charLabel.toLowerCase()
+          for (const v of group) {
+            const variantName = (v.variantDisplayName ?? "").toLowerCase()
+            const variantSlug = (v.variantSlug ?? "").toLowerCase()
+            const fullSlug = v.variantSlug ? `${slug}:${variantName}` : slug
+            // Legacy hyphen form (e.g. "kira-smile") for compatibility with
+            // users who type the old slug shape.
+            const legacySlug = v.variantSlug ? `${slug}-${variantSlug}` : slug
+            if (
+              charName.includes(q)
+              || variantName.includes(q)
+              || slug.toLowerCase().includes(q)
+              || variantSlug.includes(q)
+              || fullSlug.includes(q)
+              || legacySlug.includes(q)
+            ) {
+              rows.push({ kind: "variant", item: v, flatSearch: true, characterLabel: charLabel })
+            }
+          }
+        }
+        // Non-character refs filtered by label, index, or default-label.
+        for (const r of nonCharacterItems) {
+          if (
+            r.label.toLowerCase().includes(q)
+            || String(r.index).includes(q)
+            || r.defaultLabel.toLowerCase().includes(q)
+          ) {
+            rows.push({ kind: "image-ref", item: r })
+          }
+        }
+        return rows
+      }
+
       // Drill-in: back row + this character's variants.
       if (drillCharacterSlug) {
         const variants = characterGroups.get(drillCharacterSlug) ?? []
@@ -88,20 +143,18 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         // Back row always visible (navigation, not data).
         const rows: DisplayRow[] = [{ kind: "back", characterName }]
         for (const v of variants) {
-          if (q && !(v.label.toLowerCase().includes(q) || (v.variantDisplayName ?? "").toLowerCase().includes(q))) continue
           rows.push({ kind: "variant", item: v })
         }
         return rows
       }
-      // Root: non-character refs (filtered) + one row per character (filtered).
+
+      // Root (empty query): non-character refs + one row per character.
       const rows: DisplayRow[] = []
       for (const r of nonCharacterItems) {
-        if (q && !(r.label.toLowerCase().includes(q) || String(r.index).includes(q) || r.defaultLabel.toLowerCase().includes(q))) continue
         rows.push({ kind: "image-ref", item: r })
       }
       for (const [slug, group] of characterGroups) {
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
-        if (q && !(canonical.label.toLowerCase().includes(q) || slug.toLowerCase().includes(q))) continue
         rows.push({ kind: "character-root", item: canonical, variantCount: group.length, characterSlug: slug })
       }
       return rows
@@ -114,6 +167,16 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       const skipBack = displayRows[0]?.kind === "back" && displayRows.length > 1
       setSelectedIndex(skipBack ? 1 : 0)
     }, [displayRows])
+
+    // Hybrid mode orthogonality: when the user types a non-empty filter while
+    // drilled into a character, reset the drill state so the flat-search
+    // results aren't masked by the drill bucket. Clearing the filter back to
+    // empty resumes the hierarchical root view automatically.
+    useEffect(() => {
+      if (query.trim().length > 0 && drillCharacterSlug) {
+        setDrillCharacterSlug(null)
+      }
+    }, [query, drillCharacterSlug])
 
     const handleSelect = useCallback((row: DisplayRow) => {
       if (row.kind === "back") {
@@ -232,6 +295,11 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 ? `@${item.characterSlug}:N:${item.variantSlug}`
                 : `@${item.characterSlug}:N`)
             : `@image:${item.index}:${item.defaultLabel}`
+          // In flat-search mode, the parent character label is hoisted into
+          // the row so the user can distinguish identically-named variants
+          // across characters ("Kira / smile" vs "Aria / smile"). The normal
+          // drill-in row keeps its existing two-tone label.
+          const useFullPath = row.kind === "variant" && row.flatSearch === true
           return (
             <button
               key={`${row.kind}-${item.index}-${item.variantSlug ?? "canonical"}`}
@@ -256,12 +324,19 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               <span className="truncate flex-1 min-w-0">
                 {row.kind === "image-ref"
                   ? <>#{item.index} {item.label}</>
-                  : <>
-                      {item.label}
-                      {item.variantDisplayName && item.variantDisplayName !== "canonical" && (
-                        <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
-                      )}
-                    </>
+                  : useFullPath
+                    ? <>
+                        {row.characterLabel ?? item.label}
+                        {item.variantDisplayName && item.variantDisplayName !== "canonical" && (
+                          <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
+                        )}
+                      </>
+                    : <>
+                        {item.label}
+                        {item.variantDisplayName && item.variantDisplayName !== "canonical" && (
+                          <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
+                        )}
+                      </>
                 }
               </span>
               <span
