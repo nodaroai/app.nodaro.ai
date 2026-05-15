@@ -39,6 +39,8 @@ export interface SuggestionItem {
   label: string
   category: string
   thumbnailUrl?: string
+  /** Variant display name for ref-image suggestions (e.g. "smile"). Hidden when "canonical" or absent. */
+  variantDisplayName?: string
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -50,6 +52,12 @@ export interface RefImageItem {
   readonly index: number
   /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
   readonly defaultLabel: string
+  /** When source === "character", the slug for the character (e.g. "kira"). */
+  readonly characterSlug?: string
+  /** When source === "character", the slug for the variant (e.g. "smile"). undefined = canonical. */
+  readonly variantSlug?: string
+  /** Variant display name for the autocomplete (e.g. "smile", "canonical"). */
+  readonly variantDisplayName?: string
 }
 
 type TriggerChar = "[" | "<" | "/" | "{" | "@"
@@ -116,12 +124,21 @@ export function TagTextarea(props: TagTextareaProps) {
 
   const refImageSuggestions = useMemo((): SuggestionItem[] => {
     if (!referenceImages || referenceImages.length === 0) return []
-    return referenceImages.map((r) => ({
-      tag: `{image:${r.index}:${r.defaultLabel}}`,
-      label: `#${r.index} ${r.label}`,
-      category: REF_IMAGE_SOURCE_LABEL[r.source],
-      thumbnailUrl: r.url,
-    }))
+    return referenceImages.map((r) => {
+      // Character refs use slug-based @<character>(-<variant>)? tokens; everything else
+      // keeps the legacy {image:N:role} positional token so existing prompts keep working.
+      const isCharacterMention = r.source === "character" && r.characterSlug
+      const tag = isCharacterMention
+        ? (r.variantSlug ? `@${r.characterSlug}-${r.variantSlug}` : `@${r.characterSlug}`)
+        : `{image:${r.index}:${r.defaultLabel}}`
+      return {
+        tag,
+        label: `#${r.index} ${r.label}`,
+        category: REF_IMAGE_SOURCE_LABEL[r.source],
+        thumbnailUrl: r.url,
+        variantDisplayName: r.source === "character" ? r.variantDisplayName : undefined,
+      }
+    })
   }, [referenceImages])
 
   const filtered = useMemo(() => {
@@ -544,7 +561,12 @@ export function TagTextarea(props: TagTextareaProps) {
                       alt=""
                       className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
                     />
-                    <span className="truncate flex-1 min-w-0">{item.label}</span>
+                    <span className="truncate flex-1 min-w-0">
+                      {item.label}
+                      {item.variantDisplayName && item.variantDisplayName !== "canonical" && (
+                        <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
+                      )}
+                    </span>
                     <span
                       className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
                         isSelected
