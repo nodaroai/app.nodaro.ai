@@ -199,7 +199,7 @@ import {
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro/shared";
-import { characterMentionSlug } from "@nodaro/shared";
+import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
@@ -631,6 +631,135 @@ function buildConnectedRefsForI2I(
     out.push({ id, ...meta });
   }
   return out;
+}
+
+/**
+ * Expand every wired upstream Character node into canonical + per-variant
+ * `ConnectedReference` entries. Frontend mirror of the backend
+ * `expandWiredCharacterRefs` in `payload-builder.ts`, dropping the asset-id
+ * keys (callers only need the list, not the map).
+ *
+ * Used by the video branches' `@-mention` resolution. The image branches use
+ * `expandCharacterNodeIntoRefs` per-upstream because they merge with other
+ * sources (chainRefs / character definitions) into a single keyed Map; the
+ * video branches consume a flat list and don't need that level of detail.
+ */
+function expandWiredCharacterRefsForVideo(
+  consumerNodeId: string,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): ConnectedReference[] {
+  const out: ConnectedReference[] = [];
+  const incomingEdges = edges.filter((e) => e.target === consumerNodeId);
+  for (const e of incomingEdges) {
+    const upstream = nodes.find((n) => n.id === e.source);
+    if (!upstream || upstream.type !== "character") continue;
+    const expansion = expandCharacterNodeIntoRefs(upstream);
+    for (const [id, meta] of expansion) {
+      out.push({ id, ...meta });
+    }
+  }
+  return out;
+}
+
+/**
+ * Resolve `@kira:N` / `@kira:N:smile` mentions in a video-node prompt against
+ * wired Character upstreams AND apply the per-character canonical fallback
+ * for unmentioned wired characters.
+ *
+ * Frontend mirror of the backend `resolveVideoPromptMentions` in
+ * `payload-builder.ts`. Without this, single-node frontend runs (clicking
+ * "Run" on a single video node) skipped @-mention resolution while running
+ * the full workflow worked correctly — producing inconsistent behavior.
+ *
+ * Per-character behavior contract (parity with image-side + backend):
+ *   - wired-character with at least one `@-mention` → contribute ONLY the
+ *     mentioned variant URLs (no canonical auto-attach), prepend the
+ *     mention-derived directive block.
+ *   - wired-character with NO `@-mention` → contribute the canonical URL
+ *     + a strong identity directive. Mirrors the pre-mention behavior.
+ *
+ * Returns the mutated prompt + the asset URLs to slot into the worker
+ * payload. The caller decides where (i2v has both `imageUrl` and
+ * `referenceImageUrls`; v2v has only a single `referenceImageUrl`; t2v has
+ * `referenceImageUrls` only).
+ */
+function resolveVideoPromptMentions(
+  prompt: string | undefined,
+  consumerNodeId: string,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): { prompt: string | undefined; additionalUrls: string[] } {
+  if (!prompt) return { prompt, additionalUrls: [] };
+  const wiredCharRefs = expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges);
+  if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] };
+  const knownCharSlugs = Array.from(
+    new Set(
+      wiredCharRefs
+        .map((r) => r.characterSlug)
+        .filter((s): s is string => typeof s === "string" && s.length > 0),
+    ),
+  );
+  if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] };
+  const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs);
+  // Resolve any mentions (may be empty); always check fallback after.
+  const resolved = mentionTokens.length > 0
+    ? resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
+    : { prompt, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() };
+
+  // Canonical fallback for any wired character NOT @-mentioned. Single
+  // canonical URL + strong directive per unmentioned character — mirrors
+  // `buildCanonicalFallback` from the shared prompt-builder and the backend
+  // `resolveVideoPromptMentions`.
+  const fallbackUrls: string[] = [];
+  const fallbackDirectiveLines: string[] = [];
+  const seenSlugs = new Set<string>();
+  for (const r of wiredCharRefs) {
+    if (r.source !== "wired-character") continue;
+    if (!r.characterSlug) continue;
+    if (resolved.mentionedCharacterSlugs.has(r.characterSlug)) continue;
+    if (seenSlugs.has(r.characterSlug)) continue;
+    if (r.variantSlug) continue;
+    if (!r.url) continue;
+    seenSlugs.add(r.characterSlug);
+    fallbackUrls.push(r.url);
+    const displayName = r.defaultName || r.characterSlug;
+    const descPart = r.characterCanonicalDescription
+      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
+      : displayName;
+    fallbackDirectiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`);
+  }
+
+  let finalPrompt = resolved.prompt;
+  if (fallbackDirectiveLines.length > 0) {
+    // Mirror shared `buildImagePrompt`'s consolidation: append fallback
+    // bullets into an existing "Use these characters:" block when present,
+    // otherwise create a new one.
+    if (finalPrompt && finalPrompt.startsWith("Use these characters:\n")) {
+      const splitIdx = finalPrompt.indexOf("\n\n");
+      if (splitIdx !== -1) {
+        const header = finalPrompt.slice(0, splitIdx);
+        const rest = finalPrompt.slice(splitIdx);
+        finalPrompt = `${header}\n${fallbackDirectiveLines.join("\n")}${rest}`;
+      } else {
+        finalPrompt = `${finalPrompt}\n${fallbackDirectiveLines.join("\n")}`;
+      }
+    } else {
+      const block = `Use these characters:\n${fallbackDirectiveLines.join("\n")}`;
+      finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block;
+    }
+  }
+
+  // Dedup combined URLs while preserving order (mentions first, fallback after).
+  const merged: string[] = [];
+  const seen = new Set<string>();
+  for (const u of resolved.additionalUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+  }
+  for (const u of fallbackUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+  }
+  return { prompt: finalPrompt, additionalUrls: merged };
 }
 
 /** Check if a node has any upload-* ancestors via BFS backward through edges. */
@@ -1439,15 +1568,6 @@ export function executeNode(
     // Resolve reference image URLs early so we can use them in the start-frame check below
     const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
 
-    // VEO reference mode and Seedance 2 reference-only mode don't require a start frame
-    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
-    const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "") && (i2vData.seedance2InputMode ?? "frames") === "references"
-    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly) {
-      const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
-      toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
-      return Promise.reject(new Error("No start frame image"));
-    }
-
     let endFrameUrl: string | undefined = inputs.endFrameUrl;
     if (!endFrameUrl) {
       const endEdge = edges.find(
@@ -1503,6 +1623,51 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
+    // Resolve @-mentions in the i2v prompt. Mirrors the backend
+    // `resolveVideoPromptMentions` in `payload-builder.ts` so single-node
+    // frontend runs (clicking "Run" on this node) produce the same
+    // `prompt` + `imageUrl` + `referenceImageUrls` as orchestrator-driven runs.
+    // i2v has two slots: `startFrameUrl` (primary input frame) and
+    // `referenceImageUrls` (additional pool for maxRefImages-aware providers).
+    // Existing frames/refs from upstream wins — mentions augment, never
+    // overwrite. When no `startFrameUrl` is wired yet, the first resolved
+    // mention URL fills that slot so a pure "@kira:1:smile dancing" prompt
+    // gets the smile image as input rather than failing with no image.
+    const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges);
+    prompt = i2vMention.prompt;
+    let i2vMergedRefs: string[] | undefined = referenceImageUrls?.length ? [...referenceImageUrls] : undefined;
+    if (i2vMention.additionalUrls.length > 0) {
+      let remainingMentionUrls = i2vMention.additionalUrls;
+      if (!startFrameUrl) {
+        startFrameUrl = remainingMentionUrls[0];
+        remainingMentionUrls = remainingMentionUrls.slice(1);
+      }
+      if (remainingMentionUrls.length > 0) {
+        const existing = i2vMergedRefs ?? [];
+        const merged: string[] = [];
+        const seen = new Set<string>();
+        for (const u of existing) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+        }
+        for (const u of remainingMentionUrls) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+        }
+        i2vMergedRefs = merged;
+      }
+    }
+
+    // VEO reference mode and Seedance 2 reference-only mode don't require a start frame.
+    // Run this check AFTER mention resolution — a `@kira:1:smile dancing` prompt with a
+    // wired Character but no `startFrameUrl` source must let the resolved mention URL
+    // fill the slot (matches backend's i2v handling in payload-builder.ts).
+    const isVeoRefMode = (nodeProvider === "veo3" || nodeProvider === "veo3.1" || nodeProvider === "veo3_lite") && i2vData.veoMode === "reference"
+    const isSeedance2RefOnly = isSeedance2Provider(nodeProvider ?? "") && (i2vData.seedance2InputMode ?? "frames") === "references"
+    if (!startFrameUrl && !isVeoRefMode && !isSeedance2RefOnly) {
+      const debugSources = edges.filter((e) => e.target === node.id).map((e) => `${e.sourceHandle ?? "?"}→${e.targetHandle ?? "?"}`).join(", ")
+      toast.error(`Node "${i2vData.label}": no start frame image found (inputs: startFrame=${inputs.startFrameUrl ?? "none"}, imageUrl=${inputs.imageUrl ?? "none"}, edges: ${debugSources || "none"})`);
+      return Promise.reject(new Error("No start frame image"));
+    }
+
     const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
       | string
       | undefined;
@@ -1552,7 +1717,7 @@ export function executeNode(
       i2vData.videoSize,
       i2vData.seed,
       i2vData.cameraFixed,
-      s2FrameMode ? undefined : (referenceImageUrls?.length ? referenceImageUrls : undefined),
+      s2FrameMode ? undefined : (i2vMergedRefs?.length ? i2vMergedRefs : undefined),
       i2vData.veoMode === "reference" ? "REFERENCE_2_VIDEO" : undefined,
       {
         referenceVideoUrls: s2FrameMode ? undefined : (referenceVideoUrls?.length ? referenceVideoUrls : undefined),
@@ -1599,6 +1764,22 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
+    // Resolve @-mentions in the v2v prompt. Mirrors the backend
+    // `resolveVideoPromptMentions` in `payload-builder.ts`. v2v has only a
+    // single `referenceImageUrl` slot — when an upstream ref image is wired
+    // we keep it; otherwise the first resolved mention URL fills it. Extra
+    // mention URLs beyond slot 0 are dropped: v2v providers (Wan 2.6 et al)
+    // accept exactly one reference image and silently ignore the rest, so
+    // there's no payload key to plumb them into. Prompt token replacement
+    // still happens so the LLM sees the character names regardless.
+    const v2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges);
+    prompt = v2vMention.prompt;
+    const v2vUpstreamRef = typeof inputs.referenceImageUrls === "string"
+      ? inputs.referenceImageUrls
+      : Array.isArray(inputs.referenceImageUrls)
+        ? inputs.referenceImageUrls[0]
+        : undefined;
+    const v2vReferenceImageUrl = v2vUpstreamRef ?? v2vMention.additionalUrls[0];
     const provider =
       typeof v2vData.provider === "string" ? v2vData.provider : undefined;
     const v2vManualPrompt = typeof v2vData.prompt === "string" ? v2vData.prompt.trim() : undefined;
@@ -1616,7 +1797,7 @@ export function executeNode(
         multiShots: v2vData.multiShots,
         aspectRatio: v2vData.aspectRatio,
         seed: v2vData.seed,
-        referenceImageUrl: typeof inputs.referenceImageUrls === "string" ? inputs.referenceImageUrls : Array.isArray(inputs.referenceImageUrls) ? inputs.referenceImageUrls[0] : undefined,
+        referenceImageUrl: v2vReferenceImageUrl,
         // Wan video edit (wan-videoedit) params
         negativePrompt: v2vData.negativePrompt,
         videoEditDuration: v2vData.videoEditDuration,
@@ -1649,6 +1830,12 @@ export function executeNode(
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
       if (identityClause) prompt = `${prompt} ${identityClause}`;
     }
+    // Resolve @-mentions in the t2v prompt. Mirrors the backend
+    // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no
+    // `imageUrl` slot — all resolved URLs become entries in
+    // `referenceImageUrls`, merged with whatever upstream already provided.
+    const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges);
+    prompt = t2vMention.prompt ?? prompt;
     const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;
     const isKlingVariant =
@@ -1656,7 +1843,22 @@ export function executeNode(
       t2vProvider === "kling-turbo" ||
       t2vProvider === "kling-3.0";
     const isSeedance2T2V = isSeedance2Provider(t2vProvider)
-    const t2vRefImages = inputs.referenceImageUrls as string[] | undefined
+    const upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
+    // Merge upstream refs with mention-resolved URLs (mention URLs appended,
+    // deduped by URL). Backend payload-builder.ts t2v branch does the same.
+    let t2vRefImages: string[] | undefined = upstreamRefImages?.length ? [...upstreamRefImages] : undefined;
+    if (t2vMention.additionalUrls.length > 0) {
+      const existing = t2vRefImages ?? [];
+      const merged: string[] = [];
+      const seen = new Set<string>();
+      for (const u of existing) {
+        if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+      }
+      for (const u of t2vMention.additionalUrls) {
+        if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
+      }
+      t2vRefImages = merged;
+    }
     const t2vRefVideos = inputs.referenceVideoUrls as string[] | undefined
     const t2vRefAudios = inputs.referenceAudioUrls as string[] | undefined
     const seedance2Extras = isSeedance2T2V
@@ -1695,6 +1897,12 @@ export function executeNode(
                 urls: string[];
               }>
             | undefined,
+          // Forward mention-resolved reference images. The /v1/text-to-video
+          // route accepts these for any provider that supports them; the route
+          // ignores them for providers (like vanilla Kling) that don't. Mirrors
+          // the backend orchestrator's t2v payload-builder which also always
+          // forwards `referenceImageUrls`.
+          referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
         }
       : {
           duration: t2vData.duration,

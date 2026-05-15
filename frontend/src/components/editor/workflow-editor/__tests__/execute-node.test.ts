@@ -884,6 +884,111 @@ describe("image-to-video", () => {
       },
     )
   })
+
+  it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {
+    // Frontend = backend parity test. User scenario: a Character node "shira"
+    // wired upstream of image-to-video, with smile + laughing expressions.
+    // Prompt: "@shira:1:smile @shira:2:laughing dancing".
+    // Expected: smile URL slots as startFrame (no upstream frame wired), laughing
+    // URL appears in referenceImageUrls, prompt has the resolved directive block.
+    // Mirrors the orchestrator's `resolveVideoPromptMentions` behavior so single-
+    // node frontend execution matches workflow-orchestrator output exactly.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [
+          { name: "smile", url: "http://shira/smile.png" },
+          { name: "laughing", url: "http://shira/laughing.png" },
+        ],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const i2vNode = makeNode("image-to-video", {
+      prompt: "@shira:1:smile @shira:2:laughing dancing",
+    })
+    mockNodes = [shiraNode, i2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    // The input resolver pushes shira's URL into inputs.referenceImageUrls.
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode as any, makeCtx())
+
+    const callArgs = mockRunVideoGeneration.mock.calls[0]
+    const passedStartFrame = callArgs[1] as string
+    const passedPrompt = callArgs[8] as string
+    const passedRefs = callArgs[22] as string[] | undefined
+
+    // First mention URL becomes the start frame (no upstream frame was wired).
+    expect(passedStartFrame).toBe("http://shira/smile.png")
+    // Second mention URL appears in referenceImageUrls alongside upstream URL.
+    expect(passedRefs).toBeDefined()
+    expect(passedRefs).toContain("http://shira/laughing.png")
+    // The literal @-mention tokens are replaced.
+    expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
+    expect(passedPrompt).not.toMatch(/@shira:2:laughing\b/)
+    // Only the FIRST mention emits a directive (dedup in resolveCharacterMentions).
+    expect(passedPrompt).toContain("Image 1 (shira)")
+  })
+
+  it("attaches canonical fallback when a Character is wired upstream WITHOUT any @-mention", async () => {
+    // Canonical fallback parity test: without any @-mention, the wired
+    // Character contributes its canonical URL + identity directive (mirrors
+    // the pre-mention auto-attach behavior + the backend orchestrator).
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://shira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const i2vNode = makeNode("image-to-video", {
+      prompt: "make her dance in the rain",
+    })
+    mockNodes = [shiraNode, i2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode as any, makeCtx())
+
+    const callArgs = mockRunVideoGeneration.mock.calls[0]
+    const passedStartFrame = callArgs[1] as string
+    const passedPrompt = callArgs[8] as string
+
+    // Canonical URL fills the start frame slot (no other source).
+    expect(passedStartFrame).toBe("http://shira/portrait.png")
+    // Canonical fallback directive must appear in the prompt.
+    expect(passedPrompt).toContain("shira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -925,6 +1030,96 @@ describe("video-to-video", () => {
       }),
     )
   })
+
+  it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {
+    // Frontend = backend parity test. v2v has only a single `referenceImageUrl`
+    // slot, so only the first resolved mention URL fills it (extras dropped,
+    // matching backend payload-builder.ts v2v handling).
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [
+          { name: "smile", url: "http://shira/smile.png" },
+        ],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const v2vNode = makeNode("video-to-video", {
+      prompt: "@shira:1:smile waving",
+    })
+    mockNodes = [shiraNode, v2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+      // No upstream referenceImageUrls so the mention URL fills the slot.
+    })
+    mockRunVideoToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(v2vNode as any, makeCtx())
+
+    const callArgs = mockRunVideoToVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[3] as string
+    const passedOptions = callArgs[5] as { referenceImageUrl?: string }
+
+    // First mention URL becomes the single referenceImageUrl.
+    expect(passedOptions.referenceImageUrl).toBe("http://shira/smile.png")
+    // Literal token replaced.
+    expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
+    expect(passedPrompt).toContain("Image 1 (shira)")
+  })
+
+  it("attaches canonical fallback when a Character is wired upstream WITHOUT any @-mention", async () => {
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const v2vNode = makeNode("video-to-video", {
+      prompt: "make her wave",
+    })
+    mockNodes = [shiraNode, v2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+    })
+    mockRunVideoToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(v2vNode as any, makeCtx())
+
+    const callArgs = mockRunVideoToVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[3] as string
+    const passedOptions = callArgs[5] as { referenceImageUrl?: string }
+
+    // Canonical URL fills the single referenceImageUrl slot (no other source).
+    expect(passedOptions.referenceImageUrl).toBe("http://shira/portrait.png")
+    expect(passedPrompt).toContain("shira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -960,6 +1155,101 @@ describe("text-to-video", () => {
         generateAudio: true,
       }),
     )
+  })
+
+  it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {
+    // Frontend = backend parity test. t2v has no `imageUrl` slot — all
+    // resolved URLs become entries in referenceImageUrls, merged with whatever
+    // upstream already provided. Mirrors backend payload-builder.ts t2v.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [
+          { name: "smile", url: "http://shira/smile.png" },
+          { name: "laughing", url: "http://shira/laughing.png" },
+        ],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const t2vNode = makeNode("text-to-video", {
+      prompt: "@shira:1:smile @shira:2:laughing dancing",
+    })
+    mockNodes = [shiraNode, t2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    const passedOptions = callArgs[4] as { referenceImageUrls?: string[] }
+
+    // Both mention URLs appear in referenceImageUrls (merged with upstream).
+    expect(passedOptions.referenceImageUrls).toBeDefined()
+    expect(passedOptions.referenceImageUrls).toContain("http://shira/smile.png")
+    expect(passedOptions.referenceImageUrls).toContain("http://shira/laughing.png")
+    // Literal tokens replaced + directive emitted.
+    expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
+    expect(passedPrompt).not.toMatch(/@shira:2:laughing\b/)
+    expect(passedPrompt).toContain("Image 1 (shira)")
+  })
+
+  it("attaches canonical fallback when a Character is wired upstream WITHOUT any @-mention", async () => {
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const t2vNode = makeNode("text-to-video", {
+      prompt: "make her dance in the rain",
+    })
+    mockNodes = [shiraNode, t2vNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    const passedOptions = callArgs[4] as { referenceImageUrls?: string[] }
+
+    // Canonical fallback directive must appear in the prompt.
+    expect(passedPrompt).toContain("shira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
+    // Canonical URL already in upstream refs, no dup.
+    expect(passedOptions.referenceImageUrls).toBeDefined()
+    expect(passedOptions.referenceImageUrls).toContain("http://shira/portrait.png")
   })
 })
 
