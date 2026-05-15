@@ -98,6 +98,28 @@ function getAllSuggestions(): SuggestionItem[] {
 
 const ALL_SUGGESTIONS = getAllSuggestions()
 
+/**
+ * Scan the current prompt for existing `@<char>:<N>(:<variant>)?` tokens and
+ * return the next free index (max found + 1). Used by the `@` autocomplete
+ * when inserting a new mention so each character mention carries a stable
+ * positional index the user can trace to the final prompt's identity directive
+ * (`Image N (Name)`).
+ *
+ * Bare `@foo` tokens are no longer valid mentions (the index segment is
+ * required), so they don't participate in the count.
+ */
+function computeNextMentionIndex(promptValue: string): number {
+  // Matches `@<char>:<N>(:<variant>)?` and captures N. Mirrors the shared
+  // `findCharacterMentionTokens` regex shape so we count the same tokens.
+  const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?/g
+  let maxIndex = 0
+  for (const match of promptValue.matchAll(regex)) {
+    const n = parseInt(match[1], 10)
+    if (Number.isInteger(n) && n > maxIndex) maxIndex = n
+  }
+  return maxIndex + 1
+}
+
 const SSML_SUGGESTIONS: SuggestionItem[] = SSML_BREAK_OPTIONS.map((b) => ({
   tag: b.tag,
   label: b.label,
@@ -360,6 +382,12 @@ export function TagTextarea(props: TagTextareaProps) {
   // Click handler for the `@` autocomplete that's aware of the hierarchical
   // kinds. Back rows pop the drill, character-root rows push it, leaf/variant
   // rows fall through to `insertTag` and close the popup.
+  //
+  // Character variant insertions (`kind === "variant"`) get rewritten from
+  // `@kira` / `@kira:smile` to `@kira:N` / `@kira:N:smile`, where N is the
+  // next available index in the current prompt. The numeric index lets the
+  // user trace each `@-mention` to its corresponding `Image N (Name)` bullet
+  // in the final assembled identity directive block.
   const selectSuggestion = useCallback((item: SuggestionItem) => {
     if (item.kind === "back") {
       setDrillCharacterSlug(null)
@@ -376,8 +404,23 @@ export function TagTextarea(props: TagTextareaProps) {
       clearFilterTextInTextarea()
       return
     }
-    insertTag(item.tag)
-  }, [insertTag, clearFilterTextInTextarea])
+    let tag = item.tag
+    if (item.kind === "variant" && item.characterSlug) {
+      // Compute the prompt slice that will remain in the textarea after
+      // insertion: everything BEFORE the `@` trigger + everything AFTER the
+      // cursor. The to-be-inserted token contributes no existing index of
+      // its own, so the count from that slice is the right starting point.
+      const before = triggerInfo ? value.slice(0, triggerInfo.position) : ""
+      const cursorPos = textareaRef.current?.selectionStart ?? value.length
+      const after = value.slice(cursorPos)
+      const promptForCount = before + after
+      const nextIndex = computeNextMentionIndex(promptForCount)
+      tag = item.tag.startsWith(`@${item.characterSlug}:`)
+        ? `@${item.characterSlug}:${nextIndex}:${item.tag.slice(item.characterSlug.length + 2)}`
+        : `@${item.characterSlug}:${nextIndex}`
+    }
+    insertTag(tag)
+  }, [insertTag, clearFilterTextInTextarea, triggerInfo, value])
 
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
