@@ -107,6 +107,14 @@ export {
 } from "./ancestor-refs.js"
 
 export {
+  expandExtraRefsToConnectedReferences,
+} from "./extra-refs.js"
+export type {
+  ExtraRefInput,
+  ExtraRefCharacterContext,
+} from "./extra-refs.js"
+
+export {
   DEFAULT_IDENTITY_LOCK,
   getIdentityLockClause,
   toIdentityLockMode,

@@ -186,6 +186,140 @@ function buildCanonicalFallback(
   return { directiveLines, urls }
 }
 
+/**
+ * Build directive lines + URLs for user-attached "extra reference images"
+ * (entries with `isExtraRef === true`). Runs alongside `buildCanonicalFallback`
+ * — both feed into the same "Use these characters:\n..." block prepended to
+ * the prompt.
+ *
+ * Numbering rule: starts at `nextImageIndex` (passed in by the caller — equal
+ * to the count of already-emitted canonical fallback URLs + the count of
+ * mention URLs) and increments by 1 per extra ref. The caller's URL merge
+ * order must match this counter so "Image N" in the directive resolves to
+ * the N-th URL in the final `referenceImageUrls` array.
+ *
+ * Per-extra directive shape:
+ *   - manual extra (source === "manual" + description set)
+ *     → `Image N (reference): <description>.`
+ *   - character extra (source === "wired-character" + characterSlug set
+ *     + description set) where the SAME `characterSlug` was already emitted
+ *     as a mention or canonical entry
+ *     → `Image N is the same subject as Image M, <description>.`
+ *     where M is the position of the earlier same-character image.
+ *   - character extra of a previously-unseen character (no canonical, no
+ *     mention) → emit a canonical-style directive (display name + mode
+ *     directive). Acts as the "first sight" attachment for that character.
+ *
+ * The caller is responsible for:
+ *   1. Merging `urls` into `referenceImageUrls` in the same order as the
+ *      directive lines (so positions align).
+ *   2. Concatenating `directiveLines` onto the existing "Use these characters:"
+ *      block (or creating a new one).
+ *
+ * `emittedCharacterPositions` is a map from characterSlug → position (1-based)
+ * of the FIRST emitted image for that character. The caller pre-populates it
+ * with positions from mentions + canonical fallback so that "Image B is the
+ * same subject as Image A" can reference an earlier slot correctly.
+ */
+function buildExtraRefDirectives(
+  refs: readonly ConnectedReference[],
+  emittedCharacterPositions: ReadonlyMap<string, number>,
+  startIndex: number,
+): { directiveLines: string[]; urls: string[] } {
+  const directiveLines: string[] = []
+  const urls: string[] = []
+  // Local copy of the position map so first-sight extras can be referenced by
+  // later extras of the same character (e.g. two extras of Kira where the
+  // first becomes "Image M" and the second pairs back to "M").
+  const positionsByChar = new Map(emittedCharacterPositions)
+  let cursor = startIndex
+  for (const r of refs) {
+    if (!r.isExtraRef) continue
+    if (!r.url) continue
+    const description = (r.description ?? r.variantDescription ?? "").trim()
+    // Character extra
+    if (r.source === "wired-character" && r.characterSlug) {
+      const earlierPos = positionsByChar.get(r.characterSlug)
+      if (earlierPos !== undefined) {
+        // Pair-back form. `Image N is the same subject as Image M, <desc>.`
+        // Description is optional — when absent we still emit the pairing.
+        const tail = description ? `, ${description}` : ""
+        directiveLines.push(`- Image ${cursor} is the same subject as Image ${earlierPos}${tail}.`)
+      } else {
+        // First sight of this character via an extra ref. Emit a canonical-style
+        // directive — the description (or the character's canonical desc) is
+        // the descriptive part, and the usage mode is whatever the caller
+        // resolved onto `defaultUsageMode` (per-ref override → node default →
+        // identical, applied when the ExtraRef was mapped to a ConnectedReference).
+        const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+        const directive = usageModeDirective(effectiveMode)
+        const displayName = r.defaultName || r.characterSlug
+        const subject = `Image ${cursor} (${displayName})`
+        const includeCanonicalDesc =
+          effectiveMode === "identical" || effectiveMode === "face-pose"
+        const canonicalDesc = r.characterCanonicalDescription?.trim()
+        // Description preference: per-ref description > canonical (when mode
+        // allows it) > nothing. The per-ref description is what the user
+        // typed in the extra-ref row, so it always wins.
+        let descPart = subject
+        if (description) {
+          descPart = `${subject} — ${description}`
+        } else if (includeCanonicalDesc && canonicalDesc) {
+          descPart = `${subject} — ${canonicalDesc}`
+        }
+        directiveLines.push(`- ${descPart}. ${directive}`)
+        positionsByChar.set(r.characterSlug, cursor)
+      }
+    } else {
+      // Manual / generic extra. Description (when present) goes in the
+      // parenthetical; absent description still emits a positional marker so
+      // the URL position is unambiguous in the prompt.
+      if (description) {
+        directiveLines.push(`- Image ${cursor} (reference): ${description}.`)
+      } else {
+        directiveLines.push(`- Image ${cursor} (reference).`)
+      }
+    }
+    urls.push(r.url)
+    cursor += 1
+  }
+  return { directiveLines, urls }
+}
+
+/**
+ * Per-character extra refs need to know which numbered slot the EARLIER
+ * emitted image of the same character lives in. This helper walks the
+ * URL-merge order built up by `buildImagePrompt` and returns the
+ * `characterSlug → first-position` map used by `buildExtraRefDirectives`.
+ *
+ * The merge order matches `mergedUrls` in `buildImagePrompt`:
+ *   [pre-existing referenceImageUrls] + [resolved mentions] + [canonical fallback]
+ * (followed by extras when this helper is consulted).
+ *
+ * For each URL in the merged list, we look up the originating
+ * `ConnectedReference` to learn its `characterSlug`. The first time we see
+ * a slug, we record its position; later same-slug images don't overwrite.
+ */
+function buildCharacterPositionMap(
+  mergedUrls: readonly string[],
+  refs: readonly ConnectedReference[],
+): Map<string, number> {
+  const byUrl = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.url) continue
+    if (!byUrl.has(r.url)) byUrl.set(r.url, r)
+  }
+  const positions = new Map<string, number>()
+  for (let i = 0; i < mergedUrls.length; i++) {
+    const ref = byUrl.get(mergedUrls[i])
+    const slug = ref?.characterSlug
+    if (slug && !positions.has(slug)) {
+      positions.set(slug, i + 1)
+    }
+  }
+  return positions
+}
+
 export interface BuildImagePromptConfig {
   /** Raw user prompt text */
   prompt: string
@@ -266,8 +400,17 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
           .filter((s): s is string => typeof s === "string" && s.length > 0)
       )
     )
-    if (knownCharacterSlugs.length > 0) {
-      const mentionTokens = findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
+    const hasExtraRefs = connectedReferences.some((r) => r.isExtraRef === true)
+    // We only need to run the directive-emission machinery if either
+    // (a) there's at least one character ref (mention / canonical fallback
+    //     could fire), or (b) there's at least one user-attached extra ref
+    //     (manual uploads with descriptions, or character-variant extras).
+    // The empty-extras-empty-characters case falls through to the standard
+    // non-character ref path unchanged.
+    if (knownCharacterSlugs.length > 0 || hasExtraRefs) {
+      const mentionTokens = knownCharacterSlugs.length > 0
+        ? findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
+        : []
       const resolved = mentionTokens.length > 0
         ? resolveCharacterMentions(config.prompt, mentionTokens, connectedReferences)
         : { prompt: config.prompt, additionalUrls: [], mentionedCharacterSlugs: new Set<string>() }
@@ -301,11 +444,40 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
         ...resolved.additionalUrls,
         ...fallback.urls,
       ].filter((u, i, a) => a.indexOf(u) === i)
+
+      // Extra-ref directives: user-attached refs (manual uploads + picked
+      // character variants). Emitted AFTER mentions + canonical fallback so
+      // they get the next positional slots. Numbering = position in the final
+      // ref URL list (mergedUrls.length + 1, +2, …).
+      const characterPositions = buildCharacterPositionMap(mergedUrls, connectedReferences)
+      const extras = buildExtraRefDirectives(
+        connectedReferences,
+        characterPositions,
+        mergedUrls.length + 1,
+      )
+      let finalMergedUrls = mergedUrls
+      if (extras.directiveLines.length > 0) {
+        if (promptForNext.startsWith("Use these characters:\n")) {
+          const splitIdx = promptForNext.indexOf("\n\n")
+          if (splitIdx !== -1) {
+            const header = promptForNext.slice(0, splitIdx)
+            const rest = promptForNext.slice(splitIdx)
+            promptForNext = `${header}\n${extras.directiveLines.join("\n")}${rest}`
+          } else {
+            promptForNext = `${promptForNext}\n${extras.directiveLines.join("\n")}`
+          }
+        } else {
+          promptForNext = `Use these characters:\n${extras.directiveLines.join("\n")}\n\n${promptForNext}`
+        }
+        finalMergedUrls = [...mergedUrls, ...extras.urls]
+          .filter((u, i, a) => a.indexOf(u) === i)
+      }
+
       // Mutate the config locals (NOT the original passed config).
       config = {
         ...config,
         prompt: promptForNext,
-        referenceImageUrls: mergedUrls,
+        referenceImageUrls: finalMergedUrls,
       }
       referenceImageUrls = config.referenceImageUrls || []
     }
@@ -330,9 +502,14 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     // Non-character refs are still emitted as per-identity directives + URLs.
     // Character refs are filtered out here — Phase 0 has already added their
     // URLs to `referenceImageUrls` (via mention resolution) and prepended the
-    // "Use these characters…" directive block.
+    // "Use these characters…" directive block. User-attached extras
+    // (isExtraRef === true) are also filtered out: Phase 0 already emitted
+    // their per-ref directive ("Image N (reference): <description>." / "same
+    // subject as Image M, …") and merged their URLs into `referenceImageUrls`.
+    // Letting them through here would double-emit the URLs (and append a
+    // second positional directive via the {image:N:label} path).
     const nonCharacterRefs = connectedReferences.filter(
-      (r) => r.source !== "wired-character",
+      (r) => r.source !== "wired-character" && r.isExtraRef !== true,
     )
 
     // Identities = (used in prompt) ∪ (default label for refs with no mentions).
