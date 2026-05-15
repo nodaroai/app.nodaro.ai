@@ -198,6 +198,7 @@ import {
 } from "./asset-executors";
 import { buildImagePrompt } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro/shared";
+import { characterMentionSlug } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
@@ -546,6 +547,60 @@ export function executeNode(
         const upstream = wiredSourceNodes[i];
         if (upstream) {
           const upstreamData = upstream.data as Record<string, unknown>;
+          // For wired character upstream nodes we have the full CharacterNodeData
+          // — expand into a canonical entry plus one entry per asset variant
+          // (expressions / poses / motions / angles / bodyAngles / lighting).
+          // This is what powers `@kira` / `@kira-smile` autocomplete + buildImagePrompt
+          // mention resolution.
+          if (upstream.type === "character") {
+            const charData = upstream.data as CharacterNodeData;
+            const charName = charData.characterName || (upstreamData.label as string) || "Character";
+            const characterSlug = characterMentionSlug(charName);
+            if (characterSlug) {
+              const canonicalUrl = charData.defaultAssetUrl || chainRefs[i] || charData.sourceImageUrl;
+              if (canonicalUrl) {
+                refMetaMap.set(upstream.id, {
+                  defaultName: charName,
+                  source: "wired-character",
+                  description: charData.description,
+                  url: canonicalUrl,
+                  characterSlug,
+                  variantSlug: undefined,
+                  characterCanonicalDescription: charData.canonicalDescription ?? null,
+                  variantDescription: null,
+                  variantDisplayName: "canonical",
+                });
+              }
+              const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
+                expressions: charData.expressions ?? [],
+                poses: charData.poses ?? [],
+                motions: charData.motions ?? [],
+                angles: charData.angles ?? [],
+                bodyAngles: charData.bodyAngles ?? [],
+                lightingVariations: charData.lightingVariations ?? [],
+              };
+              for (const [arrayName, items] of Object.entries(assetArrays)) {
+                for (const item of items) {
+                  if (!item.url) continue;
+                  const variantSlug = characterMentionSlug(item.name);
+                  if (!variantSlug) continue;
+                  refMetaMap.set(`${upstream.id}_${arrayName}_${variantSlug}`, {
+                    defaultName: `${charName} / ${item.name}`,
+                    source: "wired-character",
+                    description: charData.description,
+                    url: item.url,
+                    characterSlug,
+                    variantSlug,
+                    characterCanonicalDescription: charData.canonicalDescription ?? null,
+                    variantDescription: null,
+                    variantDisplayName: item.name,
+                  });
+                }
+              }
+              continue;
+            }
+            // Fall through to generic upstream handling for unnamed characters.
+          }
           refMetaMap.set(upstream.id, {
             defaultName: (upstreamData.label as string) || (upstreamData.name as string) || upstream.type!,
             source: wiredSourceTypeMap[upstream.type!],
@@ -582,14 +637,80 @@ export function executeNode(
       location: "wired-location",
     };
     for (const c of charDefs) {
-      if (c.type === "reference" && c.referenceImageUrl) {
-        refMetaMap.set(`char_${c.id}`, {
-          defaultName: c.name,
-          source: charCategorySource[c.category ?? ""] ?? "wired-character",
-          description: c.description,
-          url: c.referenceImageUrl,
-        });
+      if (c.type !== "reference" || !c.referenceImageUrl) continue;
+      const source = charCategorySource[c.category ?? ""] ?? "wired-character";
+      const characterSlug = source === "wired-character"
+        ? characterMentionSlug(c.name)
+        : "";
+      // Try to find a canvas character node backing this definition so we can
+      // expand into canonical + per-variant `connectedReferences` entries.
+      // `CharacterDefinition.id` may match a Character node's `characterDbId`
+      // when the definition was created from a DB character.
+      const matchingCharNode = source === "wired-character"
+        ? nodes.find((n) => {
+            if (n.type !== "character") return false;
+            const nd = n.data as CharacterNodeData;
+            return nd.characterDbId === c.id;
+          })
+        : undefined;
+      if (source === "wired-character" && characterSlug && matchingCharNode) {
+        const charData = matchingCharNode.data as CharacterNodeData;
+        const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl;
+        if (canonicalUrl) {
+          refMetaMap.set(`char_${c.id}`, {
+            defaultName: c.name,
+            source,
+            description: c.description ?? charData.description,
+            url: canonicalUrl,
+            characterSlug,
+            variantSlug: undefined,
+            characterCanonicalDescription: charData.canonicalDescription ?? null,
+            variantDescription: null,
+            variantDisplayName: "canonical",
+          });
+        }
+        const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
+          expressions: charData.expressions ?? [],
+          poses: charData.poses ?? [],
+          motions: charData.motions ?? [],
+          angles: charData.angles ?? [],
+          bodyAngles: charData.bodyAngles ?? [],
+          lightingVariations: charData.lightingVariations ?? [],
+        };
+        for (const [arrayName, items] of Object.entries(assetArrays)) {
+          for (const item of items) {
+            if (!item.url) continue;
+            const variantSlug = characterMentionSlug(item.name);
+            if (!variantSlug) continue;
+            refMetaMap.set(`char_${c.id}_${arrayName}_${variantSlug}`, {
+              defaultName: `${c.name} / ${item.name}`,
+              source,
+              description: c.description ?? charData.description,
+              url: item.url,
+              characterSlug,
+              variantSlug,
+              characterCanonicalDescription: charData.canonicalDescription ?? null,
+              variantDescription: null,
+              variantDisplayName: item.name,
+            });
+          }
+        }
+        continue;
       }
+      // No matching canvas node — emit single canonical entry. For character
+      // sources, still populate `characterSlug` so `@<name>` mentions resolve
+      // even without variants.
+      refMetaMap.set(`char_${c.id}`, {
+        defaultName: c.name,
+        source,
+        description: c.description,
+        url: c.referenceImageUrl,
+        ...(characterSlug ? {
+          characterSlug,
+          variantSlug: undefined,
+          variantDisplayName: "canonical",
+        } : {}),
+      });
     }
 
     // Apply ordering: use referenceImageOrder if set, otherwise default map order
