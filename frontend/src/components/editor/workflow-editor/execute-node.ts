@@ -200,6 +200,7 @@ import {
 import { buildImagePrompt } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
+import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
 import { evaluateJsonPath, stringifyPathResults } from "@nodaro/shared";
@@ -434,6 +435,11 @@ function expandCharacterNodeIntoRefs(
   if (!characterSlug) return [];
 
   const out: Array<[string, Omit<ConnectedReference, "id">]> = [];
+  // Propagated to every entry derived from this character so downstream
+  // `resolveCharacterMentions` can use it as the fallback when a slug doesn't
+  // carry an explicit `:mode` override. `undefined` ↔ "identical" (the global
+  // default) is handled by the resolver, not here, to keep the JSON small.
+  const defaultUsageMode = charData.defaultUsageMode;
   const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl;
   if (canonicalUrl) {
     out.push([
@@ -448,6 +454,7 @@ function expandCharacterNodeIntoRefs(
         characterCanonicalDescription: charData.canonicalDescription ?? null,
         variantDescription: null,
         variantDisplayName: "canonical",
+        defaultUsageMode,
       },
     ]);
   }
@@ -476,6 +483,7 @@ function expandCharacterNodeIntoRefs(
           characterCanonicalDescription: charData.canonicalDescription ?? null,
           variantDescription: null,
           variantDisplayName: item.name,
+          defaultUsageMode,
         },
       ]);
     }
@@ -713,7 +721,10 @@ function resolveVideoPromptMentions(
   // Canonical fallback for any wired character NOT @-mentioned. Single
   // canonical URL + strong directive per unmentioned character — mirrors
   // `buildCanonicalFallback` from the shared prompt-builder and the backend
-  // `resolveVideoPromptMentions`.
+  // `resolveVideoPromptMentions`. The directive's wording is mode-aware:
+  // resolves through the character node's `defaultUsageMode` → global
+  // `DEFAULT_USAGE_MODE` so a character configured for "face" emits a
+  // face-only directive instead of the identity-lock language.
   const fallbackUrls: string[] = [];
   const fallbackDirectiveLines: string[] = [];
   const seenSlugs = new Set<string>();
@@ -727,10 +738,13 @@ function resolveVideoPromptMentions(
     seenSlugs.add(r.characterSlug);
     fallbackUrls.push(r.url);
     const displayName = r.defaultName || r.characterSlug;
-    const descPart = r.characterCanonicalDescription
+    const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE;
+    const directive = usageModeDirective(effectiveMode);
+    const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose";
+    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName;
-    fallbackDirectiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`);
+    fallbackDirectiveLines.push(`- ${descPart}. ${directive}`);
   }
 
   let finalPrompt = resolved.prompt;
@@ -919,6 +933,10 @@ export function executeNode(
             const charName = charData.characterName || (upstreamData.label as string) || "Character";
             const characterSlug = characterMentionSlug(charName);
             if (characterSlug) {
+              // Propagate the character node's default usage mode into every
+              // derived entry — `resolveCharacterMentions` reads this as the
+              // fallback when a mention slug omits its own `:mode` override.
+              const defaultUsageMode = charData.defaultUsageMode;
               const canonicalUrl = charData.defaultAssetUrl || chainRefs[i] || charData.sourceImageUrl;
               if (canonicalUrl) {
                 refMetaMap.set(upstream.id, {
@@ -931,6 +949,7 @@ export function executeNode(
                   characterCanonicalDescription: charData.canonicalDescription ?? null,
                   variantDescription: null,
                   variantDisplayName: "canonical",
+                  defaultUsageMode,
                 });
               }
               const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
@@ -956,6 +975,7 @@ export function executeNode(
                     characterCanonicalDescription: charData.canonicalDescription ?? null,
                     variantDescription: null,
                     variantDisplayName: item.name,
+                    defaultUsageMode,
                   });
                 }
               }
@@ -1017,6 +1037,7 @@ export function executeNode(
         : undefined;
       if (source === "wired-character" && characterSlug && matchingCharNode) {
         const charData = matchingCharNode.data as CharacterNodeData;
+        const defaultUsageMode = charData.defaultUsageMode;
         const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl;
         if (canonicalUrl) {
           refMetaMap.set(`char_${c.id}`, {
@@ -1029,6 +1050,7 @@ export function executeNode(
             characterCanonicalDescription: charData.canonicalDescription ?? null,
             variantDescription: null,
             variantDisplayName: "canonical",
+            defaultUsageMode,
           });
         }
         const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
@@ -1054,6 +1076,7 @@ export function executeNode(
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: null,
               variantDisplayName: item.name,
+              defaultUsageMode,
             });
           }
         }

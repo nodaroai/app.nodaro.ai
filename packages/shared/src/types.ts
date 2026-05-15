@@ -3,6 +3,8 @@
  * Both frontend WorkflowNode and backend SimpleNode satisfy these.
  */
 
+import type { UsageMode } from "./character-usage-mode.js"
+
 export interface GenericNode {
   id: string
   type: string
@@ -74,6 +76,14 @@ export interface ConnectedReference {
   readonly variantDescription?: string | null
   /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */
   readonly variantDisplayName?: string
+  /**
+   * Character node's `defaultUsageMode` propagated into every entry derived
+   * from that node. Used by `resolveCharacterMentions` as the fallback when
+   * the per-mention slug doesn't carry an explicit mode override. Absent for
+   * non-character refs and for character entries built without a node context
+   * (e.g. character-definition-only entries in legacy paths).
+   */
+  readonly defaultUsageMode?: UsageMode
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */

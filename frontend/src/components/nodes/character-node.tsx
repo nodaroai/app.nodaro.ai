@@ -12,6 +12,7 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
 
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
@@ -188,12 +189,40 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
           glance which asset is acting as the canvas default — addressing
           the "show the name and selected default in the node, not just the
           image" request. The variant suffix is brand-pink to match other
-          accent UI; suffix is omitted for canonical/portrait defaults. */}
-      <div className="px-2.5 pt-1.5 text-[12px] font-semibold text-slate-200 truncate">
-        {nodeData.characterName || "Unnamed"}
-        {showVariantSuffix && (
-          <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
-        )}
+          accent UI; suffix is omitted for canonical/portrait defaults.
+
+          Trailing inline dropdown sets `defaultUsageMode` — how downstream
+          generators should consume this character's reference image. The
+          mode propagates into every `ConnectedReference` derived from this
+          node and drives the per-image directive in the assembled prompt
+          (see `packages/shared/src/character-usage-mode.ts`). Click/pointer
+          handlers stop propagation so picking a mode doesn't also drag the
+          node or open the config panel. */}
+      <div className="px-2.5 pt-1.5 flex items-center gap-1.5 min-w-0">
+        <div className="flex-1 min-w-0 text-[12px] font-semibold text-slate-200 truncate">
+          {nodeData.characterName || "Unnamed"}
+          {showVariantSuffix && (
+            <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
+          )}
+        </div>
+        <select
+          aria-label="Default usage mode for character mentions"
+          title="How the AI consumes this character's image when @-mentioned"
+          value={nodeData.defaultUsageMode ?? DEFAULT_USAGE_MODE}
+          onChange={(e) =>
+            updateNodeData(id, { defaultUsageMode: e.target.value as UsageMode })
+          }
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="shrink-0 text-[9px] leading-tight bg-[#13161f] border border-[#334155] rounded px-1 py-0.5 text-slate-300 hover:border-[#475569] focus:outline-none focus:border-[#ff0073] cursor-pointer"
+        >
+          {USAGE_MODES.map((m) => (
+            <option key={m} value={m}>
+              {usageModeLabel(m)}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="px-2.5 pb-2 text-[9px] text-slate-600">{`${nodeData.style} · ${nodeData.gender}`}</div>
 

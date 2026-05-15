@@ -24,7 +24,7 @@ import {
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared"
-import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions, usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
@@ -221,6 +221,16 @@ function expandWiredCharacterRefs(
     const description = charData.description as string | undefined
     const canonicalDescription =
       (charData.canonicalDescription as string | null | undefined) ?? null
+    // Propagate the character node's default usage mode into every entry —
+    // `resolveCharacterMentions` reads this as the fallback when a per-mention
+    // slug omits its own `:mode` override. The cast is defensive — the JSON
+    // saved by the canvas already constrains this field to a `UsageMode`
+    // literal, but `SimpleNode.data` is a structural `Record<string, unknown>`
+    // so we narrow at the boundary. Invalid values trip the resolver into
+    // returning the global `DEFAULT_USAGE_MODE`, so the failure mode is safe.
+    const defaultUsageMode = charData.defaultUsageMode as
+      | ConnectedReference["defaultUsageMode"]
+      | undefined
     const canonicalUrl =
       (charData.defaultAssetUrl as string | undefined) ||
       (charData.sourceImageUrl as string | undefined)
@@ -236,6 +246,7 @@ function expandWiredCharacterRefs(
         characterCanonicalDescription: canonicalDescription,
         variantDescription: null,
         variantDisplayName: "canonical",
+        defaultUsageMode,
       })
     }
 
@@ -263,6 +274,7 @@ function expandWiredCharacterRefs(
           characterCanonicalDescription: canonicalDescription,
           variantDescription: null,
           variantDisplayName: item.name,
+          defaultUsageMode,
         })
       }
     }
@@ -333,10 +345,16 @@ function resolveVideoPromptMentions(
     seenSlugs.add(r.characterSlug)
     fallbackUrls.push(r.url)
     const displayName = r.defaultName || r.characterSlug
-    const descPart = r.characterCanonicalDescription
+    // Mode-aware directive: character node's `defaultUsageMode` → global
+    // `DEFAULT_USAGE_MODE`. Keeps backend video runs in lock-step with the
+    // frontend `resolveVideoPromptMentions` and the shared image builder.
+    const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    const directive = usageModeDirective(effectiveMode)
+    const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
+    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName
-    fallbackDirectiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+    fallbackDirectiveLines.push(`- ${descPart}. ${directive}`)
   }
 
   let finalPrompt = resolved.prompt
