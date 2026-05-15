@@ -71,6 +71,7 @@ import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
   WorkflowNode,
+  WorkflowEdge,
   GenerateScriptData,
   GenerateImageData,
   EditImageData,
@@ -402,6 +403,235 @@ export function resolveFilterConditionValue(raw: string, valueType: string | und
  * Accepts optional overrides for list execution chaining.
  */
 const UPLOAD_NODE_TYPES = new Set(["upload-image", "upload-video", "upload-audio"]);
+
+/**
+ * Expand a wired upstream Character node into a canonical entry + one entry
+ * per asset variant (expressions / poses / motions / angles / bodyAngles /
+ * lighting). Mirrors the backend `expandWiredCharacterRefs` in
+ * `payload-builder.ts` so single-node frontend runs produce the same
+ * `@kira:N:variant` mention resolution as orchestrator-driven runs.
+ *
+ * Returns `[entryId, ConnectedReference]` pairs so callers can drop them
+ * straight into a Map keyed by ID (preserving Map dedup + insertion-order).
+ * Returns an empty array when the character has no usable slug — the caller
+ * is expected to fall back to a generic `wired-image` entry.
+ *
+ * @param characterNode - The upstream Character node (must have type === "character").
+ * @param fallbackUrl - URL to use for the canonical entry when the node has
+ *   no `defaultAssetUrl` (typically the upstream-output URL). The backend
+ *   doesn't have this fallback (it prefers `defaultAssetUrl || sourceImageUrl`);
+ *   the frontend keeps it because `chainRefs[i]` may carry a fresher generated
+ *   result than `sourceImageUrl`.
+ */
+function expandCharacterNodeIntoRefs(
+  characterNode: WorkflowNode,
+  fallbackUrl?: string,
+): Array<[string, Omit<ConnectedReference, "id">]> {
+  const charData = characterNode.data as CharacterNodeData;
+  const upstreamData = characterNode.data as Record<string, unknown>;
+  const charName = charData.characterName || (upstreamData.label as string) || "Character";
+  const characterSlug = characterMentionSlug(charName);
+  if (!characterSlug) return [];
+
+  const out: Array<[string, Omit<ConnectedReference, "id">]> = [];
+  const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl;
+  if (canonicalUrl) {
+    out.push([
+      characterNode.id,
+      {
+        defaultName: charName,
+        source: "wired-character",
+        description: charData.description,
+        url: canonicalUrl,
+        characterSlug,
+        variantSlug: undefined,
+        characterCanonicalDescription: charData.canonicalDescription ?? null,
+        variantDescription: null,
+        variantDisplayName: "canonical",
+      },
+    ]);
+  }
+  const assetArrays: Record<string, readonly { readonly name: string; readonly url: string }[]> = {
+    expressions: charData.expressions ?? [],
+    poses: charData.poses ?? [],
+    motions: charData.motions ?? [],
+    angles: charData.angles ?? [],
+    bodyAngles: charData.bodyAngles ?? [],
+    lightingVariations: charData.lightingVariations ?? [],
+  };
+  for (const [arrayName, items] of Object.entries(assetArrays)) {
+    for (const item of items) {
+      if (!item.url) continue;
+      const variantSlug = characterMentionSlug(item.name);
+      if (!variantSlug) continue;
+      out.push([
+        `${characterNode.id}_${arrayName}_${variantSlug}`,
+        {
+          defaultName: `${charName} / ${item.name}`,
+          source: "wired-character",
+          description: charData.description,
+          url: item.url,
+          characterSlug,
+          variantSlug,
+          characterCanonicalDescription: charData.canonicalDescription ?? null,
+          variantDescription: null,
+          variantDisplayName: item.name,
+        },
+      ]);
+    }
+  }
+  return out;
+}
+
+const WIRED_SOURCE_TYPE_MAP: Record<string, ReferenceSource> = {
+  "upload-image": "wired-image",
+  "generate-image": "wired-image",
+  "edit-image": "wired-image",
+  "image-to-image": "wired-image",
+  "modify-image": "wired-image",
+  "upscale-image": "wired-image",
+  "remove-background": "wired-image",
+  "character": "wired-character",
+  "face": "wired-face",
+  "object": "wired-object",
+  "location": "wired-location",
+};
+
+/**
+ * Build `connectedReferences` for the image-to-image / modify-image variants.
+ *
+ * Critical distinction vs. the generate-image inline expansion (which keys off
+ * `chainRefs[i] → wiredSourceNodes[i]`): i2i/modify consume the FIRST wired
+ * upstream URL as the main `imageUrl`, so a naive index-based match would
+ * either (a) miss the wired Character entirely when it's the only upstream
+ * (chainRefs becomes `[]` after the main-image is filtered out) or (b)
+ * misalign Character expansions to non-character chainRefs.
+ *
+ * Instead, this helper:
+ *   1. Iterates ALL incoming-edge wired source nodes once, expanding every
+ *      wired Character upstream into canonical + per-variant entries
+ *      (powering `@kira:N:variant` mention resolution in `buildImagePrompt`'s
+ *      Phase 0). This runs regardless of whether the character's URL became
+ *      the main `imageUrl`.
+ *   2. Adds non-character wired URLs from `chainRefs` (= upstream URLs MINUS
+ *      the main `imageUrl`) as plain `wired-image` entries — these are the
+ *      additional references the i2i/modify route surfaces alongside the main
+ *      image.
+ *   3. Expands `characterDefinitionIds` refs the same way as generate-image.
+ *
+ * Bug history: before this helper, i2i/modify called `buildImagePrompt`
+ * WITHOUT `connectedReferences`, so Phase 0 mention resolution never fired.
+ * `@kira:1:smile` tokens stayed literal in the prompt and only the canonical
+ * character URL attached (as the main imageUrl).
+ */
+function buildConnectedRefsForI2I(
+  consumerNodeId: string,
+  chainRefs: readonly string[],
+  characterDefinitionIds: readonly string[] | undefined,
+  legacyRefUrl: string | undefined,
+  nodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+  characterDefinitions: readonly CharacterDef[],
+): ConnectedReference[] {
+  const refMetaMap = new Map<string, Omit<ConnectedReference, "id">>();
+
+  if (legacyRefUrl) {
+    refMetaMap.set("__legacy__", {
+      defaultName: "Image 1",
+      source: "manual",
+      url: legacyRefUrl,
+    });
+  }
+
+  // Step 1: expand every wired Character upstream once, by-source-node (not
+  // by-chainRefs-index). This ensures the character variants get added even
+  // when the character's canonical URL is consumed as the main `imageUrl`.
+  const incomingEdges = edges.filter((e) => e.target === consumerNodeId);
+  const wiredSourceNodes = incomingEdges
+    .map((e) => nodes.find((n) => n.id === e.source))
+    .filter((n): n is WorkflowNode => Boolean(n && n.type && n.type in WIRED_SOURCE_TYPE_MAP));
+  const characterUpstreams = wiredSourceNodes.filter((n) => n.type === "character");
+  const characterUrlsCovered = new Set<string>();
+  for (const upstream of characterUpstreams) {
+    const expansion = expandCharacterNodeIntoRefs(upstream);
+    if (expansion.length === 0) continue; // unnamed character — fall through to step 2
+    for (const [id, meta] of expansion) {
+      refMetaMap.set(id, meta);
+      if (meta.url) characterUrlsCovered.add(meta.url);
+    }
+  }
+
+  // Step 2: add non-character upstream URLs (from `chainRefs`, the upstream
+  // URLs minus the main `imageUrl`) as plain `wired-image` entries. Also
+  // include any chainRefs URLs from unnamed Character upstreams (where
+  // expansion returned empty and we want to surface the URL as a generic ref).
+  for (let i = 0; i < chainRefs.length; i++) {
+    if (characterUrlsCovered.has(chainRefs[i])) continue;
+    refMetaMap.set(`wired_${i}`, {
+      defaultName: `Wired Image ${i + 1}`,
+      source: "wired-image",
+      url: chainRefs[i],
+    });
+  }
+
+  // Step 3: character-definition refs (from the node's `characterDefinitionIds`
+  // field). Try to find a matching canvas Character node so we can expand
+  // variants the same way step 1 does.
+  const charIds = characterDefinitionIds ?? [];
+  const charDefs = characterDefinitions.filter((c) => charIds.includes(c.id));
+  const charCategorySource: Record<string, ReferenceSource> = {
+    face: "wired-face",
+    object: "wired-object",
+    location: "wired-location",
+  };
+  for (const c of charDefs) {
+    if (c.type !== "reference" || !c.referenceImageUrl) continue;
+    const source = charCategorySource[c.category ?? ""] ?? "wired-character";
+    const characterSlug = source === "wired-character"
+      ? characterMentionSlug(c.name)
+      : "";
+    const matchingCharNode = source === "wired-character"
+      ? nodes.find((n) => {
+          if (n.type !== "character") return false;
+          const nd = n.data as CharacterNodeData;
+          return nd.characterDbId === c.id;
+        })
+      : undefined;
+    if (source === "wired-character" && characterSlug && matchingCharNode) {
+      const expansion = expandCharacterNodeIntoRefs(matchingCharNode, c.referenceImageUrl);
+      // Re-key under `char_<id>...` so we don't collide with the wired-upstream
+      // expansion (step 1) that keyed under `<nodeId>...`.
+      for (const [id, meta] of expansion) {
+        const newId = id.startsWith(matchingCharNode.id)
+          ? `char_${c.id}${id.slice(matchingCharNode.id.length)}`
+          : `char_${c.id}_${id}`;
+        if (!refMetaMap.has(newId)) refMetaMap.set(newId, meta);
+      }
+      continue;
+    }
+    // No matching canvas node — emit single canonical entry. For character
+    // sources, still populate `characterSlug` so `@<name>` mentions resolve.
+    if (!refMetaMap.has(`char_${c.id}`)) {
+      refMetaMap.set(`char_${c.id}`, {
+        defaultName: c.name,
+        source,
+        description: c.description,
+        url: c.referenceImageUrl,
+        ...(characterSlug ? {
+          characterSlug,
+          variantSlug: undefined,
+          variantDisplayName: "canonical",
+        } : {}),
+      });
+    }
+  }
+
+  const out: ConnectedReference[] = [];
+  for (const [id, meta] of refMetaMap) {
+    out.push({ id, ...meta });
+  }
+  return out;
+}
 
 /** Check if a node has any upload-* ancestors via BFS backward through edges. */
 function hasUploadAncestor(nodeId: string, nodes: readonly { id: string; type: string }[], edges: readonly { source: string; target: string }[]): boolean {
@@ -938,20 +1168,30 @@ export function executeNode(
       if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
     }
 
-    // Collect reference images from connected nodes + character assets
+    // Collect reference images from connected nodes + character assets.
+    // chainRefs = upstream image URLs MINUS the main `imageUrl` (which the i2i
+    // route consumes as its primary input).
     const chainRefs = orderedImageUrls.filter((url) => url !== imageUrl);
     const charIds = i2iData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
-    const charRefUrls = charDefs
-      .filter((c) => c.type === "reference" && c.referenceImageUrl)
-      .map((c) => c.referenceImageUrl as string);
-    const nodeRefUrl = i2iData.referenceImageUrl;
-    const directRefs = [
-      ...(nodeRefUrl ? [nodeRefUrl] : []),
-      ...chainRefs,
-      ...charRefUrls,
-    ];
+
+    // Build `connectedReferences` so wired-Character upstreams expand into
+    // canonical + variant entries (powering @kira:N:variant mention resolution
+    // in `buildImagePrompt`'s Phase 0). Without this, @-mentions in the i2i
+    // prompt were never resolved at single-node-run time, leaving the literal
+    // `@shira:1:smile` text in the prompt and attaching only the character's
+    // canonical sourceImageUrl as the main image. Mirrors the generate-image
+    // expansion and the backend `expandWiredCharacterRefs` for parity.
+    const connectedReferences = buildConnectedRefsForI2I(
+      node.id,
+      chainRefs,
+      charIds,
+      i2iData.referenceImageUrl,
+      nodes,
+      edges,
+      allCharDefs as readonly CharacterDef[],
+    );
 
     // Build prompt with style + character descriptions (same as generate-image)
     const result = buildImagePrompt({
@@ -962,7 +1202,7 @@ export function executeNode(
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
-      referenceImageUrls: directRefs,
+      connectedReferences,
       ancestorRefs: [],
     });
 
@@ -1059,20 +1299,27 @@ export function executeNode(
       if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
     }
 
-    // Collect reference images from connected nodes + character assets
+    // Collect reference images from connected nodes + character assets.
+    // chainRefs = upstream image URLs MINUS the main `imageUrl` (which the
+    // modify-image route consumes as its primary input).
     const chainRefs = orderedImageUrls.filter((url) => url !== imageUrl);
     const charIds = modData.characterDefinitionIds ?? [];
     const allCharDefs = useWorkflowStore.getState().characterDefinitions;
     const charDefs = allCharDefs.filter((c) => charIds.includes(c.id));
-    const charRefUrls = charDefs
-      .filter((c) => c.type === "reference" && c.referenceImageUrl)
-      .map((c) => c.referenceImageUrl as string);
-    const nodeRefUrl = modData.referenceImageUrl;
-    const directRefs = [
-      ...(nodeRefUrl ? [nodeRefUrl] : []),
-      ...chainRefs,
-      ...charRefUrls,
-    ];
+
+    // Build `connectedReferences` so wired-Character upstreams expand into
+    // canonical + variant entries (powering @kira:N:variant mention resolution
+    // in `buildImagePrompt`'s Phase 0). See image-to-image branch above for
+    // the bug history — same root cause.
+    const connectedReferences = buildConnectedRefsForI2I(
+      node.id,
+      chainRefs,
+      charIds,
+      modData.referenceImageUrl,
+      nodes,
+      edges,
+      allCharDefs as readonly CharacterDef[],
+    );
 
     // Build prompt with style + character descriptions
     const styleBypass = hasConnectedStyleNode(node.id, nodes, edges);
@@ -1084,7 +1331,7 @@ export function executeNode(
       characterDefs: charDefs as CharacterDef[],
       userTemplates: useWorkflowStore.getState().userPromptTemplates,
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
-      referenceImageUrls: directRefs,
+      connectedReferences,
       ancestorRefs: [],
     });
 

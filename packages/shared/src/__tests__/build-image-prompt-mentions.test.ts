@@ -204,4 +204,67 @@ describe("buildImagePrompt with @-mentions", () => {
     expect(result.prompt).toContain("Image 1 (person")
     expect(result.prompt).toContain("match exactly. Maintain perfect likeness (face, body proportions, distinctive features)")
   })
+
+  // Reproduces the user-reported scenario from the bug report: a character
+  // "shira" with two expression variants (smile, laughing), the user typing a
+  // prompt that mentions both variants. The fix in `execute-node.ts` ensures
+  // image-to-image / modify-image build a full `connectedReferences` array so
+  // this scenario actually reaches Phase 0 (it was previously bypassed). This
+  // test guards the underlying Phase 0 resolution path that the executor now
+  // routes through.
+  it("user scenario: shira with smile + laughing variants — both URLs attach, canonical skipped", () => {
+    const shiraCanonical: ConnectedReference = {
+      id: "char-shira",
+      defaultName: "shira",
+      source: "wired-character",
+      url: "https://r2/shira/laughing.png", // defaultAssetUrl per ★ button
+      characterSlug: "shira",
+      variantSlug: undefined,
+      characterCanonicalDescription: "young woman, brown eyes",
+      variantDescription: null,
+      variantDisplayName: "canonical",
+    }
+    const shiraSmile: ConnectedReference = {
+      id: "char-shira-smile",
+      defaultName: "shira / smile",
+      source: "wired-character",
+      url: "https://r2/shira/smile.png",
+      characterSlug: "shira",
+      variantSlug: "smile",
+      characterCanonicalDescription: "young woman, brown eyes",
+      variantDescription: null,
+      variantDisplayName: "smile",
+    }
+    const shiraLaughing: ConnectedReference = {
+      id: "char-shira-laughing",
+      defaultName: "shira / laughing",
+      source: "wired-character",
+      url: "https://r2/shira/laughing.png",
+      characterSlug: "shira",
+      variantSlug: "laughing",
+      characterCanonicalDescription: "young woman, brown eyes",
+      variantDescription: null,
+      variantDisplayName: "laughing",
+    }
+    const result = buildImagePrompt({
+      prompt:
+        "@shira:1:smile with a friend, drinking coffee, @shira:2:laughing laughs when her friend say something to her ear",
+      provider: "nano-banana-pro",
+      connectedReferences: [shiraCanonical, shiraSmile, shiraLaughing],
+    })
+    // Both mentioned variant URLs must be in the references list.
+    expect(result.referenceImageUrls).toEqual(
+      expect.arrayContaining(["https://r2/shira/smile.png", "https://r2/shira/laughing.png"]),
+    )
+    // Canonical (laughing URL via defaultAssetUrl) should NOT be in refs as a
+    // standalone canonical attachment — though note that the laughing variant
+    // URL coincidentally matches `defaultAssetUrl` here, that's OK because
+    // it's attached as the LAUGHING VARIANT, not as the canonical fallback.
+    // The expected behavior is: 2 unique URLs (smile + laughing), no triple-
+    // attach of the canonical with the same URL as the laughing variant.
+    expect(result.referenceImageUrls).toHaveLength(2)
+    // Tokens replaced — no literal `@shira:N:variant` survives.
+    expect(result.prompt).not.toMatch(/@shira:1:smile\b/)
+    expect(result.prompt).not.toMatch(/@shira:2:laughing\b/)
+  })
 })
