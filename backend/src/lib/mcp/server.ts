@@ -10,6 +10,7 @@ import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
 import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
+import { registerCharacterTools } from "./tools/characters.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
@@ -107,6 +108,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
+  registerCharacterTools(server, session)
   registerUploadTools({ server, session })
   registerFilmDirectorTool(server, session)
 
