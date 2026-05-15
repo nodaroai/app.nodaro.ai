@@ -567,6 +567,58 @@ describe("generate-image", () => {
     expect(calledPrompt.length).toBe(2000)
     expect(calledPrompt.endsWith("...")).toBe(true)
   })
+
+  it("resolves @character:N:variant mentions when a Character is wired upstream", async () => {
+    // Parity test with image-to-image — same user scenario. generate-image
+    // already built connectedReferences inline before the fix, so this test
+    // documents the parity expectation between the two node-type branches.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/laughing.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [
+          { name: "smile", url: "http://shira/smile.png" },
+          { name: "laughing", url: "http://shira/laughing.png" },
+        ],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const genNode = makeNode("generate-image", {
+      prompt: "@shira:1:smile with friend, @shira:2:laughing laughs at a joke",
+      provider: "nano-banana-pro",
+    })
+    mockNodes = [shiraNode, genNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+
+    await executeNode(genNode as any, makeCtx())
+
+    const callArgs = mockRunImageGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    const passedRefs = callArgs[3] as string[] | undefined
+
+    expect(passedRefs).toBeDefined()
+    expect(passedRefs).toContain("http://shira/smile.png")
+    expect(passedRefs).toContain("http://shira/laughing.png")
+    // Canonical NOT in refs because shira was @-mentioned.
+    expect(passedRefs).not.toContain("http://shira/portrait.png")
+    expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
+    expect(passedPrompt).not.toMatch(/@shira:2:laughing\b/)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -654,6 +706,126 @@ describe("image-to-image", () => {
       undefined,
       expect.anything(),
     )
+  })
+
+  it("resolves @character:N:variant mentions when a Character is wired upstream (bug fix)", async () => {
+    // User scenario: a Character node "shira" wired upstream of image-to-image.
+    // shira has expressions "smile" and "laughing", and defaultAssetUrl set to
+    // the "laughing" URL via the studio's ★ button. User types the prompt:
+    //   "@shira:1:smile with friend, @shira:2:laughing laughs at a joke"
+    // Expected: BOTH smile + laughing variant URLs attach as referenceImageUrls,
+    // and the literal @-mention tokens are replaced by the resolved directives.
+    //
+    // Before the fix, the i2i path called `buildImagePrompt` WITHOUT a
+    // `connectedReferences` array, so Phase 0 mention resolution never fired
+    // and the @-mention tokens stayed in the prompt verbatim with NO variant
+    // URLs attached.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/laughing.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [
+          { name: "smile", url: "http://shira/smile.png" },
+          { name: "laughing", url: "http://shira/laughing.png" },
+        ],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const i2iNode = makeNode("image-to-image", {
+      prompt: "@shira:1:smile with friend, @shira:2:laughing laughs at a joke",
+      provider: "nano-banana",
+    })
+    mockNodes = [shiraNode, i2iNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    // The input resolver pushes shira's URL into inputs.referenceImageUrls.
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunImageToImage.mockResolvedValue(undefined)
+
+    await executeNode(i2iNode as any, makeCtx())
+
+    // shira's portrait becomes the main `imageUrl` (first wired image is the
+    // i2i input). The variant URLs must appear as `referenceImageUrls`.
+    const callArgs = mockRunImageToImage.mock.calls[0]
+    const passedImageUrl = callArgs[1] as string
+    const passedPrompt = callArgs[2] as string
+    const passedRefs = callArgs[5] as string[] | undefined
+
+    expect(passedImageUrl).toBe("http://shira/portrait.png")
+    expect(passedRefs).toBeDefined()
+    expect(passedRefs).toContain("http://shira/smile.png")
+    expect(passedRefs).toContain("http://shira/laughing.png")
+    // Canonical NOT attached because the character was @-mentioned.
+    // (Phase 0's per-character contract: mentioned → only mentioned variants).
+    // The portrait URL IS still passed as the main imageUrl, but should NOT
+    // appear in the references list.
+    expect(passedRefs).not.toContain("http://shira/portrait.png")
+    // Literal @-mention tokens were replaced — they must not survive into the
+    // final prompt verbatim.
+    expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
+    expect(passedPrompt).not.toMatch(/@shira:2:laughing\b/)
+    // Only the FIRST mention of a character emits a directive (existing dedup
+    // behavior in resolveCharacterMentions). With two `@shira:N:variant`
+    // tokens, only `Image 1 (shira)` is emitted.
+    expect(passedPrompt).toContain("Image 1 (shira)")
+  })
+
+  it("attaches canonical fallback when a Character is wired upstream WITHOUT any @-mention", async () => {
+    // Canonical fallback behavior: even when the user types no @-mention, a
+    // wired Character still contributes its canonical URL + a strong identity
+    // directive (mirrors the pre-mention-feature auto-attach behavior). Per
+    // i2i semantics, the canonical URL is consumed as the main imageUrl, so
+    // referenceImageUrls is empty here — but the directive must appear in the
+    // prompt.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/laughing.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://shira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const i2iNode = makeNode("image-to-image", {
+      prompt: "make her dance in the rain",
+      provider: "nano-banana",
+    })
+    mockNodes = [shiraNode, i2iNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunImageToImage.mockResolvedValue(undefined)
+
+    await executeNode(i2iNode as any, makeCtx())
+
+    const callArgs = mockRunImageToImage.mock.calls[0]
+    const passedPrompt = callArgs[2] as string
+
+    // Canonical fallback directive must appear in the prompt.
+    expect(passedPrompt).toContain("shira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
   })
 })
 

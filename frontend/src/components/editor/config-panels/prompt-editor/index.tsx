@@ -102,21 +102,50 @@ export function PromptEditor({
       ImageRefExtension.configure({
         suggestion: {
           char: "@",
-          items: ({ query }) => {
-            const all = refsRef.current
-            if (!query) return all.slice(0, 20)
-            const q = query.toLowerCase()
-            return all
-              .filter(
-                (r) =>
-                  r.label.toLowerCase().includes(q) ||
-                  String(r.index).includes(q) ||
-                  r.defaultLabel.toLowerCase().includes(q),
-              )
-              .slice(0, 20)
-          },
+          // Return the FULL unfiltered set — the SuggestionList applies both
+          // its hierarchical (drill-in) grouping AND the query-based filter
+          // itself. Returning early-filtered items here would hide the right
+          // character's variants when the user types something that matches
+          // only the root character label.
+          items: () => Array.from(refsRef.current),
           command: ({ editor: ed, range, props }) => {
             const item = props as unknown as RefImageItem
+            // Character refs: insert as PLAIN TEXT in the new `@<slug>:N:<variant>`
+            // format that `findCharacterMentionTokens` (shared) recognizes.
+            // The numeric index N is computed at insertion time by scanning the
+            // editor's current text for existing `@<char>:<N>` patterns and
+            // using max-N + 1. This keeps the user-typed slug and the final
+            // identity-directive block (`Image N (Name) — match exactly…`) in
+            // lock-step.
+            //
+            // Non-character refs continue to use the existing TipTap `imageRef`
+            // atomic node so the visual pill + `{image:N:label}` round-trip
+            // behavior is preserved.
+            if (item.source === "character" && item.characterSlug) {
+              // Scan editor's plain-text content for existing `@<char>:<N>(:<variant>)?`
+              // tokens. Use max + 1 as the next index. Mirrors `computeNextMentionIndex`
+              // in `tag-textarea.tsx` and the regex shape in `character-mention-slug.ts`.
+              const currentText = ed.getText({ blockSeparator: "\n" })
+              const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?/g
+              let maxIdx = 0
+              for (const match of currentText.matchAll(regex)) {
+                const n = parseInt(match[1], 10)
+                if (Number.isInteger(n) && n > maxIdx) maxIdx = n
+              }
+              const nextIdx = maxIdx + 1
+              const token = item.variantSlug
+                ? `@${item.characterSlug}:${nextIdx}:${item.variantSlug}`
+                : `@${item.characterSlug}:${nextIdx}`
+              // Replace the typed `@<filter>` range with the resolved token + space.
+              ed
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent(`${token} `)
+                .run()
+              return
+            }
+            // Non-character ref: keep the existing atomic `imageRef` node.
             ed
               .chain()
               .focus()
@@ -156,16 +185,34 @@ export function PromptEditor({
 
             const renderList = (props: {
               items: readonly RefImageItem[]
+              query: string
               command: (item: RefImageItem) => void
               clientRect?: (() => DOMRect | null) | null
+              editor: ReturnType<typeof useEditor>
+              range: { from: number; to: number }
             }) => {
               if (!root) return
               positionMount(props.clientRect?.() ?? null)
+              // Clear the typed filter text between the `@` and the cursor.
+              // Used when the list pushes/pops the drill so the new view starts
+              // with an empty filter (mirrors `TagTextarea`'s drill UX).
+              const clearFilter = () => {
+                const ed = props.editor
+                if (!ed) return
+                // Keep the `@` (range.from points at it) — delete from
+                // range.from + 1 to range.to.
+                const start = props.range.from + 1
+                const end = props.range.to
+                if (end <= start) return
+                ed.chain().focus().deleteRange({ from: start, to: end }).run()
+              }
               root.render(
                 <SuggestionList
                   ref={(r) => { listRef = r }}
                   items={props.items}
+                  query={props.query}
                   command={props.command}
+                  onDrillChange={clearFilter}
                 />,
               )
             }
