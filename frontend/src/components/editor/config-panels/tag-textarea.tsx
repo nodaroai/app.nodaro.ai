@@ -41,6 +41,22 @@ export interface SuggestionItem {
   thumbnailUrl?: string
   /** Variant display name for ref-image suggestions (e.g. "smile"). Hidden when "canonical" or absent. */
   variantDisplayName?: string
+  /**
+   * Discriminator for the `@` autocomplete's hierarchical view. Absent for
+   * normal flat suggestions (audio tags, SSML breaks, node refs, non-character
+   * refs).
+   *
+   *  - "character-root": clicking drills into the character's variants.
+   *    `tag` is the bare `@<characterSlug>` (used if the user presses Enter
+   *    without drilling).
+   *  - "variant": leaf variant inside the drill-in view. `tag` is the full
+   *    `@<character>:<variant>` slug. Clicking inserts and closes.
+   *  - "back": back row at the top of drill-in view. `tag` is unused.
+   *  - undefined / "leaf": ordinary leaf (insert + close).
+   */
+  kind?: "character-root" | "variant" | "back" | "leaf"
+  /** Slug of the character this root row represents — used to drill in. */
+  characterSlug?: string
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -109,6 +125,9 @@ export function TagTextarea(props: TagTextareaProps) {
   const [warning, setWarning] = useState<string | null>(null)
   const [imagePreview, setImagePreview] = useState<{ url: string; anchor: DOMRect } | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
+  // Drill-in state for the `@` autocomplete. When non-null, the dropdown shows
+  // that character's variants instead of the root character list.
+  const [drillCharacterSlug, setDrillCharacterSlug] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -122,25 +141,89 @@ export function TagTextarea(props: TagTextareaProps) {
     }))
   }, [nodeRefs])
 
+  // Hierarchical autocomplete for the `@` trigger:
+  //
+  //   Root view: 1 entry per character (canonical thumbnail + name) + the
+  //              non-character refs (uploaded / wired-image) inline at the
+  //              bottom. Selecting a character drills in instead of inserting.
+  //
+  //   Drill-in:  "← back (Name)" row + that character's variants. Selecting a
+  //              variant inserts `@<char>:<variant>` and closes the popup.
+  //
+  // Non-character refs (`source !== "character"`) bypass the drill-in
+  // entirely and use the legacy `{image:N:role}` token.
   const refImageSuggestions = useMemo((): SuggestionItem[] => {
     if (!referenceImages || referenceImages.length === 0) return []
-    return referenceImages.map((r) => {
-      // Character refs use slug-based @<character>(:<variant>)? tokens; everything else
-      // keeps the legacy {image:N:role} positional token so existing prompts keep working.
-      // Colon separator is unambiguous (each side may contain dashes).
-      const isCharacterMention = r.source === "character" && r.characterSlug
-      const tag = isCharacterMention
-        ? (r.variantSlug ? `@${r.characterSlug}:${r.variantSlug}` : `@${r.characterSlug}`)
-        : `{image:${r.index}:${r.defaultLabel}}`
-      return {
-        tag,
-        label: `#${r.index} ${r.label}`,
-        category: REF_IMAGE_SOURCE_LABEL[r.source],
-        thumbnailUrl: r.url,
-        variantDisplayName: r.source === "character" ? r.variantDisplayName : undefined,
+
+    // Bucket character refs by characterSlug; keep non-character refs flat.
+    const characterGroups = new Map<string, RefImageItem[]>()
+    const nonCharacterItems: RefImageItem[] = []
+    for (const item of referenceImages) {
+      if (item.source === "character" && item.characterSlug) {
+        const group = characterGroups.get(item.characterSlug) ?? []
+        group.push(item)
+        characterGroups.set(item.characterSlug, group)
+      } else {
+        nonCharacterItems.push(item)
       }
-    })
-  }, [referenceImages])
+    }
+
+    // Drill-in view: that character's variants + back row.
+    if (drillCharacterSlug) {
+      const variants = characterGroups.get(drillCharacterSlug) ?? []
+      const canonical = variants.find((v) => !v.variantSlug)
+      const characterName = canonical?.label ?? drillCharacterSlug
+      const backLabel = `back (${characterName})`
+      // Single category bucket keeps the back row visually attached to the
+      // variant list and avoids two separate category headers.
+      const drillCategory = `${characterName} variants`
+      return [
+        {
+          kind: "back",
+          tag: "__back__",
+          label: backLabel,
+          category: drillCategory,
+        },
+        ...variants.map((v): SuggestionItem => ({
+          kind: "variant",
+          tag: v.variantSlug
+            ? `@${v.characterSlug}:${v.variantSlug}`
+            : `@${v.characterSlug}`,
+          label: v.variantDisplayName ?? v.label,
+          category: drillCategory,
+          thumbnailUrl: v.url,
+          variantDisplayName: v.variantDisplayName,
+          characterSlug: v.characterSlug,
+        })),
+      ]
+    }
+
+    // Root view: one entry per character (using canonical row or fallback)
+    // + non-character refs as ordinary leaves.
+    const characterRoots: SuggestionItem[] = []
+    for (const [slug, items] of characterGroups) {
+      const canonical = items.find((i) => !i.variantSlug) ?? items[0]
+      const variantCount = items.length
+      characterRoots.push({
+        kind: "character-root",
+        tag: `@${slug}`,
+        label: canonical.label,
+        category: REF_IMAGE_SOURCE_LABEL[canonical.source],
+        thumbnailUrl: canonical.url,
+        characterSlug: slug,
+        // Hint at how many variants are available behind the drill-in.
+        variantDisplayName: variantCount > 1 ? `${variantCount} variants` : undefined,
+      })
+    }
+    const nonCharacterLeaves: SuggestionItem[] = nonCharacterItems.map((r) => ({
+      kind: "leaf",
+      tag: `{image:${r.index}:${r.defaultLabel}}`,
+      label: `#${r.index} ${r.label}`,
+      category: REF_IMAGE_SOURCE_LABEL[r.source],
+      thumbnailUrl: r.url,
+    }))
+    return [...nonCharacterLeaves, ...characterRoots]
+  }, [referenceImages, drillCharacterSlug])
 
   const filtered = useMemo(() => {
     if (!showDropdown || !triggerInfo) return []
@@ -162,7 +245,8 @@ export function TagTextarea(props: TagTextareaProps) {
     }
 
     if (!q) return items
-    return items.filter((s) => s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
+    // Back rows always stay visible — they're navigation, not data.
+    return items.filter((s) => s.kind === "back" || s.label.toLowerCase().includes(q) || s.category.toLowerCase().includes(q))
   }, [showDropdown, triggerInfo, filterText, customTags, nodeRefSuggestions, refImageSuggestions, tagMode])
 
   const groupedFiltered = useMemo(() => {
@@ -182,6 +266,7 @@ export function TagTextarea(props: TagTextareaProps) {
     setSelectedIndex(0)
     setWarning(null)
     setDropdownPos(null)
+    setDrillCharacterSlug(null)
   }, [])
 
   // Compute dropdown position relative to viewport. Flips above the textarea
@@ -251,6 +336,49 @@ export function TagTextarea(props: TagTextareaProps) {
     })
   }, [triggerInfo, value, onChange, maxLength, provider, tagMode, dismiss])
 
+  // Trim any filter text the user has typed between `@` and the cursor.
+  // Used when transitioning between drill states so the new view starts
+  // with an empty filter. `filterText` is derived from the textarea content,
+  // so we have to actually delete the characters there too.
+  const clearFilterTextInTextarea = useCallback(() => {
+    if (!triggerInfo || !textareaRef.current) return
+    const before = value.slice(0, triggerInfo.position + 1) // keep the `@`
+    const cursorPos = textareaRef.current.selectionStart
+    const after = value.slice(cursorPos)
+    if (cursorPos <= triggerInfo.position + 1) return // nothing to clear
+    onChange(before + after)
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        const newPos = triggerInfo.position + 1
+        textareaRef.current.selectionStart = newPos
+        textareaRef.current.selectionEnd = newPos
+        textareaRef.current.focus()
+      }
+    })
+  }, [triggerInfo, value, onChange])
+
+  // Click handler for the `@` autocomplete that's aware of the hierarchical
+  // kinds. Back rows pop the drill, character-root rows push it, leaf/variant
+  // rows fall through to `insertTag` and close the popup.
+  const selectSuggestion = useCallback((item: SuggestionItem) => {
+    if (item.kind === "back") {
+      setDrillCharacterSlug(null)
+      setSelectedIndex(0)
+      setFilterText("")
+      clearFilterTextInTextarea()
+      return
+    }
+    if (item.kind === "character-root" && item.characterSlug) {
+      setDrillCharacterSlug(item.characterSlug)
+      // Skip the back row so the first variant is highlighted by default.
+      setSelectedIndex(1)
+      setFilterText("")
+      clearFilterTextInTextarea()
+      return
+    }
+    insertTag(item.tag)
+  }, [insertTag, clearFilterTextInTextarea])
+
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
     if (maxLength && newValue.length > maxLength) return
@@ -271,6 +399,7 @@ export function TagTextarea(props: TagTextareaProps) {
       setSelectedIndex(0)
       setShowDropdown(true)
       setWarning(null)
+      setDrillCharacterSlug(null)
       updateDropdownPos()
     } else if (showDropdown && triggerInfo) {
       // Update filter text
@@ -330,11 +459,23 @@ export function TagTextarea(props: TagTextareaProps) {
       } else if (e.key === "Enter") {
         e.preventDefault()
         const item = filtered[selectedIndex]
-        if (item) insertTag(item.tag)
+        if (item) selectSuggestion(item)
         return
       } else if (e.key === "Escape") {
         e.preventDefault()
         dismiss()
+        return
+      } else if (
+        e.key === "Backspace"
+        && triggerInfo?.char === "@"
+        && drillCharacterSlug
+        && filterText.length === 0
+      ) {
+        // In drill-in view with empty filter: Backspace pops back to root
+        // instead of deleting the `@` (which would close the popup).
+        e.preventDefault()
+        setDrillCharacterSlug(null)
+        setSelectedIndex(0)
         return
       }
     }
@@ -378,7 +519,7 @@ export function TagTextarea(props: TagTextareaProps) {
         ta.selectionEnd = tok.end
       }
     }
-  }, [showDropdown, filtered, selectedIndex, insertTag, dismiss, findImageTokens, removeTokenAt])
+  }, [showDropdown, filtered, selectedIndex, selectSuggestion, dismiss, findImageTokens, removeTokenAt, triggerInfo, drillCharacterSlug, filterText])
 
   // Snap cursor to nearest token boundary when a click lands inside a token.
   const handleSelect = useCallback(() => {
@@ -538,8 +679,33 @@ export function TagTextarea(props: TagTextareaProps) {
           {items.map((item) => {
             const idx = filtered.indexOf(item)
             const isSelected = idx === selectedIndex
-            const isRefImage = item.thumbnailUrl !== undefined
-            const isNodeRef = !isRefImage && category !== "Audio Tags" && category !== "Suno"
+            const isBack = item.kind === "back"
+            const isCharacterRoot = item.kind === "character-root"
+            const isRefImage = !isBack && item.thumbnailUrl !== undefined
+            const isNodeRef = !isBack && !isRefImage && category !== "Audio Tags" && category !== "Suno"
+
+            // "Back" row: arrow + label, no thumbnail, no tag pill.
+            if (isBack) {
+              return (
+                <button
+                  key={`back-${idx}`}
+                  type="button"
+                  data-index={idx}
+                  className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 ${
+                    isSelected
+                      ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                      : "hover:bg-muted text-muted-foreground"
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    selectSuggestion(item)
+                  }}
+                >
+                  <span className="font-medium">&larr; {item.label}</span>
+                </button>
+              )
+            }
+
             return (
               <button
                 key={item.tag}
@@ -552,7 +718,7 @@ export function TagTextarea(props: TagTextareaProps) {
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  insertTag(item.tag)
+                  selectSuggestion(item)
                 }}
               >
                 {isRefImage && (
@@ -568,15 +734,25 @@ export function TagTextarea(props: TagTextareaProps) {
                         <span className="text-slate-500 ml-1">/ {item.variantDisplayName}</span>
                       )}
                     </span>
-                    <span
-                      className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
-                        isSelected
-                          ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
-                          : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                      }`}
-                    >
-                      {item.tag}
-                    </span>
+                    {isCharacterRoot ? (
+                      // Drill-in hint — no tag pill (clicking drills, doesn't insert).
+                      <span
+                        className="text-slate-500 text-[12px] leading-4 shrink-0"
+                        aria-hidden
+                      >
+                        &rsaquo;
+                      </span>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                          isSelected
+                            ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                            : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                        }`}
+                      >
+                        {item.tag}
+                      </span>
+                    )}
                   </>
                 )}
                 {isNodeRef && (
