@@ -328,6 +328,9 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         : "character",
       index: i + 1,
       defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+      characterSlug: ref.characterSlug,
+      variantSlug: ref.variantSlug,
+      variantDisplayName: ref.variantDisplayName,
     }))
   }, [connectedReferences])
 
@@ -852,6 +855,9 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         : "character",
       index: i + 1,
       defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+      characterSlug: ref.characterSlug,
+      variantSlug: ref.variantSlug,
+      variantDisplayName: ref.variantDisplayName,
     }))
   }, [connectedReferences])
 
