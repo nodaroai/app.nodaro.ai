@@ -2722,6 +2722,15 @@ export type CharacterNodeData = {
    *  - "strict"  — clamp facial identity precisely to the reference photo (default for face-locked workflows)
    *  Defaults to "soft" for backward compatibility. */
   identityLock?: "off" | "soft" | "strict"
+  /**
+   * Default usage mode for `@kira:N` mentions of this character. Drives the
+   * per-image directive in the assembled prompt — "identical" emits the full
+   * likeness lock, "face" / "face-pose" / "emotion" / "style" emit narrower
+   * directives. Overridden per-mention by a 4-part slug (`@kira:1:smile:face`).
+   * Defaults to "identical" (the legacy "match exactly" behavior) when unset.
+   * See `packages/shared/src/character-usage-mode.ts`.
+   */
+  defaultUsageMode?: import("@nodaro/shared").UsageMode
   characterSheet: CharacterSheet | null
   projectId: string
   createdAt: string

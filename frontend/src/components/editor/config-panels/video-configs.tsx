@@ -86,6 +86,7 @@ interface VideoRefAutocompleteEntry {
   readonly characterSlug?: string
   readonly variantSlug?: string
   readonly variantDisplayName?: string
+  readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
 }
 
 function buildVideoRefAutocomplete(
@@ -104,6 +105,7 @@ function buildVideoRefAutocomplete(
       const charName = charData.characterName || s.label || "Character"
       const slug = characterMentionSlug(charName)
       if (slug) {
+        const defaultUsageMode = charData.defaultUsageMode
         const canonicalUrl =
           charData.defaultAssetUrl ||
           charData.sourceImageUrl ||
@@ -119,6 +121,7 @@ function buildVideoRefAutocomplete(
             characterSlug: slug,
             variantSlug: undefined,
             variantDisplayName: "canonical",
+            defaultUsageMode,
           })
         }
         const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string }>> = {
@@ -142,6 +145,7 @@ function buildVideoRefAutocomplete(
               characterSlug: slug,
               variantSlug,
               variantDisplayName: item.name,
+              defaultUsageMode,
             })
           }
         }
@@ -179,6 +183,7 @@ function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): Ref
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,
+    defaultUsageMode: ref.defaultUsageMode,
   }))
 }
 

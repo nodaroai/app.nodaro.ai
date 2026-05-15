@@ -212,6 +212,126 @@ describe("buildImagePrompt with @-mentions", () => {
   // this scenario actually reaches Phase 0 (it was previously bypassed). This
   // test guards the underlying Phase 0 resolution path that the executor now
   // routes through.
+  // -------------------------------------------------------------------------
+  // Usage-mode tests — per-mention slug override + character-node default
+  // propagation through ConnectedReference.defaultUsageMode.
+  // -------------------------------------------------------------------------
+
+  it("@kira:1:face emits face-only directive (no canonical description)", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:face waving",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Preserve clothing, hair styling, and posture")
+    // Face-only deliberately drops the canonical-description prefix so the
+    // model isn't anchored to body proportions when only the face is wanted.
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+    expect(result.prompt).toContain("Image 1 (Kira)")
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+  })
+
+  it("@kira:1:smile:face combines variant URL with face-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "show @kira:1:smile:face dancing",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraSmile],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://r2/kira-smile.png"])
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Image 1 (Kira)")
+  })
+
+  it("@kira:1:style emits style-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "redo @kira:1:style as a comic panel",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the visual style and tone")
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("@kira:1:emotion emits emotion-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:emotion expressed by another character",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the emotional expression")
+    expect(result.prompt).toContain("Preserve all other aspects")
+  })
+
+  it("@kira:1:face-pose emits face + pose directive AND keeps canonical description", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:face-pose in a different outfit",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take the facial features and body pose")
+    expect(result.prompt).toContain("Preserve clothing and styling")
+    // face-pose deliberately keeps the canonical description so the model
+    // holds the underlying identity while reposing.
+    expect(result.prompt).toContain("auburn shoulder-length hair")
+  })
+
+  it("falls back to character node's defaultUsageMode when slug has no mode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "@kira:1 happy",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    // No slug-level mode; falls through to node default "face".
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    // Canonical description omitted because face mode drops it.
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("slug mode overrides character node's defaultUsageMode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "@kira:1:style as a wood carving",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    expect(result.prompt).toContain("Take only the visual style and tone")
+    expect(result.prompt).not.toContain("Take only the facial features and expression")
+  })
+
+  it("canonical fallback (no @-mention) uses character node's defaultUsageMode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait with no mention",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    // Canonical fallback triggers — directive uses the node's default mode.
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+  })
+
+  it("canonical fallback without defaultUsageMode keeps the legacy 'Match exactly' directive", () => {
+    const result = buildImagePrompt({
+      prompt: "just a scene",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    // Backwards-compat: when neither slug nor node specify a mode, the
+    // directive matches the pre-mode-feature wording exactly.
+    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+  })
+
   it("user scenario: shira with smile + laughing variants — both URLs attach, canonical skipped", () => {
     const shiraCanonical: ConnectedReference = {
       id: "char-shira",

@@ -286,6 +286,9 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         const charName = charData.characterName || s.label || "Character"
         const slug = characterMentionSlug(charName)
         if (slug) {
+          // Propagated to every derived entry so the FinalPromptPreview's call
+          // to `buildImagePrompt` resolves directives the same way runtime does.
+          const defaultUsageMode = charData.defaultUsageMode
           const canonicalUrl =
             charData.defaultAssetUrl ||
             charData.sourceImageUrl ||
@@ -304,6 +307,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: null,
               variantDisplayName: "canonical",
+              defaultUsageMode,
             })
           }
           const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
@@ -331,6 +335,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
                 characterCanonicalDescription: charData.canonicalDescription ?? null,
                 variantDescription: item.description ?? null,
                 variantDisplayName: item.name,
+                defaultUsageMode,
               })
             }
           }
@@ -366,6 +371,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         : undefined
       if (matchingCharNode && slug) {
         const charData = matchingCharNode.data as CharacterNodeData
+        const defaultUsageMode = charData.defaultUsageMode
         const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl
         if (canonicalUrl) {
           map.set(`char_${c.id}`, {
@@ -379,6 +385,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
             characterCanonicalDescription: charData.canonicalDescription ?? null,
             variantDescription: null,
             variantDisplayName: "canonical",
+            defaultUsageMode,
           })
         }
         const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
@@ -406,6 +413,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: item.description ?? null,
               variantDisplayName: item.name,
+              defaultUsageMode,
             })
           }
         }
@@ -457,6 +465,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
+      defaultUsageMode: ref.defaultUsageMode,
     }))
   }, [connectedReferences])
 
@@ -952,6 +961,10 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         const charName = charData.characterName || s.label || "Character"
         const slug = characterMentionSlug(charName)
         if (slug) {
+          // Propagate the character node's default usage mode into every
+          // derived entry — keeps the modify-image FinalPromptPreview in sync
+          // with the runtime path through `buildImagePrompt`.
+          const defaultUsageMode = charData.defaultUsageMode
           const canonicalUrl =
             charData.defaultAssetUrl ||
             charData.sourceImageUrl ||
@@ -970,6 +983,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: null,
               variantDisplayName: "canonical",
+              defaultUsageMode,
             })
           }
           const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
@@ -997,6 +1011,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
                 characterCanonicalDescription: charData.canonicalDescription ?? null,
                 variantDescription: item.description ?? null,
                 variantDisplayName: item.name,
+                defaultUsageMode,
               })
             }
           }
@@ -1031,6 +1046,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         : undefined
       if (matchingCharNode && slug) {
         const charData = matchingCharNode.data as CharacterNodeData
+        const defaultUsageMode = charData.defaultUsageMode
         const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl
         if (canonicalUrl) {
           map.set(`char_${c.id}`, {
@@ -1044,6 +1060,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
             characterCanonicalDescription: charData.canonicalDescription ?? null,
             variantDescription: null,
             variantDisplayName: "canonical",
+            defaultUsageMode,
           })
         }
         const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
@@ -1071,6 +1088,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
               characterCanonicalDescription: charData.canonicalDescription ?? null,
               variantDescription: item.description ?? null,
               variantDisplayName: item.name,
+              defaultUsageMode,
             })
           }
         }
@@ -1107,6 +1125,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
+      defaultUsageMode: ref.defaultUsageMode,
     }))
   }, [connectedReferences])
 

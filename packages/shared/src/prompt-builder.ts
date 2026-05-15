@@ -8,6 +8,7 @@ import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-constants.js"
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
+import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
 import type {
   CharacterDef,
   ConnectedReference,
@@ -88,18 +89,27 @@ export function resolveCharacterMentions(
     replacements.push({ token: t.token, offset: t.offset, replacement: displayName })
 
     if (isFirstMention) {
-      // Strengthened character directive — folds identity-preservation
-      // language directly into the bullet so the model holds face / body /
-      // distinctive features. Replaces the redundant global trailing
-      // identity-lock clause we used to append from `collectIdentityLockClause`.
+      // Per-image directive uses a mode-specific directive (identical / face /
+      // face-pose / emotion / style). Resolution order: per-mention slug
+      // override → character node default → global DEFAULT_USAGE_MODE.
       // The leading `Image N (Name)` numeric index comes straight from the
       // user-typed token so the literal slug `@kira:1:smile` and the final
       // identity directive `Image 1 (Kira)` line up.
+      const effectiveMode: UsageMode =
+        t.usageMode ?? match.defaultUsageMode ?? DEFAULT_USAGE_MODE
+      const directive = usageModeDirective(effectiveMode)
       const subject = `Image ${t.imageIndex} (${displayName})`
-      const descPart = match.characterCanonicalDescription
+      // Canonical description is identity-context — only useful when the model
+      // is being asked to lock to that identity ("identical" / "face-pose").
+      // For "emotion" / "style" modes the canonical description (face/body/
+      // features) is noise relative to the directive's intent, so we omit it
+      // and keep the bullet focused on the mode-specific instruction.
+      const includeCanonicalDesc =
+        effectiveMode === "identical" || effectiveMode === "face-pose"
+      const descPart = includeCanonicalDesc && match.characterCanonicalDescription
         ? `${subject} — ${match.characterCanonicalDescription.trim()}`
         : subject
-      directiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+      directiveLines.push(`- ${descPart}. ${directive}`)
     }
     if (t.variantSlug && match.variantDescription) {
       directiveLines.push(`  (in this image: ${match.variantDescription.trim()})`)
@@ -158,10 +168,20 @@ function buildCanonicalFallback(
     // background hint, so we emit a strong directive (matching the legacy
     // identity-lock clause strength) without a numeric index in front —
     // numeric indices are reserved for explicit user-typed mentions.
-    const descPart = r.characterCanonicalDescription
+    //
+    // Mode source: character node's `defaultUsageMode` (if set), else the
+    // global `DEFAULT_USAGE_MODE` ("identical"). Without a slug-level
+    // override available here (the user hasn't @-mentioned this character),
+    // the node's default is the only signal — preserves the legacy "match
+    // exactly" behavior when no default is configured.
+    const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    const directive = usageModeDirective(effectiveMode)
+    const includeCanonicalDesc =
+      effectiveMode === "identical" || effectiveMode === "face-pose"
+    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName
-    directiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+    directiveLines.push(`- ${descPart}. ${directive}`)
   }
   return { directiveLines, urls }
 }
