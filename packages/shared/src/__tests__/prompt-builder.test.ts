@@ -543,22 +543,22 @@ describe("buildImagePrompt", () => {
   })
 
   describe("{image:N} expansion in prompt", () => {
-    it("expands {image:1} (no label) using letter naming", () => {
+    it("expands {image:1} (no label) using numeric naming", () => {
       const result = buildImagePrompt({
         prompt: "{image:1} shows a cat",
         provider: "nano-banana",
         referenceImageUrls: ["https://img.example.com/1.png", "https://img.example.com/2.png"],
       })
-      expect(result.prompt).toContain("Image A shows a cat")
+      expect(result.prompt).toContain("Image 1 shows a cat")
     })
 
-    it("expands multiple image references with letters", () => {
+    it("expands multiple image references with numeric indices", () => {
       const result = buildImagePrompt({
         prompt: "{image:1} and {image:2}",
         provider: "nano-banana",
         referenceImageUrls: ["https://a.png", "https://b.png"],
       })
-      expect(result.prompt).toContain("Image A and Image B")
+      expect(result.prompt).toContain("Image 1 and Image 2")
     })
 
     it("does not expand {image:N} for out-of-range index", () => {
@@ -577,7 +577,7 @@ describe("buildImagePrompt", () => {
         referenceImageUrls: [],
         ancestorRefs: ["https://ancestor.png"],
       })
-      expect(result.prompt).toContain("Image A from ancestor")
+      expect(result.prompt).toContain("Image 1 from ancestor")
     })
   })
 })
@@ -612,9 +612,9 @@ describe("buildImagePrompt with connectedReferences", () => {
         { id: "b", defaultName: "Image 2", source: "manual", url: "https://b.png" },
       ],
     })
-    expect(result.prompt).toContain("- Image A (dragon) — match exactly.")
-    // Image B is attached but not mentioned → no directive about it
-    expect(result.prompt).not.toContain("Image B")
+    expect(result.prompt).toContain("- Image 1 (dragon) — match exactly.")
+    // Image 2 is attached but not mentioned → no directive about it
+    expect(result.prompt).not.toContain("Image 2")
     // But its URL is still sent to the provider
     expect(result.referenceImageUrls).toEqual(["https://a.png", "https://b.png"])
   })
@@ -628,10 +628,10 @@ describe("buildImagePrompt with connectedReferences", () => {
         { id: "b", defaultName: "Image 2", source: "manual", url: "https://b.png" },
       ],
     })
-    expect(result.prompt).toContain("- Image A (dragon) — match exactly.")
-    expect(result.prompt).toContain("- Image B (dragon) — match exactly.")
-    expect(result.prompt).toContain("- Image A (background) — use as the background/setting.")
-    expect(result.prompt).toContain("Image A (dragon) fighting Image B (dragon) in Image A (background)")
+    expect(result.prompt).toContain("- Image 1 (dragon) — match exactly.")
+    expect(result.prompt).toContain("- Image 2 (dragon) — match exactly.")
+    expect(result.prompt).toContain("- Image 1 (background) — use as the background/setting.")
+    expect(result.prompt).toContain("Image 1 (dragon) fighting Image 2 (dragon) in Image 1 (background)")
   })
 
   it("separates directives from the user prompt and uses the composition prefix", () => {
@@ -644,7 +644,7 @@ describe("buildImagePrompt with connectedReferences", () => {
       ],
     })
     expect(result.prompt).toMatch(/^Use these references for the output image:\n/)
-    expect(result.prompt).toContain("Compose them naturally into a single image: Image B (object)")
+    expect(result.prompt).toContain("Compose them naturally into a single image: Image 2 (object)")
   })
 
   it("identityMeta override switches a single identity to strict", () => {
@@ -658,7 +658,7 @@ describe("buildImagePrompt with connectedReferences", () => {
         { imageIndex: 1, label: "object", fidelity: "strict" },
       ],
     })
-    expect(result.prompt).toContain("- Image A (object) — match exactly. Maintain perfect likeness.")
+    expect(result.prompt).toContain("- Image 1 (object) — match exactly. Maintain perfect likeness.")
   })
 
   it("uses parenthetical form for proper-noun labels (no article needed)", () => {
@@ -669,8 +669,8 @@ describe("buildImagePrompt with connectedReferences", () => {
         { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
       ],
     })
-    expect(result.prompt).toContain("- Image A (Danny) — match exactly.")
-    expect(result.prompt).toContain("Image A (Danny) smiling")
+    expect(result.prompt).toContain("- Image 1 (Danny) — match exactly.")
+    expect(result.prompt).toContain("Image 1 (Danny) smiling")
   })
 
   it("uses scene-setting verb for background-style labels", () => {
@@ -721,10 +721,10 @@ describe("buildImagePrompt with connectedReferences", () => {
       ],
     })
     // Description is folded into the parenthetical with an em-dash separator
-    expect(result.prompt).toContain("Image A (Sarah — tall, red hair)")
+    expect(result.prompt).toContain("Image 1 (Sarah — tall, red hair)")
   })
 
-  it("expands {image:1} (no label) to letter-named position", () => {
+  it("expands {image:1} (no label) to numeric position", () => {
     // Note: character refs are now mention-only. Use a non-character source.
     const result = buildImagePrompt({
       prompt: "{image:1} smiling",
@@ -733,10 +733,10 @@ describe("buildImagePrompt with connectedReferences", () => {
         { id: "c1", defaultName: "Sarah", source: "wired-face", url: "https://s.png" },
       ],
     })
-    expect(result.prompt).toContain("Image A smiling")
+    expect(result.prompt).toContain("Image 1 smiling")
   })
 
-  it("expands {image:1:label} to parenthetical letter form", () => {
+  it("expands {image:1:label} to parenthetical numeric form", () => {
     const result = buildImagePrompt({
       prompt: "{image:1:dragon} roaring",
       provider: "nano-banana",
@@ -744,7 +744,7 @@ describe("buildImagePrompt with connectedReferences", () => {
         { id: "a", defaultName: "Image 1", source: "manual", url: "https://a.png" },
       ],
     })
-    expect(result.prompt).toContain("Image A (dragon) roaring")
+    expect(result.prompt).toContain("Image 1 (dragon) roaring")
     expect(result.prompt).not.toContain("{image:1:dragon}")
   })
 
@@ -784,8 +784,8 @@ describe("buildImagePrompt with connectedReferences", () => {
       ],
     })
     // Only the "background" identity should produce a directive — no extra "object" default.
-    expect(result.prompt).toContain("- Image A (background) — use as the background/setting.")
-    expect(result.prompt).not.toContain("Image A (object)")
+    expect(result.prompt).toContain("- Image 1 (background) — use as the background/setting.")
+    expect(result.prompt).not.toContain("Image 1 (object)")
   })
 
   it("filters URLs for providers that don't support reference images", () => {
@@ -804,13 +804,13 @@ describe("buildImagePrompt with connectedReferences", () => {
 // expandImagePositionRefs
 // ---------------------------------------------------------------------------
 describe("expandImagePositionRefs", () => {
-  it("replaces {image:1} with letter-named position", () => {
-    expect(expandImagePositionRefs("{image:1} shows", 2)).toBe("Image A shows")
+  it("replaces {image:1} with numeric position", () => {
+    expect(expandImagePositionRefs("{image:1} shows", 2)).toBe("Image 1 shows")
   })
 
   it("replaces multiple valid tokens", () => {
     expect(expandImagePositionRefs("{image:1} and {image:2}", 2)).toBe(
-      "Image A and Image B",
+      "Image 1 and Image 2",
     )
   })
 
@@ -831,13 +831,13 @@ describe("expandImagePositionRefs", () => {
   })
 
   it("is case-insensitive", () => {
-    expect(expandImagePositionRefs("{IMAGE:1}", 1)).toBe("Image A")
-    expect(expandImagePositionRefs("{Image:2}", 3)).toBe("Image B")
+    expect(expandImagePositionRefs("{IMAGE:1}", 1)).toBe("Image 1")
+    expect(expandImagePositionRefs("{Image:2}", 3)).toBe("Image 2")
   })
 
   it("handles adjacent tokens", () => {
     expect(expandImagePositionRefs("{image:1}{image:2}", 2)).toBe(
-      "Image AImage B",
+      "Image 1Image 2",
     )
   })
 
@@ -845,8 +845,8 @@ describe("expandImagePositionRefs", () => {
     expect(expandImagePositionRefs("{image:1} smiling", 2, ["Sarah", "Bob"])).toBe("Sarah smiling")
   })
 
-  it("falls back to letter-named position when name is missing", () => {
-    expect(expandImagePositionRefs("{image:2} appears", 2, ["Sarah"])).toBe("Image B appears")
+  it("falls back to numeric position when name is missing", () => {
+    expect(expandImagePositionRefs("{image:2} appears", 2, ["Sarah"])).toBe("Image 2 appears")
   })
 
   it("preserves out-of-range tokens even with names", () => {
