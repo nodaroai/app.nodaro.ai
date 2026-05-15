@@ -711,11 +711,13 @@ describe("buildImagePrompt with connectedReferences", () => {
   })
 
   it("inlines the upstream description in the directive when the ref is mentioned", () => {
+    // Note: character refs are now mention-only (no {image:N} expansion).
+    // Use a wired-face ref to test the {image:N:label} expansion path.
     const result = buildImagePrompt({
       prompt: "{image:1:Sarah} on a beach",
       provider: "nano-banana",
       connectedReferences: [
-        { id: "c1", defaultName: "Sarah", source: "wired-character", description: "tall, red hair", url: "https://s.png" },
+        { id: "c1", defaultName: "Sarah", source: "wired-face", description: "tall, red hair", url: "https://s.png" },
       ],
     })
     // Description is folded into the parenthetical with an em-dash separator
@@ -723,11 +725,12 @@ describe("buildImagePrompt with connectedReferences", () => {
   })
 
   it("expands {image:1} (no label) to letter-named position", () => {
+    // Note: character refs are now mention-only. Use a non-character source.
     const result = buildImagePrompt({
       prompt: "{image:1} smiling",
       provider: "nano-banana",
       connectedReferences: [
-        { id: "c1", defaultName: "Sarah", source: "wired-character", url: "https://s.png" },
+        { id: "c1", defaultName: "Sarah", source: "wired-face", url: "https://s.png" },
       ],
     })
     expect(result.prompt).toContain("Image A smiling")

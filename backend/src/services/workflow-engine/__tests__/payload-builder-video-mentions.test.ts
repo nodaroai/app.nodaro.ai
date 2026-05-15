@@ -61,10 +61,10 @@ describe("payload-builder video paths: @-mention resolution", () => {
   const jobId = "job-1"
 
   describe("image-to-video", () => {
-    it("resolves @kira-smile and slots the variant URL into imageUrl when no upstream image is wired", () => {
+    it("resolves @kira:smile and slots the variant URL into imageUrl when no upstream image is wired", () => {
       const character = charNode("char-1")
       const i2v = node("i2v-1", "image-to-video", {
-        prompt: "@kira-smile dances in a forest",
+        prompt: "@kira:smile dances in a forest",
         provider: "kling",
       })
       const nodes = [character, i2v]
@@ -86,7 +86,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // The prompt now has "Kira" instead of the literal token.
       const prompt = result.payload.prompt as string
       expect(prompt).toContain("Kira")
-      expect(prompt).not.toMatch(/@kira-smile\b/)
+      expect(prompt).not.toMatch(/@kira:smile\b/)
       // Canonical description ride-along (first mention emits the long bio).
       expect(prompt).toContain("auburn shoulder-length hair")
     })
@@ -94,7 +94,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
     it("preserves upstream imageUrl and routes the mention URL into referenceImageUrls", () => {
       const character = charNode("char-1")
       const i2v = node("i2v-1", "image-to-video", {
-        prompt: "@kira-smile pose in the rain",
+        prompt: "@kira:smile pose in the rain",
         provider: "kling",
       })
       const nodes = [character, i2v]
@@ -188,7 +188,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
     it("dedupes mention URLs against existing referenceImageUrls", () => {
       const character = charNode("char-1")
       const t2v = node("t2v-1", "text-to-video", {
-        prompt: "@kira-smile in a meadow",
+        prompt: "@kira:smile in a meadow",
         provider: "kling",
       })
       const nodes = [character, t2v]
@@ -240,10 +240,10 @@ describe("payload-builder video paths: @-mention resolution", () => {
       expect(result.payload.referenceImageUrl).toBeUndefined()
     })
 
-    it("resolves @kira-smile and routes the URL into v2v's single referenceImageUrl slot", () => {
+    it("resolves @kira:smile and routes the URL into v2v's single referenceImageUrl slot", () => {
       const character = charNode("char-1")
       const v2v = node("v2v-1", "video-to-video", {
-        prompt: "transform the figure into @kira-smile",
+        prompt: "transform the figure into @kira:smile",
         provider: "wan",
         videoUrl: "https://r2/source.mp4",
       })
@@ -264,7 +264,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // Prompt token was replaced regardless of slot capacity.
       const prompt = result.payload.prompt as string
       expect(prompt).toContain("Kira")
-      expect(prompt).not.toMatch(/@kira-smile\b/)
+      expect(prompt).not.toMatch(/@kira:smile\b/)
     })
   })
 })

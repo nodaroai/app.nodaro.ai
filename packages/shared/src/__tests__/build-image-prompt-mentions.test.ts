@@ -71,4 +71,43 @@ describe("buildImagePrompt with @-mentions", () => {
     })
     expect(result.prompt).toContain("@unknown")
   })
+
+  // Fix 2: character refs that aren't @-mentioned should NOT contribute URLs.
+  it("does NOT attach character URLs when no @-mention is present", () => {
+    const result = buildImagePrompt({
+      prompt: "just a dragon flying",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraSmile],
+    })
+    expect(result.referenceImageUrls ?? []).not.toContain("https://r2/kira-portrait.png")
+    expect(result.referenceImageUrls ?? []).not.toContain("https://r2/kira-smile.png")
+    // Sanity: no character directive either, since no mention was made.
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("attaches ONLY mentioned variant URLs (not canonical, not other variants)", () => {
+    const result = buildImagePrompt({
+      prompt: "show @kira:smile dancing",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraSmile],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://r2/kira-smile.png"])
+  })
+
+  it("attaches non-character refs (manual / wired-image) even without @-mention", () => {
+    const manualRef: ConnectedReference = {
+      id: "ref-manual-1",
+      defaultName: "Image 1",
+      source: "manual",
+      url: "https://r2/manual.png",
+    }
+    const result = buildImagePrompt({
+      prompt: "a scene with the object",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, manualRef],
+    })
+    // Manual ref auto-attaches; character ref does NOT.
+    expect(result.referenceImageUrls).toContain("https://r2/manual.png")
+    expect(result.referenceImageUrls ?? []).not.toContain("https://r2/kira-portrait.png")
+  })
 })

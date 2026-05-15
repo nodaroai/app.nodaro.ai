@@ -195,12 +195,30 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   // New path: rich `connectedReferences` provided. Per-identity directives
   // are emitted at the top, `{image:N:label}` tokens expand to natural-
   // language phrases, and URLs are sent in connectedReferences order.
+  //
+  // Character refs (source === "wired-character") are AUTOCOMPLETE-ONLY by
+  // default — they ONLY contribute URLs + directives via Phase 0 mention
+  // resolution above (`referenceImageUrls` and a "Use these characters…"
+  // prefix). A wired character with no @-mention in the prompt contributes
+  // zero URLs and zero directives here. Non-character refs (manual,
+  // wired-image, wired-face, wired-object, wired-location) still auto-
+  // attach so unchanged behavior for them.
   // -------------------------------------------------------------------------
   if (connectedReferences) {
     let prompt = config.prompt
 
+    // Non-character refs are still emitted as per-identity directives + URLs.
+    // Character refs are filtered out here — Phase 0 has already added their
+    // URLs to `referenceImageUrls` (via mention resolution) and prepended the
+    // "Use these characters…" directive block.
+    const nonCharacterRefs = connectedReferences.filter(
+      (r) => r.source !== "wired-character",
+    )
+
     // Identities = (used in prompt) ∪ (default label for refs with no mentions).
-    const identities = collectIdentities(prompt, connectedReferences, identityMeta)
+    // Indexing here is against the non-character ref list so {image:N} tokens
+    // line up with `nonCharacterRefs[N-1]` for legacy positional mentions.
+    const identities = collectIdentities(prompt, nonCharacterRefs, identityMeta)
 
     const directives = identities
       .map((id) => buildIdentityDirective(id))
@@ -237,10 +255,20 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
 
     // Resolve `{image:N:label}` → "the <label> from image N".
     // Bare `{image:N}` (no label) → "[reference image N]" (legacy fallback).
-    prompt = expandImageRefTokens(prompt, connectedReferences.length)
+    prompt = expandImageRefTokens(prompt, nonCharacterRefs.length)
+
+    // URLs: non-character refs auto-attach in their original order.
+    // Character URLs (if any) come from Phase 0's `referenceImageUrls`
+    // (only the mentioned variants).
+    const nonCharacterUrls = nonCharacterRefs
+      .map((r) => r.url)
+      .filter((u): u is string => Boolean(u))
+    const characterUrlsFromPhase0 = referenceImageUrls.filter(
+      (u) => !nonCharacterUrls.includes(u),
+    )
+    const orderedUrls = [...nonCharacterUrls, ...characterUrlsFromPhase0]
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
-    const orderedUrls = connectedReferences.map((r) => r.url).filter((u): u is string => Boolean(u))
     const refsToSend = supportsRefs && orderedUrls.length > 0 ? orderedUrls : undefined
 
     return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
