@@ -29,21 +29,157 @@ import type {
   FaceSwapData,
   GeneratedScript,
   GeneratedScriptResult,
+  CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions } from "./model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE } from "@nodaro/shared"
+import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
+import type { RefImageItem } from "./tag-textarea"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
-import type { ConfigProps } from "./types"
+import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+
+// ---------------------------------------------------------------------------
+// Character @-mention autocomplete — builds the RefImageItem[] passed as
+// `referenceImages` to <TagTextarea>. Each wired upstream character expands
+// into a canonical entry plus one entry per asset variant (expressions /
+// poses / motions / angles / bodyAngles / lighting) so typing `@kira-smile`
+// in the prompt resolves the right asset. Mirrors the editor-side builder in
+// image-configs.tsx (GenerateImageConfig / ModifyImageConfig) — simplified
+// because video data types have no `characterDefinitionIds` (only wired
+// upstreams). Generic image upstreams (generate-image, upload-image, etc.)
+// are included so users can also reference them positionally via the @
+// suggestion list, mirroring image-configs behavior.
+// ---------------------------------------------------------------------------
+
+const VIDEO_REF_SOURCE_BY_TYPE: Record<string, ReferenceSource> = {
+  "upload-image": "wired-image",
+  "generate-image": "wired-image",
+  "edit-image": "wired-image",
+  "image-to-image": "wired-image",
+  "modify-image": "wired-image",
+  "upscale-image": "wired-image",
+  "remove-background": "wired-image",
+  "extract-frame": "wired-image",
+  "scene": "wired-image",
+  "character": "wired-character",
+  "face": "wired-face",
+  "object": "wired-object",
+  "location": "wired-location",
+}
+
+interface VideoRefAutocompleteEntry {
+  readonly id: string
+  readonly url: string
+  readonly defaultName: string
+  readonly source: ReferenceSource
+  readonly characterSlug?: string
+  readonly variantSlug?: string
+  readonly variantDisplayName?: string
+}
+
+function buildVideoRefAutocomplete(
+  sources: ReadonlyArray<SourceNodeInfo>,
+): VideoRefAutocompleteEntry[] {
+  const out: VideoRefAutocompleteEntry[] = []
+  for (const s of sources) {
+    const refSource = VIDEO_REF_SOURCE_BY_TYPE[s.type]
+    if (!refSource) continue
+    const nd = s.nodeData ?? {}
+
+    // Character upstream: expand into canonical + one entry per asset variant
+    // so the `@kira` / `@kira-smile` typeahead in the prompt editor sees them.
+    if (s.type === "character") {
+      const charData = nd as unknown as CharacterNodeData
+      const charName = charData.characterName || s.label || "Character"
+      const slug = characterMentionSlug(charName)
+      if (slug) {
+        const canonicalUrl =
+          charData.defaultAssetUrl ||
+          charData.sourceImageUrl ||
+          (nd.generatedImageUrl as string) ||
+          (nd.url as string) ||
+          ""
+        if (canonicalUrl) {
+          out.push({
+            id: s.id,
+            url: canonicalUrl,
+            defaultName: charName,
+            source: "wired-character",
+            characterSlug: slug,
+            variantSlug: undefined,
+            variantDisplayName: "canonical",
+          })
+        }
+        const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string }>> = {
+          expressions: charData.expressions ?? [],
+          poses: charData.poses ?? [],
+          motions: charData.motions ?? [],
+          angles: charData.angles ?? [],
+          bodyAngles: charData.bodyAngles ?? [],
+          lightingVariations: charData.lightingVariations ?? [],
+        }
+        for (const [arrayName, items] of Object.entries(assetArrays)) {
+          for (const item of items) {
+            if (!item.url) continue
+            const variantSlug = characterMentionSlug(item.name)
+            if (!variantSlug) continue
+            out.push({
+              id: `${s.id}_${arrayName}_${variantSlug}`,
+              url: item.url,
+              defaultName: `${charName} / ${item.name}`,
+              source: "wired-character",
+              characterSlug: slug,
+              variantSlug,
+              variantDisplayName: item.name,
+            })
+          }
+        }
+        continue
+      }
+      // Unnamed character — fall through to generic upstream handling.
+    }
+
+    const url =
+      (nd.generatedImageUrl as string) ||
+      (nd.url as string) ||
+      (nd.sourceImageUrl as string) ||
+      (nd.referenceImageUrl as string) ||
+      ""
+    if (!url) continue
+    out.push({
+      id: s.id,
+      url,
+      defaultName: s.label || s.type,
+      source: refSource,
+    })
+  }
+  return out
+}
+
+function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): RefImageItem[] {
+  return entries.map((ref, i) => ({
+    url: ref.url,
+    label: ref.defaultName,
+    source:
+      ref.source === "wired-image" ? "wired"
+      : "character",
+    index: i + 1,
+    defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
+    characterSlug: ref.characterSlug,
+    variantSlug: ref.variantSlug,
+    variantDisplayName: ref.variantDisplayName,
+  }))
+}
 
 export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
@@ -111,6 +247,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
     }))
   }, [sources])
+
+  // Character @-mention autocomplete: wired-character upstreams expand into
+  // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
 
 
   const maxRefImages = data.provider === "grok-i2v" ? 6 : data.provider === "kling-3-omni" ? 7 : 3
@@ -224,6 +367,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the motion or animation you want..."
           nodeRefs={nodeRefs}
+          referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
@@ -825,6 +969,13 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     }))
   }, [sources])
 
+  // Character @-mention autocomplete: wired-character upstreams expand into
+  // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
+
   return (
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -859,6 +1010,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           placeholder="Describe what to change or continue..."
           rows={3}
           nodeRefs={nodeRefs}
+          referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
@@ -1001,6 +1153,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               placeholder="What to avoid..."
               rows={2}
               nodeRefs={nodeRefs}
+              referenceImages={refImagesForAutocomplete}
               displayMode={variableDisplayMode}
               refMap={refMap}
             />
@@ -1253,6 +1406,13 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     [sources],
   )
 
+  // Character @-mention autocomplete: wired-character upstreams expand into
+  // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
+
   if (data.provider === "kling-3.0") {
     return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} />
   }
@@ -1281,6 +1441,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the video to generate..."
           nodeRefs={nodeRefs}
+          referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />
@@ -1498,6 +1659,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           onChange={(v) => onUpdate({ negativePrompt: v })}
           placeholder="Things to avoid..."
           nodeRefs={nodeRefs}
+          referenceImages={refImagesForAutocomplete}
           displayMode={variableDisplayMode}
           refMap={refMap}
         />

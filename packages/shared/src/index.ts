@@ -130,12 +130,14 @@ export {
   expandImageRefTokens,
   expandImagePositionRefs,
   buildScenePrompt,
+  resolveCharacterMentions,
   SCENE_PROMPT_MAX_LENGTH,
   SHOT_LABELS,
   MOVEMENT_LABELS,
   truncateText,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
+  type ResolveCharacterMentionsResult,
 } from "./prompt-builder.js"
 
 export {
@@ -836,3 +838,10 @@ export type {
 export { stripExportContent } from "./workflow-export.js"
 
 export { validateSubWorkflowRoutes } from "./sub-workflow-validation.js"
+
+export {
+  characterMentionSlug,
+  parseCharacterMentionToken,
+  findCharacterMentionTokens,
+} from "./character-mention-slug.js"
+export type { CharacterMentionTokenInfo } from "./character-mention-slug.js"

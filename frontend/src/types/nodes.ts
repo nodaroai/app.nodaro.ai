@@ -2672,6 +2672,15 @@ export interface CharacterSheet {
 export interface CharacterAssetItem {
   readonly name: string
   readonly url: string
+  /** Per-variant description (e.g. "smile", "side profile"). Backend persists this on
+   *  the character row; surfaced by `getCharacter`. Used by @-mention expansion in
+   *  config panels + the runtime prompt builder to attach per-variant fidelity blocks. */
+  readonly description?: string
+  /** Motion clips (i2v) only — natural-language description of the motion captured. */
+  readonly motionDescription?: string
+  /** Real-life reference URLs (from the user's photos) that were used to generate
+   *  this variant. Used by char-studio to detect stale renders when refs change. */
+  readonly realLifeRefs?: ReadonlyArray<string>
 }
 
 export type CharacterAssetType =

@@ -64,6 +64,16 @@ export interface ConnectedReference {
   /** Optional rich text from upstream char/face/object/location node. */
   description?: string
   url: string
+  /** Slug of the source character (e.g. "kira") when this entry came from a character node. */
+  readonly characterSlug?: string
+  /** Variant slug (e.g. "smile"). undefined = canonical/default. */
+  readonly variantSlug?: string
+  /** Character's canonical_description. Set on every entry from the same character (used for dedup). */
+  readonly characterCanonicalDescription?: string | null
+  /** The asset's own description (per-variant). null for canonical entries. */
+  readonly variantDescription?: string | null
+  /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */
+  readonly variantDisplayName?: string
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */

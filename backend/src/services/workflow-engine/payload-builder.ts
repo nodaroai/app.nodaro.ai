@@ -23,7 +23,8 @@ import {
 } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import type { CharacterDef, SceneData } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
@@ -91,6 +92,222 @@ function collectAncestorRefs(
     (src) => getNodeImageUrl(src, nodeStates),
     visited,
   )
+}
+
+// ---------------------------------------------------------------------------
+// Character connection → `ConnectedReference[]` expansion
+//
+// Mirror of the frontend `execute-node.ts` expansion: each wired upstream
+// Character node contributes a canonical entry plus one entry per asset
+// variant (expressions / poses / motions / angles / bodyAngles / lighting),
+// powering `@kira` / `@kira-smile` mention resolution in `buildImagePrompt`
+// for orchestrator-driven runs (webhook / cron / MCP) where the frontend's
+// `execute-node.ts` doesn't run.
+//
+// Returns ConnectedReference entries for ALL wired character upstreams. If
+// none have a usable slug (named character), returns an empty array — the
+// caller should then fall back to the legacy URL-only path. Field names use
+// camelCase from the workflow JSON saved by the frontend (the canvas keeps
+// CharacterNodeData in camelCase; the snake_case `characters` DB row is
+// distinct and not what flows through SimpleNode.data).
+// ---------------------------------------------------------------------------
+
+interface CharacterAssetItem {
+  readonly name?: string
+  readonly url?: string
+}
+
+function asAssetItems(value: unknown): readonly CharacterAssetItem[] {
+  if (!Array.isArray(value)) return []
+  return value as readonly CharacterAssetItem[]
+}
+
+/**
+ * Build a complete `connectedReferences` list for an image-gen / i2i node.
+ * Emits the wired-character expanded entries first (canonical + per-variant
+ * for every wired Character upstream — these power `@kira-smile` resolution
+ * in `buildImagePrompt`'s Phase 0), then appends any remaining URLs from the
+ * ref-URL map (manual uploads, extracted refs, character-definition refs,
+ * non-character wired upstream images) as plain `wired-image` entries.
+ * Duplicates by URL are skipped so the canonical character URL doesn't get
+ * listed twice (the existing flow keys upstream character URLs as
+ * `wired_<i>` in refUrlMap — same URL as the expanded canonical entry).
+ * Used only when the prompt contains an `@-mention`.
+ */
+function buildConnectedRefsForGenerate(
+  wiredCharRefs: readonly ConnectedReference[],
+  refUrlMap: ReadonlyMap<string, string>,
+  orderIds: readonly string[],
+): ConnectedReference[] {
+  const out: ConnectedReference[] = []
+  const seenUrls = new Set<string>()
+  for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  const addRawUrl = (id: string, url: string): void => {
+    if (!url || seenUrls.has(url)) return
+    seenUrls.add(url)
+    out.push({
+      id,
+      defaultName: id,
+      source: "wired-image",
+      url,
+    })
+  }
+  // Honor user-specified ordering first, then default insertion order.
+  for (const id of orderIds) {
+    const url = refUrlMap.get(id)
+    if (url) addRawUrl(id, url)
+  }
+  for (const [id, url] of refUrlMap) {
+    addRawUrl(id, url)
+  }
+  return out
+}
+
+/**
+ * Variant of `buildConnectedRefsForGenerate` for the image-to-image case
+ * (and any other case that has a flat `directRefs: string[]` list rather
+ * than a refUrlMap). Emits the wired-character expansion first, then any
+ * remaining URLs from `directRefs` as plain `wired-image` entries, deduped
+ * by URL.
+ */
+function buildConnectedRefsFromUrls(
+  wiredCharRefs: readonly ConnectedReference[],
+  directRefs: readonly string[],
+): ConnectedReference[] {
+  const out: ConnectedReference[] = []
+  const seenUrls = new Set<string>()
+  for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  for (let i = 0; i < directRefs.length; i++) {
+    const url = directRefs[i]
+    if (!url || seenUrls.has(url)) continue
+    seenUrls.add(url)
+    out.push({
+      id: `direct_${i}`,
+      defaultName: `Image ${i + 1}`,
+      source: "wired-image",
+      url,
+    })
+  }
+  return out
+}
+
+/** Expand wired upstream Character nodes into canonical + per-variant refs. */
+function expandWiredCharacterRefs(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): ConnectedReference[] {
+  if (!buildCtx?.nodes || !buildCtx.edges) return []
+  const out: ConnectedReference[] = []
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    if (!upstream || upstream.type !== "character") continue
+    const charData = upstream.data
+    const charName =
+      (charData.characterName as string | undefined) ??
+      (charData.label as string | undefined) ??
+      ""
+    const characterSlug = characterMentionSlug(charName)
+    if (!characterSlug) continue // unnamed character — skip from autocomplete
+
+    const description = charData.description as string | undefined
+    const canonicalDescription =
+      (charData.canonicalDescription as string | null | undefined) ?? null
+    const canonicalUrl =
+      (charData.defaultAssetUrl as string | undefined) ||
+      (charData.sourceImageUrl as string | undefined)
+    if (canonicalUrl) {
+      out.push({
+        id: `char_${upstream.id}`,
+        defaultName: charName,
+        source: "wired-character",
+        description,
+        url: canonicalUrl,
+        characterSlug,
+        variantSlug: undefined,
+        characterCanonicalDescription: canonicalDescription,
+        variantDescription: null,
+        variantDisplayName: "canonical",
+      })
+    }
+
+    const assetArrays: Record<string, readonly CharacterAssetItem[]> = {
+      expressions: asAssetItems(charData.expressions),
+      poses: asAssetItems(charData.poses),
+      motions: asAssetItems(charData.motions),
+      angles: asAssetItems(charData.angles),
+      bodyAngles: asAssetItems(charData.bodyAngles),
+      lightingVariations: asAssetItems(charData.lightingVariations),
+    }
+    for (const [arrayName, items] of Object.entries(assetArrays)) {
+      for (const item of items) {
+        if (!item?.url) continue
+        const variantSlug = characterMentionSlug(item.name ?? "")
+        if (!variantSlug) continue
+        out.push({
+          id: `char_${upstream.id}_${arrayName}_${variantSlug}`,
+          defaultName: `${charName} / ${item.name}`,
+          source: "wired-character",
+          description,
+          url: item.url,
+          characterSlug,
+          variantSlug,
+          characterCanonicalDescription: canonicalDescription,
+          variantDescription: null,
+          variantDisplayName: item.name,
+        })
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Resolve `@kira` / `@kira-smile` mentions in a video-node prompt against
+ * wired Character upstreams.
+ *
+ * Mirrors `buildImagePrompt`'s Phase 0 mention pass but lives outside the
+ * image-specific assembly pipeline (which appends style hints, routes
+ * negative prompts, filters refs by model support, etc.) so it can be
+ * applied to video routes that have their own payload shape.
+ *
+ * Returns the mutated prompt + the asset URLs that the matched mentions
+ * resolved to (canonical for `@kira`, variant for `@kira-smile`). The
+ * caller decides where to slot the URLs into the worker payload (i2v
+ * has both `imageUrl` and `referenceImageUrls`; v2v has only a single
+ * `referenceImageUrl`; t2v has `referenceImageUrls` only).
+ *
+ * When the prompt has no resolvable mentions, returns the input prompt
+ * unchanged and `additionalUrls: []` — callers can branch on `.length`.
+ */
+function resolveVideoPromptMentions(
+  prompt: string | undefined,
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): { prompt: string | undefined; additionalUrls: string[] } {
+  if (!prompt) return { prompt, additionalUrls: [] }
+  const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] }
+  const knownCharSlugs = Array.from(
+    new Set(
+      wiredCharRefs
+        .map((r) => r.characterSlug)
+        .filter((s): s is string => typeof s === "string" && s.length > 0),
+    ),
+  )
+  if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] }
+  const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs)
+  if (mentionTokens.length === 0) return { prompt, additionalUrls: [] }
+  const resolved = resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
+  return { prompt: resolved.prompt, additionalUrls: resolved.additionalUrls }
 }
 
 // ---------------------------------------------------------------------------
@@ -579,19 +796,53 @@ export function buildPayload(
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
 
+      // Wired-character @-mention expansion: when an upstream Character node
+      // is wired AND the prompt contains an @-mention referencing it, switch
+      // to the `connectedReferences` code path so buildImagePrompt's Phase 0
+      // can resolve `@kira-smile` to the variant URL + inject the variant
+      // description. When no @-mention is present we keep the legacy path
+      // (preserves the current orchestrator behavior for non-mention prompts).
+      const wiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const knownCharSlugs = Array.from(
+        new Set(
+          wiredCharRefs
+            .map((r) => r.characterSlug)
+            .filter((s): s is string => typeof s === "string" && s.length > 0),
+        ),
+      )
+      const hasMention =
+        knownCharSlugs.length > 0 &&
+        findCharacterMentionTokens(rawPrompt, knownCharSlugs).length > 0
+
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const result = buildImagePrompt({
-        prompt: rawPrompt,
-        provider,
-        style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-        characterDefs: charDefs as CharacterDef[],
-        userTemplates: settings?.userPromptTemplates,
-        flowTemplates: settings?.flowPromptTemplates,
-        referenceImageUrls: directRefs,
-        ancestorRefs,
-      })
+      const result = hasMention
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: buildConnectedRefsForGenerate(
+              wiredCharRefs,
+              refUrlMap,
+              orderIds,
+            ),
+            ancestorRefs,
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs,
+          })
 
       return {
         jobName: "generate-image",
@@ -752,19 +1003,44 @@ export function buildPayload(
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
 
+      // Wired-character @-mention expansion: see generate-image case above.
+      const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const i2iKnownCharSlugs = Array.from(
+        new Set(
+          i2iWiredCharRefs
+            .map((r) => r.characterSlug)
+            .filter((s): s is string => typeof s === "string" && s.length > 0),
+        ),
+      )
+      const i2iHasMention =
+        i2iKnownCharSlugs.length > 0 &&
+        findCharacterMentionTokens(rawPrompt, i2iKnownCharSlugs).length > 0
+
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const i2iResult = buildImagePrompt({
-        prompt: rawPrompt,
-        provider,
-        style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-        characterDefs: charDefs as CharacterDef[],
-        userTemplates: settings?.userPromptTemplates,
-        flowTemplates: settings?.flowPromptTemplates,
-        referenceImageUrls: directRefs,
-        ancestorRefs: [],
-      })
+      const i2iResult = i2iHasMention
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs),
+            ancestorRefs: [],
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs: [],
+          })
 
       return {
         jobName: "image-to-image",
@@ -924,18 +1200,43 @@ export function buildPayload(
           if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
         }
 
+        // Wired-character @-mention expansion: see generate-image case above.
+        const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+        const modKnownCharSlugs = Array.from(
+          new Set(
+            modWiredCharRefs
+              .map((r) => r.characterSlug)
+              .filter((s): s is string => typeof s === "string" && s.length > 0),
+          ),
+        )
+        const modHasMention =
+          modKnownCharSlugs.length > 0 &&
+          findCharacterMentionTokens(rawPrompt, modKnownCharSlugs).length > 0
+
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const i2iResult = buildImagePrompt({
-          prompt: rawPrompt,
-          provider,
-          style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-          negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-          characterDefs: charDefs as CharacterDef[],
-          userTemplates: settings?.userPromptTemplates,
-          flowTemplates: settings?.flowPromptTemplates,
-          referenceImageUrls: directRefs,
-          ancestorRefs: [],
-        })
+        const i2iResult = modHasMention
+          ? buildImagePrompt({
+              prompt: rawPrompt,
+              provider,
+              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+              characterDefs: charDefs as CharacterDef[],
+              userTemplates: settings?.userPromptTemplates,
+              flowTemplates: settings?.flowPromptTemplates,
+              connectedReferences: buildConnectedRefsFromUrls(modWiredCharRefs, directRefs),
+              ancestorRefs: [],
+            })
+          : buildImagePrompt({
+              prompt: rawPrompt,
+              provider,
+              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+              characterDefs: charDefs as CharacterDef[],
+              userTemplates: settings?.userPromptTemplates,
+              flowTemplates: settings?.flowPromptTemplates,
+              referenceImageUrls: directRefs,
+              ancestorRefs: [],
+            })
 
         return {
           jobName: "image-to-image",
@@ -1005,6 +1306,58 @@ export function buildPayload(
       const isS2 = isSeedance2Provider(provider)
       const s2Mode = isS2 ? ((data.seedance2InputMode as string | undefined) ?? "frames") : "frames"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // Compose the prompt first so we can run @-mention resolution against
+      // it before the worker sees the final string. The mention pass swaps
+      // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
+      // + returns variant/canonical URLs to slot into the worker payload.
+      let i2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
+        const hints: string[] = []
+        if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+        for (const h of cinematographyHints) hints.push(h)
+        if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
+        else if (hints.length > 0) p = hints.join(", ")
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx)
+      i2vPrompt = i2vMention.prompt
+      // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
+      // (1) `imageUrl` is the primary input frame, (2) `referenceImageUrls`
+      // is an additional pool that maxRefImages-aware providers will consume.
+      // Existing frames/refs from upstream wins — mentions augment, never
+      // overwrite. When no `imageUrl` is wired yet, the first resolved
+      // mention URL fills that slot so a pure "@kira-smile dancing" prompt
+      // gets the smile image as input rather than failing with no image.
+      const i2vBaseImage = (isS2 && s2Mode === "references")
+        ? undefined
+        : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined)
+      const i2vBaseRefs = (isS2 && s2Mode === "frames")
+        ? undefined
+        : resolvedInputs.referenceImageUrls
+      let i2vImageUrl = i2vBaseImage
+      let i2vReferenceImageUrls = i2vBaseRefs
+      if (i2vMention.additionalUrls.length > 0) {
+        let remainingMentionUrls = i2vMention.additionalUrls
+        if (!i2vImageUrl) {
+          i2vImageUrl = remainingMentionUrls[0]
+          remainingMentionUrls = remainingMentionUrls.slice(1)
+        }
+        if (remainingMentionUrls.length > 0) {
+          const existing = i2vReferenceImageUrls ?? []
+          const merged: string[] = []
+          const seen = new Set<string>()
+          for (const u of existing) {
+            if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          }
+          for (const u of remainingMentionUrls) {
+            if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          }
+          i2vReferenceImageUrls = merged
+        }
+      }
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
@@ -1019,21 +1372,10 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          imageUrl: (isS2 && s2Mode === "references") ? undefined : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl),
+          imageUrl: i2vImageUrl,
           endFrameUrl: (isS2 && s2Mode === "references") ? undefined : resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
-            const hints: string[] = []
-            if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
-            const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-            for (const h of cinematographyHints) hints.push(h)
-            if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
-            else if (hints.length > 0) p = hints.join(", ")
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: i2vPrompt,
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -1055,7 +1397,7 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
-          referenceImageUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceImageUrls,
+          referenceImageUrls: i2vReferenceImageUrls,
           referenceVideoUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
@@ -1074,6 +1416,37 @@ export function buildPayload(
     case "text-to-video": {
       const provider = (data.provider as string) ?? "kling"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
+      // t2v has no `imageUrl` slot — all resolved URLs become entries in
+      // `referenceImageUrls`, merged with whatever upstream already provided.
+      let t2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+        {
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          if (cinematographyHints.length > 0) {
+            const joined = cinematographyHints.join(", ")
+            p = p ? `${p}. ${joined}` : joined
+          }
+        }
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx)
+      t2vPrompt = t2vMention.prompt
+      let t2vReferenceImageUrls = resolvedInputs.referenceImageUrls
+      if (t2vMention.additionalUrls.length > 0) {
+        const existing = t2vReferenceImageUrls ?? []
+        const merged: string[] = []
+        const seen = new Set<string>()
+        for (const u of existing) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        }
+        for (const u of t2vMention.additionalUrls) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        }
+        t2vReferenceImageUrls = merged
+      }
       return {
         jobName: "text-to-video",
         queueName: "video-generation",
@@ -1088,19 +1461,7 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
-            {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-              if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
-              }
-            }
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: t2vPrompt,
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -1116,7 +1477,7 @@ export function buildPayload(
           seed: data.seed,
           resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
           generateAudio: data.generateAudio,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
@@ -1129,6 +1490,34 @@ export function buildPayload(
 
     case "video-to-video": {
       const v2vProvider = (data.provider as string) ?? "wan"
+      // Resolve @-mentions in the v2v prompt. v2v has only a single
+      // `referenceImageUrl` slot — when an upstream ref image is wired we
+      // keep it; otherwise the first resolved mention URL fills it. Extra
+      // mention URLs beyond slot 0 are dropped: v2v providers (Wan 2.6 et al)
+      // accept exactly one reference image and silently ignore the rest, so
+      // there's no payload key to plumb them into. Prompt token replacement
+      // still happens so the LLM sees the character names regardless.
+      let v2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+        {
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          if (cinematographyHints.length > 0) {
+            const joined = cinematographyHints.join(", ")
+            p = p ? `${p}. ${joined}` : joined
+          }
+        }
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx)
+      v2vPrompt = v2vMention.prompt
+      const v2vUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
+        ? resolvedInputs.referenceImageUrls
+        : Array.isArray(resolvedInputs.referenceImageUrls)
+          ? resolvedInputs.referenceImageUrls[0]
+          : undefined) as string | undefined
+      const v2vReferenceImageUrl = v2vUpstreamRef ?? v2vMention.additionalUrls[0]
       return {
         jobName: "video-to-video",
         queueName: "video-generation",
@@ -1136,19 +1525,7 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
-            {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-              if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
-              }
-            }
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: v2vPrompt,
           provider: v2vProvider,
           duration: data.v2vDuration as string | undefined,
           resolution: data.v2vResolution as string | undefined,
@@ -1156,7 +1533,7 @@ export function buildPayload(
           multiShots: data.multiShots as boolean | undefined,
           aspectRatio: data.aspectRatio as string | undefined,
           seed: data.seed as number | undefined,
-          referenceImageUrl: (typeof resolvedInputs.referenceImageUrls === "string" ? resolvedInputs.referenceImageUrls : Array.isArray(resolvedInputs.referenceImageUrls) ? resolvedInputs.referenceImageUrls[0] : undefined) as string | undefined,
+          referenceImageUrl: v2vReferenceImageUrl,
           negativePrompt: data.negativePrompt as string | undefined,
           videoEditDuration: data.videoEditDuration as string | undefined,
           audioSetting: data.audioSetting as string | undefined,
