@@ -110,4 +110,34 @@ describe("buildImagePrompt with @-mentions", () => {
     expect(result.referenceImageUrls).toContain("https://r2/manual.png")
     expect(result.referenceImageUrls ?? []).not.toContain("https://r2/kira-portrait.png")
   })
+
+  // Fix 4: strengthened character directive folds identity-preservation
+  // language directly into the bullet — no global trailing clause needed.
+  it("emits a strengthened identity directive when a character is mentioned", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira dancing in the rain",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    // Phase 0 character directive folds in identity-preservation language.
+    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+    expect(result.prompt).toMatch(/face, body proportions, distinctive features/)
+  })
+
+  it("strengthens directive for non-character refs labeled 'person'", () => {
+    const personRef: ConnectedReference = {
+      id: "ref-face",
+      defaultName: "Sarah",
+      source: "wired-face",
+      url: "https://r2/sarah.png",
+      description: "tall, red hair",
+    }
+    const result = buildImagePrompt({
+      prompt: "{image:1:person} smiling",
+      provider: "nano-banana-pro",
+      connectedReferences: [personRef],
+    })
+    // Per-image directive folds in identity-preservation language.
+    expect(result.prompt).toContain("match exactly. Maintain perfect likeness (face, body proportions, distinctive features)")
+  })
 })

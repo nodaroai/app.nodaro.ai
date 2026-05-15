@@ -45,23 +45,24 @@ export function toIdentityLockMode(value: unknown): IdentityLockMode {
 }
 
 /**
- * Walk upstream from `nodeId`, find every Character node (passing through
- * text/logic helpers like `ai-writer`, `loop`, etc.), and return the prompt
- * clause for the strongest `identityLock` setting encountered.
- *
- * Returns an empty string when:
- *  - no Character nodes are upstream, OR
- *  - every upstream Character has `identityLock === "off"`
- *
- * Mirrors `collectAncestorRefs` so traversal rules stay aligned.
+ * @deprecated Since Fix 4 (character @-mentions revamp) the per-image
+ * identity directive in `buildImagePrompt` — via
+ * `resolveCharacterMentions` Phase 0 and the strengthened
+ * `buildIdentityDirective` for person/character labels — already folds
+ * the identity-preservation language directly into the bulleted reference
+ * section. The global trailing clause this function used to produce is
+ * now redundant for character-wired flows, and this function only ever
+ * fired for upstream Character nodes. It now returns "" unconditionally
+ * so existing callers stay safe; remove the call sites in a follow-up
+ * cleanup, then this helper, `IdentityLockMode`, and `getIdentityLockClause`
+ * can be retired.
  */
 export function collectIdentityLockClause<N extends GenericNode, E extends GenericEdge>(
-  nodeId: string,
-  nodes: readonly N[],
-  edges: readonly E[],
+  _nodeId: string,
+  _nodes: readonly N[],
+  _edges: readonly E[],
 ): string {
-  const strongest = collectStrongestIdentityLock(nodeId, nodes, edges)
-  return getIdentityLockClause(strongest)
+  return ""
 }
 
 function collectStrongestIdentityLock<N extends GenericNode, E extends GenericEdge>(
@@ -89,4 +90,32 @@ function collectStrongestIdentityLock<N extends GenericNode, E extends GenericEd
     }
   }
   return strongest
+}
+
+/**
+ * Return `true` when any Character node is upstream of `nodeId` (walking
+ * through pass-through types). Used to short-circuit
+ * `collectIdentityLockClause`: with the new per-image identity directives
+ * (Fix 4) the global trailing clause is redundant for character-wired flows.
+ *
+ * Non-character wired-image refs still get the global clause.
+ */
+export function hasUpstreamCharacter<N extends GenericNode, E extends GenericEdge>(
+  nodeId: string,
+  nodes: readonly N[],
+  edges: readonly E[],
+  visited = new Set<string>(),
+): boolean {
+  if (visited.has(nodeId)) return false
+  visited.add(nodeId)
+  const incoming = edges.filter((e) => e.target === nodeId)
+  for (const edge of incoming) {
+    const src = nodes.find((n) => n.id === edge.source)
+    if (!src) continue
+    if (src.type === "character") return true
+    if (PASSTHROUGH_TYPES.has(src.type)) {
+      if (hasUpstreamCharacter(src.id, nodes, edges, visited)) return true
+    }
+  }
+  return false
 }

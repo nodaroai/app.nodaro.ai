@@ -74,8 +74,15 @@ export function resolveCharacterMentions(
     const displayName = bySlug.get(t.characterSlug)?.defaultName ?? t.characterSlug
     replacements.push({ token: t.token, offset: t.offset, replacement: displayName })
 
-    if (isFirstMention && match.characterCanonicalDescription) {
-      directiveLines.push(`- ${displayName}: ${match.characterCanonicalDescription.trim()}`)
+    if (isFirstMention) {
+      // Strengthened character directive — folds identity-preservation
+      // language directly into the bullet so the model holds face / body /
+      // distinctive features. Replaces the redundant global trailing
+      // identity-lock clause we used to append from `collectIdentityLockClause`.
+      const descPart = match.characterCanonicalDescription
+        ? `${displayName} — ${match.characterCanonicalDescription.trim()}`
+        : displayName
+      directiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
     }
     if (t.variantSlug && match.variantDescription) {
       directiveLines.push(`  (in this image: ${match.variantDescription.trim()})`)
@@ -457,6 +464,15 @@ function formatDirectiveSubject(label: string, imageIndex: number, description?:
   return `Image ${letter} (${inner})`
 }
 
+/** Labels that mean "a person / character" — strengthen the directive so the
+ *  model holds the face + body + distinctive features. Folds the
+ *  identity-preservation language (previously appended as a trailing
+ *  global clause via `collectIdentityLockClause`) directly into the per-image
+ *  bullet so the model sees the identifier and the rule together. */
+const PERSON_LABELS: ReadonlySet<string> = new Set([
+  "person", "character", "face", "subject", "people",
+])
+
 function buildIdentityDirective(id: ResolvedIdentity): string {
   if (id.fidelity === "custom" && id.customText) {
     return `- ${id.customText}`
@@ -472,6 +488,13 @@ function buildIdentityDirective(id: ResolvedIdentity): string {
   }
   if (TEXTURE_LABELS.has(lower)) {
     return `- ${subject} — apply this ${id.label}.`
+  }
+
+  // Person/character labels: strengthen the directive (regardless of fidelity)
+  // so the global trailing identity-lock clause becomes redundant.
+  // "loose" still gets the inspiration form so users can opt out.
+  if (PERSON_LABELS.has(lower) && id.fidelity !== "loose") {
+    return `- ${subject} — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`
   }
 
   switch (id.fidelity) {
