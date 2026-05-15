@@ -39,6 +39,7 @@ import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import type { RefImageItem } from "./tag-textarea"
+import { PromptEditor } from "./prompt-editor"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
@@ -361,15 +362,13 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       )}
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={data.provider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
-        <TagTextarea
+        <PromptEditor
           rows={3}
           value={data.prompt || ""}
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the motion or animation you want..."
-          nodeRefs={nodeRefs}
           referenceImages={refImagesForAutocomplete}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
 
@@ -1004,15 +1003,13 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       <ModelDescriptionHint modelId={data.provider} />
 
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="video-to-video" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
-        <TagTextarea
+        <PromptEditor
+          rows={3}
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe what to change or continue..."
-          rows={3}
-          nodeRefs={nodeRefs}
           referenceImages={refImagesForAutocomplete}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
 
@@ -1435,15 +1432,13 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
-        <TagTextarea
+        <PromptEditor
           rows={3}
           value={data.prompt}
           onChange={(v) => onUpdate({ prompt: v })}
           placeholder="Describe the video to generate..."
-          nodeRefs={nodeRefs}
           referenceImages={refImagesForAutocomplete}
-          displayMode={variableDisplayMode}
-          refMap={refMap}
+          nodeRefs={nodeRefs}
         />
       </MappableField>
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
