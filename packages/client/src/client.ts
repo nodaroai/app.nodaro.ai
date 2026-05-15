@@ -8,6 +8,7 @@ import { NodesResource } from "./resources/nodes.js"
 import { DeveloperAppsResource } from "./resources/developer-apps.js"
 import { OAuthResource } from "./resources/oauth.js"
 import { AppsResource } from "./resources/apps.js"
+import { CharactersResource } from "./resources/characters.js"
 
 export interface ClientOptions {
   /** Backend base URL, e.g. "https://nodaro.example.com" or empty string for same-origin. */
@@ -51,6 +52,7 @@ export class NodaroClient {
   readonly developerApps: DeveloperAppsResource
   readonly oauth: OAuthResource
   readonly apps: AppsResource
+  readonly characters: CharactersResource
 
   constructor(opts: ClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "")  // strip trailing slash
@@ -66,6 +68,7 @@ export class NodaroClient {
     this.developerApps = new DeveloperAppsResource(this)
     this.oauth = new OAuthResource(this)
     this.apps = new AppsResource(this)
+    this.characters = new CharactersResource(this)
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
