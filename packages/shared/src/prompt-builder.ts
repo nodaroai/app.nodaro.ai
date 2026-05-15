@@ -17,6 +17,13 @@ import type {
   SceneData,
 } from "./types.js"
 
+export interface ResolveCharacterMentionsResult {
+  /** Prompt with @-tokens replaced by display names + "Use these characters:" directive prepended. */
+  prompt: string
+  /** Resolved URLs from matched mention tokens, in mention order, deduped via caller responsibility. */
+  additionalUrls: string[]
+}
+
 /**
  * Resolve @-mention tokens in a prompt against connected references.
  * Returns: augmented prompt (with directives prepended + tokens replaced
@@ -32,11 +39,11 @@ import type {
  *   apply right-to-left so earlier replacements do not shift later offsets.
  * - Prepend a "Use these characters:\n…" directive section when any directives were emitted.
  */
-function resolveCharacterMentions(
+export function resolveCharacterMentions(
   prompt: string,
   tokens: readonly CharacterMentionTokenInfo[],
   refs: readonly ConnectedReference[],
-): { prompt: string; additionalUrls: string[] } {
+): ResolveCharacterMentionsResult {
   const bySlug = new Map<string, ConnectedReference>()
   const byVariant = new Map<string, ConnectedReference>()
   for (const r of refs) {

@@ -130,12 +130,14 @@ export {
   expandImageRefTokens,
   expandImagePositionRefs,
   buildScenePrompt,
+  resolveCharacterMentions,
   SCENE_PROMPT_MAX_LENGTH,
   SHOT_LABELS,
   MOVEMENT_LABELS,
   truncateText,
   type BuildImagePromptConfig,
   type BuildImagePromptResult,
+  type ResolveCharacterMentionsResult,
 } from "./prompt-builder.js"
 
 export {
