@@ -271,22 +271,26 @@ function expandWiredCharacterRefs(
 }
 
 /**
- * Resolve `@kira` / `@kira-smile` mentions in a video-node prompt against
- * wired Character upstreams.
+ * Resolve `@kira:N` / `@kira:N:smile` mentions in a video-node prompt against
+ * wired Character upstreams AND apply the per-character canonical fallback
+ * for unmentioned wired characters.
  *
- * Mirrors `buildImagePrompt`'s Phase 0 mention pass but lives outside the
- * image-specific assembly pipeline (which appends style hints, routes
- * negative prompts, filters refs by model support, etc.) so it can be
- * applied to video routes that have their own payload shape.
+ * Mirrors `buildImagePrompt`'s Phase 0 mention pass + canonical fallback but
+ * lives outside the image-specific assembly pipeline (which appends style
+ * hints, routes negative prompts, filters refs by model support, etc.) so
+ * it can be applied to video routes that have their own payload shape.
  *
- * Returns the mutated prompt + the asset URLs that the matched mentions
- * resolved to (canonical for `@kira`, variant for `@kira-smile`). The
- * caller decides where to slot the URLs into the worker payload (i2v
- * has both `imageUrl` and `referenceImageUrls`; v2v has only a single
- * `referenceImageUrl`; t2v has `referenceImageUrls` only).
+ * Per-character behavior contract (parity with image-side):
+ *   - wired-character with at least one `@-mention` → contribute ONLY the
+ *     mentioned variant URLs (no canonical auto-attach), prepend the
+ *     mention-derived directive block.
+ *   - wired-character with NO `@-mention` → contribute the canonical URL
+ *     + a strong identity directive. Mirrors the pre-mention behavior.
  *
- * When the prompt has no resolvable mentions, returns the input prompt
- * unchanged and `additionalUrls: []` — callers can branch on `.length`.
+ * Returns the mutated prompt + the asset URLs to slot into the worker
+ * payload. The caller decides where (i2v has both `imageUrl` and
+ * `referenceImageUrls`; v2v has only `referenceImageUrl`; t2v has
+ * `referenceImageUrls` only).
  */
 function resolveVideoPromptMentions(
   prompt: string | undefined,
@@ -305,9 +309,63 @@ function resolveVideoPromptMentions(
   )
   if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] }
   const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs)
-  if (mentionTokens.length === 0) return { prompt, additionalUrls: [] }
-  const resolved = resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
-  return { prompt: resolved.prompt, additionalUrls: resolved.additionalUrls }
+  // Resolve any mentions (may be empty); always check fallback after.
+  const resolved = mentionTokens.length > 0
+    ? resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
+    : { prompt, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
+
+  // Canonical fallback for any wired character NOT @-mentioned. Single
+  // canonical URL + strong directive per unmentioned character — mirrors
+  // `buildCanonicalFallback` from the shared prompt-builder.
+  const fallbackUrls: string[] = []
+  const fallbackDirectiveLines: string[] = []
+  const seenSlugs = new Set<string>()
+  for (const r of wiredCharRefs) {
+    if (r.source !== "wired-character") continue
+    if (!r.characterSlug) continue
+    if (resolved.mentionedCharacterSlugs.has(r.characterSlug)) continue
+    if (seenSlugs.has(r.characterSlug)) continue
+    if (r.variantSlug) continue
+    if (!r.url) continue
+    seenSlugs.add(r.characterSlug)
+    fallbackUrls.push(r.url)
+    const displayName = r.defaultName || r.characterSlug
+    const descPart = r.characterCanonicalDescription
+      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
+      : displayName
+    fallbackDirectiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+  }
+
+  let finalPrompt = resolved.prompt
+  if (fallbackDirectiveLines.length > 0) {
+    // Mirror shared `buildImagePrompt`'s consolidation: append fallback
+    // bullets into an existing "Use these characters:" block when present,
+    // otherwise create a new one.
+    if (finalPrompt && finalPrompt.startsWith("Use these characters:\n")) {
+      const splitIdx = finalPrompt.indexOf("\n\n")
+      if (splitIdx !== -1) {
+        const header = finalPrompt.slice(0, splitIdx)
+        const rest = finalPrompt.slice(splitIdx)
+        finalPrompt = `${header}\n${fallbackDirectiveLines.join("\n")}${rest}`
+      } else {
+        finalPrompt = `${finalPrompt}\n${fallbackDirectiveLines.join("\n")}`
+      }
+    } else {
+      const block = `Use these characters:\n${fallbackDirectiveLines.join("\n")}`
+      finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block
+    }
+  }
+
+  // Dedup combined URLs while preserving order (mentions first, fallback after).
+  const merged: string[] = []
+  const seen = new Set<string>()
+  for (const u of resolved.additionalUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+  }
+  for (const u of fallbackUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+  }
+  return { prompt: finalPrompt, additionalUrls: merged }
 }
 
 // ---------------------------------------------------------------------------
@@ -797,26 +855,20 @@ export function buildPayload(
       }
 
       // Wired-character @-mention expansion: when an upstream Character node
-      // is wired AND the prompt contains an @-mention referencing it, switch
-      // to the `connectedReferences` code path so buildImagePrompt's Phase 0
-      // can resolve `@kira-smile` to the variant URL + inject the variant
-      // description. When no @-mention is present we keep the legacy path
-      // (preserves the current orchestrator behavior for non-mention prompts).
+      // is wired, ALWAYS route through `connectedReferences` so buildImagePrompt's
+      // Phase 0 applies the per-character contract uniformly:
+      //   - mentioned (`@kira:N:smile`) → variant URL only, no canonical.
+      //   - unmentioned wired character → canonical URL via the default
+      //     fallback (matches pre-mention behavior of "wire = use it").
+      // This is the path the frontend takes too — keeping them aligned is the
+      // entire point of running the workflow through the orchestrator producing
+      // identical output to a frontend single-node run.
       const wiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-      const knownCharSlugs = Array.from(
-        new Set(
-          wiredCharRefs
-            .map((r) => r.characterSlug)
-            .filter((s): s is string => typeof s === "string" && s.length > 0),
-        ),
-      )
-      const hasMention =
-        knownCharSlugs.length > 0 &&
-        findCharacterMentionTokens(rawPrompt, knownCharSlugs).length > 0
+      const hasWiredCharacter = wiredCharRefs.length > 0
 
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const result = hasMention
+      const result = hasWiredCharacter
         ? buildImagePrompt({
             prompt: rawPrompt,
             provider,
@@ -1004,21 +1056,15 @@ export function buildPayload(
       }
 
       // Wired-character @-mention expansion: see generate-image case above.
+      // Same uniform-path strategy — always route through `connectedReferences`
+      // when any wired character exists so the canonical fallback applies for
+      // unmentioned characters and frontend/backend parity is preserved.
       const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-      const i2iKnownCharSlugs = Array.from(
-        new Set(
-          i2iWiredCharRefs
-            .map((r) => r.characterSlug)
-            .filter((s): s is string => typeof s === "string" && s.length > 0),
-        ),
-      )
-      const i2iHasMention =
-        i2iKnownCharSlugs.length > 0 &&
-        findCharacterMentionTokens(rawPrompt, i2iKnownCharSlugs).length > 0
+      const i2iHasWiredCharacter = i2iWiredCharRefs.length > 0
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const i2iResult = i2iHasMention
+      const i2iResult = i2iHasWiredCharacter
         ? buildImagePrompt({
             prompt: rawPrompt,
             provider,
@@ -1201,20 +1247,14 @@ export function buildPayload(
         }
 
         // Wired-character @-mention expansion: see generate-image case above.
+        // Uniform-path: always use `connectedReferences` when any wired
+        // character exists so the per-character contract (mentioned → variant
+        // only / unmentioned → canonical fallback) applies in both paths.
         const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-        const modKnownCharSlugs = Array.from(
-          new Set(
-            modWiredCharRefs
-              .map((r) => r.characterSlug)
-              .filter((s): s is string => typeof s === "string" && s.length > 0),
-          ),
-        )
-        const modHasMention =
-          modKnownCharSlugs.length > 0 &&
-          findCharacterMentionTokens(rawPrompt, modKnownCharSlugs).length > 0
+        const modHasWiredCharacter = modWiredCharRefs.length > 0
 
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const i2iResult = modHasMention
+        const i2iResult = modHasWiredCharacter
           ? buildImagePrompt({
               prompt: rawPrompt,
               provider,

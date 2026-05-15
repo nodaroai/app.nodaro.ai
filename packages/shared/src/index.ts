@@ -111,6 +111,7 @@ export {
   getIdentityLockClause,
   toIdentityLockMode,
   collectIdentityLockClause,
+  hasUpstreamCharacter,
   type IdentityLockMode,
 } from "./identity-lock.js"
 

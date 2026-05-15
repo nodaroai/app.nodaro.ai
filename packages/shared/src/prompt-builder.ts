@@ -22,6 +22,13 @@ export interface ResolveCharacterMentionsResult {
   prompt: string
   /** Resolved URLs from matched mention tokens, in mention order, deduped via caller responsibility. */
   additionalUrls: string[]
+  /**
+   * Set of character slugs that had at least one resolved mention token.
+   * Callers use this to gate the per-character "no mention → canonical
+   * fallback" behavior so a wired character with no `@-mention` still gets
+   * its canonical URL attached (existing pre-mention-feature behavior).
+   */
+  mentionedCharacterSlugs: Set<string>
 }
 
 /**
@@ -38,6 +45,10 @@ export interface ResolveCharacterMentionsResult {
  * - Build a `replacements` array (token + offset + replacement display name) and
  *   apply right-to-left so earlier replacements do not shift later offsets.
  * - Prepend a "Use these characters:\n…" directive section when any directives were emitted.
+ * - Each directive bullet leads with the user-visible `Image N (Name)` index pulled
+ *   directly from the typed token (e.g. `@kira:1:smile` → `Image 1 (Kira)`).
+ *   This lets the user trace a literal slug in the prompt to its appearance in
+ *   the final assembled identity-directive block.
  */
 export function resolveCharacterMentions(
   prompt: string,
@@ -57,6 +68,7 @@ export function resolveCharacterMentions(
 
   const additionalUrls: string[] = []
   const charactersSeen = new Set<string>()
+  const mentionedCharacterSlugs = new Set<string>()
   const directiveLines: string[] = []
 
   const replacements: Array<{ token: string; offset: number; replacement: string }> = []
@@ -67,6 +79,7 @@ export function resolveCharacterMentions(
     if (!match) continue
 
     additionalUrls.push(match.url)
+    mentionedCharacterSlugs.add(t.characterSlug)
 
     const isFirstMention = !charactersSeen.has(t.characterSlug)
     charactersSeen.add(t.characterSlug)
@@ -74,8 +87,19 @@ export function resolveCharacterMentions(
     const displayName = bySlug.get(t.characterSlug)?.defaultName ?? t.characterSlug
     replacements.push({ token: t.token, offset: t.offset, replacement: displayName })
 
-    if (isFirstMention && match.characterCanonicalDescription) {
-      directiveLines.push(`- ${displayName}: ${match.characterCanonicalDescription.trim()}`)
+    if (isFirstMention) {
+      // Strengthened character directive — folds identity-preservation
+      // language directly into the bullet so the model holds face / body /
+      // distinctive features. Replaces the redundant global trailing
+      // identity-lock clause we used to append from `collectIdentityLockClause`.
+      // The leading `Image N (Name)` numeric index comes straight from the
+      // user-typed token so the literal slug `@kira:1:smile` and the final
+      // identity directive `Image 1 (Kira)` line up.
+      const subject = `Image ${t.imageIndex} (${displayName})`
+      const descPart = match.characterCanonicalDescription
+        ? `${subject} — ${match.characterCanonicalDescription.trim()}`
+        : subject
+      directiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
     }
     if (t.variantSlug && match.variantDescription) {
       directiveLines.push(`  (in this image: ${match.variantDescription.trim()})`)
@@ -94,7 +118,52 @@ export function resolveCharacterMentions(
     resolvedPrompt = `Use these characters:\n${directiveLines.join("\n")}\n\n${resolvedPrompt}`
   }
 
-  return { prompt: resolvedPrompt, additionalUrls }
+  return { prompt: resolvedPrompt, additionalUrls, mentionedCharacterSlugs }
+}
+
+/**
+ * Build the canonical-fallback directive lines + URLs for wired characters
+ * that were NOT @-mentioned in the prompt. Matches the pre-mention behavior:
+ * a character wired to a generator without any `@-mention` still contributes
+ * its default URL + a strong identity directive, so users who wire a single
+ * character without typing anything get the same result they did before the
+ * `@-mention` feature shipped.
+ *
+ * Returns directive lines (matching `resolveCharacterMentions`'s format) and
+ * canonical URLs (variantSlug === undefined entries only) keyed by
+ * `characterSlug`, deduped. Callers prepend the directives + merge the URLs.
+ */
+function buildCanonicalFallback(
+  refs: readonly ConnectedReference[],
+  mentionedSlugs: ReadonlySet<string>,
+): { directiveLines: string[]; urls: string[] } {
+  const directiveLines: string[] = []
+  const urls: string[] = []
+  const seenSlugs = new Set<string>()
+  for (const r of refs) {
+    if (r.source !== "wired-character") continue
+    if (!r.characterSlug) continue
+    if (mentionedSlugs.has(r.characterSlug)) continue
+    if (seenSlugs.has(r.characterSlug)) continue
+    // Canonical entry only — never auto-attach a variant for an unmentioned
+    // character. Multiple wired characters each contribute one canonical
+    // URL + one directive, mirroring the legacy auto-attach behavior.
+    if (r.variantSlug) continue
+    if (!r.url) continue
+    seenSlugs.add(r.characterSlug)
+    urls.push(r.url)
+    const displayName = r.defaultName || r.characterSlug
+    // Unmentioned canonical falls outside the user-typed prompt, so it has
+    // no `imageIndex` from the user. The wired-character canonical is a
+    // background hint, so we emit a strong directive (matching the legacy
+    // identity-lock clause strength) without a numeric index in front —
+    // numeric indices are reserved for explicit user-typed mentions.
+    const descPart = r.characterCanonicalDescription
+      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
+      : displayName
+    directiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+  }
+  return { directiveLines, urls }
 }
 
 export interface BuildImagePromptConfig {
@@ -156,10 +225,18 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   } = config
 
   // -------------------------------------------------------------------------
-  // Phase 0: resolve @<character-slug>(-<variant-slug>)? tokens.
-  // Runs BEFORE the existing `{image:N}` resolution path. Both coexist:
-  // Phase 0 handles slug-based character mentions; the existing path below
-  // handles `{image:N:label}` tokens for non-character refs.
+  // Phase 0: resolve `@<character-slug>:<index>(:<variant-slug>)?` tokens
+  // AND apply the per-character canonical fallback for unmentioned wired
+  // characters. Runs BEFORE the existing `{image:N}` resolution path. Both
+  // coexist: Phase 0 handles slug-based character mentions / fallbacks;
+  // the existing path below handles `{image:N:label}` tokens for
+  // non-character refs.
+  //
+  // Per-character contract:
+  //   - wired-character WITHOUT any `@-mention` → contribute canonical URL
+  //     + a strong identity directive (pre-mention-feature behavior).
+  //   - wired-character WITH at least one `@-mention` → contribute ONLY
+  //     mentioned variant URLs (no canonical auto-attach).
   // -------------------------------------------------------------------------
   if (connectedReferences && connectedReferences.length > 0) {
     const knownCharacterSlugs = Array.from(
@@ -171,23 +248,46 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     )
     if (knownCharacterSlugs.length > 0) {
       const mentionTokens = findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
-      if (mentionTokens.length > 0) {
-        const resolved = resolveCharacterMentions(
-          config.prompt,
-          mentionTokens,
-          connectedReferences
-        )
-        // Mutate the config locals (NOT the original passed config).
-        config = {
-          ...config,
-          prompt: resolved.prompt,
-          referenceImageUrls: [
-            ...(referenceImageUrls || []),
-            ...resolved.additionalUrls,
-          ].filter((u, i, a) => a.indexOf(u) === i),
+      const resolved = mentionTokens.length > 0
+        ? resolveCharacterMentions(config.prompt, mentionTokens, connectedReferences)
+        : { prompt: config.prompt, additionalUrls: [], mentionedCharacterSlugs: new Set<string>() }
+      // Default-fallback canonical URLs + directives for any wired character
+      // that has zero mentions in the prompt. Mirrors the legacy behavior the
+      // mention feature replaced — wire a character with no typing required.
+      const fallback = buildCanonicalFallback(
+        connectedReferences,
+        resolved.mentionedCharacterSlugs,
+      )
+      let promptForNext = resolved.prompt
+      if (fallback.directiveLines.length > 0) {
+        // Mirror `resolveCharacterMentions`'s "Use these characters:\n…" block
+        // structure. When both blocks exist, append fallback bullets to the
+        // same block so the model sees one consolidated header.
+        if (promptForNext.startsWith("Use these characters:\n")) {
+          const splitIdx = promptForNext.indexOf("\n\n")
+          if (splitIdx !== -1) {
+            const header = promptForNext.slice(0, splitIdx)
+            const rest = promptForNext.slice(splitIdx)
+            promptForNext = `${header}\n${fallback.directiveLines.join("\n")}${rest}`
+          } else {
+            promptForNext = `${promptForNext}\n${fallback.directiveLines.join("\n")}`
+          }
+        } else {
+          promptForNext = `Use these characters:\n${fallback.directiveLines.join("\n")}\n\n${promptForNext}`
         }
-        referenceImageUrls = config.referenceImageUrls || []
       }
+      const mergedUrls = [
+        ...(referenceImageUrls || []),
+        ...resolved.additionalUrls,
+        ...fallback.urls,
+      ].filter((u, i, a) => a.indexOf(u) === i)
+      // Mutate the config locals (NOT the original passed config).
+      config = {
+        ...config,
+        prompt: promptForNext,
+        referenceImageUrls: mergedUrls,
+      }
+      referenceImageUrls = config.referenceImageUrls || []
     }
   }
 
@@ -195,12 +295,30 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   // New path: rich `connectedReferences` provided. Per-identity directives
   // are emitted at the top, `{image:N:label}` tokens expand to natural-
   // language phrases, and URLs are sent in connectedReferences order.
+  //
+  // Character refs (source === "wired-character") are AUTOCOMPLETE-ONLY by
+  // default — they ONLY contribute URLs + directives via Phase 0 mention
+  // resolution above (`referenceImageUrls` and a "Use these characters…"
+  // prefix). A wired character with no @-mention in the prompt contributes
+  // zero URLs and zero directives here. Non-character refs (manual,
+  // wired-image, wired-face, wired-object, wired-location) still auto-
+  // attach so unchanged behavior for them.
   // -------------------------------------------------------------------------
   if (connectedReferences) {
     let prompt = config.prompt
 
+    // Non-character refs are still emitted as per-identity directives + URLs.
+    // Character refs are filtered out here — Phase 0 has already added their
+    // URLs to `referenceImageUrls` (via mention resolution) and prepended the
+    // "Use these characters…" directive block.
+    const nonCharacterRefs = connectedReferences.filter(
+      (r) => r.source !== "wired-character",
+    )
+
     // Identities = (used in prompt) ∪ (default label for refs with no mentions).
-    const identities = collectIdentities(prompt, connectedReferences, identityMeta)
+    // Indexing here is against the non-character ref list so {image:N} tokens
+    // line up with `nonCharacterRefs[N-1]` for legacy positional mentions.
+    const identities = collectIdentities(prompt, nonCharacterRefs, identityMeta)
 
     const directives = identities
       .map((id) => buildIdentityDirective(id))
@@ -209,7 +327,9 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     if (directives) {
       // "Use these references…" header + bulleted directives + the
       // "Compose them naturally…" prefix proved most reliable in user
-      // testing. Letters (Image A/B/…) outperform digits for the model.
+      // testing. Numeric indices ("Image 1") match the user-typed
+      // `@character:N` slug format so the literal prompt and the final
+      // identity directive are visually linked.
       prompt = prompt
         ? `Use these references for the output image:\n${directives}\n\nCompose them naturally into a single image: ${prompt}`
         : `Use these references for the output image:\n${directives}`
@@ -237,10 +357,20 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
 
     // Resolve `{image:N:label}` → "the <label> from image N".
     // Bare `{image:N}` (no label) → "[reference image N]" (legacy fallback).
-    prompt = expandImageRefTokens(prompt, connectedReferences.length)
+    prompt = expandImageRefTokens(prompt, nonCharacterRefs.length)
+
+    // URLs: non-character refs auto-attach in their original order.
+    // Character URLs (if any) come from Phase 0's `referenceImageUrls`
+    // (only the mentioned variants).
+    const nonCharacterUrls = nonCharacterRefs
+      .map((r) => r.url)
+      .filter((u): u is string => Boolean(u))
+    const characterUrlsFromPhase0 = referenceImageUrls.filter(
+      (u) => !nonCharacterUrls.includes(u),
+    )
+    const orderedUrls = [...nonCharacterUrls, ...characterUrlsFromPhase0]
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
-    const orderedUrls = connectedReferences.map((r) => r.url).filter((u): u is string => Boolean(u))
     const refsToSend = supportsRefs && orderedUrls.length > 0 ? orderedUrls : undefined
 
     return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
@@ -392,42 +522,33 @@ const TEXTURE_LABELS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Convert 1-based position to a letter identifier (A, B, ..., Z, AA, AB, ...).
- * Letter naming consistently outperformed digit naming in user testing for
- * multi-reference compositions — the model parses "Image A" / "Image B" as
- * distinct identifiers more reliably than "image 1" / "image 2".
- */
-function indexToLetter(n: number): string {
-  if (n < 1) return String(n)
-  let s = ""
-  let m = n
-  while (m > 0) {
-    const rem = (m - 1) % 26
-    s = String.fromCharCode(65 + rem) + s
-    m = Math.floor((m - 1) / 26)
-  }
-  return s
-}
-
-/**
  * Subject form for directive bullets: parenthetical label after the image
- * letter so the model sees both the position binding and the role descriptor
- * in one tight phrase. Matches Google's "Image A (ceramic mug)" pattern and
- * the variant that user testing landed on as most reliable.
+ * index so the model sees both the position binding and the role descriptor
+ * in one tight phrase. Numeric indices ("Image 1") match the typed token
+ * (e.g. `@kira:1:smile`) so users can trace the slug through to the final
+ * assembled directive.
  *
- *  "dragon" + 1                       → "Image A (dragon)"
- *  "Danny"  + 2                       → "Image B (Danny)"
- *  "dragon" + 1 + desc "red scales"   → "Image A (dragon — red scales)"
- *  no label + 3                       → "Image C"
+ *  "dragon" + 1                       → "Image 1 (dragon)"
+ *  "Danny"  + 2                       → "Image 2 (Danny)"
+ *  "dragon" + 1 + desc "red scales"   → "Image 1 (dragon — red scales)"
+ *  no label + 3                       → "Image 3"
  */
 function formatDirectiveSubject(label: string, imageIndex: number, description?: string): string {
-  const letter = indexToLetter(imageIndex)
-  if (!label && !description) return `Image ${letter}`
+  if (!label && !description) return `Image ${imageIndex}`
   const inner = label && description
     ? `${label} — ${description}`
     : (label || description)!
-  return `Image ${letter} (${inner})`
+  return `Image ${imageIndex} (${inner})`
 }
+
+/** Labels that mean "a person / character" — strengthen the directive so the
+ *  model holds the face + body + distinctive features. Folds the
+ *  identity-preservation language (previously appended as a trailing
+ *  global clause via `collectIdentityLockClause`) directly into the per-image
+ *  bullet so the model sees the identifier and the rule together. */
+const PERSON_LABELS: ReadonlySet<string> = new Set([
+  "person", "character", "face", "subject", "people",
+])
 
 function buildIdentityDirective(id: ResolvedIdentity): string {
   if (id.fidelity === "custom" && id.customText) {
@@ -446,6 +567,13 @@ function buildIdentityDirective(id: ResolvedIdentity): string {
     return `- ${subject} — apply this ${id.label}.`
   }
 
+  // Person/character labels: strengthen the directive (regardless of fidelity)
+  // so the global trailing identity-lock clause becomes redundant.
+  // "loose" still gets the inspiration form so users can opt out.
+  if (PERSON_LABELS.has(lower) && id.fidelity !== "loose") {
+    return `- ${subject} — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`
+  }
+
   switch (id.fidelity) {
     case "strict":
       return `- ${subject} — match exactly. Maintain perfect likeness.`
@@ -460,13 +588,14 @@ function buildIdentityDirective(id: ResolvedIdentity): string {
 
 /**
  * Replace `{image:N:label}` and `{image:N}` tokens with natural-language
- * phrases bound to a letter-named image (Image A / B / C …).
+ * phrases bound to a numbered image (Image 1 / 2 / 3 …).
  *
- * - `{image:N:label}`  → `Image {Letter} ({label})`
- * - `{image:N}`        → `Image {Letter}` (no role specified)
+ * - `{image:N:label}`  → `Image {N} ({label})`
+ * - `{image:N}`        → `Image {N}` (no role specified)
  *
  * Same parenthetical form as the directive subject so the model sees a
  * consistent identifier in both the bulleted list and the scene description.
+ * Numeric indices match the user-typed slug format (`@kira:1:smile`).
  *
  * Out-of-range indices are left untouched so they're visible in the output.
  */
@@ -474,8 +603,7 @@ export function expandImageRefTokens(prompt: string, imageCount: number): string
   return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
     const n = parseInt(num, 10)
     if (n < 1 || n > imageCount) return match
-    const letter = indexToLetter(n)
-    return label ? `Image ${letter} (${label})` : `Image ${letter}`
+    return label ? `Image ${n} (${label})` : `Image ${n}`
   })
 }
 
@@ -507,10 +635,9 @@ export function expandImagePositionRefs(
   return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
     const n = parseInt(num, 10)
     if (n < 1 || n > imageCount) return match
-    const letter = indexToLetter(n)
-    if (label) return `Image ${letter} (${label})`
+    if (label) return `Image ${n} (${label})`
     if (names && names[n - 1]) return names[n - 1]
-    return `Image ${letter}`
+    return `Image ${n}`
   })
 }
 

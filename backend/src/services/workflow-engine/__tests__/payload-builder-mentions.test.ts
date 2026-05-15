@@ -61,7 +61,7 @@ describe("payload-builder: character @-mention expansion", () => {
   it("expands a wired character into canonical + variant connectedReferences for generate-image", () => {
     const character = charNode("char-1")
     const generateImage = node("gen-1", "generate-image", {
-      prompt: "make her dance, @kira-smile",
+      prompt: "make her dance, @kira:1:smile",
       provider: "nano-banana-pro",
     })
     const nodes = [character, generateImage]
@@ -80,7 +80,7 @@ describe("payload-builder: character @-mention expansion", () => {
 
     expect(result.jobName).toBe("generate-image")
     // The smile variant URL must appear in the outgoing reference list — proves
-    // the @kira-smile token resolved via the expanded connectedReferences.
+    // the @kira:1:smile token resolved via the expanded connectedReferences.
     const refs = result.payload.referenceImageUrls as string[] | undefined
     expect(refs).toBeDefined()
     expect(refs).toContain("https://r2/kira-smile.png")
@@ -89,13 +89,15 @@ describe("payload-builder: character @-mention expansion", () => {
     const prompt = result.payload.prompt as string
     expect(prompt).toContain("Kira")
     // Token itself is replaced (not left literal).
-    expect(prompt).not.toMatch(/@kira-smile\b/)
+    expect(prompt).not.toMatch(/@kira:1:smile\b/)
+    // Numeric image index from the typed slug surfaces in the directive.
+    expect(prompt).toContain("Image 1 (Kira)")
   })
 
-  it("resolves bare @kira to canonical URL", () => {
+  it("resolves @kira:1 (no variant) to canonical URL", () => {
     const character = charNode("char-1")
     const generateImage = node("gen-1", "generate-image", {
-      prompt: "feature @kira prominently",
+      prompt: "feature @kira:1 prominently",
       provider: "nano-banana-pro",
     })
     const nodes = [character, generateImage]
@@ -124,7 +126,7 @@ describe("payload-builder: character @-mention expansion", () => {
   it("works for image-to-image too", () => {
     const character = charNode("char-1")
     const i2i = node("i2i-1", "image-to-image", {
-      prompt: "transform into @kira-smile",
+      prompt: "transform into @kira:1:smile",
       provider: "flux-i2i",
       imageUrl: "https://r2/main.png",
     })
@@ -196,7 +198,7 @@ describe("payload-builder: character @-mention expansion", () => {
       ],
     })
     const generateImage = node("gen-1", "generate-image", {
-      prompt: "test @kira-smile",
+      prompt: "test @kira:1:smile",
       provider: "nano-banana-pro",
     })
     const nodes = [character, generateImage]
