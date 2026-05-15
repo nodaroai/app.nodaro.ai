@@ -177,6 +177,38 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // No mention → no "Use these characters:" header.
       expect(prompt).not.toContain("Use these characters:")
     })
+
+    it("applies canonical fallback when prompt is empty AND character is wired (no typed text)", () => {
+      // Parity test: a wired Character with NO typed prompt should still get
+      // the canonical fallback block prepended. Before the fix,
+      // `resolveVideoPromptMentions` bailed early when `prompt` was empty,
+      // dropping the fallback. Now it treats `""` as the working prompt and
+      // assembles the canonical block on top of it.
+      const character = charNode("char-1")
+      const i2v = node("i2v-1", "image-to-video", {
+        // No prompt typed.
+        provider: "kling",
+      })
+      const nodes = [character, i2v]
+      const edges = [edge("char-1", "i2v-1")]
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        i2v,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      // Canonical URL fills the imageUrl slot.
+      expect(result.payload.imageUrl).toBe("https://r2/kira-portrait.png")
+      const prompt = result.payload.prompt as string
+      // Canonical fallback directive must appear even with empty user input.
+      expect(prompt).toContain("Use these characters:")
+      expect(prompt).toContain("auburn shoulder-length hair")
+      expect(prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+    })
   })
 
   describe("text-to-video", () => {
