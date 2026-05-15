@@ -23,7 +23,8 @@ import {
 } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import type { CharacterDef, SceneData } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
@@ -91,6 +92,182 @@ function collectAncestorRefs(
     (src) => getNodeImageUrl(src, nodeStates),
     visited,
   )
+}
+
+// ---------------------------------------------------------------------------
+// Character connection → `ConnectedReference[]` expansion
+//
+// Mirror of the frontend `execute-node.ts` expansion: each wired upstream
+// Character node contributes a canonical entry plus one entry per asset
+// variant (expressions / poses / motions / angles / bodyAngles / lighting),
+// powering `@kira` / `@kira-smile` mention resolution in `buildImagePrompt`
+// for orchestrator-driven runs (webhook / cron / MCP) where the frontend's
+// `execute-node.ts` doesn't run.
+//
+// Returns ConnectedReference entries for ALL wired character upstreams. If
+// none have a usable slug (named character), returns an empty array — the
+// caller should then fall back to the legacy URL-only path. Field names use
+// camelCase from the workflow JSON saved by the frontend (the canvas keeps
+// CharacterNodeData in camelCase; the snake_case `characters` DB row is
+// distinct and not what flows through SimpleNode.data).
+// ---------------------------------------------------------------------------
+
+interface CharacterAssetItem {
+  readonly name?: string
+  readonly url?: string
+}
+
+function asAssetItems(value: unknown): readonly CharacterAssetItem[] {
+  if (!Array.isArray(value)) return []
+  return value as readonly CharacterAssetItem[]
+}
+
+/**
+ * Build a complete `connectedReferences` list for an image-gen / i2i node.
+ * Emits the wired-character expanded entries first (canonical + per-variant
+ * for every wired Character upstream — these power `@kira-smile` resolution
+ * in `buildImagePrompt`'s Phase 0), then appends any remaining URLs from the
+ * ref-URL map (manual uploads, extracted refs, character-definition refs,
+ * non-character wired upstream images) as plain `wired-image` entries.
+ * Duplicates by URL are skipped so the canonical character URL doesn't get
+ * listed twice (the existing flow keys upstream character URLs as
+ * `wired_<i>` in refUrlMap — same URL as the expanded canonical entry).
+ * Used only when the prompt contains an `@-mention`.
+ */
+function buildConnectedRefsForGenerate(
+  wiredCharRefs: readonly ConnectedReference[],
+  refUrlMap: ReadonlyMap<string, string>,
+  orderIds: readonly string[],
+): ConnectedReference[] {
+  const out: ConnectedReference[] = []
+  const seenUrls = new Set<string>()
+  for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  const addRawUrl = (id: string, url: string): void => {
+    if (!url || seenUrls.has(url)) return
+    seenUrls.add(url)
+    out.push({
+      id,
+      defaultName: id,
+      source: "wired-image",
+      url,
+    })
+  }
+  // Honor user-specified ordering first, then default insertion order.
+  for (const id of orderIds) {
+    const url = refUrlMap.get(id)
+    if (url) addRawUrl(id, url)
+  }
+  for (const [id, url] of refUrlMap) {
+    addRawUrl(id, url)
+  }
+  return out
+}
+
+/**
+ * Variant of `buildConnectedRefsForGenerate` for the image-to-image case
+ * (and any other case that has a flat `directRefs: string[]` list rather
+ * than a refUrlMap). Emits the wired-character expansion first, then any
+ * remaining URLs from `directRefs` as plain `wired-image` entries, deduped
+ * by URL.
+ */
+function buildConnectedRefsFromUrls(
+  wiredCharRefs: readonly ConnectedReference[],
+  directRefs: readonly string[],
+): ConnectedReference[] {
+  const out: ConnectedReference[] = []
+  const seenUrls = new Set<string>()
+  for (const r of wiredCharRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
+  for (let i = 0; i < directRefs.length; i++) {
+    const url = directRefs[i]
+    if (!url || seenUrls.has(url)) continue
+    seenUrls.add(url)
+    out.push({
+      id: `direct_${i}`,
+      defaultName: `Image ${i + 1}`,
+      source: "wired-image",
+      url,
+    })
+  }
+  return out
+}
+
+/** Expand wired upstream Character nodes into canonical + per-variant refs. */
+function expandWiredCharacterRefs(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): ConnectedReference[] {
+  if (!buildCtx?.nodes || !buildCtx.edges) return []
+  const out: ConnectedReference[] = []
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    if (!upstream || upstream.type !== "character") continue
+    const charData = upstream.data
+    const charName =
+      (charData.characterName as string | undefined) ??
+      (charData.label as string | undefined) ??
+      ""
+    const characterSlug = characterMentionSlug(charName)
+    if (!characterSlug) continue // unnamed character — skip from autocomplete
+
+    const description = charData.description as string | undefined
+    const canonicalDescription =
+      (charData.canonicalDescription as string | null | undefined) ?? null
+    const canonicalUrl =
+      (charData.defaultAssetUrl as string | undefined) ||
+      (charData.sourceImageUrl as string | undefined)
+    if (canonicalUrl) {
+      out.push({
+        id: `char_${upstream.id}`,
+        defaultName: charName,
+        source: "wired-character",
+        description,
+        url: canonicalUrl,
+        characterSlug,
+        variantSlug: undefined,
+        characterCanonicalDescription: canonicalDescription,
+        variantDescription: null,
+        variantDisplayName: "canonical",
+      })
+    }
+
+    const assetArrays: Record<string, readonly CharacterAssetItem[]> = {
+      expressions: asAssetItems(charData.expressions),
+      poses: asAssetItems(charData.poses),
+      motions: asAssetItems(charData.motions),
+      angles: asAssetItems(charData.angles),
+      bodyAngles: asAssetItems(charData.bodyAngles),
+      lightingVariations: asAssetItems(charData.lightingVariations),
+    }
+    for (const [arrayName, items] of Object.entries(assetArrays)) {
+      for (const item of items) {
+        if (!item?.url) continue
+        const variantSlug = characterMentionSlug(item.name ?? "")
+        if (!variantSlug) continue
+        out.push({
+          id: `char_${upstream.id}_${arrayName}_${variantSlug}`,
+          defaultName: `${charName} / ${item.name}`,
+          source: "wired-character",
+          description,
+          url: item.url,
+          characterSlug,
+          variantSlug,
+          characterCanonicalDescription: canonicalDescription,
+          variantDescription: null,
+          variantDisplayName: item.name,
+        })
+      }
+    }
+  }
+  return out
 }
 
 // ---------------------------------------------------------------------------
@@ -579,19 +756,53 @@ export function buildPayload(
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
 
+      // Wired-character @-mention expansion: when an upstream Character node
+      // is wired AND the prompt contains an @-mention referencing it, switch
+      // to the `connectedReferences` code path so buildImagePrompt's Phase 0
+      // can resolve `@kira-smile` to the variant URL + inject the variant
+      // description. When no @-mention is present we keep the legacy path
+      // (preserves the current orchestrator behavior for non-mention prompts).
+      const wiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const knownCharSlugs = Array.from(
+        new Set(
+          wiredCharRefs
+            .map((r) => r.characterSlug)
+            .filter((s): s is string => typeof s === "string" && s.length > 0),
+        ),
+      )
+      const hasMention =
+        knownCharSlugs.length > 0 &&
+        findCharacterMentionTokens(rawPrompt, knownCharSlugs).length > 0
+
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const result = buildImagePrompt({
-        prompt: rawPrompt,
-        provider,
-        style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-        characterDefs: charDefs as CharacterDef[],
-        userTemplates: settings?.userPromptTemplates,
-        flowTemplates: settings?.flowPromptTemplates,
-        referenceImageUrls: directRefs,
-        ancestorRefs,
-      })
+      const result = hasMention
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: buildConnectedRefsForGenerate(
+              wiredCharRefs,
+              refUrlMap,
+              orderIds,
+            ),
+            ancestorRefs,
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs,
+          })
 
       return {
         jobName: "generate-image",
@@ -752,19 +963,44 @@ export function buildPayload(
         if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
       }
 
+      // Wired-character @-mention expansion: see generate-image case above.
+      const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const i2iKnownCharSlugs = Array.from(
+        new Set(
+          i2iWiredCharRefs
+            .map((r) => r.characterSlug)
+            .filter((s): s is string => typeof s === "string" && s.length > 0),
+        ),
+      )
+      const i2iHasMention =
+        i2iKnownCharSlugs.length > 0 &&
+        findCharacterMentionTokens(rawPrompt, i2iKnownCharSlugs).length > 0
+
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const i2iResult = buildImagePrompt({
-        prompt: rawPrompt,
-        provider,
-        style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-        negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-        characterDefs: charDefs as CharacterDef[],
-        userTemplates: settings?.userPromptTemplates,
-        flowTemplates: settings?.flowPromptTemplates,
-        referenceImageUrls: directRefs,
-        ancestorRefs: [],
-      })
+      const i2iResult = i2iHasMention
+        ? buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            connectedReferences: buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs),
+            ancestorRefs: [],
+          })
+        : buildImagePrompt({
+            prompt: rawPrompt,
+            provider,
+            style: i2iStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+            negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+            characterDefs: charDefs as CharacterDef[],
+            userTemplates: settings?.userPromptTemplates,
+            flowTemplates: settings?.flowPromptTemplates,
+            referenceImageUrls: directRefs,
+            ancestorRefs: [],
+          })
 
       return {
         jobName: "image-to-image",
@@ -924,18 +1160,43 @@ export function buildPayload(
           if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause
         }
 
+        // Wired-character @-mention expansion: see generate-image case above.
+        const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+        const modKnownCharSlugs = Array.from(
+          new Set(
+            modWiredCharRefs
+              .map((r) => r.characterSlug)
+              .filter((s): s is string => typeof s === "string" && s.length > 0),
+          ),
+        )
+        const modHasMention =
+          modKnownCharSlugs.length > 0 &&
+          findCharacterMentionTokens(rawPrompt, modKnownCharSlugs).length > 0
+
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const i2iResult = buildImagePrompt({
-          prompt: rawPrompt,
-          provider,
-          style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
-          negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
-          characterDefs: charDefs as CharacterDef[],
-          userTemplates: settings?.userPromptTemplates,
-          flowTemplates: settings?.flowPromptTemplates,
-          referenceImageUrls: directRefs,
-          ancestorRefs: [],
-        })
+        const i2iResult = modHasMention
+          ? buildImagePrompt({
+              prompt: rawPrompt,
+              provider,
+              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+              characterDefs: charDefs as CharacterDef[],
+              userTemplates: settings?.userPromptTemplates,
+              flowTemplates: settings?.flowPromptTemplates,
+              connectedReferences: buildConnectedRefsFromUrls(modWiredCharRefs, directRefs),
+              ancestorRefs: [],
+            })
+          : buildImagePrompt({
+              prompt: rawPrompt,
+              provider,
+              style: modStyleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
+              negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
+              characterDefs: charDefs as CharacterDef[],
+              userTemplates: settings?.userPromptTemplates,
+              flowTemplates: settings?.flowPromptTemplates,
+              referenceImageUrls: directRefs,
+              ancestorRefs: [],
+            })
 
         return {
           jobName: "image-to-image",
