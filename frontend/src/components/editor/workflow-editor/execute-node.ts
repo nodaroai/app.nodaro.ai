@@ -690,7 +690,6 @@ function resolveVideoPromptMentions(
   nodes: readonly WorkflowNode[],
   edges: readonly WorkflowEdge[],
 ): { prompt: string | undefined; additionalUrls: string[] } {
-  if (!prompt) return { prompt, additionalUrls: [] };
   const wiredCharRefs = expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges);
   if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] };
   const knownCharSlugs = Array.from(
@@ -701,11 +700,15 @@ function resolveVideoPromptMentions(
     ),
   );
   if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] };
-  const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs);
+  // Empty user prompt is allowed — canonical fallback / mention resolution
+  // can fill the prompt entirely. Treat undefined/empty as `""` so the
+  // resolver flows through to mention + canonical-fallback assembly below.
+  const promptForResolution = prompt ?? "";
+  const mentionTokens = findCharacterMentionTokens(promptForResolution, knownCharSlugs);
   // Resolve any mentions (may be empty); always check fallback after.
   const resolved = mentionTokens.length > 0
-    ? resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
-    : { prompt, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() };
+    ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
+    : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() };
 
   // Canonical fallback for any wired character NOT @-mentioned. Single
   // canonical URL + strong directive per unmentioned character — mirrors
@@ -1099,10 +1102,12 @@ export function executeNode(
     // a source, `imgData.prompt` holds that source's output.
     const manualImgPrompt = resolveTextRefs(imgData.prompt?.trim(), refMap);
     let prompt = overridePrompt || manualImgPrompt || inputs.prompt;
-    // Fold cinematography hints BEFORE the empty check — a Person / Framing /
-    // Style node wired to the `cinematography` handle is a perfectly valid
-    // prompt source on its own. Requiring a manual prompt in that case would
-    // force users to type filler.
+    // Fold cinematography hints — a Person / Framing / Style node wired to
+    // the `cinematography` handle is a perfectly valid prompt source on its
+    // own. Requiring a manual prompt in that case would force users to type
+    // filler. We defer the final empty-prompt check until AFTER assembly
+    // (mention resolution, identity directives, style, etc.) so an empty
+    // user prompt with a wired Character / @-mention / style still runs.
     {
       const cinematographyHints = collectCinematographyHints(node.id, nodes, edges, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES });
       if (cinematographyHints.length > 0) {
@@ -1110,17 +1115,13 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
-    if (!prompt) {
-      toast.error(`Node "${imgData.label}": no prompt — type one or connect a cinematography source`);
-      return Promise.reject(new Error("No prompt"));
-    }
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
-      if (identityClause) prompt = `${prompt} ${identityClause}`;
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
 
     const result = buildImagePrompt({
-      prompt,
+      prompt: prompt ?? "",
       provider: providerKey,
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : imgData.style,
       negativePrompt: imgData.negativePrompt,
@@ -1130,6 +1131,14 @@ export function executeNode(
       identityMeta: imgData.identityMeta ?? [],
       ancestorRefs,
     });
+
+    // Post-assembly empty-prompt check: a Character / @-mention / style / etc.
+    // could have filled the assembled prompt even if user typed nothing.
+    // Only reject when the FINAL assembled prompt is truly empty.
+    if (!result.prompt.trim()) {
+      toast.error(`Node "${imgData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
+      return Promise.reject(new Error("No prompt"));
+    }
 
     // Capture the user-typed template (pre-resolution) so it lands in
     // jobs.input_data.userPrompt for debugging.
@@ -1276,13 +1285,11 @@ export function executeNode(
       );
       return Promise.reject(new Error("No input image"));
     }
+    // Manual user prompt is OPTIONAL here — a wired Character (canonical
+    // fallback), @-mention, cinematography hint, or style node can fill the
+    // assembled prompt entirely. We defer the empty-prompt check until AFTER
+    // `buildImagePrompt` so empty user input + wired identity still runs.
     let rawPrompt: string | undefined = i2iData.prompt;
-    if (!rawPrompt) {
-      toast.error(
-        `Node "${i2iData.label}": transformation prompt is required`,
-      );
-      return Promise.reject(new Error("Transformation prompt is required"));
-    }
     const provider = i2iData.provider || "nano-banana";
 
     {
@@ -1294,7 +1301,7 @@ export function executeNode(
     }
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
-      if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
+      if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause;
     }
 
     // Collect reference images from connected nodes + character assets.
@@ -1324,7 +1331,7 @@ export function executeNode(
 
     // Build prompt with style + character descriptions (same as generate-image)
     const result = buildImagePrompt({
-      prompt: rawPrompt,
+      prompt: rawPrompt ?? "",
       provider,
       style: hasConnectedStyleNode(node.id, nodes, edges) ? undefined : i2iData.style,
       negativePrompt: i2iData.negativePrompt,
@@ -1334,6 +1341,15 @@ export function executeNode(
       connectedReferences,
       ancestorRefs: [],
     });
+
+    // Post-assembly empty-prompt check: only reject when the FINAL prompt
+    // (after mention resolution, identity directives, style, etc.) is empty.
+    if (!result.prompt.trim()) {
+      toast.error(
+        `Node "${i2iData.label}": no prompt — type one, mention a character, or connect a cinematography source`,
+      );
+      return Promise.reject(new Error("Transformation prompt is required"));
+    }
 
     // Resolve mask from handle or painted mask
     let maskUrl: string | undefined;
@@ -1407,13 +1423,11 @@ export function executeNode(
       );
       return Promise.reject(new Error("No input image"));
     }
+    // Manual user prompt is OPTIONAL here — a wired Character (canonical
+    // fallback), @-mention, cinematography hint, or style node can fill the
+    // assembled prompt entirely. We defer the empty-prompt check until AFTER
+    // `buildImagePrompt` so empty user input + wired identity still runs.
     let rawPrompt: string | undefined = modData.prompt;
-    if (!rawPrompt) {
-      toast.error(
-        `Node "${modData.label}": transformation prompt is required`,
-      );
-      return Promise.reject(new Error("Transformation prompt is required"));
-    }
     const provider = modData.provider || "nano-banana";
 
     {
@@ -1425,7 +1439,7 @@ export function executeNode(
     }
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
-      if (identityClause) rawPrompt = `${rawPrompt} ${identityClause}`;
+      if (identityClause) rawPrompt = rawPrompt ? `${rawPrompt} ${identityClause}` : identityClause;
     }
 
     // Collect reference images from connected nodes + character assets.
@@ -1453,7 +1467,7 @@ export function executeNode(
     // Build prompt with style + character descriptions
     const styleBypass = hasConnectedStyleNode(node.id, nodes, edges);
     const result = buildImagePrompt({
-      prompt: rawPrompt,
+      prompt: rawPrompt ?? "",
       provider,
       style: styleBypass ? undefined : modData.style,
       negativePrompt: modData.negativePrompt,
@@ -1463,6 +1477,15 @@ export function executeNode(
       connectedReferences,
       ancestorRefs: [],
     });
+
+    // Post-assembly empty-prompt check: only reject when the FINAL prompt
+    // (after mention resolution, identity directives, style, etc.) is empty.
+    if (!result.prompt.trim()) {
+      toast.error(
+        `Node "${modData.label}": no prompt — type one, mention a character, or connect a cinematography source`,
+      );
+      return Promise.reject(new Error("Transformation prompt is required"));
+    }
 
     // Resolve mask from handle or painted mask
     let maskUrl: string | undefined;
@@ -1809,7 +1832,10 @@ export function executeNode(
 
   if (node.type === "text-to-video") {
     const t2vData = node.data as TextToVideoData;
-    // Manual wins — see gen-image note above.
+    // Manual wins — see gen-image note above. We defer the empty-prompt check
+    // until AFTER mention resolution + identity-lock so an empty user prompt
+    // with a wired Character / @-mention / style still runs (canonical
+    // fallback fills the assembled prompt).
     let prompt = stripVideoImageTokens(
       overridePrompt ??
       resolveTextRefs(t2vData.prompt?.trim(), refMap) ??
@@ -1822,13 +1848,9 @@ export function executeNode(
         prompt = prompt ? `${prompt}. ${joined}` : joined;
       }
     }
-    if (!prompt) {
-      toast.error(`Node "${t2vData.label}": no prompt — type one or connect a cinematography source`);
-      return Promise.reject(new Error("No prompt"));
-    }
     {
       const identityClause = collectIdentityLockClause(node.id, nodes, edges);
-      if (identityClause) prompt = `${prompt} ${identityClause}`;
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
     // Resolve @-mentions in the t2v prompt. Mirrors the backend
     // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no
@@ -1836,6 +1858,15 @@ export function executeNode(
     // `referenceImageUrls`, merged with whatever upstream already provided.
     const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges);
     prompt = t2vMention.prompt ?? prompt;
+    // Post-assembly empty-prompt check: only reject when the FINAL prompt
+    // (after mention resolution, identity directives, etc.) is empty. The
+    // backend `/v1/text-to-video` route enforces min(1) on the assembled
+    // prompt — this frontend check provides a friendlier error message
+    // before the request fires.
+    if (!prompt || !prompt.trim()) {
+      toast.error(`Node "${t2vData.label}": no prompt — type one, mention a character, or connect a cinematography source`);
+      return Promise.reject(new Error("No prompt"));
+    }
     const t2vProvider = t2vData.provider || "seedance-2-fast";
     const t2vRaw = t2vData as Record<string, unknown>;
     const isKlingVariant =

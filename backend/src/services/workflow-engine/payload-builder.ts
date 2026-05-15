@@ -297,7 +297,6 @@ function resolveVideoPromptMentions(
   consumerNodeId: string,
   buildCtx: PayloadBuildContext | undefined,
 ): { prompt: string | undefined; additionalUrls: string[] } {
-  if (!prompt) return { prompt, additionalUrls: [] }
   const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
   if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] }
   const knownCharSlugs = Array.from(
@@ -308,11 +307,15 @@ function resolveVideoPromptMentions(
     ),
   )
   if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] }
-  const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs)
+  // Empty user prompt is allowed — canonical fallback / mention resolution
+  // can fill the prompt entirely. Treat undefined/empty as `""` so the
+  // resolver flows through to mention + canonical-fallback assembly below.
+  const promptForResolution = prompt ?? ""
+  const mentionTokens = findCharacterMentionTokens(promptForResolution, knownCharSlugs)
   // Resolve any mentions (may be empty); always check fallback after.
   const resolved = mentionTokens.length > 0
-    ? resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
-    : { prompt, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
+    ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
+    : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
 
   // Canonical fallback for any wired character NOT @-mentioned. Single
   // canonical URL + strong directive per unmentioned character — mirrors

@@ -619,6 +619,98 @@ describe("generate-image", () => {
     expect(passedPrompt).not.toMatch(/@shira:1:smile\b/)
     expect(passedPrompt).not.toMatch(/@shira:2:laughing\b/)
   })
+
+  it("allows empty user prompt when a wired Character fills the assembled prompt (canonical fallback)", async () => {
+    // User scenario: a Character node "kira" is wired into a generate-image
+    // node, but the user typed NOTHING in the prompt field. The pre-fix code
+    // rejected this with "no prompt — type one or connect a cinematography
+    // source", but a wired Character contributes a canonical URL + identity
+    // directive via Phase 0 in `buildImagePrompt`. The assembled prompt has
+    // plenty of content even with empty user input — so the node should run.
+    const kiraNode = {
+      id: "char-kira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "kira",
+        characterName: "kira",
+        sourceImageUrl: "http://kira/portrait.png",
+        defaultAssetUrl: "http://kira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://kira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    // No prompt — user typed nothing.
+    const genNode = makeNode("generate-image", { provider: "nano-banana-pro" })
+    mockNodes = [kiraNode, genNode]
+    mockEdges = [{ source: "char-kira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://kira/portrait.png"],
+    })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+
+    // Should NOT throw — the assembled prompt has the canonical fallback block.
+    await executeNode(genNode as any, makeCtx())
+
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRunImageGeneration).toHaveBeenCalled()
+    const callArgs = mockRunImageGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    // Canonical fallback directive must appear in the assembled prompt.
+    expect(passedPrompt).toContain("kira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
+  })
+
+  it("allows empty user prompt with @-mention when a Character is wired upstream", async () => {
+    // Variant of the canonical fallback test: user typed only "@kira:1:smile"
+    // (no other words). The assembled prompt has identity directives even
+    // though the literal user input has no descriptive content.
+    const kiraNode = {
+      id: "char-kira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "kira",
+        characterName: "kira",
+        sourceImageUrl: "http://kira/portrait.png",
+        defaultAssetUrl: "http://kira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://kira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const genNode = makeNode("generate-image", {
+      prompt: "@kira:1:smile",
+      provider: "nano-banana-pro",
+    })
+    mockNodes = [kiraNode, genNode]
+    mockEdges = [{ source: "char-kira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://kira/portrait.png"],
+    })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    mockCollectAncestorRefs.mockReturnValue([])
+
+    await executeNode(genNode as any, makeCtx())
+
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRunImageGeneration).toHaveBeenCalled()
+    const callArgs = mockRunImageGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    // Literal mention must be replaced.
+    expect(passedPrompt).not.toMatch(/@kira:1:smile\b/)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -827,6 +919,69 @@ describe("image-to-image", () => {
     expect(passedPrompt).toMatch(/Match exactly/)
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
+
+  it("allows empty user prompt when a wired Character fills the assembled prompt (canonical fallback)", async () => {
+    // Empty user prompt + wired Character → canonical fallback fills the
+    // assembled prompt. The pre-fix code rejected with "transformation prompt
+    // is required" before `buildImagePrompt` ran. Now the check runs AFTER
+    // assembly, so a wired Character can supply the prompt entirely.
+    const shiraNode = {
+      id: "char-shira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "shira",
+        characterName: "shira",
+        sourceImageUrl: "http://shira/portrait.png",
+        defaultAssetUrl: "http://shira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://shira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    // No prompt — user typed nothing.
+    const i2iNode = makeNode("image-to-image", { provider: "nano-banana" })
+    mockNodes = [shiraNode, i2iNode]
+    mockEdges = [{ source: "char-shira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://input.png",
+      referenceImageUrls: ["http://shira/portrait.png"],
+    })
+    mockRunImageToImage.mockResolvedValue(undefined)
+
+    await executeNode(i2iNode as any, makeCtx())
+
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRunImageToImage).toHaveBeenCalled()
+    const callArgs = mockRunImageToImage.mock.calls[0]
+    const passedPrompt = callArgs[2] as string
+    expect(passedPrompt).toContain("shira")
+    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("young woman, brown eyes")
+  })
+
+  it("rejects when user prompt is empty AND no character/cinematography wired", async () => {
+    // Negative case: with no wired Character, no @-mention, no cinematography,
+    // and an empty user prompt, the assembled prompt is empty — so the
+    // post-assembly check must still reject. Guards against the fix loosening
+    // the check too much.
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://img.png",
+    })
+    const promise = executeNode(
+      makeNode("image-to-image", { provider: "nano-banana" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow(
+      "Transformation prompt is required",
+    )
+    expect(mockToastError).toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -988,6 +1143,49 @@ describe("image-to-video", () => {
     expect(passedPrompt).toContain("shira")
     expect(passedPrompt).toMatch(/Match exactly/)
     expect(passedPrompt).toContain("young woman, brown eyes")
+  })
+
+  it("allows empty user prompt when a wired Character supplies the canonical fallback", async () => {
+    // Empty user prompt + wired Character → canonical fallback fills the
+    // assembled prompt. `resolveVideoPromptMentions` now handles
+    // empty/undefined prompts and applies canonical fallback regardless,
+    // so an i2v node with only a wired Character (no typed text) still runs.
+    const kiraNode = {
+      id: "char-kira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "kira",
+        characterName: "kira",
+        sourceImageUrl: "http://kira/portrait.png",
+        defaultAssetUrl: "http://kira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [{ name: "smile", url: "http://kira/smile.png" }],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    const i2vNode = makeNode("image-to-video", {}) // No prompt
+    mockNodes = [kiraNode, i2vNode]
+    mockEdges = [{ source: "char-kira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({
+      // Provide a start frame so the i2v node has its required input.
+      imageUrl: "http://input-frame.png",
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(i2vNode as any, makeCtx())
+
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRunVideoGeneration).toHaveBeenCalled()
+    const callArgs = mockRunVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[8] as string
+    // Canonical fallback directive must appear even though user typed nothing.
+    expect(passedPrompt).toContain("kira")
+    expect(passedPrompt).toMatch(/Match exactly/)
   })
 })
 
@@ -1250,6 +1448,46 @@ describe("text-to-video", () => {
     // Canonical URL already in upstream refs, no dup.
     expect(passedOptions.referenceImageUrls).toBeDefined()
     expect(passedOptions.referenceImageUrls).toContain("http://shira/portrait.png")
+  })
+
+  it("allows empty user prompt when a wired Character supplies the canonical fallback", async () => {
+    // Empty user prompt + wired Character → canonical fallback fills the
+    // assembled prompt. Pre-fix code rejected with "no prompt" before mention
+    // resolution ran. Now the check runs AFTER mention resolution +
+    // canonical-fallback assembly, so an empty typed prompt still runs.
+    const kiraNode = {
+      id: "char-kira",
+      type: "character",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "kira",
+        characterName: "kira",
+        sourceImageUrl: "http://kira/portrait.png",
+        defaultAssetUrl: "http://kira/portrait.png",
+        canonicalDescription: "young woman, brown eyes",
+        expressions: [],
+        poses: [],
+        motions: [],
+        angles: [],
+        bodyAngles: [],
+        lightingVariations: [],
+      },
+    }
+    // No prompt — user typed nothing.
+    const t2vNode = makeNode("text-to-video", {})
+    mockNodes = [kiraNode, t2vNode]
+    mockEdges = [{ source: "char-kira", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+
+    await executeNode(t2vNode as any, makeCtx())
+
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockRunTextToVideoGeneration).toHaveBeenCalled()
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedPrompt = callArgs[1] as string
+    expect(passedPrompt).toContain("kira")
+    expect(passedPrompt).toMatch(/Match exactly/)
   })
 })
 
