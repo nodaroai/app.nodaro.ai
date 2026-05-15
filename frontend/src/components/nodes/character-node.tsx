@@ -49,8 +49,27 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.anglesStatus === "running" ||
     nodeData.motionStatus === "running"
 
+  // Per-canvas-node thumbnail aspect ratio (frontend-only). Default to "1:1"
+  // for backwards compat — most existing character thumbnails are square. The
+  // CSS `aspect-ratio` property accepts "W / H" form, so we translate "16:9"
+  // → "16 / 9" at render time. The image inside uses `object-fit: cover` so
+  // it crops cleanly regardless of source dimensions.
+  const aspectRatio = nodeData.defaultAssetAspectRatio ?? "1:1"
+  const aspectRatioCss = aspectRatio.replace(":", " / ")
+
+  // The variant suffix in "Kira • Smiling" should only show when the user
+  // actually picked a non-canonical asset as the default. Skip when the asset
+  // name is missing, equals "canonical" (the default portrait), or matches
+  // the character's own name (which happens for some canonical sources).
+  const variantName = nodeData.defaultAssetName
+  const showVariantSuffix =
+    !!nodeData.defaultAssetUrl &&
+    !!variantName &&
+    variantName !== "canonical" &&
+    variantName !== nodeData.characterName
+
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative">
     <EditableNodeLabel
       label={nodeData.label}
       icon={<UserCircle className="w-3.5 h-3.5" />}
@@ -81,14 +100,18 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       </div>
 
       {/* Portrait preview — uses defaultAssetUrl when the user star'd a
-          studio asset, otherwise falls back to the approved portrait. */}
+          studio asset, otherwise falls back to the approved portrait. The
+          outer container uses `aspect-ratio` CSS so the image height tracks
+          the node width as the user resizes; the image inside is sized to
+          100% × 100% with `object-fit: cover` so it crops cleanly without
+          stretching regardless of the source dimensions. */}
       <div className="px-2.5 pt-2.5">
         {thumbnailUrl ? (
-          <div className="relative">
+          <div className="relative group/thumb w-full" style={{ aspectRatio: aspectRatioCss }}>
             {isVideoDefault ? (
               <video
                 src={thumbnailUrl}
-                className="w-full h-[110px] object-cover rounded-md border border-[#334155] bg-black"
+                className="w-full h-full object-cover rounded-md border border-[#334155] bg-black"
                 muted
                 playsInline
                 loop
@@ -99,7 +122,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               <CachedImage
                 src={thumbnailUrl}
                 alt={thumbnailLabel}
-                className="w-full h-[110px] object-cover rounded-md border border-[#334155]"
+                className="w-full h-full object-cover rounded-md border border-[#334155]"
                 thumbnail={!useFull}
                 thumbnailWidth={320}
               />
@@ -110,11 +133,40 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
               <span
                 aria-hidden
                 title={`Default: ${nodeData.defaultAssetName ?? ""}`}
-                className="absolute top-1 right-1 px-1 rounded-full bg-black/50 text-[8px] text-yellow-400 leading-tight border border-yellow-400/40"
+                className="absolute top-1 left-1 px-1 rounded-full bg-black/50 text-[8px] text-yellow-400 leading-tight border border-yellow-400/40"
               >
                 ★
               </span>
             )}
+            {/* Aspect-ratio toggle. Shows on hover over the thumbnail; the
+                active option is highlighted in brand-pink. Clicks call
+                `stopPropagation` so toggling doesn't also select the node
+                or open the config panel. */}
+            <div className="absolute top-1 right-1 flex gap-0.5 bg-black/60 backdrop-blur-sm rounded px-0.5 py-0.5 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+              {(["1:1", "16:9"] as const).map((ar) => {
+                const isActive = aspectRatio === ar
+                return (
+                  <button
+                    key={ar}
+                    type="button"
+                    aria-label={`Set thumbnail aspect ratio to ${ar}`}
+                    aria-pressed={isActive}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      updateNodeData(id, { defaultAssetAspectRatio: ar })
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className={`text-[9px] leading-none px-1.5 py-0.5 rounded ${
+                      isActive
+                        ? "bg-[#ff0073] text-white"
+                        : "text-slate-300 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {ar}
+                  </button>
+                )
+              })}
+            </div>
             {status === "running" && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md">
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
@@ -122,14 +174,27 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         ) : (
-          <div className="w-full h-[110px] rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-[#3b4155]">
+          <div
+            className="w-full rounded-md border border-dashed border-[#334155] flex items-center justify-center text-[10px] text-[#3b4155]"
+            style={{ aspectRatio: aspectRatioCss }}
+          >
             {status === "running" ? <Loader2 className="w-5 h-5 animate-spin" /> : "portrait preview"}
           </div>
         )}
       </div>
 
-      {/* Name + style/gender */}
-      <div className="px-2.5 pt-1.5 text-[12px] font-semibold text-slate-200 truncate">{nodeData.characterName || "Unnamed"}</div>
+      {/* Name + variant label. When a default asset is set we show
+          "Character • Variant" below the thumbnail so users can see at a
+          glance which asset is acting as the canvas default — addressing
+          the "show the name and selected default in the node, not just the
+          image" request. The variant suffix is brand-pink to match other
+          accent UI; suffix is omitted for canonical/portrait defaults. */}
+      <div className="px-2.5 pt-1.5 text-[12px] font-semibold text-slate-200 truncate">
+        {nodeData.characterName || "Unnamed"}
+        {showVariantSuffix && (
+          <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
+        )}
+      </div>
       <div className="px-2.5 pb-2 text-[9px] text-slate-600">{`${nodeData.style} · ${nodeData.gender}`}</div>
 
       {/* Asset badge row */}

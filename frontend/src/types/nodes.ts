@@ -2784,6 +2784,12 @@ export type CharacterNodeData = {
   // never sent to `saveCharacter`.
   readonly defaultAssetUrl?: string
   readonly defaultAssetName?: string
+  // Per-canvas-node crop aspect ratio for the default-asset thumbnail. Frontend-only
+  // (lives on node data, not the DB row). Defaults to "1:1" — most existing characters
+  // are square portraits. Toggling to "16:9" switches the image container's
+  // `aspect-ratio` CSS while keeping `object-fit: cover` so the image still crops
+  // cleanly without stretching.
+  readonly defaultAssetAspectRatio?: "16:9" | "1:1"
 }
 
 // --- Object Node Data ---
