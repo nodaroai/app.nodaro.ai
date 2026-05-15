@@ -836,3 +836,10 @@ export type {
 export { stripExportContent } from "./workflow-export.js"
 
 export { validateSubWorkflowRoutes } from "./sub-workflow-validation.js"
+
+export {
+  characterMentionSlug,
+  parseCharacterMentionToken,
+  findCharacterMentionTokens,
+} from "./character-mention-slug.js"
+export type { CharacterMentionTokenInfo } from "./character-mention-slug.js"
