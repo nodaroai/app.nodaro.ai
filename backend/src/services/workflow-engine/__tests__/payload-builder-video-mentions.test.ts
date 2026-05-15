@@ -47,24 +47,23 @@ function charNode(id: string, extra: Record<string, unknown> = {}): SimpleNode {
 }
 
 // ---------------------------------------------------------------------------
-// Video payload-builder: @-mention resolution
+// Video payload-builder: @-mention resolution + per-character default fallback
 //
-// The image-side mention resolution (Task 5) goes through `buildImagePrompt`'s
-// Phase 0. The video paths use their own prompt assembly so they need to call
-// `resolveCharacterMentions` directly via `resolveVideoPromptMentions`.
-//
-// These tests verify the wiring: prompts get the @-token replaced + the right
-// asset URL gets slotted into the worker payload's image fields.
+// Frontend / backend parity contract:
+//   - wired character @-mentioned (`@kira:1:smile`) → ONLY variant URL in
+//     payload (no canonical auto-attach).
+//   - wired character NOT @-mentioned → canonical URL in payload + strong
+//     identity directive in prompt (pre-mention "wire it = use it" behavior).
 // ---------------------------------------------------------------------------
 
 describe("payload-builder video paths: @-mention resolution", () => {
   const jobId = "job-1"
 
   describe("image-to-video", () => {
-    it("resolves @kira:smile and slots the variant URL into imageUrl when no upstream image is wired", () => {
+    it("resolves @kira:1:smile and slots the variant URL into imageUrl when no upstream image is wired", () => {
       const character = charNode("char-1")
       const i2v = node("i2v-1", "image-to-video", {
-        prompt: "@kira:smile dances in a forest",
+        prompt: "@kira:1:smile dances in a forest",
         provider: "kling",
       })
       const nodes = [character, i2v]
@@ -86,15 +85,17 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // The prompt now has "Kira" instead of the literal token.
       const prompt = result.payload.prompt as string
       expect(prompt).toContain("Kira")
-      expect(prompt).not.toMatch(/@kira:smile\b/)
+      expect(prompt).not.toMatch(/@kira:1:smile\b/)
       // Canonical description ride-along (first mention emits the long bio).
       expect(prompt).toContain("auburn shoulder-length hair")
+      // Numeric index from the typed slug surfaces in the directive.
+      expect(prompt).toContain("Image 1 (Kira)")
     })
 
     it("preserves upstream imageUrl and routes the mention URL into referenceImageUrls", () => {
       const character = charNode("char-1")
       const i2v = node("i2v-1", "image-to-video", {
-        prompt: "@kira:smile pose in the rain",
+        prompt: "@kira:1:smile pose in the rain",
         provider: "kling",
       })
       const nodes = [character, i2v]
@@ -117,16 +118,47 @@ describe("payload-builder video paths: @-mention resolution", () => {
       const refs = result.payload.referenceImageUrls as string[] | undefined
       expect(refs).toBeDefined()
       expect(refs).toContain("https://r2/kira-smile.png")
+      // Canonical NOT attached because the character was @-mentioned.
+      expect(refs).not.toContain("https://r2/kira-portrait.png")
     })
 
-    it("leaves prompt body untouched and produces no extra refs when there are no mentions", () => {
+    it("falls back to canonical URL when character is wired but not @-mentioned (parity with frontend)", () => {
       const character = charNode("char-1")
       const i2v = node("i2v-1", "image-to-video", {
-        prompt: "a dog runs through a park",
+        prompt: "a calm forest at dawn",
         provider: "kling",
       })
       const nodes = [character, i2v]
       const edges = [edge("char-1", "i2v-1")]
+      // No upstream image — only the character is wired (no @-mention).
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        i2v,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      // Canonical URL fills the missing imageUrl slot (default fallback).
+      expect(result.payload.imageUrl).toBe("https://r2/kira-portrait.png")
+      const prompt = result.payload.prompt as string
+      // Strong directive prepended for the unmentioned wired character.
+      expect(prompt).toContain("Use these characters:")
+      expect(prompt).toContain("auburn shoulder-length hair")
+      expect(prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+      // No literal `@-mention` ever appeared, so the body is unchanged.
+      expect(prompt).toContain("a calm forest at dawn")
+    })
+
+    it("leaves prompt body untouched when there are no mentions AND no wired character", () => {
+      const i2v = node("i2v-1", "image-to-video", {
+        prompt: "a dog runs through a park",
+        provider: "kling",
+      })
+      const nodes = [i2v]
+      const edges: SimpleEdge[] = []
       const inputs: ResolvedInputs = {
         imageUrl: "https://r2/dog.png",
       }
@@ -141,24 +173,17 @@ describe("payload-builder video paths: @-mention resolution", () => {
 
       expect(result.payload.imageUrl).toBe("https://r2/dog.png")
       const prompt = result.payload.prompt as string
-      // Original prompt body is preserved (identity-lock clause may be
-      // appended by the unrelated identityLockClause path — that's
-      // pre-existing behavior, not our concern).
       expect(prompt.startsWith("a dog runs through a park")).toBe(true)
       // No mention → no "Use these characters:" header.
       expect(prompt).not.toContain("Use these characters:")
-      // No mention-derived reference URL was injected.
-      const refs = result.payload.referenceImageUrls as string[] | undefined
-      expect(refs ?? []).not.toContain("https://r2/kira-smile.png")
-      expect(refs ?? []).not.toContain("https://r2/kira-portrait.png")
     })
   })
 
   describe("text-to-video", () => {
-    it("resolves @kira (canonical) and appends the canonical URL to referenceImageUrls", () => {
+    it("resolves @kira:1 (no variant) and appends the canonical URL to referenceImageUrls", () => {
       const character = charNode("char-1")
       const t2v = node("t2v-1", "text-to-video", {
-        prompt: "@kira walks across a desert",
+        prompt: "@kira:1 walks across a desert",
         provider: "kling",
       })
       const nodes = [character, t2v]
@@ -176,11 +201,11 @@ describe("payload-builder video paths: @-mention resolution", () => {
       expect(result.jobName).toBe("text-to-video")
       const refs = result.payload.referenceImageUrls as string[] | undefined
       expect(refs).toBeDefined()
-      // @kira (no variant) → canonical / defaultAssetUrl.
+      // @kira:1 (no variant) → canonical / defaultAssetUrl.
       expect(refs).toContain("https://r2/kira-portrait.png")
       const prompt = result.payload.prompt as string
       expect(prompt).toContain("Kira")
-      expect(prompt).not.toMatch(/@kira\b/)
+      expect(prompt).not.toMatch(/@kira:1\b/)
       // Canonical description directive should be prepended.
       expect(prompt).toContain("auburn shoulder-length hair")
     })
@@ -188,7 +213,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
     it("dedupes mention URLs against existing referenceImageUrls", () => {
       const character = charNode("char-1")
       const t2v = node("t2v-1", "text-to-video", {
-        prompt: "@kira:smile in a meadow",
+        prompt: "@kira:1:smile in a meadow",
         provider: "kling",
       })
       const nodes = [character, t2v]
@@ -210,13 +235,39 @@ describe("payload-builder video paths: @-mention resolution", () => {
       const occurrences = refs!.filter((u) => u === "https://r2/kira-smile.png").length
       expect(occurrences).toBe(1)
     })
+
+    it("falls back to canonical URL when character is wired but not @-mentioned", () => {
+      const character = charNode("char-1")
+      const t2v = node("t2v-1", "text-to-video", {
+        prompt: "a desert at sunset",
+        provider: "kling",
+      })
+      const nodes = [character, t2v]
+      const edges = [edge("char-1", "t2v-1")]
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        t2v,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      const refs = result.payload.referenceImageUrls as string[] | undefined
+      expect(refs).toBeDefined()
+      expect(refs).toContain("https://r2/kira-portrait.png")
+      const prompt = result.payload.prompt as string
+      expect(prompt).toContain("Use these characters:")
+      expect(prompt).toContain("auburn shoulder-length hair")
+    })
   })
 
   describe("video-to-video", () => {
-    it("leaves unknown @mystery as a literal token (no character wired with that slug)", () => {
+    it("leaves unknown @mystery:1 as a literal token (no character wired with that slug)", () => {
       const character = charNode("char-1") // slug "kira"
       const v2v = node("v2v-1", "video-to-video", {
-        prompt: "@mystery person appears suddenly",
+        prompt: "@mystery:1 person appears suddenly",
         provider: "wan",
         videoUrl: "https://r2/source.mp4",
       })
@@ -235,15 +286,16 @@ describe("payload-builder video paths: @-mention resolution", () => {
       expect(result.jobName).toBe("video-to-video")
       const prompt = result.payload.prompt as string
       // Unknown slug stays literal — no expansion happened.
-      expect(prompt).toContain("@mystery")
-      // No mention URL → referenceImageUrl stays undefined.
-      expect(result.payload.referenceImageUrl).toBeUndefined()
+      expect(prompt).toContain("@mystery:1")
+      // Wired Kira (unmentioned) falls back to canonical — fills the single
+      // v2v reference slot since no upstream ref was provided.
+      expect(result.payload.referenceImageUrl).toBe("https://r2/kira-portrait.png")
     })
 
-    it("resolves @kira:smile and routes the URL into v2v's single referenceImageUrl slot", () => {
+    it("resolves @kira:1:smile and routes the URL into v2v's single referenceImageUrl slot", () => {
       const character = charNode("char-1")
       const v2v = node("v2v-1", "video-to-video", {
-        prompt: "transform the figure into @kira:smile",
+        prompt: "transform the figure into @kira:1:smile",
         provider: "wan",
         videoUrl: "https://r2/source.mp4",
       })
@@ -264,7 +316,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // Prompt token was replaced regardless of slot capacity.
       const prompt = result.payload.prompt as string
       expect(prompt).toContain("Kira")
-      expect(prompt).not.toMatch(/@kira:smile\b/)
+      expect(prompt).not.toMatch(/@kira:1:smile\b/)
     })
   })
 })
