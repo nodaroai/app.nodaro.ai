@@ -28,6 +28,7 @@ import type {
   RemoveBackgroundData,
   GenerateMaskData,
   CharacterDefinition,
+  CharacterNodeData,
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
@@ -43,7 +44,7 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug } from "@nodaro/shared"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
@@ -272,10 +273,71 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       })
     }
 
-    // Wired upstream nodes (sources from @xyflow incoming edges)
+    // Wired upstream nodes (sources from @xyflow incoming edges).
+    // For `character` upstream nodes, expand into a canonical entry plus one
+    // entry per asset variant (expressions / poses / motions / angles / etc.)
+    // so the `@kira` / `@kira-smile` typeahead in the prompt editor sees them.
+    // Mirrors `execute-node.ts` (runtime path).
     for (const s of sources) {
       if (!(s.type in wiredSourceTypeMap)) continue
       const nd = s.nodeData ?? {}
+      if (s.type === "character") {
+        const charData = nd as unknown as CharacterNodeData
+        const charName = charData.characterName || s.label || "Character"
+        const slug = characterMentionSlug(charName)
+        if (slug) {
+          const canonicalUrl =
+            charData.defaultAssetUrl ||
+            charData.sourceImageUrl ||
+            (nd.generatedImageUrl as string) ||
+            (nd.url as string) ||
+            ""
+          if (canonicalUrl) {
+            map.set(s.id, {
+              id: s.id,
+              defaultName: charName,
+              source: "wired-character",
+              description: charData.description,
+              url: canonicalUrl,
+              characterSlug: slug,
+              variantSlug: undefined,
+              characterCanonicalDescription: charData.canonicalDescription ?? null,
+              variantDescription: null,
+              variantDisplayName: "canonical",
+            })
+          }
+          const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
+            expressions: charData.expressions ?? [],
+            poses: charData.poses ?? [],
+            motions: charData.motions ?? [],
+            angles: charData.angles ?? [],
+            bodyAngles: charData.bodyAngles ?? [],
+            lightingVariations: charData.lightingVariations ?? [],
+          }
+          for (const [arrayName, items] of Object.entries(assetArrays)) {
+            for (const item of items) {
+              if (!item.url) continue
+              const variantSlug = characterMentionSlug(item.name)
+              if (!variantSlug) continue
+              const variantId = `${s.id}_${arrayName}_${variantSlug}`
+              map.set(variantId, {
+                id: variantId,
+                defaultName: `${charName} / ${item.name}`,
+                source: "wired-character",
+                description: item.description ?? charData.description,
+                url: item.url,
+                characterSlug: slug,
+                variantSlug,
+                characterCanonicalDescription: charData.canonicalDescription ?? null,
+                variantDescription: item.description ?? null,
+                variantDisplayName: item.name,
+              })
+            }
+          }
+          continue
+        }
+        // Unnamed character — fall through to generic upstream handling.
+      }
       const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
       map.set(s.id, {
@@ -287,15 +349,79 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       })
     }
 
-    // Attached character definitions (from character-definitions store)
+    // Attached character definitions (from character-definitions store).
+    // When the definition backs a canvas Character node (matched by characterDbId),
+    // expand into canonical + per-variant entries so autocomplete sees variants
+    // even though there's no wired edge.
     for (const c of attachedChars) {
       if (c.type !== "reference" || !c.referenceImageUrl) continue
+      const source = charCategorySource[c.category ?? ""] ?? "wired-character"
+      const slug = source === "wired-character" ? characterMentionSlug(c.name) : ""
+      const matchingCharNode = source === "wired-character" && slug
+        ? nodes.find((n) => {
+            if (n.type !== "character") return false
+            const nd = n.data as CharacterNodeData
+            return nd.characterDbId === c.id
+          })
+        : undefined
+      if (matchingCharNode && slug) {
+        const charData = matchingCharNode.data as CharacterNodeData
+        const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl
+        if (canonicalUrl) {
+          map.set(`char_${c.id}`, {
+            id: `char_${c.id}`,
+            defaultName: c.name,
+            source,
+            description: c.description ?? charData.description,
+            url: canonicalUrl,
+            characterSlug: slug,
+            variantSlug: undefined,
+            characterCanonicalDescription: charData.canonicalDescription ?? null,
+            variantDescription: null,
+            variantDisplayName: "canonical",
+          })
+        }
+        const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
+          expressions: charData.expressions ?? [],
+          poses: charData.poses ?? [],
+          motions: charData.motions ?? [],
+          angles: charData.angles ?? [],
+          bodyAngles: charData.bodyAngles ?? [],
+          lightingVariations: charData.lightingVariations ?? [],
+        }
+        for (const [arrayName, items] of Object.entries(assetArrays)) {
+          for (const item of items) {
+            if (!item.url) continue
+            const variantSlug = characterMentionSlug(item.name)
+            if (!variantSlug) continue
+            const variantId = `char_${c.id}_${arrayName}_${variantSlug}`
+            map.set(variantId, {
+              id: variantId,
+              defaultName: `${c.name} / ${item.name}`,
+              source,
+              description: item.description ?? c.description ?? charData.description,
+              url: item.url,
+              characterSlug: slug,
+              variantSlug,
+              characterCanonicalDescription: charData.canonicalDescription ?? null,
+              variantDescription: item.description ?? null,
+              variantDisplayName: item.name,
+            })
+          }
+        }
+        continue
+      }
+      // No matching canvas node — emit single canonical entry. For character
+      // sources, still populate characterSlug so `@<name>` resolves.
       map.set(`char_${c.id}`, {
         id: `char_${c.id}`,
         defaultName: c.name,
-        source: charCategorySource[c.category ?? ""] ?? "wired-character",
+        source,
         description: c.description,
         url: c.referenceImageUrl,
+        ...(slug
+          ? { characterSlug: slug, variantSlug: undefined, variantDisplayName: "canonical" }
+          : {}),
       })
     }
 
@@ -314,7 +440,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       if (!seen.has(id)) ordered.push(entry)
     }
     return ordered
-  }, [data.referenceImageUrls, data.referenceImageOrder, sources, attachedChars])
+  }, [data.referenceImageUrls, data.referenceImageOrder, sources, attachedChars, nodes])
 
   // Ordered reference-image list for the "@" autocomplete trigger. Derived from
   // connectedReferences so the default label per source is preserved.
@@ -814,10 +940,70 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       })
     }
 
-    // Wired upstream nodes
+    // Wired upstream nodes. For `character` upstreams, expand into canonical +
+    // per-variant entries (expressions / poses / motions / angles / etc.) so the
+    // `@kira` / `@kira-smile` typeahead in the prompt editor sees them. Mirrors
+    // `execute-node.ts` (runtime path).
     for (const s of sources) {
       if (!(s.type in wiredSourceTypeMap)) continue
       const nd = s.nodeData ?? {}
+      if (s.type === "character") {
+        const charData = nd as unknown as CharacterNodeData
+        const charName = charData.characterName || s.label || "Character"
+        const slug = characterMentionSlug(charName)
+        if (slug) {
+          const canonicalUrl =
+            charData.defaultAssetUrl ||
+            charData.sourceImageUrl ||
+            (nd.generatedImageUrl as string) ||
+            (nd.url as string) ||
+            ""
+          if (canonicalUrl) {
+            map.set(s.id, {
+              id: s.id,
+              defaultName: charName,
+              source: "wired-character",
+              description: charData.description,
+              url: canonicalUrl,
+              characterSlug: slug,
+              variantSlug: undefined,
+              characterCanonicalDescription: charData.canonicalDescription ?? null,
+              variantDescription: null,
+              variantDisplayName: "canonical",
+            })
+          }
+          const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
+            expressions: charData.expressions ?? [],
+            poses: charData.poses ?? [],
+            motions: charData.motions ?? [],
+            angles: charData.angles ?? [],
+            bodyAngles: charData.bodyAngles ?? [],
+            lightingVariations: charData.lightingVariations ?? [],
+          }
+          for (const [arrayName, items] of Object.entries(assetArrays)) {
+            for (const item of items) {
+              if (!item.url) continue
+              const variantSlug = characterMentionSlug(item.name)
+              if (!variantSlug) continue
+              const variantId = `${s.id}_${arrayName}_${variantSlug}`
+              map.set(variantId, {
+                id: variantId,
+                defaultName: `${charName} / ${item.name}`,
+                source: "wired-character",
+                description: item.description ?? charData.description,
+                url: item.url,
+                characterSlug: slug,
+                variantSlug,
+                characterCanonicalDescription: charData.canonicalDescription ?? null,
+                variantDescription: item.description ?? null,
+                variantDisplayName: item.name,
+              })
+            }
+          }
+          continue
+        }
+        // Unnamed character — fall through to generic upstream handling.
+      }
       const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
       map.set(s.id, {
@@ -829,20 +1015,83 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       })
     }
 
-    // Attached character definitions
+    // Attached character definitions. When the definition backs a canvas
+    // Character node (matched by characterDbId), expand into canonical +
+    // per-variant entries.
     for (const c of attachedChars) {
       if (c.type !== "reference" || !c.referenceImageUrl) continue
+      const source = charCategorySource[c.category ?? ""] ?? "wired-character"
+      const slug = source === "wired-character" ? characterMentionSlug(c.name) : ""
+      const matchingCharNode = source === "wired-character" && slug
+        ? nodes.find((n) => {
+            if (n.type !== "character") return false
+            const nd = n.data as CharacterNodeData
+            return nd.characterDbId === c.id
+          })
+        : undefined
+      if (matchingCharNode && slug) {
+        const charData = matchingCharNode.data as CharacterNodeData
+        const canonicalUrl = charData.defaultAssetUrl || c.referenceImageUrl || charData.sourceImageUrl
+        if (canonicalUrl) {
+          map.set(`char_${c.id}`, {
+            id: `char_${c.id}`,
+            defaultName: c.name,
+            source,
+            description: c.description ?? charData.description,
+            url: canonicalUrl,
+            characterSlug: slug,
+            variantSlug: undefined,
+            characterCanonicalDescription: charData.canonicalDescription ?? null,
+            variantDescription: null,
+            variantDisplayName: "canonical",
+          })
+        }
+        const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string; readonly description?: string }>> = {
+          expressions: charData.expressions ?? [],
+          poses: charData.poses ?? [],
+          motions: charData.motions ?? [],
+          angles: charData.angles ?? [],
+          bodyAngles: charData.bodyAngles ?? [],
+          lightingVariations: charData.lightingVariations ?? [],
+        }
+        for (const [arrayName, items] of Object.entries(assetArrays)) {
+          for (const item of items) {
+            if (!item.url) continue
+            const variantSlug = characterMentionSlug(item.name)
+            if (!variantSlug) continue
+            const variantId = `char_${c.id}_${arrayName}_${variantSlug}`
+            map.set(variantId, {
+              id: variantId,
+              defaultName: `${c.name} / ${item.name}`,
+              source,
+              description: item.description ?? c.description ?? charData.description,
+              url: item.url,
+              characterSlug: slug,
+              variantSlug,
+              characterCanonicalDescription: charData.canonicalDescription ?? null,
+              variantDescription: item.description ?? null,
+              variantDisplayName: item.name,
+            })
+          }
+        }
+        continue
+      }
+      // No matching canvas node — emit single canonical entry. For character
+      // sources, still populate characterSlug so `@<name>` resolves.
       map.set(`char_${c.id}`, {
         id: `char_${c.id}`,
         defaultName: c.name,
-        source: charCategorySource[c.category ?? ""] ?? "wired-character",
+        source,
         description: c.description,
         url: c.referenceImageUrl,
+        ...(slug
+          ? { characterSlug: slug, variantSlug: undefined, variantDisplayName: "canonical" }
+          : {}),
       })
     }
 
     return Array.from(map.values())
-  }, [data.referenceImageUrl, sources, attachedChars])
+  }, [data.referenceImageUrl, sources, attachedChars, nodes])
 
   // Ordered ref-image list for the `@` autocomplete in PromptEditor.
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
