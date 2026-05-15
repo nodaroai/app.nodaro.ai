@@ -7,6 +7,7 @@
 import { resolveTemplate, applyTemplate } from "./prompt-templates.js"
 import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "./model-constants.js"
 import { getStylePromptHint } from "./style.js"
+import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import type {
   CharacterDef,
   ConnectedReference,
@@ -15,6 +16,79 @@ import type {
   ReferenceSource,
   SceneData,
 } from "./types.js"
+
+/**
+ * Resolve @-mention tokens in a prompt against connected references.
+ * Returns: augmented prompt (with directives prepended + tokens replaced
+ * by character display names) and the set of asset URLs to include as refs.
+ *
+ * Behavior:
+ * - Build two lookup Maps: `bySlug` for canonical entries, `byVariant` for variant entries.
+ * - Iterate tokens left-to-right so directives are emitted in mention order.
+ * - For each token, prefer the variant match when variantSlug present; fall back to canonical.
+ * - `charactersSeen` Set guards the long canonical description to appear AT MOST ONCE
+ *   per character even when the character is mentioned in several tokens.
+ * - Build a `replacements` array (token + offset + replacement display name) and
+ *   apply right-to-left so earlier replacements do not shift later offsets.
+ * - Prepend a "Use these characters:\n…" directive section when any directives were emitted.
+ */
+function resolveCharacterMentions(
+  prompt: string,
+  tokens: readonly CharacterMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+): { prompt: string; additionalUrls: string[] } {
+  const bySlug = new Map<string, ConnectedReference>()
+  const byVariant = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.characterSlug) continue
+    if (!r.variantSlug) {
+      bySlug.set(r.characterSlug, r)
+    } else {
+      byVariant.set(`${r.characterSlug}:${r.variantSlug}`, r)
+    }
+  }
+
+  const additionalUrls: string[] = []
+  const charactersSeen = new Set<string>()
+  const directiveLines: string[] = []
+
+  const replacements: Array<{ token: string; offset: number; replacement: string }> = []
+  for (const t of tokens) {
+    const match = t.variantSlug
+      ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`)
+      : bySlug.get(t.characterSlug)
+    if (!match) continue
+
+    additionalUrls.push(match.url)
+
+    const isFirstMention = !charactersSeen.has(t.characterSlug)
+    charactersSeen.add(t.characterSlug)
+
+    const displayName = bySlug.get(t.characterSlug)?.defaultName ?? t.characterSlug
+    replacements.push({ token: t.token, offset: t.offset, replacement: displayName })
+
+    if (isFirstMention && match.characterCanonicalDescription) {
+      directiveLines.push(`- ${displayName}: ${match.characterCanonicalDescription.trim()}`)
+    }
+    if (t.variantSlug && match.variantDescription) {
+      directiveLines.push(`  (in this image: ${match.variantDescription.trim()})`)
+    }
+  }
+
+  // Apply replacements right-to-left so offsets remain valid.
+  let resolvedPrompt = prompt
+  for (const r of [...replacements].sort((a, b) => b.offset - a.offset)) {
+    resolvedPrompt = resolvedPrompt.slice(0, r.offset)
+      + r.replacement
+      + resolvedPrompt.slice(r.offset + r.token.length)
+  }
+
+  if (directiveLines.length > 0) {
+    resolvedPrompt = `Use these characters:\n${directiveLines.join("\n")}\n\n${resolvedPrompt}`
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls }
+}
 
 export interface BuildImagePromptConfig {
   /** Raw user prompt text */
@@ -61,7 +135,7 @@ export interface BuildImagePromptResult {
  * truncation, and reference image filtering.
  */
 export function buildImagePrompt(config: BuildImagePromptConfig): BuildImagePromptResult {
-  const {
+  let {
     provider,
     style,
     negativePrompt,
@@ -73,6 +147,42 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     connectedReferences,
     identityMeta = [],
   } = config
+
+  // -------------------------------------------------------------------------
+  // Phase 0: resolve @<character-slug>(-<variant-slug>)? tokens.
+  // Runs BEFORE the existing `{image:N}` resolution path. Both coexist:
+  // Phase 0 handles slug-based character mentions; the existing path below
+  // handles `{image:N:label}` tokens for non-character refs.
+  // -------------------------------------------------------------------------
+  if (connectedReferences && connectedReferences.length > 0) {
+    const knownCharacterSlugs = Array.from(
+      new Set(
+        connectedReferences
+          .map((r) => r.characterSlug)
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+      )
+    )
+    if (knownCharacterSlugs.length > 0) {
+      const mentionTokens = findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
+      if (mentionTokens.length > 0) {
+        const resolved = resolveCharacterMentions(
+          config.prompt,
+          mentionTokens,
+          connectedReferences
+        )
+        // Mutate the config locals (NOT the original passed config).
+        config = {
+          ...config,
+          prompt: resolved.prompt,
+          referenceImageUrls: [
+            ...(referenceImageUrls || []),
+            ...resolved.additionalUrls,
+          ].filter((u, i, a) => a.indexOf(u) === i),
+        }
+        referenceImageUrls = config.referenceImageUrls || []
+      }
+    }
+  }
 
   // -------------------------------------------------------------------------
   // New path: rich `connectedReferences` provided. Per-identity directives
