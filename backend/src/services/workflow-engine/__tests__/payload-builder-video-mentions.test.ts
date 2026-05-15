@@ -352,3 +352,127 @@ describe("payload-builder video paths: @-mention resolution", () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Video payload-builder: extra reference images (the `extraRefs` field).
+//
+// Mirrors the frontend `resolveVideoPromptMentions` extras-pass and the
+// shared `buildExtraRefDirectives` (which handles the image side). Orchestrator
+// path must produce the same prompt + URL ordering as a single-node frontend
+// run with the same workflow JSON.
+// ---------------------------------------------------------------------------
+
+describe("payload-builder video paths: extra reference images", () => {
+  const jobId = "job-extras"
+
+  it("appends manual extra refs to referenceImageUrls AND emits 'Image N (reference): …' directive (image-to-video)", () => {
+    const i2v = node("i2v-1", "image-to-video", {
+      prompt: "a moody portrait, slow tilt up",
+      provider: "kling",
+      extraRefs: [
+        { url: "https://r2/look-ref.png", description: "warm cinematic color palette" },
+      ],
+    })
+    const nodes = [i2v]
+    const edges: SimpleEdge[] = []
+    const inputs: ResolvedInputs = { imageUrl: "https://r2/portrait.png" }
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    // imageUrl preserved.
+    expect(result.payload.imageUrl).toBe("https://r2/portrait.png")
+    // Extra URL appended to referenceImageUrls.
+    const refs = result.payload.referenceImageUrls as string[] | undefined
+    expect(refs).toBeDefined()
+    expect(refs).toContain("https://r2/look-ref.png")
+    // Prompt has the dedicated extra-ref bullet.
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain("Image 1 (reference): warm cinematic color palette.")
+  })
+
+  it("pairs character-sourced extras back to canonically-attached character (same subject as Image A)", () => {
+    const character = charNode("char-1")
+    const i2v = node("i2v-1", "image-to-video", {
+      prompt: "outside a coffee shop",
+      provider: "kling",
+      extraRefs: [
+        {
+          url: "https://r2/kira-standing.png",
+          description: "full body, standing, facing right",
+          characterSlug: "kira",
+          variantSlug: "standing",
+          variantDisplayName: "standing",
+        },
+      ],
+    })
+    const nodes = [character, i2v]
+    const edges = [edge("char-1", "i2v-1")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    // Canonical fill — i2v slot 0 = canonical Kira (no @-mention used).
+    expect(result.payload.imageUrl).toBe("https://r2/kira-portrait.png")
+    // Extra URL appended to referenceImageUrls.
+    const refs = result.payload.referenceImageUrls as string[] | undefined
+    expect(refs).toBeDefined()
+    expect(refs).toContain("https://r2/kira-standing.png")
+    // Pair-back directive.
+    const prompt = result.payload.prompt as string
+    expect(prompt).toContain(
+      "Image 2 is the same subject as Image 1, full body, standing, facing right.",
+    )
+  })
+
+  it("emits canonical-style directive for a first-sight character extra (no wired upstream)", () => {
+    const i2v = node("i2v-1", "image-to-video", {
+      prompt: "a beach scene",
+      provider: "kling",
+      extraRefs: [
+        {
+          url: "https://r2/danny.png",
+          description: "hands in pockets, looking right",
+          characterSlug: "danny",
+          variantDisplayName: "canonical",
+        },
+      ],
+    })
+    const nodes = [i2v]
+    const edges: SimpleEdge[] = []
+    const inputs: ResolvedInputs = { imageUrl: "https://r2/beach.png" }
+
+    const result = buildPayload(i2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    expect(result.payload.imageUrl).toBe("https://r2/beach.png")
+    const refs = result.payload.referenceImageUrls as string[] | undefined
+    expect(refs).toContain("https://r2/danny.png")
+    const prompt = result.payload.prompt as string
+    // First sight emits a canonical-style bullet with the description.
+    expect(prompt).toContain("Image 1 (danny) — hands in pockets, looking right")
+  })
+
+  it("propagates extra refs to text-to-video referenceImageUrls", () => {
+    const character = charNode("char-1")
+    const t2v = node("t2v-1", "text-to-video", {
+      prompt: "@kira:1 walks through a snowy street",
+      provider: "kling",
+      extraRefs: [
+        { url: "https://r2/style-ref.png", description: "1970s film look" },
+      ],
+    })
+    const nodes = [character, t2v]
+    const edges = [edge("char-1", "t2v-1")]
+    const inputs: ResolvedInputs = {}
+
+    const result = buildPayload(t2v, jobId, inputs, undefined, { nodes, edges, nodeStates: {} })
+
+    const refs = result.payload.referenceImageUrls as string[] | undefined
+    expect(refs).toBeDefined()
+    expect(refs).toContain("https://r2/style-ref.png")
+    expect(refs).toContain("https://r2/kira-portrait.png")
+    const prompt = result.payload.prompt as string
+    // Numeric ordering: mention takes position 1; extra takes position 2.
+    expect(prompt).toContain("Image 1 (Kira)")
+    expect(prompt).toContain("Image 2 (reference): 1970s film look.")
+  })
+})

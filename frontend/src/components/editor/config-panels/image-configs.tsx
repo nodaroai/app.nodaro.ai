@@ -40,11 +40,12 @@ import { intersectModelOptions } from "@/lib/multi-provider/intersect-model-opti
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
+import { ExtraRefsSection } from "./extra-refs-section"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
@@ -447,8 +448,29 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     for (const [id, entry] of map) {
       if (!seen.has(id)) ordered.push(entry)
     }
+    // User-attached extras — appended after regular refs so they get the
+    // last positional slots, matching the runtime `execute-node.ts` order.
+    // The character-context lookup uses `nodes` instead of `sources` because
+    // upstream might include canvas characters not surfaced in `sources`.
+    const ctxLookup = (slug: string) => {
+      for (const n of nodes) {
+        if (n.type !== "character") continue
+        const cd = n.data as CharacterNodeData
+        const name = cd.characterName || (cd.label as string) || ""
+        if (characterMentionSlug(name) === slug) {
+          return {
+            defaultUsageMode: cd.defaultUsageMode,
+            canonicalDescription: cd.canonicalDescription ?? null,
+            displayName: name,
+          }
+        }
+      }
+      return undefined
+    }
+    const extras = expandExtraRefsToConnectedReferences(data.extraRefs, ctxLookup)
+    for (const e of extras) ordered.push(e)
     return ordered
-  }, [data.referenceImageUrls, data.referenceImageOrder, sources, attachedChars, nodes])
+  }, [data.referenceImageUrls, data.referenceImageOrder, data.extraRefs, sources, attachedChars, nodes])
 
   // Ordered reference-image list for the "@" autocomplete trigger. Derived from
   // connectedReferences so the default label per source is preserved.
@@ -576,6 +598,14 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
+
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
 
       {/* Assets section (characters, locations, objects) — descriptions work for all models */}
       <div className="pt-1">
@@ -1108,8 +1138,27 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       })
     }
 
-    return Array.from(map.values())
-  }, [data.referenceImageUrl, sources, attachedChars, nodes])
+    const base = Array.from(map.values())
+    // User-attached extras — appended after regular refs so they get the
+    // last positional slots, matching the runtime `execute-node.ts` order.
+    const ctxLookup = (slug: string) => {
+      for (const n of nodes) {
+        if (n.type !== "character") continue
+        const cd = n.data as CharacterNodeData
+        const name = cd.characterName || (cd.label as string) || ""
+        if (characterMentionSlug(name) === slug) {
+          return {
+            defaultUsageMode: cd.defaultUsageMode,
+            canonicalDescription: cd.canonicalDescription ?? null,
+            displayName: name,
+          }
+        }
+      }
+      return undefined
+    }
+    const extras = expandExtraRefsToConnectedReferences(data.extraRefs, ctxLookup)
+    return [...base, ...extras]
+  }, [data.referenceImageUrl, data.extraRefs, sources, attachedChars, nodes])
 
   // Ordered ref-image list for the `@` autocomplete in PromptEditor.
   const refImagesForAutocomplete = useMemo<RefImageItem[]>(() => {
@@ -1257,6 +1306,14 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         />
         <p className="text-[10px] text-muted-foreground mt-0.5">Appended to prompt as exclusion guidance</p>
       </MappableField>
+
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
 
       {/* Connected upstream images with ordering */}
       {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (

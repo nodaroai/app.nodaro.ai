@@ -84,6 +84,25 @@ export interface ConnectedReference {
    * (e.g. character-definition-only entries in legacy paths).
    */
   readonly defaultUsageMode?: UsageMode
+  /**
+   * Marks an entry as a user-attached "extra reference image" (see the
+   * `extraRefs` field on Generate/Modify/Image-to-Video/Text-to-Video/Video-to-Video
+   * node data types in the frontend). Extras are auto-attached to the worker
+   * `referenceImageUrls` AND get a dedicated directive line in the assembled
+   * prompt:
+   *   - character-sourced extras of an already-emitted character →
+   *     "Image N is the same subject as Image M, <description>."
+   *   - character-sourced extras of a previously-unseen character →
+   *     a canonical-style directive using the description as the descriptor
+   *   - manual-sourced extras →
+   *     "Image N (reference): <description>."
+   *
+   * The `description` field carries the per-ref free-text the user typed.
+   * Without this marker, character refs with a variantSlug are treated as
+   * autocomplete-only (the legacy behavior — unmentioned variants don't
+   * auto-attach), which is exactly what we DON'T want for explicit extras.
+   */
+  readonly isExtraRef?: boolean
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */

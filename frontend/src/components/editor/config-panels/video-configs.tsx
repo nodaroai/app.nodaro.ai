@@ -46,6 +46,7 @@ import { CameraMotionPicker } from "./camera-motion-picker"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
+import { ExtraRefsSection } from "./extra-refs-section"
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
 
@@ -376,6 +377,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
         />
       </MappableField>
+
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
 
       {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (
         <>
@@ -1018,6 +1027,14 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
+
 
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
@@ -1446,6 +1463,13 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           nodeRefs={nodeRefs}
         />
       </MappableField>
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
