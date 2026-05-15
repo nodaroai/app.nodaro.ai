@@ -24,7 +24,7 @@ import {
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
 import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared"
-import { characterMentionSlug, findCharacterMentionTokens } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
@@ -268,6 +268,46 @@ function expandWiredCharacterRefs(
     }
   }
   return out
+}
+
+/**
+ * Resolve `@kira` / `@kira-smile` mentions in a video-node prompt against
+ * wired Character upstreams.
+ *
+ * Mirrors `buildImagePrompt`'s Phase 0 mention pass but lives outside the
+ * image-specific assembly pipeline (which appends style hints, routes
+ * negative prompts, filters refs by model support, etc.) so it can be
+ * applied to video routes that have their own payload shape.
+ *
+ * Returns the mutated prompt + the asset URLs that the matched mentions
+ * resolved to (canonical for `@kira`, variant for `@kira-smile`). The
+ * caller decides where to slot the URLs into the worker payload (i2v
+ * has both `imageUrl` and `referenceImageUrls`; v2v has only a single
+ * `referenceImageUrl`; t2v has `referenceImageUrls` only).
+ *
+ * When the prompt has no resolvable mentions, returns the input prompt
+ * unchanged and `additionalUrls: []` — callers can branch on `.length`.
+ */
+function resolveVideoPromptMentions(
+  prompt: string | undefined,
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): { prompt: string | undefined; additionalUrls: string[] } {
+  if (!prompt) return { prompt, additionalUrls: [] }
+  const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] }
+  const knownCharSlugs = Array.from(
+    new Set(
+      wiredCharRefs
+        .map((r) => r.characterSlug)
+        .filter((s): s is string => typeof s === "string" && s.length > 0),
+    ),
+  )
+  if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] }
+  const mentionTokens = findCharacterMentionTokens(prompt, knownCharSlugs)
+  if (mentionTokens.length === 0) return { prompt, additionalUrls: [] }
+  const resolved = resolveCharacterMentions(prompt, mentionTokens, wiredCharRefs)
+  return { prompt: resolved.prompt, additionalUrls: resolved.additionalUrls }
 }
 
 // ---------------------------------------------------------------------------
@@ -1266,6 +1306,58 @@ export function buildPayload(
       const isS2 = isSeedance2Provider(provider)
       const s2Mode = isS2 ? ((data.seedance2InputMode as string | undefined) ?? "frames") : "frames"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // Compose the prompt first so we can run @-mention resolution against
+      // it before the worker sees the final string. The mention pass swaps
+      // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
+      // + returns variant/canonical URLs to slot into the worker payload.
+      let i2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
+        const hints: string[] = []
+        if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
+        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+        for (const h of cinematographyHints) hints.push(h)
+        if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
+        else if (hints.length > 0) p = hints.join(", ")
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx)
+      i2vPrompt = i2vMention.prompt
+      // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
+      // (1) `imageUrl` is the primary input frame, (2) `referenceImageUrls`
+      // is an additional pool that maxRefImages-aware providers will consume.
+      // Existing frames/refs from upstream wins — mentions augment, never
+      // overwrite. When no `imageUrl` is wired yet, the first resolved
+      // mention URL fills that slot so a pure "@kira-smile dancing" prompt
+      // gets the smile image as input rather than failing with no image.
+      const i2vBaseImage = (isS2 && s2Mode === "references")
+        ? undefined
+        : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined)
+      const i2vBaseRefs = (isS2 && s2Mode === "frames")
+        ? undefined
+        : resolvedInputs.referenceImageUrls
+      let i2vImageUrl = i2vBaseImage
+      let i2vReferenceImageUrls = i2vBaseRefs
+      if (i2vMention.additionalUrls.length > 0) {
+        let remainingMentionUrls = i2vMention.additionalUrls
+        if (!i2vImageUrl) {
+          i2vImageUrl = remainingMentionUrls[0]
+          remainingMentionUrls = remainingMentionUrls.slice(1)
+        }
+        if (remainingMentionUrls.length > 0) {
+          const existing = i2vReferenceImageUrls ?? []
+          const merged: string[] = []
+          const seen = new Set<string>()
+          for (const u of existing) {
+            if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          }
+          for (const u of remainingMentionUrls) {
+            if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          }
+          i2vReferenceImageUrls = merged
+        }
+      }
       return {
         jobName: "image-to-video",
         queueName: "video-generation",
@@ -1280,21 +1372,10 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          imageUrl: (isS2 && s2Mode === "references") ? undefined : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl),
+          imageUrl: i2vImageUrl,
           endFrameUrl: (isS2 && s2Mode === "references") ? undefined : resolvedInputs.endFrameUrl,
           audioUrl: resolvedInputs.audioUrl,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
-            const hints: string[] = []
-            if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
-            const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-            for (const h of cinematographyHints) hints.push(h)
-            if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
-            else if (hints.length > 0) p = hints.join(", ")
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: i2vPrompt,
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -1316,7 +1397,7 @@ export function buildPayload(
           grokMode: data.grokMode,
           videoSize: data.videoSize,
           removeWatermark: data.removeWatermark,
-          referenceImageUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceImageUrls,
+          referenceImageUrls: i2vReferenceImageUrls,
           referenceVideoUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: (isS2 && s2Mode === "frames") ? undefined : resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
@@ -1335,6 +1416,37 @@ export function buildPayload(
     case "text-to-video": {
       const provider = (data.provider as string) ?? "kling"
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+      // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
+      // t2v has no `imageUrl` slot — all resolved URLs become entries in
+      // `referenceImageUrls`, merged with whatever upstream already provided.
+      let t2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+        {
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          if (cinematographyHints.length > 0) {
+            const joined = cinematographyHints.join(", ")
+            p = p ? `${p}. ${joined}` : joined
+          }
+        }
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx)
+      t2vPrompt = t2vMention.prompt
+      let t2vReferenceImageUrls = resolvedInputs.referenceImageUrls
+      if (t2vMention.additionalUrls.length > 0) {
+        const existing = t2vReferenceImageUrls ?? []
+        const merged: string[] = []
+        const seen = new Set<string>()
+        for (const u of existing) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        }
+        for (const u of t2vMention.additionalUrls) {
+          if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+        }
+        t2vReferenceImageUrls = merged
+      }
       return {
         jobName: "text-to-video",
         queueName: "video-generation",
@@ -1349,19 +1461,7 @@ export function buildPayload(
         ),
         payload: {
           jobId,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
-            {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-              if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
-              }
-            }
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: t2vPrompt,
           provider,
           duration: data.duration,
           mode: data.mode ?? data.kling3Mode,
@@ -1377,7 +1477,7 @@ export function buildPayload(
           seed: data.seed,
           resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
           generateAudio: data.generateAudio,
-          referenceImageUrls: resolvedInputs.referenceImageUrls,
+          referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
@@ -1390,6 +1490,34 @@ export function buildPayload(
 
     case "video-to-video": {
       const v2vProvider = (data.provider as string) ?? "wan"
+      // Resolve @-mentions in the v2v prompt. v2v has only a single
+      // `referenceImageUrl` slot — when an upstream ref image is wired we
+      // keep it; otherwise the first resolved mention URL fills it. Extra
+      // mention URLs beyond slot 0 are dropped: v2v providers (Wan 2.6 et al)
+      // accept exactly one reference image and silently ignore the rest, so
+      // there's no payload key to plumb them into. Prompt token replacement
+      // still happens so the LLM sees the character names regardless.
+      let v2vPrompt: string | undefined = (() => {
+        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+        {
+          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
+          if (cinematographyHints.length > 0) {
+            const joined = cinematographyHints.join(", ")
+            p = p ? `${p}. ${joined}` : joined
+          }
+        }
+        const identityClause = collectIdentityLockClause(node.id, buildCtx)
+        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+        return p
+      })()
+      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx)
+      v2vPrompt = v2vMention.prompt
+      const v2vUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
+        ? resolvedInputs.referenceImageUrls
+        : Array.isArray(resolvedInputs.referenceImageUrls)
+          ? resolvedInputs.referenceImageUrls[0]
+          : undefined) as string | undefined
+      const v2vReferenceImageUrl = v2vUpstreamRef ?? v2vMention.additionalUrls[0]
       return {
         jobName: "video-to-video",
         queueName: "video-generation",
@@ -1397,19 +1525,7 @@ export function buildPayload(
         payload: {
           jobId,
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
-          prompt: (() => {
-            let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
-            {
-              const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-              if (cinematographyHints.length > 0) {
-                const joined = cinematographyHints.join(", ")
-                p = p ? `${p}. ${joined}` : joined
-              }
-            }
-            const identityClause = collectIdentityLockClause(node.id, buildCtx)
-            if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
-          })(),
+          prompt: v2vPrompt,
           provider: v2vProvider,
           duration: data.v2vDuration as string | undefined,
           resolution: data.v2vResolution as string | undefined,
@@ -1417,7 +1533,7 @@ export function buildPayload(
           multiShots: data.multiShots as boolean | undefined,
           aspectRatio: data.aspectRatio as string | undefined,
           seed: data.seed as number | undefined,
-          referenceImageUrl: (typeof resolvedInputs.referenceImageUrls === "string" ? resolvedInputs.referenceImageUrls : Array.isArray(resolvedInputs.referenceImageUrls) ? resolvedInputs.referenceImageUrls[0] : undefined) as string | undefined,
+          referenceImageUrl: v2vReferenceImageUrl,
           negativePrompt: data.negativePrompt as string | undefined,
           videoEditDuration: data.videoEditDuration as string | undefined,
           audioSetting: data.audioSetting as string | undefined,
