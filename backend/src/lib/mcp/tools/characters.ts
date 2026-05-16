@@ -15,19 +15,30 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
 /**
  * Character platform tools.
  *
- * Two read-only discovery tools (`list_characters` / `get_character`) plus a
- * full set of lifecycle + studio-operation tools that mirror the REST
- * surface: `create_character` / `update_character` / `delete_character` /
- * `restore_character` / `approve_portrait` / `recaption_character` /
- * `generate_character_motion`. Portrait + variant-asset generation already
- * live as verb tools in `verbs-clo.ts::generate_character` (kind=main/asset)
- * so we don't duplicate those — character motion is split out because the
- * underlying route has its own LLM-augmentation path and credit profile.
+ * Two read-only discovery tools (`list_characters` / `get_character`) plus
+ * the creative + reversible-write subset of the REST surface:
+ * `create_character` / `update_character` / `approve_portrait` /
+ * `recaption_character` / `generate_character_motion`. Portrait + variant-
+ * asset generation already live as verb tools in
+ * `verbs-clo.ts::generate_character` (kind=main/asset) so we don't duplicate
+ * those — character motion is split out because the underlying route has
+ * its own LLM-augmentation path and credit profile.
+ *
+ * INTENTIONAL OMISSIONS: `delete_character` and `restore_character` are
+ * NOT exposed via MCP. Destructive (or destructive-adjacent) operations
+ * driven by an LLM are dangerous — prompt injection or hallucination can
+ * trigger them unexpectedly, and the LLM doesn't always have the user
+ * context to make those calls safely. Users still archive + restore
+ * through REST (`DELETE /v1/characters/:id`, `POST /v1/characters/:id/restore`)
+ * — those are explicit user actions, not LLM-driven. The same principle
+ * applies to any future tool addition: MCP exposes creation, modification,
+ * and generation (all reversible); deletion, restoration, and permanent
+ * state changes stay REST/SDK/CLI only.
  *
  * Scope gates:
  *   - `assets:read` — list_characters, get_character
- *   - `assets:write` — create_character, update_character, delete_character,
- *     restore_character, approve_portrait, recaption_character
+ *   - `assets:write` — create_character, update_character, approve_portrait,
+ *     recaption_character
  *   - `workflows:execute` — generate_character_motion (it produces an i2v
  *     job that consumes credits, same gate as other generation verbs)
  *
@@ -442,75 +453,16 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
     },
   )
 
-  // ── delete_character (soft) ──
-  server.registerTool(
-    "delete_character",
-    {
-      title: "Delete Character (Soft)",
-      description:
-        "Soft-delete a character (sets `deleted_at`). The row is hidden from " +
-        "`list_characters` but still loadable by id via `get_character` — " +
-        "canvas nodes pointing at the row keep working. Use `restore_character` " +
-        "to un-archive. This is a non-destructive archive; permanent deletion " +
-        "is UI-only by design.",
-      inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: true },
-    },
-    async (args) => {
-      const { error } = await supabase
-        .from("characters")
-        .update({
-          deleted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", args.id)
-        .eq("user_id", session.userId)
-      if (error) return err(`Error: ${error.message}`)
-      return okText(`Archived character ${args.id}. Restore via restore_character.`, {
-        id: args.id,
-        archived: true,
-      })
-    },
-  )
-
-  // ── restore_character ──
-  server.registerTool(
-    "restore_character",
-    {
-      title: "Restore Character",
-      description:
-        "Un-archive a soft-deleted character. If the original name now " +
-        "collides with another active character, the server auto-suffixes " +
-        '"(restored)" and returns the effective name in `name`.',
-      inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async (args) => {
-      if (!fastify) {
-        return err(
-          "restore_character is not available in this server build (no Fastify instance).",
-        )
-      }
-      const res = await fastify.inject({
-        method: "POST",
-        url: `/v1/characters/${encodeURIComponent(args.id)}/restore`,
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
-        payload: { userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      let parsed: { id?: string; name?: string } | null = null
-      try {
-        parsed = JSON.parse(res.body) as { id?: string; name?: string }
-      } catch {
-        /* fall through */
-      }
-      const id = parsed?.id ?? args.id
-      const name = parsed?.name ?? ""
-      return okText(`Restored character "${name}" (id ${id}).`, { id, name })
-    },
-  )
+  // NOTE: `delete_character` and `restore_character` are INTENTIONALLY NOT
+  // exposed via MCP. Destructive operations driven by an LLM are risky —
+  // even a soft delete is hard to undo without context the LLM doesn't have,
+  // and prompt injection / hallucination can trigger them unexpectedly.
+  // Users (and SDK/CLI integrations on their behalf) can still archive +
+  // restore through the REST surface (`DELETE /v1/characters/:id`,
+  // `POST /v1/characters/:id/restore`) — those are explicit user actions,
+  // not LLM-driven. Keep this comment so future tool additions remember the
+  // boundary: MCP exposes creation / generation / modification (reversible),
+  // never deletion / restoration / permanent state changes.
 
   // ── approve_portrait ──
   server.registerTool(

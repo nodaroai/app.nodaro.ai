@@ -15,7 +15,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:execute` | `run_workflow`, `generate_character_motion` |
 | `jobs:read` | `list_jobs`, `get_job` |
 | `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
-| `assets:write` | `favorite_asset`, `create_character`, `update_character`, `delete_character`, `restore_character`, `approve_portrait`, `recaption_character` |
+| `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character` |
 | `generation:write` | All generation verbs (`generate_image`, `generate_video`, etc.) |
 
 ---
@@ -527,29 +527,26 @@ omitted fields are left untouched.
 call as `expected_updated_at`. If the row changed since you read it the call
 returns an error instead of overwriting.
 
-### `delete_character`
+### Destructive operations — intentionally NOT exposed via MCP
 
-Soft-deletes a character (sets `deleted_at`). The row is hidden from
-`list_characters` but still loadable via `get_character` — canvas nodes
-referencing it keep working. Use `restore_character` to un-archive.
+`delete_character` and `restore_character` are **not** available through
+the MCP surface. Destructive (or destructive-adjacent) operations driven
+by an LLM are dangerous — prompt injection or hallucination can trigger
+them unexpectedly, and the LLM doesn't always have the user context to
+make those calls safely.
 
-**Scope:** `assets:write`
+To archive or restore a character, use the REST API, SDK, or CLI directly
+— those are explicit user actions, not LLM-driven:
 
-**Input:** `{ id: <uuid> }`
+| Surface | How |
+|---------|-----|
+| REST | `DELETE /v1/characters/:id` (archive) / `POST /v1/characters/:id/restore` |
+| SDK | `client.characters.delete(id)` / `client.characters.restore(id)` |
+| CLI | `nodaro characters delete <id>` / `nodaro characters restore <id>` |
 
-**Response:** `{ id, archived: true }` in structured content.
-
-### `restore_character`
-
-Un-archives a soft-deleted character. If the original name now collides
-with another active character the server auto-suffixes `"(restored)"` and
-returns the effective name.
-
-**Scope:** `assets:write`
-
-**Input:** `{ id: <uuid> }`
-
-**Response:** `{ id, name }` in structured content.
+The same principle applies to every MCP tool family: MCP exposes
+creation, modification, and generation (all reversible); deletion,
+restoration, and permanent state changes stay REST/SDK/CLI only.
 
 ### `approve_portrait`
 

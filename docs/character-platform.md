@@ -256,10 +256,18 @@ To see archived rows: `list({ archived: true })` (REST: `?archived=true`).
 To un-archive: `POST /v1/characters/:id/restore`. If the name now collides
 with another active row, the server auto-suffixes `"(restored)"`.
 
+| Surface | Delete (archive) | Restore |
+|---|---|---|
+| REST | `DELETE /v1/characters/:id` | `POST /v1/characters/:id/restore` |
+| SDK | `client.characters.delete(id)` | `client.characters.restore(id)` |
+| CLI | `nodaro characters delete <id>` | `nodaro characters restore <id>` |
+| MCP | **Not exposed** (LLM-driven destruction is unsafe) | **Not exposed** |
+
 Permanent deletion is intentionally NOT exposed through any programmatic
 surface. The archive view in the editor (`/library/characters`) is the only
-place a user can permanently destroy a character row. SDK / MCP / CLI
-delete calls are always soft.
+place a user can permanently destroy a character row. REST / SDK / CLI
+delete calls are always soft; the MCP surface intentionally omits delete
+and restore entirely so an LLM cannot trigger them.
 
 ## Pricing notes
 

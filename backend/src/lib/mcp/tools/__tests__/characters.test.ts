@@ -528,59 +528,12 @@ describe("update_character tool", () => {
   })
 })
 
-// ── delete_character (soft) ─────────────────────────────────────────────────
-
-describe("delete_character tool", () => {
-  it("soft-deletes by setting deleted_at and scoping by user_id", async () => {
-    const builder = buildChain({ data: null, error: null })
-    fromMock.mockReturnValue(builder)
-
-    const server = buildServer()
-    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
-    const result = await callTool(server, "delete_character", { id: KIRA_ID })
-
-    expect(result.isError).toBeUndefined()
-    expect(result.structuredContent?.archived).toBe(true)
-    const updateMock = builder.update as ReturnType<typeof vi.fn>
-    const patch = updateMock.mock.calls[0][0] as Record<string, unknown>
-    expect(patch.deleted_at).toEqual(expect.any(String))
-    expect(patch.updated_at).toEqual(expect.any(String))
-    const eqMock = builder.eq as ReturnType<typeof vi.fn>
-    expect(eqMock).toHaveBeenCalledWith("user_id", "u1")
-    expect(eqMock).toHaveBeenCalledWith("id", KIRA_ID)
-  })
-
-  it("surfaces supabase errors", async () => {
-    fromMock.mockReturnValue(buildChain({ data: null, error: { message: "boom" } }))
-    const server = buildServer()
-    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
-    const result = await callTool(server, "delete_character", { id: KIRA_ID })
-    expect(result.isError).toBe(true)
-    expect(result.content[0]?.text).toContain("boom")
-  })
-})
-
-// ── restore_character ───────────────────────────────────────────────────────
-
-describe("restore_character tool", () => {
-  it("proxies to /v1/characters/:id/restore via fastify.inject", async () => {
-    const fastify = Fastify()
-    let received: Record<string, unknown> | undefined
-    fastify.post("/v1/characters/:id/restore", async (req) => {
-      received = req.body as Record<string, unknown>
-      return { id: KIRA_ID, name: "Kira" }
-    })
-
-    const server = buildServer()
-    registerCharacterTools({ server, session: writeSession(), fastify })
-    const result = await callTool(server, "restore_character", { id: KIRA_ID })
-
-    expect(result.isError).toBeUndefined()
-    expect(result.structuredContent?.id).toBe(KIRA_ID)
-    expect(result.structuredContent?.name).toBe("Kira")
-    expect(received?.userId).toBe("u1")
-  })
-})
+// ── destructive tools are intentionally NOT exposed via MCP ─────────────────
+//
+// `delete_character` and `restore_character` are explicitly absent from the
+// MCP surface — destructive (or destructive-adjacent) operations driven by an
+// LLM are too risky. Users still archive + restore through REST/SDK/CLI; see
+// `scope gating` block below for the actual absence assertions.
 
 // ── approve_portrait ────────────────────────────────────────────────────────
 
@@ -711,8 +664,6 @@ describe("scope gating", () => {
     expect(names.has("get_character")).toBe(true)
     expect(names.has("create_character")).toBe(false)
     expect(names.has("update_character")).toBe(false)
-    expect(names.has("delete_character")).toBe(false)
-    expect(names.has("restore_character")).toBe(false)
     expect(names.has("approve_portrait")).toBe(false)
     expect(names.has("recaption_character")).toBe(false)
     expect(names.has("generate_character_motion")).toBe(false)
@@ -725,8 +676,6 @@ describe("scope gating", () => {
     const names = new Set(tools.map((t) => t.name))
     expect(names.has("create_character")).toBe(true)
     expect(names.has("update_character")).toBe(true)
-    expect(names.has("delete_character")).toBe(true)
-    expect(names.has("restore_character")).toBe(true)
     expect(names.has("approve_portrait")).toBe(true)
     expect(names.has("recaption_character")).toBe(true)
     expect(names.has("generate_character_motion")).toBe(false)
@@ -737,5 +686,21 @@ describe("scope gating", () => {
     registerCharacterTools({ server, session: executeSession(), fastify: Fastify() })
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).toContain("generate_character_motion")
+  })
+
+  // Destructive-tool safety net — `delete_character` and `restore_character`
+  // must NEVER appear in the MCP surface, regardless of session scopes. An
+  // LLM with `assets:write` + `workflows:execute` is the broadest scope
+  // possible and still must not see them. Adding these tools back would
+  // break this test.
+  it("destructive tools (delete_character / restore_character) are absent under EVERY session", async () => {
+    for (const session of [readSession(), writeSession(), executeSession()]) {
+      const server = buildServer()
+      registerCharacterTools({ server, session, fastify: Fastify() })
+      const tools = await listTools(server)
+      const names = new Set(tools.map((t) => t.name))
+      expect(names.has("delete_character")).toBe(false)
+      expect(names.has("restore_character")).toBe(false)
+    }
   })
 })
