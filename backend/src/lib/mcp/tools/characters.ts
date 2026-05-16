@@ -87,13 +87,13 @@ interface CharacterRow {
 }
 
 /**
- * Row shape returned by `list_characters` — same identity fields as the
- * detail row, but the bulky JSONB asset arrays are replaced by SQL-side
- * counts (`*_count: number | null`). Pulling the full arrays just to call
- * `.length` is wasteful at scale; Postgres' `jsonb_array_length` lets us
- * project the count directly so we never copy the asset payloads over the
- * wire for the list view. Null arrays project to `null` from the function
- * call — `summarize()` coalesces those to 0.
+ * Row shape returned by `list_characters`. Includes the full JSONB asset
+ * arrays — we COUNT them in JS via `summarize()` because PostgREST's `select=`
+ * syntax does not support inline SQL function calls like
+ * `jsonb_array_length(coalesce(col, '[]'::jsonb))`. A previous optimization
+ * attempted that and produced a 400 "failed to parse select" error from
+ * PostgREST. Future optimization: add a Postgres RPC that returns the
+ * count-only summary and call it via `supabase.rpc()`.
  */
 interface CharacterSummaryRow {
   id: string
@@ -105,32 +105,18 @@ interface CharacterSummaryRow {
   gender: string | null
   style: string | null
   base_outfit: string | null
-  expressions_count: number | null
-  poses_count: number | null
-  motions_count: number | null
-  angles_count: number | null
-  body_angles_count: number | null
-  lighting_variations_count: number | null
+  expressions: AssetEntry[] | null
+  poses: AssetEntry[] | null
+  motions: AssetEntry[] | null
+  angles: AssetEntry[] | null
+  body_angles: AssetEntry[] | null
+  lighting_variations: AssetEntry[] | null
   updated_at: string
 }
 
-/**
- * Summary projection used by `list_characters`. PostgREST's projection syntax
- * `<alias>:<expr>` runs `jsonb_array_length(coalesce(col, '[]'::jsonb))` on
- * each asset bucket so we get the count without dragging the whole array over
- * the wire. The `coalesce(...)` ensures NULL JSONB columns project to 0
- * (`jsonb_array_length(NULL)` would be NULL otherwise — `summarize()` still
- * defends against that with `?? 0` for safety).
- */
 const SUMMARY_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, " +
-  "expressions_count:jsonb_array_length(coalesce(expressions, '[]'::jsonb)), " +
-  "poses_count:jsonb_array_length(coalesce(poses, '[]'::jsonb)), " +
-  "motions_count:jsonb_array_length(coalesce(motions, '[]'::jsonb)), " +
-  "angles_count:jsonb_array_length(coalesce(angles, '[]'::jsonb)), " +
-  "body_angles_count:jsonb_array_length(coalesce(body_angles, '[]'::jsonb)), " +
-  "lighting_variations_count:jsonb_array_length(coalesce(lighting_variations, '[]'::jsonb)), " +
-  "updated_at"
+  "expressions, poses, motions, angles, body_angles, lighting_variations, updated_at"
 
 const FULL_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, created_at, updated_at"
@@ -168,14 +154,12 @@ function summarize(row: CharacterSummaryRow) {
     style: row.style,
     baseOutfit: row.base_outfit,
     assetCounts: {
-      // jsonb_array_length(NULL) projects to NULL — coalesce defensively to 0
-      // so the output shape is stable for clients that read the counts.
-      expressions: row.expressions_count ?? 0,
-      poses: row.poses_count ?? 0,
-      motions: row.motions_count ?? 0,
-      angles: row.angles_count ?? 0,
-      bodyAngles: row.body_angles_count ?? 0,
-      lightingVariations: row.lighting_variations_count ?? 0,
+      expressions: (row.expressions ?? []).length,
+      poses: (row.poses ?? []).length,
+      motions: (row.motions ?? []).length,
+      angles: (row.angles ?? []).length,
+      bodyAngles: (row.body_angles ?? []).length,
+      lightingVariations: (row.lighting_variations ?? []).length,
     },
     updatedAt: row.updated_at,
   }
