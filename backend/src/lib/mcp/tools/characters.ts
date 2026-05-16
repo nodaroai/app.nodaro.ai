@@ -1,12 +1,17 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { CHARACTER_STYLES } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
-import { registerTask } from "../tasks.js"
-import { parseJobId, errorResult } from "./_verb-helpers.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -81,13 +86,59 @@ interface CharacterRow {
   created_at: string
 }
 
+/**
+ * Row shape returned by `list_characters` — same identity fields as the
+ * detail row, but the bulky JSONB asset arrays are replaced by SQL-side
+ * counts (`*_count: number | null`). Pulling the full arrays just to call
+ * `.length` is wasteful at scale; Postgres' `jsonb_array_length` lets us
+ * project the count directly so we never copy the asset payloads over the
+ * wire for the list view. Null arrays project to `null` from the function
+ * call — `summarize()` coalesces those to 0.
+ */
+interface CharacterSummaryRow {
+  id: string
+  name: string
+  description: string | null
+  canonical_description: string | null
+  source_image_url: string | null
+  seed_prompt: string | null
+  gender: string | null
+  style: string | null
+  base_outfit: string | null
+  expressions_count: number | null
+  poses_count: number | null
+  motions_count: number | null
+  angles_count: number | null
+  body_angles_count: number | null
+  lighting_variations_count: number | null
+  updated_at: string
+}
+
+/**
+ * Summary projection used by `list_characters`. PostgREST's projection syntax
+ * `<alias>:<expr>` runs `jsonb_array_length(coalesce(col, '[]'::jsonb))` on
+ * each asset bucket so we get the count without dragging the whole array over
+ * the wire. The `coalesce(...)` ensures NULL JSONB columns project to 0
+ * (`jsonb_array_length(NULL)` would be NULL otherwise — `summarize()` still
+ * defends against that with `?? 0` for safety).
+ */
 const SUMMARY_COLUMNS =
-  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, updated_at"
+  "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, " +
+  "expressions_count:jsonb_array_length(coalesce(expressions, '[]'::jsonb)), " +
+  "poses_count:jsonb_array_length(coalesce(poses, '[]'::jsonb)), " +
+  "motions_count:jsonb_array_length(coalesce(motions, '[]'::jsonb)), " +
+  "angles_count:jsonb_array_length(coalesce(angles, '[]'::jsonb)), " +
+  "body_angles_count:jsonb_array_length(coalesce(body_angles, '[]'::jsonb)), " +
+  "lighting_variations_count:jsonb_array_length(coalesce(lighting_variations, '[]'::jsonb)), " +
+  "updated_at"
 
 const FULL_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, created_at, updated_at"
 
-const STYLE_ENUM = ["realistic", "anime", "3d-pixar", "illustration"] as const
+// Single source of truth lives in `@nodaro/shared/entity-prompts` —
+// reused here so the MCP tool surface, the SDK, the CLI, and the route's
+// Zod schema all stay in lockstep when a new style is added.
+const STYLE_ENUM = CHARACTER_STYLES
 
 function err(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true as const }
@@ -105,7 +156,7 @@ function okText(text: string, structuredContent?: Record<string, unknown>) {
     : { content: [{ type: "text" as const, text }] }
 }
 
-function summarize(row: CharacterRow) {
+function summarize(row: CharacterSummaryRow) {
   return {
     id: row.id,
     name: row.name,
@@ -117,12 +168,14 @@ function summarize(row: CharacterRow) {
     style: row.style,
     baseOutfit: row.base_outfit,
     assetCounts: {
-      expressions: (row.expressions ?? []).length,
-      poses: (row.poses ?? []).length,
-      motions: (row.motions ?? []).length,
-      angles: (row.angles ?? []).length,
-      bodyAngles: (row.body_angles ?? []).length,
-      lightingVariations: (row.lighting_variations ?? []).length,
+      // jsonb_array_length(NULL) projects to NULL — coalesce defensively to 0
+      // so the output shape is stable for clients that read the counts.
+      expressions: row.expressions_count ?? 0,
+      poses: row.poses_count ?? 0,
+      motions: row.motions_count ?? 0,
+      angles: row.angles_count ?? 0,
+      bodyAngles: row.body_angles_count ?? 0,
+      lightingVariations: row.lighting_variations_count ?? 0,
     },
     updatedAt: row.updated_at,
   }
@@ -248,7 +301,12 @@ function registerReadTools({ server, session }: RegisterCharacterToolsOpts): voi
         .order("updated_at", { ascending: false })
         .limit(limit)
       if (error) return err(`Error: ${error.message}`)
-      const rows = (data ?? []) as CharacterRow[]
+      // PostgREST's TS inference can't represent the `alias:expr` projection
+      // we use for the SQL-side `jsonb_array_length` counts (it falls back to
+      // a generic-error union), so we route the cast through `unknown` to
+      // assert the runtime shape. The `CharacterSummaryRow` type above
+      // documents that exact shape — verified by the `assetCounts` test path.
+      const rows = (data ?? []) as unknown as CharacterSummaryRow[]
       return ok({ data: rows.map(summarize) })
     },
   )
@@ -395,25 +453,6 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
     async (args) => {
-      // Concurrency guard — only fire when caller opts in.
-      if (args.expected_updated_at !== undefined) {
-        const { data: existing, error: lookupErr } = await supabase
-          .from("characters")
-          .select("id, updated_at")
-          .eq("id", args.id)
-          .eq("user_id", session.userId)
-          .maybeSingle()
-        if (lookupErr) return err(`Error: ${lookupErr.message}`)
-        if (!existing) return err("Character not found")
-        if (
-          (existing as Record<string, unknown>).updated_at !== args.expected_updated_at
-        ) {
-          return err(
-            "Character was modified since you last read it. Fetch the latest with get_character and retry.",
-          )
-        }
-      }
-
       const patch: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       }
@@ -428,21 +467,43 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
         return err("Nothing to update — pass at least one field besides id.")
       }
 
-      const { data, error } = await supabase
+      // Optimistic concurrency control is folded into the UPDATE: when
+      // `expected_updated_at` is supplied, we add `.eq("updated_at", X)` so the
+      // UPDATE only fires if the row's `updated_at` still matches the caller's
+      // snapshot. That's atomic — no pre-SELECT round-trip and no race window
+      // between the read and the write. `.maybeSingle()` returns `data: null`
+      // (no error) when the row was filtered out (stale token OR row removed),
+      // and we distinguish the two by looking at `null` here.
+      let query = supabase
         .from("characters")
         .update(patch)
         .eq("id", args.id)
         .eq("user_id", session.userId)
+      if (args.expected_updated_at !== undefined) {
+        query = query.eq("updated_at", args.expected_updated_at)
+      }
+      const { data, error } = await query
         .select("id, name, updated_at")
-        .single()
-      if (error || !data) {
-        if (error?.code === "23505") {
+        .maybeSingle()
+      if (error) {
+        if (error.code === "23505") {
           return err(
             `A character named "${args.name ?? ""}" already exists. Pick a different name.`,
           )
         }
-        if (error?.code === "PGRST116") return err("Character not found")
-        return err(`Error: ${error?.message ?? "Failed to update character"}`)
+        return err(`Error: ${error.message ?? "Failed to update character"}`)
+      }
+      if (!data) {
+        // No row matched the UPDATE. With expected_updated_at, the most likely
+        // cause is a stale token (concurrent write); without it, the row
+        // doesn't exist or isn't owned by the caller. Surface both as
+        // actionable messages.
+        if (args.expected_updated_at !== undefined) {
+          return err(
+            "Character was modified since you last read it. Fetch the latest with get_character and retry.",
+          )
+        }
+        return err("Character not found")
       }
       const row = data as { id: string; name: string; updated_at: string }
       return okText(`Updated character "${row.name}" (id ${row.id}).`, {
@@ -657,14 +718,21 @@ function registerGenerationTools({
       })
       if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
       const jobId = parseJobId(res.body)
-      if (!jobId) {
-        return err(`Submitted but couldn't parse job_id: ${res.body}`)
-      }
-      registerTask({ taskId: jobId, userId: session.userId, kind: "video" })
-      return okText(
-        `Character motion started (id ${jobId}). Poll via get_job until status=completed.`,
-        { jobId },
-      )
+      if (!jobId) return parseFailure(res.body)
+      // Use the shared video-widget helper so the iframe receives the live
+      // progress payload (jobId + prompt + model). The previous hand-rolled
+      // `registerTask + okText` path worked but skipped the
+      // `structuredContent` wiring — the widget rendered an empty card.
+      return jobResultWithWidget({
+        jobId,
+        label: "character motion",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.motion_prompt,
+          model: args.provider ?? "kling",
+        },
+      })
     },
   )
 }
