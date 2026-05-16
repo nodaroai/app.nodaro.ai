@@ -130,6 +130,21 @@ nodaro executions cancel <id> [--mode cancelled|stopping]
 # Jobs
 nodaro jobs get <id>
 nodaro jobs cancel <id>
+
+# Characters — full lifecycle + studio operations
+nodaro characters list [--project <id>] [--archived] [--json]
+nodaro characters get <id>
+nodaro characters create --name <name> [--description "..."] [--style realistic|anime|3d-pixar|illustration] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
+nodaro characters update <id> [--name <name>] [--description "..."] [--style ...]
+nodaro characters delete <id>
+nodaro characters restore <id>
+nodaro characters duplicate <id> [--node-id <id>] [--project <id>]
+nodaro characters usage <id>
+nodaro characters generate <id> [--seed-prompt "..."] [--count 1|2|4] [--provider <p>] [--watch]
+nodaro characters generate-asset <id> --asset-type expressions|poses|lighting|angles|headAngles|bodyAngles|custom --variant <name> [--provider <p>] [--watch]
+nodaro characters generate-motion <id> --motion-prompt "..." [--provider <p>] [--watch]
+nodaro characters approve-portrait <id> --job <jobId>
+nodaro characters recaption <id>
 ```
 
 ## Param syntax

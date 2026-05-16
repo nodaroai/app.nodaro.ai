@@ -1,33 +1,52 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
+import { config } from "../../config.js"
+import { registerTask } from "../tasks.js"
+import { parseJobId, errorResult } from "./_verb-helpers.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
+const writeGate: ToolGate = { required: ["assets:write"] }
+const executeGate: ToolGate = { required: ["workflows:execute"] }
 
 /**
- * Character discovery tools.
+ * Character platform tools.
  *
- * `list_characters` returns a flat list of the caller's characters with
- * summary fields (portrait URL, asset counts, identity copy). `get_character`
- * returns the full record for one character — every expression/pose/motion/
- * angle/lighting variant with its URL, plus reference photos and per-variant
- * real-life-ref URLs.
+ * Two read-only discovery tools (`list_characters` / `get_character`) plus
+ * the creative + reversible-write subset of the REST surface:
+ * `create_character` / `update_character` / `approve_portrait` /
+ * `recaption_character` / `generate_character_motion`. Portrait + variant-
+ * asset generation already live as verb tools in
+ * `verbs-clo.ts::generate_character` (kind=main/asset) so we don't duplicate
+ * those — character motion is split out because the underlying route has
+ * its own LLM-augmentation path and credit profile.
  *
- * Use case: an LLM client asks the user to "make a photo of Kira smiling and
- * Shira laughing at the park". The model calls `list_characters` → finds
- * matching names → calls `get_character` on each → picks the expression URLs
- * that match "smile" / "laugh" → passes those URLs as references to
- * `generate_image` / `image_to_image`.
+ * INTENTIONAL OMISSIONS: `delete_character` and `restore_character` are
+ * NOT exposed via MCP. Destructive (or destructive-adjacent) operations
+ * driven by an LLM are dangerous — prompt injection or hallucination can
+ * trigger them unexpectedly, and the LLM doesn't always have the user
+ * context to make those calls safely. Users still archive + restore
+ * through REST (`DELETE /v1/characters/:id`, `POST /v1/characters/:id/restore`)
+ * — those are explicit user actions, not LLM-driven. The same principle
+ * applies to any future tool addition: MCP exposes creation, modification,
+ * and generation (all reversible); deletion, restoration, and permanent
+ * state changes stay REST/SDK/CLI only.
  *
- * Both tools are scoped to `session.userId` (the service-role client bypasses
- * RLS, so the manual `user_id` filter is the only thing keeping characters
- * from leaking across users). Archived characters (`deleted_at IS NOT NULL`)
- * are excluded — they're not selectable in the editor either.
+ * Scope gates:
+ *   - `assets:read` — list_characters, get_character
+ *   - `assets:write` — create_character, update_character, approve_portrait,
+ *     recaption_character
+ *   - `workflows:execute` — generate_character_motion (it produces an i2v
+ *     job that consumes credits, same gate as other generation verbs)
  *
- * Gated on `assets:read` (same scope as the gallery; characters are
- * reference-asset entities).
+ * All tools are scoped to `session.userId`. Mutation tools that touch
+ * `characters` rows write via Supabase service-role with a manual
+ * `user_id` filter; tools that fire generation routes go through
+ * `fastify.inject()` with the internal-orchestrator-secret so the auth
+ * middleware accepts `userId` from the request body.
  */
 
 interface AssetEntry {
@@ -68,6 +87,8 @@ const SUMMARY_COLUMNS =
 const FULL_COLUMNS =
   "id, name, description, canonical_description, source_image_url, seed_prompt, gender, style, base_outfit, expressions, poses, motions, angles, body_angles, lighting_variations, reference_photos, real_life_refs_by_variant, created_at, updated_at"
 
+const STYLE_ENUM = ["realistic", "anime", "3d-pixar", "illustration"] as const
+
 function err(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true as const }
 }
@@ -76,6 +97,12 @@ function ok(payload: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
   }
+}
+
+function okText(text: string, structuredContent?: Record<string, unknown>) {
+  return structuredContent
+    ? { content: [{ type: "text" as const, text }], structuredContent }
+    : { content: [{ type: "text" as const, text }] }
 }
 
 function summarize(row: CharacterRow) {
@@ -125,7 +152,64 @@ function detail(row: CharacterRow) {
   }
 }
 
-export function registerCharacterTools(server: McpServer, session: McpSession): void {
+/**
+ * Synthetic canvas node id used when an MCP caller creates a character
+ * without supplying one. The `characters.node_id` column is `NOT NULL` to
+ * keep editor-flow rows linkable to a React Flow node, but MCP-managed
+ * characters never have a canvas node so we stamp a fixed sentinel — the
+ * editor's library list ignores `node_id` entirely.
+ */
+const MCP_SYNTHETIC_NODE_ID = "mcp-managed"
+
+export interface RegisterCharacterToolsOpts {
+  server: McpServer
+  session: McpSession
+  /**
+   * Optional Fastify instance for tools that proxy through `/v1/...` routes
+   * (`approve_portrait`, `recaption_character`, `generate_character_motion`).
+   * When omitted, those tools won't register — primarily for the
+   * `list_characters`-only test path.
+   */
+  fastify?: FastifyInstance
+}
+
+/**
+ * Discriminate between an `RegisterCharacterToolsOpts` object and the legacy
+ * positional-args call (`McpServer`, `McpSession`).
+ *
+ * The MCP SDK's `McpServer` exposes a private `.server` accessor; testing
+ * `"server" in x` is therefore truthy for raw McpServer instances. We instead
+ * check for the presence of `.session`, which only exists on the opts object.
+ */
+function isOpts(x: unknown): x is RegisterCharacterToolsOpts {
+  return (
+    typeof x === "object" &&
+    x !== null &&
+    "session" in (x as Record<string, unknown>) &&
+    "server" in (x as Record<string, unknown>)
+  )
+}
+
+export function registerCharacterTools(
+  serverOrOpts: McpServer | RegisterCharacterToolsOpts,
+  session?: McpSession,
+): void {
+  // Backwards-compatible call site: registerCharacterTools(server, session).
+  // The new call site passes a single options object including `fastify`.
+  const opts: RegisterCharacterToolsOpts = isOpts(serverOrOpts)
+    ? serverOrOpts
+    : { server: serverOrOpts, session: session as McpSession }
+
+  registerReadTools(opts)
+  registerWriteTools(opts)
+  registerGenerationTools(opts)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// READ tools — list + get (assets:read)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function registerReadTools({ server, session }: RegisterCharacterToolsOpts): void {
   if (!passesGate(session, readGate)) return
 
   server.registerTool(
@@ -196,6 +280,391 @@ export function registerCharacterTools(server: McpServer, session: McpSession): 
       if (error) return err(`Error: ${error.message}`)
       if (!data) return err("Character not found")
       return ok({ data: detail(data as CharacterRow) })
+    },
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WRITE tools — create/update/delete/restore + approve_portrait + recaption
+// (assets:write)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
+  const { server, session, fastify } = opts
+  if (!passesGate(session, writeGate)) return
+
+  // ── create_character ──
+  server.registerTool(
+    "create_character",
+    {
+      title: "Create Character",
+      description:
+        "Create a new character row with basic identity fields (name + optional " +
+        "description, gender, style, baseOutfit, seedPrompt). Returns the new " +
+        "character id. The character has no portrait yet — call " +
+        "`generate_character` (kind='main') next to produce one, then " +
+        "`approve_portrait` to anchor it. Use this when the user wants to add " +
+        "a new named character to their library before generating any media.",
+      inputSchema: {
+        name: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe(
+            "Display name for the character (e.g. 'Kira'). Must be unique among the user's active characters; conflicts return a name_taken error.",
+          ),
+        description: z.string().max(2000).optional(),
+        gender: z.string().max(50).optional(),
+        style: z.enum(STYLE_ENUM).optional(),
+        base_outfit: z.string().max(1000).optional(),
+        seed_prompt: z
+          .string()
+          .max(2000)
+          .optional()
+          .describe("Short prompt fragment that scaffolds the canonical portrait."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        user_id: session.userId,
+        node_id: MCP_SYNTHETIC_NODE_ID,
+        name: args.name,
+        description: args.description ?? null,
+        gender: args.gender ?? null,
+        style: args.style ?? null,
+        base_outfit: args.base_outfit ?? null,
+        seed_prompt: args.seed_prompt ?? null,
+        expressions: [],
+        poses: [],
+        lighting_variations: [],
+        angles: [],
+        body_angles: [],
+        motions: [],
+        reference_photos: [],
+        real_life_refs_by_variant: {},
+        updated_at: new Date().toISOString(),
+      }
+      const { data, error } = await supabase
+        .from("characters")
+        .insert(payload)
+        .select("id, name")
+        .single()
+      if (error || !data) {
+        if (error?.code === "23505") {
+          return err(
+            `A character named "${args.name}" already exists. Pick a different name.`,
+          )
+        }
+        return err(`Error: ${error?.message ?? "Failed to create character"}`)
+      }
+      const row = data as { id: string; name: string }
+      return okText(
+        `Created character "${row.name}" (id ${row.id}). Next: call generate_character(kind='main', name=${JSON.stringify(row.name)}, attachToCharacterId=${JSON.stringify(row.id)}) to produce a portrait.`,
+        { id: row.id, name: row.name },
+      )
+    },
+  )
+
+  // ── update_character ──
+  server.registerTool(
+    "update_character",
+    {
+      title: "Update Character",
+      description:
+        "Update an existing character's identity fields. Only the fields you " +
+        "supply get written — omitted fields are not touched. Pass " +
+        "`expected_updated_at` (from `get_character`) to enable optimistic " +
+        "concurrency control: the update fails with a conflict error if the " +
+        "row changed since you last read it.",
+      inputSchema: {
+        id: z.string().uuid(),
+        name: z.string().min(1).max(200).optional(),
+        description: z.string().max(2000).optional(),
+        gender: z.string().max(50).optional(),
+        style: z.enum(STYLE_ENUM).optional(),
+        base_outfit: z.string().max(1000).optional(),
+        seed_prompt: z.string().max(2000).optional(),
+        expected_updated_at: z
+          .string()
+          .optional()
+          .describe(
+            "Optimistic concurrency token (the `updatedAt` from get_character). When provided and stale, the call returns a conflict error.",
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      // Concurrency guard — only fire when caller opts in.
+      if (args.expected_updated_at !== undefined) {
+        const { data: existing, error: lookupErr } = await supabase
+          .from("characters")
+          .select("id, updated_at")
+          .eq("id", args.id)
+          .eq("user_id", session.userId)
+          .maybeSingle()
+        if (lookupErr) return err(`Error: ${lookupErr.message}`)
+        if (!existing) return err("Character not found")
+        if (
+          (existing as Record<string, unknown>).updated_at !== args.expected_updated_at
+        ) {
+          return err(
+            "Character was modified since you last read it. Fetch the latest with get_character and retry.",
+          )
+        }
+      }
+
+      const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      }
+      if (args.name !== undefined) patch.name = args.name
+      if (args.description !== undefined) patch.description = args.description
+      if (args.gender !== undefined) patch.gender = args.gender
+      if (args.style !== undefined) patch.style = args.style
+      if (args.base_outfit !== undefined) patch.base_outfit = args.base_outfit
+      if (args.seed_prompt !== undefined) patch.seed_prompt = args.seed_prompt
+
+      if (Object.keys(patch).length === 1) {
+        return err("Nothing to update — pass at least one field besides id.")
+      }
+
+      const { data, error } = await supabase
+        .from("characters")
+        .update(patch)
+        .eq("id", args.id)
+        .eq("user_id", session.userId)
+        .select("id, name, updated_at")
+        .single()
+      if (error || !data) {
+        if (error?.code === "23505") {
+          return err(
+            `A character named "${args.name ?? ""}" already exists. Pick a different name.`,
+          )
+        }
+        if (error?.code === "PGRST116") return err("Character not found")
+        return err(`Error: ${error?.message ?? "Failed to update character"}`)
+      }
+      const row = data as { id: string; name: string; updated_at: string }
+      return okText(`Updated character "${row.name}" (id ${row.id}).`, {
+        id: row.id,
+        name: row.name,
+        updated_at: row.updated_at,
+      })
+    },
+  )
+
+  // NOTE: `delete_character` and `restore_character` are INTENTIONALLY NOT
+  // exposed via MCP. Destructive operations driven by an LLM are risky —
+  // even a soft delete is hard to undo without context the LLM doesn't have,
+  // and prompt injection / hallucination can trigger them unexpectedly.
+  // Users (and SDK/CLI integrations on their behalf) can still archive +
+  // restore through the REST surface (`DELETE /v1/characters/:id`,
+  // `POST /v1/characters/:id/restore`) — those are explicit user actions,
+  // not LLM-driven. Keep this comment so future tool additions remember the
+  // boundary: MCP exposes creation / generation / modification (reversible),
+  // never deletion / restoration / permanent state changes.
+
+  // ── approve_portrait ──
+  server.registerTool(
+    "approve_portrait",
+    {
+      title: "Approve Portrait",
+      description:
+        "Approve a completed `generate_character` job as the character's " +
+        "canonical portrait. Sets `source_image_url` on the character row and " +
+        "fires an LLM caption (Claude Sonnet vision) inline to populate " +
+        "`canonical_description`. Returns the new portrait URL plus the " +
+        "caption. The caption is null on LLM sub-failure (portrait still set; " +
+        "retry with `recaption_character`).",
+      inputSchema: {
+        character_id: z.string().uuid(),
+        candidate_job_id: z
+          .string()
+          .uuid()
+          .describe(
+            "The job id from a completed `generate_character` call. The job must be status=completed and belong to the caller.",
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      if (!fastify) {
+        return err(
+          "approve_portrait is not available in this server build (no Fastify instance).",
+        )
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: `/v1/characters/${encodeURIComponent(args.character_id)}/approve-portrait`,
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload: { candidateJobId: args.candidate_job_id, userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      let parsed: { portraitUrl?: string; canonicalDescription?: string | null } | null = null
+      try {
+        parsed = JSON.parse(res.body) as {
+          portraitUrl?: string
+          canonicalDescription?: string | null
+        }
+      } catch {
+        /* fall through */
+      }
+      return okText(
+        `Approved portrait for character ${args.character_id}.${parsed?.canonicalDescription === null ? " (LLM caption sub-failed — retry with recaption_character.)" : ""}`,
+        {
+          characterId: args.character_id,
+          portraitUrl: parsed?.portraitUrl,
+          canonicalDescription: parsed?.canonicalDescription ?? null,
+        },
+      )
+    },
+  )
+
+  // ── recaption_character ──
+  server.registerTool(
+    "recaption_character",
+    {
+      title: "Recaption Character",
+      description:
+        "Re-run the LLM caption (Claude Sonnet vision) against the " +
+        "character's current portrait and persist the new " +
+        "`canonical_description`. Use after a portrait update or when the " +
+        "previous caption is unsatisfactory. Returns 400 `no_portrait` if no " +
+        "portrait is set; 502 on LLM failure.",
+      inputSchema: { id: z.string().uuid() },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      if (!fastify) {
+        return err(
+          "recaption_character is not available in this server build (no Fastify instance).",
+        )
+      }
+      const res = await fastify.inject({
+        method: "POST",
+        url: `/v1/characters/${encodeURIComponent(args.id)}/llm-caption`,
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload: { userId: session.userId },
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      let parsed: { canonicalDescription?: string } | null = null
+      try {
+        parsed = JSON.parse(res.body) as { canonicalDescription?: string }
+      } catch {
+        /* fall through */
+      }
+      return okText(
+        `Refreshed canonical description for character ${args.id}.`,
+        { id: args.id, canonicalDescription: parsed?.canonicalDescription ?? null },
+      )
+    },
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERATION tools — generate_character_motion (workflows:execute)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function registerGenerationTools({
+  server,
+  session,
+  fastify,
+}: RegisterCharacterToolsOpts): void {
+  if (!passesGate(session, executeGate)) return
+  if (!fastify) return
+
+  server.registerTool(
+    "generate_character_motion",
+    {
+      title: "Generate Character Motion",
+      description:
+        "Animate a character's portrait into a motion clip via image-to-video. " +
+        "Pass `attach_to_character_id` to use the character's anchor portrait " +
+        "as the source frame and auto-attach the resulting clip to the " +
+        "character's `motions[]` bucket on completion. The motion_prompt " +
+        "describes WHAT moves and HOW (e.g. 'slow head turn left, eyes track " +
+        "the camera, soft smile'). Returns the i2v job id — poll via " +
+        "`get_job` until completion. Credit cost depends on the provider.",
+      inputSchema: {
+        motion_prompt: z.string().min(1).max(2000),
+        name: z.string().min(1).max(200),
+        attach_to_character_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "When set, use the character's anchor portrait as source and append the result to the row's motions[].",
+          ),
+        attach_name: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Display name for the motion entry, e.g. 'walking'."),
+        source_image_url: z
+          .string()
+          .url()
+          .optional()
+          .describe(
+            "Override source frame. Required when attach_to_character_id is omitted (no portrait to fall back on).",
+          ),
+        description: z.string().max(1000).optional(),
+        motion_description: z.string().max(500).optional(),
+        gender: z.string().max(50).optional(),
+        style: z.enum(STYLE_ENUM).optional(),
+        base_outfit: z.string().max(1000).optional(),
+        provider: z
+          .string()
+          .optional()
+          .describe("i2v provider. Defaults to 'kling'."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        motionPrompt: args.motion_prompt,
+        name: args.name,
+        userId: session.userId,
+        mcp_client: session.clientName,
+      }
+      if (args.attach_to_character_id) {
+        payload.attachToCharacterId = args.attach_to_character_id
+      }
+      if (args.attach_name) payload.attachName = args.attach_name
+      if (args.source_image_url) payload.sourceImageUrl = args.source_image_url
+      if (args.description) payload.description = args.description
+      if (args.motion_description) payload.motionDescription = args.motion_description
+      if (args.gender) payload.gender = args.gender
+      if (args.style) payload.style = args.style
+      if (args.base_outfit) payload.baseOutfit = args.base_outfit
+      if (args.provider) payload.provider = args.provider
+
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/generate-character-motion",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) {
+        return err(`Submitted but couldn't parse job_id: ${res.body}`)
+      }
+      registerTask({ taskId: jobId, userId: session.userId, kind: "video" })
+      return okText(
+        `Character motion started (id ${jobId}). Poll via get_job until status=completed.`,
+        { jobId },
+      )
     },
   )
 }

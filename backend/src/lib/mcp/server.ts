@@ -108,7 +108,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerApps({ server, session, fastify: opts.fastify })
   registerModels({ server, session, fastify: opts.fastify })
   registerGallery({ server, session, fastify: opts.fastify })
-  registerCharacterTools(server, session)
+  registerCharacterTools({ server, session, fastify: opts.fastify })
   registerUploadTools({ server, session })
   registerFilmDirectorTool(server, session)
 

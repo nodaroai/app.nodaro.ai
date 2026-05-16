@@ -12,10 +12,10 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|----------|
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow` |
+| `workflows:execute` | `run_workflow`, `generate_character_motion` |
 | `jobs:read` | `list_jobs`, `get_job` |
 | `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
-| `assets:write` | `favorite_asset` |
+| `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character` |
 | `generation:write` | All generation verbs (`generate_image`, `generate_video`, etc.) |
 
 ---
@@ -478,5 +478,172 @@ generate_image({
     "https://…/kira-smile.png",
     "https://…/shira-laugh.png"
   ]
+})
+```
+
+### `create_character`
+
+Creates a new character row with identity fields. No portrait — call
+`generate_character` (kind=`"main"`) afterwards. The character is scoped to
+the calling user and visible in the editor under the user's library.
+
+**Scope:** `assets:write`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string (1–200) | Display name; must be unique among the user's active characters. |
+| `description` | string (max 2000) | Identity notes (height, hair, vibe). |
+| `gender` | string (max 50) | Optional. |
+| `style` | enum | `realistic` / `anime` / `3d-pixar` / `illustration`. |
+| `base_outfit` | string (max 1000) | Default wardrobe description. |
+| `seed_prompt` | string (max 2000) | Scaffold prompt for portrait generation. |
+
+**Response:** `{ id, name }` in structured content. A 409
+`A character named "X" already exists.` error is returned on name conflict.
+
+### `update_character`
+
+Patches an existing character. Only the fields you supply are written;
+omitted fields are left untouched.
+
+**Scope:** `assets:write`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | UUID | Required. |
+| `name` | string (1–200) | Optional. 409 on name conflict. |
+| `description` | string (max 2000) | Optional. |
+| `gender` | string (max 50) | Optional. |
+| `style` | enum | Optional. |
+| `base_outfit` | string (max 1000) | Optional. |
+| `seed_prompt` | string (max 2000) | Optional. |
+| `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency. |
+
+**Optimistic concurrency:** pass the `updatedAt` from a prior `get_character`
+call as `expected_updated_at`. If the row changed since you read it the call
+returns an error instead of overwriting.
+
+### Destructive operations — intentionally NOT exposed via MCP
+
+`delete_character` and `restore_character` are **not** available through
+the MCP surface. Destructive (or destructive-adjacent) operations driven
+by an LLM are dangerous — prompt injection or hallucination can trigger
+them unexpectedly, and the LLM doesn't always have the user context to
+make those calls safely.
+
+To archive or restore a character, use the REST API, SDK, or CLI directly
+— those are explicit user actions, not LLM-driven:
+
+| Surface | How |
+|---------|-----|
+| REST | `DELETE /v1/characters/:id` (archive) / `POST /v1/characters/:id/restore` |
+| SDK | `client.characters.delete(id)` / `client.characters.restore(id)` |
+| CLI | `nodaro characters delete <id>` / `nodaro characters restore <id>` |
+
+The same principle applies to every MCP tool family: MCP exposes
+creation, modification, and generation (all reversible); deletion,
+restoration, and permanent state changes stay REST/SDK/CLI only.
+
+### `approve_portrait`
+
+Approves a completed `generate_character` job as the character's canonical
+portrait. Sets `source_image_url` and fires an LLM caption (Claude Sonnet
+vision) inline to populate `canonical_description`.
+
+**Scope:** `assets:write`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `character_id` | UUID | Required. |
+| `candidate_job_id` | UUID | The job id from a completed `generate_character` call. |
+
+**Response:** `{ characterId, portraitUrl, canonicalDescription }` — the
+caption is `null` on LLM sub-failure (portrait still set; retry via
+`recaption_character`).
+
+### `recaption_character`
+
+Re-runs the LLM caption against the character's current portrait and
+persists the new `canonical_description`. Returns 400 `no_portrait` when no
+portrait is set; 502 on LLM failure.
+
+**Scope:** `assets:write`
+
+**Input:** `{ id: <uuid> }`
+
+**Response:** `{ id, canonicalDescription }` in structured content.
+
+### `generate_character_motion`
+
+Animates a character's portrait into a motion clip via image-to-video.
+When `attach_to_character_id` is set, the character's anchor portrait is
+used as the source frame and the resulting clip is appended to the row's
+`motions[]` bucket on completion.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `motion_prompt` | string (1–2000) | Required. What moves and how. |
+| `name` | string (1–200) | Required. Used in the prompt. |
+| `attach_to_character_id` | UUID | Optional. Auto-attach + reuse anchor portrait. |
+| `attach_name` | string (1–200) | Optional. Display name in the motions[] bucket. |
+| `source_image_url` | URL | Required when `attach_to_character_id` is omitted. |
+| `description` | string (max 1000) | Optional. Visual scaffolding. |
+| `motion_description` | string (max 500) | Optional. Tight description of rhythm + feel. |
+| `provider` | string | Defaults to `kling`. |
+
+**Response:** `{ jobId }` in structured content. Poll via `get_job` until
+status=completed.
+
+### Studio walkthrough — create + portrait + asset
+
+```jsonc
+// Step 1 — create the character row
+create_character({
+  name: "Kira",
+  description: "young protagonist with auburn hair",
+  style: "realistic",
+  seed_prompt: "kira portrait, warm natural lighting"
+})
+// → { id: "kira-uuid", name: "Kira" }
+
+// Step 2 — generate 4 portrait candidates auto-attaching to the row
+generate_character({
+  kind: "main",
+  name: "Kira",
+  // count is not exposed to MCP yet — single candidate per call
+})
+// → { content: [text], structuredContent: { jobId: "job-1" } }
+
+// Step 3 — after the job completes, approve the candidate
+approve_portrait({
+  character_id: "kira-uuid",
+  candidate_job_id: "job-1"
+})
+// → { portraitUrl: "https://…/kira-portrait.png", canonicalDescription: "…" }
+
+// Step 4 — layer a smile expression from the portrait
+generate_character({
+  kind: "asset",
+  asset_type: "expressions",
+  variant: "smile",
+  name: "Kira"
+})
+
+// Step 5 — animate the portrait
+generate_character_motion({
+  motion_prompt: "slow head turn left, soft smile",
+  name: "Kira",
+  attach_to_character_id: "kira-uuid",
+  attach_name: "head turn"
 })
 ```

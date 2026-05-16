@@ -1,10 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import Fastify from "fastify"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
+}))
+
+vi.mock("../../../config.js", () => ({
+  config: { INTERNAL_ORCHESTRATOR_SECRET: "test-secret" },
+  hasCredits: () => true,
+  hasAdmin: () => true,
+  isCloud: () => true,
+  isCommunity: () => false,
+  isBusiness: () => false,
 }))
 
 const { registerCharacterTools } = await import("../characters.js")
@@ -42,6 +52,50 @@ function readSession() {
     scopes: ["assets:read"] as Scope[],
     clientName: "Claude",
   })
+}
+
+function writeSession() {
+  return newSession({
+    userId: "u1",
+    scopes: ["assets:read", "assets:write"] as Scope[],
+    clientName: "Claude",
+  })
+}
+
+function executeSession() {
+  return newSession({
+    userId: "u1",
+    scopes: ["assets:read", "assets:write", "workflows:execute"] as Scope[],
+    clientName: "Claude",
+  })
+}
+
+/**
+ * Build a chainable supabase stub mirroring the workflows test helper. Every
+ * builder method returns `this`, terminal `single`/`maybeSingle` resolve
+ * `result`, and the builder itself is awaitable for the non-single path.
+ */
+function buildChain(result: { data: unknown; error: unknown }) {
+  const obj: Record<string, unknown> = {}
+  for (const m of [
+    "select",
+    "eq",
+    "is",
+    "in",
+    "order",
+    "limit",
+    "insert",
+    "update",
+    "filter",
+    "gte",
+    "lt",
+  ]) {
+    obj[m] = vi.fn(() => obj)
+  }
+  obj.maybeSingle = vi.fn().mockResolvedValue(result)
+  obj.single = vi.fn().mockResolvedValue(result)
+  obj.then = (resolve: (v: unknown) => unknown) => Promise.resolve(result).then(resolve)
+  return obj
 }
 
 // ── list_characters ─────────────────────────────────────────────────────────
@@ -350,5 +404,303 @@ describe("get_character tool", () => {
     expect(payload.data.poses).toEqual([])
     expect(payload.data.referencePhotos).toEqual([])
     expect(payload.data.realLifeRefsByVariant).toEqual({})
+  })
+})
+
+// ── create_character ────────────────────────────────────────────────────────
+
+describe("create_character tool", () => {
+  it("inserts a new row scoped to the session user and returns the new id", async () => {
+    const builder = buildChain({ data: { id: KIRA_ID, name: "Kira" }, error: null })
+    fromMock.mockReturnValue(builder)
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "create_character", {
+      name: "Kira",
+      description: "freckled redhead protagonist",
+      gender: "female",
+      style: "realistic",
+      base_outfit: "denim jacket",
+      seed_prompt: "kira portrait",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.id).toBe(KIRA_ID)
+    // The insert payload should carry the session userId, the synthetic
+    // node_id, and the camelCase → snake_case-translated identity fields.
+    const insertMock = builder.insert as ReturnType<typeof vi.fn>
+    expect(insertMock).toHaveBeenCalledTimes(1)
+    const row = insertMock.mock.calls[0][0] as Record<string, unknown>
+    expect(row.user_id).toBe("u1")
+    expect(row.node_id).toBe("mcp-managed")
+    expect(row.name).toBe("Kira")
+    expect(row.description).toBe("freckled redhead protagonist")
+    expect(row.gender).toBe("female")
+    expect(row.style).toBe("realistic")
+    expect(row.base_outfit).toBe("denim jacket")
+    expect(row.seed_prompt).toBe("kira portrait")
+    // Asset buckets default to empty arrays so DAG-aware downstream code
+    // doesn't break on null.
+    expect(row.expressions).toEqual([])
+    expect(row.motions).toEqual([])
+  })
+
+  it("returns a name-taken error on 23505", async () => {
+    fromMock.mockReturnValue(
+      buildChain({ data: null, error: { code: "23505", message: "duplicate" } }),
+    )
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "create_character", { name: "Kira" })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("already exists")
+  })
+
+  it("does NOT register without assets:write scope", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: readSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("create_character")
+  })
+})
+
+// ── update_character ────────────────────────────────────────────────────────
+
+describe("update_character tool", () => {
+  it("writes only the supplied fields and scopes the UPDATE by user_id", async () => {
+    const builder = buildChain({
+      data: { id: KIRA_ID, name: "Kira Updated", updated_at: "2026-05-11T00:00:00Z" },
+      error: null,
+    })
+    fromMock.mockReturnValue(builder)
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "update_character", {
+      id: KIRA_ID,
+      name: "Kira Updated",
+      description: "new visual notes",
+    })
+
+    expect(result.isError).toBeUndefined()
+    const updateMock = builder.update as ReturnType<typeof vi.fn>
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    const patch = updateMock.mock.calls[0][0] as Record<string, unknown>
+    expect(patch.name).toBe("Kira Updated")
+    expect(patch.description).toBe("new visual notes")
+    // Untouched fields are NOT in the patch.
+    expect(patch.gender).toBeUndefined()
+    expect(patch.style).toBeUndefined()
+    // Always set updated_at.
+    expect(patch.updated_at).toEqual(expect.any(String))
+
+    const eqMock = builder.eq as ReturnType<typeof vi.fn>
+    expect(eqMock).toHaveBeenCalledWith("user_id", "u1")
+  })
+
+  it("rejects a payload with no fields besides id", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "update_character", { id: KIRA_ID })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("Nothing to update")
+  })
+
+  it("enforces optimistic concurrency when expected_updated_at is supplied", async () => {
+    // First call (lookup) returns a different updated_at than the caller's
+    // expected — the tool should reject before the UPDATE fires.
+    const lookup = buildChain({
+      data: { id: KIRA_ID, updated_at: "2026-05-11T00:00:00Z" },
+      error: null,
+    })
+    fromMock.mockReturnValueOnce(lookup)
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "update_character", {
+      id: KIRA_ID,
+      name: "Kira Stale",
+      expected_updated_at: "2026-05-10T00:00:00Z",
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("modified since")
+  })
+})
+
+// ── destructive tools are intentionally NOT exposed via MCP ─────────────────
+//
+// `delete_character` and `restore_character` are explicitly absent from the
+// MCP surface — destructive (or destructive-adjacent) operations driven by an
+// LLM are too risky. Users still archive + restore through REST/SDK/CLI; see
+// `scope gating` block below for the actual absence assertions.
+
+// ── approve_portrait ────────────────────────────────────────────────────────
+
+describe("approve_portrait tool", () => {
+  it("proxies to /v1/characters/:id/approve-portrait with candidate_job_id", async () => {
+    const fastify = Fastify()
+    const PORTRAIT_URL = "https://r2/portrait.png"
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/characters/:id/approve-portrait", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { portraitUrl: PORTRAIT_URL, canonicalDescription: "a young protagonist" }
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify })
+    const result = await callTool(server, "approve_portrait", {
+      character_id: KIRA_ID,
+      candidate_job_id: "00000000-0000-0000-0000-000000000099",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.portraitUrl).toBe(PORTRAIT_URL)
+    expect(result.structuredContent?.canonicalDescription).toBe("a young protagonist")
+    expect(received?.candidateJobId).toBe("00000000-0000-0000-0000-000000000099")
+    expect(received?.userId).toBe("u1")
+  })
+
+  it("surfaces the candidate-not-ready 400 from the route", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/characters/:id/approve-portrait", async (_req, reply) => {
+      return reply
+        .status(400)
+        .send({ error: { code: "candidate_not_ready", message: "Candidate not ready" } })
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify })
+    const result = await callTool(server, "approve_portrait", {
+      character_id: KIRA_ID,
+      candidate_job_id: "00000000-0000-0000-0000-000000000099",
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("candidate_not_ready")
+  })
+})
+
+// ── recaption_character ─────────────────────────────────────────────────────
+
+describe("recaption_character tool", () => {
+  it("proxies to /v1/characters/:id/llm-caption", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/characters/:id/llm-caption", async () => {
+      return { canonicalDescription: "fresh caption" }
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify })
+    const result = await callTool(server, "recaption_character", { id: KIRA_ID })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.canonicalDescription).toBe("fresh caption")
+  })
+
+  it("surfaces 502 LLM failures from the route", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/characters/:id/llm-caption", async (_req, reply) => {
+      return reply
+        .status(502)
+        .send({ error: { code: "llm_failure", message: "LLM caption failed" } })
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify })
+    const result = await callTool(server, "recaption_character", { id: KIRA_ID })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("llm_failure")
+  })
+})
+
+// ── generate_character_motion ───────────────────────────────────────────────
+
+describe("generate_character_motion tool", () => {
+  it("proxies to /v1/generate-character-motion with attach + provider fields", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/generate-character-motion", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { jobId: "job-motion-1" }
+    })
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_character_motion", {
+      motion_prompt: "slow head turn",
+      name: "Kira",
+      attach_to_character_id: KIRA_ID,
+      attach_name: "head turn",
+      provider: "kling",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.jobId).toBe("job-motion-1")
+    expect(received?.motionPrompt).toBe("slow head turn")
+    expect(received?.attachToCharacterId).toBe(KIRA_ID)
+    expect(received?.attachName).toBe("head turn")
+    expect(received?.provider).toBe("kling")
+    expect(received?.userId).toBe("u1")
+    expect(received?.mcp_client).toBe("Claude")
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("generate_character_motion")
+  })
+})
+
+// ── scope-gating cross-check ────────────────────────────────────────────────
+
+describe("scope gating", () => {
+  it("read-only session sees list_characters + get_character but no write tools", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: readSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    const names = new Set(tools.map((t) => t.name))
+    expect(names.has("list_characters")).toBe(true)
+    expect(names.has("get_character")).toBe(true)
+    expect(names.has("create_character")).toBe(false)
+    expect(names.has("update_character")).toBe(false)
+    expect(names.has("approve_portrait")).toBe(false)
+    expect(names.has("recaption_character")).toBe(false)
+    expect(names.has("generate_character_motion")).toBe(false)
+  })
+
+  it("write session adds CRUD + studio tools but no generation", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    const names = new Set(tools.map((t) => t.name))
+    expect(names.has("create_character")).toBe(true)
+    expect(names.has("update_character")).toBe(true)
+    expect(names.has("approve_portrait")).toBe(true)
+    expect(names.has("recaption_character")).toBe(true)
+    expect(names.has("generate_character_motion")).toBe(false)
+  })
+
+  it("execute session adds generate_character_motion", async () => {
+    const server = buildServer()
+    registerCharacterTools({ server, session: executeSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).toContain("generate_character_motion")
+  })
+
+  // Destructive-tool safety net — `delete_character` and `restore_character`
+  // must NEVER appear in the MCP surface, regardless of session scopes. An
+  // LLM with `assets:write` + `workflows:execute` is the broadest scope
+  // possible and still must not see them. Adding these tools back would
+  // break this test.
+  it("destructive tools (delete_character / restore_character) are absent under EVERY session", async () => {
+    for (const session of [readSession(), writeSession(), executeSession()]) {
+      const server = buildServer()
+      registerCharacterTools({ server, session, fastify: Fastify() })
+      const tools = await listTools(server)
+      const names = new Set(tools.map((t) => t.name))
+      expect(names.has("delete_character")).toBe(false)
+      expect(names.has("restore_character")).toBe(false)
+    }
   })
 })

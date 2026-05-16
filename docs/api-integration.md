@@ -237,7 +237,120 @@ All errors share the same shape:
 Treat anything in the 5xx range as transient — retry with exponential
 backoff. Treat 4xx as terminal — don't retry without fixing the request.
 
-## 9. SDK alternative (TypeScript)
+## 9. Characters
+
+Character routes let you fully script character creation, identity edits,
+asset generation, and the portrait-approval pipeline that drives Character
+Studio. All routes require an authenticated bearer token (`ndr_…` /
+`ndr_app_…` / Supabase JWT) and are scoped to the calling user.
+
+### Lifecycle
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/characters` | List characters. Query: `projectId`, `archived=true`. |
+| `GET` | `/v1/characters/:id` | Get full character + in-flight portrait/asset jobs. |
+| `POST` | `/v1/characters` | Upsert (create if no `id`, update otherwise). |
+| `POST` | `/v1/characters/:id/duplicate` | Fork to a new row with `(copy)` suffix. |
+| `POST` | `/v1/characters/:id/restore` | Un-archive a soft-deleted character. |
+| `DELETE` | `/v1/characters/:id` | Soft-delete (archive). Restorable. |
+| `GET` | `/v1/characters/:id/usage` | List workflows that reference this character. |
+
+The upsert body is documented in `backend/src/routes/characters.ts`. On
+UPDATE, only the fields you supply are written; omitted keys are left alone
+so partial saves don't clobber asset arrays a worker is concurrently
+appending to.
+
+### Generation
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/generate-character` | Generate 1 / 2 / 4 portrait candidates. |
+| `POST` | `/v1/generate-character-asset` | Generate one expression / pose / angle / lighting variant. |
+| `POST` | `/v1/generate-character-motion` | Animate the character's portrait into a motion clip. |
+
+All generation routes return at minimum `{ jobId }`. `/v1/generate-character`
+additionally returns `{ jobIds: string[] }` so multi-candidate runs are
+trackable. Pass `attachToCharacterId` to auto-attach the result to the
+character row when the job completes — no separate `approve` step needed
+for single-candidate runs.
+
+### Portrait approval
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/characters/:id/approve-portrait` | Set the row's `source_image_url` from a completed candidate job AND fire the LLM caption. |
+| `POST` | `/v1/characters/:id/llm-caption` | Re-run the LLM caption against the current portrait. |
+
+`approve-portrait` body: `{ candidateJobId: <uuid> }`. The candidate must be
+`status="completed"` and belong to the caller. The route returns
+`{ portraitUrl, canonicalDescription }` — `canonicalDescription` is `null` if
+the LLM caption sub-failed (portrait still set; retry via `llm-caption`).
+
+### Worked example: create → generate → approve
+
+```bash
+TOKEN="ndr_..."
+BASE="https://nodaro.example.com"
+
+# 1. Create the character row.
+CHAR=$(curl -s -X POST "$BASE/v1/characters" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "nodeId": "scripted",
+        "name": "Kira",
+        "description": "young protagonist with auburn hair",
+        "style": "realistic",
+        "seedPrompt": "kira portrait, warm natural lighting"
+      }' | jq -r .id)
+
+# 2. Generate 4 portrait candidates, auto-attaching to the row.
+JOB_IDS=$(curl -s -X POST "$BASE/v1/generate-character" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+        \"name\": \"Kira\",
+        \"seedPrompt\": \"kira portrait, warm natural lighting\",
+        \"count\": 4,
+        \"attachToCharacterId\": \"$CHAR\"
+      }" | jq -r '.jobIds | join(" ")')
+
+# 3. Poll each job until done, then approve your favorite.
+for JOB in $JOB_IDS; do
+  while true; do
+    STATUS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+      "$BASE/v1/jobs/$JOB" | jq -r .status)
+    [[ "$STATUS" == "completed" || "$STATUS" == "failed" ]] && break
+    sleep 3
+  done
+done
+
+PICK=$(echo "$JOB_IDS" | awk '{print $1}')
+curl -s -X POST "$BASE/v1/characters/$CHAR/approve-portrait" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"candidateJobId\": \"$PICK\"}" | jq .
+
+# 4. Generate an "smile" expression off the approved portrait.
+curl -s -X POST "$BASE/v1/generate-character-asset" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+        \"name\": \"Kira\",
+        \"assetType\": \"expressions\",
+        \"variant\": \"smile\",
+        \"attachToCharacterId\": \"$CHAR\",
+        \"attachToColumn\": \"expressions\",
+        \"attachName\": \"smile\"
+      }"
+```
+
+A complete walkthrough — including motion generation and using character
+assets as references in downstream image/video calls — is in
+[Character Platform](./character-platform.md).
+
+## 10. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 
