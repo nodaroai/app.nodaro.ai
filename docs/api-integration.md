@@ -248,7 +248,7 @@ Studio. All routes require an authenticated bearer token (`ndr_…` /
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/v1/characters` | List characters. Query: `projectId`, `archived=true`. |
+| `GET` | `/v1/characters` | List characters. Query: `projectId`, `archived=true`, `limit` (default 100, max 500). |
 | `GET` | `/v1/characters/:id` | Get full character + in-flight portrait/asset jobs. |
 | `POST` | `/v1/characters` | Upsert (create if no `id`, update otherwise). |
 | `POST` | `/v1/characters/:id/duplicate` | Fork to a new row with `(copy)` suffix. |

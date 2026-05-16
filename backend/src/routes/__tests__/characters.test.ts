@@ -151,14 +151,15 @@ function mockGetByIdJobs(
 
 /**
  * Build a thenable chain for `supabase.from().select().order().eq().is()` etc.
- * The list route now applies a `deleted_at IS NULL` filter via `.is()` and an
- * optional `.not()` for the archived view, so the chain mock supports those.
+ * The list route now applies a `deleted_at IS NULL` filter via `.is()`, an
+ * optional `.not()` for the archived view, and a `.limit()` for pagination.
  */
 function mockListChain(result: { data: unknown; error: unknown }) {
   const chainable: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     not: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
   }
   // Make chainable thenable so `await query` resolves
   chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => Promise.resolve(result).then(resolve)
@@ -295,6 +296,47 @@ describe("GET /v1/characters", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/characters?archived=maybe",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  // The list route accepts `?limit=N` (Zod coerces from the query string).
+  // Default is 100; cap is 500. Without the limit on the query builder a
+  // misbehaving SDK consumer could drag the whole table across the wire.
+  it("applies the default limit of 100 when ?limit is not supplied", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/characters" })
+
+    expect(res.statusCode).toBe(200)
+    expect(chainable.limit).toHaveBeenCalledWith(100)
+  })
+
+  it("forwards ?limit=N (coerced to number) to the query builder", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/characters?limit=5" })
+
+    expect(res.statusCode).toBe(200)
+    expect(chainable.limit).toHaveBeenCalledWith(5)
+  })
+
+  it("rejects ?limit > 500 with 400 validation_error", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/characters?limit=9999",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects ?limit <= 0 with 400 validation_error", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/characters?limit=0",
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
