@@ -577,3 +577,171 @@ describe("POST /v1/generate-character-asset — v2 behavior", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Per-asset-type aspect-ratio defaults (smart-defaults feature).
+//
+// Spec: resolveCharacterAspectRatio precedence is explicit > nodeOverride >
+//       per-asset-type default. These cases exercise all three layers
+//       end-to-end through the route handler.
+// ---------------------------------------------------------------------------
+describe("POST /v1/generate-character-asset — aspect-ratio defaults", () => {
+  function getAspect(): string {
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    return enqueued.aspectRatio as string
+  }
+
+  it("expressions defaults to 1:1 when nothing is set", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "expressions", variant: "smile", name: "Kira" },
+    })
+    expect(getAspect()).toBe("1:1")
+  })
+
+  it("poses defaults to 9:16 when nothing is set", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "poses", variant: "standing", name: "Kira" },
+    })
+    expect(getAspect()).toBe("9:16")
+  })
+
+  it("headAngles defaults to 3:4 when nothing is set", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "headAngles", variant: "front", name: "Kira" },
+    })
+    expect(getAspect()).toBe("3:4")
+  })
+
+  it("bodyAngles defaults to 9:16 when nothing is set", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "bodyAngles", variant: "front", name: "Kira" },
+    })
+    expect(getAspect()).toBe("9:16")
+  })
+
+  it("lighting defaults to 3:4 when nothing is set", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "lighting", variant: "daylight", name: "Kira" },
+    })
+    expect(getAspect()).toBe("3:4")
+  })
+
+  it("legacy 'angles' alias defaults to 3:4 (same as headAngles)", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { assetType: "angles", variant: "front", name: "Kira" },
+    })
+    expect(getAspect()).toBe("3:4")
+  })
+
+  it("custom asset falls back to the portrait default (3:4)", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "custom",
+        variant: "custom",
+        name: "Kira",
+        userPrompt: "a stoic warrior with a scar",
+      },
+    })
+    expect(getAspect()).toBe("3:4")
+  })
+
+  it("characterNodeAspectRatio overrides the per-asset-type default", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        // expressions defaults to 1:1, but the node toggle says 16:9 → 16:9 wins.
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        characterNodeAspectRatio: "16:9",
+      },
+    })
+    expect(getAspect()).toBe("16:9")
+  })
+
+  it("explicit aspectRatio beats characterNodeAspectRatio and the per-asset-type default", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        // poses defaults to 9:16, node says 16:9, but explicit 1:1 wins.
+        assetType: "poses",
+        variant: "standing",
+        name: "Kira",
+        aspectRatio: "1:1",
+        characterNodeAspectRatio: "16:9",
+      },
+    })
+    expect(getAspect()).toBe("1:1")
+  })
+
+  it("invalid aspectRatio value is rejected by Zod (validation_error)", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: "https://example.com/p.png", canonical_description: null },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-asset",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        assetType: "expressions",
+        variant: "smile",
+        name: "Kira",
+        aspectRatio: "21:9", // outside the 4-value union
+      },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+})

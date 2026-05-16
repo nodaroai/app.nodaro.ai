@@ -426,4 +426,90 @@ describe("POST /v1/generate-character", () => {
       }),
     )
   })
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Per-asset-type aspect-ratio defaults — portrait defaults to 3:4.
+  // Spec: explicit > characterNodeAspectRatio > per-asset-type default.
+  // ───────────────────────────────────────────────────────────────────────
+  describe("aspect-ratio defaults", () => {
+    function getAspect(): string {
+      const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      return enqueued.aspectRatio as string
+    }
+
+    it("portrait defaults to 3:4 when nothing is set", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "young woman" },
+      })
+      expect(getAspect()).toBe("3:4")
+    })
+
+    it("characterNodeAspectRatio overrides the portrait default", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "y w", characterNodeAspectRatio: "16:9" },
+      })
+      expect(getAspect()).toBe("16:9")
+    })
+
+    it("explicit aspectRatio beats characterNodeAspectRatio and the portrait default", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "y w",
+          aspectRatio: "9:16",
+          characterNodeAspectRatio: "16:9",
+        },
+      })
+      expect(getAspect()).toBe("9:16")
+    })
+
+    it("invalid aspectRatio is rejected by Zod (validation_error)", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: { name: "Kira", seedPrompt: "y w", aspectRatio: "21:9" },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+    })
+
+    it("count=2 batch — all jobs in the batch share the same resolved aspectRatio", async () => {
+      const { insert } = mockJobsInsertChain()
+      vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+      await app.inject({
+        method: "POST",
+        url: "/v1/generate-character",
+        headers: { "x-user-id": TEST_USER_ID },
+        payload: {
+          name: "Kira",
+          seedPrompt: "y w",
+          count: 2,
+          characterNodeAspectRatio: "9:16",
+        },
+      })
+      expect(vi.mocked(videoQueue.add)).toHaveBeenCalledTimes(2)
+      const enqueued0 = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+      const enqueued1 = vi.mocked(videoQueue.add).mock.calls[1][1] as Record<string, unknown>
+      expect(enqueued0.aspectRatio).toBe("9:16")
+      expect(enqueued1.aspectRatio).toBe("9:16")
+    })
+  })
 })
