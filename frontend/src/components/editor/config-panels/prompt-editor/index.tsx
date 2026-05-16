@@ -178,7 +178,9 @@ export function PromptEditor({
               const MARGIN = 4
               const vh = window.innerHeight
               const vw = window.innerWidth
-              const ESTIMATED_H = 220
+              // Should track the SuggestionList's `max-h` clamp (300px) so
+              // the flip-above decision uses the actual rendered height.
+              const ESTIMATED_H = 300
               const ESTIMATED_W = 280
               const spaceBelow = vh - rect.bottom - MARGIN
               const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
@@ -286,7 +288,9 @@ export function PromptEditor({
               const MARGIN = 4
               const vh = window.innerHeight
               const vw = window.innerWidth
-              const ESTIMATED_H = 220
+              // Should track the SuggestionList's `max-h` clamp (300px) so
+              // the flip-above decision uses the actual rendered height.
+              const ESTIMATED_H = 300
               const ESTIMATED_W = 280
               const spaceBelow = vh - rect.bottom - MARGIN
               const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top

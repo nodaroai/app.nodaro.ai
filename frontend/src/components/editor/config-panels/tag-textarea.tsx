@@ -405,7 +405,7 @@ export function TagTextarea(props: TagTextareaProps) {
     const rect = wrapperRef.current.getBoundingClientRect()
     const vh = window.innerHeight
     const MARGIN = 8
-    const IDEAL_MAX_H = 256 // matches `max-h-64`
+    const IDEAL_MAX_H = 300 // matches the popup's max-h cap
     const spaceBelow = Math.max(0, vh - rect.bottom - MARGIN)
     const spaceAbove = Math.max(0, rect.top - MARGIN)
     // Prefer below, but flip if there's more room above and below is tight.

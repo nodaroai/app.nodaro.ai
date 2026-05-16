@@ -229,7 +229,13 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     }
 
     return (
-      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-64 min-w-[240px]">
+      // Viewport-relative cap so the dropdown is always scrollable in-place
+      // instead of clipping off-screen. The fixed 300px cap is the desired
+      // size on a tall viewport; the `min()` constraint trims it on short
+      // screens (e.g. a small laptop with multiple panels open). The mount's
+      // `top` is set by `positionMount` in `prompt-editor/index.tsx`, which
+      // also flips above the cursor when there isn't enough room below.
+      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[240px]">
         {displayRows.map((row, idx) => {
           const isSelected = idx === selectedIndex
           if (row.kind === "back") {

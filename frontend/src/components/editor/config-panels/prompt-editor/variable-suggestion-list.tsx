@@ -84,7 +84,9 @@ export const VariableSuggestionList = forwardRef<VariableSuggestionListHandle, V
     }
 
     return (
-      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-64 min-w-[220px]">
+      // Same viewport-relative cap as `SuggestionList` so the `{` picker stays
+      // scrollable in-place on short viewports instead of clipping off-screen.
+      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[220px]">
         {items.map((item, idx) => {
           const isSelected = idx === selectedIndex
           return (
