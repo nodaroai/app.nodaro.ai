@@ -111,6 +111,20 @@ describe("generate-character handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith("style transfer", "nano-banana", ["https://ref.png"], undefined)
   })
+
+  it("forwards aspectRatio from job.data to generateImage extraParams.aspect_ratio", async () => {
+    // The route's resolveCharacterAspectRatio computes the final ratio and
+    // puts it on job.data.aspectRatio. The handler must forward that to
+    // generateImage as `{ aspect_ratio: ... }` so the provider call uses it.
+    const job = makeJob("generate-character", { prompt: "a warrior", aspectRatio: "3:4" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a warrior",
+      "nano-banana",
+      undefined,
+      { aspect_ratio: "3:4" },
+    )
+  })
 })
 
 describe("generate-face handler", () => {
@@ -231,7 +245,17 @@ describe("generate-character-motion handler", () => {
     })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockImageToVideo).toHaveBeenCalledWith("https://x/p.png", "kling", "Alex, walking. realistic style.")
+    // Trailing args (duration, endFrameUrl, options) are undefined when the
+    // route didn't resolve an aspect ratio. The route now always sets one
+    // for studio-path runs — see the "forwards aspectRatio" test below.
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/p.png",
+      "kling",
+      "Alex, walking. realistic style.",
+      undefined,
+      undefined,
+      undefined,
+    )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
@@ -245,7 +269,14 @@ describe("generate-character-motion handler", () => {
       sourceImageUrl: "https://x/q.png",
     })
     await handler(job as never, makeCtx())
-    expect(mocks.mockImageToVideo).toHaveBeenCalledWith("https://x/q.png", "kling", "Sam, dancing.")
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/q.png",
+      "kling",
+      "Sam, dancing.",
+      undefined,
+      undefined,
+      undefined,
+    )
   })
 
   it("passes watermark flag through", async () => {
@@ -255,8 +286,33 @@ describe("generate-character-motion handler", () => {
       provider: "minimax",
     })
     await handler(job as never, makeCtx({ shouldWatermark: true }))
-    expect(mocks.mockImageToVideo).toHaveBeenCalledWith("https://x/r.png", "minimax", "Riley, jumping.")
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/r.png",
+      "minimax",
+      "Riley, jumping.",
+      undefined,
+      undefined,
+      undefined,
+    )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", true)
+  })
+
+  it("forwards aspectRatio from job.data to imageToVideo options.aspectRatio", async () => {
+    const job = makeJob("generate-character-motion", {
+      prompt: "Jordan, jumping.",
+      sourceImageUrl: "https://x/s.png",
+      provider: "kling",
+      aspectRatio: "9:16",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/s.png",
+      "kling",
+      "Jordan, jumping.",
+      undefined,
+      undefined,
+      { aspectRatio: "9:16" },
+    )
   })
 
   it("returns early when cancelled (no markJobCompleted, no credits)", async () => {

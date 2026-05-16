@@ -8,7 +8,12 @@ import { extractWorkflowId, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
-import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
+import {
+  PLACEHOLDER_CHARACTER_NAME,
+  CHARACTER_ASPECT_OPTIONS,
+  resolveCharacterAspectRatio,
+  type CharacterAssetTypeForAspect,
+} from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -69,7 +74,29 @@ const generateCharacterAssetBody = z.object({
     .enum(["expressions", "poses", "angles", "body_angles", "lighting_variations"])
     .optional(),
   attachName: z.string().min(1).max(200).optional(),
+  // Per-asset-type aspect-ratio defaults (smart-defaults feature). When the
+  // caller omits `aspectRatio`, the route derives one from `assetType` —
+  // expressions=1:1, poses=9:16, headAngles=3:4, bodyAngles=9:16, lighting=3:4,
+  // angles=3:4 (legacy alias for headAngles), custom=portrait default 3:4.
+  // `characterNodeAspectRatio` is the character node's per-canvas toggle —
+  // wins against the default, loses to an explicit `aspectRatio`.
+  // See `packages/shared/src/character-aspect-defaults.ts` for precedence.
+  aspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
+  characterNodeAspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
 })
+
+/**
+ * Pick the asset-type bucket the resolver uses for defaults. `custom` doesn't
+ * have its own framing — fall back to the portrait default (3:4) so a custom
+ * asset still gets a sensible vertical crop instead of inheriting whatever the
+ * caller left over from a previous request.
+ */
+function pickAspectAssetType(
+  assetType: z.infer<typeof assetTypeEnum>,
+): CharacterAssetTypeForAspect {
+  if (assetType === "custom") return "portrait"
+  return assetType
+}
 
 function buildVariantPrompt(
   assetType: string,
@@ -333,6 +360,16 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
     //    through so the worker's `attachAssetToCharacter` helper (Task 2)
     //    can persist them on the character row alongside the generated URL.
     // ─────────────────────────────────────────────────────────────────────
+    // Resolve aspect ratio with per-asset-type defaults. Expressions are 1:1
+    // (square), poses/bodyAngles/motions are 9:16 (full-body vertical),
+    // headAngles/angles/lighting are 3:4 (vertical headshot). Caller's
+    // explicit value wins; node toggle is the middle layer.
+    const aspectRatio = resolveCharacterAspectRatio({
+      explicit: parsed.data.aspectRatio,
+      nodeOverride: parsed.data.characterNodeAspectRatio,
+      assetType: pickAspectAssetType(assetType),
+    })
+
     await videoQueue.add("generate-character-asset", {
       jobId: job.id,
       prompt,
@@ -345,6 +382,7 @@ export async function generateCharacterAssetRoutes(app: FastifyInstance) {
       attachName: parsed.data.attachName,
       description: parsed.data.description,
       realLifeRefs: parsed.data.realLifeRefs,
+      aspectRatio,
       usageLogId,
     })
 
