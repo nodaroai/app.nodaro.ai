@@ -373,7 +373,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           arrayField="bodyAngles"
           presets={BODY_ANGLE_PRESETS}
           title="Body Angles"
-          description="full-body T-pose at different angles"
+          description="full-body natural standing at different angles"
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">

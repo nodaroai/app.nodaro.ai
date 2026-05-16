@@ -2799,7 +2799,7 @@ export type CharacterNodeData = {
   lightingVariations: CharacterAssetItem[]
   // `angles` is the legacy single-surface column; the UI now treats it as
   // head-and-shoulders portraits (Head Angles). `bodyAngles` (migration 118)
-  // holds full-body T-pose views.
+  // holds full-body natural standing views.
   angles: CharacterAssetItem[]
   bodyAngles: CharacterAssetItem[]
   // Asset generation status

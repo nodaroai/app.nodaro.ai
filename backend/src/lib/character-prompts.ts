@@ -23,7 +23,7 @@ export const ASSET_MOTION_SCAFFOLDING =
 // `angles` is now treated as head angles (the column was split — see migration
 // 118). `headAngles` is the explicit alias; both produce head-and-shoulders
 // framing. `bodyAngles` writes to the new `body_angles` column and produces
-// full-body T-pose framing. This is a small behavior change for existing
+// full-body natural standing framing. This is a small behavior change for existing
 // characters' future angle gens — they were semantically head angles all along,
 // so the new framing matches the column's new meaning.
 const ASSET_FRAMING_BY_TYPE: Record<string, string> = {
@@ -31,7 +31,7 @@ const ASSET_FRAMING_BY_TYPE: Record<string, string> = {
   poses: "full body visible including feet",
   angles: "head-and-shoulders portrait, same neutral expression",
   headAngles: "head-and-shoulders portrait, same neutral expression",
-  bodyAngles: "full body T-pose, neutral standing posture, plain background",
+  bodyAngles: "full body, standing naturally with arms relaxed at sides, neutral posture, plain background",
   lighting: "full body, same neutral standing pose",
 }
 

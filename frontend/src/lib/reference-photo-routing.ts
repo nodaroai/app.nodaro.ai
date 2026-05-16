@@ -4,7 +4,7 @@ export type ReferencePhotoKind =
   | "sideRight"
   | "threeQuarterLeft"
   | "threeQuarterRight"
-  | "frontBody"          // RENAMED from "fullBody" — explicit full-body T-pose shot
+  | "frontBody"          // RENAMED from "fullBody" — explicit full-body natural standing shot
   | "other"
 
 export interface ReferencePhoto {

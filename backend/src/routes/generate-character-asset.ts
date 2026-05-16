@@ -160,7 +160,7 @@ function buildVariantPrompt(
     }
     const angle = angleMap[variant] ?? `${variant} view`
     const subject = namePart ? namePart.trim() : "the character"
-    return `Full body view of ${subject}, ${angle}, neutral T-pose standing posture. FULL BODY visible including feet, plain background. ${base}`
+    return `Full body view of ${subject}, ${angle}, standing naturally with arms relaxed at sides. FULL BODY visible including feet, plain background. ${base}`
   }
 
   // lighting
