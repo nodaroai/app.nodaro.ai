@@ -14,6 +14,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.jobs`](#clientjobs)
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
+  - [`client.characters`](#clientcharacters)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -43,10 +44,10 @@ const client = createClient({
 | `fetch` | `typeof fetch` | no | Custom fetch implementation. Default: `globalThis.fetch`. |
 | `timeoutMs` | `number` | no | Per-request timeout. Default: `60_000`. |
 
-The instance exposes seven resource objects: `workflows`, `projects`, `jobs`,
-`executions`, `nodes`, `developerApps`, `oauth`. It also exposes a low-level
-`request<T>(method, path, options)` method for endpoints not yet wrapped by a
-resource.
+The instance exposes nine resource objects: `workflows`, `projects`, `jobs`,
+`executions`, `nodes`, `characters`, `apps`, `developerApps`, `oauth`. It also
+exposes a low-level `request<T>(method, path, options)` method for endpoints
+not yet wrapped by a resource.
 
 ### `class NodaroClient`
 
@@ -208,7 +209,8 @@ Every resource is constructed automatically by `createClient` and reachable via
 `client.<resource>`. The classes are also exported for advanced typechecking
 but rarely need to be imported directly:
 `WorkflowsResource`, `ProjectsResource`, `JobsResource`, `ExecutionsResource`,
-`NodesResource`, `DeveloperAppsResource`, `OAuthResource`.
+`NodesResource`, `CharactersResource`, `AppsResource`, `DeveloperAppsResource`,
+`OAuthResource`.
 
 All "data" responses follow the envelope `{ data: T }` — the SDK returns the
 envelope as-is. Mutation responses (`delete`, `cancel`) return `{ success: true }`.
@@ -518,6 +520,208 @@ console.log(data.providers, data.creditCost)
 
 ---
 
+### `client.characters`
+
+Script the full character lifecycle — identity edits, portrait + asset
+generation, motion clips, and LLM-captioned approval.
+
+A "character" is the canonical identity row that Character Studio drives
+(`characters` table). Each row carries the portrait URL, six asset buckets
+(`expressions`, `poses`, `motions`, `angles`, `bodyAngles`,
+`lightingVariations`), reference photos, and the LLM caption that anchors
+identity in downstream prompts.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListCharactersParams): Promise<{ characters: Character[] }>
+```
+
+Lists the caller's characters. By default returns active characters only;
+pass `archived: true` for an "archive" view. `projectId` further restricts
+to a single project.
+
+```ts
+const { characters } = await client.characters.list({ projectId })
+```
+
+#### `get(id)`
+
+```ts
+get(id: string): Promise<CharacterDetail>
+```
+
+Fetches a single character + three live-progress buckets
+(`pendingJobs`, `portraitCandidates`, `previousCandidates`) the studio uses
+to rehydrate spinners after a reload.
+
+```ts
+const character = await client.characters.get(characterId)
+```
+
+Soft-deleted characters are returned by id intentionally so canvas nodes
+that hold a stale `characterDbId` keep loading.
+
+#### `upsert(input)` / `create(input)` / `update(id, input)`
+
+```ts
+upsert(input: UpsertCharacterInput): Promise<{ id: string; name?: string }>
+create(input: Omit<UpsertCharacterInput, "id">): Promise<{ id: string; name?: string }>
+update(id: string, input: Omit<UpsertCharacterInput, "id">): Promise<{ id: string; name?: string }>
+```
+
+`upsert()` creates when `input.id` is omitted and updates when it is set.
+`create()` and `update()` are thin wrappers that pin `id` for you. On UPDATE
+only the fields you supply are written; omitted fields are not touched.
+
+Name collisions return 409 `name_taken`. To auto-number a placeholder, pass
+the placeholder name imported from `@nodaro/shared`.
+
+```ts
+const { id } = await client.characters.create({
+  nodeId: "scripted",
+  name: "Kira",
+  description: "young protagonist with auburn hair",
+  style: "realistic",
+  seedPrompt: "kira portrait, warm natural lighting",
+})
+```
+
+#### `delete(id)`
+
+```ts
+delete(id: string): Promise<{ success: true; archived: true }>
+```
+
+Soft-deletes (archives) a character. The row is hidden from `list()` by
+default but still loadable via `get(id)`. Use `restore(id)` to un-archive.
+
+#### `restore(id)`
+
+```ts
+restore(id: string): Promise<{ id: string; name: string }>
+```
+
+Un-archives a soft-deleted character. If the name now collides with another
+active character, the server auto-suffixes `"(restored)"` and returns the
+effective name.
+
+#### `duplicate(id, input?)`
+
+```ts
+duplicate(id: string, input?: DuplicateCharacterInput): Promise<{ id: string; name: string }>
+```
+
+Forks a character to a new row with `"(copy)"` suffix. Asset URLs are
+shared by reference; the new row diverges by regenerating any of them.
+
+#### `usage(id)`
+
+```ts
+usage(id: string): Promise<CharacterUsage>
+```
+
+Returns the count of workflows that reference this character. Powers the
+library's "Archive" confirmation modal.
+
+#### `generate(input)`
+
+```ts
+generate(input: GenerateCharacterInput): Promise<{ jobId: string; jobIds: string[] }>
+```
+
+Fires the portrait-generation pipeline (`POST /v1/generate-character`).
+With `count > 1`, all jobs are reserved up-front before any is enqueued —
+mid-batch failures roll back atomically.
+
+When `attachToCharacterId` is set, the worker writes the result directly to
+the row's `source_image_url`; for multi-candidate runs, use `approvePortrait()`
+to pick a candidate.
+
+```ts
+const { jobIds } = await client.characters.generate({
+  name: "Kira",
+  seedPrompt: "kira portrait, warm natural lighting",
+  count: 4,
+  attachToCharacterId,
+})
+```
+
+#### `generateAsset(input)`
+
+```ts
+generateAsset(input: GenerateAssetInput): Promise<{ jobId: string }>
+```
+
+Generates a single expression / pose / lighting / angle variant from the
+character's anchor portrait. Pass the `attachTo*` triple to auto-append
+the result to the row's named bucket on completion.
+
+```ts
+await client.characters.generateAsset({
+  name: "Kira",
+  assetType: "expressions",
+  variant: "smile",
+  attachToCharacterId,
+  attachToColumn: "expressions",
+  attachName: "smile",
+})
+```
+
+#### `generateMotion(input)`
+
+```ts
+generateMotion(input: GenerateMotionInput): Promise<{ jobId: string }>
+```
+
+Animates the character's portrait into a motion clip via image-to-video.
+The result is appended to the `motions[]` bucket when
+`attachToCharacterId` is set. The route can fall back to the row's anchor
+portrait when `sourceImageUrl` is omitted.
+
+```ts
+await client.characters.generateMotion({
+  name: "Kira",
+  motionPrompt: "slow head turn left, soft smile",
+  provider: "kling",
+  attachToCharacterId,
+  attachName: "head turn",
+})
+```
+
+#### `approvePortrait(id, candidateJobId)`
+
+```ts
+approvePortrait(id: string, candidateJobId: string): Promise<ApprovePortraitResult>
+```
+
+Picks a completed `generate()` candidate as the character's canonical
+portrait. Sets `source_image_url` and fires an LLM caption (Claude Sonnet
+vision) inline. Returns the new portrait URL plus the caption.
+
+`canonicalDescription` is `null` when the LLM call sub-failed (portrait
+still set — retry with `recaption()`).
+
+```ts
+const { portraitUrl, canonicalDescription } =
+  await client.characters.approvePortrait(characterId, candidateJobId)
+```
+
+#### `recaption(id)`
+
+```ts
+recaption(id: string): Promise<{ canonicalDescription: string }>
+```
+
+Re-runs the LLM caption against the current portrait. Returns 400
+`no_portrait` if none is set; 502 on LLM failure.
+
+```ts
+const { canonicalDescription } = await client.characters.recaption(characterId)
+```
+
+---
+
 ### `client.developerApps`
 
 Manage your own OAuth developer apps. Only the owner can read or modify their
@@ -701,6 +905,22 @@ Every type used in a public method signature is re-exported from
 - `NodeCategory` — union of category slugs
 - `OutputType` — `"text" | "image" | "video" | "audio" | "data" | "none"`
 - `NodeInputField`, `NodeInputSchema` — input-schema shapes
+
+### Characters
+
+- `Character` — full character record (camelCase)
+- `CharacterDetail` — `Character` plus in-flight `pendingJobs` / `portraitCandidates` / `previousCandidates` buckets
+- `CharacterUsage` — `{ workflowCount, workflows: { id, name }[] }`
+- `ReferencePhoto`, `ReferencePhotoKind` — identity reference photo shapes
+- `UpsertCharacterInput` — body for `upsert()` / `create()` / `update()`
+- `UpsertCharacterResult` — `{ id, name? }`
+- `ListCharactersParams` — `{ projectId?, archived? }`
+- `DuplicateCharacterInput` — `{ nodeId?, projectId? }`
+- `GenerateCharacterInput` — body for `generate()`
+- `GenerateCharacterResult` — `{ jobId, jobIds[] }`
+- `GenerateAssetInput`, `GenerateMotionInput` — bodies for asset / motion generation
+- `ApprovePortraitResult` — `{ portraitUrl, canonicalDescription: string | null }`
+- `RecaptionResult` — `{ canonicalDescription }`
 
 ### Developer apps
 

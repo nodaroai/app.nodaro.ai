@@ -38,6 +38,7 @@ export { NodesResource } from "./resources/nodes.js"
 export { DeveloperAppsResource } from "./resources/developer-apps.js"
 export { OAuthResource } from "./resources/oauth.js"
 export { AppsResource } from "./resources/apps.js"
+export { CharactersResource } from "./resources/characters.js"
 
 // --- Resource type definitions ---
 export type {
@@ -103,3 +104,21 @@ export type {
   DeleteAppRunResult,
 } from "./resources/apps.js"
 export type { RunNodeResult } from "./resources/nodes.js"
+
+export type {
+  Character,
+  CharacterDetail,
+  CharacterUsage,
+  ReferencePhoto,
+  ReferencePhotoKind,
+  UpsertCharacterInput,
+  UpsertCharacterResult,
+  ListCharactersParams,
+  DuplicateCharacterInput,
+  GenerateCharacterInput,
+  GenerateCharacterResult,
+  GenerateAssetInput,
+  GenerateMotionInput,
+  ApprovePortraitResult,
+  RecaptionResult,
+} from "./resources/characters.js"

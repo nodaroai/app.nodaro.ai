@@ -230,6 +230,85 @@ documented in [OAuth Flow](./oauth-flow.md). Once your server has an
 `access_token`, the call site is identical to the example above:
 `new StaticTokenAuth(accessToken)`.
 
+### Create a character end-to-end
+
+Character Studio's full pipeline is scriptable through `client.characters`.
+The typical flow: create the row, generate portrait candidates, pick one,
+then layer expression / pose / motion assets on top.
+
+```ts
+import { createClient, StaticTokenAuth } from "@nodaro/client"
+
+const client = createClient({
+  baseUrl: "https://nodaro.example.com",
+  auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
+})
+
+// 1. Create the character row.
+const { id: characterId } = await client.characters.create({
+  nodeId: "scripted",
+  name: "Kira",
+  description: "young protagonist with auburn hair",
+  style: "realistic",
+  seedPrompt: "kira portrait, warm natural lighting",
+})
+
+// 2. Generate 4 portrait candidates, auto-attaching to the row.
+const { jobIds } = await client.characters.generate({
+  name: "Kira",
+  seedPrompt: "kira portrait, warm natural lighting",
+  count: 4,
+  attachToCharacterId: characterId,
+})
+
+// 3. Wait for all 4 to complete, then pick a candidate.
+for (const jobId of jobIds) {
+  while (true) {
+    const { data: job } = await client.jobs.get(jobId)
+    if (job.status === "completed" || job.status === "failed") break
+    await new Promise(r => setTimeout(r, 3_000))
+  }
+}
+
+// 4. Approve the first candidate (the LLM caption fires inline).
+const { portraitUrl, canonicalDescription } =
+  await client.characters.approvePortrait(characterId, jobIds[0])
+
+// 5. Layer a smile expression on top.
+await client.characters.generateAsset({
+  name: "Kira",
+  assetType: "expressions",
+  variant: "smile",
+  attachToCharacterId: characterId,
+  attachToColumn: "expressions",
+  attachName: "smile",
+})
+
+// 6. Animate the portrait into a motion clip.
+await client.characters.generateMotion({
+  name: "Kira",
+  motionPrompt: "slow head turn left, soft smile",
+  provider: "kling",
+  attachToCharacterId: characterId,
+  attachName: "head turn",
+})
+
+// 7. Re-fetch — the character now has a portrait, a smile expression,
+//    and a motion clip ready to use as a reference in any subsequent
+//    generate-image / generate-video call.
+const character = await client.characters.get(characterId)
+console.log({
+  portrait: character.sourceImageUrl,
+  canonicalDescription: character.canonicalDescription,
+  expressions: character.expressions,
+  motions: character.motions,
+})
+```
+
+For the full surface (including the soft-delete + archive flow, character
+duplication, and how to wire character assets into downstream prompts) see
+the dedicated [Character Platform](./character-platform.md) guide.
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,
