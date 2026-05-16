@@ -243,6 +243,63 @@ describe("GET /v1/characters", () => {
     expect(chainable.eq).toHaveBeenCalledWith("project_id", TEST_PROJECT_ID)
   })
 
+  // Scoping safety net — when a user is authenticated, the list query MUST
+  // filter by user_id so one user can never see another's characters. The
+  // route reads `req.userId` (set by the auth middleware) and applies it
+  // unconditionally.
+  it("scopes the query by user_id when authenticated", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/characters",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(chainable.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  // Default view (no `archived` flag) excludes soft-deleted rows via the
+  // `deleted_at IS NULL` filter. The picker + library list both rely on this.
+  it("excludes archived rows by default (deleted_at IS NULL)", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({ method: "GET", url: "/v1/characters" })
+
+    expect(res.statusCode).toBe(200)
+    expect(chainable.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(chainable.not).not.toHaveBeenCalled()
+  })
+
+  // `archived=true` flips the filter — the route should apply
+  // `.not("deleted_at", "is", null)` instead of `.is("deleted_at", null)`.
+  // Powers the editor's `/library/characters/archived` view.
+  it("includes ONLY archived rows when ?archived=true", async () => {
+    const { mockSelect, chainable } = mockListChain({ data: [], error: null })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/characters?archived=true",
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(chainable.not).toHaveBeenCalledWith("deleted_at", "is", null)
+    expect(chainable.is).not.toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("returns 400 on invalid archived query param", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/characters?archived=maybe",
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
   it("returns 500 on DB error", async () => {
     const { mockSelect } = mockListChain({
       data: null,
@@ -1150,5 +1207,165 @@ describe("DELETE /v1/characters/:id (soft delete)", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("internal_error")
+  })
+
+  // Cross-user safety net: when caller A tries to delete user B's character,
+  // the `.eq("user_id", caller)` scope on the UPDATE means zero rows are
+  // affected. Supabase doesn't surface a row-count for UPDATE, so the
+  // response is still 200/success — that's the documented contract. The
+  // critical guarantee is that B's row is untouched, which we verify by
+  // asserting the UPDATE includes the user_id scope.
+  it("scopes the UPDATE by user_id so cross-user delete is a no-op", async () => {
+    const { mockUpdate, eq1, eq2 } = mockSoftDeleteChain({ error: null })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const ATTACKER_ID = "00000000-0000-4000-8000-0000000000aa"
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/characters/${TEST_CHARACTER_ID}`,
+      headers: { "x-user-id": ATTACKER_ID },
+    })
+
+    // Same contract as the happy path — supabase doesn't return row counts on
+    // UPDATE, so we get 200/success regardless of whether a row matched.
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, archived: true })
+    // The critical assertion: the UPDATE was scoped to the caller's user_id,
+    // NOT the owner's — so B's row is provably untouched.
+    expect(eq1).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(eq2).toHaveBeenCalledWith("user_id", ATTACKER_ID)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /v1/characters/:id/restore
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/characters/:id/restore", () => {
+  /**
+   * Build a chain that mirrors the restore handler:
+   *   1. SELECT(id, name, deleted_at) → maybeSingle: lookup the archived row
+   *   2. SELECT(id) → ilike conflict check
+   *   3. UPDATE(deleted_at=null, name=…) → maybeSingle / single result
+   *
+   * We route by call-order via mockImplementation so each step gets a stub.
+   */
+  function mockRestoreChains(opts: {
+    archived?: { data: unknown; error: unknown }
+    conflict?: { data: unknown; error: unknown }
+    update?: { data: unknown; error: unknown }
+  }) {
+    const archived = opts.archived ?? {
+      data: { id: TEST_CHARACTER_ID, name: "Hero", deleted_at: "2026-05-01T00:00:00Z" },
+      error: null,
+    }
+    const conflict = opts.conflict ?? { data: [], error: null }
+    const update = opts.update ?? {
+      data: { id: TEST_CHARACTER_ID, name: "Hero" },
+      error: null,
+    }
+
+    const archivedChain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue(archived),
+    }
+    const archivedSelect = vi.fn().mockReturnValue(archivedChain)
+
+    const conflictChain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
+      ilike: vi.fn().mockResolvedValue(conflict),
+    }
+    const conflictSelect = vi.fn().mockReturnValue(conflictChain)
+
+    const updateChain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      select: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue(update),
+    }
+    const updateFn = vi.fn().mockReturnValue(updateChain)
+
+    let call = 0
+    function next() {
+      const c = call++
+      if (c === 0) return { select: archivedSelect } as never
+      if (c === 1) return { select: conflictSelect } as never
+      return { update: updateFn } as never
+    }
+    return { next, archivedChain, conflictChain, updateChain, updateFn }
+  }
+
+  it("returns 401 when unauthenticated", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/restore`,
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe("unauthorized")
+  })
+
+  it("returns 200 and un-archives the row (clears deleted_at)", async () => {
+    const stubs = mockRestoreChains({})
+    vi.mocked(supabase.from).mockImplementation(stubs.next)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/restore`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ id: TEST_CHARACTER_ID, name: "Hero" })
+
+    // The UPDATE must clear deleted_at and re-stamp updated_at.
+    const updatePayload = stubs.updateFn.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(updatePayload.deleted_at).toBe(null)
+    expect(updatePayload.name).toBe("Hero")
+    expect(updatePayload.updated_at).toEqual(expect.any(String))
+
+    // Scoping: the UPDATE is keyed on both id AND user_id so a stale
+    // session can't restore someone else's row.
+    const updateEq = stubs.updateChain.eq as ReturnType<typeof vi.fn>
+    expect(updateEq).toHaveBeenCalledWith("id", TEST_CHARACTER_ID)
+    expect(updateEq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("returns 404 when the character isn't found or isn't owned by the caller", async () => {
+    const stubs = mockRestoreChains({
+      archived: { data: null, error: { message: "no rows" } },
+    })
+    vi.mocked(supabase.from).mockImplementation(stubs.next)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/restore`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns the row as-is when already active (no-op)", async () => {
+    // `deleted_at: null` → row is already active; route returns the existing
+    // id/name without re-running the UPDATE.
+    const stubs = mockRestoreChains({
+      archived: {
+        data: { id: TEST_CHARACTER_ID, name: "Hero", deleted_at: null },
+        error: null,
+      },
+    })
+    vi.mocked(supabase.from).mockImplementation(stubs.next)
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/characters/${TEST_CHARACTER_ID}/restore`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ id: TEST_CHARACTER_ID, name: "Hero" })
+    // No UPDATE was issued.
+    expect(stubs.updateFn).not.toHaveBeenCalled()
   })
 })
