@@ -2799,7 +2799,7 @@ export type CharacterNodeData = {
   lightingVariations: CharacterAssetItem[]
   // `angles` is the legacy single-surface column; the UI now treats it as
   // head-and-shoulders portraits (Head Angles). `bodyAngles` (migration 118)
-  // holds full-body T-pose views.
+  // holds full-body natural standing views.
   angles: CharacterAssetItem[]
   bodyAngles: CharacterAssetItem[]
   // Asset generation status
@@ -5335,6 +5335,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["in"],
     outputs: ["characterRef"],
+    // PR #2410 removed the `maxWidth: '220px'` wrapper so the node could be
+    // resized horizontally via BaseNode's NodeResizeControl. Without an
+    // initial `width`, newly-created character nodes render at React Flow's
+    // default (which can be very wide). Set the canonical 220px so the node
+    // matches its pre-#2410 visual size on creation but stays freely resizable.
+    width: 220,
     defaultData: {
       label: "Character",
       characterDbId: "",

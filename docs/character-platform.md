@@ -57,7 +57,7 @@ entry is `{ name, url }`:
 | `expressions` | Same head-and-shoulders framing, different emotion | `smile`, `angry`, `surprised`, `laughing` |
 | `poses` | Full-body framing with a posture change | `standing`, `walking`, `sitting`, `running` |
 | `angles` | Head-and-shoulders portrait at different camera angles | `front`, `3/4 left`, `left profile`, `right profile`, `3/4 right`, `back` |
-| `bodyAngles` | Full-body at different angles, neutral T-pose | Same set as `angles`. |
+| `bodyAngles` | Full-body at different angles, standing naturally with arms relaxed at sides | Same set as `angles`. |
 | `lightingVariations` | Same pose, different lighting | `daylight`, `night`, `dramatic` |
 | `motions` | Video clips animating the portrait | `walking`, `head turn`, `wave` |
 

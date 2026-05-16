@@ -24,6 +24,7 @@ export const USAGE_MODES = [
   "identical",
   "face",
   "face-pose",
+  "pose",
   "emotion",
   "style",
 ] as const
@@ -52,15 +53,17 @@ export function isUsageMode(s: string): s is UsageMode {
 export function usageModeDirective(mode: UsageMode): string {
   switch (mode) {
     case "identical":
-      return "Match exactly. Maintain perfect likeness (face, body proportions, distinctive features)."
+      return "The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections."
     case "face":
-      return "Take only the facial features and expression. Preserve clothing, hair styling, and posture from the rest of the prompt."
+      return "Take ONLY the facial features and expression — preserve 100% facial identity, bone structure, skin tone, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections. Adopt clothing, hair styling, and posture from the rest of the prompt."
     case "face-pose":
-      return "Take the facial features and body pose. Preserve clothing and styling from the rest of the prompt."
+      return "Take the facial features AND body pose — preserve 100% facial identity, bone structure, skin tone, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture. Adopt clothing and styling from the rest of the prompt."
+    case "pose":
+      return "Take only the body pose and posture — do not copy facial identity, features, or skin. Adopt face, clothing, hair, and all other details from the rest of the prompt."
     case "emotion":
-      return "Take only the emotional expression. Preserve all other aspects from the rest of the prompt."
+      return "Take only the emotional expression — preserve 100% facial identity and all unique features unchanged. Adopt face shape, clothing, body, and pose from the rest of the prompt; transfer only the emotional cue."
     case "style":
-      return "Take only the visual style and tone."
+      return "Take only the visual style and tone (lighting, color grade, atmosphere). Do not copy the subject's identity, clothing, or pose."
   }
 }
 
@@ -70,6 +73,7 @@ export function usageModeLabel(mode: UsageMode): string {
     case "identical": return "Identical"
     case "face": return "Face only"
     case "face-pose": return "Face + Pose"
+    case "pose": return "Pose only"
     case "emotion": return "Emotion only"
     case "style": return "Style only"
   }

@@ -34,7 +34,7 @@ const EXPRESSION_PRESETS = [
 // Appearance tab's Head/Body Angles + Lighting sub-sections. The angles surface was split
 // into head + body in migration 118 — `headAngles` writes to the legacy `angles` column
 // (now semantically head-and-shoulders) and `bodyAngles` writes to the new `body_angles`
-// column with full-body T-pose framing.
+// column with full-body natural standing framing.
 export type ImageAssetType =
   | "expressions"
   | "poses"

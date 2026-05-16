@@ -40,7 +40,7 @@ const generateCharacterBody = z
           url: safeUrlSchema,
           // Migration 118 renamed the two ambiguous kinds:
           //   front    → frontFace  (face-level shot)
-          //   fullBody → frontBody  (full-body T-pose shot)
+          //   fullBody → frontBody  (full-body natural standing shot)
           kind: z.enum([
             "frontFace",
             "sideLeft",
