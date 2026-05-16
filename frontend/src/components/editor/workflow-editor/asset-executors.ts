@@ -51,6 +51,9 @@ export function runCharacterGeneration(
       sourceImageUrl: data.sourceImageUrl || undefined,
       provider: data.provider,
       userId: ctx.userId,
+      // Canvas-node aspect-ratio toggle — overrides the backend's portrait
+      // default (3:4) so the canvas render matches the chosen thumbnail crop.
+      characterNodeAspectRatio: data.defaultAssetAspectRatio,
     })
       .then(({ jobId }) => {
         guardedToast.info("Character generation started", {
@@ -704,6 +707,7 @@ export async function handleGenerateCharacterAsset(
         sourceImageUrl: portraitUrl,
         provider: data.provider,
         userId: ctx.userId,
+        characterNodeAspectRatio: data.defaultAssetAspectRatio,
       });
 
       const imageUrl = await pollJobToCompletion(jobId, ctx);
