@@ -102,6 +102,10 @@ function buildChain(result: { data: unknown; error: unknown }) {
 
 describe("list_characters tool", () => {
   it("returns the caller's characters scoped by user_id with asset counts", async () => {
+    // The SUMMARY_COLUMNS projection runs `jsonb_array_length` SQL-side so
+    // each asset bucket arrives as `<bucket>_count: number | null` rather
+    // than the full array. Mock the DB shape accordingly. (NULL counts are
+    // tolerated by `summarize()` — see the `angles_count: null` below.)
     const builder = chain({
       data: [
         {
@@ -114,15 +118,12 @@ describe("list_characters tool", () => {
           gender: "female",
           style: "photoreal",
           base_outfit: "denim jacket",
-          expressions: [
-            { name: "smile", url: "https://example.com/kira-smile.png" },
-            { name: "frown", url: "https://example.com/kira-frown.png" },
-          ],
-          poses: [{ name: "standing", url: "https://example.com/kira-stand.png" }],
-          motions: [],
-          angles: null,
-          body_angles: [],
-          lighting_variations: [],
+          expressions_count: 2,
+          poses_count: 1,
+          motions_count: 0,
+          angles_count: null, // null array tolerated
+          body_angles_count: 0,
+          lighting_variations_count: 0,
           updated_at: "2026-05-10T00:00:00Z",
         },
         {
@@ -135,12 +136,12 @@ describe("list_characters tool", () => {
           gender: null,
           style: null,
           base_outfit: null,
-          expressions: [{ name: "laughing", url: "https://example.com/shira-laugh.png" }],
-          poses: [],
-          motions: [],
-          angles: [],
-          body_angles: [],
-          lighting_variations: [],
+          expressions_count: 1,
+          poses_count: 0,
+          motions_count: 0,
+          angles_count: 0,
+          body_angles_count: 0,
+          lighting_variations_count: 0,
           updated_at: "2026-05-09T00:00:00Z",
         },
       ],
@@ -508,13 +509,13 @@ describe("update_character tool", () => {
   })
 
   it("enforces optimistic concurrency when expected_updated_at is supplied", async () => {
-    // First call (lookup) returns a different updated_at than the caller's
-    // expected — the tool should reject before the UPDATE fires.
-    const lookup = buildChain({
-      data: { id: KIRA_ID, updated_at: "2026-05-11T00:00:00Z" },
-      error: null,
-    })
-    fromMock.mockReturnValueOnce(lookup)
+    // The UPDATE includes `.eq("updated_at", expected_updated_at)` so when
+    // the row has moved on, the UPDATE matches zero rows and `.maybeSingle()`
+    // resolves `{ data: null, error: null }`. The handler distinguishes
+    // "stale token" from "row missing" by checking whether
+    // `expected_updated_at` was supplied. Result text says "modified since".
+    const builder = buildChain({ data: null, error: null })
+    fromMock.mockReturnValueOnce(builder)
 
     const server = buildServer()
     registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
@@ -525,6 +526,32 @@ describe("update_character tool", () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.text).toContain("modified since")
+
+    // The UPDATE included the `updated_at` filter for atomic concurrency.
+    const eqMock = builder.eq as ReturnType<typeof vi.fn>
+    expect(eqMock).toHaveBeenCalledWith("updated_at", "2026-05-10T00:00:00Z")
+  })
+
+  it("succeeds and atomically refreshes updated_at when expected_updated_at matches", async () => {
+    const builder = buildChain({
+      data: { id: KIRA_ID, name: "Kira Updated", updated_at: "2026-05-12T00:00:00Z" },
+      error: null,
+    })
+    fromMock.mockReturnValueOnce(builder)
+
+    const server = buildServer()
+    registerCharacterTools({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "update_character", {
+      id: KIRA_ID,
+      name: "Kira Updated",
+      expected_updated_at: "2026-05-11T00:00:00Z",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.id).toBe(KIRA_ID)
+    expect(result.structuredContent?.updated_at).toBe("2026-05-12T00:00:00Z")
+    const eqMock = builder.eq as ReturnType<typeof vi.fn>
+    expect(eqMock).toHaveBeenCalledWith("updated_at", "2026-05-11T00:00:00Z")
   })
 })
 

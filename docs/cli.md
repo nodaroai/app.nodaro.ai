@@ -132,7 +132,7 @@ nodaro jobs get <id>
 nodaro jobs cancel <id>
 
 # Characters — full lifecycle + studio operations
-nodaro characters list [--project <id>] [--archived] [--json]
+nodaro characters list [--project <id>] [--archived] [--limit <n>] [--json]
 nodaro characters get <id>
 nodaro characters create --name <name> [--description "..."] [--style realistic|anime|3d-pixar|illustration] [--seed-prompt "..."] [--node-id <id>] [--project <id>]
 nodaro characters update <id> [--name <name>] [--description "..."] [--style ...]
