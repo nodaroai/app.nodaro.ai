@@ -431,6 +431,7 @@ centered composition, high quality, single character`
               baseOutfit: data.baseOutfit,
               sourceImageUrl: imageUrl,
               userId: user?.id,
+              characterNodeAspectRatio: data.defaultAssetAspectRatio,
             })
 
             // Poll for result
@@ -542,6 +543,7 @@ centered composition, high quality, single character`
         baseOutfit: data.baseOutfit || undefined,
         sourceImageUrl: mainImageUrl,
         userId: user?.id,
+        characterNodeAspectRatio: data.defaultAssetAspectRatio,
       })
 
       toast.info("Generating custom variation...")

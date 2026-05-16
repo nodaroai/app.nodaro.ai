@@ -34,7 +34,7 @@ const EXPRESSION_PRESETS = [
 // Appearance tab's Head/Body Angles + Lighting sub-sections. The angles surface was split
 // into head + body in migration 118 — `headAngles` writes to the legacy `angles` column
 // (now semantically head-and-shoulders) and `bodyAngles` writes to the new `body_angles`
-// column with full-body T-pose framing.
+// column with full-body natural standing framing.
 export type ImageAssetType =
   | "expressions"
   | "poses"
@@ -146,6 +146,10 @@ export function ImageAssetTab({
         attachToCharacterId: characterId,
         attachToColumn,
         attachName,
+        // Forward the character node's 4-pill toggle so the backend's
+        // per-asset-type default can be overridden when the user has picked
+        // a different ratio on the canvas.
+        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
       })
       jobs.track(jobId, trackingAssetType, attachName)
     },
@@ -226,6 +230,7 @@ export function ImageAssetTab({
         attachToCharacterId: characterId,
         attachToColumn,
         attachName: trackName,
+        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
       })
       jobs.track(jobId, trackingAssetType, trackName)
     },
@@ -265,6 +270,7 @@ export function ImageAssetTab({
           attachToColumn,
           attachName: variant,
           realLifeRefs: submission.realLifeRefs,
+          characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
         })
         jobs.track(jobId, trackingAssetType, variant)
       } catch (e) {

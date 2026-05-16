@@ -111,10 +111,14 @@ describe("buildImagePrompt with @-mentions", () => {
     expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
     // No variant auto-attaches.
     expect(result.referenceImageUrls ?? []).not.toContain("https://r2/kira-smile.png")
-    // Strong directive for the canonical fallback (no numeric index — reserved
-    // for explicit user mentions).
+    // Strong directive for the canonical fallback. The numeric index now ALSO
+    // gets prefixed on canonical fallback bullets so the model can correlate
+    // the ref position with the named character ("Image 1 in the input array
+    // is Kira"). Position is 1 because this is the only ref and there are no
+    // pre-existing refs.
+    expect(result.prompt).toContain("Image 1 (Kira)")
     expect(result.prompt).toContain("auburn shoulder-length hair")
-    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+    expect(result.prompt).toContain("The subject must remain exactly the same person")
   })
 
   it("attaches ONLY mentioned variant URL when character IS @-mentioned (no canonical fallback)", () => {
@@ -139,10 +143,12 @@ describe("buildImagePrompt with @-mentions", () => {
     expect(result.referenceImageUrls).not.toContain("https://r2/kira-portrait.png")
     // Adam (not mentioned) → canonical fallback.
     expect(result.referenceImageUrls).toContain("https://r2/adam-portrait.png")
-    // Both characters get strong directives in the same "Use these characters:" block.
+    // Both characters get strong directives with numeric prefixes in the same
+    // "Use these characters:" block. Kira is mention #1 so emits at Image 1;
+    // Adam's canonical fallback lands at Image 2 (1 mention URL + 1 fallback).
     expect(result.prompt).toContain("Use these characters:")
     expect(result.prompt).toContain("Image 1 (Kira)")
-    expect(result.prompt).toContain("Adam")
+    expect(result.prompt).toContain("Image 2 (Adam)")
   })
 
   it("multiple mentions of same character pick the right variant per token", () => {
@@ -182,8 +188,8 @@ describe("buildImagePrompt with @-mentions", () => {
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical],
     })
-    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
-    expect(result.prompt).toMatch(/face, body proportions, distinctive features/)
+    expect(result.prompt).toContain("The subject must remain exactly the same person")
+    expect(result.prompt).toContain("preserve 100% facial identity")
     expect(result.prompt).toContain("Image 1 (Kira)")
   })
 
@@ -223,8 +229,8 @@ describe("buildImagePrompt with @-mentions", () => {
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical],
     })
-    expect(result.prompt).toContain("Take only the facial features and expression")
-    expect(result.prompt).toContain("Preserve clothing, hair styling, and posture")
+    expect(result.prompt).toContain("Take ONLY the facial features")
+    expect(result.prompt).toContain("Adopt clothing, hair styling, and posture")
     // Face-only deliberately drops the canonical-description prefix so the
     // model isn't anchored to body proportions when only the face is wanted.
     expect(result.prompt).not.toContain("auburn shoulder-length hair")
@@ -239,7 +245,7 @@ describe("buildImagePrompt with @-mentions", () => {
       connectedReferences: [kiraCanonical, kiraSmile],
     })
     expect(result.referenceImageUrls).toEqual(["https://r2/kira-smile.png"])
-    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Take ONLY the facial features")
     expect(result.prompt).toContain("Image 1 (Kira)")
   })
 
@@ -260,7 +266,7 @@ describe("buildImagePrompt with @-mentions", () => {
       connectedReferences: [kiraCanonical],
     })
     expect(result.prompt).toContain("Take only the emotional expression")
-    expect(result.prompt).toContain("Preserve all other aspects")
+    expect(result.prompt).toContain("transfer only the emotional cue")
   })
 
   it("@kira:1:face-pose emits face + pose directive AND keeps canonical description", () => {
@@ -269,8 +275,8 @@ describe("buildImagePrompt with @-mentions", () => {
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical],
     })
-    expect(result.prompt).toContain("Take the facial features and body pose")
-    expect(result.prompt).toContain("Preserve clothing and styling")
+    expect(result.prompt).toContain("Take the facial features AND body pose")
+    expect(result.prompt).toContain("Adopt clothing and styling")
     // face-pose deliberately keeps the canonical description so the model
     // holds the underlying identity while reposing.
     expect(result.prompt).toContain("auburn shoulder-length hair")
@@ -287,7 +293,7 @@ describe("buildImagePrompt with @-mentions", () => {
       connectedReferences: [kiraFace],
     })
     // No slug-level mode; falls through to node default "face".
-    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Take ONLY the facial features")
     // Canonical description omitted because face mode drops it.
     expect(result.prompt).not.toContain("auburn shoulder-length hair")
   })
@@ -303,7 +309,7 @@ describe("buildImagePrompt with @-mentions", () => {
       connectedReferences: [kiraFace],
     })
     expect(result.prompt).toContain("Take only the visual style and tone")
-    expect(result.prompt).not.toContain("Take only the facial features and expression")
+    expect(result.prompt).not.toContain("Take ONLY the facial features")
   })
 
   it("canonical fallback (no @-mention) uses character node's defaultUsageMode", () => {
@@ -317,19 +323,19 @@ describe("buildImagePrompt with @-mentions", () => {
       connectedReferences: [kiraFace],
     })
     // Canonical fallback triggers — directive uses the node's default mode.
-    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Take ONLY the facial features")
     expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
   })
 
-  it("canonical fallback without defaultUsageMode keeps the legacy 'Match exactly' directive", () => {
+  it("canonical fallback without defaultUsageMode emits the default 'identical' directive", () => {
     const result = buildImagePrompt({
       prompt: "just a scene",
       provider: "nano-banana-pro",
       connectedReferences: [kiraCanonical],
     })
-    // Backwards-compat: when neither slug nor node specify a mode, the
-    // directive matches the pre-mode-feature wording exactly.
-    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+    // Default mode is "identical" — directive comes from usageModeDirective("identical").
+    expect(result.prompt).toContain("The subject must remain exactly the same person")
+    expect(result.prompt).toContain("preserve 100% facial identity")
   })
 
   it("user scenario: shira with smile + laughing variants — both URLs attach, canonical skipped", () => {
@@ -419,8 +425,11 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
     expect(result.prompt).toContain(
       "Image 2 is the same subject as Image 1, full body, standing, facing right.",
     )
-    // Canonical fallback bullet for Kira still emitted ("match exactly").
-    expect(result.prompt).toContain("Kira — young woman, brown eyes, auburn shoulder-length hair, athletic build")
+    // Canonical fallback bullet for Kira now leads with the numeric prefix
+    // ("Image 1 (Kira) — …") so the model can correlate ref position with
+    // the named character. Without the prefix the bullet was a floating
+    // "Kira — …" with no link back to a specific reference slot.
+    expect(result.prompt).toContain("Image 1 (Kira) — young woman, brown eyes, auburn shoulder-length hair, athletic build")
   })
 
   it("emits canonical-style directive for a character extra of a previously-unseen character", () => {
@@ -445,7 +454,7 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
     expect(result.referenceImageUrls).toEqual(["https://r2/daniel-1.png"])
     // First-sight extra: canonical-style directive with the per-ref
     // description as the descriptor.
-    expect(result.prompt).toContain("Image 1 (Daniel) — looking right, hands in pockets. Match exactly")
+    expect(result.prompt).toContain("Image 1 (Daniel) — looking right, hands in pockets. The subject must remain exactly the same person")
   })
 
   it("emits 'Image N (reference): <description>.' for a manual upload extra", () => {
@@ -482,13 +491,10 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
       defaultUsageMode: "identical",
       isExtraRef: true,
     }
-    // Use a `@kira:1` mention so the canonical bullet picks up the
-    // "Image 1 (Kira)" numeric prefix — matches the spec's example exactly.
-    // (Without the mention, the canonical fallback bullet emits just "Kira"
-    // because positional indices are reserved for explicit user typing — see
-    // `buildCanonicalFallback`. The extra still pairs back to "Image 1" by
-    // URL position so the model can resolve the reference correctly either
-    // way.)
+    // Both mention-driven AND canonical-fallback bullets now include the
+    // numeric `Image N (Name)` prefix so the model can correlate any bullet
+    // to its position in the ref array. The `@kira:1` mention drives the
+    // primary bullet at Image 1.
     const result = buildImagePrompt({
       prompt: "@kira:1 outside a coffee shop",
       provider: "nano-banana-pro",
@@ -505,11 +511,11 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
     expect(result.prompt).toContain("outside a coffee shop")
   })
 
-  it("pairs an extra back to a canonical-fallback character by URL position even without numeric prefix", () => {
-    // Without a `@kira:N` mention, the canonical bullet emits "Kira — ..."
-    // (no numeric prefix — that's reserved for user-typed mentions). The
-    // extra's "same subject as Image 1" still resolves: position 1 in the
-    // worker's `referenceImageUrls` IS the canonical URL.
+  it("pairs an extra back to a canonical-fallback character with numeric prefix on both", () => {
+    // Even without a `@kira:N` mention, the canonical fallback bullet now
+    // leads with "Image 1 (Kira) — …" so the model can link the canonical
+    // ref to the named character. The extra's "same subject as Image 1"
+    // resolves cleanly: position 1 in the ref array IS the canonical URL.
     const kiraExtra: ConnectedReference = {
       id: "extra-kira-stand",
       defaultName: "Kira / standing",
@@ -533,8 +539,8 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
       "https://r2/kira-portrait.png",
       "https://r2/kira-standing.png",
     ])
-    // Canonical fallback bullet (no numeric prefix — existing behavior).
-    expect(result.prompt).toContain("Kira — young woman, brown eyes")
+    // Canonical fallback bullet now includes the numeric prefix.
+    expect(result.prompt).toContain("Image 1 (Kira) — young woman, brown eyes")
     // Pair-back to "Image 1" still emitted.
     expect(result.prompt).toContain(
       "Image 2 is the same subject as Image 1, full body, standing, facing right.",
@@ -594,8 +600,8 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
     })
     // "style" mode directive should be emitted (and identity-lock language
     // suppressed) because this is a first-sight character extra.
-    expect(result.prompt).toContain("Take only the visual style and tone.")
-    expect(result.prompt).not.toMatch(/Match exactly\. Maintain perfect likeness/)
+    expect(result.prompt).toContain("Take only the visual style and tone")
+    expect(result.prompt).not.toContain("The subject must remain exactly the same person")
   })
 
   it("leaves empty-extras workflows unchanged (no Use these characters: prefix)", () => {

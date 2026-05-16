@@ -10,7 +10,12 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { extractJsonFromAIResponse } from "../lib/json-utils.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { buildMotionPrompt, CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
+import {
+  buildMotionPrompt,
+  CHARACTER_MOTION_PROVIDERS,
+  CHARACTER_ASPECT_OPTIONS,
+  resolveCharacterAspectRatio,
+} from "@nodaro/shared"
 
 export const generateCharacterMotionBody = z.object({
   motionPrompt: z.string().min(1).max(2000),
@@ -40,6 +45,12 @@ export const generateCharacterMotionBody = z.object({
   // pass the character DB id + display name.
   attachToCharacterId: z.string().uuid().optional(),
   attachName: z.string().min(1).max(200).optional(),
+  // Per-asset-type aspect-ratio defaults (smart-defaults feature). Motions
+  // default to 9:16 (full-body vertical clip). `characterNodeAspectRatio` is
+  // the character node's per-canvas toggle — wins against the default, loses
+  // to an explicit `aspectRatio`. See `packages/shared/src/character-aspect-defaults.ts`.
+  aspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
+  characterNodeAspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
 }).refine(
   (data) => Boolean(data.attachToCharacterId) || Boolean(data.sourceImageUrl),
   { message: "Provide attachToCharacterId or sourceImageUrl" },
@@ -258,6 +269,14 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
       //    characters.motions[] entry (Task 1 migration gives motions the
       //    richer shape with motionDescription).
       // ───────────────────────────────────────────────────────────────────
+      // Resolve aspect ratio: motions default to 9:16 (full-body vertical clip).
+      // Explicit > node override > default.
+      const aspectRatio = resolveCharacterAspectRatio({
+        explicit: parsed.data.aspectRatio,
+        nodeOverride: parsed.data.characterNodeAspectRatio,
+        assetType: "motions",
+      })
+
       await videoQueue.add("generate-character-motion", {
         jobId: job.id,
         prompt,
@@ -268,6 +287,7 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         description: parsed.data.description,
         motionDescription: parsed.data.motionDescription,
         realLifeRefs: parsed.data.realLifeRefs,
+        aspectRatio,
         usageLogId,
       })
 

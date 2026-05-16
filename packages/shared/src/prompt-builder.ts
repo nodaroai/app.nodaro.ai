@@ -142,14 +142,25 @@ export function resolveCharacterMentions(
  * Returns directive lines (matching `resolveCharacterMentions`'s format) and
  * canonical URLs (variantSlug === undefined entries only) keyed by
  * `characterSlug`, deduped. Callers prepend the directives + merge the URLs.
+ *
+ * Numbering: each emitted line is prefixed with `Image N (Name) — …` where
+ * N is the position of this canonical URL in the final `referenceImageUrls`
+ * list. The caller passes `startIndex` (1-based) for the first canonical
+ * URL; subsequent canonical URLs get `startIndex + 1`, `+ 2`, etc.
+ *
+ * Without the numeric prefix the model has no way to link "Image 1" in its
+ * input array to the directive bullet "shira — young woman…" — which led
+ * users to see uncorrelated directives and ungrouped reference images.
  */
 function buildCanonicalFallback(
   refs: readonly ConnectedReference[],
   mentionedSlugs: ReadonlySet<string>,
+  startIndex: number,
 ): { directiveLines: string[]; urls: string[] } {
   const directiveLines: string[] = []
   const urls: string[] = []
   const seenSlugs = new Set<string>()
+  let cursor = startIndex
   for (const r of refs) {
     if (r.source !== "wired-character") continue
     if (!r.characterSlug) continue
@@ -163,12 +174,6 @@ function buildCanonicalFallback(
     seenSlugs.add(r.characterSlug)
     urls.push(r.url)
     const displayName = r.defaultName || r.characterSlug
-    // Unmentioned canonical falls outside the user-typed prompt, so it has
-    // no `imageIndex` from the user. The wired-character canonical is a
-    // background hint, so we emit a strong directive (matching the legacy
-    // identity-lock clause strength) without a numeric index in front —
-    // numeric indices are reserved for explicit user-typed mentions.
-    //
     // Mode source: character node's `defaultUsageMode` (if set), else the
     // global `DEFAULT_USAGE_MODE` ("identical"). Without a slug-level
     // override available here (the user hasn't @-mentioned this character),
@@ -178,10 +183,14 @@ function buildCanonicalFallback(
     const directive = usageModeDirective(effectiveMode)
     const includeCanonicalDesc =
       effectiveMode === "identical" || effectiveMode === "face-pose"
+    // Subject line includes the numeric position so the model can correlate
+    // "Image N in the input array" with the named character in the directive.
+    const subject = `Image ${cursor} (${displayName})`
     const descPart = includeCanonicalDesc && r.characterCanonicalDescription
-      ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
-      : displayName
+      ? `${subject} — ${r.characterCanonicalDescription.trim()}`
+      : subject
     directiveLines.push(`- ${descPart}. ${directive}`)
+    cursor += 1
   }
   return { directiveLines, urls }
 }
@@ -417,9 +426,20 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
       // Default-fallback canonical URLs + directives for any wired character
       // that has zero mentions in the prompt. Mirrors the legacy behavior the
       // mention feature replaced — wire a character with no typing required.
+      //
+      // `startIndex` = position (1-based) of the first canonical fallback
+      // URL in the final merged list. Computed by deduping the prefix
+      // (pre-existing refs + mention URLs) so that if a mention URL
+      // coincidentally equals an upstream ref, the canonical lines still
+      // point at the correct position.
+      const prefixDedupedLength = ([
+        ...(referenceImageUrls || []),
+        ...resolved.additionalUrls,
+      ].filter((u, i, a) => a.indexOf(u) === i)).length
       const fallback = buildCanonicalFallback(
         connectedReferences,
         resolved.mentionedCharacterSlugs,
+        prefixDedupedLength + 1,
       )
       let promptForNext = resolved.prompt
       if (fallback.directiveLines.length > 0) {

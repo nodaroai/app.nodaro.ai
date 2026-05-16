@@ -5,6 +5,7 @@ import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
+import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
 const TAG_PATTERN = /(\[[^\]]+\]|<break[^>]*\/>)/g
@@ -51,19 +52,24 @@ export interface SuggestionItem {
    *    without drilling).
    *  - "variant": leaf variant inside the drill-in view. `tag` is the full
    *    `@<character>:<variant>` slug. Clicking inserts and closes.
+   *  - "mode": one row per usage mode in the 3rd-level mode-picker drill.
+   *    `mode` carries the chosen `UsageMode`. Selecting inserts the slug
+   *    with the mode appended as the 4th segment.
    *  - "back": back row at the top of drill-in view. `tag` is unused.
    *  - undefined / "leaf": ordinary leaf (insert + close).
    */
-  kind?: "character-root" | "variant" | "back" | "leaf"
+  kind?: "character-root" | "variant" | "back" | "leaf" | "mode"
   /** Slug of the character this root row represents — used to drill in. */
   characterSlug?: string
+  /** When `kind === "mode"`, the usage mode chosen by this row. */
+  mode?: UsageMode
   /**
    * Character node's `defaultUsageMode`. Carried through from the source
    * `RefImageItem` so `selectSuggestion` can append the trailing `:<mode>`
    * segment to the inserted slug when the character has a non-default mode
    * (keeps the casual `@kira:1:smile` insertion clean for the common case).
    */
-  defaultUsageMode?: import("@nodaro/shared").UsageMode
+  defaultUsageMode?: UsageMode
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -90,7 +96,7 @@ export interface RefImageItem {
    * back to this same value at execution time when the slug omits the mode,
    * so insertion is purely a UX/display concern.
    */
-  readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
+  readonly defaultUsageMode?: UsageMode
 }
 
 type TriggerChar = "[" | "<" | "/" | "{" | "@"
@@ -166,9 +172,19 @@ export function TagTextarea(props: TagTextareaProps) {
   const [warning, setWarning] = useState<string | null>(null)
   const [imagePreview, setImagePreview] = useState<{ url: string; anchor: DOMRect } | null>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null)
-  // Drill-in state for the `@` autocomplete. When non-null, the dropdown shows
-  // that character's variants instead of the root character list.
+  // Drill-in state for the `@` autocomplete — TWO levels:
+  //   `drillCharacterSlug`: when non-null, the dropdown shows that character's
+  //                         variants instead of the root character list.
+  //   `drillVariant`: when non-null, the dropdown shows the 6 usage modes
+  //                   (3rd-level mode-picker drill). Selecting a mode inserts
+  //                   the slug with `:mode` appended as the 4th segment.
   const [drillCharacterSlug, setDrillCharacterSlug] = useState<string | null>(null)
+  const [drillVariant, setDrillVariant] = useState<{
+    characterSlug: string
+    variantSlug: string | null
+    variantDisplayName: string | null
+    item: RefImageItem
+  } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const dropdownRef = useRef<HTMLDivElement | null>(null)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -219,6 +235,35 @@ export function TagTextarea(props: TagTextareaProps) {
     }
 
     const q = filterText.trim().toLowerCase()
+
+    // MODE PICKER (3rd-level drill). When the user has drilled into a
+    // specific variant, surface USAGE_MODES so they can pick the per-mention
+    // mode override. Typing filters by label/key.
+    if (drillVariant) {
+      const variantName = drillVariant.variantDisplayName ?? "canonical"
+      const backLabel = `back (${variantName})`
+      const modeCategory = "Usage mode"
+      const matchingModes = q.length > 0
+        ? USAGE_MODES.filter((m) =>
+            usageModeLabel(m).toLowerCase().includes(q) || m.toLowerCase().includes(q),
+          )
+        : USAGE_MODES
+      return [
+        {
+          kind: "back",
+          tag: "__back__",
+          label: backLabel,
+          category: modeCategory,
+        },
+        ...matchingModes.map((m): SuggestionItem => ({
+          kind: "mode",
+          tag: `:${m}`,
+          label: usageModeLabel(m),
+          category: modeCategory,
+          mode: m,
+        })),
+      ]
+    }
 
     // FLAT SEARCH MODE — when the user has typed something after `@`,
     // surface every character ref (canonical + variants) so typing
@@ -343,7 +388,7 @@ export function TagTextarea(props: TagTextareaProps) {
       thumbnailUrl: r.url,
     }))
     return [...nonCharacterLeaves, ...characterRoots]
-  }, [referenceImages, drillCharacterSlug, filterText])
+  }, [referenceImages, drillCharacterSlug, drillVariant, filterText])
 
   // Filter character-aware suggestions internally (the memo above already
   // applies the query in flat-search mode and ignores it in root/drill mode).
@@ -394,6 +439,7 @@ export function TagTextarea(props: TagTextareaProps) {
     setWarning(null)
     setDropdownPos(null)
     setDrillCharacterSlug(null)
+    setDrillVariant(null)
   }, [])
 
   // Compute dropdown position relative to viewport. Flips above the textarea
@@ -405,7 +451,7 @@ export function TagTextarea(props: TagTextareaProps) {
     const rect = wrapperRef.current.getBoundingClientRect()
     const vh = window.innerHeight
     const MARGIN = 8
-    const IDEAL_MAX_H = 256 // matches `max-h-64`
+    const IDEAL_MAX_H = 300 // matches the popup's max-h cap
     const spaceBelow = Math.max(0, vh - rect.bottom - MARGIN)
     const spaceAbove = Math.max(0, rect.top - MARGIN)
     // Prefer below, but flip if there's more room above and below is tight.
@@ -484,9 +530,42 @@ export function TagTextarea(props: TagTextareaProps) {
     })
   }, [triggerInfo, value, onChange])
 
+  // Drill into the 3rd-level mode picker for a given variant SuggestionItem.
+  // The chip on each variant row (level-2 drill) and the right-arrow key both
+  // call this; `selectSuggestion` itself never lands here (Enter on a variant
+  // inserts with the default mode — legacy behavior preserved).
+  const drillIntoMode = useCallback((item: SuggestionItem) => {
+    if (item.kind !== "variant" || !item.characterSlug || !referenceImages) return
+    // Recover the underlying RefImageItem so the eventual insertion has
+    // access to the character's defaultUsageMode (used as the fallback if
+    // the user later switches back to default).
+    const variantSlugFromTag = item.tag.startsWith(`@${item.characterSlug}:`)
+      ? item.tag.slice(item.characterSlug.length + 2)
+      : ""
+    const matchingRef = referenceImages.find(
+      (r) => r.characterSlug === item.characterSlug
+        && ((variantSlugFromTag === "" && !r.variantSlug) || r.variantSlug === variantSlugFromTag),
+    )
+    if (!matchingRef) return
+    const variantDisplayName = item.variantDisplayName && item.variantDisplayName !== "canonical"
+      ? item.variantDisplayName
+      : null
+    setDrillVariant({
+      characterSlug: item.characterSlug,
+      variantSlug: matchingRef.variantSlug ?? null,
+      variantDisplayName,
+      item: matchingRef,
+    })
+    // Skip the back row so the first usage-mode row is highlighted by default.
+    setSelectedIndex(1)
+    setFilterText("")
+    clearFilterTextInTextarea()
+  }, [referenceImages, clearFilterTextInTextarea])
+
   // Click handler for the `@` autocomplete that's aware of the hierarchical
-  // kinds. Back rows pop the drill, character-root rows push it, leaf/variant
-  // rows fall through to `insertTag` and close the popup.
+  // kinds. Back rows pop one level, character-root rows push to level 2, mode
+  // rows insert with the chosen mode, leaf/variant rows fall through to
+  // `insertTag` and close the popup.
   //
   // Character variant insertions (`kind === "variant"`) get rewritten from
   // `@kira` / `@kira:smile` to `@kira:N` / `@kira:N:smile`, where N is the
@@ -495,7 +574,12 @@ export function TagTextarea(props: TagTextareaProps) {
   // in the final assembled identity directive block.
   const selectSuggestion = useCallback((item: SuggestionItem) => {
     if (item.kind === "back") {
-      setDrillCharacterSlug(null)
+      // Pop one level: mode picker → variant list; variant list → root.
+      if (drillVariant) {
+        setDrillVariant(null)
+      } else {
+        setDrillCharacterSlug(null)
+      }
       setSelectedIndex(0)
       setFilterText("")
       clearFilterTextInTextarea()
@@ -507,6 +591,21 @@ export function TagTextarea(props: TagTextareaProps) {
       setSelectedIndex(1)
       setFilterText("")
       clearFilterTextInTextarea()
+      return
+    }
+    if (item.kind === "mode" && item.mode && drillVariant) {
+      // 3rd-level mode insertion. Always emit the 4th `:mode` slug segment —
+      // this is the user's explicit choice, so it must round-trip even when
+      // equal to the character's default (otherwise the picker is a no-op).
+      const before = triggerInfo ? value.slice(0, triggerInfo.position) : ""
+      const cursorPos = textareaRef.current?.selectionStart ?? value.length
+      const after = value.slice(cursorPos)
+      const promptForCount = before + after
+      const nextIndex = computeNextMentionIndex(promptForCount)
+      const parts = [`@${drillVariant.characterSlug}:${nextIndex}`]
+      if (drillVariant.variantSlug) parts.push(drillVariant.variantSlug)
+      parts.push(item.mode)
+      insertTag(parts.join(":"))
       return
     }
     let tag = item.tag
@@ -532,14 +631,14 @@ export function TagTextarea(props: TagTextareaProps) {
       const mode = item.defaultUsageMode
       // Skip emitting the trailing `:mode` for the default mode so casual
       // users (no mode configured on the node) keep seeing the old form.
-      const includeMode = mode != null && mode !== "identical"
+      const includeMode = mode != null && mode !== DEFAULT_USAGE_MODE
       const parts = [`@${item.characterSlug}:${nextIndex}`]
       if (variantSlug) parts.push(variantSlug)
       if (includeMode) parts.push(mode)
       tag = parts.join(":")
     }
     insertTag(tag)
-  }, [insertTag, clearFilterTextInTextarea, triggerInfo, value])
+  }, [insertTag, clearFilterTextInTextarea, triggerInfo, value, drillVariant])
 
   const handleInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value
@@ -562,6 +661,7 @@ export function TagTextarea(props: TagTextareaProps) {
       setShowDropdown(true)
       setWarning(null)
       setDrillCharacterSlug(null)
+      setDrillVariant(null)
       updateDropdownPos()
     } else if (showDropdown && triggerInfo) {
       // Update filter text
@@ -628,17 +728,51 @@ export function TagTextarea(props: TagTextareaProps) {
         dismiss()
         return
       } else if (
-        e.key === "Backspace"
+        e.key === "ArrowRight"
         && triggerInfo?.char === "@"
         && drillCharacterSlug
+        && !drillVariant
+      ) {
+        // In the variant view (level 2), Right on a variant row drills into
+        // the mode picker. Anywhere else, fall through (lets cursor move).
+        const item = filtered[selectedIndex]
+        if (item?.kind === "variant" && item.characterSlug) {
+          e.preventDefault()
+          drillIntoMode(item)
+          return
+        }
+      } else if (
+        e.key === "ArrowLeft"
+        && triggerInfo?.char === "@"
+        && drillVariant
+      ) {
+        // In the mode picker (level 3), Left pops back to the variant view.
+        e.preventDefault()
+        setDrillVariant(null)
+        setSelectedIndex(1)
+        setFilterText("")
+        clearFilterTextInTextarea()
+        return
+      } else if (
+        e.key === "Backspace"
+        && triggerInfo?.char === "@"
         && filterText.length === 0
       ) {
-        // In drill-in view with empty filter: Backspace pops back to root
-        // instead of deleting the `@` (which would close the popup).
-        e.preventDefault()
-        setDrillCharacterSlug(null)
-        setSelectedIndex(0)
-        return
+        // In drill-in views with empty filter, Backspace pops one level
+        // (mode → variant → root) instead of deleting the `@` (which would
+        // close the popup).
+        if (drillVariant) {
+          e.preventDefault()
+          setDrillVariant(null)
+          setSelectedIndex(1)
+          return
+        }
+        if (drillCharacterSlug) {
+          e.preventDefault()
+          setDrillCharacterSlug(null)
+          setSelectedIndex(0)
+          return
+        }
       }
     }
 
@@ -681,7 +815,7 @@ export function TagTextarea(props: TagTextareaProps) {
         ta.selectionEnd = tok.end
       }
     }
-  }, [showDropdown, filtered, selectedIndex, selectSuggestion, dismiss, findImageTokens, removeTokenAt, triggerInfo, drillCharacterSlug, filterText])
+  }, [showDropdown, filtered, selectedIndex, selectSuggestion, dismiss, findImageTokens, removeTokenAt, triggerInfo, drillCharacterSlug, drillVariant, drillIntoMode, clearFilterTextInTextarea, filterText])
 
   // Snap cursor to nearest token boundary when a click lands inside a token.
   const handleSelect = useCallback(() => {
@@ -711,14 +845,15 @@ export function TagTextarea(props: TagTextareaProps) {
   }, [showDropdown, dismiss])
 
   // Hybrid mode orthogonality: when the user types a non-empty filter while
-  // drilled into a character, reset the drill state so the flat-search results
-  // aren't masked by the drill bucket. Clearing the filter back to empty
+  // drilled into a character (but NOT in the mode picker — there typing
+  // filters the modes themselves), reset the character drill so the
+  // flat-search results aren't masked. Clearing the filter back to empty
   // resumes the hierarchical root view automatically (drill stays null).
   useEffect(() => {
-    if (filterText.trim().length > 0 && drillCharacterSlug) {
+    if (filterText.trim().length > 0 && drillCharacterSlug && !drillVariant) {
       setDrillCharacterSlug(null)
     }
-  }, [filterText, drillCharacterSlug])
+  }, [filterText, drillCharacterSlug, drillVariant])
 
   // Clear transient insert-time warning after 4 seconds
   useEffect(() => {
@@ -852,9 +987,23 @@ export function TagTextarea(props: TagTextareaProps) {
             const idx = filtered.indexOf(item)
             const isSelected = idx === selectedIndex
             const isBack = item.kind === "back"
+            const isMode = item.kind === "mode"
             const isCharacterRoot = item.kind === "character-root"
-            const isRefImage = !isBack && item.thumbnailUrl !== undefined
-            const isNodeRef = !isBack && !isRefImage && category !== "Audio Tags" && category !== "Suno"
+            const isVariant = item.kind === "variant"
+            const isRefImage = !isBack && !isMode && item.thumbnailUrl !== undefined
+            const isNodeRef = !isBack && !isMode && !isRefImage && category !== "Audio Tags" && category !== "Suno"
+            // Render the mode-picker chip on character variant rows when in
+            // the level-2 drill view. The chip is a separate click target
+            // that drills one more level into the mode picker (instead of
+            // inserting with the default mode like an Enter on the row).
+            // Flat-search variants skip the chip — drilling from a search
+            // result is confusing (the user already filtered to a variant;
+            // mode is a separate concern best set after picking).
+            const showModeChip = isVariant
+              && triggerInfo?.char === "@"
+              && drillCharacterSlug != null
+              && drillVariant == null
+              && item.characterSlug != null
 
             // "Back" row: arrow + label, no thumbnail, no tag pill.
             if (isBack) {
@@ -874,6 +1023,37 @@ export function TagTextarea(props: TagTextareaProps) {
                   }}
                 >
                   <span className="font-medium">&larr; {item.label}</span>
+                </button>
+              )
+            }
+
+            // "Mode" row (level-3 drill): label + `:mode` chip, no thumbnail.
+            if (isMode) {
+              return (
+                <button
+                  key={`mode-${item.mode}`}
+                  type="button"
+                  data-index={idx}
+                  className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                    isSelected
+                      ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+                      : "hover:bg-muted text-foreground"
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    selectSuggestion(item)
+                  }}
+                >
+                  <span className="truncate flex-1 min-w-0">{item.label}</span>
+                  <span
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                      isSelected
+                        ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                        : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                    }`}
+                  >
+                    {item.tag}
+                  </span>
                 </button>
               )
             }
@@ -915,15 +1095,39 @@ export function TagTextarea(props: TagTextareaProps) {
                         &rsaquo;
                       </span>
                     ) : (
-                      <span
-                        className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
-                          isSelected
-                            ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
-                            : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
-                        }`}
-                      >
-                        {item.tag}
-                      </span>
+                      <>
+                        <span
+                          className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                            isSelected
+                              ? "border-sky-400/60 bg-sky-500/20 text-sky-700 dark:text-sky-200"
+                              : "border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                          }`}
+                        >
+                          {item.tag}
+                        </span>
+                        {showModeChip && (
+                          <span
+                            role="button"
+                            aria-label="Pick usage mode"
+                            title="Pick usage mode (or press Right arrow)"
+                            className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
+                              isSelected
+                                ? "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-200 hover:bg-sky-500/25"
+                                : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                            onMouseDown={(e) => {
+                              // Stop the row's onMouseDown from also firing
+                              // (which would insert with the default mode
+                              // instead of drilling into the mode picker).
+                              e.preventDefault()
+                              e.stopPropagation()
+                              drillIntoMode(item)
+                            }}
+                          >
+                            mode &rsaquo;
+                          </span>
+                        )}
+                      </>
                     )}
                   </>
                 )}

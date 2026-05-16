@@ -36,6 +36,11 @@ vi.mock("lucide-react", () => {
     Maximize2: Icon,
     ChevronDown: Icon,
     ChevronRight: Icon,
+    // shadcn `Select` (used by CharacterNode's usage-mode dropdown) imports
+    // ChevronDownIcon / ChevronUpIcon / CheckIcon under the *Icon suffix.
+    ChevronDownIcon: Icon,
+    ChevronUpIcon: Icon,
+    CheckIcon: Icon,
     Type: Icon,
     FileVideo: Icon,
     FileImage: Icon,

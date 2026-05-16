@@ -9,7 +9,7 @@ import { HardBreak } from "@tiptap/extension-hard-break"
 import { Placeholder, UndoRedo } from "@tiptap/extensions"
 import { createRoot, type Root } from "react-dom/client"
 import { ImageRefExtension } from "./image-ref-extension"
-import { SuggestionList, type SuggestionListHandle } from "./suggestion-list"
+import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
 import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
@@ -110,7 +110,7 @@ export function PromptEditor({
           // only the root character label.
           items: () => Array.from(refsRef.current),
           command: ({ editor: ed, range, props }) => {
-            const item = props as unknown as RefImageItem
+            const item = props as unknown as SuggestionCommandPayload
             // Character refs: insert as PLAIN TEXT in the new `@<slug>:N:<variant>`
             // format that `findCharacterMentionTokens` (shared) recognizes.
             // The numeric index N is computed at insertion time by scanning the
@@ -135,16 +135,24 @@ export function PromptEditor({
                 if (Number.isInteger(n) && n > maxIdx) maxIdx = n
               }
               const nextIdx = maxIdx + 1
-              // Build the slug. Only emit the trailing `:mode` segment when the
-              // character node has a non-default mode — keeps the common case
-              // (`identical`) clean as the legacy 2/3-part form. Casual users
-              // never see the 4-part syntax unless they intentionally
-              // configured a non-default mode on the source character node.
-              const mode = item.defaultUsageMode
-              const includeMode = mode != null && mode !== DEFAULT_USAGE_MODE
+              // Build the slug. Mode resolution priority:
+              //   1. `item.usageMode` — set by the 3rd-level mode-picker drill;
+              //      ALWAYS emitted as the 4th slug segment (even when equal to
+              //      the default) so the user's explicit choice round-trips.
+              //   2. character node's `defaultUsageMode` — emitted only when
+              //      non-default. Keeps the common case (`identical`) clean as
+              //      the legacy 2/3-part form. Casual users never see the
+              //      4-part syntax unless they intentionally pick a mode or
+              //      configured a non-default default on the source node.
+              const explicitMode = item.usageMode
+              const defaultMode = item.defaultUsageMode
+              const includeMode = explicitMode != null
+                ? true
+                : defaultMode != null && defaultMode !== DEFAULT_USAGE_MODE
+              const modeToEmit = explicitMode ?? defaultMode
               const parts = [`@${item.characterSlug}:${nextIdx}`]
               if (item.variantSlug) parts.push(item.variantSlug)
-              if (includeMode) parts.push(mode)
+              if (includeMode && modeToEmit) parts.push(modeToEmit)
               const token = parts.join(":")
               // Replace the typed `@<filter>` range with the resolved token + space.
               ed
@@ -178,7 +186,9 @@ export function PromptEditor({
               const MARGIN = 4
               const vh = window.innerHeight
               const vw = window.innerWidth
-              const ESTIMATED_H = 220
+              // Should track the SuggestionList's `max-h` clamp (300px) so
+              // the flip-above decision uses the actual rendered height.
+              const ESTIMATED_H = 300
               const ESTIMATED_W = 280
               const spaceBelow = vh - rect.bottom - MARGIN
               const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top
@@ -196,7 +206,11 @@ export function PromptEditor({
             const renderList = (props: {
               items: readonly RefImageItem[]
               query: string
-              command: (item: RefImageItem) => void
+              // TipTap's mention extension passes whatever object the list
+              // returns straight through to the configured `command`. The
+              // 3rd-level drill (mode picker) attaches an optional `usageMode`
+              // sidecar before firing — see `SuggestionCommandPayload`.
+              command: (item: SuggestionCommandPayload) => void
               clientRect?: (() => DOMRect | null) | null
               editor: ReturnType<typeof useEditor>
               range: { from: number; to: number }
@@ -286,7 +300,9 @@ export function PromptEditor({
               const MARGIN = 4
               const vh = window.innerHeight
               const vw = window.innerWidth
-              const ESTIMATED_H = 220
+              // Should track the SuggestionList's `max-h` clamp (300px) so
+              // the flip-above decision uses the actual rendered height.
+              const ESTIMATED_H = 300
               const ESTIMATED_W = 280
               const spaceBelow = vh - rect.bottom - MARGIN
               const placeBelow = spaceBelow >= 160 || spaceBelow >= rect.top

@@ -8,7 +8,7 @@ import type {
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle,
 } from "@nodaro/shared"
-import type { ScraperActorId } from "@nodaro/shared"
+import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -2799,7 +2799,7 @@ export type CharacterNodeData = {
   lightingVariations: CharacterAssetItem[]
   // `angles` is the legacy single-surface column; the UI now treats it as
   // head-and-shoulders portraits (Head Angles). `bodyAngles` (migration 118)
-  // holds full-body T-pose views.
+  // holds full-body natural standing views.
   angles: CharacterAssetItem[]
   bodyAngles: CharacterAssetItem[]
   // Asset generation status
@@ -2840,12 +2840,18 @@ export type CharacterNodeData = {
   // never sent to `saveCharacter`.
   readonly defaultAssetUrl?: string
   readonly defaultAssetName?: string
-  // Per-canvas-node crop aspect ratio for the default-asset thumbnail. Frontend-only
-  // (lives on node data, not the DB row). Defaults to "1:1" — most existing characters
-  // are square portraits. Toggling to "16:9" switches the image container's
-  // `aspect-ratio` CSS while keeping `object-fit: cover` so the image still crops
-  // cleanly without stretching.
-  readonly defaultAssetAspectRatio?: "16:9" | "1:1"
+  // Per-canvas-node crop aspect ratio for the default-asset thumbnail AND a
+  // node-level override for the per-asset-type aspect-ratio defaults applied
+  // by `generate-character`, `generate-character-asset`, and
+  // `generate-character-motion`. Frontend-only (lives on node data, not the DB
+  // row). When set, the studio passes it through to the routes as
+  // `characterNodeAspectRatio`, which loses to an explicit request `aspectRatio`
+  // but wins against the per-asset-type default (portrait=3:4, expressions=1:1,
+  // poses=9:16, headAngles=3:4, bodyAngles=9:16, lighting=3:4, motions=9:16).
+  // Toggling 1:1/3:4/16:9/9:16 also switches the image container's
+  // `aspect-ratio` CSS while keeping `object-fit: cover` so the image still
+  // crops cleanly without stretching.
+  readonly defaultAssetAspectRatio?: CharacterAspectRatio
 }
 
 // --- Object Node Data ---
@@ -5329,6 +5335,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 5,
     inputs: ["in"],
     outputs: ["characterRef"],
+    // PR #2410 removed the `maxWidth: '220px'` wrapper so the node could be
+    // resized horizontally via BaseNode's NodeResizeControl. Without an
+    // initial `width`, newly-created character nodes render at React Flow's
+    // default (which can be very wide). Set the canonical 220px so the node
+    // matches its pre-#2410 visual size on creation but stays freely resizable.
+    width: 220,
     defaultData: {
       label: "Character",
       characterDbId: "",

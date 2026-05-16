@@ -163,6 +163,10 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
         seedPrompt: s.seedPrompt,
         // ReadonlyArray<{url, kind: ReferencePhotoKind}> -> Array<{url, kind: <same union>}>
         referencePhotos: s.referencePhotos ? [...s.referencePhotos] : undefined,
+        // Forward the character node's 4-pill toggle so the backend's
+        // per-asset-type default (portrait = 3:4) can be overridden when the
+        // user has explicitly picked a different ratio on the canvas.
+        characterNodeAspectRatio: s.defaultAssetAspectRatio,
       })
       setGenBusy(false)
       setPortraitCandidates(
@@ -373,7 +377,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
           arrayField="bodyAngles"
           presets={BODY_ANGLE_PRESETS}
           title="Body Angles"
-          description="full-body T-pose at different angles"
+          description="full-body natural standing at different angles"
         />
       </div>
       <div className="border-t border-[#1e293b] pt-4">

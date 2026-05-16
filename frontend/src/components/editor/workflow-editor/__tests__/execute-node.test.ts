@@ -664,7 +664,7 @@ describe("generate-image", () => {
     const passedPrompt = callArgs[1] as string
     // Canonical fallback directive must appear in the assembled prompt.
     expect(passedPrompt).toContain("kira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
 
@@ -916,7 +916,7 @@ describe("image-to-image", () => {
 
     // Canonical fallback directive must appear in the prompt.
     expect(passedPrompt).toContain("shira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
 
@@ -960,7 +960,7 @@ describe("image-to-image", () => {
     const callArgs = mockRunImageToImage.mock.calls[0]
     const passedPrompt = callArgs[2] as string
     expect(passedPrompt).toContain("shira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
 
@@ -1141,7 +1141,7 @@ describe("image-to-video", () => {
     expect(passedStartFrame).toBe("http://shira/portrait.png")
     // Canonical fallback directive must appear in the prompt.
     expect(passedPrompt).toContain("shira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
 
@@ -1185,7 +1185,7 @@ describe("image-to-video", () => {
     const passedPrompt = callArgs[8] as string
     // Canonical fallback directive must appear even though user typed nothing.
     expect(passedPrompt).toContain("kira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
   })
 })
 
@@ -1315,7 +1315,7 @@ describe("video-to-video", () => {
     // Canonical URL fills the single referenceImageUrl slot (no other source).
     expect(passedOptions.referenceImageUrl).toBe("http://shira/portrait.png")
     expect(passedPrompt).toContain("shira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
 })
@@ -1443,7 +1443,7 @@ describe("text-to-video", () => {
 
     // Canonical fallback directive must appear in the prompt.
     expect(passedPrompt).toContain("shira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
     // Canonical URL already in upstream refs, no dup.
     expect(passedOptions.referenceImageUrls).toBeDefined()
@@ -1487,7 +1487,7 @@ describe("text-to-video", () => {
     const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
     const passedPrompt = callArgs[1] as string
     expect(passedPrompt).toContain("kira")
-    expect(passedPrompt).toMatch(/Match exactly/)
+    expect(passedPrompt).toContain("The subject must remain exactly the same person")
   })
 })
 

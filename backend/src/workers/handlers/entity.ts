@@ -37,6 +37,11 @@ interface EntityImageJobData {
   description?: string
   motionDescription?: string
   realLifeRefs?: string[]
+  // Per-asset-type aspect-ratio (set by the route via
+  // `resolveCharacterAspectRatio`). When present, takes precedence over the
+  // handler's static `opts.aspectRatio` so each generation can pick a
+  // framing that matches its asset type (portrait=3:4, poses=9:16, etc.).
+  aspectRatio?: string
 }
 
 function makeEntityImageHandler(
@@ -56,6 +61,7 @@ function makeEntityImageHandler(
       description,
       motionDescription,
       realLifeRefs,
+      aspectRatio,
     } = data
     const resolvedProvider = provider ?? "nano-banana"
 
@@ -66,7 +72,12 @@ function makeEntityImageHandler(
     }
 
     const referenceImageUrls = sourceImageUrl ? [sourceImageUrl] : undefined
-    const extraParams = opts?.aspectRatio ? { aspect_ratio: opts.aspectRatio } : undefined
+    // Per-job aspect ratio (set by the route's `resolveCharacterAspectRatio`)
+    // wins over the handler's static `opts.aspectRatio` so each character
+    // asset can pick a framing that matches its asset type. Generate-face
+    // still pins 1:1 via opts because faces are always square crops.
+    const effectiveAspectRatio = aspectRatio ?? opts?.aspectRatio
+    const extraParams = effectiveAspectRatio ? { aspect_ratio: effectiveAspectRatio } : undefined
     const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, extraParams)
     await setJobProgress(job, ctx.jobId, 50)
 
@@ -157,6 +168,7 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
     description,
     motionDescription,
     realLifeRefs,
+    aspectRatio,
   } = job.data as {
     jobId: string
     prompt: string
@@ -167,11 +179,22 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
     description?: string
     motionDescription?: string
     realLifeRefs?: string[]
+    aspectRatio?: string
   }
   const resolvedProvider = provider ?? "kling"
   console.log(`[worker] generate-character-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
-  const result = await imageToVideo(sourceImageUrl, resolvedProvider, prompt)
+  // Pass the resolved aspect ratio (default 9:16 for motions, overridden by
+  // the character node toggle or an explicit `aspectRatio`) through the
+  // image-to-video provider chain via `options.aspectRatio`.
+  const result = await imageToVideo(
+    sourceImageUrl,
+    resolvedProvider,
+    prompt,
+    undefined,
+    undefined,
+    aspectRatio ? { aspectRatio } : undefined,
+  )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)

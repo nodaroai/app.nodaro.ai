@@ -10,6 +10,10 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildPortraitPrompt } from "../lib/character-prompts.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
+import {
+  CHARACTER_ASPECT_OPTIONS,
+  resolveCharacterAspectRatio,
+} from "@nodaro/shared"
 
 const generateCharacterBody = z
   .object({
@@ -36,7 +40,7 @@ const generateCharacterBody = z
           url: safeUrlSchema,
           // Migration 118 renamed the two ambiguous kinds:
           //   front    → frontFace  (face-level shot)
-          //   fullBody → frontBody  (full-body T-pose shot)
+          //   fullBody → frontBody  (full-body natural standing shot)
           kind: z.enum([
             "frontFace",
             "sideLeft",
@@ -51,6 +55,13 @@ const generateCharacterBody = z
       .max(20)
       .optional(),
     count: z.union([z.literal(1), z.literal(2), z.literal(4)]).optional().default(1),
+    // Per-asset-type aspect-ratio defaults (smart-defaults feature). Portrait
+    // generation defaults to 3:4 (vertical headshot). Callers can override
+    // explicitly via `aspectRatio`, or via `characterNodeAspectRatio` (the
+    // character node's 4-pill toggle) which loses to `aspectRatio` but wins
+    // against the default. See `packages/shared/src/character-aspect-defaults.ts`.
+    aspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
+    characterNodeAspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
   })
   .refine(
     (data) =>
@@ -125,6 +136,16 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
       const mcpClient = extractMcpClient(req.body)
       const inputData = buildJobInputData(parsed.data, "generate-character")
       const workflowId = extractWorkflowId(req.body)
+
+      // Resolve the final aspect ratio: explicit > node override > portrait default.
+      // The character node's `defaultAssetAspectRatio` flows in as
+      // `characterNodeAspectRatio`; the portrait default is 3:4 (vertical
+      // headshot — characters are vertical subjects).
+      const aspectRatio = resolveCharacterAspectRatio({
+        explicit: data.aspectRatio,
+        nodeOverride: data.characterNodeAspectRatio,
+        assetType: "portrait",
+      })
 
       // ──────────────────────────────────────────────────────────────────────
       // Phase 1: Insert N pending jobs (always at least 1).
@@ -239,6 +260,7 @@ export async function generateCharacterRoutes(app: FastifyInstance) {
           sourceImageUrl: data.sourceImageUrl,
           provider: data.provider,
           attachToCharacterId: data.attachToCharacterId,
+          aspectRatio,
           usageLogId: r.usageLogId,
         })
       }
