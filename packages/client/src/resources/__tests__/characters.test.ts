@@ -46,6 +46,50 @@ describe("characters resource", () => {
     expect(url).not.toContain("archived")
   })
 
+  it("list serializes the limit param into the query string", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ characters: [] }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.characters.list({ limit: 5 })
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain("limit=5")
+  })
+
+  it("list omits limit from the query string when not supplied", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ characters: [] }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.characters.list()
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).not.toContain("limit")
+  })
+
+  it("update sends only the supplied keys (omits name when not passed)", async () => {
+    // The route ignores `name: undefined` on UPDATE — but earlier SDK builds
+    // forced `name: string`, so a partial update like `{ gender: "female" }`
+    // typechecked only via an empty string fallback that the route 400'd as
+    // `min(1)`. The optional-name SDK type lets us send just the keys the
+    // caller actually wants to change.
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ id: "kira-id" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.characters.update("kira-id", { nodeId: "mcp-managed", gender: "female" })
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    const body = JSON.parse(init.body) as Record<string, unknown>
+    expect(body.id).toBe("kira-id")
+    expect(body.gender).toBe("female")
+    expect(body.name).toBeUndefined()
+  })
+
   it("get GETs /v1/characters/:id and url-encodes the id", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ id: "x" }))
     const c = createClient({
