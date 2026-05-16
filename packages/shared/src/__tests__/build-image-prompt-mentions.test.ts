@@ -212,6 +212,126 @@ describe("buildImagePrompt with @-mentions", () => {
   // this scenario actually reaches Phase 0 (it was previously bypassed). This
   // test guards the underlying Phase 0 resolution path that the executor now
   // routes through.
+  // -------------------------------------------------------------------------
+  // Usage-mode tests — per-mention slug override + character-node default
+  // propagation through ConnectedReference.defaultUsageMode.
+  // -------------------------------------------------------------------------
+
+  it("@kira:1:face emits face-only directive (no canonical description)", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:face waving",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Preserve clothing, hair styling, and posture")
+    // Face-only deliberately drops the canonical-description prefix so the
+    // model isn't anchored to body proportions when only the face is wanted.
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+    expect(result.prompt).toContain("Image 1 (Kira)")
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+  })
+
+  it("@kira:1:smile:face combines variant URL with face-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "show @kira:1:smile:face dancing",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraSmile],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://r2/kira-smile.png"])
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.prompt).toContain("Image 1 (Kira)")
+  })
+
+  it("@kira:1:style emits style-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "redo @kira:1:style as a comic panel",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the visual style and tone")
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("@kira:1:emotion emits emotion-only directive", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:emotion expressed by another character",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take only the emotional expression")
+    expect(result.prompt).toContain("Preserve all other aspects")
+  })
+
+  it("@kira:1:face-pose emits face + pose directive AND keeps canonical description", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:face-pose in a different outfit",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    expect(result.prompt).toContain("Take the facial features and body pose")
+    expect(result.prompt).toContain("Preserve clothing and styling")
+    // face-pose deliberately keeps the canonical description so the model
+    // holds the underlying identity while reposing.
+    expect(result.prompt).toContain("auburn shoulder-length hair")
+  })
+
+  it("falls back to character node's defaultUsageMode when slug has no mode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "@kira:1 happy",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    // No slug-level mode; falls through to node default "face".
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    // Canonical description omitted because face mode drops it.
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("slug mode overrides character node's defaultUsageMode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "@kira:1:style as a wood carving",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    expect(result.prompt).toContain("Take only the visual style and tone")
+    expect(result.prompt).not.toContain("Take only the facial features and expression")
+  })
+
+  it("canonical fallback (no @-mention) uses character node's defaultUsageMode", () => {
+    const kiraFace: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "face",
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait with no mention",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraFace],
+    })
+    // Canonical fallback triggers — directive uses the node's default mode.
+    expect(result.prompt).toContain("Take only the facial features and expression")
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+  })
+
+  it("canonical fallback without defaultUsageMode keeps the legacy 'Match exactly' directive", () => {
+    const result = buildImagePrompt({
+      prompt: "just a scene",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    // Backwards-compat: when neither slug nor node specify a mode, the
+    // directive matches the pre-mode-feature wording exactly.
+    expect(result.prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+  })
+
   it("user scenario: shira with smile + laughing variants — both URLs attach, canonical skipped", () => {
     const shiraCanonical: ConnectedReference = {
       id: "char-shira",
@@ -266,5 +386,224 @@ describe("buildImagePrompt with @-mentions", () => {
     // Tokens replaced — no literal `@shira:N:variant` survives.
     expect(result.prompt).not.toMatch(/@shira:1:smile\b/)
     expect(result.prompt).not.toMatch(/@shira:2:laughing\b/)
+  })
+})
+
+describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
+  it("emits 'same subject as Image M' for a character extra whose character is canonically attached", () => {
+    const kiraExtra: ConnectedReference = {
+      id: "extra-kira-stand",
+      defaultName: "Kira / standing",
+      source: "wired-character",
+      description: "full body, standing, facing right",
+      url: "https://r2/kira-standing.png",
+      characterSlug: "kira",
+      variantSlug: "standing",
+      variantDescription: "full body, standing, facing right",
+      variantDisplayName: "standing",
+      defaultUsageMode: "identical",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a busy street market",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraExtra],
+    })
+    // Kira (canonical) attaches at position 1; extra at position 2.
+    expect(result.referenceImageUrls).toEqual([
+      "https://r2/kira-portrait.png",
+      "https://r2/kira-standing.png",
+    ])
+    // Pair-back directive uses the exact "Image 2 is the same subject as
+    // Image 1, …" phrasing called out in the spec.
+    expect(result.prompt).toContain(
+      "Image 2 is the same subject as Image 1, full body, standing, facing right.",
+    )
+    // Canonical fallback bullet for Kira still emitted ("match exactly").
+    expect(result.prompt).toContain("Kira — young woman, brown eyes, auburn shoulder-length hair, athletic build")
+  })
+
+  it("emits canonical-style directive for a character extra of a previously-unseen character", () => {
+    const danielExtra: ConnectedReference = {
+      id: "extra-daniel-1",
+      defaultName: "Daniel",
+      source: "wired-character",
+      description: "looking right, hands in pockets",
+      url: "https://r2/daniel-1.png",
+      characterSlug: "daniel",
+      variantSlug: "look-right",
+      variantDescription: "looking right, hands in pockets",
+      variantDisplayName: "look-right",
+      defaultUsageMode: "identical",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a busy street market",
+      provider: "nano-banana-pro",
+      connectedReferences: [danielExtra],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://r2/daniel-1.png"])
+    // First-sight extra: canonical-style directive with the per-ref
+    // description as the descriptor.
+    expect(result.prompt).toContain("Image 1 (Daniel) — looking right, hands in pockets. Match exactly")
+  })
+
+  it("emits 'Image N (reference): <description>.' for a manual upload extra", () => {
+    const manualExtra: ConnectedReference = {
+      id: "extra-style",
+      defaultName: "Image 1",
+      source: "manual",
+      description: "warm cinematic color palette",
+      url: "https://r2/style-ref.png",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait",
+      provider: "nano-banana-pro",
+      connectedReferences: [manualExtra],
+    })
+    expect(result.referenceImageUrls).toEqual(["https://r2/style-ref.png"])
+    expect(result.prompt).toContain(
+      "Image 1 (reference): warm cinematic color palette.",
+    )
+  })
+
+  it("matches the spec's example shape — Kira mention + standing extra", () => {
+    const kiraExtra: ConnectedReference = {
+      id: "extra-kira-stand",
+      defaultName: "Kira / standing",
+      source: "wired-character",
+      description: "full body, standing, facing right",
+      url: "https://r2/kira-standing.png",
+      characterSlug: "kira",
+      variantSlug: "standing",
+      variantDescription: "full body, standing, facing right",
+      variantDisplayName: "standing",
+      defaultUsageMode: "identical",
+      isExtraRef: true,
+    }
+    // Use a `@kira:1` mention so the canonical bullet picks up the
+    // "Image 1 (Kira)" numeric prefix — matches the spec's example exactly.
+    // (Without the mention, the canonical fallback bullet emits just "Kira"
+    // because positional indices are reserved for explicit user typing — see
+    // `buildCanonicalFallback`. The extra still pairs back to "Image 1" by
+    // URL position so the model can resolve the reference correctly either
+    // way.)
+    const result = buildImagePrompt({
+      prompt: "@kira:1 outside a coffee shop",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraExtra],
+    })
+    // Block opens with "Use these characters:"
+    expect(result.prompt.startsWith("Use these characters:\n")).toBe(true)
+    // Mention emits the numeric prefix.
+    expect(result.prompt).toContain("Image 1 (Kira)")
+    expect(result.prompt).toContain(
+      "Image 2 is the same subject as Image 1, full body, standing, facing right.",
+    )
+    // User prompt is preserved at the bottom.
+    expect(result.prompt).toContain("outside a coffee shop")
+  })
+
+  it("pairs an extra back to a canonical-fallback character by URL position even without numeric prefix", () => {
+    // Without a `@kira:N` mention, the canonical bullet emits "Kira — ..."
+    // (no numeric prefix — that's reserved for user-typed mentions). The
+    // extra's "same subject as Image 1" still resolves: position 1 in the
+    // worker's `referenceImageUrls` IS the canonical URL.
+    const kiraExtra: ConnectedReference = {
+      id: "extra-kira-stand",
+      defaultName: "Kira / standing",
+      source: "wired-character",
+      description: "full body, standing, facing right",
+      url: "https://r2/kira-standing.png",
+      characterSlug: "kira",
+      variantSlug: "standing",
+      variantDescription: "full body, standing, facing right",
+      variantDisplayName: "standing",
+      defaultUsageMode: "identical",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "outside a coffee shop",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraExtra],
+    })
+    // Position 1 = canonical Kira URL; position 2 = extra URL.
+    expect(result.referenceImageUrls).toEqual([
+      "https://r2/kira-portrait.png",
+      "https://r2/kira-standing.png",
+    ])
+    // Canonical fallback bullet (no numeric prefix — existing behavior).
+    expect(result.prompt).toContain("Kira — young woman, brown eyes")
+    // Pair-back to "Image 1" still emitted.
+    expect(result.prompt).toContain(
+      "Image 2 is the same subject as Image 1, full body, standing, facing right.",
+    )
+  })
+
+  it("does NOT double-emit when extras coexist with existing positional refs", () => {
+    const manualPositional: ConnectedReference = {
+      id: "pos-1",
+      defaultName: "Image 1",
+      source: "manual",
+      url: "https://r2/positional.png",
+      // No description / no isExtraRef — legacy positional ref.
+    }
+    const manualExtra: ConnectedReference = {
+      id: "extra-1",
+      defaultName: "Image 2",
+      source: "manual",
+      description: "warm light",
+      url: "https://r2/extra.png",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait",
+      provider: "nano-banana-pro",
+      connectedReferences: [manualPositional, manualExtra],
+    })
+    // Only the extra produces its dedicated reference bullet; the
+    // positional ref doesn't (it has no description and no isExtraRef).
+    const refBullets = (result.prompt.match(/Image \d+ \(reference\)/g) || []).length
+    expect(refBullets).toBe(1)
+    // Both URLs are in the final list, no duplicates.
+    expect(result.referenceImageUrls).toEqual(
+      expect.arrayContaining(["https://r2/positional.png", "https://r2/extra.png"]),
+    )
+  })
+
+  it("respects per-ref usageMode override on a character extra", () => {
+    const kiraExtraStyleMode: ConnectedReference = {
+      id: "extra-kira-style",
+      defaultName: "Kira / look",
+      source: "wired-character",
+      description: "1970s film grain look",
+      url: "https://r2/kira-look.png",
+      characterSlug: "kira",
+      variantSlug: "look",
+      variantDescription: "1970s film grain look",
+      variantDisplayName: "look",
+      // Per-ref override resolved at construction time.
+      defaultUsageMode: "style",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraExtraStyleMode],
+    })
+    // "style" mode directive should be emitted (and identity-lock language
+    // suppressed) because this is a first-sight character extra.
+    expect(result.prompt).toContain("Take only the visual style and tone.")
+    expect(result.prompt).not.toMatch(/Match exactly\. Maintain perfect likeness/)
+  })
+
+  it("leaves empty-extras workflows unchanged (no Use these characters: prefix)", () => {
+    const result = buildImagePrompt({
+      prompt: "a portrait",
+      provider: "nano-banana-pro",
+      connectedReferences: [],
+    })
+    expect(result.prompt).not.toMatch(/^Use these characters:/)
   })
 })

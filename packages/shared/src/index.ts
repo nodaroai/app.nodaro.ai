@@ -107,6 +107,14 @@ export {
 } from "./ancestor-refs.js"
 
 export {
+  expandExtraRefsToConnectedReferences,
+} from "./extra-refs.js"
+export type {
+  ExtraRefInput,
+  ExtraRefCharacterContext,
+} from "./extra-refs.js"
+
+export {
   DEFAULT_IDENTITY_LOCK,
   getIdentityLockClause,
   toIdentityLockMode,
@@ -846,3 +854,12 @@ export {
   findCharacterMentionTokens,
 } from "./character-mention-slug.js"
 export type { CharacterMentionTokenInfo } from "./character-mention-slug.js"
+
+export {
+  USAGE_MODES,
+  DEFAULT_USAGE_MODE,
+  isUsageMode,
+  usageModeDirective,
+  usageModeLabel,
+} from "./character-usage-mode.js"
+export type { UsageMode } from "./character-usage-mode.js"

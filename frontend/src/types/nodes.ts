@@ -53,6 +53,41 @@ export interface ManualReferenceImage {
   readonly url: string  // R2 URL
 }
 
+/**
+ * Extra reference image attached to an image / video generator. Unlike
+ * `ManualReferenceImage`, an extra ref carries a description and an optional
+ * per-ref usage mode override, and may be sourced from a wired character's
+ * asset variants. At build time:
+ *   - the URL is appended to the `connectedReferences` list as the first
+ *     non-character entries (or as additional `wired-character` entries when
+ *     `characterSlug` is set) so the runtime worker sees the reference image,
+ *   - the description becomes part of the assembled prompt directive ("Image
+ *     B is the same subject as Image A, <description>." for character-sourced
+ *     extras of a character already mentioned/canonical-attached; "Image B
+ *     (reference): <description>." for everything else).
+ *
+ * See `prompt-builder.ts::resolveCharacterMentions` and the orchestrator's
+ * `payload-builder.ts` for the build-time logic.
+ */
+export interface ExtraRef {
+  /** R2 URL of the reference image (uploaded or from a character asset). */
+  readonly url: string
+  /** Free-form description appended to the prompt's identity directive. */
+  readonly description: string
+  /** Slug of the source character (e.g. "kira") when picked from a wired
+   *  character's variants. Used for the "same subject as Image A" pairing. */
+  readonly characterSlug?: string
+  /** Variant slug (e.g. "smile") when picked from a specific character
+   *  variant. undefined when picked from the canonical asset. */
+  readonly variantSlug?: string
+  /** Display name for the variant ("smile", "canonical", "side profile") —
+   *  shown in the config panel row label and unused at build time. */
+  readonly variantDisplayName?: string
+  /** Optional per-ref usage mode override (falls back to the source
+   *  character node's `defaultUsageMode`, then to the global "identical"). */
+  readonly usageMode?: import("@nodaro/shared").UsageMode
+}
+
 // --- Input Node Data ---
 
 export type TextPromptData = {
@@ -1267,6 +1302,8 @@ export type GenerateImageData = {
   referenceImageOrder?: readonly string[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1326,6 +1363,8 @@ export type ImageToImageData = {
   maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1355,6 +1394,8 @@ export type ModifyImageData = {
   maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1453,6 +1494,8 @@ export type ImageToVideoData = {
   connectedImageOrder?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
   seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1509,6 +1552,8 @@ export type TextToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1543,6 +1588,8 @@ export type VideoToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   connectedImageOrder?: readonly string[]
+  /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
+  extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -2722,6 +2769,15 @@ export type CharacterNodeData = {
    *  - "strict"  — clamp facial identity precisely to the reference photo (default for face-locked workflows)
    *  Defaults to "soft" for backward compatibility. */
   identityLock?: "off" | "soft" | "strict"
+  /**
+   * Default usage mode for `@kira:N` mentions of this character. Drives the
+   * per-image directive in the assembled prompt — "identical" emits the full
+   * likeness lock, "face" / "face-pose" / "emotion" / "style" emit narrower
+   * directives. Overridden per-mention by a 4-part slug (`@kira:1:smile:face`).
+   * Defaults to "identical" (the legacy "match exactly" behavior) when unset.
+   * See `packages/shared/src/character-usage-mode.ts`.
+   */
+  defaultUsageMode?: import("@nodaro/shared").UsageMode
   characterSheet: CharacterSheet | null
   projectId: string
   createdAt: string

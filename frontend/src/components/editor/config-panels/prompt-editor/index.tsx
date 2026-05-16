@@ -12,6 +12,7 @@ import { ImageRefExtension } from "./image-ref-extension"
 import { SuggestionList, type SuggestionListHandle } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
+import { DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
@@ -122,20 +123,29 @@ export function PromptEditor({
             // atomic node so the visual pill + `{image:N:label}` round-trip
             // behavior is preserved.
             if (item.source === "character" && item.characterSlug) {
-              // Scan editor's plain-text content for existing `@<char>:<N>(:<variant>)?`
-              // tokens. Use max + 1 as the next index. Mirrors `computeNextMentionIndex`
+              // Scan editor's plain-text content for existing
+              // `@<char>:<N>(:<variant|mode>)?(:<mode>)?` tokens (2–4 part form).
+              // Use max + 1 as the next index. Mirrors `computeNextMentionIndex`
               // in `tag-textarea.tsx` and the regex shape in `character-mention-slug.ts`.
               const currentText = ed.getText({ blockSeparator: "\n" })
-              const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?/g
+              const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?/g
               let maxIdx = 0
               for (const match of currentText.matchAll(regex)) {
                 const n = parseInt(match[1], 10)
                 if (Number.isInteger(n) && n > maxIdx) maxIdx = n
               }
               const nextIdx = maxIdx + 1
-              const token = item.variantSlug
-                ? `@${item.characterSlug}:${nextIdx}:${item.variantSlug}`
-                : `@${item.characterSlug}:${nextIdx}`
+              // Build the slug. Only emit the trailing `:mode` segment when the
+              // character node has a non-default mode — keeps the common case
+              // (`identical`) clean as the legacy 2/3-part form. Casual users
+              // never see the 4-part syntax unless they intentionally
+              // configured a non-default mode on the source character node.
+              const mode = item.defaultUsageMode
+              const includeMode = mode != null && mode !== DEFAULT_USAGE_MODE
+              const parts = [`@${item.characterSlug}:${nextIdx}`]
+              if (item.variantSlug) parts.push(item.variantSlug)
+              if (includeMode) parts.push(mode)
+              const token = parts.join(":")
               // Replace the typed `@<filter>` range with the resolved token + space.
               ed
                 .chain()

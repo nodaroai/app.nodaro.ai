@@ -57,6 +57,13 @@ export interface SuggestionItem {
   kind?: "character-root" | "variant" | "back" | "leaf"
   /** Slug of the character this root row represents — used to drill in. */
   characterSlug?: string
+  /**
+   * Character node's `defaultUsageMode`. Carried through from the source
+   * `RefImageItem` so `selectSuggestion` can append the trailing `:<mode>`
+   * segment to the inserted slug when the character has a non-default mode
+   * (keeps the casual `@kira:1:smile` insertion clean for the common case).
+   */
+  defaultUsageMode?: import("@nodaro/shared").UsageMode
 }
 
 /** A reference image that can be inserted into the prompt via the "@" trigger. */
@@ -74,6 +81,16 @@ export interface RefImageItem {
   readonly variantSlug?: string
   /** Variant display name for the autocomplete (e.g. "smile", "canonical"). */
   readonly variantDisplayName?: string
+  /**
+   * Character node's `defaultUsageMode`. Mirrors the field on the underlying
+   * `ConnectedReference` (see `packages/shared/src/types.ts`) so the
+   * autocomplete can decide whether the inserted slug needs a trailing
+   * `:mode` segment — only added when the mode is non-default so casual users
+   * never see the 4-part form they don't need. The prompt-builder still falls
+   * back to this same value at execution time when the slug omits the mode,
+   * so insertion is purely a UX/display concern.
+   */
+  readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
 }
 
 type TriggerChar = "[" | "<" | "/" | "{" | "@"
@@ -109,9 +126,11 @@ const ALL_SUGGESTIONS = getAllSuggestions()
  * required), so they don't participate in the count.
  */
 function computeNextMentionIndex(promptValue: string): number {
-  // Matches `@<char>:<N>(:<variant>)?` and captures N. Mirrors the shared
-  // `findCharacterMentionTokens` regex shape so we count the same tokens.
-  const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?/g
+  // Matches `@<char>:<N>(:<variant|mode>)?(:<mode>)?` and captures N. Mirrors
+  // the shared `findCharacterMentionTokens` regex shape so we count the same
+  // tokens — the two optional trailing groups absorb the 4-part
+  // (variant + mode) form too.
+  const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?/g
   let maxIndex = 0
   for (const match of promptValue.matchAll(regex)) {
     const n = parseInt(match[1], 10)
@@ -244,6 +263,7 @@ export function TagTextarea(props: TagTextareaProps) {
               thumbnailUrl: v.url,
               // Intentionally omitted: see displayLabel comment.
               characterSlug: v.characterSlug,
+              defaultUsageMode: v.defaultUsageMode,
             })
           }
         }
@@ -294,6 +314,7 @@ export function TagTextarea(props: TagTextareaProps) {
           thumbnailUrl: v.url,
           variantDisplayName: v.variantDisplayName,
           characterSlug: v.characterSlug,
+          defaultUsageMode: v.defaultUsageMode,
         })),
       ]
     }
@@ -499,9 +520,23 @@ export function TagTextarea(props: TagTextareaProps) {
       const after = value.slice(cursorPos)
       const promptForCount = before + after
       const nextIndex = computeNextMentionIndex(promptForCount)
-      tag = item.tag.startsWith(`@${item.characterSlug}:`)
-        ? `@${item.characterSlug}:${nextIndex}:${item.tag.slice(item.characterSlug.length + 2)}`
-        : `@${item.characterSlug}:${nextIndex}`
+      // Reconstruct from the character's slug + computed index + variant.
+      // Bare `@<slug>` (canonical) becomes `@<slug>:<N>`; `@<slug>:<variant>`
+      // becomes `@<slug>:<N>:<variant>`. The 4th `:mode` segment is appended
+      // only when the source character node has a non-default `defaultUsageMode`
+      // — this keeps the common case (`identical`) on the 2/3-part form the
+      // textarea users are already used to.
+      const variantSlug = item.tag.startsWith(`@${item.characterSlug}:`)
+        ? item.tag.slice(item.characterSlug.length + 2)
+        : ""
+      const mode = item.defaultUsageMode
+      // Skip emitting the trailing `:mode` for the default mode so casual
+      // users (no mode configured on the node) keep seeing the old form.
+      const includeMode = mode != null && mode !== "identical"
+      const parts = [`@${item.characterSlug}:${nextIndex}`]
+      if (variantSlug) parts.push(variantSlug)
+      if (includeMode) parts.push(mode)
+      tag = parts.join(":")
     }
     insertTag(tag)
   }, [insertTag, clearFilterTextInTextarea, triggerInfo, value])

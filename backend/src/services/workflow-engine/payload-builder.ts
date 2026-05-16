@@ -23,8 +23,9 @@ import {
 } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import type { CharacterDef, ConnectedReference, SceneData } from "@nodaro/shared"
-import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared"
+import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
+import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions, usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared"
+import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
 import { isSeedance2Provider } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
@@ -221,6 +222,16 @@ function expandWiredCharacterRefs(
     const description = charData.description as string | undefined
     const canonicalDescription =
       (charData.canonicalDescription as string | null | undefined) ?? null
+    // Propagate the character node's default usage mode into every entry —
+    // `resolveCharacterMentions` reads this as the fallback when a per-mention
+    // slug omits its own `:mode` override. The cast is defensive — the JSON
+    // saved by the canvas already constrains this field to a `UsageMode`
+    // literal, but `SimpleNode.data` is a structural `Record<string, unknown>`
+    // so we narrow at the boundary. Invalid values trip the resolver into
+    // returning the global `DEFAULT_USAGE_MODE`, so the failure mode is safe.
+    const defaultUsageMode = charData.defaultUsageMode as
+      | ConnectedReference["defaultUsageMode"]
+      | undefined
     const canonicalUrl =
       (charData.defaultAssetUrl as string | undefined) ||
       (charData.sourceImageUrl as string | undefined)
@@ -236,6 +247,7 @@ function expandWiredCharacterRefs(
         characterCanonicalDescription: canonicalDescription,
         variantDescription: null,
         variantDisplayName: "canonical",
+        defaultUsageMode,
       })
     }
 
@@ -263,6 +275,7 @@ function expandWiredCharacterRefs(
           characterCanonicalDescription: canonicalDescription,
           variantDescription: null,
           variantDisplayName: item.name,
+          defaultUsageMode,
         })
       }
     }
@@ -271,14 +284,60 @@ function expandWiredCharacterRefs(
 }
 
 /**
+ * Build a `slug → ExtraRefCharacterContext` lookup for character-sourced
+ * extras. Mirrors the frontend `buildExtraRefCharacterContextLookup` in
+ * `execute-node.ts`. Used by the extras directive emission below + by
+ * `expandExtraRefsToConnectedReferences` so character-sourced extras inherit
+ * `defaultUsageMode` and `canonicalDescription` from the upstream node.
+ */
+function buildExtraRefCharacterContextLookup(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): (slug: string) => ExtraRefCharacterContext | undefined {
+  if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
+  const bySlug = new Map<string, ExtraRefCharacterContext>()
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    if (!upstream || upstream.type !== "character") continue
+    const charData = upstream.data
+    const charName =
+      (charData.characterName as string | undefined) ??
+      (charData.label as string | undefined) ??
+      ""
+    const slug = characterMentionSlug(charName)
+    if (!slug) continue
+    if (!bySlug.has(slug)) {
+      bySlug.set(slug, {
+        defaultUsageMode: charData.defaultUsageMode as ExtraRefCharacterContext["defaultUsageMode"],
+        canonicalDescription: (charData.canonicalDescription as string | null | undefined) ?? null,
+        displayName: charName,
+      })
+    }
+  }
+  return (slug) => bySlug.get(slug)
+}
+
+/** Read the `extraRefs` field from a SimpleNode's `data`, returning a typed
+ *  array (cast at the boundary — the JSON schema isn't enforced server-side
+ *  but the frontend type's interface is structural). */
+function readExtraRefs(data: Record<string, unknown>): readonly ExtraRefInput[] | undefined {
+  const raw = data.extraRefs
+  if (!Array.isArray(raw)) return undefined
+  return raw as readonly ExtraRefInput[]
+}
+
+/**
  * Resolve `@kira:N` / `@kira:N:smile` mentions in a video-node prompt against
  * wired Character upstreams AND apply the per-character canonical fallback
- * for unmentioned wired characters.
+ * for unmentioned wired characters. Also emits directives + appends URLs for
+ * user-attached extra references (the `extraRefs` field on node data).
  *
- * Mirrors `buildImagePrompt`'s Phase 0 mention pass + canonical fallback but
- * lives outside the image-specific assembly pipeline (which appends style
- * hints, routes negative prompts, filters refs by model support, etc.) so
- * it can be applied to video routes that have their own payload shape.
+ * Mirrors `buildImagePrompt`'s Phase 0 mention pass + canonical fallback +
+ * extras pass, but lives outside the image-specific assembly pipeline (which
+ * appends style hints, routes negative prompts, filters refs by model
+ * support, etc.) so it can be applied to video routes that have their own
+ * payload shape.
  *
  * Per-character behavior contract (parity with image-side):
  *   - wired-character with at least one `@-mention` → contribute ONLY the
@@ -296,9 +355,13 @@ function resolveVideoPromptMentions(
   prompt: string | undefined,
   consumerNodeId: string,
   buildCtx: PayloadBuildContext | undefined,
+  extraRefs?: readonly ExtraRefInput[],
 ): { prompt: string | undefined; additionalUrls: string[] } {
   const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
-  if (wiredCharRefs.length === 0) return { prompt, additionalUrls: [] }
+  const hasExtras = (extraRefs?.length ?? 0) > 0
+  if (wiredCharRefs.length === 0 && !hasExtras) {
+    return { prompt, additionalUrls: [] }
+  }
   const knownCharSlugs = Array.from(
     new Set(
       wiredCharRefs
@@ -306,16 +369,28 @@ function resolveVideoPromptMentions(
         .filter((s): s is string => typeof s === "string" && s.length > 0),
     ),
   )
-  if (knownCharSlugs.length === 0) return { prompt, additionalUrls: [] }
   // Empty user prompt is allowed — canonical fallback / mention resolution
   // can fill the prompt entirely. Treat undefined/empty as `""` so the
   // resolver flows through to mention + canonical-fallback assembly below.
   const promptForResolution = prompt ?? ""
-  const mentionTokens = findCharacterMentionTokens(promptForResolution, knownCharSlugs)
+  const mentionTokens = knownCharSlugs.length > 0
+    ? findCharacterMentionTokens(promptForResolution, knownCharSlugs)
+    : []
   // Resolve any mentions (may be empty); always check fallback after.
   const resolved = mentionTokens.length > 0
     ? resolveCharacterMentions(promptForResolution, mentionTokens, wiredCharRefs)
     : { prompt: promptForResolution, additionalUrls: [] as string[], mentionedCharacterSlugs: new Set<string>() }
+
+  // Track position of the first emitted URL per characterSlug — used by
+  // extras to pair back via "Image B is the same subject as Image A".
+  const positionsByChar = new Map<string, number>()
+  let position = 0
+  for (let i = 0; i < resolved.additionalUrls.length; i++) {
+    position += 1
+    const ref = wiredCharRefs.find((r) => r.url === resolved.additionalUrls[i])
+    const slug = ref?.characterSlug
+    if (slug && !positionsByChar.has(slug)) positionsByChar.set(slug, position)
+  }
 
   // Canonical fallback for any wired character NOT @-mentioned. Single
   // canonical URL + strong directive per unmentioned character — mirrors
@@ -332,15 +407,67 @@ function resolveVideoPromptMentions(
     if (!r.url) continue
     seenSlugs.add(r.characterSlug)
     fallbackUrls.push(r.url)
+    position += 1
+    if (!positionsByChar.has(r.characterSlug)) positionsByChar.set(r.characterSlug, position)
     const displayName = r.defaultName || r.characterSlug
-    const descPart = r.characterCanonicalDescription
+    // Mode-aware directive: character node's `defaultUsageMode` → global
+    // `DEFAULT_USAGE_MODE`. Keeps backend video runs in lock-step with the
+    // frontend `resolveVideoPromptMentions` and the shared image builder.
+    const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    const directive = usageModeDirective(effectiveMode)
+    const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
+    const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName
-    fallbackDirectiveLines.push(`- ${descPart}. Match exactly. Maintain perfect likeness (face, body proportions, distinctive features).`)
+    fallbackDirectiveLines.push(`- ${descPart}. ${directive}`)
+  }
+
+  // Extras: emit one directive per row. Numbering continues from `position`
+  // so the worker's `referenceImageUrls` order lines up with "Image N" in
+  // the assembled prompt. Mirrors the frontend `resolveVideoPromptMentions`.
+  const extraUrls: string[] = []
+  const extraDirectiveLines: string[] = []
+  if (hasExtras) {
+    const ctxLookup = buildExtraRefCharacterContextLookup(consumerNodeId, buildCtx)
+    for (const ex of extraRefs!) {
+      if (!ex.url) continue
+      position += 1
+      const desc = (ex.description ?? "").trim()
+      if (ex.characterSlug) {
+        const earlierPos = positionsByChar.get(ex.characterSlug)
+        if (earlierPos !== undefined) {
+          const tail = desc ? `, ${desc}` : ""
+          extraDirectiveLines.push(
+            `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
+          )
+        } else {
+          const ctx = ctxLookup(ex.characterSlug)
+          const effectiveMode = ex.usageMode ?? ctx?.defaultUsageMode ?? DEFAULT_USAGE_MODE
+          const directive = usageModeDirective(effectiveMode)
+          const displayName = ctx?.displayName || ex.characterSlug
+          const subject = `Image ${position} (${displayName})`
+          const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
+          const canonicalDesc = ctx?.canonicalDescription
+          let descPart = subject
+          if (desc) descPart = `${subject} — ${desc}`
+          else if (includeCanonicalDesc && canonicalDesc?.trim()) descPart = `${subject} — ${canonicalDesc.trim()}`
+          extraDirectiveLines.push(`- ${descPart}. ${directive}`)
+          positionsByChar.set(ex.characterSlug, position)
+        }
+      } else {
+        if (desc) {
+          extraDirectiveLines.push(`- Image ${position} (reference): ${desc}.`)
+        } else {
+          extraDirectiveLines.push(`- Image ${position} (reference).`)
+        }
+      }
+      extraUrls.push(ex.url)
+    }
   }
 
   let finalPrompt = resolved.prompt
-  if (fallbackDirectiveLines.length > 0) {
+  const allFallbackLines = [...fallbackDirectiveLines, ...extraDirectiveLines]
+  if (allFallbackLines.length > 0) {
     // Mirror shared `buildImagePrompt`'s consolidation: append fallback
     // bullets into an existing "Use these characters:" block when present,
     // otherwise create a new one.
@@ -349,23 +476,27 @@ function resolveVideoPromptMentions(
       if (splitIdx !== -1) {
         const header = finalPrompt.slice(0, splitIdx)
         const rest = finalPrompt.slice(splitIdx)
-        finalPrompt = `${header}\n${fallbackDirectiveLines.join("\n")}${rest}`
+        finalPrompt = `${header}\n${allFallbackLines.join("\n")}${rest}`
       } else {
-        finalPrompt = `${finalPrompt}\n${fallbackDirectiveLines.join("\n")}`
+        finalPrompt = `${finalPrompt}\n${allFallbackLines.join("\n")}`
       }
     } else {
-      const block = `Use these characters:\n${fallbackDirectiveLines.join("\n")}`
+      const block = `Use these characters:\n${allFallbackLines.join("\n")}`
       finalPrompt = finalPrompt ? `${block}\n\n${finalPrompt}` : block
     }
   }
 
-  // Dedup combined URLs while preserving order (mentions first, fallback after).
+  // Dedup combined URLs while preserving order (mentions first, fallback,
+  // then extras). "Image N" labels in the prompt assume this exact order.
   const merged: string[] = []
   const seen = new Set<string>()
   for (const u of resolved.additionalUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
   for (const u of fallbackUrls) {
+    if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+  }
+  for (const u of extraUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
   return { prompt: finalPrompt, additionalUrls: merged }
@@ -866,12 +997,20 @@ export function buildPayload(
       // This is the path the frontend takes too — keeping them aligned is the
       // entire point of running the workflow through the orchestrator producing
       // identical output to a frontend single-node run.
+      // We ALSO route through `connectedReferences` when user-attached extras
+      // exist (even without a wired character) — extras need the dedicated
+      // directive emission in `buildExtraRefDirectives`.
       const wiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const extraRefEntries = expandExtraRefsToConnectedReferences(
+        readExtraRefs(data),
+        buildExtraRefCharacterContextLookup(node.id, buildCtx),
+      )
       const hasWiredCharacter = wiredCharRefs.length > 0
+      const useConnectedRefs = hasWiredCharacter || extraRefEntries.length > 0
 
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const result = hasWiredCharacter
+      const result = useConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
             provider,
@@ -880,11 +1019,14 @@ export function buildPayload(
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
-            connectedReferences: buildConnectedRefsForGenerate(
-              wiredCharRefs,
-              refUrlMap,
-              orderIds,
-            ),
+            connectedReferences: [
+              ...buildConnectedRefsForGenerate(
+                wiredCharRefs,
+                refUrlMap,
+                orderIds,
+              ),
+              ...extraRefEntries,
+            ],
             ancestorRefs,
           })
         : buildImagePrompt({
@@ -1063,11 +1205,15 @@ export function buildPayload(
       // when any wired character exists so the canonical fallback applies for
       // unmentioned characters and frontend/backend parity is preserved.
       const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-      const i2iHasWiredCharacter = i2iWiredCharRefs.length > 0
+      const i2iExtraRefEntries = expandExtraRefsToConnectedReferences(
+        readExtraRefs(data),
+        buildExtraRefCharacterContextLookup(node.id, buildCtx),
+      )
+      const i2iUseConnectedRefs = i2iWiredCharRefs.length > 0 || i2iExtraRefEntries.length > 0
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-      const i2iResult = i2iHasWiredCharacter
+      const i2iResult = i2iUseConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
             provider,
@@ -1076,7 +1222,10 @@ export function buildPayload(
             characterDefs: charDefs as CharacterDef[],
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
-            connectedReferences: buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs),
+            connectedReferences: [
+              ...buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs),
+              ...i2iExtraRefEntries,
+            ],
             ancestorRefs: [],
           })
         : buildImagePrompt({
@@ -1254,10 +1403,14 @@ export function buildPayload(
         // character exists so the per-character contract (mentioned → variant
         // only / unmentioned → canonical fallback) applies in both paths.
         const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
-        const modHasWiredCharacter = modWiredCharRefs.length > 0
+        const modExtraRefEntries = expandExtraRefsToConnectedReferences(
+          readExtraRefs(data),
+          buildExtraRefCharacterContextLookup(node.id, buildCtx),
+        )
+        const modUseConnectedRefs = modWiredCharRefs.length > 0 || modExtraRefEntries.length > 0
 
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
-        const i2iResult = modHasWiredCharacter
+        const i2iResult = modUseConnectedRefs
           ? buildImagePrompt({
               prompt: rawPrompt,
               provider,
@@ -1266,7 +1419,10 @@ export function buildPayload(
               characterDefs: charDefs as CharacterDef[],
               userTemplates: settings?.userPromptTemplates,
               flowTemplates: settings?.flowPromptTemplates,
-              connectedReferences: buildConnectedRefsFromUrls(modWiredCharRefs, directRefs),
+              connectedReferences: [
+                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs),
+                ...modExtraRefEntries,
+              ],
               ancestorRefs: [],
             })
           : buildImagePrompt({
@@ -1365,7 +1521,7 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx)
+      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data))
       i2vPrompt = i2vMention.prompt
       // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
       // (1) `imageUrl` is the primary input frame, (2) `referenceImageUrls`
@@ -1475,7 +1631,7 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx)
+      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data))
       t2vPrompt = t2vMention.prompt
       let t2vReferenceImageUrls = resolvedInputs.referenceImageUrls
       if (t2vMention.additionalUrls.length > 0) {
@@ -1553,7 +1709,7 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx)
+      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx, readExtraRefs(data))
       v2vPrompt = v2vMention.prompt
       const v2vUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
         ? resolvedInputs.referenceImageUrls

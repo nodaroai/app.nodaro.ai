@@ -3,6 +3,8 @@
  * Both frontend WorkflowNode and backend SimpleNode satisfy these.
  */
 
+import type { UsageMode } from "./character-usage-mode.js"
+
 export interface GenericNode {
   id: string
   type: string
@@ -74,6 +76,33 @@ export interface ConnectedReference {
   readonly variantDescription?: string | null
   /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */
   readonly variantDisplayName?: string
+  /**
+   * Character node's `defaultUsageMode` propagated into every entry derived
+   * from that node. Used by `resolveCharacterMentions` as the fallback when
+   * the per-mention slug doesn't carry an explicit mode override. Absent for
+   * non-character refs and for character entries built without a node context
+   * (e.g. character-definition-only entries in legacy paths).
+   */
+  readonly defaultUsageMode?: UsageMode
+  /**
+   * Marks an entry as a user-attached "extra reference image" (see the
+   * `extraRefs` field on Generate/Modify/Image-to-Video/Text-to-Video/Video-to-Video
+   * node data types in the frontend). Extras are auto-attached to the worker
+   * `referenceImageUrls` AND get a dedicated directive line in the assembled
+   * prompt:
+   *   - character-sourced extras of an already-emitted character →
+   *     "Image N is the same subject as Image M, <description>."
+   *   - character-sourced extras of a previously-unseen character →
+   *     a canonical-style directive using the description as the descriptor
+   *   - manual-sourced extras →
+   *     "Image N (reference): <description>."
+   *
+   * The `description` field carries the per-ref free-text the user typed.
+   * Without this marker, character refs with a variantSlug are treated as
+   * autocomplete-only (the legacy behavior — unmentioned variants don't
+   * auto-attach), which is exactly what we DON'T want for explicit extras.
+   */
+  readonly isExtraRef?: boolean
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */
