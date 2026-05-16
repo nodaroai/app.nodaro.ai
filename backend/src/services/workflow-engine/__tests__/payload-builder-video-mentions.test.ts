@@ -147,7 +147,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // Strong directive prepended for the unmentioned wired character.
       expect(prompt).toContain("Use these characters:")
       expect(prompt).toContain("auburn shoulder-length hair")
-      expect(prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+      expect(prompt).toContain("The subject must remain exactly the same person")
       // No literal `@-mention` ever appeared, so the body is unchanged.
       expect(prompt).toContain("a calm forest at dawn")
     })
@@ -207,7 +207,7 @@ describe("payload-builder video paths: @-mention resolution", () => {
       // Canonical fallback directive must appear even with empty user input.
       expect(prompt).toContain("Use these characters:")
       expect(prompt).toContain("auburn shoulder-length hair")
-      expect(prompt).toMatch(/Match exactly\. Maintain perfect likeness/)
+      expect(prompt).toContain("The subject must remain exactly the same person")
     })
   })
 
