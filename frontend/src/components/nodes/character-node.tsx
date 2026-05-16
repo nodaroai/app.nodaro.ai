@@ -12,6 +12,13 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
 
@@ -210,24 +217,36 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             <span className="text-[#ff0073] font-normal ml-1">{`• ${variantName}`}</span>
           )}
         </div>
-        <select
-          aria-label="Default usage mode for character mentions"
-          title="How the AI consumes this character's image when @-mentioned"
+        {/* Custom-styled dropdown via shadcn `Select` — the native <select>
+            popup didn't match the dark canvas styling and rendered the OS's
+            white menu. The `stopPropagation` on the trigger is critical:
+            React Flow listens for pointer events on every node to start a
+            drag, so without it opening the dropdown would also drag the node
+            (and on touch devices the dropdown wouldn't open at all). */}
+        <Select
           value={nodeData.defaultUsageMode ?? DEFAULT_USAGE_MODE}
-          onChange={(e) =>
-            updateNodeData(id, { defaultUsageMode: e.target.value as UsageMode })
+          onValueChange={(v) =>
+            updateNodeData(id, { defaultUsageMode: v as UsageMode })
           }
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="shrink-0 text-[9px] leading-tight bg-[#13161f] border border-[#334155] rounded px-1 py-0.5 text-slate-300 hover:border-[#475569] focus:outline-none focus:border-[#ff0073] cursor-pointer"
         >
-          {USAGE_MODES.map((m) => (
-            <option key={m} value={m}>
-              {usageModeLabel(m)}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label="Default usage mode for character mentions"
+            title="How the AI consumes this character's image when @-mentioned"
+            className="shrink-0 h-6 w-[110px] text-[10px] bg-[#13161f] border-[#334155] text-slate-300 hover:border-[#475569] focus:border-[#ff0073] px-2 py-0"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {USAGE_MODES.map((m) => (
+              <SelectItem key={m} value={m} className="text-[11px]">
+                {usageModeLabel(m)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="px-2.5 pb-2 text-[9px] text-slate-600">{`${nodeData.style} · ${nodeData.gender}`}</div>
 
