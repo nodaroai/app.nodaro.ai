@@ -524,8 +524,10 @@ omitted fields are left untouched.
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency. |
 
 **Optimistic concurrency:** pass the `updatedAt` from a prior `get_character`
-call as `expected_updated_at`. If the row changed since you read it the call
-returns an error instead of overwriting.
+call as `expected_updated_at`. The token is folded into the UPDATE itself
+(`WHERE updated_at = :expected_updated_at`) so the check is atomic — if the
+row changed since you read it the UPDATE matches zero rows and the call
+returns a conflict error instead of overwriting.
 
 ### Destructive operations — intentionally NOT exposed via MCP
 

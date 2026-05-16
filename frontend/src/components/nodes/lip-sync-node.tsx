@@ -270,10 +270,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
 
   // Probe the upstream audio's duration so the credit display + per-second
   // reservation reflect actual length. Cached per URL in audio-duration.ts.
+  // selectedAudio is a ConnectedNodeInfo (no data field) — look up the real
+  // WorkflowNode so extractNodeOutput can read its data.
   const upstreamAudioUrl = useMemo(() => {
     if (!selectedAudio) return undefined
-    return extractNodeOutput(selectedAudio as never)
-  }, [selectedAudio])
+    const audioNode = nodes.find((n) => n.id === selectedAudio.id)
+    if (!audioNode) return undefined
+    return extractNodeOutput(audioNode)
+  }, [selectedAudio, nodes])
   useEffect(() => {
     if (!upstreamAudioUrl) return
     let cancelled = false

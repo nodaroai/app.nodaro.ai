@@ -10,7 +10,14 @@
  * HTTP call would produce.
  */
 
-export type EntityStyle = "realistic" | "anime" | "3d-pixar" | "illustration"
+/**
+ * Allowed style values for character / face / object / location entities.
+ * Single source of truth: derive Zod enums + TS types from this tuple so the
+ * Zod schema, the TS union, the SDK input types, and the CLI flag validator
+ * never drift apart.
+ */
+export const CHARACTER_STYLES = ["realistic", "anime", "3d-pixar", "illustration"] as const
+export type EntityStyle = (typeof CHARACTER_STYLES)[number]
 
 /**
  * Reserved name the Character Studio auto-assigns when a user clicks Generate

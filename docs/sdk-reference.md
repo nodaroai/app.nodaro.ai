@@ -539,10 +539,10 @@ list(params?: ListCharactersParams): Promise<{ characters: Character[] }>
 
 Lists the caller's characters. By default returns active characters only;
 pass `archived: true` for an "archive" view. `projectId` further restricts
-to a single project.
+to a single project. `limit` caps the result (server default 100, max 500).
 
 ```ts
-const { characters } = await client.characters.list({ projectId })
+const { characters } = await client.characters.list({ projectId, limit: 50 })
 ```
 
 #### `get(id)`
@@ -566,13 +566,15 @@ that hold a stale `characterDbId` keep loading.
 
 ```ts
 upsert(input: UpsertCharacterInput): Promise<{ id: string; name?: string }>
-create(input: Omit<UpsertCharacterInput, "id">): Promise<{ id: string; name?: string }>
+create(input: Omit<UpsertCharacterInput, "id"> & { name: string }): Promise<{ id: string; name?: string }>
 update(id: string, input: Omit<UpsertCharacterInput, "id">): Promise<{ id: string; name?: string }>
 ```
 
 `upsert()` creates when `input.id` is omitted and updates when it is set.
 `create()` and `update()` are thin wrappers that pin `id` for you. On UPDATE
-only the fields you supply are written; omitted fields are not touched.
+only the fields you supply are written; omitted fields are not touched —
+including `name`, which is optional on UPDATE (the route accepts partial
+updates without forcing you to re-send the existing name).
 
 Name collisions return 409 `name_taken`. To auto-number a placeholder, pass
 the placeholder name imported from `@nodaro/shared`.

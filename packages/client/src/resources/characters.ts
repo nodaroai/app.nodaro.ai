@@ -1,4 +1,14 @@
+import type { EntityStyle } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
+
+/**
+ * Re-export the shared `EntityStyle` union (realistic | anime | 3d-pixar |
+ * illustration) and `CHARACTER_STYLES` runtime tuple so SDK consumers don't
+ * have to add `@nodaro/shared` as a second dependency just to typecheck the
+ * `style` field. Single source of truth lives in `@nodaro/shared/entity-prompts`.
+ */
+export type { EntityStyle } from "@nodaro/shared"
+export { CHARACTER_STYLES } from "@nodaro/shared"
 
 /**
  * A character record returned by Nodaro's REST API. Mirrors the camelCase
@@ -91,6 +101,12 @@ export interface ReferencePhoto {
  * `backend/src/routes/characters.ts`. Omitting `id` triggers an INSERT;
  * supplying it triggers an UPDATE that only writes the fields you pass —
  * undefined keys are NOT touched on the row.
+ *
+ * `name` is optional at the type level. The route requires `name` on INSERT
+ * (id absent) and rejects with `validation_error` otherwise; on UPDATE the
+ * route just ignores `name` when omitted, which lets partial updates like
+ * `update(id, { gender: "female" })` succeed without re-sending the same
+ * name the caller already has.
  */
 export interface UpsertCharacterInput {
   /** UUID of the character row; omit to create. */
@@ -99,7 +115,7 @@ export interface UpsertCharacterInput {
   nodeId: string
   workflowId?: string
   projectId?: string
-  name: string
+  name?: string
   description?: string
   gender?: string
   style?: string
@@ -135,6 +151,11 @@ export interface ListCharactersParams {
   projectId?: string
   /** When true, return archived characters instead of active ones. */
   archived?: boolean
+  /**
+   * Max rows to return. Server defaults to 100, caps at 500. Omit to take the
+   * server default — passing it just narrows further.
+   */
+  limit?: number
 }
 
 export interface DuplicateCharacterInput {
@@ -167,7 +188,7 @@ export interface GenerateCharacterInput {
   description?: string
   userPrompt?: string
   gender?: string
-  style?: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style?: EntityStyle
   baseOutfit?: string
   sourceImageUrl?: string
   provider?: string
@@ -202,7 +223,7 @@ export interface GenerateAssetInput {
   description?: string
   userPrompt?: string
   gender?: string
-  style?: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style?: EntityStyle
   baseOutfit?: string
   sourceImageUrl?: string
   /** Real-life reference URLs (cap 5). */
@@ -228,7 +249,7 @@ export interface GenerateMotionInput {
   description?: string
   motionDescription?: string
   gender?: string
-  style?: "realistic" | "anime" | "3d-pixar" | "illustration"
+  style?: EntityStyle
   baseOutfit?: string
   realLifeRefs?: string[]
   attachToCharacterId?: string
@@ -261,6 +282,7 @@ export class CharactersResource {
     const query: Record<string, string | undefined> = {}
     if (params.projectId) query.projectId = params.projectId
     if (params.archived) query.archived = "true"
+    if (params.limit !== undefined) query.limit = String(params.limit)
     return this.client.request("GET", "/v1/characters", { query })
   }
 
@@ -288,9 +310,13 @@ export class CharactersResource {
 
   /**
    * Convenience wrapper around `upsert()` for creating new characters.
-   * Equivalent to `upsert({ ...input, id: undefined })`.
+   * Equivalent to `upsert({ ...input, id: undefined })`. `name` is REQUIRED
+   * on create — the route 400s on INSERT-without-name; we narrow the type
+   * here so callers fail at compile-time rather than runtime.
    */
-  create(input: Omit<UpsertCharacterInput, "id">): Promise<UpsertCharacterResult> {
+  create(
+    input: Omit<UpsertCharacterInput, "id"> & { name: string },
+  ): Promise<UpsertCharacterResult> {
     return this.upsert(input)
   }
 

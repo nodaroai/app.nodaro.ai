@@ -46,7 +46,13 @@ const upsertCharacterBody = z.object({
   // debounced auto-save can write identity fields without overwriting asset
   // arrays that the worker is concurrently appending to. INSERT always uses
   // the full row (with sensible defaults).
-  name: z.string().min(1).max(200),
+  //
+  // `name` is OPTIONAL at the schema level so partial updates ({id, gender})
+  // typecheck without forcing the caller to re-send the same name they
+  // already have. The handler still requires `name` on INSERT (rejects with
+  // a `validation_error` when `id` is missing AND `name` is missing) and
+  // only writes `name` into the patch on UPDATE when it's defined.
+  name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
   gender: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
@@ -100,6 +106,11 @@ const listCharactersQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
   archived: z.enum(["true", "false"]).optional(),
+  // Default 100 = enough for the library list at typical scale; cap at 500 so
+  // a misbehaving SDK consumer can't drag the whole table over the wire.
+  // The route APPLIES `.limit(parsed.limit)` so this both validates AND drives
+  // the actual DB cap.
+  limit: z.coerce.number().int().positive().max(500).optional().default(100),
 })
 
 const SELECT_COLUMNS =
@@ -218,7 +229,7 @@ export async function characterRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId, archived } = parsed.data
+    const { projectId, archived, limit } = parsed.data
     const userId = req.userId
     const wantArchived = archived === "true"
 
@@ -232,6 +243,7 @@ export async function characterRoutes(app: FastifyInstance) {
     // Default view excludes archived. Archived view flips the filter.
     if (wantArchived) query = query.not("deleted_at", "is", null)
     else query = query.is("deleted_at", null)
+    query = query.limit(limit)
 
     const { data, error } = await query
 
@@ -450,11 +462,15 @@ export async function characterRoutes(app: FastifyInstance) {
       : undefined
 
     if (id) {
-      // UPDATE: only touch columns the caller explicitly sent.
+      // UPDATE: only touch columns the caller explicitly sent. `name` itself
+      // is OPTIONAL on UPDATE — when omitted we leave the existing row.name
+      // alone. This is what lets CLI partial updates (`nodaro characters
+      // update <id> --gender female`) succeed without forcing every caller
+      // to round-trip and re-send the current name.
       const patch: Record<string, unknown> = {
-        name,
         updated_at: new Date().toISOString(),
       }
+      if (name !== undefined) patch.name = name
       if (description !== undefined) patch.description = description ?? null
       if (gender !== undefined) patch.gender = gender ?? null
       if (style !== undefined) patch.style = style ?? null
@@ -490,7 +506,16 @@ export async function characterRoutes(app: FastifyInstance) {
       return { id: updated.id }
     }
 
-    // INSERT
+    // INSERT — `name` is required when creating a new row.
+    if (name === undefined) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: "name is required when creating a new character (id omitted).",
+        },
+      })
+    }
+
     const basePayload = {
       user_id: userId,
       node_id: nodeId,

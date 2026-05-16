@@ -1,7 +1,10 @@
 import { Command } from "commander"
+import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, table, dim, type OutputOpts } from "../output.js"
 import { watchUntilTerminal } from "../util.js"
+
+const STYLE_DESCRIPTION = `one of ${CHARACTER_STYLES.join("|")}`
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -27,32 +30,43 @@ export function charactersCommand(): Command {
     .description("list characters (active by default)")
     .option("--project <projectId>", "filter to one project")
     .option("--archived", "show archived characters instead of active ones")
+    .option("--limit <n>", "max characters to return (default 100, max 500)")
     .option("--profile <name>")
     .option("--json")
-    .action(async (opts: { project?: string; archived?: boolean } & GlobalOpts) => {
-      try {
-        const client = buildClient(opts.profile)
-        const result = await client.characters.list({
-          projectId: opts.project,
-          archived: opts.archived,
-        })
-        if (opts.json) {
-          emit(result.characters, opts)
-          return
+    .action(
+      async (
+        opts: { project?: string; archived?: boolean; limit?: string } & GlobalOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const limitNum =
+            opts.limit !== undefined ? Number.parseInt(opts.limit, 10) : undefined
+          if (limitNum !== undefined && (!Number.isFinite(limitNum) || limitNum <= 0)) {
+            throw new Error(`--limit must be a positive integer (got ${opts.limit})`)
+          }
+          const result = await client.characters.list({
+            projectId: opts.project,
+            archived: opts.archived,
+            limit: limitNum,
+          })
+          if (opts.json) {
+            emit(result.characters, opts)
+            return
+          }
+          table(
+            result.characters.map((c) => ({
+              id: c.id,
+              name: c.name,
+              portrait: c.sourceImageUrl ? "yes" : "no",
+              updatedAt: c.updatedAt,
+            })),
+            ["id", "name", "portrait", "updatedAt"],
+          )
+        } catch (err) {
+          handleError(err)
         }
-        table(
-          result.characters.map((c) => ({
-            id: c.id,
-            name: c.name,
-            portrait: c.sourceImageUrl ? "yes" : "no",
-            updatedAt: c.updatedAt,
-          })),
-          ["id", "name", "portrait", "updatedAt"],
-        )
-      } catch (err) {
-        handleError(err)
-      }
-    })
+      },
+    )
 
   cmd
     .command("get <id>")
@@ -76,7 +90,7 @@ export function charactersCommand(): Command {
     .requiredOption("--name <name>", "display name (unique per user)")
     .option("--description <desc>", "freeform identity notes")
     .option("--gender <gender>")
-    .option("--style <style>", "one of realistic|anime|3d-pixar|illustration")
+    .option("--style <style>", STYLE_DESCRIPTION)
     .option("--base-outfit <outfit>", "default wardrobe description")
     .option("--seed-prompt <prompt>", "scaffold prompt for portrait generation")
     .option("--node-id <id>", "canvas node id to bind to", "mcp-managed")
@@ -105,12 +119,7 @@ export function charactersCommand(): Command {
             description: opts.description,
             gender: opts.gender,
             // Style is validated server-side; we pass through as-is.
-            style: opts.style as
-              | "realistic"
-              | "anime"
-              | "3d-pixar"
-              | "illustration"
-              | undefined,
+            style: opts.style as EntityStyle | undefined,
             baseOutfit: opts.baseOutfit,
             seedPrompt: opts.seedPrompt,
           })
@@ -131,7 +140,7 @@ export function charactersCommand(): Command {
     .option("--name <name>")
     .option("--description <desc>")
     .option("--gender <gender>")
-    .option("--style <style>", "realistic|anime|3d-pixar|illustration")
+    .option("--style <style>", STYLE_DESCRIPTION)
     .option("--base-outfit <outfit>")
     .option("--seed-prompt <prompt>")
     .option("--node-id <id>", "canvas node id (required on update too)", "mcp-managed")
@@ -165,23 +174,23 @@ export function charactersCommand(): Command {
             )
           }
           const client = buildClient(opts.profile)
-          const result = await client.characters.update(id, {
+          // Build the patch with ONLY the keys the user actually supplied —
+          // the SDK / backend ignore unset fields on UPDATE, but sending
+          // `name: ""` would be parsed as "blank the name" and the route's
+          // Zod `min(1)` would 400. Forwarding only defined keys is the
+          // safe path.
+          const patch: Parameters<typeof client.characters.update>[1] = {
             nodeId: opts.nodeId,
-            // upsert needs `name` to be a string when supplied; if --name was
-            // omitted, the SDK type allows undefined but the route ignores
-            // unset fields on UPDATE, so we just forward what the user gave.
-            name: opts.name ?? "",
-            description: opts.description,
-            gender: opts.gender,
-            style: opts.style as
-              | "realistic"
-              | "anime"
-              | "3d-pixar"
-              | "illustration"
-              | undefined,
-            baseOutfit: opts.baseOutfit,
-            seedPrompt: opts.seedPrompt,
-          })
+          }
+          if (opts.name !== undefined) patch.name = opts.name
+          if (opts.description !== undefined) patch.description = opts.description
+          if (opts.gender !== undefined) patch.gender = opts.gender
+          if (opts.style !== undefined) {
+            patch.style = opts.style as EntityStyle
+          }
+          if (opts.baseOutfit !== undefined) patch.baseOutfit = opts.baseOutfit
+          if (opts.seedPrompt !== undefined) patch.seedPrompt = opts.seedPrompt
+          const result = await client.characters.update(id, patch)
           if (opts.json) {
             emit(result, opts)
             return
@@ -307,9 +316,19 @@ export function charactersCommand(): Command {
           // Fetch the character first so we have a name + identity fields to
           // pass to the route (the route requires `name`).
           const char = await client.characters.get(id)
+          // Precedence — `--seed-prompt` wins; otherwise fall back to the
+          // character's description ONLY when there's no portrait yet
+          // (sourceImageUrl absent), since with a portrait the character has
+          // already been visually anchored and the description shouldn't
+          // re-seed a fresh prompt. Parenthesize the ternary so the explicit
+          // flag is checked first (the original `??` + `?:` precedence
+          // dropped `--seed-prompt` when char.sourceImageUrl was truthy).
+          const fallbackSeed = char.sourceImageUrl
+            ? undefined
+            : char.description ?? undefined
           const result = await client.characters.generate({
             name: opts.name ?? char.name,
-            seedPrompt: opts.seedPrompt ?? char.sourceImageUrl ? undefined : char.description ?? undefined,
+            seedPrompt: opts.seedPrompt ?? fallbackSeed,
             description: opts.description ?? char.description ?? undefined,
             provider: opts.provider,
             count: parseCount(opts.count),
@@ -371,6 +390,26 @@ export function charactersCommand(): Command {
         try {
           const client = buildClient(opts.profile)
           const char = await client.characters.get(id)
+          // Asset-type → DB-column dispatch table. The user-facing asset-type
+          // names (camelCase + 'lighting') don't match the actual column
+          // names (snake_case + 'lighting_variations'), and head/body angles
+          // both land in their own columns rather than the bare `angles`
+          // column. Without this map, --asset-type headAngles → attachToColumn
+          // "headAngles" — which isn't a valid column and the route's Zod
+          // enum on attachToColumn would 400 the request.
+          const ASSET_TYPE_TO_COLUMN: Record<
+            string,
+            "expressions" | "poses" | "angles" | "body_angles" | "lighting_variations"
+          > = {
+            expressions: "expressions",
+            poses: "poses",
+            angles: "angles",
+            headAngles: "angles",
+            bodyAngles: "body_angles",
+            lighting: "lighting_variations",
+            // custom: caller must pass --column explicitly; no default.
+          }
+          const inferredColumn = ASSET_TYPE_TO_COLUMN[opts.assetType]
           const result = await client.characters.generateAsset({
             assetType: opts.assetType as
               | "expressions"
@@ -386,8 +425,7 @@ export function charactersCommand(): Command {
             userPrompt: opts.userPrompt,
             provider: opts.provider,
             attachToCharacterId: id,
-            attachToColumn: (opts.column ??
-              (opts.assetType === "lighting" ? "lighting_variations" : opts.assetType)) as
+            attachToColumn: (opts.column ?? inferredColumn) as
               | "expressions"
               | "poses"
               | "angles"
