@@ -864,3 +864,15 @@ export {
   usageModeLabel,
 } from "./character-usage-mode.js"
 export type { UsageMode } from "./character-usage-mode.js"
+
+export {
+  CHARACTER_ASPECT_OPTIONS,
+  CHARACTER_ASPECT_DEFAULTS,
+  isCharacterAspectRatio,
+  resolveCharacterAspectRatio,
+} from "./character-aspect-defaults.js"
+export type {
+  CharacterAspectRatio,
+  CharacterAssetTypeForAspect,
+  ResolveCharacterAspectOptions,
+} from "./character-aspect-defaults.js"

@@ -121,4 +121,9 @@ export type {
   GenerateMotionInput,
   ApprovePortraitResult,
   RecaptionResult,
+  CharacterAspectRatio,
+} from "./resources/characters.js"
+export {
+  CHARACTER_ASPECT_OPTIONS,
+  CHARACTER_ASPECT_DEFAULTS,
 } from "./resources/characters.js"

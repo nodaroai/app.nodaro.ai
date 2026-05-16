@@ -142,22 +142,27 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
             {/* Aspect-ratio toggle. Shows on hover over the thumbnail; the
                 active option is highlighted in brand-pink. Clicks call
                 `stopPropagation` so toggling doesn't also select the node
-                or open the config panel. */}
+                or open the config panel.
+
+                Picking a value here ALSO overrides the per-asset-type
+                aspect-ratio default on the next character generation (flows
+                in as `characterNodeAspectRatio` to the generate-character*
+                routes — explicit `aspectRatio` on the call still wins). */}
             <div className="absolute top-1 right-1 flex gap-0.5 bg-black/60 backdrop-blur-sm rounded px-0.5 py-0.5 opacity-0 group-hover/thumb:opacity-100 transition-opacity">
-              {(["1:1", "16:9"] as const).map((ar) => {
+              {(["1:1", "3:4", "16:9", "9:16"] as const).map((ar) => {
                 const isActive = aspectRatio === ar
                 return (
                   <button
                     key={ar}
                     type="button"
-                    aria-label={`Set thumbnail aspect ratio to ${ar}`}
+                    aria-label={`Set character aspect ratio to ${ar}`}
                     aria-pressed={isActive}
                     onClick={(e) => {
                       e.stopPropagation()
                       updateNodeData(id, { defaultAssetAspectRatio: ar })
                     }}
                     onPointerDown={(e) => e.stopPropagation()}
-                    className={`text-[9px] leading-none px-1.5 py-0.5 rounded ${
+                    className={`text-[9px] leading-none px-1 py-0.5 rounded ${
                       isActive
                         ? "bg-[#ff0073] text-white"
                         : "text-slate-300 hover:text-white hover:bg-white/10"

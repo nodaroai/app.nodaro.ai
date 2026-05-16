@@ -447,6 +447,11 @@ export async function generateCharacter(data: {
     url: string
     kind: "frontFace" | "sideLeft" | "sideRight" | "threeQuarterLeft" | "threeQuarterRight" | "frontBody" | "other"
   }>
+  /** Explicit aspect ratio — wins against everything else. */
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+  /** Character node toggle — wins against the per-asset default (portrait = 3:4),
+   *  loses to `aspectRatio`. Driven by the character node's 4-pill UI. */
+  characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
 }): Promise<{ jobId: string; jobIds: string[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
     method: "POST",
@@ -489,6 +494,12 @@ export async function generateCharacterAsset(data: {
    *  canonical description + assetType/variant. `realLifeRefs` (up to 5) are
    *  passed to the worker to bias the generation. */
   realLifeRefs?: ReadonlyArray<string>
+  /** Explicit aspect ratio — wins against everything else. */
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+  /** Character node toggle — wins against the per-asset-type default
+   *  (expressions=1:1, poses=9:16, headAngles=3:4, bodyAngles=9:16,
+   *  lighting=3:4, angles=3:4, custom=3:4), loses to `aspectRatio`. */
+  characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
     method: "POST",
@@ -520,6 +531,11 @@ export async function generateCharacterMotion(params: {
    *  the generation. */
   motionDescription?: string
   realLifeRefs?: ReadonlyArray<string>
+  /** Explicit aspect ratio — wins against everything else. */
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+  /** Character node toggle — wins against the motions default (9:16), loses
+   *  to `aspectRatio`. */
+  characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-character-motion`, {
     method: "POST",

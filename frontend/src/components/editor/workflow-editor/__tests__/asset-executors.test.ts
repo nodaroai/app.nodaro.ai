@@ -147,15 +147,17 @@ describe("runCharacterGeneration", () => {
       } as any,
       makeCtx({ userId: "u2" }),
     )
-    expect(mockGenerateCharacter).toHaveBeenCalledWith({
-      name: "Bob",
-      description: "A wizard",
-      gender: "male",
-      style: "fantasy",
-      baseOutfit: "robe",
-      sourceImageUrl: "http://img.png",
-      userId: "u2",
-    })
+    expect(mockGenerateCharacter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Bob",
+        description: "A wizard",
+        gender: "male",
+        style: "fantasy",
+        baseOutfit: "robe",
+        sourceImageUrl: "http://img.png",
+        userId: "u2",
+      }),
+    )
   })
 
   it("rejects when API fails", async () => {

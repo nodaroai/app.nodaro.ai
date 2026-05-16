@@ -646,3 +646,59 @@ describe("POST /v1/generate-character-motion — Task 8 behavior", () => {
     expect(res.json().error.code).toBe("validation_error")
   })
 })
+
+// ---------------------------------------------------------------------------
+// Per-asset-type aspect-ratio defaults (smart-defaults feature).
+// Motions default to 9:16; node toggle overrides default; explicit beats both.
+// ---------------------------------------------------------------------------
+describe("POST /v1/generate-character-motion — aspect-ratio defaults", () => {
+  function getAspect(): string {
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    return enqueued.aspectRatio as string
+  }
+
+  it("motions default to 9:16 when nothing is set", async () => {
+    setupSupabaseMock({ charRow: { source_image_url: PORTRAIT_URL, canonical_description: null } })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload(),
+    })
+    expect(getAspect()).toBe("9:16")
+  })
+
+  it("characterNodeAspectRatio overrides the motions default", async () => {
+    setupSupabaseMock({ charRow: { source_image_url: PORTRAIT_URL, canonical_description: null } })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload({ characterNodeAspectRatio: "16:9" }),
+    })
+    expect(getAspect()).toBe("16:9")
+  })
+
+  it("explicit aspectRatio beats characterNodeAspectRatio and the motions default", async () => {
+    setupSupabaseMock({ charRow: { source_image_url: PORTRAIT_URL, canonical_description: null } })
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload({ aspectRatio: "1:1", characterNodeAspectRatio: "16:9" }),
+    })
+    expect(getAspect()).toBe("1:1")
+  })
+
+  it("invalid aspectRatio value is rejected by Zod (validation_error)", async () => {
+    setupSupabaseMock({ charRow: { source_image_url: PORTRAIT_URL, canonical_description: null } })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload({ aspectRatio: "21:9" }),
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+})

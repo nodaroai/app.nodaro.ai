@@ -82,6 +82,10 @@ export function MotionsTab({
         baseOutfit: state.staged.baseOutfit,
         attachToCharacterId: characterId,
         attachName: text,
+        // Forward the character node's 4-pill toggle so the backend's
+        // motions default (9:16) can be overridden when the user has picked
+        // a different ratio on the canvas.
+        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
       })
       jobs.track(jobId, "motions", text)
     },
@@ -114,6 +118,7 @@ export function MotionsTab({
         baseOutfit: state.staged.baseOutfit,
         attachToCharacterId: characterId,
         attachName: trackName,
+        characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
       })
       jobs.track(jobId, "motions", trackName)
     },
@@ -150,6 +155,7 @@ export function MotionsTab({
           attachToCharacterId: characterId,
           attachName: variant,
           realLifeRefs: submission.realLifeRefs,
+          characterNodeAspectRatio: state.staged.defaultAssetAspectRatio,
         })
         jobs.track(jobId, "motions", variant)
       } catch (e) {

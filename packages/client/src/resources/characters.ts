@@ -1,4 +1,4 @@
-import type { EntityStyle } from "@nodaro/shared"
+import type { CharacterAspectRatio, EntityStyle } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -9,6 +9,14 @@ import type { NodaroClient } from "../client.js"
  */
 export type { EntityStyle } from "@nodaro/shared"
 export { CHARACTER_STYLES } from "@nodaro/shared"
+
+/**
+ * Re-export the 4-value aspect-ratio union accepted by the generate-character*
+ * routes. Single source of truth lives in `@nodaro/shared`. See
+ * `CHARACTER_ASPECT_DEFAULTS` for the per-asset-type defaults.
+ */
+export type { CharacterAspectRatio } from "@nodaro/shared"
+export { CHARACTER_ASPECT_OPTIONS, CHARACTER_ASPECT_DEFAULTS } from "@nodaro/shared"
 
 /**
  * A character record returned by Nodaro's REST API. Mirrors the camelCase
@@ -198,6 +206,17 @@ export interface GenerateCharacterInput {
   referencePhotos?: ReferencePhoto[]
   /** 1, 2, or 4 candidate portraits. */
   count?: 1 | 2 | 4
+  /**
+   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * node toggle and the per-asset-type default (portraits default to `3:4`).
+   * Must be one of the 4-value `CharacterAspectRatio` union.
+   */
+  aspectRatio?: CharacterAspectRatio
+  /**
+   * Character node toggle (per-canvas-node `defaultAssetAspectRatio`). Wins
+   * against the per-asset-type default, loses to `aspectRatio`.
+   */
+  characterNodeAspectRatio?: CharacterAspectRatio
 }
 
 export interface GenerateCharacterResult {
@@ -238,6 +257,17 @@ export interface GenerateAssetInput {
     | "body_angles"
     | "lighting_variations"
   attachName?: string
+  /**
+   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * node toggle and the per-asset-type default (expressions=1:1, poses=9:16,
+   * headAngles=3:4, bodyAngles=9:16, lighting=3:4, angles=3:4, custom=3:4).
+   */
+  aspectRatio?: CharacterAspectRatio
+  /**
+   * Character node toggle (per-canvas-node `defaultAssetAspectRatio`). Wins
+   * against the per-asset-type default, loses to `aspectRatio`.
+   */
+  characterNodeAspectRatio?: CharacterAspectRatio
 }
 
 export interface GenerateMotionInput {
@@ -254,6 +284,16 @@ export interface GenerateMotionInput {
   realLifeRefs?: string[]
   attachToCharacterId?: string
   attachName?: string
+  /**
+   * Explicit aspect ratio. Highest precedence — overrides both the character
+   * node toggle and the motions default (`9:16`).
+   */
+  aspectRatio?: CharacterAspectRatio
+  /**
+   * Character node toggle (per-canvas-node `defaultAssetAspectRatio`). Wins
+   * against the motions default, loses to `aspectRatio`.
+   */
+  characterNodeAspectRatio?: CharacterAspectRatio
 }
 
 export interface ApprovePortraitResult {
