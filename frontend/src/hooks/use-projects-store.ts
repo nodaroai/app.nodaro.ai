@@ -7,6 +7,7 @@ export interface Project {
   readonly id: string
   readonly name: string
   readonly description: string
+  readonly isDefault: boolean
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -50,6 +51,7 @@ interface ProjectsState {
   readonly deleteWorkflow: (id: string) => Promise<void>
   readonly renameWorkflow: (id: string, name: string) => Promise<void>
   readonly moveWorkflow: (id: string, folderId: string | null) => Promise<void>
+  readonly moveWorkflowToProject: (id: string, targetProjectId: string) => Promise<void>
   readonly duplicateWorkflow: (id: string) => Promise<WorkflowMeta | null>
 }
 
@@ -58,6 +60,7 @@ function toProject(row: Record<string, unknown>): Project {
     id: row.id as string,
     name: row.name as string,
     description: (row.description as string) ?? "",
+    isDefault: row.is_default === true,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }
@@ -172,6 +175,14 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
   deleteProject: async (id) => {
     try {
+      const target = get().projects.find((p) => p.id === id)
+      if (target?.isDefault) {
+        // Client-side guard — the DB trigger and the backend handler both
+        // reject this, but failing fast saves a round-trip and keeps the
+        // local state coherent.
+        return
+      }
+
       const supabase = createClient()
       const { error } = await supabase.from("projects").delete().eq("id", id)
       if (error) return
@@ -182,6 +193,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         workflowMetas: s.workflowMetas.filter((w) => w.projectId !== id),
       }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all })
     } catch {
       // silent
     }
@@ -332,6 +344,31 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         ),
       }))
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all })
+    } catch {
+      // silent
+    }
+  },
+
+  moveWorkflowToProject: async (id, targetProjectId) => {
+    try {
+      const supabase = createClient()
+      // folder_id must be cleared — folders are FK'd to projects.
+      const { error } = await supabase
+        .from("workflows")
+        .update({ project_id: targetProjectId, folder_id: null })
+        .eq("id", id)
+      if (error) return
+
+      set((s) => ({
+        workflowMetas: s.workflowMetas.map((w) =>
+          w.id === id
+            ? { ...w, projectId: targetProjectId, folderId: null, updatedAt: new Date().toISOString() }
+            : w,
+        ),
+      }))
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all })
     } catch {
       // silent
     }

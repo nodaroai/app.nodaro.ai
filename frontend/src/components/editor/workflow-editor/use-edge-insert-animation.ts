@@ -81,15 +81,26 @@ export function useEdgeInsertAnimation(edgeId: string): EdgeInsertAnimationProps
   useLayoutEffect(() => {
     if (SEEN_EDGES.has(edgeId)) {
       // Subsequent mount of the same edge id — no animation, no work.
+      // (Belt-and-suspenders: setPhase guarantees "done" wins even if the
+      // lazy initializer raced earlier.)
+      setPhase("done")
       return
     }
-    // First mount for this edgeId: mark seen, then schedule the swap to
-    // the animating state on the next frame. We use rAF (not setTimeout 0)
-    // so the browser has actually painted the initial state before the
-    // transition begins — otherwise the change may be batched into a single
-    // paint and the animation skipped entirely.
-    SEEN_EDGES.add(edgeId)
+    // First mount for this edgeId: schedule the swap to the animating
+    // state on the next frame. We use rAF (not setTimeout 0) so the
+    // browser has actually painted the initial state before the
+    // transition begins — otherwise the change may be batched into a
+    // single paint and the animation skipped entirely.
+    //
+    // Adding to SEEN_EDGES happens INSIDE the rAF callback (not at
+    // schedule time) so React 18 StrictMode's simulated mount→unmount→
+    // remount cycle doesn't poison the set: the cleanup cancels the
+    // first rAF before it fires, then the second mount re-schedules
+    // cleanly. Marking the id seen on cancellation would early-return
+    // on the second mount, freezing phase at "initial" → dashoffset 9999
+    // (edge stays hidden).
     const rafId = requestAnimationFrame(() => {
+      SEEN_EDGES.add(edgeId)
       setPhase("animating")
     })
     return () => {

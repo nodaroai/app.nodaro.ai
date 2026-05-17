@@ -58,6 +58,7 @@ const DB_PROJECT = {
   name: "My Project",
   description: "A test project",
   settings: { theme: "dark" },
+  is_default: false,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 }
@@ -68,8 +69,36 @@ const CAMEL_PROJECT = {
   name: "My Project",
   description: "A test project",
   settings: { theme: "dark" },
+  isDefault: false,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
+}
+
+/**
+ * Wire up `supabase.from(...)` to expose both `.select(...).eq.eq.single` and
+ * `.delete(...).eq.eq` chains in one mock. The DELETE handler now does a
+ * lookup before the delete to surface a friendly 409 when the row is the
+ * default project, so tests touching DELETE need both terminal chains.
+ */
+function mockFromForDeleteFlow({
+  lookup,
+  deleteResult,
+}: {
+  lookup: { data: { is_default: boolean } | null; error: { code?: string; message: string } | null }
+  deleteResult: { error: { message: string } | null }
+}) {
+  const mockLookupSingle = vi.fn().mockResolvedValue(lookup)
+  const mockLookupEq2 = vi.fn().mockReturnValue({ single: mockLookupSingle })
+  const mockLookupEq1 = vi.fn().mockReturnValue({ eq: mockLookupEq2 })
+  const mockSelect = vi.fn().mockReturnValue({ eq: mockLookupEq1 })
+
+  const mockDeleteEq2 = vi.fn().mockResolvedValue(deleteResult)
+  const mockDeleteEq1 = vi.fn().mockReturnValue({ eq: mockDeleteEq2 })
+  const mockDelete = vi.fn().mockReturnValue({ eq: mockDeleteEq1 })
+
+  vi.mocked(supabase.from).mockReturnValue({ select: mockSelect, delete: mockDelete } as never)
+
+  return { mockLookupEq1, mockLookupEq2, mockDeleteEq1, mockDeleteEq2, mockSelect, mockDelete }
 }
 
 let app: FastifyInstance
@@ -490,11 +519,11 @@ describe("DELETE /v1/projects/:id", () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it("returns 200 on success", async () => {
-    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  it("returns 200 on success for a non-default project", async () => {
+    mockFromForDeleteFlow({
+      lookup: { data: { is_default: false }, error: null },
+      deleteResult: { error: null },
+    })
 
     const res = await app.inject({
       method: "DELETE",
@@ -506,11 +535,43 @@ describe("DELETE /v1/projects/:id", () => {
     expect(res.json().success).toBe(true)
   })
 
-  it("returns 500 on DB error", async () => {
-    const mockEq2 = vi.fn().mockResolvedValue({ error: { message: "FK constraint" } })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  it("returns 409 default_project for the default workspace", async () => {
+    mockFromForDeleteFlow({
+      lookup: { data: { is_default: true }, error: null },
+      deleteResult: { error: null }, // unreachable — handler returns 409 first
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/projects/${TEST_PROJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("default_project")
+  })
+
+  it("returns 404 when the project does not exist (or belongs to another user)", async () => {
+    mockFromForDeleteFlow({
+      lookup: { data: null, error: { code: "PGRST116", message: "no rows" } },
+      deleteResult: { error: null },
+    })
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/projects/${TEST_PROJECT_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 500 on DB error during delete", async () => {
+    mockFromForDeleteFlow({
+      lookup: { data: { is_default: false }, error: null },
+      deleteResult: { error: { message: "FK constraint" } },
+    })
 
     const res = await app.inject({
       method: "DELETE",
@@ -519,6 +580,67 @@ describe("DELETE /v1/projects/:id", () => {
     })
 
     expect(res.statusCode).toBe(500)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /v1/projects/ensure-default — lazy-create the caller's default project
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/projects/ensure-default", () => {
+  it("returns 401 when no auth", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/projects/ensure-default",
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it("returns 200 with the existing default project when one is found", async () => {
+    const existing = { ...DB_PROJECT, name: "My Recent Flows", is_default: true }
+    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: existing, error: null })
+    const mockEq2 = vi.fn().mockReturnValue({ maybeSingle: mockMaybeSingle })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/projects/ensure-default",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.isDefault).toBe(true)
+    expect(res.json().data.name).toBe("My Recent Flows")
+  })
+
+  it("returns 201 with the newly-created default when none exists yet", async () => {
+    // First call: lookup → returns null (no existing default).
+    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const mockEq2 = vi.fn().mockReturnValue({ maybeSingle: mockMaybeSingle })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq1 })
+
+    // Second call: insert → returns the new row.
+    const newRow = { ...DB_PROJECT, name: "My Recent Flows", is_default: true }
+    const mockInsertSingle = vi.fn().mockResolvedValue({ data: newRow, error: null })
+    const mockInsertSelect = vi.fn().mockReturnValue({ single: mockInsertSingle })
+    const mockInsert = vi.fn().mockReturnValue({ select: mockInsertSelect })
+
+    vi.mocked(supabase.from).mockReturnValue({
+      select: mockSelect,
+      insert: mockInsert,
+    } as never)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/projects/ensure-default",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(201)
+    expect(res.json().data.isDefault).toBe(true)
   })
 })
 
@@ -578,10 +700,13 @@ describe("cross-tenant denial", () => {
   })
 
   it("DELETE /v1/projects/:id — delete is user-scoped (foreign rows untouched)", async () => {
-    const mockEq2 = vi.fn().mockResolvedValue({ error: null })
-    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
-    const mockDelete = vi.fn().mockReturnValue({ eq: mockEq1 })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+    // The DELETE handler now does a lookup first (to surface a friendly 409
+    // for default projects). Both the lookup and the delete must be scoped by
+    // user_id — exercise that the .eq("user_id", ...) calls fire on each.
+    const mocks = mockFromForDeleteFlow({
+      lookup: { data: { is_default: false }, error: null },
+      deleteResult: { error: null },
+    })
 
     const res = await app.inject({
       method: "DELETE",
@@ -590,7 +715,9 @@ describe("cross-tenant denial", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(mockEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
-    expect(mockEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(mocks.mockLookupEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
+    expect(mocks.mockLookupEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    expect(mocks.mockDeleteEq1).toHaveBeenCalledWith("id", TEST_PROJECT_ID)
+    expect(mocks.mockDeleteEq2).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 })

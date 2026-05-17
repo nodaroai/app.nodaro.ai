@@ -1492,6 +1492,12 @@ export type ImageToVideoData = {
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
   connectedImageOrder?: readonly string[]
+  /** User-defined order of the connections wired into the `references` handle.
+   * Drives which character becomes "Image 1" vs "Image 2" in the assembled
+   * prompt when multiple characters/uploads are wired to references. The
+   * orchestrator + frontend execute-node apply this order BEFORE assigning
+   * positional Image-N letters. IDs not in the array fall to the end. */
+  connectedRefImageOrder?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
   seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1552,6 +1558,10 @@ export type TextToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   kieTaskId?: string                 // KIE task ID for extend/upscale operations (VEO, Runway)
+  /** User-defined order of the connections wired into the `references` handle.
+   * Mirrors `ImageToVideoData.connectedRefImageOrder` — drives Image-1/Image-2
+   * positional assignment in the assembled prompt for multi-character t2v. */
+  connectedRefImageOrder?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"

@@ -254,6 +254,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
     }))
   }, [sources])
+  // Sources wired specifically into the `references` handle. Pre-filtered here
+  // so `<ConnectedMediaList>` only sees (and reorders) the reference-image
+  // connections — start/end frame edges live in their own pre-existing media
+  // list above and have their own ordering field.
+  const refSources = useMemo(
+    () => sources.filter((s) => s.targetHandle === "references"),
+    [sources],
+  )
 
   // Character @-mention autocomplete: wired-character upstreams expand into
   // canonical + per-variant entries (mirrors image-configs.tsx Task 6 + 8b3b3c13).
@@ -341,7 +349,10 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
       )}
 
-      {/* Reference images section (Grok / VEO reference mode) */}
+      {/* Reference images section (Grok / VEO reference mode). Drag-to-reorder
+          is essential because the positional Image-N letters in the assembled
+          prompt are assigned by array index — without reorder the user can't
+          control which character is "Image 1" vs "Image 2". */}
       {supportsReferences && (!isVeo || isVeoRefMode) && connectedRefImages.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Reference Images ({connectedRefImages.length}/{maxRefImages})</Label>
@@ -350,17 +361,12 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
             </div>
           )}
-          <div className="flex flex-wrap gap-1.5">
-            {connectedRefImages.map((img) => (
-              <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
-                {img.imageUrl ? (
-                  <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-muted flex items-center justify-center text-[8px] text-muted-foreground">No img</div>
-                )}
-              </div>
-            ))}
-          </div>
+          <ConnectedMediaList
+            sources={refSources}
+            mediaOrder={data.connectedRefImageOrder ?? []}
+            onUpdateOrder={(order) => onUpdate({ connectedRefImageOrder: order })}
+            mediaType="image"
+          />
           <p className="text-[10px] text-muted-foreground px-1">
             Connect image nodes to the References handle. Up to {maxRefImages} additional reference images.
           </p>
@@ -1415,6 +1421,15 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
     }))
   }, [sources])
+  // Same filter as `connectedRefImages` above but kept as the original
+  // SourceNodeInfo shape — passed straight into `<ConnectedMediaList>` for
+  // drag-to-reorder. Without explicit ordering, the positional Image-N
+  // letters in the assembled t2v prompt are assigned by upstream edge order
+  // (which the user has no control over).
+  const refSources = useMemo(
+    () => sources.filter((s) => T2V_IMAGE_TYPES.includes(s.type)),
+    [sources],
+  )
 
   const connectedRefVideos = useMemo(
     () => sources.filter((s) => s.targetHandle === "reference-videos"),
@@ -1586,17 +1601,12 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           {connectedRefImages.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs">Reference Images ({connectedRefImages.length}/{SEEDANCE_2_REF_LIMITS.images})</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {connectedRefImages.map((img) => (
-                  <div key={img.id} className="relative w-12 h-12 rounded border border-border overflow-hidden">
-                    {img.imageUrl ? (
-                      <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-muted flex items-center justify-center text-[8px] text-muted-foreground">No img</div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <ConnectedMediaList
+                sources={refSources}
+                mediaOrder={data.connectedRefImageOrder ?? []}
+                onUpdateOrder={(order) => onUpdate({ connectedRefImageOrder: order })}
+                mediaType="image"
+              />
             </div>
           )}
           {connectedRefVideos.length > 0 && (

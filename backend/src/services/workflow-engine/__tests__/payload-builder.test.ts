@@ -115,6 +115,58 @@ describe("buildPayload", () => {
       expect(result.payload.imageUrl).toBe("https://start.png")
       expect(result.payload.endFrameUrl).toBe("https://end.png")
     })
+
+    // Drag-to-reorder in the config panel writes `connectedRefImageOrder` to
+    // node data. The orchestrator must re-derive `referenceImageUrls` in that
+    // order before mention-merge so positional Image-N letters in the
+    // assembled prompt match the user's intended ordering. Verified by:
+    // (a) passing two character upstreams (edge order kira → mike),
+    // (b) setting connectedRefImageOrder=[mike,kira] (reversed),
+    // (c) asserting the payload's referenceImageUrls comes out mike-first.
+    it("applies connectedRefImageOrder to referenceImageUrls (image-to-video)", () => {
+      const consumer = node("v1", "image-to-video", {
+        provider: "grok-i2v",
+        duration: 5,
+        connectedRefImageOrder: ["mike", "kira"],
+      })
+      const kira = node("kira", "character", {})
+      const mike = node("mike", "character", {})
+      const states: Record<string, NodeExecutionState> = {
+        kira: { status: "completed", output: { imageUrl: "https://kira.png" } },
+        mike: { status: "completed", output: { imageUrl: "https://mike.png" } },
+      }
+      const edges: SimpleEdge[] = [
+        edge("kira", "v1", "characterRef", "references"),
+        edge("mike", "v1", "characterRef", "references"),
+      ]
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://start.png",
+        referenceImageUrls: ["https://kira.png", "https://mike.png"],
+      }
+      const result = buildPayload(consumer, jobId, inputs, undefined, {
+        nodes: [consumer, kira, mike],
+        edges,
+        nodeStates: states,
+      })
+      const refs = result.payload.referenceImageUrls as string[]
+      expect(refs[0]).toBe("https://mike.png")
+      expect(refs[1]).toBe("https://kira.png")
+    })
+
+    it("falls back to edge order when connectedRefImageOrder is empty", () => {
+      const consumer = node("v1", "image-to-video", {
+        provider: "grok-i2v",
+        duration: 5,
+      })
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://start.png",
+        referenceImageUrls: ["https://a.png", "https://b.png"],
+      }
+      const result = buildPayload(consumer, jobId, inputs)
+      const refs = result.payload.referenceImageUrls as string[]
+      expect(refs[0]).toBe("https://a.png")
+      expect(refs[1]).toBe("https://b.png")
+    })
   })
 
   describe("text-to-video", () => {

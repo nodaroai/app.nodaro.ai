@@ -1,25 +1,18 @@
-// Unified Tutorials tab — consumes the grouped GET /v1/tutorials response
-// added in Part 1. Renders TWO visually distinct flavors per category:
+// Unified Tutorials tab — consumes the grouped GET /v1/tutorials response.
 //
-//   📹 Watch & Learn   — video tutorials (read-only, opens in modal)
-//   ⚡ Try It Yourself — flow tutorials (clones into a project)
-//
-// Visual contrast is deliberate: videos sit on a neutral card, flows wear
-// the marketplace template colors (preview-led, complexity badge, "Tutorial"
-// pill, primary CTA button). Categories with only one flavor collapse the
-// subsection heading away to keep the layout tight.
+// Layout mirrors the Templates carousel on the same page: a row of filter
+// pills (All / Video Courses / Written Guides) above one or two horizontal
+// strips of compact cards. Category (Getting Started / Workflows /
+// Advanced) is demoted from a section heading to a chip on each card —
+// keeps the page tight when a category has only one or two tutorials.
 
 import { useState, useMemo, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
 import {
   Play,
   BookOpen,
   Zap,
   Coins,
   Layers,
-  ArrowRight,
-  Loader2,
 } from "lucide-react"
 import {
   Dialog,
@@ -27,20 +20,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useTutorialsGrouped } from "@/hooks/queries/use-tutorials"
 import { useProjects } from "@/hooks/queries/use-projects-queries"
-import { cloneTemplate, type FlowTutorialItem, type VideoTutorialItem } from "@/lib/api"
+import {
+  useTemplateFavorites,
+  useToggleTemplateFavoriteMutation,
+} from "@/hooks/queries/use-template-marketplace-queries"
+import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
+import {
+  type FlowTutorialItem,
+  type VideoTutorialItem,
+  type TemplateBrowseCard,
+} from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity } from "@/lib/template-utils"
 
 // ---------------------------------------------------------------------------
@@ -75,10 +68,45 @@ function videoThumbnailUrl(video: VideoTutorialItem): string {
 }
 
 // ---------------------------------------------------------------------------
-// Video card
+// Filter pill
 // ---------------------------------------------------------------------------
 
-function VideoTutorialCard({
+interface FilterPillProps {
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly icon?: React.ReactNode
+  readonly label: string
+  readonly count?: number
+}
+
+function FilterPill({ active, onClick, icon, label, count }: FilterPillProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
+        active
+          ? "bg-foreground text-background"
+          : "bg-muted/40 text-muted-foreground hover:text-foreground hover:bg-muted",
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+      {count !== undefined && (
+        <span className={cn("text-[10px]", active ? "opacity-70" : "opacity-50")}>
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Compact video card — sized to match the Templates carousel (w-48).
+// ---------------------------------------------------------------------------
+
+function CompactVideoCard({
   video,
   onWatch,
 }: {
@@ -90,7 +118,7 @@ function VideoTutorialCard({
     <button
       type="button"
       onClick={() => onWatch(video)}
-      className="text-left group rounded-lg overflow-hidden border border-border bg-card hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
+      className="text-left group flex-shrink-0 w-48 rounded-lg overflow-hidden border border-border bg-card hover:border-zinc-400 dark:hover:border-zinc-600 transition-colors cursor-pointer"
     >
       <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {thumb ? (
@@ -105,38 +133,44 @@ function VideoTutorialCard({
             <BookOpen className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
           </div>
         )}
+        {/* Play overlay */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
-          <div className="h-10 w-10 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Play className="h-5 w-5 text-white ml-0.5" fill="white" />
+          <div className="h-9 w-9 rounded-full bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <Play className="h-4 w-4 text-white ml-0.5" fill="white" />
           </div>
         </div>
       </div>
       <div className="p-2">
         <p className="text-xs font-medium text-foreground truncate">{video.title}</p>
-        {video.description && (
-          <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
-            {video.description}
-          </p>
-        )}
+        <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+          <Play className="h-2.5 w-2.5" fill="currentColor" />
+          Video
+        </p>
       </div>
     </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Flow card
+// Compact flow card — same shape as CompactVideoCard, amber-tinted to keep
+// the visual distinction the original tab established.
 // ---------------------------------------------------------------------------
 
-function FlowTutorialCard({
+function CompactFlowCard({
   flow,
-  onClone,
+  onSelect,
 }: {
   flow: FlowTutorialItem
-  onClone: (f: FlowTutorialItem) => void
+  onSelect: (f: FlowTutorialItem) => void
 }) {
   const complexity = COMPLEXITY_CONFIG[flow.complexity as Complexity]
   return (
-    <div className="rounded-lg overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card flex flex-col">
+    <button
+      type="button"
+      onClick={() => onSelect(flow)}
+      disabled={!flow.slug}
+      className="group text-left flex-shrink-0 w-48 rounded-lg overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card hover:border-amber-400 dark:hover:border-amber-500/50 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+    >
       <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {flow.previewMediaUrl ? (
           flow.previewMediaType === "video" ? (
@@ -160,15 +194,11 @@ function FlowTutorialCard({
             <Zap className="h-6 w-6 text-amber-400/60" />
           </div>
         )}
-        {/* "Tutorial" pill — top right */}
-        <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-medium flex items-center gap-1">
-          <Zap className="h-2.5 w-2.5" fill="currentColor" />
-          Tutorial
-        </span>
+        {/* Complexity chip (optional) */}
         {complexity && (
           <span
             className={cn(
-              "absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium",
+              "absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0.5 rounded border font-medium",
               complexity.color,
             )}
           >
@@ -176,124 +206,55 @@ function FlowTutorialCard({
           </span>
         )}
       </div>
-      <div className="p-2 flex-1 flex flex-col gap-1.5">
-        <p className="text-xs font-semibold text-foreground truncate">{flow.title}</p>
-        {flow.description && (
-          <p className="text-[10px] text-muted-foreground line-clamp-2">{flow.description}</p>
-        )}
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-auto">
+      <div className="p-2">
+        <p className="text-xs font-medium text-foreground truncate">{flow.title}</p>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+          <span className="flex items-center gap-1">
+            <Zap className="h-2.5 w-2.5" fill="currentColor" />
+            Guide
+          </span>
           {flow.estimatedCredits > 0 && (
-            <span className="flex items-center gap-0.5">
-              <Coins className="h-3 w-3" />
-              {flow.estimatedCredits} CR
+            <span className="flex items-center gap-1">
+              <Coins className="h-2.5 w-2.5" />
+              {flow.estimatedCredits}
             </span>
           )}
-          <span className="flex items-center gap-0.5">
-            <Layers className="h-3 w-3" />
+          <span className="flex items-center gap-1">
+            <Layers className="h-2.5 w-2.5" />
             {flow.nodeCount}
           </span>
         </div>
-        <Button
-          size="sm"
-          className="h-7 text-xs mt-1 bg-amber-500 hover:bg-amber-600 text-white"
-          onClick={() => onClone(flow)}
-          disabled={!flow.slug}
-        >
-          <ArrowRight className="h-3.5 w-3.5 mr-1" />
-          Clone & Try
-        </Button>
       </div>
-    </div>
+    </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Clone dialog
+// FlowTutorialItem → TemplateBrowseCard (for reuse of TemplatePreviewModal)
 // ---------------------------------------------------------------------------
 
-function CloneFlowDialog({
-  flow,
-  onClose,
-}: {
-  flow: FlowTutorialItem | null
-  onClose: () => void
-}) {
-  const navigate = useNavigate()
-  const { data: projects = [] } = useProjects()
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
-  const [isCloning, setIsCloning] = useState(false)
-
-  // Reset selection when modal opens
-  const firstProjectId = projects[0]?.id
-  if (flow && !selectedProjectId && firstProjectId) {
-    setSelectedProjectId(firstProjectId)
+function flowToTemplateBrowseCard(flow: FlowTutorialItem): TemplateBrowseCard {
+  return {
+    id: flow.templateId,
+    slug: flow.slug ?? "",
+    name: flow.title,
+    description: flow.description,
+    nodeTypesUsed: flow.nodeTypesUsed,
+    providersUsed: flow.providersUsed,
+    nodeCount: flow.nodeCount,
+    estimatedCredits: flow.estimatedCredits,
+    complexity: flow.complexity,
+    category: "other",
+    outputTypes: [],
+    tags: [],
+    previewMediaUrl: flow.previewMediaUrl,
+    previewMediaType: flow.previewMediaType,
+    creatorId: "",
+    creatorDisplayName: null,
+    cloneCount: 0,
+    favoriteCount: 0,
+    createdAt: flow.createdAt,
   }
-
-  const handleClone = async () => {
-    if (!flow?.slug || !selectedProjectId) return
-    setIsCloning(true)
-    try {
-      const result = await cloneTemplate(flow.slug, selectedProjectId, flow.title)
-      toast.success("Tutorial cloned to your project!")
-      onClose()
-      navigate(`/projects/${result.projectId}`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clone tutorial")
-    } finally {
-      setIsCloning(false)
-    }
-  }
-
-  return (
-    <Dialog open={!!flow} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Clone {flow?.title ?? "tutorial"}</DialogTitle>
-          <DialogDescription>
-            Adds a copy of this workflow to one of your projects so you can run it and tweak it.
-          </DialogDescription>
-        </DialogHeader>
-        {projects.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-2">
-            You don't have any projects yet. Create one first from the Projects page.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Project</label>
-            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pick a project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isCloning}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleClone}
-            disabled={!selectedProjectId || isCloning || projects.length === 0 || !flow?.slug}
-          >
-            {isCloning ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Cloning...
-              </>
-            ) : (
-              "Clone & Open"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -352,27 +313,55 @@ function VideoPlayerDialog({
 // Main
 // ---------------------------------------------------------------------------
 
+type FilterValue = "all" | "videos" | "flows"
+
 export function TutorialsTab() {
+  const [filter, setFilter] = useState<FilterValue>("all")
   const [openVideo, setOpenVideo] = useState<VideoTutorialItem | null>(null)
-  const [openFlow, setOpenFlow] = useState<FlowTutorialItem | null>(null)
+  const [selectedFlow, setSelectedFlow] = useState<FlowTutorialItem | null>(null)
 
   const { data, isLoading } = useTutorialsGrouped()
+  const { data: projects = [] } = useProjects()
+  const { data: favoriteIds = [] } = useTemplateFavorites()
+  const toggleFavorite = useToggleTemplateFavoriteMutation()
+  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
 
-  // Drop empty categories so the page doesn't render lonely headers.
-  const nonEmpty = useMemo(() => {
-    const cats = data?.categories ?? []
-    return cats.filter((c) => c.videos.length > 0 || c.flows.length > 0)
+  // Group the API response by type first, then by category — so each type
+  // strip (Video Courses / Written Guides) can render one compact mini-row
+  // per category. Empty categories are dropped per type so we don't render
+  // a lonely sub-header with nothing underneath.
+  const { videoCategories, flowCategories, totalVideos, totalFlows } = useMemo(() => {
+    const vc: Array<{ name: string; items: VideoTutorialItem[] }> = []
+    const fc: Array<{ name: string; items: FlowTutorialItem[] }> = []
+    let totalV = 0
+    let totalF = 0
+    for (const c of data?.categories ?? []) {
+      if (c.videos.length > 0) {
+        vc.push({ name: c.name, items: c.videos })
+        totalV += c.videos.length
+      }
+      if (c.flows.length > 0) {
+        fc.push({ name: c.name, items: c.flows })
+        totalF += c.flows.length
+      }
+    }
+    return { videoCategories: vc, flowCategories: fc, totalVideos: totalV, totalFlows: totalF }
   }, [data])
 
   const handleWatch = useCallback((v: VideoTutorialItem) => setOpenVideo(v), [])
-  const handleClone = useCallback((f: FlowTutorialItem) => setOpenFlow(f), [])
+  const handleSelectFlow = useCallback((f: FlowTutorialItem) => setSelectedFlow(f), [])
 
   if (isLoading) {
     return (
-      <div className="px-3 pb-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-lg overflow-hidden">
+      <div className="px-3 pb-3 space-y-3">
+        <div className="flex gap-2">
+          <div className="h-7 w-16 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          <div className="h-7 w-28 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          <div className="h-7 w-28 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+        </div>
+        <div className="flex gap-3 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex-shrink-0 w-48 rounded-lg overflow-hidden">
               <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
               <div className="p-2 space-y-1.5">
                 <div className="h-3 w-3/4 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
@@ -385,7 +374,7 @@ export function TutorialsTab() {
     )
   }
 
-  if (nonEmpty.length === 0) {
+  if (totalVideos === 0 && totalFlows === 0) {
     return (
       <div className="text-center py-16 text-muted-foreground">
         <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -395,53 +384,106 @@ export function TutorialsTab() {
     )
   }
 
+  const showVideos = filter === "all" || filter === "videos"
+  const showFlows = filter === "all" || filter === "flows"
+  const showStripHeaders = filter === "all"
+
   return (
-    <div className="px-3 pb-3 space-y-6">
-      {nonEmpty.map((category) => {
-        const hasBoth = category.videos.length > 0 && category.flows.length > 0
-        return (
-          <section key={category.id}>
-            <h3 className="text-sm font-semibold text-foreground mb-3">
-              {category.name}
+    <div className="px-3 pb-3 space-y-5">
+      {/* Filter pills row */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <FilterPill
+          active={filter === "all"}
+          onClick={() => setFilter("all")}
+          label="All"
+          count={totalVideos + totalFlows}
+        />
+        <FilterPill
+          active={filter === "videos"}
+          onClick={() => setFilter("videos")}
+          icon={<Play className="h-3 w-3" fill="currentColor" />}
+          label="Video Courses"
+          count={totalVideos}
+        />
+        <FilterPill
+          active={filter === "flows"}
+          onClick={() => setFilter("flows")}
+          icon={<Zap className="h-3 w-3" fill="currentColor" />}
+          label="Written Guides"
+          count={totalFlows}
+        />
+      </div>
+
+      {showVideos && totalVideos > 0 && (
+        <section className="space-y-3">
+          {showStripHeaders && (
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Play className="h-3.5 w-3.5" fill="currentColor" />
+              Video Courses
             </h3>
-
-            {category.videos.length > 0 && (
-              <div className={hasBoth ? "mb-4" : ""}>
-                {hasBoth && (
-                  <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                    <Play className="h-3 w-3" fill="currentColor" />
-                    Watch &amp; Learn
-                  </h4>
-                )}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {category.videos.map((v) => (
-                    <VideoTutorialCard key={v.id} video={v} onWatch={handleWatch} />
-                  ))}
-                </div>
+          )}
+          {videoCategories.map((cat) => (
+            <div key={`v-${cat.name}`}>
+              <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+                {cat.name}
+              </h4>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                {cat.items.map((video) => (
+                  <CompactVideoCard key={video.id} video={video} onWatch={handleWatch} />
+                ))}
               </div>
-            )}
+            </div>
+          ))}
+        </section>
+      )}
 
-            {category.flows.length > 0 && (
-              <div>
-                {hasBoth && (
-                  <h4 className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                    <Zap className="h-3 w-3" fill="currentColor" />
-                    Try It Yourself
-                  </h4>
-                )}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {category.flows.map((f) => (
-                    <FlowTutorialCard key={f.id} flow={f} onClone={handleClone} />
-                  ))}
-                </div>
+      {showFlows && totalFlows > 0 && (
+        <section className="space-y-3">
+          {showStripHeaders && (
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5" fill="currentColor" />
+              Written Guides
+            </h3>
+          )}
+          {flowCategories.map((cat) => (
+            <div key={`f-${cat.name}`}>
+              <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
+                {cat.name}
+              </h4>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+                {cat.items.map((flow) => (
+                  <CompactFlowCard key={flow.id} flow={flow} onSelect={handleSelectFlow} />
+                ))}
               </div>
-            )}
-          </section>
-        )
-      })}
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* When user filters to a type that has no items, show a quiet empty
+          note rather than collapsing the page silently. */}
+      {filter === "videos" && totalVideos === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-8">
+          No video courses available yet.
+        </p>
+      )}
+      {filter === "flows" && totalFlows === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-8">
+          No written guides available yet.
+        </p>
+      )}
 
       <VideoPlayerDialog video={openVideo} onClose={() => setOpenVideo(null)} />
-      <CloneFlowDialog flow={openFlow} onClose={() => setOpenFlow(null)} />
+
+      {selectedFlow && (
+        <TemplatePreviewModal
+          template={flowToTemplateBrowseCard(selectedFlow)}
+          onClose={() => setSelectedFlow(null)}
+          isFavorited={favSet.has(selectedFlow.templateId)}
+          onToggleFavorite={(id) => toggleFavorite.mutate({ templateId: id })}
+          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        />
+      )}
     </div>
   )
 }

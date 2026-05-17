@@ -1789,8 +1789,33 @@ export function executeNode(
     }
     if (!startFrameUrl) startFrameUrl = inputs.imageUrl;
 
-    // Resolve reference image URLs early so we can use them in the start-frame check below
-    const referenceImageUrls = inputs.referenceImageUrls as string[] | undefined
+    // Resolve reference image URLs early so we can use them in the start-frame check below.
+    // Apply user-defined reorder from `connectedRefImageOrder` (drag list in
+    // the config panel) before mention-merge so positional Image-N letters
+    // in the assembled prompt respect the user's ordering. Mirrors the
+    // orchestrator's `applyOrderToReferenceUrls` in `payload-builder.ts`.
+    let referenceImageUrls = inputs.referenceImageUrls as string[] | undefined;
+    if (i2vData.connectedRefImageOrder?.length) {
+      const refSourceNodes = edges
+        .filter((e) => e.target === node.id && e.targetHandle === "references")
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter(Boolean) as WorkflowNode[];
+      if (refSourceNodes.length > 0) {
+        const idToUrl = new Map<string, string>();
+        for (const src of refSourceNodes) {
+          const url = extractNodeOutput(src);
+          if (url) idToUrl.set(src.id, url);
+        }
+        const reordered = applyMediaOrder(
+          refSourceNodes.map((n) => ({ id: n.id })),
+          i2vData.connectedRefImageOrder,
+        );
+        const orderedUrls = reordered
+          .map((e) => idToUrl.get(e.id))
+          .filter((u): u is string => !!u);
+        if (orderedUrls.length > 0) referenceImageUrls = orderedUrls;
+      }
+    }
 
     let endFrameUrl: string | undefined = inputs.endFrameUrl;
     if (!endFrameUrl) {
@@ -2075,7 +2100,45 @@ export function executeNode(
       t2vProvider === "kling-turbo" ||
       t2vProvider === "kling-3.0";
     const isSeedance2T2V = isSeedance2Provider(t2vProvider)
-    const upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
+    // Apply user-defined reorder from `connectedRefImageOrder` (drag list in
+    // the config panel) before mention-merge so positional Image-N letters
+    // in the assembled prompt respect the user's ordering. Mirrors the
+    // orchestrator's t2v branch in `payload-builder.ts`. t2v has no
+    // startFrame handle, so the filter accepts any wired image/character/
+    // entity upstream (matches `T2V_IMAGE_TYPES` in `video-configs.tsx`).
+    let upstreamRefImages = inputs.referenceImageUrls as string[] | undefined
+    if (t2vData.connectedRefImageOrder?.length) {
+      const t2vRefAllowedTypes = new Set([
+        "generate-image", "upload-image", "character", "object", "location",
+        "edit-image", "image-to-image", "scene",
+      ]);
+      const refSourceNodes = edges
+        .filter((e) => e.target === node.id)
+        .map((e) => nodes.find((n) => n.id === e.source))
+        .filter((n): n is WorkflowNode => !!n && t2vRefAllowedTypes.has(n.type as string));
+      if (refSourceNodes.length > 0) {
+        const idToUrl = new Map<string, string>();
+        for (const src of refSourceNodes) {
+          const url = extractNodeOutput(src);
+          if (url) idToUrl.set(src.id, url);
+        }
+        // Dedupe sources (a node could appear in multiple edges) before reorder.
+        const seenIds = new Set<string>();
+        const uniqueSources = refSourceNodes.filter((n) => {
+          if (seenIds.has(n.id)) return false;
+          seenIds.add(n.id);
+          return true;
+        });
+        const reordered = applyMediaOrder(
+          uniqueSources.map((n) => ({ id: n.id })),
+          t2vData.connectedRefImageOrder,
+        );
+        const orderedUrls = reordered
+          .map((e) => idToUrl.get(e.id))
+          .filter((u): u is string => !!u);
+        if (orderedUrls.length > 0) upstreamRefImages = orderedUrls;
+      }
+    }
     // Merge upstream refs with mention-resolved URLs (mention URLs appended,
     // deduped by URL). Backend payload-builder.ts t2v branch does the same.
     let t2vRefImages: string[] | undefined = upstreamRefImages?.length ? [...upstreamRefImages] : undefined;

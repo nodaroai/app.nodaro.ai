@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
+import { StrictMode } from "react"
 import { render, act } from "@testing-library/react"
 import { useEdgeInsertAnimation, __resetSeenEdgesForTests } from "../use-edge-insert-animation"
 
@@ -77,5 +78,23 @@ describe("useEdgeInsertAnimation", () => {
     const b = render(<TestComponent edgeId="indep-b" />)
     // b is a different edgeId — should also start hidden (not skipped).
     expect(b.getByTestId("edge").style.strokeDashoffset).toBe("9999")
+  })
+
+  // Regression guard. React 18 StrictMode simulates mount→unmount→remount for
+  // every effect. The previous implementation added the edgeId to SEEN_EDGES
+  // at rAF schedule time, so the cleanup cancelled the rAF but left the id
+  // marked seen — the second mount then early-returned without scheduling a
+  // new rAF, freezing phase at "initial" → strokeDashoffset stays at 9999
+  // forever (edge invisible).
+  it("recovers from StrictMode double-mount race (dashoffset transitions to 0)", async () => {
+    const { getByTestId } = render(
+      <StrictMode>
+        <TestComponent edgeId="strict-mode-edge" />
+      </StrictMode>,
+    )
+    await flushAnimationFrame()
+    const el = getByTestId("edge")
+    expect(el.style.strokeDashoffset).toBe("0")
+    expect(el.style.transition).toContain("stroke-dashoffset")
   })
 })

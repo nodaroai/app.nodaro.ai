@@ -6,6 +6,7 @@ import {
   type WorkflowExport,
 } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
+import { ensureDefaultProject } from "../lib/default-project.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
 import type { Scope } from "../lib/scopes.js"
@@ -78,15 +79,31 @@ const createWorkflowBody = z.object({
   sourcePrompt: z.string().max(10000).optional(),
 })
 
+// Project-less create. `projectId` is optional; when omitted the server
+// resolves the caller's default project (lazy-creating one if needed).
+const createWorkflowFlatBody = createWorkflowBody.extend({
+  projectId: z.string().uuid().optional(),
+})
+
 const updateWorkflowBody = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).optional(),
+  // Setting projectId moves the workflow to a different project owned by the
+  // caller. folder_id is auto-cleared in that case since folders are scoped
+  // to a single project (FK ON DELETE SET NULL would orphan otherwise).
+  projectId: z.string().uuid().optional(),
   folderId: z.string().uuid().nullable().optional(),
   nodes: z.array(z.record(z.unknown())).optional(),
   edges: z.array(z.record(z.unknown())).optional(),
   settings: z.record(z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
   thumbnailUrl: z.string().url().nullable().optional(),
+})
+
+const listWorkflowsQuery = z.object({
+  limit: z
+    .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(500))
+    .optional(),
 })
 
 const exportWorkflowQuery = z.object({
@@ -274,6 +291,80 @@ export async function workflowRoutes(app: FastifyInstance) {
     return reply.status(201).send({ data: toWorkflowFull(data) })
   })
 
+  // List ALL workflows owned by the caller, across every project. Used by
+  // the SDK / CLI / MCP for a flat view; the frontend's "My Workflows" tab
+  // hits Supabase directly for one fewer hop.
+  app.get("/v1/workflows", async (req, reply) => {
+    const userId = authorize(req, reply, "workflows:read")
+    if (!userId) return
+
+    const query = parseWith(reply, listWorkflowsQuery, req.query ?? {}, "Invalid query")
+    if (!query) return
+    const limit = query.limit ?? 100
+
+    const { data, error } = await supabase
+      .from("workflows")
+      .select(WORKFLOW_META_COLS)
+      .eq("user_id", userId)
+      .is("parent_workflow_id", null)
+      .order("updated_at", { ascending: false })
+      .limit(limit)
+
+    if (error) return internalError(reply, error.message)
+    return { data: (data ?? []).map(toWorkflowMeta) }
+  })
+
+  // Project-less workflow create. Body.projectId is optional — when omitted
+  // the workflow lands in the caller's default project (lazy-created if it
+  // does not yet exist). Powers the dashboard "+ New Workflow" quick-create.
+  app.post("/v1/workflows", async (req, reply) => {
+    const userId = authorize(req, reply, "workflows:write")
+    if (!userId) return
+
+    const body = parseWith(reply, createWorkflowFlatBody, req.body ?? {}, "Invalid request")
+    if (!body) return
+
+    if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
+
+    let projectId = body.projectId
+
+    if (projectId) {
+      // Caller specified a project — verify ownership before insert.
+      const { data: proj, error: projErr } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", projectId)
+        .eq("user_id", userId)
+        .maybeSingle()
+      if (projErr) return internalError(reply, projErr.message)
+      if (!proj) return notFound(reply, "Project not found")
+    } else {
+      // Resolve / lazy-create the default project.
+      const resolved = await ensureDefaultProject(userId)
+      if ("error" in resolved) return internalError(reply, resolved.error)
+      projectId = resolved.projectId
+    }
+
+    const { data, error } = await supabase
+      .from("workflows")
+      .insert({
+        project_id: projectId,
+        user_id: userId,
+        name: body.name,
+        description: body.description ?? null,
+        folder_id: body.folderId ?? null,
+        nodes: body.nodes ?? [],
+        edges: body.edges ?? [],
+        settings: body.settings ?? {},
+        source_prompt: body.sourcePrompt ?? null,
+      })
+      .select(WORKFLOW_FULL_COLS)
+      .single()
+
+    if (error) return internalError(reply, error.message)
+    return reply.status(201).send({ data: toWorkflowFull(data) })
+  })
+
   // Get workflow by ID
   app.get("/v1/workflows/:id", async (req, reply) => {
     const userId = authorize(req, reply)
@@ -320,6 +411,23 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (body.settings !== undefined) updates.settings = body.settings
     if (body.sourcePrompt !== undefined) updates.source_prompt = body.sourcePrompt
     if (body.thumbnailUrl !== undefined) updates.thumbnail_url = body.thumbnailUrl
+
+    // Cross-project move — verify caller owns the target project, then null
+    // out folder_id (folders are project-scoped; a stale id would orphan).
+    // An explicit folderId in the same request takes precedence and is
+    // validated against the new project below by the FK.
+    if (body.projectId !== undefined) {
+      const { data: targetProject, error: targetErr } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("id", body.projectId)
+        .eq("user_id", userId)
+        .maybeSingle()
+      if (targetErr) return internalError(reply, targetErr.message)
+      if (!targetProject) return notFound(reply, "Project not found")
+      updates.project_id = body.projectId
+      if (body.folderId === undefined) updates.folder_id = null
+    }
 
     const { data, error } = await supabase
       .from("workflows")

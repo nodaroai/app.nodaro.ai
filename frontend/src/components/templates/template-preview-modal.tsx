@@ -61,7 +61,7 @@ function TemplateFlowCanvas({
       fitViewOptions={{ padding: 0.2 }}
       proOptions={{ hideAttribution: true }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#333" />
+      <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
       <Controls showInteractive={false} />
     </ReactFlow>
   )
@@ -158,8 +158,11 @@ export function TemplatePreviewModal({
           <X className="w-5 h-5 text-foreground" />
         </button>
 
-        {/* Left: ReactFlow canvas (~60%) */}
-        <div className="flex-1 min-w-0 bg-zinc-950 dark:bg-zinc-950 relative">
+        {/* Left: ReactFlow canvas (~60%). Adaptive grey so nodes (which carry
+            their own card-style bg) stay visible in both light and dark mode —
+            pure white/black backgrounds collapse the contrast against node
+            borders. */}
+        <div className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900 relative">
           {isLoadingDetail ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
