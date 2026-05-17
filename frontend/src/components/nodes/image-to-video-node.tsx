@@ -213,7 +213,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
         listProgress={status === "running" && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
         listProgressPercent={status === "running" ? listProgressPercent : undefined}
         minWidth={220}
-        minHeight={200}
+        minHeight={mediaAspectRatio ? Math.round(220 / mediaAspectRatio) : 200}
         imageAspectRatio={mediaAspectRatio}
         bottomToolbarContent={
           showThumbnails && results.length > 1 ? (

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { CHARACTER_STYLES } from "@nodaro/shared"
+import { CHARACTER_STYLES, CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
@@ -24,10 +24,14 @@ const executeGate: ToolGate = { required: ["workflows:execute"] }
  * the creative + reversible-write subset of the REST surface:
  * `create_character` / `update_character` / `approve_portrait` /
  * `recaption_character` / `generate_character_motion`. Portrait + variant-
- * asset generation already live as verb tools in
- * `verbs-clo.ts::generate_character` (kind=main/asset) so we don't duplicate
- * those — character motion is split out because the underlying route has
- * its own LLM-augmentation path and credit profile.
+ * asset generation already live as a verb tool in
+ * `verbs-clo.ts::generate_character` (kind=main / kind=asset) — that one
+ * covers expressions / poses / angles / headAngles / bodyAngles / lighting /
+ * custom, including the `attach_to_*` studio params. We do NOT duplicate it
+ * here. `generate_character_motion` stays in this file because it dispatches
+ * to a distinct route (`/v1/generate-character-motion`) with its own
+ * motion-specific input shape (`motion_prompt`, `motion_description`) and a
+ * different i2v credit profile.
  *
  * INTENTIONAL OMISSIONS: `delete_character` and `restore_character` are
  * NOT exposed via MCP. Destructive (or destructive-adjacent) operations
@@ -611,7 +615,15 @@ function registerWriteTools(opts: RegisterCharacterToolsOpts): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GENERATION tools — generate_character_motion (workflows:execute)
+// GENERATION tools — generate_character_motion only
+// (workflows:execute)
+//
+// Character asset variant generation lives in
+// `verbs-clo.ts::generate_character` (kind="asset") — that tool covers
+// expressions / poses / angles / headAngles / bodyAngles / lighting / custom,
+// including the attach-to-character studio params. Motion clips stay here
+// because they dispatch to a distinct route with a different input shape and
+// credit profile.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function registerGenerationTools({
@@ -627,13 +639,19 @@ function registerGenerationTools({
     {
       title: "Generate Character Motion",
       description:
-        "Animate a character's portrait into a motion clip via image-to-video. " +
-        "Pass `attach_to_character_id` to use the character's anchor portrait " +
-        "as the source frame and auto-attach the resulting clip to the " +
-        "character's `motions[]` bucket on completion. The motion_prompt " +
-        "describes WHAT moves and HOW (e.g. 'slow head turn left, eyes track " +
-        "the camera, soft smile'). Returns the i2v job id — poll via " +
-        "`get_job` until completion. Credit cost depends on the provider.",
+        "Animate a character into a motion clip via image-to-video. Pass " +
+        "`attach_to_character_id` to auto-resolve the source frame from the " +
+        "character row and append the result to the row's `motions[]` " +
+        "bucket on completion. Source-frame priority: explicit " +
+        "`source_image_url` (override) > the character's `front` body angle " +
+        "(full-body framing produces much better motion than a portrait " +
+        "headshot) > any other body angle > the anchor portrait. " +
+        "Generate body angles first via `generate_character_asset` with " +
+        "`asset_type=bodyAngles` and `attach_to_column=body_angles` for the " +
+        "best motion results. The motion_prompt describes WHAT moves and " +
+        "HOW (e.g. 'slow head turn left, eyes track the camera, soft " +
+        "smile'). Returns the i2v job id — poll via `get_job` until " +
+        "completion. Credit cost depends on the provider.",
       inputSchema: {
         motion_prompt: z.string().min(1).max(2000),
         name: z.string().min(1).max(200),
@@ -655,7 +673,10 @@ function registerGenerationTools({
           .url()
           .optional()
           .describe(
-            "Override source frame. Required when attach_to_character_id is omitted (no portrait to fall back on).",
+            "Override source frame. When `attach_to_character_id` is set and " +
+            "this is omitted, the route picks the character's `front` body " +
+            "angle (preferred) or the anchor portrait. Required when " +
+            "`attach_to_character_id` is omitted.",
           ),
         description: z.string().max(1000).optional(),
         motion_description: z.string().max(500).optional(),
@@ -663,7 +684,7 @@ function registerGenerationTools({
         style: z.enum(STYLE_ENUM).optional(),
         base_outfit: z.string().max(1000).optional(),
         provider: z
-          .string()
+          .enum(CHARACTER_MOTION_PROVIDERS)
           .optional()
           .describe("i2v provider. Defaults to 'kling'."),
       },

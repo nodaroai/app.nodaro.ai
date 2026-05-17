@@ -334,6 +334,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "fast", "unfiltered"],
     features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
+    features: ["reference-image"],
     pricing: [{ identifier: "flux-2-klein", credits: 2 }],
   },
   "kontext-multi": {

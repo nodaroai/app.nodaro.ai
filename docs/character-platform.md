@@ -59,12 +59,29 @@ entry is `{ name, url }`:
 | `angles` | Head-and-shoulders portrait at different camera angles | `front`, `3/4 left`, `left profile`, `right profile`, `3/4 right`, `back` |
 | `bodyAngles` | Full-body at different angles, standing naturally with arms relaxed at sides | Same set as `angles`. |
 | `lightingVariations` | Same pose, different lighting | `daylight`, `night`, `dramatic` |
-| `motions` | Video clips animating the portrait | `walking`, `head turn`, `wave` |
+| `motions` | Video clips animating the character (i2v) | `walking`, `head turn`, `wave` |
 
 Each variant is generated independently via `POST /v1/generate-character-asset`
 (or `POST /v1/generate-character-motion` for `motions`). The result is
 appended to the named bucket on completion when `attachToCharacterId` +
 `attachToColumn` + `attachName` are supplied.
+
+### Motion source-frame resolution
+
+`POST /v1/generate-character-motion` auto-resolves the i2v source frame
+from the character row when `attachToCharacterId` is set. Priority:
+
+1. Caller-provided `sourceImageUrl` (explicit override — always wins).
+2. The `front` entry in `body_angles` (full-body framing produces much
+   better motion than a portrait headshot crop).
+3. Any other entry in `body_angles` (most recently saved).
+4. The anchor portrait (`source_image_url` on the row) — legacy fallback.
+
+To get the best motion clips, generate a `front` body angle first via
+`POST /v1/generate-character-asset` with `assetType: "bodyAngles"`,
+`variant: "front"`, `attachToColumn: "body_angles"`. The Character Studio
+UI does this automatically before kicking off a motion generation when
+no body angle exists yet.
 
 ## `realLifeRefsByVariant` shape
 
@@ -301,6 +318,78 @@ approve_portrait({
 })
 // → { portraitUrl, canonicalDescription }
 ```
+
+### Generating character assets via MCP
+
+Once a character has an approved portrait, use the same
+**`generate_character`** tool with `kind: "asset"` to add expression /
+head-angle / body-angle / pose / lighting variants. Each asset
+auto-attaches to the matching bucket on completion when
+`attach_to_character_id` is set. Animated clips have a dedicated tool
+(`generate_character_motion`) — they dispatch to a different route with
+a motion-specific input shape.
+
+```jsonc
+// Add a smile expression
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "expressions",
+  variant: "smile",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Add a head-angle for cross-shot framing
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "headAngles",
+  variant: "3/4 left",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Add a full-body back angle
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "bodyAngles",
+  variant: "back",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Freeform custom asset (requires attach_to_column)
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "custom",
+  variant: "noir",
+  attach_to_character_id: "kira-uuid",
+  attach_to_column: "lighting_variations",
+  attach_name: "Noir"
+})
+
+// Animated clip — different tool
+generate_character_motion({
+  motion_prompt: "slow head turn left, soft smile",
+  name: "Kira",
+  attach_to_character_id: "kira-uuid",
+  attach_name: "head turn"
+})
+```
+
+Variant names for canonical asset types:
+
+| Asset type | Preset variants |
+|-----------|-----------------|
+| `expressions` | neutral, smile, angry, surprised, sad, talking, laughing, disgusted, fearful, smirk, crying |
+| `headAngles` / `angles` | front, 3/4 left, left profile, right profile, 3/4 right |
+| `bodyAngles` | front, 3/4 left, left profile, right profile, 3/4 right, back |
+| `poses` | standing, walking, sitting, running, crouching, pointing, fighting stance, jumping, turning |
+| `lighting` | daylight, night, dramatic |
+| `custom` | any short label — pair with `attach_to_column` when attaching to a character row |
+
+See [docs/mcp/tools.md](mcp/tools.md#generate_character) for the full
+parameter reference.
 
 ## Identity-foundation fields (advanced)
 

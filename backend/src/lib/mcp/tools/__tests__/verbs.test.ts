@@ -600,6 +600,124 @@ describe("generate_character verb", () => {
     })
     expect(result.isError).toBe(true)
   })
+
+  it("forwards bodyAngles + attach_to_character_id to /v1/generate-character-asset", async () => {
+    // Reproduces the user complaint "i cannot generate expressions and
+    // head/body angles shots via mcp" — verifies the consolidated
+    // `generate_character` (kind=asset) tool now accepts the previously
+    // missing `bodyAngles` enum and the studio attach-* fields.
+    const KIRA_ID = "11111111-1111-4111-8111-111111111111"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-character-asset",
+      { jobId: "job-body-back" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_character", {
+      kind: "asset",
+      name: "Kira",
+      asset_type: "bodyAngles",
+      variant: "back",
+      attach_to_character_id: KIRA_ID,
+      attach_name: "Back body angle",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("job-body-back")
+    // camelCase translation: snake_case MCP input → camelCase route payload.
+    expect(received.body?.assetType).toBe("bodyAngles")
+    expect(received.body?.variant).toBe("back")
+    expect(received.body?.attachToCharacterId).toBe(KIRA_ID)
+    expect(received.body?.attachName).toBe("Back body angle")
+    // Session-derived identity travels through so the route's auth + scope
+    // resolution lands on the right user.
+    expect(received.body?.userId).toBe("u1")
+    expect(received.body?.mcp_client).toBe("Claude")
+  })
+
+  it("forwards expressions + attach_to_character_id without attach_to_column (route picks bucket)", async () => {
+    // For canonical asset types the route derives the column from
+    // assetType — no client-side pre-check, and the MCP layer must NOT
+    // forge an attachToColumn. We only need to verify that
+    // attachToColumn is absent from the forwarded payload (the route
+    // itself owns the bucket-resolution logic).
+    const KIRA_ID = "11111111-1111-4111-8111-111111111111"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-character-asset",
+      { jobId: "job-smile" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_character", {
+      kind: "asset",
+      name: "Kira",
+      asset_type: "expressions",
+      variant: "smile",
+      attach_to_character_id: KIRA_ID,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.assetType).toBe("expressions")
+    expect(received.body?.attachToCharacterId).toBe(KIRA_ID)
+    expect(received.body?.attachToColumn).toBeUndefined()
+    expect(received.body?.attachName).toBeUndefined()
+  })
+
+  it("surfaces the route's 400 verbatim (custom + missing attach_to_column)", async () => {
+    // For asset_type='custom' the route enforces attach_to_column when
+    // attach_to_character_id is set — the worker can't infer the bucket
+    // from a 'custom' assetType. The MCP layer does NOT pre-check this;
+    // the route's response IS the answer.
+    const KIRA_ID = "11111111-1111-4111-8111-111111111111"
+    const fastify = Fastify()
+    fastify.post("/v1/generate-character-asset", async (_req, reply) => {
+      return reply
+        .status(400)
+        .send({ error: { code: "validation_error", message: "attachToColumn is required for custom asset_type" } })
+    })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_character", {
+      kind: "asset",
+      name: "Kira",
+      asset_type: "custom",
+      variant: "noir",
+      attach_to_character_id: KIRA_ID,
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("validation_error")
+  })
+
+  it("forwards custom + attach_to_column when supplied", async () => {
+    const KIRA_ID = "11111111-1111-4111-8111-111111111111"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-character-asset",
+      { jobId: "job-custom-1" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_character", {
+      kind: "asset",
+      name: "Kira",
+      asset_type: "custom",
+      variant: "noir",
+      attach_to_character_id: KIRA_ID,
+      attach_to_column: "lighting_variations",
+      attach_name: "Noir",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.assetType).toBe("custom")
+    expect(received.body?.attachToColumn).toBe("lighting_variations")
+    expect(received.body?.attachName).toBe("Noir")
+  })
 })
 
 describe("generate_location verb", () => {

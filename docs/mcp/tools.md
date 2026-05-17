@@ -12,7 +12,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|----------|
 | `workflows:read` | `list_projects`, `get_project`, `list_workflows`, `get_workflow`, `get_workflow_json`, `export_workflow` |
 | `workflows:write` | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` |
-| `workflows:execute` | `run_workflow`, `generate_character_motion` |
+| `workflows:execute` | `run_workflow`, `generate_character` (kind=`main`/`asset`), `generate_character_motion` |
 | `jobs:read` | `list_jobs`, `get_job` |
 | `assets:read` | `browse_gallery`, `list_favorites`, `get_asset`, `list_characters`, `get_character` |
 | `assets:write` | `favorite_asset`, `create_character`, `update_character`, `approve_portrait`, `recaption_character` |
@@ -581,12 +581,142 @@ portrait is set; 502 on LLM failure.
 
 **Response:** `{ id, canonicalDescription }` in structured content.
 
+### `generate_character`
+
+Generates either a fresh portrait (`kind: "main"`) or an asset variant
+(`kind: "asset"`) for a named character. The single tool covers two routes
+under the hood: `POST /v1/generate-character` (main portrait) and
+`POST /v1/generate-character-asset` (variants — expressions, poses, head
+angles, body angles, lighting, custom). Use `generate_character_motion`
+for animated clips — that's a separate route with its own input shape.
+
+**`kind: "main"` — generate a portrait**
+
+Creates a new character image with the supplied identity fields. Returns
+the image-generation job id; poll via `get_job` until completion, then
+approve it with `approve_portrait` to anchor it as the character's
+canonical portrait.
+
+**`kind: "asset"` — generate a variant**
+
+Generates a new variant for an existing character — expression (smile,
+sad, angry, surprised, talking, laughing, disgusted, fearful, smirk,
+crying, neutral), head angle (front, 3/4 left, left profile, right
+profile, 3/4 right), body angle (same set plus back, full-body framing),
+pose (standing, walking, sitting, running, crouching, pointing, fighting
+stance, jumping, turning), lighting variation (daylight, night,
+dramatic), or a freeform `custom` prompt. When `attach_to_character_id`
+is set, the character's anchor portrait is used as the image-to-image
+source AND the result auto-attaches to the appropriate bucket on
+completion. The character must have an approved portrait — the route
+returns 400 `portrait_required` otherwise.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `kind` | `"main"` \| `"asset"` | Defaults to `"main"`. |
+| `name` | string (1–200) | Required. Character name; pass the same name as the character row. |
+| `description` | string (max 2000) | Optional. Identity description used in the prompt. |
+| `gender` | string (max 50) | Optional. |
+| `style` | enum | Optional. `realistic` \| `anime` \| `3d-pixar` \| `illustration`. |
+| `base_outfit` | string (max 1000) | Optional. |
+| `source_image_url` | URL | Optional. For kind=`asset`: overrides the i2i source. Required when `attach_to_character_id` is omitted (no portrait to fall back on). |
+| `model` | string | Optional. Image-generation provider; defaults to `nano-banana`. Other options: `nano-banana-pro`, `flux`, `grok`, `gpt-image`, `ideogram`. |
+| `asset_type` | enum | Required when `kind="asset"`. `expressions` \| `poses` \| `lighting` \| `angles` \| `headAngles` \| `bodyAngles` \| `custom`. `angles` is the legacy alias for `headAngles`; prefer `headAngles`. For motion clips use `generate_character_motion`. |
+| `variant` | string (1–100) | Required when `kind="asset"`. Variant name — e.g. `smile`, `3/4 left`, `back`, `walking`, `daylight`, or any short label for custom. |
+| `attach_to_character_id` | UUID | Optional. Studio mode: auto-attach to the character's row and reuse the anchor portrait as the i2i source. |
+| `attach_to_column` | enum | Required with `attach_to_character_id` when `asset_type="custom"` (the worker can't infer the bucket). One of `expressions` \| `poses` \| `angles` \| `body_angles` \| `lighting_variations`. Canonical asset types derive the column automatically. |
+| `attach_name` | string (1–200) | Optional. Display name stored on the attached asset entry; defaults to `variant`. |
+
+**Response:** `{ jobId }` in structured content. Poll via `get_job` until
+status=completed. For `kind="asset"` with `attach_to_character_id` set,
+the asset auto-attaches to the matching bucket on completion.
+
+**Example: portrait**
+
+```jsonc
+generate_character({
+  kind: "main",
+  name: "Kira",
+  description: "young protagonist, auburn hair, green eyes",
+  style: "realistic"
+})
+// → { content: [text], structuredContent: { jobId: "job-portrait" } }
+```
+
+**Example: smile expression**
+
+```jsonc
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "expressions",
+  variant: "smile",
+  attach_to_character_id: "kira-uuid"
+})
+// → { content: [text], structuredContent: { jobId: "job-asset-1" } }
+```
+
+**Example: 3/4-left head angle**
+
+```jsonc
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "headAngles",
+  variant: "3/4 left",
+  attach_to_character_id: "kira-uuid",
+  attach_name: "Three-quarter left"
+})
+```
+
+**Example: back body angle**
+
+```jsonc
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "bodyAngles",
+  variant: "back",
+  attach_to_character_id: "kira-uuid"
+})
+```
+
+**Example: custom asset with explicit column**
+
+```jsonc
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "custom",
+  variant: "noir",
+  attach_to_character_id: "kira-uuid",
+  attach_to_column: "lighting_variations",
+  attach_name: "Noir"
+})
+```
+
 ### `generate_character_motion`
 
-Animates a character's portrait into a motion clip via image-to-video.
-When `attach_to_character_id` is set, the character's anchor portrait is
-used as the source frame and the resulting clip is appended to the row's
+Animates a character into a motion clip via image-to-video. When
+`attach_to_character_id` is set, the source frame is auto-resolved from
+the character row and the resulting clip is appended to the row's
 `motions[]` bucket on completion.
+
+**Source-frame priority** (when `attach_to_character_id` is set):
+
+1. Explicit `source_image_url` (override — always wins).
+2. The character's `front` body angle — full-body framing produces much
+   better motion than a portrait headshot.
+3. Any other body angle (most recently saved).
+4. The anchor portrait (`source_image_url` on the row).
+
+Generate body angles first via `generate_character_asset` with
+`asset_type=bodyAngles` and `attach_to_column=body_angles` for the best
+motion results.
 
 **Scope:** `workflows:execute`
 
@@ -596,9 +726,9 @@ used as the source frame and the resulting clip is appended to the row's
 |-------|------|-------|
 | `motion_prompt` | string (1–2000) | Required. What moves and how. |
 | `name` | string (1–200) | Required. Used in the prompt. |
-| `attach_to_character_id` | UUID | Optional. Auto-attach + reuse anchor portrait. |
+| `attach_to_character_id` | UUID | Optional. Auto-attach + auto-resolve source frame. |
 | `attach_name` | string (1–200) | Optional. Display name in the motions[] bucket. |
-| `source_image_url` | URL | Required when `attach_to_character_id` is omitted. |
+| `source_image_url` | URL | Override source frame. Required when `attach_to_character_id` is omitted. |
 | `description` | string (max 1000) | Optional. Visual scaffolding. |
 | `motion_description` | string (max 500) | Optional. Tight description of rhythm + feel. |
 | `provider` | string | Defaults to `kling`. |
@@ -636,12 +766,22 @@ approve_portrait({
 // Step 4 — layer a smile expression from the portrait
 generate_character({
   kind: "asset",
+  name: "Kira",
   asset_type: "expressions",
   variant: "smile",
-  name: "Kira"
+  attach_to_character_id: "kira-uuid"
 })
 
-// Step 5 — animate the portrait
+// Step 5 — add a 3/4-left head angle for cross-shot framing
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "headAngles",
+  variant: "3/4 left",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Step 6 — animate the portrait
 generate_character_motion({
   motion_prompt: "slow head turn left, soft smile",
   name: "Kira",

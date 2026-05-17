@@ -1,4 +1,8 @@
 import { z } from "zod"
+import {
+  CHARACTER_ASSET_TYPES,
+  CHARACTER_ATTACH_COLUMNS,
+} from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
 import type { RegisterOpts } from "./verbs-image.js"
@@ -30,7 +34,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
     {
       title: "Generate Character",
       description:
-        "Generate a character image (kind: 'main') or a variant (kind: 'asset' with asset_type + variant — e.g. expressions/poses/angles/lighting).",
+        "Generate a character portrait (kind: 'main') or a variant asset (kind: 'asset' with asset_type + variant). Asset types: expressions, poses, lighting, angles, headAngles, bodyAngles, custom. When attach_to_character_id is set, the result auto-attaches to the character's matching bucket and the anchor portrait is reused as the i2i source.",
       inputSchema: {
         kind: z.enum(["main", "asset"]).default("main"),
         name: z.string().min(1).max(200),
@@ -42,14 +46,38 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         model: z.string().optional().describe("Image model (defaults to nano-banana)"),
         // asset-only fields
         asset_type: z
-          .enum(["expressions", "poses", "lighting", "angles", "custom"])
-          .optional(),
+          .enum(CHARACTER_ASSET_TYPES)
+          .optional()
+          .describe(
+            "Required when kind='asset'. One of: expressions, poses, lighting, angles, headAngles, bodyAngles, custom. `angles` is the legacy alias for `headAngles` (head-and-shoulders); prefer `headAngles` for new code. For animated clips, use `generate_character_motion` instead.",
+          ),
         variant: z
           .string()
           .min(1)
           .max(100)
           .optional()
-          .describe("Required when kind='asset'. e.g. 'smile', 'walking'."),
+          .describe(
+            "Required when kind='asset'. Variant name — e.g. expressions: 'smile'/'angry'/...; headAngles/bodyAngles: 'front'/'3/4 left'/'left profile'/'right profile'/'3/4 right'/'back'; poses: 'standing'/'walking'/...; lighting: 'daylight'/'night'/'dramatic'; or any short label for custom.",
+          ),
+        attach_to_character_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "If provided, the generated asset is auto-attached to this character row. The character's anchor portrait is reused as the i2i source; the route returns `portrait_required` (400) if no approved portrait exists. Required for the studio path.",
+          ),
+        attach_to_column: z
+          .enum(CHARACTER_ATTACH_COLUMNS)
+          .optional()
+          .describe(
+            "Required with attach_to_character_id when asset_type='custom' (the worker can't infer the bucket). For canonical asset types the column is derived automatically. One of: expressions, poses, angles, body_angles, lighting_variations.",
+          ),
+        attach_name: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Display name for the attached asset entry (defaults to variant)."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -97,6 +125,14 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       if (isAsset) {
         payload.assetType = args.asset_type
         payload.variant = args.variant
+        // Auto-attach studio fields — forwarded only on asset-mode requests.
+        // The main route ignores them but we keep the payload tight so the
+        // wire-shape mirrors `/v1/generate-character-asset`'s Zod schema.
+        if (args.attach_to_character_id) {
+          payload.attachToCharacterId = args.attach_to_character_id
+        }
+        if (args.attach_to_column) payload.attachToColumn = args.attach_to_column
+        if (args.attach_name) payload.attachName = args.attach_name
       }
       const url = isAsset ? "/v1/generate-character-asset" : "/v1/generate-character"
       const res = await fastify.inject({

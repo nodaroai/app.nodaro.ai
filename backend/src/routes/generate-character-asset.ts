@@ -11,6 +11,8 @@ import { llmComplete } from "../lib/llm-client.js"
 import {
   PLACEHOLDER_CHARACTER_NAME,
   CHARACTER_ASPECT_OPTIONS,
+  CHARACTER_ASSET_TYPES,
+  CHARACTER_ATTACH_COLUMNS,
   resolveCharacterAspectRatio,
   type CharacterAssetTypeForAspect,
 } from "@nodaro/shared"
@@ -24,15 +26,11 @@ import {
 // `headAngles` is an alias for `angles` (the legacy single-surface column,
 // now treated as head-angles in the UI). `bodyAngles` writes to the new
 // `body_angles` column. Both produce different framing in buildVariantPrompt.
-const assetTypeEnum = z.enum([
-  "expressions",
-  "poses",
-  "lighting",
-  "angles",
-  "headAngles",
-  "bodyAngles",
-  "custom",
-])
+// Single source of truth lives in `@nodaro/shared/entity-prompts` —
+// `CHARACTER_ASSET_TYPES` is reused by the MCP `generate_character` verb
+// (`backend/src/lib/mcp/tools/verbs-clo.ts`) so the Zod enum here and the
+// MCP tool's input enum can't drift.
+const assetTypeEnum = z.enum(CHARACTER_ASSET_TYPES)
 
 const VARIANTS: Record<string, readonly string[]> = {
   expressions: ["neutral", "smile", "angry", "surprised", "sad", "talking", "laughing", "disgusted", "fearful", "smirk", "crying"],
@@ -70,9 +68,7 @@ const generateCharacterAssetBody = z.object({
   // — important for custom prompts where assetType="custom" but the asset
   // still belongs in expressions / poses / angles / lighting_variations.
   attachToCharacterId: z.string().uuid().optional(),
-  attachToColumn: z
-    .enum(["expressions", "poses", "angles", "body_angles", "lighting_variations"])
-    .optional(),
+  attachToColumn: z.enum(CHARACTER_ATTACH_COLUMNS).optional(),
   attachName: z.string().min(1).max(200).optional(),
   // Per-asset-type aspect-ratio defaults (smart-defaults feature). When the
   // caller omits `aspectRatio`, the route derives one from `assetType` —
