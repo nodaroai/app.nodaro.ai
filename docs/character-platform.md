@@ -302,6 +302,78 @@ approve_portrait({
 // → { portraitUrl, canonicalDescription }
 ```
 
+### Generating character assets via MCP
+
+Once a character has an approved portrait, use the same
+**`generate_character`** tool with `kind: "asset"` to add expression /
+head-angle / body-angle / pose / lighting variants. Each asset
+auto-attaches to the matching bucket on completion when
+`attach_to_character_id` is set. Animated clips have a dedicated tool
+(`generate_character_motion`) — they dispatch to a different route with
+a motion-specific input shape.
+
+```jsonc
+// Add a smile expression
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "expressions",
+  variant: "smile",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Add a head-angle for cross-shot framing
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "headAngles",
+  variant: "3/4 left",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Add a full-body back angle
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "bodyAngles",
+  variant: "back",
+  attach_to_character_id: "kira-uuid"
+})
+
+// Freeform custom asset (requires attach_to_column)
+generate_character({
+  kind: "asset",
+  name: "Kira",
+  asset_type: "custom",
+  variant: "noir",
+  attach_to_character_id: "kira-uuid",
+  attach_to_column: "lighting_variations",
+  attach_name: "Noir"
+})
+
+// Animated clip — different tool
+generate_character_motion({
+  motion_prompt: "slow head turn left, soft smile",
+  name: "Kira",
+  attach_to_character_id: "kira-uuid",
+  attach_name: "head turn"
+})
+```
+
+Variant names for canonical asset types:
+
+| Asset type | Preset variants |
+|-----------|-----------------|
+| `expressions` | neutral, smile, angry, surprised, sad, talking, laughing, disgusted, fearful, smirk, crying |
+| `headAngles` / `angles` | front, 3/4 left, left profile, right profile, 3/4 right |
+| `bodyAngles` | front, 3/4 left, left profile, right profile, 3/4 right, back |
+| `poses` | standing, walking, sitting, running, crouching, pointing, fighting stance, jumping, turning |
+| `lighting` | daylight, night, dramatic |
+| `custom` | any short label — pair with `attach_to_column` when attaching to a character row |
+
+See [docs/mcp/tools.md](mcp/tools.md#generate_character) for the full
+parameter reference.
+
 ## Identity-foundation fields (advanced)
 
 For high-fidelity character work, three fields work together to anchor

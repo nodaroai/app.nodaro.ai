@@ -682,6 +682,15 @@ describe("generate_character_motion tool", () => {
   })
 })
 
+// ── generate_character_asset is intentionally NOT registered here ───────────
+//
+// Asset variant generation (expressions / poses / angles / headAngles /
+// bodyAngles / lighting / custom) lives in
+// `verbs-clo.ts::generate_character` (kind="asset") — see
+// `__tests__/verbs.test.ts` for the asset-mode payload + attach-field tests.
+// This file deliberately exposes only motion (`generate_character_motion`)
+// because the motion route has its own input shape.
+
 // ── scope-gating cross-check ────────────────────────────────────────────────
 
 describe("scope gating", () => {
@@ -697,6 +706,10 @@ describe("scope gating", () => {
     expect(names.has("approve_portrait")).toBe(false)
     expect(names.has("recaption_character")).toBe(false)
     expect(names.has("generate_character_motion")).toBe(false)
+    // Asset generation lives in verbs-clo.ts — registerCharacterTools
+    // must NOT register `generate_character_asset` regardless of session
+    // scope; if it ever reappears the registry has duplicate tools.
+    expect(names.has("generate_character_asset")).toBe(false)
   })
 
   it("write session adds CRUD + studio tools but no generation", async () => {
@@ -709,13 +722,19 @@ describe("scope gating", () => {
     expect(names.has("approve_portrait")).toBe(true)
     expect(names.has("recaption_character")).toBe(true)
     expect(names.has("generate_character_motion")).toBe(false)
+    expect(names.has("generate_character_asset")).toBe(false)
   })
 
-  it("execute session adds generate_character_motion", async () => {
+  it("execute session adds generate_character_motion (asset gen is in verbs-clo)", async () => {
     const server = buildServer()
     registerCharacterTools({ server, session: executeSession(), fastify: Fastify() })
     const tools = await listTools(server)
-    expect(tools.map((t) => t.name)).toContain("generate_character_motion")
+    const names = new Set(tools.map((t) => t.name))
+    expect(names.has("generate_character_motion")).toBe(true)
+    // Asset variant generation is exposed by verbs-clo.ts under the
+    // existing `generate_character` (kind=asset) tool — characters.ts
+    // must not register a separate `generate_character_asset`.
+    expect(names.has("generate_character_asset")).toBe(false)
   })
 
   // Destructive-tool safety net — `delete_character` and `restore_character`

@@ -20,6 +20,44 @@ export const CHARACTER_STYLES = ["realistic", "anime", "3d-pixar", "illustration
 export type EntityStyle = (typeof CHARACTER_STYLES)[number]
 
 /**
+ * Character asset-type enum — the kinds of variant a user can generate off a
+ * character's anchor portrait. Mirrors the literal accepted by
+ * `POST /v1/generate-character-asset` (`backend/src/routes/generate-character-asset.ts`)
+ * and consumed by the MCP `generate_character` verb (kind="asset") in
+ * `backend/src/lib/mcp/tools/verbs-clo.ts`.
+ *
+ * `angles` is the legacy single-surface alias for `headAngles` — both produce
+ * head-and-shoulders portrait framing. `bodyAngles` is the full-body variant.
+ * `lighting` is the bucket key (the DB column is `lighting_variations`).
+ */
+export const CHARACTER_ASSET_TYPES = [
+  "expressions",
+  "poses",
+  "lighting",
+  "angles",
+  "headAngles",
+  "bodyAngles",
+  "custom",
+] as const
+export type CharacterAssetType = (typeof CHARACTER_ASSET_TYPES)[number]
+
+/**
+ * DB columns the character-asset worker may auto-attach to. Required when
+ * `assetType === "custom"` (the worker can't infer the bucket from the asset
+ * type); for canonical asset types the column is derived automatically.
+ *
+ * Mirrors the literal accepted by the route's `attachToColumn` Zod field.
+ */
+export const CHARACTER_ATTACH_COLUMNS = [
+  "expressions",
+  "poses",
+  "angles",
+  "body_angles",
+  "lighting_variations",
+] as const
+export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
+
+/**
  * Reserved name the Character Studio auto-assigns when a user clicks Generate
  * before naming the character. Treated as "no name" by prompt builders so the
  * literal string "Untitled character" never leaks into a generation prompt.
