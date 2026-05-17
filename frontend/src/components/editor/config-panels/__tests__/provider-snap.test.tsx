@@ -87,6 +87,9 @@ vi.mock("@/components/editor/config-panels/aspect-ratio-selector", () => ({
 vi.mock("@/components/editor/config-panels/reference-image-list", () => ({
   ReferenceImageList: () => <div />,
 }))
+vi.mock("@/components/editor/config-panels/injected-reference-list", () => ({
+  InjectedReferenceList: () => <div />,
+}))
 vi.mock("@/components/editor/config-panels/prompt-editor", () => ({
   PromptEditor: () => <div />,
 }))
@@ -129,18 +132,22 @@ vi.mock("@/components/editor/media-editor", () => ({
   MediaEditorModal: () => null,
 }))
 
-// Hooks / stores
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) =>
-    selector({
-      characterDefinitions: [],
-      addCharacterDefinition: vi.fn(),
-      addNode: vi.fn(),
-      selectNode: vi.fn(),
-      nodes: [],
-      edges: [],
-    }),
-}))
+// Hooks / stores — useWorkflowStore is used BOTH as a hook (selector) AND
+// statically (`.getState()`). Provide both APIs on the mock.
+vi.mock("@/hooks/use-workflow-store", () => {
+  const state = {
+    characterDefinitions: [],
+    addCharacterDefinition: vi.fn(),
+    addNode: vi.fn(),
+    selectNode: vi.fn(),
+    deleteEdge: vi.fn(),
+    nodes: [],
+    edges: [],
+  }
+  const useWorkflowStore: any = (selector: any) => selector(state)
+  useWorkflowStore.getState = () => state
+  return { useWorkflowStore }
+})
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   prefetchModelCredits: vi.fn(),
   useModelCredits: () => ({ data: null, isLoading: false }),

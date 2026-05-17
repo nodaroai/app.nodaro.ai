@@ -1300,6 +1300,21 @@ export type GenerateImageData = {
   referenceImageUrl?: string
   referenceImageUrls?: readonly ManualReferenceImage[]
   referenceImageOrder?: readonly string[]
+  /**
+   * Unified reorder of the injected-references list (wired raw + @-mentions
+   * + canonical fallbacks). Each entry is a stable tile ID using the scheme
+   * from `compute-injected-refs.ts`. Additive — when absent, the natural
+   * order from `buildImagePrompt` applies (matches pre-feature behavior).
+   * Honored by both the orchestrator (`payload-builder.ts` → `buildImagePrompt`)
+   * AND the frontend single-node executor (`execute-node.ts`).
+   */
+  referenceOrder?: readonly string[]
+  /**
+   * Character slugs whose canonical-fallback (auto-attached when wired but
+   * not @-mentioned) the user has explicitly hidden via the × button.
+   * Mention variants for the same character still attach.
+   */
+  suppressedCanonicalCharacterIds?: readonly string[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1363,6 +1378,10 @@ export type ImageToImageData = {
   maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. Additive over connectedMediaOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
@@ -1394,6 +1413,10 @@ export type ModifyImageData = {
   maskUrl?: string
   characterDefinitionIds?: readonly string[]
   connectedMediaOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. Additive over connectedMediaOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
@@ -1498,6 +1521,10 @@ export type ImageToVideoData = {
    * orchestrator + frontend execute-node apply this order BEFORE assigning
    * positional Image-N letters. IDs not in the array fall to the end. */
   connectedRefImageOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
   seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1562,6 +1589,10 @@ export type TextToVideoData = {
    * Mirrors `ImageToVideoData.connectedRefImageOrder` — drives Image-1/Image-2
    * positional assignment in the assembled prompt for multi-character t2v. */
   connectedRefImageOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. Additive over connectedRefImageOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -1598,6 +1629,10 @@ export type VideoToVideoData = {
   currentJobId?: string              // ID of the currently running job (for progress polling)
   currentJobProgress?: number        // Progress percentage from backend (0-100)
   connectedImageOrder?: readonly string[]
+  /** See GenerateImageData.referenceOrder. Additive over connectedImageOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -1641,6 +1676,10 @@ export type LipSyncData = {
   still?: boolean
   poseStyle?: number
   expressionScale?: number
+  /** See GenerateImageData.referenceOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1665,6 +1704,10 @@ export type SpeechToVideoData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  /** See GenerateImageData.referenceOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1688,6 +1731,10 @@ export type MotionTransferData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  /** See GenerateImageData.referenceOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1744,6 +1791,10 @@ export type FaceSwapData = {
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
+  /** See GenerateImageData.referenceOrder. */
+  referenceOrder?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds. */
+  suppressedCanonicalCharacterIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }

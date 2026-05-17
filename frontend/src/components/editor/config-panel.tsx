@@ -492,16 +492,16 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "suno-add-vocals": return <SunoAddVocalsConfig {...configProps} />
     case "suno-convert-wav": return <SunoConvertWavConfig {...configProps} />
     case "suno-upload-extend": return <SunoUploadExtendConfig {...configProps} />
-    case "lip-sync": return <LipSyncConfig {...configProps} />
+    case "lip-sync": return <LipSyncConfig {...configProps} nodeId={selectedNodeId} />
     case "speech-to-video": return <SpeechToVideoConfig {...configProps} nodeId={selectedNodeId} />
-    case "motion-transfer": return <MotionTransferConfig {...configProps} />
+    case "motion-transfer": return <MotionTransferConfig {...configProps} nodeId={selectedNodeId} />
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />
     case "llm-chat": return <LLMChatConfig {...configProps} />
     case "ai-writer": return <AIWriterConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
-    case "face-swap": return <FaceSwapConfig {...configProps} />
+    case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
     case "add-captions": return <AddCaptionsConfig {...configProps} />

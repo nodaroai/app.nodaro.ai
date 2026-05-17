@@ -197,7 +197,7 @@ import {
   runObjectGeneration,
   runLocationGeneration,
 } from "./asset-executors";
-import { buildImagePrompt } from "@nodaro/shared";
+import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
@@ -736,8 +736,23 @@ function resolveVideoPromptMentions(
   nodes: readonly WorkflowNode[],
   edges: readonly WorkflowEdge[],
   extraRefs?: readonly import("@/types/nodes").ExtraRef[],
+  opts?: {
+    /** User-defined reorder (see compute-injected-refs). */
+    referenceOrder?: readonly string[]
+    /** Character slugs whose canonical-fallback is hidden. */
+    suppressedCanonicalCharacterIds?: readonly string[]
+  },
 ): { prompt: string | undefined; additionalUrls: string[] } {
-  const wiredCharRefs = expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges);
+  let wiredCharRefs = expandWiredCharacterRefsForVideo(consumerNodeId, nodes, edges);
+  const suppressedSlugs = new Set(opts?.suppressedCanonicalCharacterIds ?? []);
+  if (suppressedSlugs.size > 0) {
+    wiredCharRefs = wiredCharRefs.filter((r) => {
+      if (r.source !== "wired-character") return true;
+      if (!r.characterSlug) return true;
+      if (r.variantSlug) return true;
+      return !suppressedSlugs.has(r.characterSlug);
+    });
+  }
   // Extras are valid even WITHOUT any wired character upstream (e.g. the user
   // uploaded loose reference photos and typed per-row descriptions). The
   // early-return below is gated on (no chars AND no extras) so we don't skip
@@ -921,7 +936,8 @@ function resolveVideoPromptMentions(
   }
 
   // Dedup combined URLs while preserving order (mentions first, fallback,
-  // then extras). The "Image N" labels in the prompt assume this exact order.
+  // then extras). The "Image N" labels in the prompt assume this exact order
+  // BEFORE any user-defined `referenceOrder` reorder below.
   const merged: string[] = [];
   const seen = new Set<string>();
   for (const u of resolved.additionalUrls) {
@@ -933,6 +949,30 @@ function resolveVideoPromptMentions(
   for (const u of extraUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u); }
   }
+
+  // Apply user-defined reorder + renumber `Image N` tokens — parity with the
+  // backend `resolveVideoPromptMentions` and the shared image builder.
+  const referenceOrder = opts?.referenceOrder;
+  if (referenceOrder && referenceOrder.length > 0 && merged.length > 1) {
+    const refsForOrdering: ConnectedReference[] = [...wiredCharRefs];
+    if (hasExtras) {
+      for (const ex of extraRefs!) {
+        if (!ex.url) continue;
+        refsForOrdering.push({
+          id: ex.url,
+          defaultName: ex.characterSlug || "Extra",
+          source: ex.characterSlug ? "wired-character" : "manual",
+          url: ex.url,
+          characterSlug: ex.characterSlug,
+          variantSlug: ex.variantSlug,
+          isExtraRef: true,
+        });
+      }
+    }
+    const reordered = applyReferenceOrderToVideo(merged, finalPrompt, refsForOrdering, referenceOrder);
+    return { prompt: reordered.prompt, additionalUrls: reordered.urls };
+  }
+
   return { prompt: finalPrompt, additionalUrls: merged };
 }
 
@@ -1319,6 +1359,11 @@ export function executeNode(
       connectedReferences,
       identityMeta: imgData.identityMeta ?? [],
       ancestorRefs,
+      // User-defined reorder + canonical suppression — parity with backend
+      // payload-builder so single-node runs and orchestrator runs produce
+      // identical URL lists.
+      referenceOrder: imgData.referenceOrder ?? undefined,
+      suppressedCanonicalCharacterIds: imgData.suppressedCanonicalCharacterIds ?? undefined,
     });
 
     // Post-assembly empty-prompt check: a Character / @-mention / style / etc.
@@ -1535,6 +1580,8 @@ export function executeNode(
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
       connectedReferences,
       ancestorRefs: [],
+      referenceOrder: i2iData.referenceOrder ?? undefined,
+      suppressedCanonicalCharacterIds: i2iData.suppressedCanonicalCharacterIds ?? undefined,
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
@@ -1677,6 +1724,8 @@ export function executeNode(
       flowTemplates: useWorkflowStore.getState().flowPromptTemplates,
       connectedReferences,
       ancestorRefs: [],
+      referenceOrder: modData.referenceOrder ?? undefined,
+      suppressedCanonicalCharacterIds: modData.suppressedCanonicalCharacterIds ?? undefined,
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
@@ -1882,7 +1931,10 @@ export function executeNode(
     // overwrite. When no `startFrameUrl` is wired yet, the first resolved
     // mention URL fills that slot so a pure "@kira:1:smile dancing" prompt
     // gets the smile image as input rather than failing with no image.
-    const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, i2vData.extraRefs);
+    const i2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, i2vData.extraRefs, {
+      referenceOrder: i2vData.referenceOrder,
+      suppressedCanonicalCharacterIds: i2vData.suppressedCanonicalCharacterIds,
+    });
     prompt = i2vMention.prompt;
     let i2vMergedRefs: string[] | undefined = referenceImageUrls?.length ? [...referenceImageUrls] : undefined;
     if (i2vMention.additionalUrls.length > 0) {
@@ -2021,7 +2073,10 @@ export function executeNode(
     // accept exactly one reference image and silently ignore the rest, so
     // there's no payload key to plumb them into. Prompt token replacement
     // still happens so the LLM sees the character names regardless.
-    const v2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, v2vData.extraRefs);
+    const v2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, v2vData.extraRefs, {
+      referenceOrder: v2vData.referenceOrder,
+      suppressedCanonicalCharacterIds: v2vData.suppressedCanonicalCharacterIds,
+    });
     prompt = v2vMention.prompt;
     const v2vUpstreamRef = typeof inputs.referenceImageUrls === "string"
       ? inputs.referenceImageUrls
@@ -2082,7 +2137,10 @@ export function executeNode(
     // `resolveVideoPromptMentions` in `payload-builder.ts`. t2v has no
     // `imageUrl` slot — all resolved URLs become entries in
     // `referenceImageUrls`, merged with whatever upstream already provided.
-    const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, t2vData.extraRefs);
+    const t2vMention = resolveVideoPromptMentions(prompt, node.id, nodes, edges, t2vData.extraRefs, {
+      referenceOrder: t2vData.referenceOrder,
+      suppressedCanonicalCharacterIds: t2vData.suppressedCanonicalCharacterIds,
+    });
     prompt = t2vMention.prompt ?? prompt;
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
     // (after mention resolution, identity directives, etc.) is empty. The
