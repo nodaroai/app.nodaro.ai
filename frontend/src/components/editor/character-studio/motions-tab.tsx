@@ -2,6 +2,8 @@ import { useCallback, useState } from "react"
 import { toast } from "sonner"
 import { CHARACTER_MOTION_PROVIDERS } from "@nodaro/shared"
 import { generateCharacterMotion } from "@/lib/api"
+import { DEFAULT_IMAGE_MODEL } from "./expressions-tab"
+import { ensureBodyAngleForMotion } from "./ensure-body-angle"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
 import { AssetCard } from "./asset-card"
@@ -71,9 +73,33 @@ export function MotionsTab({
         toast.error(e instanceof Error ? e.message : "Could not save character.")
         return
       }
+      // Auto-chain: when the row has no body angles yet, generate a `front`
+      // body angle first and use its URL as the motion's source frame.
+      // Otherwise let the backend pick the best one from the row.
+      let chainedSourceUrl: string | undefined
+      try {
+        const url = await ensureBodyAngleForMotion({
+          state,
+          jobs,
+          characterId,
+          provider: DEFAULT_IMAGE_MODEL,
+        })
+        chainedSourceUrl = url ?? undefined
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? `Body reference failed: ${e.message}`
+            : "Body reference generation failed.",
+        )
+        return
+      }
       const { jobId } = await generateCharacterMotion({
         motionPrompt: text,
-        sourceImageUrl: state.staged.sourceImageUrl,
+        // Explicit override when we JUST generated a body angle — closes the
+        // race with the DB write. When chainedSourceUrl is undefined (the row
+        // already had body angles), the backend picks the best one from the
+        // row.
+        sourceImageUrl: chainedSourceUrl,
         provider: model,
         name: state.staged.characterName,
         description: state.staged.description,
@@ -107,9 +133,27 @@ export function MotionsTab({
         state.patch({ motions: items.filter((_, i) => i !== idx) })
       }
       const trackName = mode === "replace" ? asset.name : `${asset.name} (v)`
+      // Auto-chain: see handleGenerate for the rationale.
+      let chainedSourceUrl: string | undefined
+      try {
+        const url = await ensureBodyAngleForMotion({
+          state,
+          jobs,
+          characterId,
+          provider: DEFAULT_IMAGE_MODEL,
+        })
+        chainedSourceUrl = url ?? undefined
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? `Body reference failed: ${e.message}`
+            : "Body reference generation failed.",
+        )
+        return
+      }
       const { jobId } = await generateCharacterMotion({
         motionPrompt: asset.name,
-        sourceImageUrl: state.staged.sourceImageUrl,
+        sourceImageUrl: chainedSourceUrl,
         provider: currentModel,
         name: state.staged.characterName,
         description: state.staged.description,
@@ -141,10 +185,28 @@ export function MotionsTab({
         return
       }
       const variant = submission.userPrompt.slice(0, 100) || "custom"
+      // Auto-chain: see handleGenerate for the rationale.
+      let chainedSourceUrl: string | undefined
+      try {
+        const url = await ensureBodyAngleForMotion({
+          state,
+          jobs,
+          characterId,
+          provider: DEFAULT_IMAGE_MODEL,
+        })
+        chainedSourceUrl = url ?? undefined
+      } catch (e) {
+        toast.error(
+          e instanceof Error
+            ? `Body reference failed: ${e.message}`
+            : "Body reference generation failed.",
+        )
+        return
+      }
       try {
         const { jobId } = await generateCharacterMotion({
           motionPrompt: submission.userPrompt,
-          sourceImageUrl: state.staged.sourceImageUrl,
+          sourceImageUrl: chainedSourceUrl,
           provider: currentModel,
           name: state.staged.characterName,
           description: submission.description || state.staged.description,

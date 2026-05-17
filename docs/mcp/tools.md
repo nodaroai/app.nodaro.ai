@@ -701,10 +701,22 @@ generate_character({
 
 ### `generate_character_motion`
 
-Animates a character's portrait into a motion clip via image-to-video.
-When `attach_to_character_id` is set, the character's anchor portrait is
-used as the source frame and the resulting clip is appended to the row's
+Animates a character into a motion clip via image-to-video. When
+`attach_to_character_id` is set, the source frame is auto-resolved from
+the character row and the resulting clip is appended to the row's
 `motions[]` bucket on completion.
+
+**Source-frame priority** (when `attach_to_character_id` is set):
+
+1. Explicit `source_image_url` (override — always wins).
+2. The character's `front` body angle — full-body framing produces much
+   better motion than a portrait headshot.
+3. Any other body angle (most recently saved).
+4. The anchor portrait (`source_image_url` on the row).
+
+Generate body angles first via `generate_character_asset` with
+`asset_type=bodyAngles` and `attach_to_column=body_angles` for the best
+motion results.
 
 **Scope:** `workflows:execute`
 
@@ -714,9 +726,9 @@ used as the source frame and the resulting clip is appended to the row's
 |-------|------|-------|
 | `motion_prompt` | string (1–2000) | Required. What moves and how. |
 | `name` | string (1–200) | Required. Used in the prompt. |
-| `attach_to_character_id` | UUID | Optional. Auto-attach + reuse anchor portrait. |
+| `attach_to_character_id` | UUID | Optional. Auto-attach + auto-resolve source frame. |
 | `attach_name` | string (1–200) | Optional. Display name in the motions[] bucket. |
-| `source_image_url` | URL | Required when `attach_to_character_id` is omitted. |
+| `source_image_url` | URL | Override source frame. Required when `attach_to_character_id` is omitted. |
 | `description` | string (max 1000) | Optional. Visual scaffolding. |
 | `motion_description` | string (max 500) | Optional. Tight description of rhythm + feel. |
 | `provider` | string | Defaults to `kling`. |

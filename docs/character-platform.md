@@ -59,12 +59,29 @@ entry is `{ name, url }`:
 | `angles` | Head-and-shoulders portrait at different camera angles | `front`, `3/4 left`, `left profile`, `right profile`, `3/4 right`, `back` |
 | `bodyAngles` | Full-body at different angles, standing naturally with arms relaxed at sides | Same set as `angles`. |
 | `lightingVariations` | Same pose, different lighting | `daylight`, `night`, `dramatic` |
-| `motions` | Video clips animating the portrait | `walking`, `head turn`, `wave` |
+| `motions` | Video clips animating the character (i2v) | `walking`, `head turn`, `wave` |
 
 Each variant is generated independently via `POST /v1/generate-character-asset`
 (or `POST /v1/generate-character-motion` for `motions`). The result is
 appended to the named bucket on completion when `attachToCharacterId` +
 `attachToColumn` + `attachName` are supplied.
+
+### Motion source-frame resolution
+
+`POST /v1/generate-character-motion` auto-resolves the i2v source frame
+from the character row when `attachToCharacterId` is set. Priority:
+
+1. Caller-provided `sourceImageUrl` (explicit override — always wins).
+2. The `front` entry in `body_angles` (full-body framing produces much
+   better motion than a portrait headshot crop).
+3. Any other entry in `body_angles` (most recently saved).
+4. The anchor portrait (`source_image_url` on the row) — legacy fallback.
+
+To get the best motion clips, generate a `front` body angle first via
+`POST /v1/generate-character-asset` with `assetType: "bodyAngles"`,
+`variant: "front"`, `attachToColumn: "body_angles"`. The Character Studio
+UI does this automatically before kicking off a motion generation when
+no body angle exists yet.
 
 ## `realLifeRefsByVariant` shape
 

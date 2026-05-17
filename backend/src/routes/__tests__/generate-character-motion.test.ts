@@ -86,7 +86,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateCharacterMotionRoutes } from "../generate-character-motion.js"
+import { generateCharacterMotionRoutes, resolveFrontBodyAngleUrl } from "../generate-character-motion.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
@@ -144,7 +144,11 @@ afterEach(async () => {
  *   - "jobs"       -> insert chain returning job-1 by default
  */
 function setupSupabaseMock(opts: {
-  charRow?: { source_image_url: string | null; canonical_description: string | null } | null
+  charRow?: {
+    source_image_url: string | null
+    canonical_description: string | null
+    body_angles?: unknown
+  } | null
   charError?: { message: string } | null
   jobInsertResult?: { data: { id: string } | null; error: { message: string } | null }
 }) {
@@ -619,6 +623,146 @@ describe("POST /v1/generate-character-motion — Task 8 behavior", () => {
     expect(enqueuedPayload.sourceImageUrl).toBe(OVERRIDE_URL)
   })
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Full-body source-frame preference. When the character has body_angles
+  // populated, motion gen should pick the canonical "front" angle over the
+  // anchor portrait — character motion looks much better when the source
+  // frame is a full-body shot. See `resolveFrontBodyAngleUrl()`.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it("prefers the front body angle URL over the anchor portrait when body_angles has a 'front' entry", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        body_angles: [
+          { name: "back", url: "https://example.com/body-back.png" },
+          { name: "front", url: "https://example.com/body-front.png" },
+          { name: "3/4 left", url: "https://example.com/body-34left.png" },
+        ],
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        motionPrompt: "she waves slowly toward the camera",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachName: "wave",
+      },
+    })
+
+    const enqueuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueuedPayload.sourceImageUrl).toBe("https://example.com/body-front.png")
+  })
+
+  it("explicit sourceImageUrl still wins over a 'front' body angle (caller's override is final)", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        body_angles: [{ name: "front", url: "https://example.com/body-front.png" }],
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: basePayload({
+        sourceImageUrl: OVERRIDE_URL,
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachName: "wave",
+      }),
+    })
+
+    const enqueuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueuedPayload.sourceImageUrl).toBe(OVERRIDE_URL)
+  })
+
+  it("falls back to the portrait when body_angles is empty (legacy character path still works)", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        body_angles: [],
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        motionPrompt: "she waves",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachName: "wave",
+      },
+    })
+
+    const enqueuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueuedPayload.sourceImageUrl).toBe("https://example.com/portrait.png")
+  })
+
+  it("falls back to the most-recently-saved body angle when no 'front' entry exists", async () => {
+    setupSupabaseMock({
+      charRow: {
+        source_image_url: "https://example.com/portrait.png",
+        canonical_description: "tall woman",
+        body_angles: [
+          { name: "back", url: "https://example.com/body-back.png" },
+          { name: "left profile", url: "https://example.com/body-left.png" },
+        ],
+      },
+    })
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        motionPrompt: "she waves",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachName: "wave",
+      },
+    })
+
+    // No "front" → take the LAST entry (newest append).
+    const enqueuedPayload = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueuedPayload.sourceImageUrl).toBe("https://example.com/body-left.png")
+  })
+
+  it("400 portrait_required when character has no portrait AND no body angles", async () => {
+    setupSupabaseMock({
+      charRow: { source_image_url: null, canonical_description: "tall woman", body_angles: [] },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-character-motion",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        motionPrompt: "she waves",
+        name: "Kira",
+        attachToCharacterId: TEST_CHARACTER_ID,
+        attachName: "wave",
+      },
+    })
+
+    // Portrait gate still fires first — a character without source_image_url
+    // is rejected regardless of body_angles. (The frontend auto-chains a body
+    // angle gen BEFORE the motion call so this case is unreachable in the UI,
+    // but the route stays strict for non-studio callers.)
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("portrait_required")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
   it("description longer than 1000 chars is rejected with validation_error", async () => {
     setupSupabaseMock({
       charRow: { source_image_url: PORTRAIT_URL, canonical_description: null },
@@ -700,5 +844,71 @@ describe("POST /v1/generate-character-motion — aspect-ratio defaults", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Unit tests for the `body_angles` URL resolver. Kept inline because the
+// function is a tiny helper exported alongside the route; a separate test
+// file would be heavier than the function it tests.
+// ---------------------------------------------------------------------------
+describe("resolveFrontBodyAngleUrl", () => {
+  it("returns null for null / undefined / non-array input", () => {
+    expect(resolveFrontBodyAngleUrl(null)).toBeNull()
+    expect(resolveFrontBodyAngleUrl(undefined)).toBeNull()
+    expect(resolveFrontBodyAngleUrl({})).toBeNull()
+    expect(resolveFrontBodyAngleUrl("front-url")).toBeNull()
+  })
+
+  it("returns null for an empty array", () => {
+    expect(resolveFrontBodyAngleUrl([])).toBeNull()
+  })
+
+  it("picks the 'front' entry when present, regardless of position", () => {
+    const angles = [
+      { name: "back", url: "https://example.com/back.png" },
+      { name: "front", url: "https://example.com/front.png" },
+      { name: "3/4 left", url: "https://example.com/34l.png" },
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBe("https://example.com/front.png")
+  })
+
+  it("matches 'front' case-insensitively and tolerates whitespace", () => {
+    const angles = [
+      { name: "back", url: "https://example.com/back.png" },
+      { name: "  Front  ", url: "https://example.com/case.png" },
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBe("https://example.com/case.png")
+  })
+
+  it("falls back to the LAST entry when no 'front' exists (most-recently-saved)", () => {
+    const angles = [
+      { name: "back", url: "https://example.com/back.png" },
+      { name: "left profile", url: "https://example.com/left.png" },
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBe("https://example.com/left.png")
+  })
+
+  it("skips entries without a usable url field", () => {
+    const angles = [
+      { name: "front", url: "" },              // empty URL — skipped in pass 1
+      { name: "back", url: "https://example.com/back.png" }, // last viable
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBe("https://example.com/back.png")
+  })
+
+  it("returns null when no entry has a URL at all", () => {
+    const angles = [
+      { name: "front" },
+      { name: "back", url: 123 as unknown as string },
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBeNull()
+  })
+
+  it("tolerates entries that are missing `name` (still considered for the fallback pass)", () => {
+    const angles = [
+      { url: "https://example.com/nameless.png" },
+    ]
+    expect(resolveFrontBodyAngleUrl(angles)).toBe("https://example.com/nameless.png")
   })
 })

@@ -639,13 +639,19 @@ function registerGenerationTools({
     {
       title: "Generate Character Motion",
       description:
-        "Animate a character's portrait into a motion clip via image-to-video. " +
-        "Pass `attach_to_character_id` to use the character's anchor portrait " +
-        "as the source frame and auto-attach the resulting clip to the " +
-        "character's `motions[]` bucket on completion. The motion_prompt " +
-        "describes WHAT moves and HOW (e.g. 'slow head turn left, eyes track " +
-        "the camera, soft smile'). Returns the i2v job id — poll via " +
-        "`get_job` until completion. Credit cost depends on the provider.",
+        "Animate a character into a motion clip via image-to-video. Pass " +
+        "`attach_to_character_id` to auto-resolve the source frame from the " +
+        "character row and append the result to the row's `motions[]` " +
+        "bucket on completion. Source-frame priority: explicit " +
+        "`source_image_url` (override) > the character's `front` body angle " +
+        "(full-body framing produces much better motion than a portrait " +
+        "headshot) > any other body angle > the anchor portrait. " +
+        "Generate body angles first via `generate_character_asset` with " +
+        "`asset_type=bodyAngles` and `attach_to_column=body_angles` for the " +
+        "best motion results. The motion_prompt describes WHAT moves and " +
+        "HOW (e.g. 'slow head turn left, eyes track the camera, soft " +
+        "smile'). Returns the i2v job id — poll via `get_job` until " +
+        "completion. Credit cost depends on the provider.",
       inputSchema: {
         motion_prompt: z.string().min(1).max(2000),
         name: z.string().min(1).max(200),
@@ -667,7 +673,10 @@ function registerGenerationTools({
           .url()
           .optional()
           .describe(
-            "Override source frame. Required when attach_to_character_id is omitted (no portrait to fall back on).",
+            "Override source frame. When `attach_to_character_id` is set and " +
+            "this is omitted, the route picks the character's `front` body " +
+            "angle (preferred) or the anchor portrait. Required when " +
+            "`attach_to_character_id` is omitted.",
           ),
         description: z.string().max(1000).optional(),
         motion_description: z.string().max(500).optional(),

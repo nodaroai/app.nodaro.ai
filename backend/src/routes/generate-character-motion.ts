@@ -82,6 +82,45 @@ function buildMotionDualUserMessage(ctx: {
   )
 }
 
+/**
+ * Pick the best full-body reference URL from a `characters.body_angles` value.
+ *
+ * Body angles are appended (never prepended) by `append_character_asset`, so
+ * the array order is oldest → newest. We prefer the canonical "front" entry
+ * (mirrors `BODY_ANGLE_PRESETS[0]` in the studio frontend), falling back to
+ * the most-recently-saved entry so older characters without a "front" angle
+ * still benefit. Returns null when no usable URL is found — callers fall
+ * back to the portrait.
+ *
+ * Exported for unit testing; the surface is intentionally small (one JSONB
+ * column → one URL) and tolerant of legacy shapes (string entries, missing
+ * `name`, non-array values).
+ */
+export function resolveFrontBodyAngleUrl(raw: unknown): string | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  // Pass 1: look for an entry explicitly named "front" (case-insensitive,
+  // tolerating leading/trailing whitespace).
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue
+    const rec = entry as Record<string, unknown>
+    const name = typeof rec.name === "string" ? rec.name.trim().toLowerCase() : ""
+    const url = typeof rec.url === "string" ? rec.url : ""
+    if (name === "front" && url) return url
+  }
+  // Pass 2: any non-empty URL — prefer the most recently appended (last in
+  // array) since users tend to generate fresher / higher-quality body shots
+  // after their first try.
+  for (let i = raw.length - 1; i >= 0; i--) {
+    const entry = raw[i]
+    if (!entry || typeof entry !== "object") continue
+    const url = typeof (entry as Record<string, unknown>).url === "string"
+      ? ((entry as Record<string, unknown>).url as string)
+      : ""
+    if (url) return url
+  }
+  return null
+}
+
 export async function generateCharacterMotionRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-character-motion",
@@ -116,10 +155,11 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
       // ───────────────────────────────────────────────────────────────────
       let canonicalDescription: string | null = null
       let portraitImageUrl: string | null = null
+      let frontBodyAngleUrl: string | null = null
       if (parsed.data.attachToCharacterId) {
         const { data: char, error: charErr } = await supabase
           .from("characters")
-          .select("source_image_url, canonical_description")
+          .select("source_image_url, canonical_description, body_angles")
           .eq("id", parsed.data.attachToCharacterId)
           .eq("user_id", userId)
           .is("deleted_at", null)
@@ -137,6 +177,13 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
         }
         canonicalDescription = (char.canonical_description as string | null) ?? null
         portraitImageUrl = char.source_image_url as string
+        // Prefer a full-body reference for i2v motion gen — character motion
+        // looks far better when the source frame is a full-body shot rather
+        // than a head-and-shoulders portrait. Pick the canonical "front" body
+        // angle when present; otherwise fall back to the most-recently-saved
+        // entry (body_angles is APPEND-only via `append_character_asset`, so
+        // the last element is the newest).
+        frontBodyAngleUrl = resolveFrontBodyAngleUrl(char.body_angles)
 
         // ─────────────────────────────────────────────────────────────────
         // 4. Studio-gated dual-output LLM draft.
@@ -215,11 +262,18 @@ export async function generateCharacterMotionRoutes(app: FastifyInstance) {
 
       const modelIdentifier = parsed.data.provider ?? "kling"
 
-      // Use the character's anchor portrait as the i2v source when the studio
-      // path runs, UNLESS the caller passed an explicit sourceImageUrl (their
-      // choice wins). Outside the studio path, behavior is unchanged.
+      // i2v source-frame resolution (studio path). Priority:
+      //   1. Caller-provided `sourceImageUrl` (explicit override always wins).
+      //   2. Front body angle on the character row (full-body framing — gives
+      //      MUCH better motion results than a portrait headshot crop).
+      //   3. Anchor portrait (`source_image_url`) — last-resort fallback so
+      //      legacy characters without body angles still produce motion.
+      // Outside the studio path, only the explicit URL is available.
       const resolvedSourceImageUrl =
-        parsed.data.sourceImageUrl ?? portraitImageUrl ?? undefined
+        parsed.data.sourceImageUrl ??
+        frontBodyAngleUrl ??
+        portraitImageUrl ??
+        undefined
 
       const prompt = buildMotionPrompt({
         name: parsed.data.name,

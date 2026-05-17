@@ -515,7 +515,11 @@ export async function generateCharacterAsset(data: {
 
 export async function generateCharacterMotion(params: {
   motionPrompt: string
-  sourceImageUrl: string
+  /** Optional in the studio path: when `attachToCharacterId` is set the
+   *  backend resolves the source frame from the character row (prefers the
+   *  `front` body angle, falls back to other body angles, then the anchor
+   *  portrait). Required when there is no `attachToCharacterId`. */
+  sourceImageUrl?: string
   provider?: string
   name: string
   description?: string
