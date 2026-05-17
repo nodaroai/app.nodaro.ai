@@ -14,8 +14,7 @@
  */
 
 import { registerKieProviders } from "./kie/index.js"
-// Replicate disabled — KIE.ai is the sole provider
-// import { registerReplicateProviders } from "./replicate/index.js"
+import { registerReplicateProviders } from "./replicate/index.js"
 
 let initialized = false
 
@@ -23,8 +22,10 @@ export function initProviders(): void {
   if (initialized) return
 
   registerKieProviders()
-  // Replicate disabled — KIE.ai is the sole provider
-  // registerReplicateProviders()
+  // Replicate is registered for a narrow set of "Open" (uncensored) image
+  // models — see providers/replicate/image.ts. KIE wins the chain for every
+  // model it declares; Replicate is the fallthrough.
+  registerReplicateProviders()
 
   initialized = true
   console.log("[providers] All providers registered")

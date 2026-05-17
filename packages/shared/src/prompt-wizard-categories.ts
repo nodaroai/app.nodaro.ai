@@ -156,6 +156,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "z-image": "Experimental, novel generation approaches",
     "wan-2.7":     "Wan 2.7 T2I — 1K/2K/4K, up to 9 ref images",
     "wan-2.7-pro": "Wan 2.7 Pro T2I — higher quality, 1K/2K/4K",
+    "flux-2-klein": "Open Flux 2 9B via Replicate — fast, no safety filter",
   },
   "image-to-image": {
     "nano-banana": "Fast style transfer and transformation",
@@ -174,6 +175,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream-5-lite-i2i": "Light artistic transformation",
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
+    "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs, no safety filter",
   },
   "modify-image": {
     "nano-banana": "Fast style transfer and transformation",
@@ -193,6 +195,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "seedream-5-lite-i2i": "Light artistic transformation",
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
+    "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs, no safety filter",
   },
   "generate-mask": {
     "grounded-sam": "Text-prompted segmentation — isolates the subject you describe in words (Grounding DINO + Segment Anything)",

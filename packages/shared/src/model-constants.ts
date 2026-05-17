@@ -71,6 +71,9 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "topaz-image-upscale",
   // Wan 2.7 — accepts up to 9 optional ref images via input_urls (pure T2I when omitted)
   "wan-2.7",
+  // Replicate "Open" (uncensored) image models
+  "flux-2-klein",
+  "kontext-multi",
 ])
 
 /**
@@ -128,6 +131,10 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "recraft-remove-bg": 1,
   "recraft-upscale": 1,
   "topaz-image-upscale": 1,
+  // Replicate Open models — Klein takes an optional single ref; Kontext Multi
+  // accepts up to 4 numbered input images.
+  "flux-2-klein": 1,
+  "kontext-multi": 4,
 }
 
 export const DEFAULT_REF_IMAGE_MAX = 4
@@ -202,6 +209,8 @@ export const IMAGE_GEN_PROVIDERS = [
   "z-image",
   "wan-2.7",
   "wan-2.7-pro",
+  // Replicate Open (uncensored) — runs through Replicate, not KIE
+  "flux-2-klein",
 ] as const
 
 /** Image-to-image providers (require input image) */
@@ -223,6 +232,8 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-5-lite-i2i",
   "flux-kontext",
   "flux-kontext-max",
+  // Replicate Open (uncensored) — multi-image Kontext via Replicate
+  "kontext-multi",
 ] as const
 
 /** Image editing providers (upscale, remove bg, etc.) */
@@ -510,6 +521,7 @@ export const SEED_SUPPORT = new Set([
   "ideogram-remix", "ideogram-reframe", "ideogram-v3",
   "qwen", "qwen-i2i", "qwen-edit",
   "flux", "flux-flex", "flux-i2i", "flux-pro-i2i", "flux-kontext", "flux-kontext-max",
+  "flux-2-klein", "kontext-multi",
 ])
 
 /** Ideogram models that support rendering_speed selection (TURBO/BALANCED/QUALITY) */
