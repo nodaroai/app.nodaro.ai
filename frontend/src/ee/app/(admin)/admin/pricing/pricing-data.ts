@@ -131,6 +131,8 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "flux-flex":         { provider: "KIE.ai",    providerCostUsd: 0.070, markupPct: 25 },  // 14 KIE cr (Flex 1K)
   "flux-kontext":      { provider: "KIE.ai",    providerCostUsd: 0.025, markupPct: 25 },  // 5 KIE cr (Pro)
   "flux-kontext-max":  { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (Max)
+  "flux-2-klein":      { provider: "Replicate", providerCostUsd: 0.025, markupPct: 25 },  // BFL Flux 2 9B (Open, uncensored)
+  "kontext-multi":     { provider: "Replicate", providerCostUsd: 0.050, markupPct: 25 },  // multi-image-kontext-pro (Open, uncensored)
   "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
   "gpt-image-2":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (1K default; estimated until calibrated)

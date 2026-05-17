@@ -323,6 +323,30 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: KONTEXT_RATIOS,
     pricing: [{ identifier: "flux-kontext-max", credits: 4 }],
   },
+  // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
+  "flux-2-klein": {
+    id: "flux-2-klein",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Black Forest Labs",
+    label: "Flux 2 Klein (Open)",
+    description: "Open Flux 2 9B from BFL — fast, no safety filter. Runs direct on Replicate.",
+    useCases: ["realistic", "fast", "unfiltered"],
+    aspectRatios: FLUX_RATIOS,
+    pricing: [{ identifier: "flux-2-klein", credits: 2 }],
+  },
+  "kontext-multi": {
+    id: "kontext-multi",
+    kind: "image",
+    modes: ["i2i", "edit"] as const,
+    family: "Black Forest Labs",
+    label: "Kontext Multi (Open)",
+    description: "Multi-image Flux Kontext Pro via Replicate — up to 4 input images, no safety filter.",
+    useCases: ["edit", "multi-reference", "unfiltered"],
+    features: ["reference-image"],
+    aspectRatios: KONTEXT_RATIOS,
+    pricing: [{ identifier: "kontext-multi", credits: 4 }],
+  },
 
   // ── OpenAI (GPT Image) ──
   "gpt-image": {

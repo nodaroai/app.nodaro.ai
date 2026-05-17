@@ -85,7 +85,20 @@ export async function buildRoutingDecision(
     }
   }
 
-  // Shared capabilities: KIE only (Replicate fallback disabled)
+  // image-generation: KIE first, fall through to Replicate for "Open"
+  // (uncensored) models that only live there (flux-2-klein, kontext-multi).
+  // Walker in router.ts uses each provider's `supportedModels`, so KIE-routed
+  // ids never reach Replicate.
+  if (capability === "image-generation") {
+    return {
+      providerChain: ["kie", "replicate"],
+      markupPercent: settings.cost_markup_percent,
+      activeProvider: "kie",
+      settings,
+    }
+  }
+
+  // Other shared capabilities: KIE only
   return {
     providerChain: ["kie"],
     markupPercent: settings.cost_markup_percent,
@@ -108,16 +121,16 @@ export function applyMarkup(
 
 /**
  * Determine the markup to use when a specific provider was used.
- *
- * - KIE mode + KIE used        → configured markup
- * - KIE mode + Replicate used  → FALLBACK_MARKUP_PERCENT (10%)
- * - Replicate mode              → 0
+ * Cloud mode applies the configured markup uniformly across KIE and the
+ * Replicate fallback; self-hosted ("ai_provider != kie") applies none.
+ * `providerUsed` is kept in the signature so a future per-provider markup
+ * (e.g. cheaper rate for Replicate fallback) can branch without an API break.
  */
 export function resolveMarkup(
   decision: RoutingDecision,
   providerUsed: ProviderUsed
 ): number {
+  void providerUsed
   if (decision.activeProvider !== "kie") return 0
-  // Replicate disabled — all requests use KIE markup
   return decision.settings.cost_markup_percent
 }

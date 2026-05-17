@@ -30,6 +30,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "z-image", label: "Z-Image", desc: "Fast, lightweight generation" },
   { value: "wan-2.7",     label: "Wan 2.7",     desc: "T2I, 1K/2K/4K, up to 9 ref images" },
   { value: "wan-2.7-pro", label: "Wan 2.7 Pro", desc: "Higher quality T2I, 1K/2K/4K" },
+  { value: "flux-2-klein", label: "Flux 2 Klein (Open)", desc: "BFL Flux 2 9B via Replicate — fast, no safety filter" },
 ]
 
 export const IMAGE_GEN_MODEL_IDS = IMAGE_GEN_MODELS.map(m => m.value)
@@ -51,6 +52,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "qwen-edit", label: "Qwen Edit", desc: "Targeted image editing" },
   { value: "seedream-5-lite-i2i", label: "Seedream 5 Lite", desc: "Latest Seedream image-to-image" },
   { value: "seedream-edit", label: "Seedream Edit", desc: "Photorealistic image editing" },
+  { value: "kontext-multi", label: "Kontext Multi (Open)", desc: "Multi-image Flux Kontext via Replicate — up to 4 refs, no safety filter" },
 ]
 
 export const IMAGE_EDIT_MODELS = [
