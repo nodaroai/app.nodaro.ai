@@ -10,16 +10,12 @@
 // subsection heading away to keep the layout tight.
 
 import { useState, useMemo, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
 import {
   Play,
   BookOpen,
   Zap,
   Coins,
   Layers,
-  ArrowRight,
-  Loader2,
 } from "lucide-react"
 import {
   Dialog,
@@ -27,20 +23,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useTutorialsGrouped } from "@/hooks/queries/use-tutorials"
 import { useProjects } from "@/hooks/queries/use-projects-queries"
-import { cloneTemplate, type FlowTutorialItem, type VideoTutorialItem } from "@/lib/api"
+import {
+  useTemplateFavorites,
+  useToggleTemplateFavoriteMutation,
+} from "@/hooks/queries/use-template-marketplace-queries"
+import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
+import {
+  type FlowTutorialItem,
+  type VideoTutorialItem,
+  type TemplateBrowseCard,
+} from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity } from "@/lib/template-utils"
 
 // ---------------------------------------------------------------------------
@@ -129,14 +125,19 @@ function VideoTutorialCard({
 
 function FlowTutorialCard({
   flow,
-  onClone,
+  onSelect,
 }: {
   flow: FlowTutorialItem
-  onClone: (f: FlowTutorialItem) => void
+  onSelect: (f: FlowTutorialItem) => void
 }) {
   const complexity = COMPLEXITY_CONFIG[flow.complexity as Complexity]
   return (
-    <div className="rounded-lg overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card flex flex-col">
+    <button
+      type="button"
+      onClick={() => onSelect(flow)}
+      disabled={!flow.slug}
+      className="group text-left rounded-xl overflow-hidden border border-amber-200/60 dark:border-amber-500/20 bg-gradient-to-b from-amber-50/40 to-card dark:from-amber-500/5 dark:to-card hover:border-amber-400 dark:hover:border-amber-500/50 transition-all flex flex-col cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+    >
       <div className="relative aspect-video bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         {flow.previewMediaUrl ? (
           flow.previewMediaType === "video" ? (
@@ -157,18 +158,18 @@ function FlowTutorialCard({
           )
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Zap className="h-6 w-6 text-amber-400/60" />
+            <Zap className="h-8 w-8 text-amber-400/60" />
           </div>
         )}
         {/* "Tutorial" pill — top right */}
-        <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500 text-white font-medium flex items-center gap-1">
+        <span className="absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-white font-medium flex items-center gap-1">
           <Zap className="h-2.5 w-2.5" fill="currentColor" />
           Tutorial
         </span>
         {complexity && (
           <span
             className={cn(
-              "absolute top-1.5 left-1.5 text-[10px] px-1.5 py-0.5 rounded border font-medium",
+              "absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded border font-medium",
               complexity.color,
             )}
           >
@@ -176,124 +177,60 @@ function FlowTutorialCard({
           </span>
         )}
       </div>
-      <div className="p-2 flex-1 flex flex-col gap-1.5">
-        <p className="text-xs font-semibold text-foreground truncate">{flow.title}</p>
+      <div className="p-3 flex-1 flex flex-col gap-1.5">
+        <h3 className="text-sm font-semibold text-foreground truncate">{flow.title}</h3>
         {flow.description && (
-          <p className="text-[10px] text-muted-foreground line-clamp-2">{flow.description}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2">{flow.description}</p>
         )}
-        <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-auto">
+        <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-auto pt-1">
           {flow.estimatedCredits > 0 && (
-            <span className="flex items-center gap-0.5">
+            <span className="flex items-center gap-1">
               <Coins className="h-3 w-3" />
               {flow.estimatedCredits} CR
             </span>
           )}
-          <span className="flex items-center gap-0.5">
+          <span className="flex items-center gap-1">
             <Layers className="h-3 w-3" />
             {flow.nodeCount}
           </span>
         </div>
-        <Button
-          size="sm"
-          className="h-7 text-xs mt-1 bg-amber-500 hover:bg-amber-600 text-white"
-          onClick={() => onClone(flow)}
-          disabled={!flow.slug}
-        >
-          <ArrowRight className="h-3.5 w-3.5 mr-1" />
-          Clone & Try
-        </Button>
       </div>
-    </div>
+    </button>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Clone dialog
+// FlowTutorialItem → TemplateBrowseCard (for reuse of TemplatePreviewModal)
 // ---------------------------------------------------------------------------
-
-function CloneFlowDialog({
-  flow,
-  onClose,
-}: {
-  flow: FlowTutorialItem | null
-  onClose: () => void
-}) {
-  const navigate = useNavigate()
-  const { data: projects = [] } = useProjects()
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
-  const [isCloning, setIsCloning] = useState(false)
-
-  // Reset selection when modal opens
-  const firstProjectId = projects[0]?.id
-  if (flow && !selectedProjectId && firstProjectId) {
-    setSelectedProjectId(firstProjectId)
+//
+// The /v1/tutorials response is a subset of /v1/templates/browse's row shape —
+// the preview modal fetches the full record by slug separately via
+// useTemplateDetail, so the only fields we have to surface up front are those
+// the modal renders before that detail call resolves (name, description,
+// preview media, complexity, nodeCount, estimatedCredits). The rest default
+// to neutral placeholders.
+function flowToTemplateBrowseCard(flow: FlowTutorialItem): TemplateBrowseCard {
+  return {
+    id: flow.templateId,
+    slug: flow.slug ?? "",
+    name: flow.title,
+    description: flow.description,
+    nodeTypesUsed: flow.nodeTypesUsed,
+    providersUsed: flow.providersUsed,
+    nodeCount: flow.nodeCount,
+    estimatedCredits: flow.estimatedCredits,
+    complexity: flow.complexity,
+    category: "other",
+    outputTypes: [],
+    tags: [],
+    previewMediaUrl: flow.previewMediaUrl,
+    previewMediaType: flow.previewMediaType,
+    creatorId: "",
+    creatorDisplayName: null,
+    cloneCount: 0,
+    favoriteCount: 0,
+    createdAt: flow.createdAt,
   }
-
-  const handleClone = async () => {
-    if (!flow?.slug || !selectedProjectId) return
-    setIsCloning(true)
-    try {
-      const result = await cloneTemplate(flow.slug, selectedProjectId, flow.title)
-      toast.success("Tutorial cloned to your project!")
-      onClose()
-      navigate(`/projects/${result.projectId}`)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to clone tutorial")
-    } finally {
-      setIsCloning(false)
-    }
-  }
-
-  return (
-    <Dialog open={!!flow} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Clone {flow?.title ?? "tutorial"}</DialogTitle>
-          <DialogDescription>
-            Adds a copy of this workflow to one of your projects so you can run it and tweak it.
-          </DialogDescription>
-        </DialogHeader>
-        {projects.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-2">
-            You don't have any projects yet. Create one first from the Projects page.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Project</label>
-            <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Pick a project" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isCloning}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleClone}
-            disabled={!selectedProjectId || isCloning || projects.length === 0 || !flow?.slug}
-          >
-            {isCloning ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Cloning...
-              </>
-            ) : (
-              "Clone & Open"
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -354,9 +291,12 @@ function VideoPlayerDialog({
 
 export function TutorialsTab() {
   const [openVideo, setOpenVideo] = useState<VideoTutorialItem | null>(null)
-  const [openFlow, setOpenFlow] = useState<FlowTutorialItem | null>(null)
+  const [selectedFlow, setSelectedFlow] = useState<FlowTutorialItem | null>(null)
 
   const { data, isLoading } = useTutorialsGrouped()
+  const { data: projects = [] } = useProjects()
+  const { data: favoriteIds = [] } = useTemplateFavorites()
+  const toggleFavorite = useToggleTemplateFavoriteMutation()
 
   // Drop empty categories so the page doesn't render lonely headers.
   const nonEmpty = useMemo(() => {
@@ -364,8 +304,10 @@ export function TutorialsTab() {
     return cats.filter((c) => c.videos.length > 0 || c.flows.length > 0)
   }, [data])
 
+  const favSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+
   const handleWatch = useCallback((v: VideoTutorialItem) => setOpenVideo(v), [])
-  const handleClone = useCallback((f: FlowTutorialItem) => setOpenFlow(f), [])
+  const handleSelectFlow = useCallback((f: FlowTutorialItem) => setSelectedFlow(f), [])
 
   if (isLoading) {
     return (
@@ -429,9 +371,9 @@ export function TutorialsTab() {
                     Try It Yourself
                   </h4>
                 )}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {category.flows.map((f) => (
-                    <FlowTutorialCard key={f.id} flow={f} onClone={handleClone} />
+                    <FlowTutorialCard key={f.id} flow={f} onSelect={handleSelectFlow} />
                   ))}
                 </div>
               </div>
@@ -441,7 +383,16 @@ export function TutorialsTab() {
       })}
 
       <VideoPlayerDialog video={openVideo} onClose={() => setOpenVideo(null)} />
-      <CloneFlowDialog flow={openFlow} onClose={() => setOpenFlow(null)} />
+
+      {selectedFlow && (
+        <TemplatePreviewModal
+          template={flowToTemplateBrowseCard(selectedFlow)}
+          onClose={() => setSelectedFlow(null)}
+          isFavorited={favSet.has(selectedFlow.templateId)}
+          onToggleFavorite={(id) => toggleFavorite.mutate({ templateId: id })}
+          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+        />
+      )}
     </div>
   )
 }
