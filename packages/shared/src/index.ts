@@ -862,6 +862,7 @@ export {
   isUsageMode,
   usageModeDirective,
   usageModeLabel,
+  usageModeIncludesName,
 } from "./character-usage-mode.js"
 export type { UsageMode } from "./character-usage-mode.js"
 

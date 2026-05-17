@@ -137,6 +137,44 @@ swapped in based on the field-mapping rules.
 For programmatic flows, prefer Pattern A — explicit URLs are easier to
 reason about and don't depend on the canvas wiring.
 
+## Mention usage modes
+
+When you `@-mention` a character (e.g. `@kira:1:smile`), an optional 4th slug
+segment chooses HOW the model should consume the reference image. The mode
+also defaults from the character node's small "Default usage mode" dropdown,
+so casual prompts (`@kira:1:smile` with no mode) inherit a sensible default.
+
+| Mode | Slug suffix | What it does | Sample bullet |
+|------|-------------|--------------|---------------|
+| Identical (default) | `:identical` | Lock to the character's full identity. | `- Image 1 (Kira) — <canonical desc>. The subject must remain exactly the same person…` |
+| Face only | `:face` | Borrow face + expression, adopt clothing / hair / posture from the prompt. | `- Image 1 (Kira). Take ONLY the facial features…` |
+| Face + Pose | `:face-pose` | Face + body pose, prompt drives the rest. | `- Image 1 (Kira) — <canonical desc>. Take the facial features AND body pose…` |
+| Pose only | `:pose` | Body posture only — face/hair/clothing from prompt. | `- Image 1 (Kira). Take only the body pose and posture…` |
+| Emotion only | `:emotion` | Transfer the emotional cue, preserve identity. | `- Image 1 (Kira). Take only the emotional expression…` |
+| Style only | `:style` | Lighting / color / tone — not the subject. | `- Image 1 (Kira). Take only the visual style and tone…` |
+| Name only | `:name` | Label the slot with the character name, NO directive. Tells the model who the character is so it can correlate the image with a named entity, without prescribing how to use it. | `- Image 1 (Kira)` |
+| None | `:none` | Attach the image silently. NO bullet, NO name in any label, and NO entry under the "Use these characters:" header for this mention. The mention text is replaced inline with the bare positional reference (`Image 1`) so the user's sentence still parses. Intent: "let the visual speak for itself; don't bias the model with text". If every mention of a character is `:none`, that character is invisible textually — only the image is attached. | _(no bullet emitted)_ |
+
+**Worked example — mixed `:none` + `:face` on the same character:**
+
+User prompt:
+```
+show @shira:1:none with @shira:2:face mode
+```
+
+Assembled prompt:
+```
+Use these characters:
+- Image 2 (shira). Take ONLY the facial features and expression…
+
+show Image 1 with shira mode
+```
+
+The first mention attaches the image silently (no bullet, inline replacement
+is `Image 1`). The second mention emits the `face`-only directive bullet for
+position 2. The `Use these characters:` header is present because at least
+one mention contributed a bullet.
+
 ## Quickstart by surface
 
 ### REST

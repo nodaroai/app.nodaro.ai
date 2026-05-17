@@ -803,12 +803,22 @@ function resolveVideoPromptMentions(
     if (!positionsByChar.has(r.characterSlug)) positionsByChar.set(r.characterSlug, position);
     const displayName = r.defaultName || r.characterSlug;
     const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE;
+    // Minimal-intervention modes:
+    //   - "none": URL attached, NO bullet emitted.
+    //   - "name": one bullet with the name, no trailing directive.
+    if (effectiveMode === "none") {
+      continue;
+    }
+    if (effectiveMode === "name") {
+      fallbackDirectiveLines.push(`- Image ${position} (${displayName})`);
+      continue;
+    }
     const directive = usageModeDirective(effectiveMode);
     const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose";
     const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName;
-    fallbackDirectiveLines.push(`- ${descPart}. ${directive}`);
+    fallbackDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`);
   }
 
   // Extras: emit one directive per row. Numbering continues from `position`
@@ -824,27 +834,43 @@ function resolveVideoPromptMentions(
       position += 1;
       const desc = (ex.description ?? "").trim();
       if (ex.characterSlug) {
+        // First sight of this character via an extra. Resolution chain
+        // matches the image side: per-ref override → upstream node default
+        // → global identical. We don't have direct access to the upstream
+        // character node here, so look it up via slug.
+        const upstream = nodes.find((n) => {
+          if (n.type !== "character") return false;
+          const cd = n.data as CharacterNodeData;
+          const name = cd.characterName || (cd.label as string) || "";
+          return characterMentionSlug(name) === ex.characterSlug;
+        });
+        const charDefaultMode = upstream
+          ? ((upstream.data as CharacterNodeData).defaultUsageMode)
+          : undefined;
+        const effectiveMode = ex.usageMode ?? charDefaultMode ?? DEFAULT_USAGE_MODE;
         const earlierPos = positionsByChar.get(ex.characterSlug);
         if (earlierPos !== undefined) {
-          const tail = desc ? `, ${desc}` : "";
-          extraDirectiveLines.push(
-            `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
-          );
+          // Pair-back. Suppressed for "none" so the extras-side respects the
+          // same minimal-intervention contract as primary mentions.
+          if (effectiveMode !== "none") {
+            const tail = desc ? `, ${desc}` : "";
+            extraDirectiveLines.push(
+              `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
+            );
+          }
+        } else if (effectiveMode === "none") {
+          // URL attached, no bullet. Record the slot for any later same-
+          // character extras that pair-back via "same subject as Image N".
+          positionsByChar.set(ex.characterSlug, position);
+        } else if (effectiveMode === "name") {
+          const displayName = upstream
+            ? ((upstream.data as CharacterNodeData).characterName as string) || ex.characterSlug
+            : ex.characterSlug;
+          const subject = `Image ${position} (${displayName})`;
+          const descPart = desc ? `${subject} — ${desc}` : subject;
+          extraDirectiveLines.push(`- ${descPart}.`);
+          positionsByChar.set(ex.characterSlug, position);
         } else {
-          // First sight of this character via an extra. Resolution chain
-          // matches the image side: per-ref override → upstream node default
-          // → global identical. We don't have direct access to the upstream
-          // character node here, so look it up via slug.
-          const upstream = nodes.find((n) => {
-            if (n.type !== "character") return false;
-            const cd = n.data as CharacterNodeData;
-            const name = cd.characterName || (cd.label as string) || "";
-            return characterMentionSlug(name) === ex.characterSlug;
-          });
-          const charDefaultMode = upstream
-            ? ((upstream.data as CharacterNodeData).defaultUsageMode)
-            : undefined;
-          const effectiveMode = ex.usageMode ?? charDefaultMode ?? DEFAULT_USAGE_MODE;
           const directive = usageModeDirective(effectiveMode);
           const displayName = upstream
             ? ((upstream.data as CharacterNodeData).characterName as string) || ex.characterSlug
@@ -857,7 +883,7 @@ function resolveVideoPromptMentions(
           let descPart = subject;
           if (desc) descPart = `${subject} — ${desc}`;
           else if (includeCanonicalDesc && canonicalDesc?.trim()) descPart = `${subject} — ${canonicalDesc.trim()}`;
-          extraDirectiveLines.push(`- ${descPart}. ${directive}`);
+          extraDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`);
           positionsByChar.set(ex.characterSlug, position);
         }
       } else {
