@@ -324,6 +324,7 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "middle-eastern",     label: "Middle Eastern (Arab)", shortLabel: "Arab",           group: "Middle East & N. Africa", dimension: "ethnicity", description: "Arab / Levantine / Gulf features", promptHint: "Middle Eastern" },
   { id: "turkish",            label: "Turkish",             group: "Middle East & N. Africa", dimension: "ethnicity", description: "Anatolian Turkish features",        promptHint: "of Turkish descent" },
   { id: "persian",            label: "Persian / Iranian",   shortLabel: "Persian",          group: "Middle East & N. Africa", dimension: "ethnicity", description: "Indo-Iranian features",             promptHint: "of Persian Iranian descent" },
+  { id: "israeli",            label: "Israeli",             group: "Middle East & N. Africa", dimension: "ethnicity", description: "Israeli features (Mediterranean Levantine, broad)", promptHint: "of Israeli descent" },
   // African
   { id: "african",            label: "African (any)",       shortLabel: "any",              group: "African", dimension: "ethnicity", description: "Any Sub-Saharan African — unspecified region", promptHint: "of African descent" },
   { id: "west-african",       label: "West African",        shortLabel: "West",             group: "African", dimension: "ethnicity", description: "Yoruba / Igbo / Akan / Wolof",     promptHint: "of West African descent" },
@@ -342,6 +343,9 @@ export const PEOPLE: ReadonlyArray<Person> = [
   { id: "celtic",             label: "Celtic",              group: "European", dimension: "ethnicity", description: "British / Irish features",          promptHint: "of Celtic British descent" },
   { id: "mediterranean",      label: "Mediterranean",       shortLabel: "Mediter.",         group: "European", dimension: "ethnicity", description: "Southern European (broad)",         promptHint: "of Mediterranean descent" },
   { id: "slavic",             label: "Slavic",              group: "European", dimension: "ethnicity", description: "Eastern European features",         promptHint: "of Slavic Eastern European descent" },
+  { id: "czech",              label: "Czech",               group: "European", dimension: "ethnicity", description: "Czech features (West Slavic, Central European)", promptHint: "of Czech descent" },
+  { id: "russian",            label: "Russian",             group: "European", dimension: "ethnicity", description: "Russian features (East Slavic)",    promptHint: "of Russian descent" },
+  { id: "ukrainian",          label: "Ukrainian",           group: "European", dimension: "ethnicity", description: "Ukrainian features (East Slavic)",  promptHint: "of Ukrainian descent" },
   { id: "italian",            label: "Italian",             group: "European", dimension: "ethnicity", description: "Italian features",                  promptHint: "of Italian descent" },
   { id: "iberian",            label: "Iberian (Spanish / Portuguese)", shortLabel: "Iberian", group: "European", dimension: "ethnicity", description: "Spanish / Portuguese with Celtiberian + Moorish heritage", promptHint: "of Iberian Spanish or Portuguese descent" },
   { id: "french",             label: "French",              group: "European", dimension: "ethnicity", description: "French features (varies north to south)", promptHint: "of French descent" },
