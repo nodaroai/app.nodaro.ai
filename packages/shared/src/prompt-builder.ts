@@ -68,7 +68,15 @@ export function resolveCharacterMentions(
   }
 
   const additionalUrls: string[] = []
-  const charactersSeen = new Set<string>()
+  // `firstBulletEmittedFor` tracks the slug of characters that have already
+  // produced a non-"none" bullet. Each character emits AT MOST ONE primary
+  // bullet (the rich identity / name-only line). "none" mentions don't claim
+  // this slot — they emit no bullet AT ALL — so a later "face" mention of the
+  // same character still emits its directive bullet on first sight. Without
+  // this split, a `[none, face]` mention pair would suppress both bullets
+  // because the first iteration would silently consume the "first mention"
+  // slot without emitting anything.
+  const firstBulletEmittedFor = new Set<string>()
   const mentionedCharacterSlugs = new Set<string>()
   const directiveLines: string[] = []
 
@@ -82,21 +90,49 @@ export function resolveCharacterMentions(
     additionalUrls.push(match.url)
     mentionedCharacterSlugs.add(t.characterSlug)
 
-    const isFirstMention = !charactersSeen.has(t.characterSlug)
-    charactersSeen.add(t.characterSlug)
+    // Per-mention effective mode. Resolution order: per-mention slug override
+    // → character node default → global DEFAULT_USAGE_MODE. Used both to
+    // shape the inline replacement and to decide whether (and how) to emit a
+    // bullet for this mention.
+    const effectiveMode: UsageMode =
+      t.usageMode ?? match.defaultUsageMode ?? DEFAULT_USAGE_MODE
 
     const displayName = bySlug.get(t.characterSlug)?.defaultName ?? t.characterSlug
-    replacements.push({ token: t.token, offset: t.offset, replacement: displayName })
+    // Inline replacement of `@kira:1:smile` in the user's prompt. For "none"
+    // mode we substitute the bare positional reference (`Image 1`) so the
+    // user's sentence reads "show Image 1 dancing" — the image is attached,
+    // the model sees the position label, but no character name biases the
+    // textual prompt. Every other mode (including "name") keeps the legacy
+    // `Kira` substitution so prose flows naturally.
+    const replacement = effectiveMode === "none"
+      ? `Image ${t.imageIndex}`
+      : displayName
+    replacements.push({ token: t.token, offset: t.offset, replacement })
 
-    if (isFirstMention) {
-      // Per-image directive uses a mode-specific directive (identical / face /
-      // face-pose / emotion / style). Resolution order: per-mention slug
-      // override → character node default → global DEFAULT_USAGE_MODE.
-      // The leading `Image N (Name)` numeric index comes straight from the
-      // user-typed token so the literal slug `@kira:1:smile` and the final
-      // identity directive `Image 1 (Kira)` line up.
-      const effectiveMode: UsageMode =
-        t.usageMode ?? match.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    // Bullet emission rules per mode:
+    //   - "none": NO bullet (zero textual intervention; only the image is
+    //     attached). Doesn't consume the per-character "first bullet" slot —
+    //     a later non-none mention can still emit its primary directive.
+    //     If EVERY mention of a character is "none", that character
+    //     contributes no bullets at all, so it won't appear under the
+    //     "Use these characters:" header.
+    //   - "name": ONE bullet on first non-none mention only —
+    //     `- Image N (Name)` with no trailing directive. Tells the model who
+    //     the character is so it can correlate, without prescribing how to
+    //     use the image.
+    //   - other modes: ONE bullet on first non-none mention only,
+    //     `- Image N (Name) — <canonical?>. <directive>`.
+    if (effectiveMode === "none") {
+      // Suppress everything — the inline replacement above is the only signal.
+      continue
+    }
+    const isFirstBullet = !firstBulletEmittedFor.has(t.characterSlug)
+    if (effectiveMode === "name") {
+      if (isFirstBullet) {
+        directiveLines.push(`- Image ${t.imageIndex} (${displayName})`)
+        firstBulletEmittedFor.add(t.characterSlug)
+      }
+    } else if (isFirstBullet) {
       const directive = usageModeDirective(effectiveMode)
       const subject = `Image ${t.imageIndex} (${displayName})`
       // Canonical description is identity-context — only useful when the model
@@ -109,9 +145,20 @@ export function resolveCharacterMentions(
       const descPart = includeCanonicalDesc && match.characterCanonicalDescription
         ? `${subject} — ${match.characterCanonicalDescription.trim()}`
         : subject
-      directiveLines.push(`- ${descPart}. ${directive}`)
+      // `directive` is non-null here because usageModeDirective only returns
+      // null for "none"/"name", both of which are already handled above.
+      directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
+      firstBulletEmittedFor.add(t.characterSlug)
     }
-    if (t.variantSlug && match.variantDescription) {
+    // Variant-description sub-line only makes sense alongside an emitted
+    // bullet — for "none"/"name" modes it's dropped (those modes are
+    // intentionally minimal).
+    if (
+      t.variantSlug
+      && match.variantDescription
+      && effectiveMode !== "name"
+      && isFirstBullet
+    ) {
       directiveLines.push(`  (in this image: ${match.variantDescription.trim()})`)
     }
   }
@@ -180,6 +227,24 @@ function buildCanonicalFallback(
     // the node's default is the only signal — preserves the legacy "match
     // exactly" behavior when no default is configured.
     const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    // Minimal-intervention modes:
+    //   - "none": URL is attached but NO bullet is emitted — the visual
+    //     speaks for itself, no textual bias.
+    //   - "name": one bullet with the name, no trailing directive — lets the
+    //     model correlate the position with a named entity without
+    //     prescribing usage.
+    if (effectiveMode === "none") {
+      // Bare URL attachment, no bullet — `cursor` still advances so any
+      // downstream extras that pair-back via "same subject as Image N" see
+      // the correct positional slot for this character.
+      cursor += 1
+      continue
+    }
+    if (effectiveMode === "name") {
+      directiveLines.push(`- Image ${cursor} (${displayName})`)
+      cursor += 1
+      continue
+    }
     const directive = usageModeDirective(effectiveMode)
     const includeCanonicalDesc =
       effectiveMode === "identical" || effectiveMode === "face-pose"
@@ -189,7 +254,8 @@ function buildCanonicalFallback(
     const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${subject} — ${r.characterCanonicalDescription.trim()}`
       : subject
-    directiveLines.push(`- ${descPart}. ${directive}`)
+    // `directive` is non-null here ("none"/"name" already short-circuited).
+    directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
     cursor += 1
   }
   return { directiveLines, urls }
@@ -248,19 +314,36 @@ function buildExtraRefDirectives(
     const description = (r.description ?? r.variantDescription ?? "").trim()
     // Character extra
     if (r.source === "wired-character" && r.characterSlug) {
+      const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
       const earlierPos = positionsByChar.get(r.characterSlug)
       if (earlierPos !== undefined) {
         // Pair-back form. `Image N is the same subject as Image M, <desc>.`
         // Description is optional — when absent we still emit the pairing.
-        const tail = description ? `, ${description}` : ""
-        directiveLines.push(`- Image ${cursor} is the same subject as Image ${earlierPos}${tail}.`)
+        // Minimal-intervention modes suppress even the pair-back bullet so
+        // the user's "don't bias with text" intent extends to extras.
+        if (effectiveMode !== "none") {
+          const tail = description ? `, ${description}` : ""
+          directiveLines.push(`- Image ${cursor} is the same subject as Image ${earlierPos}${tail}.`)
+        }
+      } else if (effectiveMode === "none") {
+        // First sight of this character via an extra ref, but mode is "none".
+        // Attach the URL, emit no bullet, record the position so any later
+        // extras of the same character that pair-back land on the right slot.
+        positionsByChar.set(r.characterSlug, cursor)
+      } else if (effectiveMode === "name") {
+        // "Name only" — labeled subject + the per-ref description (when
+        // present), no trailing directive.
+        const displayName = r.defaultName || r.characterSlug
+        const subject = `Image ${cursor} (${displayName})`
+        const descPart = description ? `${subject} — ${description}` : subject
+        directiveLines.push(`- ${descPart}.`)
+        positionsByChar.set(r.characterSlug, cursor)
       } else {
         // First sight of this character via an extra ref. Emit a canonical-style
         // directive — the description (or the character's canonical desc) is
         // the descriptive part, and the usage mode is whatever the caller
         // resolved onto `defaultUsageMode` (per-ref override → node default →
         // identical, applied when the ExtraRef was mapped to a ConnectedReference).
-        const effectiveMode: UsageMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
         const directive = usageModeDirective(effectiveMode)
         const displayName = r.defaultName || r.characterSlug
         const subject = `Image ${cursor} (${displayName})`
@@ -276,7 +359,7 @@ function buildExtraRefDirectives(
         } else if (includeCanonicalDesc && canonicalDesc) {
           descPart = `${subject} — ${canonicalDesc}`
         }
-        directiveLines.push(`- ${descPart}. ${directive}`)
+        directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
         positionsByChar.set(r.characterSlug, cursor)
       }
     } else {
@@ -475,7 +558,12 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
         characterPositions,
         mergedUrls.length + 1,
       )
-      let finalMergedUrls = mergedUrls
+      // Always merge extras' URLs — minimal-intervention modes ("none" /
+      // "name") may emit zero or one bullet while still attaching the image.
+      // Gating the URL merge on `directiveLines.length > 0` would silently
+      // drop the URL for a `none`-mode extra.
+      const finalMergedUrls = [...mergedUrls, ...extras.urls]
+        .filter((u, i, a) => a.indexOf(u) === i)
       if (extras.directiveLines.length > 0) {
         if (promptForNext.startsWith("Use these characters:\n")) {
           const splitIdx = promptForNext.indexOf("\n\n")
@@ -489,8 +577,6 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
         } else {
           promptForNext = `Use these characters:\n${extras.directiveLines.join("\n")}\n\n${promptForNext}`
         }
-        finalMergedUrls = [...mergedUrls, ...extras.urls]
-          .filter((u, i, a) => a.indexOf(u) === i)
       }
 
       // Mutate the config locals (NOT the original passed config).

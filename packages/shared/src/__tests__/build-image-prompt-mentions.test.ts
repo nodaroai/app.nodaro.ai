@@ -613,3 +613,197 @@ describe("buildImagePrompt with extra reference images (isExtraRef)", () => {
     expect(result.prompt).not.toMatch(/^Use these characters:/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// "name" and "none" minimal-intervention usage modes
+//
+// These two modes deliberately suppress part (or all) of the per-mention
+// textual prompt so the model isn't biased beyond the attached image:
+//   - "name": keeps the labeled subject ("Image N (Name)") but DROPS the
+//     directive sentence — the model is told who the character is so it can
+//     correlate the position with a named entity, without being told how to
+//     consume the image.
+//   - "none": suppresses the bullet entirely; the user's `@<slug>:N(:variant):none`
+//     token is replaced inline with `Image N` (bare positional reference) so
+//     the sentence still parses, but the model receives no character name
+//     and no directive — just the attached image at position N. If EVERY
+//     mention of a character is "none", that character contributes zero
+//     bullets, so the "Use these characters:" header omits it entirely.
+// ---------------------------------------------------------------------------
+
+describe("buildImagePrompt with 'name' / 'none' usage modes", () => {
+  it("@kira:1:name keeps the labeled subject but emits NO directive sentence", () => {
+    const result = buildImagePrompt({
+      prompt: "@kira:1:name at a coffee shop",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    // URL still attaches.
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    // Header is present (this character has a non-none mention).
+    expect(result.prompt).toContain("Use these characters:")
+    // Bullet has the name but no trailing directive language.
+    expect(result.prompt).toContain("- Image 1 (Kira)")
+    expect(result.prompt).not.toContain("The subject must remain exactly the same person")
+    expect(result.prompt).not.toContain("Take ONLY the facial features")
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+    // Inline replacement keeps the character name so the sentence reads naturally.
+    expect(result.prompt).toContain("Kira at a coffee shop")
+    expect(result.prompt).not.toMatch(/@kira:1:name\b/)
+  })
+
+  it("@kira:1:none emits NO bullet, NO header, and substitutes the positional reference inline", () => {
+    const result = buildImagePrompt({
+      prompt: "show @kira:1:none dancing",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical],
+    })
+    // URL still attaches — the image is the whole point.
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    // No header at all: the only character has no bullets.
+    expect(result.prompt).not.toContain("Use these characters:")
+    // No directive sentence anywhere.
+    expect(result.prompt).not.toContain("The subject must remain exactly the same person")
+    expect(result.prompt).not.toContain("Take ONLY the facial features")
+    // Name MUST NOT appear in parens (no `(Kira)` label).
+    expect(result.prompt).not.toContain("(Kira)")
+    // Inline replacement is the bare positional reference, NOT the name.
+    expect(result.prompt).toContain("show Image 1 dancing")
+    expect(result.prompt).not.toContain("show Kira dancing")
+    expect(result.prompt).not.toMatch(/@kira:1:none\b/)
+  })
+
+  it("mixed: same character used with 'none' AND 'face' — header present, 'none' bare, 'face' full directive", () => {
+    // The user types two mentions of the same character. The first asks for
+    // the visual alone (mode: none → no bullet), the second asks for the
+    // face only (mode: face → labeled + face directive). The "Use these
+    // characters:" header MUST be present (at least one non-none mention),
+    // and the two mentions emit different textual treatments.
+    const result = buildImagePrompt({
+      prompt: "show @shira:1:none with @shira:2:face mode",
+      provider: "nano-banana-pro",
+      connectedReferences: [{
+        ...kiraCanonical,
+        id: "char-shira",
+        defaultName: "shira",
+        characterSlug: "shira",
+      }],
+    })
+    // Header included because at least one non-none mention exists.
+    expect(result.prompt).toContain("Use these characters:")
+    // The 'face' mention emits the labeled bullet with the face-only directive.
+    expect(result.prompt).toContain("- Image 2 (shira)")
+    expect(result.prompt).toContain("Take ONLY the facial features")
+    // The 'none' mention emits NO bullet for slot 1.
+    expect(result.prompt).not.toMatch(/- Image 1 \(/)
+    // Inline replacements: slot 1 reads as "Image 1" (bare), slot 2 reads as "shira".
+    expect(result.prompt).toContain("show Image 1 with shira mode")
+  })
+
+  it("two characters, one 'none' the other 'identical' — header includes ONLY the identical one", () => {
+    // Adam (identical) is mentioned and gets a full bullet. Kira (none) gets
+    // her URL attached but no bullet.
+    const result = buildImagePrompt({
+      prompt: "@kira:1:none in the background, @adam:2 in front",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, adamCanonical],
+    })
+    // Both URLs attach.
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    expect(result.referenceImageUrls).toContain("https://r2/adam-portrait.png")
+    // Header is present because Adam emits a bullet.
+    expect(result.prompt).toContain("Use these characters:")
+    // Adam's bullet present with identity-lock language.
+    expect(result.prompt).toContain("Image 2 (Adam)")
+    expect(result.prompt).toContain("The subject must remain exactly the same person")
+    // Kira's bullet ABSENT — no `Image 1 (Kira)` text anywhere.
+    expect(result.prompt).not.toContain("(Kira)")
+  })
+
+  it("canonical fallback with character.defaultUsageMode = 'name' emits labeled bullet, no directive", () => {
+    const kiraNameMode: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "name",
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait scene",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraNameMode],
+    })
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    expect(result.prompt).toContain("Use these characters:")
+    expect(result.prompt).toContain("- Image 1 (Kira)")
+    expect(result.prompt).not.toContain("The subject must remain exactly the same person")
+    expect(result.prompt).not.toContain("auburn shoulder-length hair")
+  })
+
+  it("canonical fallback with character.defaultUsageMode = 'none' attaches URL but emits no bullet/header", () => {
+    const kiraNoneMode: ConnectedReference = {
+      ...kiraCanonical,
+      defaultUsageMode: "none",
+    }
+    const result = buildImagePrompt({
+      prompt: "a portrait scene",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraNoneMode],
+    })
+    // URL still attached.
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    // No header at all (only character, no bullets).
+    expect(result.prompt).not.toContain("Use these characters:")
+    expect(result.prompt).not.toContain("(Kira)")
+    expect(result.prompt).not.toContain("The subject must remain exactly the same person")
+    // User prompt is preserved verbatim (no transformation since there's no
+    // mention token to replace).
+    expect(result.prompt).toContain("a portrait scene")
+  })
+
+  it("mixed canonical fallback: one 'none' character + one 'identical' character — header lists only identical", () => {
+    const kiraNone: ConnectedReference = { ...kiraCanonical, defaultUsageMode: "none" }
+    const result = buildImagePrompt({
+      prompt: "a scene",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraNone, adamCanonical],
+    })
+    // Both URLs attached.
+    expect(result.referenceImageUrls).toContain("https://r2/kira-portrait.png")
+    expect(result.referenceImageUrls).toContain("https://r2/adam-portrait.png")
+    // Header present because Adam emits a bullet.
+    expect(result.prompt).toContain("Use these characters:")
+    // Adam's bullet present.
+    expect(result.prompt).toContain("Adam")
+    // Kira's name not in any bullet.
+    expect(result.prompt).not.toContain("(Kira)")
+  })
+
+  it("character extra (isExtraRef) with mode 'none' attaches URL but emits no bullet/pair-back", () => {
+    const kiraExtraNone: ConnectedReference = {
+      id: "extra-kira-stand",
+      defaultName: "Kira / standing",
+      source: "wired-character",
+      description: "full body, standing, facing right",
+      url: "https://r2/kira-standing.png",
+      characterSlug: "kira",
+      variantSlug: "standing",
+      variantDescription: "full body, standing, facing right",
+      variantDisplayName: "standing",
+      defaultUsageMode: "none",
+      isExtraRef: true,
+    }
+    const result = buildImagePrompt({
+      prompt: "a busy market",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, kiraExtraNone],
+    })
+    // Both URLs land.
+    expect(result.referenceImageUrls).toEqual([
+      "https://r2/kira-portrait.png",
+      "https://r2/kira-standing.png",
+    ])
+    // Canonical bullet for Kira still present (mode defaulting to identical).
+    expect(result.prompt).toContain("Image 1 (Kira)")
+    // No pair-back bullet for the 'none' extra.
+    expect(result.prompt).not.toContain("Image 2 is the same subject as Image 1")
+    expect(result.prompt).not.toContain("Image 2 (reference)")
+  })
+})

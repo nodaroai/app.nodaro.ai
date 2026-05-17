@@ -5,11 +5,12 @@ import {
   isUsageMode,
   usageModeDirective,
   usageModeLabel,
+  usageModeIncludesName,
   type UsageMode,
 } from "../character-usage-mode.js"
 
 describe("USAGE_MODES", () => {
-  it("contains the 6 expected mode keys in canonical order", () => {
+  it("contains the 8 expected mode keys in canonical order", () => {
     expect(USAGE_MODES).toEqual([
       "identical",
       "face",
@@ -17,6 +18,8 @@ describe("USAGE_MODES", () => {
       "pose",
       "emotion",
       "style",
+      "name",
+      "none",
     ])
   })
   it("has 'identical' as the default", () => {
@@ -98,10 +101,18 @@ describe("usageModeDirective", () => {
     expect(d).toMatch(/tone/i)
     expect(d).toMatch(/do not copy the subject's identity/i)
   })
-  it("returns a distinct directive for each mode (no accidental aliasing)", () => {
-    const directives = USAGE_MODES.map(usageModeDirective)
+  it("returns null for 'name' and 'none' — minimal-intervention modes emit no directive", () => {
+    expect(usageModeDirective("name")).toBeNull()
+    expect(usageModeDirective("none")).toBeNull()
+  })
+  it("returns a distinct directive for every mode that emits one (no accidental aliasing)", () => {
+    // "name" and "none" both intentionally return null — exclude them from
+    // the uniqueness check. Every other mode must produce its own sentence.
+    const speakingModes = USAGE_MODES.filter((m) => m !== "name" && m !== "none")
+    const directives = speakingModes.map((m) => usageModeDirective(m))
+    expect(directives.every((d) => typeof d === "string" && d.length > 0)).toBe(true)
     const unique = new Set(directives)
-    expect(unique.size).toBe(USAGE_MODES.length)
+    expect(unique.size).toBe(speakingModes.length)
   })
 })
 
@@ -113,10 +124,24 @@ describe("usageModeLabel", () => {
     expect(usageModeLabel("pose")).toBe("Pose only")
     expect(usageModeLabel("emotion")).toBe("Emotion only")
     expect(usageModeLabel("style")).toBe("Style only")
+    expect(usageModeLabel("name")).toBe("Name only")
+    expect(usageModeLabel("none")).toBe("None")
   })
   it("returns a distinct label per mode", () => {
     const labels = USAGE_MODES.map(usageModeLabel)
     const unique = new Set(labels)
     expect(unique.size).toBe(USAGE_MODES.length)
+  })
+})
+
+describe("usageModeIncludesName", () => {
+  it("returns false ONLY for 'none' — the no-text-bias mode", () => {
+    expect(usageModeIncludesName("none")).toBe(false)
+    // Every other mode keeps the name in the labeled subject (e.g. `Image A
+    // (shira)`) so the model can correlate the position with a named entity.
+    for (const m of USAGE_MODES) {
+      if (m === "none") continue
+      expect(usageModeIncludesName(m)).toBe(true)
+    }
   })
 })

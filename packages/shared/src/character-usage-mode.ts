@@ -27,6 +27,8 @@ export const USAGE_MODES = [
   "pose",
   "emotion",
   "style",
+  "name",
+  "none",
 ] as const
 
 export type UsageMode = (typeof USAGE_MODES)[number]
@@ -45,12 +47,20 @@ export function isUsageMode(s: string): s is UsageMode {
  * which aspects of the reference to take and which to derive from the rest of
  * the prompt.
  *
+ * `name` and `none` are minimal-intervention modes that return `null` — the
+ * caller emits NO trailing directive for them. `name` still includes the
+ * character name in the labeled subject (`Image A (shira)`); `none` suppresses
+ * the name as well (bare `Image A`) and excludes the character entirely from
+ * the top-level "Use these characters:" header when ALL of its mentions are
+ * `none`. Use these when the user wants the visual reference to speak for
+ * itself without textual bias.
+ *
  * Calling sites: `resolveCharacterMentions` (shared/prompt-builder.ts) and the
  * per-character canonical fallback (also in prompt-builder.ts), plus the video
  * mention resolvers on frontend (execute-node.ts) and backend (payload-builder.ts)
  * which mirror the same directive shape.
  */
-export function usageModeDirective(mode: UsageMode): string {
+export function usageModeDirective(mode: UsageMode): string | null {
   switch (mode) {
     case "identical":
       return "The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections."
@@ -64,6 +74,9 @@ export function usageModeDirective(mode: UsageMode): string {
       return "Take only the emotional expression — preserve 100% facial identity and all unique features unchanged. Adopt face shape, clothing, body, and pose from the rest of the prompt; transfer only the emotional cue."
     case "style":
       return "Take only the visual style and tone (lighting, color grade, atmosphere). Do not copy the subject's identity, clothing, or pose."
+    case "name":
+    case "none":
+      return null
   }
 }
 
@@ -76,5 +89,21 @@ export function usageModeLabel(mode: UsageMode): string {
     case "pose": return "Pose only"
     case "emotion": return "Emotion only"
     case "style": return "Style only"
+    case "name": return "Name only"
+    case "none": return "None"
   }
+}
+
+/**
+ * Whether the labeled subject for this mode should include the character name
+ * in parens (e.g. `Image A (shira)`) or stay bare (`Image A`). Only `none`
+ * returns false — every other mode (including `name`) keeps the name so the
+ * model can correlate the bullet with a named entity in the rest of the
+ * prompt. Used by `resolveCharacterMentions` to decide the subject form AND to
+ * filter the top-level "Use these characters:" header (a character whose
+ * mentions are ALL `none` is invisible textually — only the image is
+ * attached).
+ */
+export function usageModeIncludesName(mode: UsageMode): boolean {
+  return mode !== "none"
 }

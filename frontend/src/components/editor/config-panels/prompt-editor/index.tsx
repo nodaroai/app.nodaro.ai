@@ -9,6 +9,7 @@ import { HardBreak } from "@tiptap/extension-hard-break"
 import { Placeholder, UndoRedo } from "@tiptap/extensions"
 import { createRoot, type Root } from "react-dom/client"
 import { ImageRefExtension } from "./image-ref-extension"
+import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
 import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
@@ -17,6 +18,18 @@ import type { RefImageItem } from "../tag-textarea"
 import type { NodeRefItem } from "@/lib/node-refs"
 
 const IMAGE_TOKEN_RE = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
+
+/**
+ * Slug shape — must mirror the input/paste-rule regex in
+ * `character-ref-extension.ts` (and the shared
+ * `findCharacterMentionTokens`). The capture-group layout is:
+ *   1=boundary char (or empty when at line start, dropped before reinjection)
+ *   2=character w/ leading "@"
+ *   3=imageIndex
+ *   4=third (variant OR mode)
+ *   5=fourth (mode)
+ */
+const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?/g
 
 interface PromptEditorProps {
   readonly value: string
@@ -36,30 +49,110 @@ interface JsonNode {
   text?: string
 }
 
+interface TokenMatch {
+  start: number
+  end: number
+  node: JsonNode
+}
+
 /**
- * Convert the canonical value string into a ProseMirror JSON doc. Splits on
- * "\n" for paragraphs and replaces every `{image:N:label}` match with an
- * atomic ImageRef node. Empty paragraphs are preserved so blank lines round
- * trip cleanly.
+ * Scan a single line for both `{image:N:label}` and `@<slug>:N(:variant)(:mode)`
+ * tokens, returning the resolved JSON nodes ordered by their start offset.
+ *
+ * Character matches that fail `parseCharacterRefMatch` (e.g. a 3-part token
+ * whose third segment is neither a usage mode nor a valid variant slug, or a
+ * 4-part token with an unknown mode) are dropped from the token list and
+ * left as text by the caller — same fallback the input/paste rules use.
+ *
+ * Returns matches in document order; the caller stitches in plain-text
+ * fragments between them.
  */
-function valueToDoc(value: string): JsonNode {
-  const lines = value.split("\n")
-  const paragraphs: JsonNode[] = lines.map((line) => {
-    const content: JsonNode[] = []
-    let lastIndex = 0
-    for (const match of line.matchAll(IMAGE_TOKEN_RE)) {
-      const start = match.index ?? 0
-      if (start > lastIndex) {
-        content.push({ type: "text", text: line.slice(lastIndex, start) })
-      }
-      content.push({
+function collectTokens(line: string): TokenMatch[] {
+  const tokens: TokenMatch[] = []
+
+  for (const match of line.matchAll(IMAGE_TOKEN_RE)) {
+    const start = match.index ?? 0
+    tokens.push({
+      start,
+      end: start + match[0].length,
+      node: {
         type: "imageRef",
         attrs: {
           imageIndex: parseInt(match[1], 10),
           label: match[2] ?? "",
         },
-      })
-      lastIndex = start + match[0].length
+      },
+    })
+  }
+
+  for (const match of line.matchAll(CHARACTER_TOKEN_RE_GLOBAL)) {
+    const matchStart = match.index ?? 0
+    const boundary = match[1] ?? ""
+    // Slug starts after the boundary character (when present). The boundary
+    // is left in-place as plain text — it belongs to the surrounding sentence.
+    const slugStart = matchStart + boundary.length
+    const slugEnd = matchStart + match[0].length
+    const characterWithAt = match[2]
+    const indexStr = match[3]
+    const third = match[4]
+    const fourth = match[5]
+    const attrs = parseCharacterRefMatch(characterWithAt, indexStr, third, fourth)
+    if (!attrs) continue
+    tokens.push({
+      start: slugStart,
+      end: slugEnd,
+      node: {
+        type: "characterRef",
+        attrs: {
+          characterSlug: attrs.characterSlug,
+          imageIndex: attrs.imageIndex,
+          variantSlug: attrs.variantSlug,
+          usageMode: attrs.usageMode,
+        },
+      },
+    })
+  }
+
+  // Sort by start offset. Token regions can't legitimately overlap since
+  // `{image:…}` lives between braces and `@…` starts with `@`, but in the
+  // event of weird user input (e.g. a literal `@kira:1` inside an image
+  // token's label like `{image:1:@kira}`) we drop later overlapping tokens
+  // to keep the doc well-formed.
+  tokens.sort((a, b) => a.start - b.start)
+  const deduped: TokenMatch[] = []
+  let cursor = 0
+  for (const t of tokens) {
+    if (t.start < cursor) continue
+    deduped.push(t)
+    cursor = t.end
+  }
+  return deduped
+}
+
+/**
+ * Convert the canonical value string into a ProseMirror JSON doc. Splits on
+ * "\n" for paragraphs and replaces every `{image:N:label}` and every
+ * `@<slug>:N(:variant)(:mode)` match with the appropriate atomic node.
+ * Empty paragraphs are preserved so blank lines round-trip cleanly.
+ */
+function valueToDoc(value: string): JsonNode {
+  const lines = value.split("\n")
+  const paragraphs: JsonNode[] = lines.map((line) => {
+    const tokens = collectTokens(line)
+    if (tokens.length === 0) {
+      return {
+        type: "paragraph",
+        content: line.length > 0 ? [{ type: "text", text: line }] : undefined,
+      }
+    }
+    const content: JsonNode[] = []
+    let lastIndex = 0
+    for (const tok of tokens) {
+      if (tok.start > lastIndex) {
+        content.push({ type: "text", text: line.slice(lastIndex, tok.start) })
+      }
+      content.push(tok.node)
+      lastIndex = tok.end
     }
     if (lastIndex < line.length) {
       content.push({ type: "text", text: line.slice(lastIndex) })
@@ -100,6 +193,7 @@ export function PromptEditor({
       HardBreak,
       UndoRedo,
       Placeholder.configure({ placeholder: placeholder ?? "" }),
+      CharacterRefExtension,
       ImageRefExtension.configure({
         suggestion: {
           char: "@",
@@ -111,13 +205,20 @@ export function PromptEditor({
           items: () => Array.from(refsRef.current),
           command: ({ editor: ed, range, props }) => {
             const item = props as unknown as SuggestionCommandPayload
-            // Character refs: insert as PLAIN TEXT in the new `@<slug>:N:<variant>`
-            // format that `findCharacterMentionTokens` (shared) recognizes.
+            // Character refs: insert as an atomic `characterRef` TipTap node
+            // (rendered as a violet pill with thumbnail). The pill's
+            // `renderText` serializes back to the literal
+            // `@<slug>:N(:<variant>)(:<mode>)` format that
+            // `findCharacterMentionTokens` (shared) recognizes — so the visual
+            // pill is a pure presentation layer and the downstream
+            // prompt-builder sees the exact same text it would have seen for
+            // a hand-typed slug.
+            //
             // The numeric index N is computed at insertion time by scanning the
-            // editor's current text for existing `@<char>:<N>` patterns and
-            // using max-N + 1. This keeps the user-typed slug and the final
-            // identity-directive block (`Image N (Name) — match exactly…`) in
-            // lock-step.
+            // editor's current text (which includes round-tripped pills) for
+            // existing `@<char>:<N>` patterns and using max-N + 1. This keeps
+            // the user-typed slug and the final identity-directive block
+            // (`Image N (Name) — match exactly…`) in lock-step.
             //
             // Non-character refs continue to use the existing TipTap `imageRef`
             // atomic node so the visual pill + `{image:N:label}` round-trip
@@ -127,6 +228,11 @@ export function PromptEditor({
               // `@<char>:<N>(:<variant|mode>)?(:<mode>)?` tokens (2–4 part form).
               // Use max + 1 as the next index. Mirrors `computeNextMentionIndex`
               // in `tag-textarea.tsx` and the regex shape in `character-mention-slug.ts`.
+              //
+              // `editor.getText` invokes our extension's `renderText` for every
+              // characterRef pill, so existing pills round-trip back to their
+              // literal slug here and are counted alongside any raw-text
+              // mentions the user may have pasted.
               const currentText = ed.getText({ blockSeparator: "\n" })
               const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?/g
               let maxIdx = 0
@@ -135,7 +241,7 @@ export function PromptEditor({
                 if (Number.isInteger(n) && n > maxIdx) maxIdx = n
               }
               const nextIdx = maxIdx + 1
-              // Build the slug. Mode resolution priority:
+              // Mode resolution priority:
               //   1. `item.usageMode` — set by the 3rd-level mode-picker drill;
               //      ALWAYS emitted as the 4th slug segment (even when equal to
               //      the default) so the user's explicit choice round-trips.
@@ -144,22 +250,36 @@ export function PromptEditor({
               //      the legacy 2/3-part form. Casual users never see the
               //      4-part syntax unless they intentionally pick a mode or
               //      configured a non-default default on the source node.
+              //
+              // The resolved `modeForNode` is what we stash on the
+              // characterRef node's `usageMode` attribute. The extension's
+              // `renderText` only emits a 4th segment when `usageMode` is
+              // non-null, so passing `null` here keeps the pill clean and
+              // defers mode resolution to the character node at runtime.
               const explicitMode = item.usageMode
               const defaultMode = item.defaultUsageMode
               const includeMode = explicitMode != null
                 ? true
                 : defaultMode != null && defaultMode !== DEFAULT_USAGE_MODE
-              const modeToEmit = explicitMode ?? defaultMode
-              const parts = [`@${item.characterSlug}:${nextIdx}`]
-              if (item.variantSlug) parts.push(item.variantSlug)
-              if (includeMode && modeToEmit) parts.push(modeToEmit)
-              const token = parts.join(":")
-              // Replace the typed `@<filter>` range with the resolved token + space.
+              const modeForNode = includeMode ? (explicitMode ?? defaultMode ?? null) : null
               ed
                 .chain()
                 .focus()
                 .deleteRange(range)
-                .insertContent(`${token} `)
+                .insertContent([
+                  {
+                    type: "characterRef",
+                    attrs: {
+                      characterSlug: item.characterSlug,
+                      imageIndex: nextIdx,
+                      variantSlug: item.variantSlug ?? null,
+                      usageMode: modeForNode,
+                    },
+                  },
+                  // Trailing space — matches the legacy plain-text insertion
+                  // so the cursor lands ready for the user to keep typing.
+                  { type: "text", text: " " },
+                ])
                 .run()
               return
             }
@@ -371,14 +491,30 @@ export function PromptEditor({
   })
 
   // Push the latest reference list into editor storage so the React node
-  // view can resolve `imageIndex` → URL without prop drilling.
+  // views can resolve their attribute keys → URL without prop drilling.
+  //
+  // The `imageRef` storage indexes by `imageIndex` (1-based slot the user
+  // typed in the `@image:N` token), the `characterRef` storage indexes by
+  // `characterSlug + variantSlug` (so a pill can find its thumbnail even
+  // when the slot order shifts on edge insertion / removal).
   useEffect(() => {
     if (!editor) return
-    const storage = editor.storage as unknown as Record<string, { referenceImages?: readonly RefImageItem[] }>
+    const storage = editor.storage as unknown as Record<string, {
+      referenceImages?: readonly RefImageItem[]
+      revision?: number
+    }>
     storage.imageRef = storage.imageRef ?? {}
     storage.imageRef.referenceImages = referenceImages ?? []
+    // Mirror the same list under the characterRef extension's storage so
+    // CharacterRefView can resolve `(characterSlug, variantSlug)` without
+    // round-tripping through the index — character pills survive slot
+    // re-ordering that way (image-ref pills can't, since they're indexed
+    // positionally by definition).
+    storage.characterRef = storage.characterRef ?? {}
+    storage.characterRef.referenceImages = referenceImages ?? []
+    storage.characterRef.revision = (storage.characterRef.revision ?? 0) + 1
     // Force node views to re-read storage by dispatching a no-op transaction.
-    editor.view.dispatch(editor.state.tr.setMeta("imageRef-refs-changed", true))
+    editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
   }, [editor, referenceImages])
 
   // Sync external value → editor when the prop changes from somewhere other

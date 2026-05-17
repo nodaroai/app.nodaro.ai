@@ -414,12 +414,22 @@ function resolveVideoPromptMentions(
     // `DEFAULT_USAGE_MODE`. Keeps backend video runs in lock-step with the
     // frontend `resolveVideoPromptMentions` and the shared image builder.
     const effectiveMode = r.defaultUsageMode ?? DEFAULT_USAGE_MODE
+    // Minimal-intervention modes:
+    //   - "none": URL is attached but NO bullet is emitted (no textual bias).
+    //   - "name": one bullet with the name, no trailing directive.
+    if (effectiveMode === "none") {
+      continue
+    }
+    if (effectiveMode === "name") {
+      fallbackDirectiveLines.push(`- Image ${position} (${displayName})`)
+      continue
+    }
     const directive = usageModeDirective(effectiveMode)
     const includeCanonicalDesc = effectiveMode === "identical" || effectiveMode === "face-pose"
     const descPart = includeCanonicalDesc && r.characterCanonicalDescription
       ? `${displayName} — ${r.characterCanonicalDescription.trim()}`
       : displayName
-    fallbackDirectiveLines.push(`- ${descPart}. ${directive}`)
+    fallbackDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
   }
 
   // Extras: emit one directive per row. Numbering continues from `position`
@@ -434,15 +444,30 @@ function resolveVideoPromptMentions(
       position += 1
       const desc = (ex.description ?? "").trim()
       if (ex.characterSlug) {
+        const ctx = ctxLookup(ex.characterSlug)
+        const effectiveMode = ex.usageMode ?? ctx?.defaultUsageMode ?? DEFAULT_USAGE_MODE
         const earlierPos = positionsByChar.get(ex.characterSlug)
         if (earlierPos !== undefined) {
-          const tail = desc ? `, ${desc}` : ""
-          extraDirectiveLines.push(
-            `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
-          )
+          // Pair-back. Suppressed for "none" so the extras-side respects the
+          // same minimal-intervention contract as primary mentions.
+          if (effectiveMode !== "none") {
+            const tail = desc ? `, ${desc}` : ""
+            extraDirectiveLines.push(
+              `- Image ${position} is the same subject as Image ${earlierPos}${tail}.`,
+            )
+          }
+        } else if (effectiveMode === "none") {
+          // URL attached, no bullet. Record the slot for any later same-
+          // character extras that pair-back via "same subject as Image N".
+          positionsByChar.set(ex.characterSlug, position)
+        } else if (effectiveMode === "name") {
+          // Labeled subject + per-ref description, no trailing directive.
+          const displayName = ctx?.displayName || ex.characterSlug
+          const subject = `Image ${position} (${displayName})`
+          const descPart = desc ? `${subject} — ${desc}` : subject
+          extraDirectiveLines.push(`- ${descPart}.`)
+          positionsByChar.set(ex.characterSlug, position)
         } else {
-          const ctx = ctxLookup(ex.characterSlug)
-          const effectiveMode = ex.usageMode ?? ctx?.defaultUsageMode ?? DEFAULT_USAGE_MODE
           const directive = usageModeDirective(effectiveMode)
           const displayName = ctx?.displayName || ex.characterSlug
           const subject = `Image ${position} (${displayName})`
@@ -451,7 +476,7 @@ function resolveVideoPromptMentions(
           let descPart = subject
           if (desc) descPart = `${subject} — ${desc}`
           else if (includeCanonicalDesc && canonicalDesc?.trim()) descPart = `${subject} — ${canonicalDesc.trim()}`
-          extraDirectiveLines.push(`- ${descPart}. ${directive}`)
+          extraDirectiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
           positionsByChar.set(ex.characterSlug, position)
         }
       } else {
