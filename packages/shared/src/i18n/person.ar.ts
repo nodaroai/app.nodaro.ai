@@ -51,6 +51,7 @@ const map: LocaleCatalogMap = {
   "middle-eastern": { label: "شرق أوسطي (عربي)", description: "ملامح عربية / شامية / خليجية" },
   "turkish": { label: "تركي", description: "ملامح أناضولية تركية" },
   "persian": { label: "فارسي / إيراني", description: "ملامح هندو-إيرانية" },
+  "israeli": { label: "إسرائيلي", description: "ملامح إسرائيلية (لڤانتية متوسطية، عامة)" },
 
   "african": { label: "أفريقي (أي)", description: "أي إفريقي جنوب الصحراء — منطقة غير محددة" },
   "west-african": { label: "غرب أفريقي", description: "Yoruba / Igbo / Akan / Wolof" },
@@ -69,6 +70,9 @@ const map: LocaleCatalogMap = {
   "celtic": { label: "كلتي", description: "ملامح بريطانية / أيرلندية" },
   "mediterranean": { label: "متوسطي", description: "جنوب أوروبي (عام)" },
   "slavic": { label: "سلافي", description: "ملامح شرق أوروبية" },
+  "czech": { label: "تشيكي", description: "ملامح تشيكية (سلافية غربية، أوروبا الوسطى)" },
+  "russian": { label: "روسي", description: "ملامح روسية (سلافية شرقية)" },
+  "ukrainian": { label: "أوكراني", description: "ملامح أوكرانية (سلافية شرقية)" },
   "italian": { label: "إيطالي", description: "ملامح إيطالية" },
   "iberian": { label: "أيبيري (إسباني / برتغالي)", description: "إسباني / برتغالي بإرث Celtiberian + موري" },
   "french": { label: "فرنسي", description: "ملامح فرنسية (تتنوع شمالا وجنوبا)" },
