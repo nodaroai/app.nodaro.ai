@@ -332,6 +332,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
     label: "Flux 2 Klein (Open)",
     description: "Open Flux 2 9B from BFL — fast, no safety filter. Runs direct on Replicate.",
     useCases: ["realistic", "fast", "unfiltered"],
+    features: ["reference-image"],
     aspectRatios: FLUX_RATIOS,
     pricing: [{ identifier: "flux-2-klein", credits: 2 }],
   },
