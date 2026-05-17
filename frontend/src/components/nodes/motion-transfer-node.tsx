@@ -71,7 +71,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const maxDuration = nodeData.characterOrientation === "image" ? 10 : 30
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={{ width: "100%", height: "100%" }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Waypoints className="w-3.5 h-3.5" />}

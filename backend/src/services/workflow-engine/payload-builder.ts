@@ -553,6 +553,63 @@ function applyOrder<T extends { id: string }>(
   return ordered
 }
 
+/** Source-node types accepted as reference images by image-to-video and
+ * text-to-video. Mirrors the frontend `connectedRefImages` filter in
+ * `video-configs.tsx` so the orchestrator's reorder picks up exactly the
+ * upstreams the user reordered in the config panel. */
+const VIDEO_REF_IMAGE_SOURCE_TYPES = new Set([
+  "generate-image",
+  "upload-image",
+  "character",
+  "object",
+  "location",
+  "edit-image",
+  "image-to-image",
+  "scene",
+])
+
+/** Re-derive `referenceImageUrls` from the workflow graph in user-defined
+ * order. Walks the consumer node's incoming edges (filtered by `edgeFilter`
+ * to a specific `targetHandle` or accepted source types), then sorts the
+ * resulting source nodes by `order` (IDs not in `order` go to the end), and
+ * finally pulls each source's image URL via `getNodeImageUrl`. Used by
+ * image-to-video / text-to-video so the positional Image-N letters in the
+ * assembled prompt respect the user's drag-to-reorder list in
+ * `connectedRefImageOrder`.
+ *
+ * Returns `undefined` when the order array is empty (caller should keep the
+ * original `resolvedInputs.referenceImageUrls` in that case to avoid extra
+ * work). */
+function applyOrderToReferenceUrls(
+  consumerNodeId: string,
+  order: readonly string[] | undefined,
+  buildCtx: PayloadBuildContext | undefined,
+  edgeFilter: (edge: SimpleEdge, sourceNode: SimpleNode) => boolean,
+): string[] | undefined {
+  if (!order?.length) return undefined
+  if (!buildCtx) return undefined
+  const allNodes = buildCtx.nodes ?? []
+  const allEdges = buildCtx.edges ?? []
+  const states = buildCtx.nodeStates ?? {}
+  const matchedSources: SimpleNode[] = []
+  const seenSrcIds = new Set<string>()
+  for (const e of allEdges) {
+    if (e.target !== consumerNodeId) continue
+    const src = allNodes.find((n) => n.id === e.source)
+    if (!src) continue
+    if (!edgeFilter(e, src)) continue
+    if (seenSrcIds.has(src.id)) continue
+    seenSrcIds.add(src.id)
+    matchedSources.push(src)
+  }
+  if (matchedSources.length === 0) return undefined
+  const ordered = applyOrder(matchedSources, order)
+  const orderedUrls = ordered
+    .map((n) => getNodeImageUrl(n, states))
+    .filter((u): u is string => !!u)
+  return orderedUrls.length > 0 ? orderedUrls : undefined
+}
+
 interface PayloadResult {
   /** BullMQ job name (e.g., "generate-image") */
   jobName: string
@@ -1558,9 +1615,19 @@ export function buildPayload(
       const i2vBaseImage = (isS2 && s2Mode === "references")
         ? undefined
         : (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl || data.imageUrl as string | undefined)
+      // Apply user-defined reorder before mention-merge so the positional
+      // Image-N letters assigned by `resolveVideoPromptMentions` match the
+      // order shown in the config panel's drag-list. Walks the `references`
+      // handle edges so end-frame / start-frame connections aren't touched.
+      const i2vOrderedRefs = applyOrderToReferenceUrls(
+        node.id,
+        data.connectedRefImageOrder as string[] | undefined,
+        buildCtx,
+        (e) => e.targetHandle === "references",
+      )
       const i2vBaseRefs = (isS2 && s2Mode === "frames")
         ? undefined
-        : resolvedInputs.referenceImageUrls
+        : (i2vOrderedRefs ?? resolvedInputs.referenceImageUrls)
       let i2vImageUrl = i2vBaseImage
       let i2vReferenceImageUrls = i2vBaseRefs
       if (i2vMention.additionalUrls.length > 0) {
@@ -1658,7 +1725,17 @@ export function buildPayload(
       })()
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data))
       t2vPrompt = t2vMention.prompt
-      let t2vReferenceImageUrls = resolvedInputs.referenceImageUrls
+      // Apply user-defined reorder for t2v references — mirrors i2v. t2v has
+      // no startFrame handle, so the filter accepts any wired image/character/
+      // entity upstream (matches the `connectedRefImages` filter in
+      // `video-configs.tsx` TextToVideoConfig).
+      const t2vOrderedRefs = applyOrderToReferenceUrls(
+        node.id,
+        data.connectedRefImageOrder as string[] | undefined,
+        buildCtx,
+        (_e, src) => VIDEO_REF_IMAGE_SOURCE_TYPES.has(src.type),
+      )
+      let t2vReferenceImageUrls = t2vOrderedRefs ?? resolvedInputs.referenceImageUrls
       if (t2vMention.additionalUrls.length > 0) {
         const existing = t2vReferenceImageUrls ?? []
         const merged: string[] = []

@@ -162,7 +162,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={{ width: "100%", height: "100%" }}>
     <EditableNodeLabel
       label={nodeData.label}
       icon={<MessageSquare className="w-3.5 h-3.5" />}

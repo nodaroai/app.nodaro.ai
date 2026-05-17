@@ -98,7 +98,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative" style={{ width: "100%", height: "100%" }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}

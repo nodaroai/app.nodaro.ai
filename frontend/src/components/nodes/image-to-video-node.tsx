@@ -191,6 +191,7 @@ function ImageToVideoNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <div
       className="relative"
+      style={{ width: "100%", height: "100%" }}
       onDoubleClick={isKling3 ? (e) => { e.stopPropagation(); setDirectorOpen(true) } : undefined}
     >
       <EditableNodeLabel
