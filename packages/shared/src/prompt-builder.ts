@@ -392,6 +392,199 @@ function buildExtraRefDirectives(
  * `ConnectedReference` to learn its `characterSlug`. The first time we see
  * a slug, we record its position; later same-slug images don't overwrite.
  */
+/**
+ * Build a stable-tile-ID-per-URL mapping for the FINAL URL list emitted by
+ * `buildImagePrompt`. Mirrors the scheme in `compute-injected-refs.ts` so the
+ * frontend reorder UI and the backend `referenceOrder` sort agree.
+ *
+ * Used internally by `applyReferenceOrder` below. Kept as a separate helper
+ * so the test in `prompt-builder.test.ts` can pin the ID scheme contract.
+ *
+ * Resolution order (first wins per URL):
+ *   1. URL is a wired character variant whose @-mention is in `prompt` →
+ *      `mention:<slug>:<variant|canonical>`. Variant slug derived from the
+ *      mention token, NOT the ref's `variantSlug` — the same URL can match
+ *      multiple variants in edge cases, but the mention token is the
+ *      authoritative user-typed source.
+ *   2. URL belongs to an `isExtraRef` entry → `wired:<id>` (the extra ref's
+ *      stable id, which the consumer panel keeps in sync with the row's id).
+ *   3. URL is a non-character wired ref → `wired:<sourceNodeId>` via the
+ *      provided `sourceNodeIdById` map, falling back to `ref.id`.
+ *   4. URL is a wired character canonical (no mention) → `char-canonical:<slug>`.
+ *
+ * URLs not matched by any of the above keep a null entry; they're sorted
+ * stable after the matched URLs and don't participate in reorder.
+ */
+function buildTileIdForUrl(
+  urls: readonly string[],
+  refs: readonly ConnectedReference[],
+  prompt: string,
+  sourceNodeIdById?: ReadonlyMap<string, string>,
+): Array<string | null> {
+  // Build slug → mention's variant decision (the first time the mention
+  // resolved per slug+variant): used to key mention URLs.
+  const knownSlugs = Array.from(
+    new Set(
+      refs.map((r) => r.characterSlug).filter((s): s is string => Boolean(s)),
+    ),
+  )
+  const mentionTokens = knownSlugs.length > 0
+    ? findCharacterMentionTokens(prompt, knownSlugs)
+    : []
+  // url → tile id, populated only for mentioned variants.
+  const mentionUrlToId = new Map<string, string>()
+  const bySlug = new Map<string, ConnectedReference>()
+  const byVariant = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.characterSlug) continue
+    if (!r.variantSlug) {
+      if (!bySlug.has(r.characterSlug)) bySlug.set(r.characterSlug, r)
+    } else {
+      byVariant.set(`${r.characterSlug}:${r.variantSlug}`, r)
+    }
+  }
+  for (const t of mentionTokens) {
+    const match = t.variantSlug
+      ? byVariant.get(`${t.characterSlug}:${t.variantSlug}`)
+      : bySlug.get(t.characterSlug)
+    if (!match?.url) continue
+    if (!mentionUrlToId.has(match.url)) {
+      mentionUrlToId.set(match.url, `mention:${t.characterSlug}:${t.variantSlug || "canonical"}`)
+    }
+  }
+
+  // url → first matching ref (used for both canonical and wired-raw paths).
+  const firstRefByUrl = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.url) continue
+    if (!firstRefByUrl.has(r.url)) firstRefByUrl.set(r.url, r)
+  }
+
+  return urls.map((url) => {
+    const mentionId = mentionUrlToId.get(url)
+    if (mentionId) return mentionId
+    const ref = firstRefByUrl.get(url)
+    if (!ref) return null
+    // Extra refs use their stable id (set by the consumer panel).
+    if (ref.isExtraRef) {
+      return `wired:${sourceNodeIdById?.get(ref.id) ?? ref.id}`
+    }
+    if (ref.source === "wired-character" && ref.characterSlug) {
+      // Canonical entry (no variant slug) when reached via the fallback path.
+      // Variant entries are handled by the mention path above.
+      if (!ref.variantSlug) {
+        return `char-canonical:${ref.characterSlug}`
+      }
+      // A wired-character VARIANT URL with no mention shouldn't appear in the
+      // final URL list under normal flow, but handle it defensively.
+      return `mention:${ref.characterSlug}:${ref.variantSlug}`
+    }
+    // Non-character wired or manual entry.
+    return `wired:${sourceNodeIdById?.get(ref.id) ?? ref.id}`
+  })
+}
+
+/**
+ * Reorder URLs by `referenceOrder` AND renumber `Image N` tokens in the
+ * prompt to match. Returns the new URL list + the rewritten prompt. When
+ * `referenceOrder` is empty / null / all-stale, the original URLs + prompt
+ * are returned unchanged (no-op contract).
+ *
+ * Renumbering rule: build an `original-pos → new-pos` map from the URL move
+ * indices, then regex-replace `Image N` substrings (word-boundary-anchored
+ * so we don't touch "Image 12" while remapping "Image 1"). Done in one pass
+ * via a callback that looks up each match in the map; unknown positions are
+ * left as-is.
+ *
+ * NB: `findCharacterMentionTokens` is already applied BEFORE this step, so
+ * any `@kira:1:smile` literals in the prompt have been replaced with display
+ * names — only positional `Image N` markers remain to be remapped.
+ *
+ * Exposed (non-export internal) — also called by video branches in
+ * payload-builder / execute-node via `applyReferenceOrderToVideo` so video
+ * prompts honor the same reorder semantics as image prompts.
+ */
+export function applyReferenceOrderToVideo(
+  urls: readonly string[],
+  prompt: string | undefined,
+  refs: readonly ConnectedReference[],
+  referenceOrder: readonly string[] | undefined,
+  sourceNodeIdById?: ReadonlyMap<string, string>,
+): { urls: string[]; prompt: string | undefined } {
+  if (!referenceOrder || !referenceOrder.length || urls.length < 2) {
+    return { urls: [...urls], prompt }
+  }
+  const reordered = applyReferenceOrder(
+    urls,
+    prompt ?? "",
+    refs,
+    referenceOrder,
+    sourceNodeIdById,
+  )
+  return {
+    urls: reordered.urls,
+    prompt: prompt === undefined ? undefined : reordered.prompt,
+  }
+}
+
+function applyReferenceOrder(
+  urls: readonly string[],
+  prompt: string,
+  refs: readonly ConnectedReference[],
+  referenceOrder: readonly string[],
+  sourceNodeIdById?: ReadonlyMap<string, string>,
+): { urls: string[]; prompt: string } {
+  if (!referenceOrder.length) return { urls: [...urls], prompt }
+  const tileIds = buildTileIdForUrl(urls, refs, prompt, sourceNodeIdById)
+  // Map: tile id → original index in URLs array. Keeps first occurrence per
+  // tile id (URLs are already deduped by `buildImagePrompt`'s merge step).
+  const byTileId = new Map<string, number>()
+  for (let i = 0; i < tileIds.length; i++) {
+    const id = tileIds[i]
+    if (id && !byTileId.has(id)) byTileId.set(id, i)
+  }
+  const newOrderIndices: number[] = []
+  const seenIndices = new Set<number>()
+  for (const id of referenceOrder) {
+    const idx = byTileId.get(id)
+    if (idx === undefined) continue
+    if (seenIndices.has(idx)) continue
+    newOrderIndices.push(idx)
+    seenIndices.add(idx)
+  }
+  // Append URLs not in `referenceOrder` in their original order.
+  for (let i = 0; i < urls.length; i++) {
+    if (!seenIndices.has(i)) {
+      newOrderIndices.push(i)
+      seenIndices.add(i)
+    }
+  }
+  // No-op check: if `newOrderIndices` is `[0, 1, 2, …]` we'd rebuild the same
+  // arrays. Cheap to detect, lets us avoid the regex when the user hasn't
+  // actually changed anything.
+  let isNoop = newOrderIndices.length === urls.length
+  for (let i = 0; isNoop && i < newOrderIndices.length; i++) {
+    if (newOrderIndices[i] !== i) isNoop = false
+  }
+  if (isNoop) return { urls: [...urls], prompt }
+  const newUrls = newOrderIndices.map((i) => urls[i])
+  // Build orig-1based-pos → new-1based-pos map for prompt renumbering.
+  const remap = new Map<number, number>()
+  for (let newPos = 0; newPos < newOrderIndices.length; newPos++) {
+    remap.set(newOrderIndices[newPos] + 1, newPos + 1)
+  }
+  // Replace every `Image N` (1-2 digit, word-boundary) substring. Negative
+  // lookahead on digits guards against `Image 12` → `Image 32` when remapping
+  // 1 → 3. Same lookbehind on `Image` prevents catching `XImage 1`.
+  const renumbered = prompt.replace(/(?<![A-Za-z])Image (\d{1,3})(?!\d)/g, (whole, n) => {
+    const orig = parseInt(n, 10)
+    const next = remap.get(orig)
+    if (next === undefined || next === orig) return whole
+    return `Image ${next}`
+  })
+  return { urls: newUrls, prompt: renumbered }
+}
+
 function buildCharacterPositionMap(
   mergedUrls: readonly string[],
   refs: readonly ConnectedReference[],
@@ -440,6 +633,47 @@ export interface BuildImagePromptConfig {
   connectedReferences?: ConnectedReference[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
+  /**
+   * User-defined reorder of the injected reference list. Each entry is a
+   * stable tile ID using the scheme from `compute-injected-refs.ts`:
+   *   - `wired:<sourceNodeId>` (a wired upstream — manual / wired-image /
+   *     wired-face / wired-object / wired-location / extra-ref)
+   *   - `mention:<characterSlug>:<variantSlug|canonical>` (an `@-mention`
+   *     resolved to a character variant URL)
+   *   - `char-canonical:<characterSlug>` (the auto-attached canonical
+   *     fallback for a wired character that the user did NOT `@-mention`)
+   *
+   * Behavior: after the existing assembly produces a URL list + a prompt
+   * with `Image N` directives, the URLs are re-ordered to match this list
+   * AND every `Image N` token in the prompt is renumbered consistently
+   * (so directive bullets, the user's typed `Image N` references, and the
+   * worker `referenceImageUrls` index all agree).
+   *
+   * IDs in this array that don't match any tile are silently dropped. Tiles
+   * whose ID is NOT in this array fall to the end in their natural order.
+   * Identical fixtures on frontend + backend MUST produce identical URL
+   * lists — the helper is shared via `compute-injected-refs.ts`.
+   *
+   * Stable-ID-per-URL mapping for the post-assembly re-order is computed
+   * from `connectedReferences` + the user's prompt; passing `referenceOrder`
+   * is a no-op when `connectedReferences` is missing (legacy path).
+   *
+   * Optional, omit to keep the existing natural order.
+   */
+  referenceOrder?: readonly string[]
+  /**
+   * Map of `connectedReferences[i].id → sourceNodeId` so wired-raw tile IDs
+   * match the upstream node IDs the consumer panel exposes. When omitted, the
+   * builder falls back to `connectedReferences[i].id` (which equals the
+   * upstream node ID for wired entries built by the existing image-configs +
+   * payload-builder flow).
+   */
+  sourceNodeIdById?: ReadonlyMap<string, string>
+  /**
+   * Character slugs whose canonical-fallback the user has explicitly hidden
+   * via the × button. Mention URLs for the same character still attach.
+   */
+  suppressedCanonicalCharacterIds?: readonly string[]
 }
 
 export interface BuildImagePromptResult {
@@ -469,6 +703,30 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     connectedReferences,
     identityMeta = [],
   } = config
+  const referenceOrder = config.referenceOrder ?? []
+  const sourceNodeIdById = config.sourceNodeIdById
+  const suppressedCanonicalCharacterIds = new Set(
+    config.suppressedCanonicalCharacterIds ?? [],
+  )
+
+  // Apply canonical suppression UP FRONT so `buildCanonicalFallback` never
+  // sees the suppressed slugs. This is the only way to drop both the URL
+  // and the directive line; filtering after the fact would leave the
+  // directive numbering misaligned.
+  if (
+    connectedReferences
+    && suppressedCanonicalCharacterIds.size > 0
+  ) {
+    connectedReferences = connectedReferences.filter((r) => {
+      if (r.source !== "wired-character") return true
+      if (!r.characterSlug) return true
+      // Only drop the CANONICAL entry — `@-mentioned` variants are explicit
+      // and should stay even when canonical is suppressed.
+      if (r.variantSlug) return true
+      if (r.isExtraRef) return true
+      return !suppressedCanonicalCharacterIds.has(r.characterSlug)
+    })
+  }
 
   // -------------------------------------------------------------------------
   // Phase 0: resolve `@<character-slug>:<index>(:<variant-slug>)?` tokens
@@ -674,9 +932,28 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     const orderedUrls = [...nonCharacterUrls, ...characterUrlsFromPhase0]
 
     const supportsRefs = MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(provider)
-    const refsToSend = supportsRefs && orderedUrls.length > 0 ? orderedUrls : undefined
 
-    return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
+    // Apply user-defined `referenceOrder` to the final URL list, with a
+    // matching renumber of every `Image N` token in the prompt. Skipped when
+    // the model doesn't support refs (refs will be dropped anyway) or when no
+    // order was supplied (no-op contract).
+    let finalUrls = orderedUrls
+    let finalPrompt = prompt
+    if (supportsRefs && referenceOrder.length > 0 && orderedUrls.length > 1) {
+      const reordered = applyReferenceOrder(
+        orderedUrls,
+        prompt,
+        connectedReferences,
+        referenceOrder,
+        sourceNodeIdById,
+      )
+      finalUrls = reordered.urls
+      finalPrompt = reordered.prompt
+    }
+
+    const refsToSend = supportsRefs && finalUrls.length > 0 ? finalUrls : undefined
+
+    return { prompt: finalPrompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
   }
 
   // -------------------------------------------------------------------------

@@ -40,6 +40,8 @@ import { intersectModelOptions } from "@/lib/multi-provider/intersect-model-opti
 import { MappableField } from "./mappable-field"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { ReferenceImageList } from "./reference-image-list"
+import { InjectedReferenceList } from "./injected-reference-list"
+import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
@@ -748,6 +750,36 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
           {supportsRefImage && (
             <>
               <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleRefImageUpload} />
+              {/* Unified injected-references list — shows wired upstreams,
+                  character canonicals, @-mention variants AND canonical
+                  fallbacks in the EXACT API order. Drag to reorder. × removes:
+                  edges (wired), mention tokens (@-mention), or adds to the
+                  suppression list (canonical fallback). */}
+              <InjectedReferenceList
+                connectedReferences={connectedReferences}
+                prompt={data.prompt || ""}
+                referenceOrder={data.referenceOrder}
+                suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+                onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+                onRemoveWiredSource={
+                  nodeId
+                    ? makeRemoveWiredSource(
+                        nodeId,
+                        edges ?? [],
+                        useWorkflowStore.getState().deleteEdge,
+                      )
+                    : undefined
+                }
+                onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+                onSuppressCanonical={(slug) =>
+                  onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+                }
+                label="Injected references"
+              />
+              {/* Legacy ReferenceImageList kept for the upload UI + per-row
+                  manual ref removal. The InjectedReferenceList above shows
+                  the SAME entries plus mention variants + canonical fallbacks
+                  that the old list never surfaced. */}
               <ReferenceImageList
                 manualImages={data.referenceImageUrls ?? []}
                 imageOrder={data.referenceImageOrder ?? []}
@@ -1315,7 +1347,38 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         edges={edges ?? []}
       />
 
-      {/* Connected upstream images with ordering */}
+      {/* Unified injected-references list — includes wired upstreams, character
+          canonicals, @-mention variants AND canonical fallbacks. Drag-reorder
+          writes to data.referenceOrder which the orchestrator + execute-node
+          honor via the shared buildImagePrompt parameter. */}
+      <InjectedReferenceList
+        connectedReferences={connectedReferences}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+        primaryLabel={isNanoBananaEdit ? "Image to Edit" : "Main Image"}
+      />
+
+      {/* Connected upstream images with ordering — kept alongside the unified
+          injected list because `connectedMediaOrder` is what the modify-image
+          route uses today to assign the "main image" slot. Both can be reordered
+          independently; the InjectedReferenceList above shows the unified API
+          order including @-mention variants the ConnectedMediaList never saw. */}
       {sources.filter((s) => IMAGE_SOURCE_TYPES.has(s.type)).length > 0 && (
         <ConnectedMediaList
           sources={sources}

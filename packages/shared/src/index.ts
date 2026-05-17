@@ -140,6 +140,7 @@ export {
   expandImagePositionRefs,
   buildScenePrompt,
   resolveCharacterMentions,
+  applyReferenceOrderToVideo,
   SCENE_PROMPT_MAX_LENGTH,
   SHOT_LABELS,
   MOVEMENT_LABELS,

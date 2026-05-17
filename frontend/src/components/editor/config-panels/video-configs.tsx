@@ -44,11 +44,15 @@ import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
+import { InjectedReferenceList } from "./injected-reference-list"
+import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
 import { ExtraRefsSection } from "./extra-refs-section"
 import type { ConfigProps, SourceNodeInfo } from "./types"
 import { PromptHelperButton } from "./prompt-helper-button"
+import type { ConnectedReference } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Character @-mention autocomplete — builds the RefImageItem[] passed as
@@ -170,6 +174,24 @@ function buildVideoRefAutocomplete(
     })
   }
   return out
+}
+
+/**
+ * Convert the autocomplete entries into `ConnectedReference[]` for the
+ * `<InjectedReferenceList>` component. Drops the imageIndex (which is just
+ * the position in this list — the component recomputes it).
+ */
+function toConnectedReferences(entries: ReadonlyArray<VideoRefAutocompleteEntry>): ConnectedReference[] {
+  return entries.map((ref) => ({
+    id: ref.id,
+    defaultName: ref.defaultName,
+    source: ref.source,
+    url: ref.url,
+    characterSlug: ref.characterSlug,
+    variantSlug: ref.variantSlug,
+    variantDisplayName: ref.variantDisplayName,
+    defaultUsageMode: ref.defaultUsageMode,
+  }))
 }
 
 function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): RefImageItem[] {
@@ -383,6 +405,32 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           nodeRefs={nodeRefs}
         />
       </MappableField>
+
+      {/* Unified injected-references list — shows wired upstreams, character
+          canonicals, @-mention variants AND canonical fallbacks in the final
+          API order. Drag to reorder; × removes the edge, mention token, or
+          adds to the canonical-suppression list. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
 
       <ExtraRefsSection
         extraRefs={data.extraRefs}
@@ -1041,6 +1089,28 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         edges={edges ?? []}
       />
 
+      {/* Unified injected-references list. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
 
       {/* Wan / Wan Flash: Duration & Resolution */}
       {isWan && (
@@ -1202,7 +1272,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
 
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 
-export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs, refMap, variableDisplayMode }: ConfigProps<MotionTransferData>) {
+export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<MotionTransferData> & { nodeId?: string }) {
   const provider = data.provider || "kling"
 
   // Detect video duration from connected upstream video node's metadata or URL
@@ -1334,6 +1404,30 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
            "wan-animate-replace": "Replaces character in video with character from image (~1s output).",
         } as Record<string, string>)[provider] ?? "Uses Kling 2.6 Motion Control. Connect image and video inputs."}
       </p>
+
+      {/* Unified injected-references list — surfaces wired character canonicals
+          + @-mention variants from the optional motion prompt. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
     </div>
   )
 }
@@ -1485,6 +1579,31 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         nodes={nodes}
         edges={edges ?? []}
       />
+
+      {/* Unified injected-references list — surfaces wired character canonicals
+          AND @-mention variants that the prompt-builder will resolve. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
+
       <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         {allowedDurations ? (
           <Select
@@ -1832,6 +1951,29 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
         />
       </div>
 
+      {/* Unified injected-references list — surfaces wired character canonicals
+          + @-mention variants. Hidden when nothing is wired. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
 
       {/* Negative Prompt */}
       <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
@@ -1937,7 +2079,7 @@ export function SpeechToVideoConfig({ data, onUpdate, sources, fieldMappings, on
   )
 }
 
-export function FaceSwapConfig({ data: _data, onUpdate: _onUpdate }: ConfigProps<FaceSwapData>) {
+export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: ConfigProps<FaceSwapData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(["roop-face-swap"]) }, [])
   return (
     <div className="flex flex-col gap-3">
@@ -1946,6 +2088,30 @@ export function FaceSwapConfig({ data: _data, onUpdate: _onUpdate }: ConfigProps
         Connect a face image to the orange handle and a video to the pink handle.
         Powered by Roop (Replicate) — {getCachedCredits("roop-face-swap") ?? 16} CR per run.
       </p>
+
+      {/* Unified injected-references list — face-swap doesn't have a prompt to
+          @-mention against, so this list only shows wired upstreams + character
+          canonicals. Drag-reorder still useful when multiple face refs are wired. */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt=""
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
     </div>
   )
 }

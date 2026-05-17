@@ -59,6 +59,10 @@ import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
 import { REPLICATE_LIP_SYNC_PROVIDERS, getEffectiveSunoCustomMode, SUNO_ADD_TRACK_MODELS } from "@nodaro/shared"
+import { InjectedReferenceList } from "./injected-reference-list"
+import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
+import { buildConnectedRefsFromSources } from "./connected-refs-builder"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowEdge } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -896,7 +900,7 @@ export function TranscribeConfig({ data, onUpdate, sources, fieldMappings, onMap
   )
 }
 
-export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<LipSyncData>) {
+export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, nodeId }: ConfigProps<LipSyncData> & { nodeId?: string }) {
   const provider = data.provider || "kling-avatar"
   const isKie = !REPLICATE_LIP_SYNC_PROVIDERS.has(provider as never)
   // Seedance 2 / 2 Fast support 1080p (cinematic tier); other KIE providers
@@ -954,6 +958,32 @@ export function LipSyncConfig({ data, onUpdate, sources, fieldMappings, onMapFie
           <Textarea rows={2} value={data.prompt ?? ""} onChange={(e) => onUpdate({ prompt: e.target.value })} placeholder="Optional: describe head/expression motions..." />
         </MappableField>
       )}
+
+      {/* Unified injected-references list — surfaces wired character canonicals
+          + @-mention variants (resolved from the motion prompt) so the user can
+          see and reorder the actual references the API will receive. Skipped
+          entirely when no refs are wired (empty-state suppression). */}
+      <InjectedReferenceList
+        connectedReferences={buildConnectedRefsFromSources(sources)}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
 
       {/* LatentSync params */}
       {provider === "latentsync" && (

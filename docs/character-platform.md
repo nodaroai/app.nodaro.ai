@@ -137,6 +137,45 @@ swapped in based on the field-mapping rules.
 For programmatic flows, prefer Pattern A — explicit URLs are easier to
 reason about and don't depend on the canvas wiring.
 
+## Injected references list (canvas editor)
+
+Every consumer node config panel — generate-image, image-to-image,
+modify-image, image-to-video, text-to-video, video-to-video, lip-sync,
+face-swap, motion-transfer, speech-to-video — surfaces a unified
+**Injected References** list that mirrors exactly what the API will receive,
+including:
+
+- Wired upstream image refs (uploads, generated images, scene nodes, …).
+- Wired Character node **canonicals** — auto-attached when the character
+  is wired but not `@-mentioned` (pre-mention-feature behavior).
+- `@-mention` resolved **variants** — when the prompt contains
+  `@kira:1:smile`, kira's smile variant URL is in the list with a thumbnail
+  + character / variant name annotation.
+- Canonical **fallback** entries for any wired character the user hasn't
+  `@-mentioned`. Dedup'd against `@-mentions`: if the user mentions
+  `@kira:1:smile`, kira's canonical fallback is suppressed (mention wins).
+
+Drag-to-reorder writes a `referenceOrder` array (stable tile IDs) on the
+node data. The reorder is honored by both the orchestrator and single-node
+"Run" execution paths via the shared `buildImagePrompt({referenceOrder})`
+parameter in `@nodaro/shared`. URL positions are renumbered consistently:
+every `Image N` token in the assembled prompt (directives + user-typed
+`{image:N:label}` markers) is rewritten to match the new position, so
+directive bullets and the worker's `referenceImageUrls` index stay in
+lock-step.
+
+The × button on each tile dispatches by origin:
+- **Wired tile** → deletes the upstream edge.
+- **Mention tile** → strips the `@kira:1:smile` token from the prompt.
+- **Canonical fallback tile** → adds the character slug to
+  `suppressedCanonicalCharacterIds`, hiding the auto-attached canonical
+  for this consumer (the `@-mentioned` variants for the same character
+  still attach).
+
+This is a frontend-only convenience for canvas users — programmatic
+flows control the reference list via the direct `reference_images` field
+(Pattern A above).
+
 ## Mention usage modes
 
 When you `@-mention` a character (e.g. `@kira:1:smile`), an optional 4th slug

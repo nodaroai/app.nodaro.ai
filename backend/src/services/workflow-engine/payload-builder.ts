@@ -7,7 +7,7 @@ import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from 
 
 // Shared logic from packages/shared — single source of truth
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared"
-import { buildImagePrompt, buildScenePrompt } from "@nodaro/shared"
+import { buildImagePrompt, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
 import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
@@ -328,6 +328,24 @@ function readExtraRefs(data: Record<string, unknown>): readonly ExtraRefInput[] 
 }
 
 /**
+ * Read an unknown field from `data` as `readonly string[]`, returning
+ * undefined when the field is missing or not a (non-empty) string array.
+ *
+ * Used for `referenceOrder` + `suppressedCanonicalCharacterIds` — both
+ * additive fields the consumer node may or may not have set. The shared
+ * `buildImagePrompt` already treats `[]` and `undefined` identically (no-op
+ * contract), so returning undefined for either case is safe.
+ */
+function readStringArray(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out: string[] = []
+  for (const v of value) {
+    if (typeof v === "string" && v.length > 0) out.push(v)
+  }
+  return out.length > 0 ? out : undefined
+}
+
+/**
  * Resolve `@kira:N` / `@kira:N:smile` mentions in a video-node prompt against
  * wired Character upstreams AND apply the per-character canonical fallback
  * for unmentioned wired characters. Also emits directives + appends URLs for
@@ -356,8 +374,24 @@ function resolveVideoPromptMentions(
   consumerNodeId: string,
   buildCtx: PayloadBuildContext | undefined,
   extraRefs?: readonly ExtraRefInput[],
+  opts?: {
+    /** Stable-ID reorder — see `compute-injected-refs.ts`. */
+    referenceOrder?: readonly string[]
+    /** Character slugs whose canonical-fallback the user has hidden. */
+    suppressedCanonicalCharacterIds?: readonly string[]
+  },
 ): { prompt: string | undefined; additionalUrls: string[] } {
-  const wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  let wiredCharRefs = expandWiredCharacterRefs(consumerNodeId, buildCtx)
+  const suppressedSlugs = new Set(opts?.suppressedCanonicalCharacterIds ?? [])
+  if (suppressedSlugs.size > 0) {
+    // Drop ONLY the canonical entry — `@-mentioned` variants stay.
+    wiredCharRefs = wiredCharRefs.filter((r) => {
+      if (r.source !== "wired-character") return true
+      if (!r.characterSlug) return true
+      if (r.variantSlug) return true
+      return !suppressedSlugs.has(r.characterSlug)
+    })
+  }
   const hasExtras = (extraRefs?.length ?? 0) > 0
   if (wiredCharRefs.length === 0 && !hasExtras) {
     return { prompt, additionalUrls: [] }
@@ -512,7 +546,8 @@ function resolveVideoPromptMentions(
   }
 
   // Dedup combined URLs while preserving order (mentions first, fallback,
-  // then extras). "Image N" labels in the prompt assume this exact order.
+  // then extras). "Image N" labels in the prompt assume this exact order
+  // BEFORE any user-defined `referenceOrder` reorder below.
   const merged: string[] = []
   const seen = new Set<string>()
   for (const u of resolved.additionalUrls) {
@@ -524,6 +559,34 @@ function resolveVideoPromptMentions(
   for (const u of extraUrls) {
     if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
   }
+
+  // Apply user-defined reorder + renumber `Image N` tokens. Skipped fast when
+  // `referenceOrder` is absent or there's <2 URLs (nothing to reorder).
+  const referenceOrder = opts?.referenceOrder
+  if (referenceOrder && referenceOrder.length > 0 && merged.length > 1) {
+    // Build a synthetic ConnectedReference list that combines wired chars +
+    // extras so `applyReferenceOrderToVideo` can identify each URL. Extras
+    // don't have a stable `id` field on the input shape, so we derive one
+    // from the URL — extras are tile-matched as `wired:<url>` in this path.
+    const refsForOrdering: ConnectedReference[] = [...wiredCharRefs]
+    if (hasExtras) {
+      for (const ex of extraRefs!) {
+        if (!ex.url) continue
+        refsForOrdering.push({
+          id: ex.url,
+          defaultName: ex.characterSlug || "Extra",
+          source: ex.characterSlug ? "wired-character" : "manual",
+          url: ex.url,
+          characterSlug: ex.characterSlug,
+          variantSlug: ex.variantSlug,
+          isExtraRef: true,
+        })
+      }
+    }
+    const reordered = applyReferenceOrderToVideo(merged, finalPrompt, refsForOrdering, referenceOrder)
+    return { prompt: reordered.prompt, additionalUrls: reordered.urls }
+  }
+
   return { prompt: finalPrompt, additionalUrls: merged }
 }
 
@@ -1092,6 +1155,8 @@ export function buildPayload(
 
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
+      const generateRefOrder = readStringArray(data.referenceOrder)
+      const generateSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
       const result = useConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
@@ -1110,6 +1175,8 @@ export function buildPayload(
               ...extraRefEntries,
             ],
             ancestorRefs,
+            referenceOrder: generateRefOrder,
+            suppressedCanonicalCharacterIds: generateSuppressed,
           })
         : buildImagePrompt({
             prompt: rawPrompt,
@@ -1121,6 +1188,8 @@ export function buildPayload(
             flowTemplates: settings?.flowPromptTemplates,
             referenceImageUrls: directRefs,
             ancestorRefs,
+            referenceOrder: generateRefOrder,
+            suppressedCanonicalCharacterIds: generateSuppressed,
           })
 
       return {
@@ -1295,6 +1364,8 @@ export function buildPayload(
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
+      const i2iRefOrder = readStringArray(data.referenceOrder)
+      const i2iSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
       const i2iResult = i2iUseConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
@@ -1309,6 +1380,8 @@ export function buildPayload(
               ...i2iExtraRefEntries,
             ],
             ancestorRefs: [],
+            referenceOrder: i2iRefOrder,
+            suppressedCanonicalCharacterIds: i2iSuppressed,
           })
         : buildImagePrompt({
             prompt: rawPrompt,
@@ -1320,6 +1393,8 @@ export function buildPayload(
             flowTemplates: settings?.flowPromptTemplates,
             referenceImageUrls: directRefs,
             ancestorRefs: [],
+            referenceOrder: i2iRefOrder,
+            suppressedCanonicalCharacterIds: i2iSuppressed,
           })
 
       return {
@@ -1492,6 +1567,8 @@ export function buildPayload(
         const modUseConnectedRefs = modWiredCharRefs.length > 0 || modExtraRefEntries.length > 0
 
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
+        const modRefOrder = readStringArray(data.referenceOrder)
+        const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
         const i2iResult = modUseConnectedRefs
           ? buildImagePrompt({
               prompt: rawPrompt,
@@ -1506,6 +1583,8 @@ export function buildPayload(
                 ...modExtraRefEntries,
               ],
               ancestorRefs: [],
+              referenceOrder: modRefOrder,
+              suppressedCanonicalCharacterIds: modSuppressed,
             })
           : buildImagePrompt({
               prompt: rawPrompt,
@@ -1517,6 +1596,8 @@ export function buildPayload(
               flowTemplates: settings?.flowPromptTemplates,
               referenceImageUrls: directRefs,
               ancestorRefs: [],
+              referenceOrder: modRefOrder,
+              suppressedCanonicalCharacterIds: modSuppressed,
             })
 
         return {
@@ -1603,7 +1684,10 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data))
+      const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+      })
       i2vPrompt = i2vMention.prompt
       // Splice mention-resolved URLs into the i2v payload. i2v has two slots:
       // (1) `imageUrl` is the primary input frame, (2) `referenceImageUrls`
@@ -1723,7 +1807,10 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data))
+      const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+      })
       t2vPrompt = t2vMention.prompt
       // Apply user-defined reorder for t2v references — mirrors i2v. t2v has
       // no startFrame handle, so the filter accepts any wired image/character/
@@ -1811,7 +1898,10 @@ export function buildPayload(
         if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
         return p
       })()
-      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx, readExtraRefs(data))
+      const v2vMention = resolveVideoPromptMentions(v2vPrompt, node.id, buildCtx, readExtraRefs(data), {
+        referenceOrder: readStringArray(data.referenceOrder),
+        suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+      })
       v2vPrompt = v2vMention.prompt
       const v2vUpstreamRef = (typeof resolvedInputs.referenceImageUrls === "string"
         ? resolvedInputs.referenceImageUrls
