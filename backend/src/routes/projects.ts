@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
+import { ensureDefaultProject } from "../lib/default-project.js"
 import { formatZodError } from "../lib/zod-error.js"
 
 const projectIdParams = z.object({
@@ -25,7 +26,7 @@ const updateProjectBody = z
   })
 
 const PROJECT_COLS =
-  "id, user_id, name, description, settings, created_at, updated_at"
+  "id, user_id, name, description, settings, is_default, created_at, updated_at"
 
 function toProjectResponse(row: Record<string, unknown>, ownerEmail?: string) {
   return {
@@ -34,6 +35,7 @@ function toProjectResponse(row: Record<string, unknown>, ownerEmail?: string) {
     name: row.name,
     description: row.description,
     settings: row.settings,
+    isDefault: row.is_default === true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(ownerEmail !== undefined && { ownerEmail }),
@@ -266,6 +268,37 @@ export async function projectRoutes(app: FastifyInstance) {
 
     const { id } = parsed.data
 
+    // Reject the default project up-front so the user sees a friendly 409
+    // rather than a 500 from the BEFORE DELETE trigger (which is the hard
+    // safety net for direct-DB or service-role bypass).
+    const { data: target, error: lookupError } = await supabase
+      .from("projects")
+      .select("id, is_default")
+      .eq("id", id)
+      .eq("user_id", req.userId)
+      .single()
+
+    if (lookupError) {
+      if (lookupError.code === "PGRST116") {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Project not found" },
+        })
+      }
+      return reply.status(500).send({
+        error: { code: "internal_error", message: lookupError.message },
+      })
+    }
+
+    if (target.is_default === true) {
+      return reply.status(409).send({
+        error: {
+          code: "default_project",
+          message:
+            "Cannot delete the default workspace. Rename it instead or move workflows to another project.",
+        },
+      })
+    }
+
     const { error } = await supabase
       .from("projects")
       .delete()
@@ -279,5 +312,28 @@ export async function projectRoutes(app: FastifyInstance) {
     }
 
     return { success: true }
+  })
+
+  // Ensure (lazy-create) the caller's default project. Idempotent — returns
+  // the existing default if there is one. Used by the SDK / CLI / MCP; the
+  // frontend calls the `ensure_default_project` RPC directly via Supabase JS
+  // for a single round-trip without the backend hop.
+  app.post("/v1/projects/ensure-default", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    const result = await ensureDefaultProject(req.userId)
+    if ("error" in result) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: result.error },
+      })
+    }
+
+    return reply.status(result.created ? 201 : 200).send({
+      data: toProjectResponse(result.project),
+    })
   })
 }

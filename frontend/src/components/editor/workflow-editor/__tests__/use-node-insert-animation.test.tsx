@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
+import { StrictMode } from "react"
 import { render, act } from "@testing-library/react"
 import { useNodeInsertAnimation, __resetSeenNodesForTests } from "../use-node-insert-animation"
 
@@ -64,5 +65,24 @@ describe("useNodeInsertAnimation", () => {
     const b = render(<TestComponent nodeId="indep-b" />)
     // b is a fresh nodeId so it should start at 0 (not "seen" yet).
     expect(b.getByTestId("anim").style.opacity).toBe("0")
+  })
+
+  // Regression guard. React 18 StrictMode simulates mount→unmount→remount for
+  // every effect. The previous implementation added the nodeId to SEEN_NODES
+  // at rAF schedule time, so the cleanup cancelled the rAF but left the id
+  // marked seen — the second mount then early-returned without scheduling a
+  // new rAF, freezing phase at "initial" → opacity 0 forever. Visible in
+  // dev as nodes rendering without their card frame: the EditableNodeLabel
+  // sibling shows normally but the BaseNode wrapper is invisible.
+  it("recovers from StrictMode double-mount race (opacity transitions to 1)", async () => {
+    const { getByTestId } = render(
+      <StrictMode>
+        <TestComponent nodeId="strict-mode-node" />
+      </StrictMode>,
+    )
+    await flushAnimationFrame()
+    const el = getByTestId("anim")
+    expect(el.style.opacity).toBe("1")
+    expect(el.style.transform).toContain("scale(1)")
   })
 })

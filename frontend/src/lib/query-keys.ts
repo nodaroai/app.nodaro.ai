@@ -99,6 +99,12 @@ export const queryKeys = {
     detail: (projectId: string) => ["projects", "detail", projectId] as const,
   },
 
+  // Workflows (flat, owner-scoped)
+  workflows: {
+    all: ["workflows"] as const,
+    listMine: () => ["workflows", "list", "mine"] as const,
+  },
+
   // Search
   search: {
     all: ["search"] as const,

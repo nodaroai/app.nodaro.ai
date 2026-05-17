@@ -7,6 +7,7 @@ export interface Project {
   readonly id: string
   readonly name: string
   readonly description: string
+  readonly isDefault: boolean
   readonly createdAt: string
   readonly updatedAt: string
   readonly userId?: string
@@ -34,6 +35,7 @@ function toProject(row: Record<string, unknown>): Project {
     id: row.id as string,
     name: row.name as string,
     description: (row.description as string) ?? "",
+    isDefault: (row.is_default ?? row.isDefault) === true,
     createdAt: (row.created_at ?? row.createdAt) as string,
     updatedAt: (row.updated_at ?? row.updatedAt) as string,
     userId: (row.user_id ?? row.userId) as string | undefined,

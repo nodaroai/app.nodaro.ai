@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { MoreHorizontal, Trash2, Pencil, FolderOpen } from "lucide-react"
+import { MoreHorizontal, Trash2, Pencil, FolderOpen, Star } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,16 +75,18 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           <Pencil className="h-3.5 w-3.5 mr-2" />
           Rename
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="text-destructive"
-          onClick={(e) => {
-            e.preventDefault()
-            onDelete(project.id)
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-2" />
-          Delete
-        </DropdownMenuItem>
+        {!project.isDefault && (
+          <DropdownMenuItem
+            className="text-destructive"
+            onClick={(e) => {
+              e.preventDefault()
+              onDelete(project.id)
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-2" />
+            Delete
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -99,7 +101,20 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           <div className="w-16 h-16 rounded-lg flex items-center justify-center flex-shrink-0 bg-zinc-100 dark:bg-zinc-800">
             <FolderOpen className="h-8 w-8 text-zinc-400 dark:text-zinc-500" />
           </div>
-          <h2 className="font-medium text-sm truncate flex-1">{project.name}</h2>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {project.isDefault && (
+              <span
+                title="Auto-created — your default workspace"
+                className="flex-shrink-0"
+              >
+                <Star
+                  className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
+                  aria-label="Default workspace"
+                />
+              </span>
+            )}
+            <h2 className="font-medium text-sm truncate">{project.name}</h2>
+          </div>
           {showOwner && isOwn && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">
               Mine
@@ -133,6 +148,17 @@ export function ProjectCard({ project, onDelete, onRename, isOwn, showOwner, vie
           {/* Metadata — below thumbnail, no bg/border */}
           <div className="pt-2 pb-1 px-0.5">
             <div className="flex items-center gap-1.5">
+              {project.isDefault && (
+                <span
+                  title="Auto-created — your default workspace"
+                  className="flex-shrink-0"
+                >
+                  <Star
+                    className="h-3.5 w-3.5 text-[#ff0073] fill-[#ff0073]"
+                    aria-label="Default workspace"
+                  />
+                </span>
+              )}
               <h2 className="font-medium text-sm truncate">{project.name}</h2>
               {showOwner && isOwn && (
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-[#ff0073]/40 text-[#ff0073] flex-shrink-0">

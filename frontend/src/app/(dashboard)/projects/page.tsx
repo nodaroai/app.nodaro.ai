@@ -1,17 +1,26 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { useProjectsStore, type WorkflowMeta } from "@/hooks/use-projects-store"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useProjectsStore } from "@/hooks/use-projects-store"
+import { useWorkflowSearch } from "@/hooks/use-workflow-search"
 import { useProjects, useAllProjects } from "@/hooks/queries/use-projects-queries"
 import { ProjectCard } from "@/components/dashboard/project-card"
 import { StatsOverview } from "@/components/dashboard/stats-overview"
 import { WorkflowThumbnail } from "@/components/dashboard/workflow-thumbnail"
+import { MyWorkflowsView } from "@/components/dashboard/my-workflows-view"
+import { MoveWorkflowDialog } from "@/components/dashboard/move-workflow-dialog"
 import { UserFilter, type UserFilterValue } from "@/components/user-filter"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
@@ -21,63 +30,10 @@ import { useAllAdminUsersLite } from "@/ee/hooks/queries/use-admin-queries"
 import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
 import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
-
-interface WorkflowSearchResult extends WorkflowMeta {
-  readonly projectName: string
-}
-
-function useWorkflowSearch(search: string, projectMap: Map<string, string>) {
-  const [results, setResults] = useState<WorkflowSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const projectMapRef = useRef(projectMap)
-  projectMapRef.current = projectMap
-
-  useEffect(() => {
-    if (search.length < 2) {
-      setResults([])
-      return
-    }
-
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      setLoading(true)
-      try {
-        const supabase = createClient()
-        const { data, error } = await supabase
-          .from("workflows")
-          .select("id, project_id, folder_id, name, thumbnail_url, created_at, updated_at")
-          .ilike("name", `%${search}%`)
-          .order("updated_at", { ascending: false })
-          .limit(20)
-
-        if (error || cancelled) return
-
-        const map = projectMapRef.current
-        setResults(
-          data.map((row) => ({
-            id: row.id,
-            projectId: row.project_id,
-            folderId: row.folder_id ?? null,
-            name: row.name,
-            thumbnailUrl: row.thumbnail_url ?? null,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            projectName: map.get(row.project_id) ?? "Unknown Project",
-          })),
-        )
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }, 300)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [search])
-
-  return { results, loading }
-}
+import { queryClient } from "@/lib/query-client"
+import { queryKeys } from "@/lib/query-keys"
+import { toast } from "sonner"
+import type { MyWorkflow } from "@/hooks/queries/use-my-workflows-queries"
 
 function TemplatesCarousel() {
   const navigate = useNavigate()
@@ -217,6 +173,119 @@ export default function ProjectsPage() {
       navigate(`/projects/${project.id}`)
     }
   }
+
+  // `isCreating` drives the spinner on the dashboard button + the empty-state
+  // CTA inside MyWorkflowsView. The editor chunk is lazy-loaded so the first
+  // navigation can take a few seconds — without immediate feedback the click
+  // looks like a no-op.
+  const [isCreating, setIsCreating] = useState(false)
+
+  // Quick-create: resolve the caller's default project (lazy-create when
+  // missing) and insert an empty workflow. The URL still embeds the projectId
+  // so the editor's existing save() path keeps working unchanged.
+  //
+  // The default project itself is created by `ensure_default_project()` (RPC
+  // from migration 116) on the first call. If the RPC isn't there yet — e.g.,
+  // the migration hasn't applied to this environment — we degrade gracefully:
+  // find or create a regular project named "My Recent Flows" so the user is
+  // never stuck. Once the migration applies, `ensure_default_project()` takes
+  // over and the partial unique index keeps things singleton.
+  const handleCreateWorkflow = async () => {
+    if (isCreating) return
+    setIsCreating(true)
+    const supabase = createClient()
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      toast.error("Please sign in to create a workflow.")
+      setIsCreating(false)
+      return
+    }
+
+    let projectId: string | null = null
+
+    const { data: rpcId, error: rpcErr } = await supabase
+      .rpc("ensure_default_project")
+
+    if (!rpcErr && typeof rpcId === "string") {
+      projectId = rpcId
+    } else {
+      // Fallback path — RPC missing (migration not applied yet) or RLS denied.
+      // Find or create a regular "My Recent Flows" project under the caller.
+      const fallbackName = "My Recent Flows"
+      const { data: existing } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("name", fallbackName)
+        .limit(1)
+        .maybeSingle()
+
+      if (existing?.id) {
+        projectId = existing.id as string
+      } else {
+        const { data: created, error: createErr } = await supabase
+          .from("projects")
+          .insert({
+            user_id: user.id,
+            name: fallbackName,
+            description: "Auto-created workspace for new workflows",
+          })
+          .select("id")
+          .single()
+        if (createErr || !created) {
+          toast.error(`Could not create workflow: ${createErr?.message ?? rpcErr?.message ?? "unknown error"}`)
+          setIsCreating(false)
+          return
+        }
+        projectId = created.id as string
+      }
+    }
+
+    const { data: wf, error: wfErr } = await supabase
+      .from("workflows")
+      .insert({
+        project_id: projectId,
+        user_id: user.id,
+        name: "Untitled Workflow",
+      })
+      .select("id, project_id")
+      .single()
+
+    if (wfErr || !wf) {
+      toast.error(`Could not create workflow: ${wfErr?.message ?? "unknown error"}`)
+      setIsCreating(false)
+      return
+    }
+
+    queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
+    queryClient.invalidateQueries({ queryKey: queryKeys.workflows.all })
+    // `isCreating` stays true through navigation so the spinner persists
+    // while the editor chunk is downloading. The page unmounts on navigate.
+    navigate(`/projects/${wf.project_id}/workflows/${wf.id}`)
+  }
+
+  // Move-to-project dialog state. Driven by the action menu inside the
+  // workflow card in MyWorkflowsView.
+  const [moveTarget, setMoveTarget] = useState<MyWorkflow | null>(null)
+  const handleMoveWorkflow = (workflow: MyWorkflow) => {
+    setMoveTarget(workflow)
+  }
+
+  // Lower-half tab — defaults to the flat workflow list. URL takes precedence
+  // over localStorage; both feed the same setter so deep links stay stable.
+  type WorkspaceTab = "workflows" | "projects"
+  const initialWorkspaceTab: WorkspaceTab = (() => {
+    if (typeof window === "undefined") return "workflows"
+    const url = new URLSearchParams(window.location.search).get("tab")
+    if (url === "projects" || url === "workflows") return url
+    const stored = localStorage.getItem("nodaro-dashboard-workspace-tab")
+    return stored === "projects" ? "projects" : "workflows"
+  })()
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>(initialWorkspaceTab)
+  useEffect(() => {
+    localStorage.setItem("nodaro-dashboard-workspace-tab", workspaceTab)
+  }, [workspaceTab])
 
   const [search, setSearch] = useState("")
 
@@ -387,11 +456,42 @@ export default function ProjectsPage() {
               </Label>
             </div>
           )}
-          <Button size="sm" className="sm:size-default" onClick={handleCreateProject}>
-            <Plus className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">New Project</span>
-            <span className="sm:hidden">New</span>
-          </Button>
+          <div className="flex items-center">
+            <Button
+              size="sm"
+              className="sm:size-default rounded-r-none"
+              onClick={handleCreateWorkflow}
+              disabled={isCreating}
+            >
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-1" />
+              )}
+              <span className="hidden sm:inline">
+                {isCreating ? "Creating…" : "New Workflow"}
+              </span>
+              <span className="sm:hidden">{isCreating ? "…" : "New"}</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  className="sm:size-default rounded-l-none border-l border-l-background/30 px-2"
+                  aria-label="More create options"
+                  disabled={isCreating}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleCreateProject}>
+                  <FolderPlus className="h-3.5 w-3.5 mr-2" />
+                  New project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
 
@@ -551,6 +651,38 @@ export default function ProjectsPage() {
         )}
       </div>
 
+      {/* Workspace tab strip — flat workflow list (default) vs. project organization */}
+      <div className="flex items-center gap-1 mb-3 border-b border-border">
+        {([
+          { id: "workflows", label: "My Workflows" },
+          { id: "projects", label: "My Projects" },
+        ] as const).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setWorkspaceTab(t.id)}
+            className={cn(
+              "px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors",
+              workspaceTab === t.id
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {workspaceTab === "workflows" && (
+        <MyWorkflowsView
+          onCreateWorkflow={handleCreateWorkflow}
+          onMoveWorkflow={handleMoveWorkflow}
+          isCreating={isCreating}
+        />
+      )}
+
+      {workspaceTab === "projects" && (
+      <>
       {/* My Projects heading + view toggle + search */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-medium text-muted-foreground">My Projects</h2>
@@ -679,7 +811,16 @@ export default function ProjectsPage() {
           </div>
         </>
       )}
+      </>
+      )}
 
+      <MoveWorkflowDialog
+        open={moveTarget !== null}
+        onOpenChange={(open) => { if (!open) setMoveTarget(null) }}
+        workflowId={moveTarget?.id ?? null}
+        workflowName={moveTarget?.name ?? null}
+        currentProjectId={moveTarget?.projectId ?? null}
+      />
     </div>
   )
 }

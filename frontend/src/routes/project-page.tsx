@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { ArrowLeft, Settings, Loader2, MoreVertical, Pencil } from "lucide-react"
+import { ArrowLeft, Settings, Loader2, MoreVertical, Pencil, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -101,6 +101,17 @@ export default function ProjectPage() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            {project.isDefault && (
+              <span
+                title="Auto-created — your default workspace"
+                className="flex-shrink-0"
+              >
+                <Star
+                  className="h-4 w-4 text-[#ff0073] fill-[#ff0073]"
+                  aria-label="Default workspace"
+                />
+              </span>
+            )}
             <h1 className="text-lg sm:text-xl font-bold truncate">{project.name}</h1>
             {readOnly && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-muted-foreground/40 text-muted-foreground flex-shrink-0">
