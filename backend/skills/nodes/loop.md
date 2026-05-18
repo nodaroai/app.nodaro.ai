@@ -1,7 +1,7 @@
 ---
 node_type: loop
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:37.006Z
+generated_from: cb1e786d
 ---
 
 # loop (UI label "Table")
@@ -11,18 +11,16 @@ generated_from: hand-written
 **Category:** input
 **Credit cost:** 0
 **Inputs (target handles):** `in`
-**Outputs (source handles):** per-column `col_<id>` handles (dynamic — the static `NODE_DEFINITIONS.outputs` array is empty; handles are registered at runtime via `useUpdateNodeInternals` from the column definitions)
-
-**Required data fields:**
-- `label: string`
-- `columns: Array<{ id: string, name: string, handleId: string, type: "text" | "image-url" | "video-url" | "audio-url" | "json" }>` (each column needs `handleId: "col_<id>"`)
-- `rows: string[][]` (each inner array MUST match the column count; each row MUST be distinct content)
-- `viewMode?: "list" | "gallery" | "packed"` (recommended: explicitly set `"list"` for tabular data)
-- `fieldMappings: Record<string, string>` (use `{}` if no input wiring)
+**Outputs (source handles):** (none)
 
 **Default data:**
 ```json
-{ "label": "Table", "columns": [], "rows": [], "fieldMappings": {} }
+{
+  "label": "Table",
+  "columns": [],
+  "rows": [],
+  "fieldMappings": {}
+}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
@@ -44,30 +42,18 @@ For single-column lists (e.g., a list of prompts), use `list` instead — that's
 
 ```json
 {
-  "id": "shots-1",
+  "id": "loop-1",
   "type": "loop",
-  "position": { "x": 340, "y": 0 },
+  "position": {
+    "x": 0,
+    "y": 0
+  },
   "data": {
-    "label": "Shot List",
-    "columns": [
-      { "id": "shot_id", "name": "Shot", "handleId": "col_shot_id", "type": "text" },
-      { "id": "action",  "name": "Action", "handleId": "col_action", "type": "text" },
-      { "id": "duration", "name": "Duration", "handleId": "col_duration", "type": "text" }
-    ],
-    "rows": [
-      ["1", "Hero enters frame from left, suits up in cockpit", "5"],
-      ["2", "Banking turn through canyon, tracers streak past", "5"],
-      ["3", "Vertical climb into golden sunlight, cut to black", "5"]
-    ],
-    "viewMode": "list",
+    "label": "Table",
+    "columns": [],
+    "rows": [],
     "fieldMappings": {}
   }
 }
-```
-
-Wiring the `action` column into a downstream generate-image node (one image per row):
-
-```json
-{ "id": "edge-action-to-scene1", "source": "shots-1", "sourceHandle": "col_action", "target": "scene-1", "targetHandle": "in" }
 ```
 <!-- AUTO-GEN:END examples -->

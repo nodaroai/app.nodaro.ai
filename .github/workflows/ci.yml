@@ -66,6 +66,8 @@ jobs:
         run: npm ci
       - name: Build shared packages
         run: npm run build:packages
+      - name: Verify skill content is up to date (gen-skills drift gate)
+        run: cd backend && npm run gen:skills:check
       - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: backend

@@ -1,0 +1,395 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "generate-image-1",
+  "type": "generate-image",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Generate Image",
+    "prompt": "",
+    "provider": "nano-banana-pro",
+    "model": "gemini-2.5-flash-image",
+    "style": "",
+    "aspectRatio": "16:9",
+    "negativePrompt": "",
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "mcp-call": "**MCP tool:** \`generate_image\`
+
+**Input parameters:**
+- \`prompt\`
+- \`model\`
+- \`resolution\`
+- \`quality\`
+- \`aspect_ratio\`
+- \`negative_prompt\`
+- \`structured\`",
+  "node-data-shape": "**Type:** \`generate-image\`
+**Category:** ai
+**Credit cost:** 5
+**Inputs (target handles):** \`in\`
+**Outputs (source handles):** \`image\`
+
+**Required data fields:**
+- \`label: string\`
+- \`prompt: string\`
+- \`provider: ImageProvider\`
+- \`model: string\`
+- \`style: string\`
+- \`aspectRatio: string\`
+- \`negativePrompt: string\`
+- \`fieldMappings: FieldMappings\`
+
+**Optional data fields:**
+- \`providers?: readonly ImageProvider[]\`
+- \`resolution?: string\`
+- \`quality?: string\`
+- \`seed?: number\`
+- \`renderingSpeed?: string\`
+- \`styleType?: string\`
+- \`expandPrompt?: boolean\`
+- \`referenceImageUrl?: string\`
+- \`referenceImageUrls?: readonly ManualReferenceImage[]\`
+- \`referenceImageOrder?: readonly string[]\`
+- \`referenceOrder?: readonly string[]\`
+- \`suppressedCanonicalCharacterIds?: readonly string[]\`
+- \`identityMeta?: readonly IdentityMeta[]\`
+- \`extraRefs?: readonly ExtraRef[]\`
+- \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
+- \`errorMessage?: string\`
+- \`generatedImageUrl?: string\`
+- \`generatedResults?: GeneratedResult[]\`
+- \`activeResultIndex?: number\`
+- \`currentJobId?: string\`
+- \`currentJobProgress?: number\`
+- \`characterDefinitionIds?: readonly string[]\`
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Generate Image",
+  "prompt": "",
+  "provider": "nano-banana-pro",
+  "model": "gemini-2.5-flash-image",
+  "style": "",
+  "aspectRatio": "16:9",
+  "negativePrompt": "",
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;
+
+exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "generate-music-1",
+  "type": "generate-music",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Generate Music",
+    "prompt": "",
+    "provider": "suno",
+    "duration": 8,
+    "genre": "",
+    "mood": "",
+    "instrumental": true,
+    "lyrics": "",
+    "referenceAudioUrl": "",
+    "referenceYouTubeUrl": "",
+    "referenceSource": "none",
+    "modelVersion": "stereo-large",
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "mcp-call": "**MCP tool:** \`generate_music\`
+
+**Input parameters:**
+- \`prompt\`
+- \`model\`
+- \`duration\`
+- \`instrumental\`
+- \`lyrics\`
+- \`genre\`
+- \`mood\`",
+  "node-data-shape": "**Type:** \`generate-music\`
+**Category:** ai
+**Credit cost:** 5
+**Inputs (target handles):** \`in\`
+**Outputs (source handles):** \`audio\`
+
+**Required data fields:**
+- \`label: string\`
+- \`prompt: string\`
+- \`provider: MusicProvider\`
+- \`duration: number\`
+- \`genre: string\`
+- \`mood: string\`
+- \`instrumental: boolean\`
+- \`lyrics: string\`
+- \`referenceAudioUrl: string\`
+- \`referenceYouTubeUrl: string\`
+- \`referenceSource: "none" | "upload" | "youtube"\`
+- \`modelVersion: string\`
+- \`fieldMappings: FieldMappings\`
+
+**Optional data fields:**
+- \`currentJobProgress?: number\`
+- \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
+- \`errorMessage?: string\`
+- \`generatedAudioUrl?: string\`
+- \`generatedResults?: GeneratedResult[]\`
+- \`activeResultIndex?: number\`
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Generate Music",
+  "prompt": "",
+  "provider": "suno",
+  "duration": 8,
+  "genre": "",
+  "mood": "",
+  "instrumental": true,
+  "lyrics": "",
+  "referenceAudioUrl": "",
+  "referenceYouTubeUrl": "",
+  "referenceSource": "none",
+  "modelVersion": "stereo-large",
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;
+
+exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "image-to-video-1",
+  "type": "image-to-video",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Image to Video",
+    "provider": "seedance-2-fast",
+    "duration": 5,
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "mcp-call": "**MCP tool:** \`animate_image\`
+
+**Input parameters:**
+- \`prompt\`
+- \`image_url\`
+- \`image_asset_id\`
+- \`model\`
+- \`duration\`
+- \`aspect_ratio\`
+- \`resolution\`
+- \`sound\`
+- \`end_frame_url\`
+- \`end_frame_asset_id\`
+- \`reference_image_urls\`
+- \`reference_video_urls\`
+- \`reference_audio_urls\`
+- \`seedance2_input_mode\`
+- \`loop_trim\`
+- \`auto_loop_trim\`",
+  "node-data-shape": "**Type:** \`image-to-video\`
+**Category:** ai
+**Credit cost:** 20
+**Inputs (target handles):** \`startFrame\`, \`endFrame\`, \`audio\`
+**Outputs (source handles):** \`video\`
+
+**Required data fields:**
+- \`label: string\`
+- \`provider: ImageToVideoProvider\`
+- \`model: string\`
+- \`duration: number\`
+- \`fieldMappings: FieldMappings\`
+
+**Optional data fields:**
+- \`motion?: "subtle" | "moderate" | "dynamic"\`
+- \`motionEnabled?: boolean\`
+- \`prompt?: string\`
+- \`negativePrompt?: string\`
+- \`generateAudio?: boolean\`
+- \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
+- \`errorMessage?: string\`
+- \`generatedVideoUrl?: string\`
+- \`generatedResults?: GeneratedResult[]\`
+- \`activeResultIndex?: number\`
+- \`aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"\`
+- \`multiShot?: boolean\`
+- \`resolution?: string\`
+- \`grokMode?: "fun" | "normal" | "spicy"\`
+- \`videoSize?: "standard" | "high"\`
+- \`seed?: number\`
+- \`cameraFixed?: boolean\`
+- \`shots?: Array<{ prompt: string; duration: number }>\`
+- \`elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>\`
+- \`webSearch?: boolean\`
+- \`nsfwChecker?: boolean\`
+- \`loopTrim?: {
+    enabled: boolean
+    framesToTest?: number
+    quality?: "lossless" | "precise"
+  }\`
+- \`enableTranslation?: boolean\`
+- \`selectedStartFrameNodeId?: string\`
+- \`selectedEndFrameNodeId?: string\`
+- \`selectedAudioNodeId?: string\`
+- \`currentJobId?: string\`
+- \`currentJobProgress?: number\`
+- \`kieTaskId?: string\`
+- \`connectedImageOrder?: readonly string[]\`
+- \`connectedRefImageOrder?: readonly string[]\`
+- \`referenceOrder?: readonly string[]\`
+- \`suppressedCanonicalCharacterIds?: readonly string[]\`
+- \`veoMode?: "frame-to-frame" | "reference"\`
+- \`seedance2InputMode?: "frames" | "references"\`
+- \`extraRefs?: readonly ExtraRef[]\`
+- \`videoPlayState?: "loop" | "paused" | "stopped"\`
+- \`pausedAtTime?: number\`
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Image to Video",
+  "provider": "seedance-2-fast",
+  "duration": 5,
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;
+
+exports[`per-node skill file snapshots > loop.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "loop-1",
+  "type": "loop",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Table",
+    "columns": [],
+    "rows": [],
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "node-data-shape": "**Type:** \`loop\`
+**Category:** input
+**Credit cost:** 0
+**Inputs (target handles):** \`in\`
+**Outputs (source handles):** (none)
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Table",
+  "columns": [],
+  "rows": [],
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;
+
+exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "trim-video-1",
+  "type": "trim-video",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Trim Video",
+    "startTime": 0,
+    "endTime": 0,
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "mcp-call": "**MCP tool:** \`trim_video\`
+
+**Input parameters:**
+- \`video_url\`
+- \`video_asset_id\`
+- \`start_time\`
+- \`end_time\`
+- \`trim_start_frames\`
+- \`trim_end_frames\`
+- \`smart_loop_cut\`
+- \`smart_loop_cut_lookback\`
+- \`silent\`",
+  "node-data-shape": "**Type:** \`trim-video\`
+**Category:** processing
+**Credit cost:** 0
+**Inputs (target handles):** \`in\`
+**Outputs (source handles):** \`video\`
+
+**Required data fields:**
+- \`label: string\`
+- \`startTime: number\`
+- \`endTime: number\`
+- \`fieldMappings: FieldMappings\`
+
+**Optional data fields:**
+- \`currentJobProgress?: number\`
+- \`trimMode?: "time" | "frames" | "smart-loop-cut"\`
+- \`trimStartFrames?: number\`
+- \`trimEndFrames?: number\`
+- \`smartLoopCutLookback?: number\`
+- \`outputSilentVideo?: boolean\`
+- \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
+- \`errorMessage?: string\`
+- \`generatedVideoUrl?: string\`
+- \`generatedResults?: readonly GeneratedResult[]\`
+- \`activeResultIndex?: number\`
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Trim Video",
+  "startTime": 0,
+  "endTime": 0,
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;

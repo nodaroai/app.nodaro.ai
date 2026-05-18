@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:36.977Z
+generated_from: cb1e786d
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -61,16 +61,162 @@ Optional but recommended: `generatedResults: [{ url, jobId, timestamp }]`, `acti
 <!-- AUTO-GEN:START node-catalog -->
 ## Available node types
 
-The catalog below lists every node type with a skill file in `backend/skills/nodes/`. Call `get_node_skill(<type>)` for the full schema.
+Call `get_node_skill(<type>)` for the full schema of any node type:
 
-- `combine-videos` — Stitch multiple videos with transitions
-- `generate-image` — Text-to-image generation
-- `generate-music` — Music generation (Suno)
-- `image-to-video` — Image-to-video animation
-- `loop` — Multi-column table (UI label "Table")
-- `merge-video-audio` — Merge final video with audio track
-- `text-prompt` — Text display / script node
-- `trim-video` — Cut a video to a time range
+- `3d-title` — 3D Title
+- `action-fx` — Action FX
+- `add-captions` — Add Captions
+- `adjust-volume` — Adjust Volume
+- `aesthetic` — Aesthetic / Microtrend
+- `after-effects` — After Effects
+- `ai-writer` — AI Agent
+- `animal` — Animal
+- `aspect-ratio` — Aspect Ratio
+- `atmosphere` — Atmosphere
+- `audio-isolation` — Voice Extractor
+- `backdrop` — Backdrop
+- `camera-format` — Camera / Film Stock
+- `camera-motion` — Camera Motion
+- `character` — Character
+- `color-look` — Color / Look
+- `combine-audio` — Combine Audio
+- `combine-text` — Combine Text
+- `combine-videos` — Combine Videos
+- `component` — Component
+- `composite` — Composite
+- `composition-effects` — Composition Effects
+- `deduplicate` — Remove Duplicates
+- `dubbing` — Dubbing
+- `duration` — Duration
+- `era` — Era / Period
+- `exposure-settings` — Exposure Settings
+- `extend-video` — Extend Video
+- `extract-field` — Extract Field
+- `extract-frame` — Extract Frame
+- `face` — Face
+- `face-swap` — Face Swap
+- `facebook-post` — Facebook Post
+- `fade-video` — Fade In/Out
+- `filter-list` — Filter List
+- `forced-alignment` — Forced Alignment
+- `framing` — Framing
+- `generate-image` — Generate Image
+- `generate-mask` — Generate Mask
+- `generate-music` — Generate Music
+- `generate-script` — Generate Script
+- `generative-pipeline` — Story → Video
+- `held-prop` — Held Prop
+- `image-to-text` — Describe Image
+- `image-to-video` — Image to Video
+- `instagram-post` — Instagram Post
+- `instrumentation` — Instrumentation
+- `json-process` — JSON Process
+- `lens` — Lens
+- `lighting` — Lighting
+- `linkedin-post` — LinkedIn Post
+- `lip-sync` — Lip Sync
+- `list` — List
+- `llm-chat` — LLM Chat
+- `location` — Location
+- `loop` — Table
+- `loop-subject` — Loop Subject
+- `loop-video` — Loop Video
+- `lottie-overlay` — Lottie Overlay
+- `manual-edit` — Manual Edit
+- `material` — Material
+- `merge-lists` — Merge Lists
+- `merge-video-audio` — Merge Video & Audio
+- `mix-audio` — Mix Audio
+- `modify-image` — Modify Image
+- `mood` — Mood
+- `motion` — Motion
+- `motion-graphics` — Motion Graphics
+- `motion-transfer` — Motion Transfer
+- `music-genre` — Music Genre
+- `music-mood` — Music Mood
+- `object` — Object
+- `person` — Person
+- `photo-genre` — Photo Genre
+- `photographer` — Photographer / Artist Style
+- `pose` — Pose
+- `post-process-effects` — Post-Process Effects
+- `preview` — Preview
+- `provider` — Provider
+- `qa-check` — QA Check
+- `reference-audio` — Reference Audio
+- `remove-background` — Remove Background
+- `render-quality` — Render Quality
+- `render-video` — Render Video
+- `resize-video` — Resize Video
+- `router` — Router
+- `rss-feed` — RSS Feed
+- `save-to-storage` — Save to Storage
+- `scene` — Scene
+- `scene-count` — Scene Count
+- `schedule-trigger` — Schedule Trigger
+- `setting` — Setting
+- `social-media-format` — Social Media Format
+- `sort-list` — Sort List
+- `speech-to-video` — Speech to Video
+- `speed-ramp` — Adjust Speed
+- `split-media` — Split Media
+- `split-text` — Split Text
+- `sticky-note` — Sticky Note
+- `style` — Style
+- `style-guide` — Style Guide
+- `styling` — Styling
+- `sub-workflow` — Sub-Workflow
+- `sub-workflow-input` — Sub-Workflow Input
+- `sub-workflow-output` — Sub-Workflow Output
+- `suno-add-instrumental` — Suno Add Instrumental
+- `suno-add-vocals` — Suno Add Vocals
+- `suno-convert-wav` — Suno Convert WAV
+- `suno-cover` — Suno Cover
+- `suno-extend` — Suno Extend
+- `suno-generate` — Suno Generate
+- `suno-lyrics` — Suno Lyrics
+- `suno-mashup` — Suno Mashup
+- `suno-music-video` — Music Video
+- `suno-replace-section` — Suno Replace Section
+- `suno-separate` — Suno Separate
+- `suno-style-boost` — Suno Style Boost
+- `suno-upload-extend` — Suno Upload Extend
+- `telegram-post` — Telegram Post
+- `telegram-trigger` — Telegram Trigger
+- `teleport-receive` — Teleport Receive
+- `teleport-send` — Teleport Send
+- `temporal` — Temporal
+- `text-prompt` — Text Prompt
+- `text-to-audio` — Text to Audio
+- `text-to-dialogue` — Text to Dialogue
+- `text-to-speech` — Text to Speech
+- `text-to-video` — Text to Video
+- `tiktok-post` — TikTok Post
+- `tone` — Tone
+- `transcode-video` — Transcode Video
+- `transcribe` — Transcribe
+- `trim-audio` — Trim Audio
+- `trim-video` — Trim Video
+- `upload-audio` — Upload Audio
+- `upload-image` — Upload Image
+- `upload-video` — Upload Video
+- `upscale-image` — Upscale Image
+- `vehicle` — Vehicle
+- `video-composer` — Compose Video
+- `video-to-video` — Video to Video
+- `video-upscale` — Upscale Video
+- `voice-changer` — Voice Changer
+- `voice-character` — Voice Character
+- `voice-delivery` — Voice Delivery
+- `voice-design` — Voice Design
+- `voice-remix` — Voice Remix
+- `weapon` — Weapon
+- `web-scrape` — Web Scrape
+- `webhook-output` — Webhook Output
+- `webhook-trigger` — Webhook Trigger
+- `x-post` — X Post
+- `youtube-upload` — YouTube Upload
+- `youtube-video` — Video URL
 <!-- AUTO-GEN:END node-catalog -->
 
 ## Common gotchas

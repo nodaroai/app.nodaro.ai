@@ -1,7 +1,7 @@
 ---
 node_type: generate-music
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:37.376Z
+generated_from: cb1e786d
 ---
 
 # generate-music
@@ -9,43 +9,64 @@ generated_from: hand-written
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `generate-music`
 **Category:** ai
-**Credit cost:** 4
+**Credit cost:** 5
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `audio`
 
-**Required data fields (config):**
+**Required data fields:**
 - `label: string`
 - `prompt: string`
-- `provider: string` — `"suno"`
-- `duration: number` — seconds
+- `provider: MusicProvider`
+- `duration: number`
 - `genre: string`
 - `mood: string`
 - `instrumental: boolean`
-- `lyrics: string` (empty string OK when `instrumental: true`)
-- `referenceAudioUrl: string` (empty string OK)
-- `referenceYouTubeUrl: string` (empty string OK)
+- `lyrics: string`
+- `referenceAudioUrl: string`
+- `referenceYouTubeUrl: string`
 - `referenceSource: "none" | "upload" | "youtube"`
 - `modelVersion: string`
-- `fieldMappings: Record<string, string>`
+- `fieldMappings: FieldMappings`
 
-**Required result fields (when attaching a completed generation):**
-- `executionStatus: "completed"`
-- `generatedAudioUrl: string` — exact field name (NOT `audioUrl`, NOT `musicUrl`)
-
-**Recommended result fields:**
-- `generatedResults: [{ url, jobId, timestamp }]`
-- `activeResultIndex: 0`
+**Optional data fields:**
+- `currentJobProgress?: number`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedAudioUrl?: string`
+- `generatedResults?: GeneratedResult[]`
+- `activeResultIndex?: number`
 
 **Default data:**
 ```json
-{ "label": "Generate Music", "prompt": "", "provider": "suno", "duration": 8, "genre": "", "mood": "", "instrumental": true, "lyrics": "", "referenceAudioUrl": "", "referenceYouTubeUrl": "", "referenceSource": "none", "modelVersion": "stereo-large", "fieldMappings": {} }
+{
+  "label": "Generate Music",
+  "prompt": "",
+  "provider": "suno",
+  "duration": 8,
+  "genre": "",
+  "mood": "",
+  "instrumental": true,
+  "lyrics": "",
+  "referenceAudioUrl": "",
+  "referenceYouTubeUrl": "",
+  "referenceSource": "none",
+  "modelVersion": "stereo-large",
+  "fieldMappings": {}
+}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
 <!-- AUTO-GEN:START mcp-call -->
-**MCP tool:** `generate_music` (Suno backend)
+**MCP tool:** `generate_music`
 
-Call the tool with prompt + duration + mood. Capture the response URL and write it to `data.generatedAudioUrl`.
+**Input parameters:**
+- `prompt`
+- `model`
+- `duration`
+- `instrumental`
+- `lyrics`
+- `genre`
+- `mood`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use
@@ -62,29 +83,26 @@ Single soundtrack for the assembled video — after all video shots are approved
 
 ```json
 {
-  "id": "music-1",
+  "id": "generate-music-1",
   "type": "generate-music",
-  "position": { "x": 1360, "y": 280 },
+  "position": {
+    "x": 0,
+    "y": 0
+  },
   "data": {
-    "label": "Soundtrack",
-    "prompt": "Tense orchestral build, 90 BPM, builds to climactic finale",
+    "label": "Generate Music",
+    "prompt": "",
     "provider": "suno",
-    "duration": 30,
-    "genre": "orchestral",
-    "mood": "tense",
+    "duration": 8,
+    "genre": "",
+    "mood": "",
     "instrumental": true,
     "lyrics": "",
     "referenceAudioUrl": "",
     "referenceYouTubeUrl": "",
     "referenceSource": "none",
     "modelVersion": "stereo-large",
-    "fieldMappings": {},
-    "executionStatus": "completed",
-    "generatedAudioUrl": "https://r2.nodaro.ai/jobs/ghi789/output.mp3",
-    "generatedResults": [
-      { "url": "https://r2.nodaro.ai/jobs/ghi789/output.mp3", "jobId": "ghi789", "timestamp": "2026-05-18T12:10:00Z" }
-    ],
-    "activeResultIndex": 0
+    "fieldMappings": {}
   }
 }
 ```
