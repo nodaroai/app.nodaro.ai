@@ -13,14 +13,10 @@ export interface NodeOutput {
   imageUrl?: string
   videoUrl?: string
   audioUrl?: string
-  /** Multiple variant URLs from a single generation (Grok = 6, Suno = 2, etc.).
-   *  Includes the primary at index 0. Frontend uses these to build N
-   *  GeneratedResult entries so users see every variant in the version pill.
-   *  Singular `imageUrl`/`audioUrl`/`videoUrl` always stays populated as the
-   *  primary for downstream chaining (orchestrator picks one). */
+  /** Multi-variant URLs from a single job. Primary at index 0. Singular
+   *  `imageUrl`/`audioUrl` stays populated for downstream chaining. */
   imageUrls?: readonly string[]
   audioUrls?: readonly string[]
-  videoUrls?: readonly string[]
   text?: string
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
+import { variantJobId } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
@@ -146,6 +147,23 @@ export function buildProviderMeta(
   if (result.fallbackFlag === true) meta.fallbackUsed = true
   if (result.providerMs !== undefined) meta.providerMs = result.providerMs
   return meta
+}
+
+/**
+ * Build the output_data row for any image-generation/edit/i2i job. Singular
+ * `imageUrl` always populated as primary; `imageUrls` only set when the
+ * provider returned multiple variants — the frontend uses array-presence to
+ * decide whether to fan out into multiple GeneratedResult entries.
+ */
+export function buildImageOutputData(
+  result: ProviderMetaSource,
+  r2Urls: readonly string[],
+): Record<string, unknown> {
+  return {
+    imageUrl: r2Urls[0]!,
+    ...(r2Urls.length > 1 ? { imageUrls: r2Urls } : {}),
+    ...buildProviderMeta(result),
+  }
 }
 
 /**
@@ -332,7 +350,7 @@ export async function uploadImageVariantsMaybeWatermark(
 ): Promise<readonly string[]> {
   return Promise.all(
     sourceUrls.map((url, i) =>
-      uploadImageMaybeWatermark(url, i === 0 ? jobId : `${jobId}-v${i}`, jobUserId, watermark),
+      uploadImageMaybeWatermark(url, variantJobId(jobId, i), jobUserId, watermark),
     ),
   )
 }

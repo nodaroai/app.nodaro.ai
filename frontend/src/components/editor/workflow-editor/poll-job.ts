@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatus, getExecutionEstimate } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
+import { buildVariantResults } from "./variant-results";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -33,9 +34,11 @@ const OUTPUT_URL_KEY: Record<OutputKey, string> = {
   generatedAudioUrl: "audioUrl",
 };
 
-/** Map store output key → backend output_data array field (multi-variant). */
-const OUTPUT_URLS_KEY: Record<OutputKey, string> = {
-  generatedVideoUrl: "videoUrls",
+/** Map store output key → backend output_data array field (multi-variant).
+ *  Video providers are single-result today; the key is `undefined` so the
+ *  fan-out branch falls through to the single-URL path. */
+const OUTPUT_URLS_KEY: Record<OutputKey, string | undefined> = {
+  generatedVideoUrl: undefined,
   generatedImageUrl: "imageUrls",
   generatedAudioUrl: "audioUrls",
 };
@@ -124,33 +127,16 @@ function handleJobCompleted(
       ? extraOutputFields(job.output_data as Record<string, unknown>)
       : {};
 
-  // Multi-variant fan-out: when the provider returned multiple variants (Grok
-  // images, Suno tracks, etc.) the worker persists `imageUrls`/`audioUrls`/
-  // `videoUrls`. Each variant becomes its own GeneratedResult so users can
-  // browse them via the version pill. Primary lives at index 0 of the array.
-  const allUrlsRaw = job.output_data?.[OUTPUT_URLS_KEY[outputKey]];
+  const urlsKey = OUTPUT_URLS_KEY[outputKey];
+  const allUrlsRaw = urlsKey ? job.output_data?.[urlsKey] : undefined;
   const variantUrls = Array.isArray(allUrlsRaw)
     ? (allUrlsRaw.filter((u) => typeof u === "string" && u.length > 0) as string[])
     : [];
 
   const newResults: GeneratedResult[] =
     variantUrls.length > 1
-      ? variantUrls.map((variantUrl, i) => ({
-          url: variantUrl,
-          thumbnailUrl,
-          timestamp: new Date().toISOString(),
-          jobId: i === 0 ? jobId : `${jobId}-v${i}`,
-          ...extraFields,
-        }))
-      : [
-          {
-            url: url as string,
-            thumbnailUrl,
-            timestamp: new Date().toISOString(),
-            jobId,
-            ...extraFields,
-          },
-        ];
+      ? buildVariantResults(variantUrls, jobId, { thumbnailUrl, extraFields })
+      : [{ url: url as string, thumbnailUrl, timestamp: new Date().toISOString(), jobId, ...extraFields }];
 
   updateNodeData(nodeId, {
     executionStatus: "completed",

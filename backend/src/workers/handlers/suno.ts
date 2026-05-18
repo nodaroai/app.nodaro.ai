@@ -1,3 +1,5 @@
+import { variantJobId } from "@nodaro/shared"
+import type { Job } from "bullmq"
 import { uploadToR2 } from "../../lib/storage.js"
 import {
   sunoGenerate, sunoCover, sunoExtend, sunoLyrics, sunoSeparate, sunoMusicVideo,
@@ -14,58 +16,68 @@ import {
   setJobProgress,
   withProgressRamp,
   type HandlerFn,
+  type JobContext,
 } from "../shared.js"
 
 /**
- * Upload every track Suno returned to R2 in parallel under suffixed keys
- * (`${jobId}` for primary, `${jobId}-v1`, `${jobId}-v2`, …) and assemble the
- * persistence-shape output_data for the job. Suno almost always returns two
- * tracks per generation; this lets the frontend surface both as variants in
- * the version pill instead of silently throwing the second away.
+ * Upload every Suno track to R2 in parallel under variant-suffixed keys and
+ * assemble the persistence-shape output_data. Suno almost always returns two
+ * tracks per generation; this surfaces both as variants in the version pill
+ * instead of silently throwing the second away.
  *
- * Returns null if no tracks survived the upload filter — the caller should
- * throw with the operation-specific label.
+ * Returns null when no tracks survived the upload filter — caller throws with
+ * the operation label.
  */
 async function uploadAllSunoTracks(
   result: SunoTaskResult,
   jobId: string,
   jobUserId: string | undefined,
-): Promise<{
-  readonly outputData: Record<string, unknown>
-  readonly primaryR2Url: string
-  readonly trackCount: number
-} | null> {
+): Promise<Record<string, unknown> | null> {
   const validTracks = result.tracks.filter((t) => t.audioUrl)
   if (validTracks.length === 0) return null
   const r2Urls = await Promise.all(
     validTracks.map((t, i) =>
-      uploadToR2(t.audioUrl, i === 0 ? jobId : `${jobId}-v${i}`, "audio", jobUserId),
+      uploadToR2(t.audioUrl, variantJobId(jobId, i), "audio", jobUserId),
     ),
   )
   const primary = validTracks[0]!
-  const primaryR2Url = r2Urls[0]!
-  const sunoTracks = validTracks.map((t, i) => ({
-    id: t.id,
-    title: t.title,
-    duration: t.duration,
-    imageUrl: t.imageUrl,
-    audioUrl: r2Urls[i]!,
-  }))
   return {
-    outputData: {
-      audioUrl: primaryR2Url,
-      ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
-      sunoTrackId: primary.id,
-      sunoTitle: primary.title,
-      sunoDuration: primary.duration,
-      sunoImageUrl: primary.imageUrl,
-      sunoTaskId: result.taskId,
-      sunoTracks,
-      trackCount: validTracks.length,
-    },
-    primaryR2Url,
+    audioUrl: r2Urls[0]!,
+    ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
+    sunoTrackId: primary.id,
+    sunoTitle: primary.title,
+    sunoDuration: primary.duration,
+    sunoImageUrl: primary.imageUrl,
+    sunoTaskId: result.taskId,
+    sunoTracks: validTracks.map((t, i) => ({
+      id: t.id,
+      title: t.title,
+      duration: t.duration,
+      imageUrl: t.imageUrl,
+      audioUrl: r2Urls[i]!,
+    })),
     trackCount: validTracks.length,
   }
+}
+
+/**
+ * Shared tail for every multi-track Suno handler: progress 50→100, persist,
+ * commit credits, log. Replaces 8 copies of the same 7-line block.
+ */
+async function finalizeSunoJob(
+  job: Job,
+  ctx: JobContext,
+  result: SunoTaskResult,
+  emptyTracksLabel: string,
+): Promise<void> {
+  await setJobProgress(job, ctx.jobId, 50)
+  const outputData = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
+  if (!outputData) throw new Error(emptyTracksLabel)
+  await setJobProgress(job, ctx.jobId, 100)
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+  if (!await markJobCompleted(ctx.jobId, { output_data: outputData })) return
+  await commitJobCredits(ctx.usageLogId, ctx.jobId)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${outputData.audioUrl as string} (${outputData.trackCount as number} tracks)`)
 }
 
 const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx) {
@@ -81,17 +93,7 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     { start: 5, cap: 45 },
     () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  // Upload ALL tracks to R2 for permanent storage (Suno URLs expire in 14 days);
-  // surface every variant as a generatedResults entry on the frontend.
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno returned no tracks")
 }
 
 const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
@@ -112,15 +114,7 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno cover returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks")
 }
 
 const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
@@ -135,15 +129,7 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno extend returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks")
 }
 
 const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
@@ -252,15 +238,7 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     { start: 5, cap: 45 },
     () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno mashup returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno mashup returned no tracks")
 }
 
 const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSection(job, ctx) {
@@ -274,15 +252,7 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
     { start: 5, cap: 45 },
     () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno replace-section returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks")
 }
 
 const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrumental(job, ctx) {
@@ -296,15 +266,7 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
     { start: 5, cap: 45 },
     () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno add-instrumental returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks")
 }
 
 const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, ctx) {
@@ -318,15 +280,7 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
     { start: 5, cap: 45 },
     () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno add-vocals returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks")
 }
 
 const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job, ctx) {
@@ -368,15 +322,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     { start: 5, cap: 45 },
     () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }),
   )
-  await setJobProgress(job, ctx.jobId, 50)
-  const persisted = await uploadAllSunoTracks(result, ctx.jobId, ctx.jobUserId)
-  if (!persisted) throw new Error("Suno upload-extend returned no tracks")
-  await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: persisted.outputData })
-  if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${persisted.primaryR2Url} (${persisted.trackCount} tracks)`)
+  await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks")
 }
 
 export const sunoHandlers: Record<string, HandlerFn> = {

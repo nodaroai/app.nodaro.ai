@@ -24,6 +24,7 @@ import { getListInputForNode } from "./node-input-resolver";
 import { executeNode, rejectAllManualEdits } from "./execute-node";
 import { executeNodeForList } from "./list-execution";
 import { cascadeAutoExecute } from "./auto-execute";
+import { buildVariantResults } from "./variant-results";
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
@@ -833,11 +834,9 @@ interface NodeExecutionState {
     imageUrl?: string;
     videoUrl?: string;
     audioUrl?: string;
-    /** Multi-variant arrays from a single job (Grok = 6, Suno = 2, etc.). Mirrors
-     *  the backend NodeOutput shape — primary at index 0, fan out in the UI. */
+    /** Multi-variant arrays from a single job. Mirrors backend NodeOutput. */
     imageUrls?: readonly string[];
     audioUrls?: readonly string[];
-    videoUrls?: readonly string[];
     text?: string;
     script?: unknown;
     generatedVoiceId?: string;
@@ -999,6 +998,7 @@ function syncNodeStatesToStore(
         const prev = (data.generatedResults ?? []) as GeneratedResult[];
         const existingUrls = new Set(prev.map((r) => r.url));
 
+        // List/loop fan-out: one URL per iteration, each with its own jobId.
         if (listResultUrls.length > 1) {
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))
@@ -1011,43 +1011,23 @@ function syncNodeStatesToStore(
             updates.generatedResults = [...newResults, ...prev];
             updates.activeResultIndex = 0;
           }
-        } else {
-          // Multi-variant fan-out: a single job that returned multiple URLs
-          // (Grok = 6 images, Suno = 2 tracks). Worker stores the array on
-          // output.imageUrls/audioUrls/videoUrls; we fan each one into its
-          // own GeneratedResult so the version pill surfaces every variant.
-          // Mirrors poll-job.ts so single-node and orchestrator paths produce
-          // identical generatedResults for the same job.
-          const variantUrls: readonly string[] =
-            (state.output.imageUrls && state.output.imageUrls.length > 1
-              ? state.output.imageUrls
-              : null) ??
-            (state.output.audioUrls && state.output.audioUrls.length > 1
-              ? state.output.audioUrls
-              : null) ??
-            (state.output.videoUrls && state.output.videoUrls.length > 1
-              ? state.output.videoUrls
-              : null) ??
-            [];
-
-          if (variantUrls.length > 1) {
-            const baseJobId = state.jobId ?? `exec-${node.id}`;
-            const newResults = variantUrls
-              .filter((u) => !existingUrls.has(u))
-              .map((variantUrl, i) => ({
-                url: variantUrl,
-                timestamp: new Date().toISOString(),
-                jobId: i === 0 ? baseJobId : `${baseJobId}-v${i}`,
-              }));
+        }
+        // Multi-variant from a single job (Grok 6 images, Suno 2 tracks).
+        // Same shape as poll-job.ts so single-node and orchestrator paths
+        // produce identical generatedResults for the same job.
+        else {
+          const variantUrls = state.output.imageUrls ?? state.output.audioUrls;
+          if (variantUrls && variantUrls.length > 1) {
+            const newResults = buildVariantResults(
+              variantUrls, state.jobId ?? `exec-${node.id}`, { existingUrls },
+            );
             if (newResults.length > 0) {
               updates.generatedResults = [...newResults, ...prev];
               updates.activeResultIndex = 0;
             }
           } else {
             const outputUrl =
-              state.output.imageUrl ??
-              state.output.videoUrl ??
-              state.output.audioUrl;
+              state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl;
             if (outputUrl && !existingUrls.has(outputUrl)) {
               updates.generatedResults = [
                 {
