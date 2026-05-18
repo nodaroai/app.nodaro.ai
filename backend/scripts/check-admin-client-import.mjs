@@ -108,6 +108,15 @@ const ALLOWED_PATHS = [
   // + canonical_description atomically with the candidate read.
   /^src\/routes\/character-portrait-approval\.ts$/,
 
+  // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
+  // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
+  // child tables; cross-user rows return 404 to avoid existence leak — audited
+  // 2026-05-18). Service-role required because the same supabase client is
+  // shared with the BullMQ orchestrator worker (out-of-band, no req context)
+  // via the ee/pipelines helpers (credits.ts, engine.ts) — splitting client
+  // types between route and worker would fork the helper contract.
+  /^src\/routes\/pipelines\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]
