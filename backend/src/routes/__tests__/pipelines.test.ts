@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest"
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest"
 import Fastify from "fastify"
 
 // ---------------------------------------------------------------------------
@@ -25,6 +25,11 @@ vi.mock("../../ee/pipelines/credits.js", () => ({
 vi.mock("../../ee/pipelines/engine.js", () => ({
   approveScriptStage: vi.fn(async () => ({ ok: true })),
   rejectScriptStage: vi.fn(async () => ({ ok: true })),
+}))
+
+vi.mock("../../ee/pipelines/entity-approval.js", () => ({
+  approveEntity: vi.fn(async () => ({ ok: true })),
+  rejectEntity: vi.fn(async () => ({ ok: true })),
 }))
 
 vi.mock("../../ee/pipelines/events.js", () => ({
@@ -141,6 +146,13 @@ async function makeApp() {
 // Tests
 // ---------------------------------------------------------------------------
 
+// Reset call history (but keep mock implementations) before every test.
+// Mock implementations stay set across the file because vi.mock() factories
+// are hoisted module-scope; clearing the history only resets `.mock.calls` etc.
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
 describe("POST /v1/pipelines", () => {
   let app: Awaited<ReturnType<typeof makeApp>>
   beforeAll(async () => {
@@ -228,6 +240,106 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/approve", () => {
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("stage_not_implemented")
+    await app.close()
+  })
+})
+
+describe("POST /v1/pipelines/:id/entities/:entity_id/{approve,reject}", () => {
+  it("approve calls approveEntity and re-enqueues the pipeline run", async () => {
+    const { approveEntity } = await import("../../ee/pipelines/entity-approval.js")
+    const { enqueuePipelineRun } = await import("../../ee/pipelines/queue.js")
+    ;(approveEntity as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
+    const app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(200)
+    expect(approveEntity).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      "e1",
+    )
+    // Engine must be re-driven so the orchestrator picks up the approval and
+    // advances (e.g. runs ensureCharacterVariants for the just-approved entity).
+    expect(enqueuePipelineRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineId: PIPELINE_ID,
+        userId: TEST_USER_ID,
+        reason: "stage_advance",
+      }),
+    )
+    await app.close()
+  })
+
+  it("reject requires feedback", async () => {
+    const app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/reject`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    await app.close()
+  })
+
+  it("reject calls rejectEntity and re-enqueues the pipeline run", async () => {
+    const { rejectEntity } = await import("../../ee/pipelines/entity-approval.js")
+    const { enqueuePipelineRun } = await import("../../ee/pipelines/queue.js")
+    ;(rejectEntity as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
+    const app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/reject`,
+      payload: { feedback: "Too dark, lighten the lighting." },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(rejectEntity).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      "e1",
+      "Too dark, lighten the lighting.",
+    )
+    // Engine must be re-driven so the orchestrator regenerates the rejected
+    // entity's main image with the feedback baked in.
+    expect(enqueuePipelineRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineId: PIPELINE_ID,
+        userId: TEST_USER_ID,
+        reason: "user_reject",
+      }),
+    )
     await app.close()
   })
 })

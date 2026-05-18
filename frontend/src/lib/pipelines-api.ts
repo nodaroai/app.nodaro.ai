@@ -58,6 +58,10 @@ export const pipelinesApi = {
     ),
   rejectStage: (id: string, stage: PipelineStageName, feedback: string) =>
     postJson<{ ok: true }>(`/v1/pipelines/${id}/stages/${stage}/reject`, { feedback }),
+  approveEntity: (id: string, entityId: string) =>
+    postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/approve`, {}),
+  rejectEntity: (id: string, entityId: string, feedback: string) =>
+    postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/reject`, { feedback }),
   getStage: (id: string, stage: PipelineStageName) =>
     getJson<{ status: string; output: unknown; critic_feedback: unknown }>(
       `/v1/pipelines/${id}/stages/${stage}`,

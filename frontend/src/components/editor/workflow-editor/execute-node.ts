@@ -66,7 +66,7 @@ import {
   webScrape,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider } from "@nodaro/shared";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared";
 import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
@@ -1990,7 +1990,7 @@ export function executeNode(
     const isSeedance2I2V = isSeedance2Provider(nodeProvider ?? "")
     const s2InputMode = isSeedance2I2V ? (i2vData.seedance2InputMode ?? "frames") : "frames"
     const effectiveAspectRatio = i2vData.aspectRatio ?? (isSeedance2I2V ? "16:9" : undefined)
-    const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? "720p" : undefined)
+    const effectiveResolution = i2vData.resolution ?? (isSeedance2I2V ? MODEL_CATALOG[nodeProvider ?? ""]?.resolutions?.[0] : undefined)
     // Gate conflicting inputs by Seedance 2 mode — edges to hidden handles persist across mode switches
     const s2RefMode = isSeedance2I2V && s2InputMode === "references"
     const s2FrameMode = isSeedance2I2V && s2InputMode === "frames"
@@ -2216,7 +2216,7 @@ export function executeNode(
     const t2vRefAudios = inputs.referenceAudioUrls as string[] | undefined
     const seedance2Extras = isSeedance2T2V
       ? {
-          resolution: (t2vRaw.resolution as string | undefined) ?? "720p",
+          resolution: (t2vRaw.resolution as string | undefined) ?? MODEL_CATALOG[t2vProvider]?.resolutions?.[0],
           generateAudio: (t2vRaw.generateAudio as boolean | undefined) ?? true,
           referenceImageUrls: t2vRefImages?.length ? t2vRefImages : undefined,
           referenceVideoUrls: t2vRefVideos?.length ? t2vRefVideos : undefined,

@@ -779,7 +779,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <div>
             <Label className="text-xs">Resolution</Label>
             <Select
-              value={data.resolution || "720p"}
+              value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
@@ -830,7 +830,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <div>
             <Label className="text-xs">Resolution</Label>
             <Select
-              value={data.resolution || "720p"}
+              value={data.resolution || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
@@ -910,7 +910,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         <div>
           <Label className="text-xs">Resolution</Label>
           <Select
-            value={data.resolution || "768P"}
+            value={data.resolution || (data.provider === "hailuo-standard" ? "512P" : "768P")}
             onValueChange={(v) => {
               const updates: Record<string, unknown> = { resolution: v }
               // 1080P only supports 6s — snap duration if needed
@@ -1756,7 +1756,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <div>
             <Label className="text-xs">Resolution</Label>
             <Select
-              value={(data.resolution as string) || "720p"}
+              value={(data.resolution as string) || "480p"}
               onValueChange={(v) => onUpdate({ resolution: v })}
             >
               <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>

@@ -35,6 +35,30 @@ multiple LLMs and generation steps under approval gates.
 5. User clicks **Approve** to finish (Phase 1A) or **Reject + feedback** to retry
    the Showrunner up to 2× with critic feedback injected.
 
+## Stages 2-4 — Characters, Objects, Locations (Phase 1B.1)
+
+After Script approval, the engine advances through three entity stages, generating
+reference images and (for characters) voice-matching against the ElevenLabs catalog.
+
+| Stage | What runs | Approval shape |
+|-------|-----------|----------------|
+| 2. Characters | Per cast member: image gen + voice match → per-character approval → angle + expression variants → batch variant approval | Per-character (main+voice), then batch (variants) |
+| 3. Objects | Per object: single reference image | Batch (all objects together) |
+| 4. Locations | Per location: main image → per-location approval → variants per `variants_needed` → batch variant approval | Per-location (main), then batch (variants) |
+
+### Variants
+
+- **Character angle variants:** up to `angle_count_hint - 1` from the canonical labels (`profile`, `three_quarter`, `full_body`).
+- **Character expression variants:** from `expression_set_hint` (max 6, controlled vocabulary).
+- **Location variants:** up to 4 from `variants_needed` (kinds: `time_of_day`, `weather`, `aftermath`, `angle`).
+
+### Credits
+
+Phase 1B.1 image gen uses `nano-banana` by default (2 credits/image, tier-overridable
+in Phase 1C). Voice match is a Haiku call (~0.005 USD ≈ 0.3 credits). A typical 4-cast,
+3-object, 3-location run with default variants is ~50-80 credits beyond the Phase 1A
+30-credit Stage 1 estimate.
+
 ## Credits
 
 Phase 1A: ~30 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;

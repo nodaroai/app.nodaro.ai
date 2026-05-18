@@ -71,4 +71,29 @@ describe("PipelinePanel", () => {
     await userEvent.click(screen.getByText("Approve"))
     expect(pipelinesApi.approveStage).toHaveBeenCalledWith("p1", "script")
   })
+
+  it("renders Characters entity grid when stage is characters", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "characters",
+      spent_credits: 35, reserved_credits: 100, upfront_credit_estimate: 100,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved", output: {}, critic_feedback: {},
+    })
+    // Mock the entities fetch via fetch since usePipelineEntities uses native fetch
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "e1", entity_type: "character", entity_key: "hero",
+          status: "awaiting_approval", main_asset_id: "a1", main_asset_url: "https://r2/hero.png",
+          metadata: { name: "Hero" }, variants: [],
+        },
+      ],
+    } as never)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+    await waitFor(() => expect(screen.getByText("Hero")).toBeInTheDocument())
+    expect(screen.getByText("Approve")).toBeInTheDocument()
+  })
 })

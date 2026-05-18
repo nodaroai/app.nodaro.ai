@@ -220,6 +220,12 @@ COPY --chown=node:node --from=shared-build /app/packages/shared/dist ./packages/
 # 5. Backend compiled JS (flat dist/server.js because tsconfig rootDir = ./src).
 COPY --chown=node:node --from=backend-build /app/backend/dist ./backend/dist
 
+# 5b. Backend skill content (markdown files read by MCP skill-loader tools).
+#     Whitelisted in .dockerignore so they enter the build context; this COPY
+#     pulls them into the runner stage. The skill-loaders module reads them
+#     at module-load time via import.meta.url path resolution.
+COPY --chown=node:node --from=backend-build /app/backend/skills ./backend/skills
+
 # 6. Remotion package source — bundled at runtime by @remotion/bundler.
 COPY --chown=node:node --from=frontend-build /app/packages/remotion/src ./packages/remotion/src
 COPY --chown=node:node --from=frontend-build /app/packages/remotion/tsconfig.json ./packages/remotion/tsconfig.json

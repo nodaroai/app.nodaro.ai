@@ -27,7 +27,7 @@ import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraR
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions, usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared"
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { PLATFORM_SPECS } from "@nodaro/shared"
-import { isSeedance2Provider } from "@nodaro/shared"
+import { isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared"
 import { COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS } from "@nodaro/shared"
 import { buildLlmCreditIdentifier } from "@nodaro/shared"
 import {
@@ -1763,7 +1763,7 @@ export function buildPayload(
           // untouched nodes submitted aspectRatio / resolution undefined.
           // Fill the defaults here so the request matches the UI.
           aspectRatio: (data.aspectRatio as string | undefined) ?? (isSeedance2Provider(provider) ? "16:9" : undefined),
-          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
+          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
           seed: data.seed,
           cameraFixed: data.cameraFixed,
           multiShot: data.multiShot,
@@ -1863,7 +1863,7 @@ export function buildPayload(
           elements: data.elements,
           removeWatermark: data.removeWatermark,
           seed: data.seed,
-          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? "720p" : undefined),
+          resolution: (data.resolution as string | undefined) ?? (isSeedance2Provider(provider) ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
           generateAudio: data.generateAudio,
           referenceImageUrls: t2vReferenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,

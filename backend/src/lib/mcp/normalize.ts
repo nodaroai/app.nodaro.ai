@@ -351,6 +351,10 @@ export function normalizeVideoInput(
   const resolution =
     normalizeResolution(raw.resolution, modelEntry?.resolutions)
     ?? normalizeResolution(saved.resolution, modelEntry?.resolutions)
+    // Default to the lowest catalog resolution (catalog arrays are ordered
+    // low→high) so MCP video tools default to the cheapest tier when the
+    // caller doesn't specify one.
+    ?? modelEntry?.resolutions?.[0]
 
   const duration =
     normalizeDuration(raw.duration, modelEntry?.durations)

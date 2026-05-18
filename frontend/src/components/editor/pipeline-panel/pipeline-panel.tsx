@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { StageRow } from "./stage-row"
+import { EntityGrid } from "./entity-grid"
 import { Button } from "@/components/ui/button"
 
 interface Props {
@@ -65,7 +66,7 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
   const pipeline = pipelineQuery.data
   const stage = stageQuery.data
   const plan = (stage?.output as { plan?: ShowrunnerPlan } | undefined)?.plan ?? null
-  const status = (stage?.status as "pending" | "running" | "awaiting_approval" | "approved" | "rejected" | "failed" | "cancelled" | undefined) ?? "queued"
+  const status = (stage?.status as PipelineStageStatus | undefined) ?? "queued"
 
   return (
     <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 bg-zinc-50 p-4 overflow-y-auto z-40">
@@ -85,7 +86,15 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
           onApprove={handleApprove}
           onReject={() => setRejectMode(true)}
         />
-        {/* Phase 1B+ stages render below as they ship */}
+        {pipeline?.current_stage === "characters" && (
+          <EntityGrid pipelineId={pipelineId} entityType="character" title="2. Characters" />
+        )}
+        {pipeline?.current_stage === "objects" && (
+          <EntityGrid pipelineId={pipelineId} entityType="object" title="3. Objects" />
+        )}
+        {pipeline?.current_stage === "locations" && (
+          <EntityGrid pipelineId={pipelineId} entityType="location" title="4. Locations" />
+        )}
       </div>
 
       {rejectMode && (

@@ -121,6 +121,11 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // Pure content-delivery tool — returns the canonical Film Director SKILL.md
   // verbatim. No knobs, no per-call variation. See film-director.ts.
   "start_film_director",
+  // Pure content-delivery tool — returns backend/skills/workflow-editor.md
+  // verbatim. No knobs, no per-call variation. See skill-loaders.ts.
+  // (get_node_skill takes a `node_type` arg, so it has a schema and is NOT
+  // in this allowlist.)
+  "start_workflow_editor",
 ])
 
 // ---------------------------------------------------------------------------
