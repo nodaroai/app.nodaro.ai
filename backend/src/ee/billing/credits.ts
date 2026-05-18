@@ -523,6 +523,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "save-to-storage": 0,
   "router": 0,
   "component": 0,               // Component node itself is free; inner nodes have their own costs
+  // ── Generative Pipeline (Story-to-Video) ──
+  // Pipeline orchestration is variable-cost — the upfront estimate is set per run.
+  // These are FALLBACK costs the credit-guard uses when an estimate isn't supplied
+  // (defensive — the route always supplies one). Number chosen as the median Phase 1A
+  // Stage 1-only run (Detection + Showrunner + 2 critics ≈ 30 credits).
+  "pipeline-orchestration": 30,
+  "pipeline-orchestration:stage_1_only": 30,
 }
 
 // Tier order for restriction checks

@@ -25,6 +25,7 @@ Complete reference for all nodes available in the Nodaro.ai visual workflow edit
 - [Asset Nodes](#asset-nodes)
 - [Output Nodes](#output-nodes)
 - [Workflow Nodes](#workflow-nodes)
+- [Generative Pipelines](#generative-pipelines)
 - [Utility Nodes](#utility-nodes)
 
 ---
@@ -256,6 +257,16 @@ Build modular, reusable workflows with sub-workflow nesting.
 | [Sub-Workflow Input](./workflow/sub-workflow-input.md) | Define input ports for nested workflow | Create reusable workflow entry points with typed ports |
 | [Sub-Workflow Output](./workflow/sub-workflow-output.md) | Define output ports for nested workflow | Define what a sub-workflow returns to its caller |
 | [Sub-Workflow](./workflow/sub-workflow.md) | Embed another workflow as a node, with inline editing and breadcrumb nesting | Compose complex pipelines from reusable workflow modules -- create a fresh child or reference an existing standalone workflow |
+
+---
+
+## Generative Pipelines
+
+Multi-stage AI pipelines that generate an editable Nodaro graph from a single prompt. Cloud edition only.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Story → Video](./generative/generative-pipeline.md) | Cloud-only. Variable cost (~30 cr in Phase 1A). Orchestrates Detection (Haiku) → Showrunner (Opus) → Script + Cast Coverage Critics (Sonnet) under approval gates. | Generate a complete cinematic workflow from a single story prompt; review and approve at each stage |
 
 ---
 

@@ -104,6 +104,7 @@ import { forcedAlignmentRoutes } from "./routes/forced-alignment.js"
 import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
+import { pipelinesRoutes } from "./routes/pipelines.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
 import { speechToVideoRoutes } from "./routes/speech-to-video.js"
 import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
@@ -314,6 +315,7 @@ export async function buildApp() {
   await app.register(subWorkflowRoutes)
   await app.register(workflowExecutionRoutes)
   await app.register(webhookTriggerRoutes)
+  await app.register(pipelinesRoutes)
   await app.register(extendVideoRoutes)
   await app.register(speechToVideoRoutes)
   await app.register(socialMediaFormatRoutes)

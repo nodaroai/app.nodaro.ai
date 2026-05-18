@@ -9,6 +9,7 @@ import type {
   SunoModel, VoiceDesignModel, CaptionStyle,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
+import type { PipelineFormat, PipelineMode } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -3560,6 +3561,20 @@ export type TelegramTriggerData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+export interface GenerativePipelineNodeData {
+  [key: string]: unknown
+  label?: string
+  story_prompt?: string
+  target_duration_seconds?: number
+  format?: PipelineFormat
+  output_resolution?: "720p" | "1080p" | "4K"
+  mode?: PipelineMode
+  // Server-side runtime fields (read-only on the canvas):
+  pipeline_id?: string
+  status?: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"
+  current_stage?: string | null
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -3710,6 +3725,7 @@ export type SceneNodeData =
   | InstrumentationData
   | VoiceCharacterData
   | VoiceDeliveryData
+  | GenerativePipelineNodeData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -3865,6 +3881,7 @@ export type SceneNodeType =
   | "instrumentation"
   | "voice-character"
   | "voice-delivery"
+  | "generative-pipeline"
 
 export type WorkflowNode = Node<SceneNodeData, SceneNodeType>
 export type WorkflowEdge = Edge
@@ -6011,6 +6028,22 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       estimatedCredits: 0,
       executionStatus: "idle",
     } as ComponentNodeData,
+  },
+  // Generative Pipeline (Story → Video)
+  {
+    type: "generative-pipeline",
+    label: "Story → Video",
+    category: "scene",
+    creditCost: 30,
+    inputs: ["story_prompt"],
+    outputs: ["final_video"],
+    defaultData: {
+      label: "Story → Video",
+      target_duration_seconds: 60,
+      format: "short_film",
+      output_resolution: "1080p",
+      mode: "manual",
+    } as GenerativePipelineNodeData,
   },
 ]
 

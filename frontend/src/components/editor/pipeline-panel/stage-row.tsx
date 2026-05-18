@@ -1,0 +1,71 @@
+import type { PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+
+interface Props {
+  stageLabel: string
+  status: PipelineStageStatus | "queued"
+  output?: ShowrunnerPlan | null
+  criticFeedback?: unknown
+  onApprove: () => void
+  onReject: () => void
+  disabled?: boolean
+}
+
+const STATUS_COPY: Record<string, string> = {
+  pending: "Waiting",
+  queued: "Queued",
+  running: "Running...",
+  awaiting_approval: "Awaiting approval",
+  approved: "Approved",
+  rejected: "Rejected — retrying",
+  failed: "Failed",
+  cancelled: "Cancelled",
+}
+
+export function StageRow({ stageLabel, status, output, onApprove, onReject, disabled }: Props) {
+  return (
+    <div className="rounded border border-zinc-200 bg-white p-3">
+      <div className="flex items-center justify-between">
+        <div className="font-medium">{stageLabel}</div>
+        <div
+          className={cn(
+            "text-xs px-2 py-0.5 rounded",
+            status === "running" && "bg-amber-100 text-amber-800",
+            status === "awaiting_approval" && "bg-blue-100 text-blue-800",
+            status === "approved" && "bg-green-100 text-green-800",
+            status === "failed" && "bg-red-100 text-red-800",
+            status === "cancelled" && "bg-zinc-100 text-zinc-700",
+          )}
+        >
+          {STATUS_COPY[status] ?? status}
+        </div>
+      </div>
+
+      {output && status === "awaiting_approval" && (
+        <div className="mt-3 space-y-2">
+          <div className="text-sm">
+            <div className="font-semibold">Title:</div> {output.title}
+          </div>
+          <div className="text-sm">
+            <div className="font-semibold">Logline:</div> {output.logline}
+          </div>
+          <div className="text-sm">
+            <div className="font-semibold">Scenes ({output.scenes.length}):</div>
+            <ul className="ml-4 mt-1 list-disc text-xs">
+              {output.scenes.map((s) => (
+                <li key={s.scene_index}>
+                  {s.scene_index}. {s.description} · {s.duration_seconds}s
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button size="sm" onClick={onApprove} disabled={disabled}>Approve</Button>
+            <Button size="sm" variant="outline" onClick={onReject} disabled={disabled}>Reject</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

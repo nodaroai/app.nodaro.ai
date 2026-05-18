@@ -99,6 +99,10 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   // Special-case dispatch (handled by executeNode before INLINE/SYNC_HTTP)
   "component",
   "sub-workflow",
+  // Generative Pipeline runs via the dedicated pipeline-orchestration queue
+  // (POST /v1/pipelines), not the DAG. Treated as a no-op leaf by the DAG
+  // executor in Phase 1A — see executeNode() in node-executor.ts.
+  "generative-pipeline",
 ])
 
 /**

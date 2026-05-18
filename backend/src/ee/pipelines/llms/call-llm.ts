@@ -1,0 +1,232 @@
+import type Anthropic from "@anthropic-ai/sdk"
+import { z } from "zod"
+import zodToJsonSchema from "zod-to-json-schema"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { getAnthropicClient } from "../../../lib/anthropic.js"
+
+export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
+
+// Accept any Zod schema whose PARSED OUTPUT is T. The schema's INPUT type may
+// diverge from T (e.g. ZodDefault makes input optional but output required),
+// which is the case for ShowrunnerPlanSchema. zodToJsonSchema + safeParse only
+// touch the input/output ends, so widening the middle generics is safe.
+export interface CallLLMArgs<T> {
+  supabase: SupabaseClient
+  pipelineId: string
+  stageId: string | null
+  sceneId?: string | null
+  userId: string
+  role: LLMRole
+  task: string
+  modelId: string
+  temperature?: number
+  systemPrompt: string
+  userPrompt: string | Anthropic.Messages.ContentBlockParam[]
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>
+  maxRetries?: number
+  cacheSystemPrompt?: boolean
+}
+
+export interface CallLLMResult<T> {
+  output: T
+  llmCallId: string
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+}
+
+/**
+ * Forced structured output via Anthropic tools API + Zod schema validation +
+ * llm_calls audit insert + retry-on-invalid loop. Used by every pipeline LLM.
+ */
+export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>> {
+  const {
+    supabase,
+    pipelineId,
+    stageId,
+    sceneId,
+    userId,
+    role,
+    task,
+    modelId,
+    temperature = 0.3,
+    systemPrompt,
+    userPrompt,
+    schema,
+    maxRetries = 2,
+    cacheSystemPrompt = true,
+  } = args
+
+  const anthropic = getAnthropicClient()
+  const retries = Math.max(0, maxRetries)
+
+  const jsonSchema = zodToJsonSchema(schema, { target: "openApi3" }) as Record<string, unknown>
+
+  const toolDef: Anthropic.Messages.Tool = {
+    name: "emit",
+    description: `Emit a structured ${task} result.`,
+    input_schema: jsonSchema as Anthropic.Messages.Tool.InputSchema,
+  }
+
+  const systemBlock: Anthropic.Messages.TextBlockParam[] = [
+    {
+      type: "text",
+      text: systemPrompt,
+      ...(cacheSystemPrompt ? { cache_control: { type: "ephemeral" } } : {}),
+    },
+  ]
+
+  let lastError: string | null = null
+  let totalIn = 0
+  let totalOut = 0
+  let cacheCreate = 0
+  let cacheRead = 0
+  const t0 = Date.now()
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const userContent =
+      typeof userPrompt === "string"
+        ? [
+            {
+              type: "text" as const,
+              text:
+                attempt === 0
+                  ? userPrompt
+                  : `${userPrompt}\n\nYOUR PREVIOUS ATTEMPT FAILED VALIDATION:\n${lastError}\n\nRetry, honoring the schema strictly.`,
+            },
+          ]
+        : userPrompt
+
+    const resp = await anthropic.messages.create({
+      model: modelId,
+      max_tokens: 8192,
+      temperature,
+      system: systemBlock,
+      tools: [toolDef],
+      tool_choice: { type: "tool", name: "emit" },
+      messages: [{ role: "user", content: userContent }],
+    })
+
+    totalIn += resp.usage.input_tokens
+    totalOut += resp.usage.output_tokens
+    cacheCreate += resp.usage.cache_creation_input_tokens ?? 0
+    cacheRead += resp.usage.cache_read_input_tokens ?? 0
+
+    const toolUse = resp.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use")
+    if (!toolUse) {
+      lastError = "Model did not call the emit tool."
+      continue
+    }
+    const parsed = schema.safeParse(toolUse.input)
+    if (!parsed.success) {
+      lastError = parsed.error.issues
+        .slice(0, 5)
+        .map((i) => `${i.path.join(".")}: ${i.message}`)
+        .join("; ")
+      continue
+    }
+    // Success — write llm_calls row.
+    const costUsd = estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead)
+    const { data: llmCall, error } = await supabase
+      .from("llm_calls")
+      .insert({
+        pipeline_id: pipelineId,
+        stage_id: stageId,
+        user_id: userId,
+        role,
+        task,
+        model_id: modelId,
+        input_tokens: totalIn,
+        output_tokens: totalOut,
+        cache_creation_input_tokens: cacheCreate,
+        cache_read_input_tokens: cacheRead,
+        cost_usd: costUsd,
+        duration_ms: Date.now() - t0,
+        success: true,
+      })
+      .select("id")
+      .single()
+    if (error || !llmCall) {
+      // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
+      console.error("[callLLM] Failed to write llm_calls success row:", error?.message ?? "unknown")
+      // Don't throw — the LLM call succeeded and the caller needs the output. Audit gap accepted.
+      return {
+        output: parsed.data,
+        llmCallId: "unrecorded",
+        costUsd,
+        inputTokens: totalIn,
+        outputTokens: totalOut,
+      }
+    }
+    return {
+      output: parsed.data,
+      llmCallId: llmCall.id,
+      costUsd,
+      inputTokens: totalIn,
+      outputTokens: totalOut,
+    }
+  }
+
+  // All retries exhausted — record failure + throw.
+  const { error: auditError } = await supabase.from("llm_calls").insert({
+    pipeline_id: pipelineId,
+    stage_id: stageId,
+    user_id: userId,
+    role,
+    task,
+    model_id: modelId,
+    input_tokens: totalIn,
+    output_tokens: totalOut,
+    cache_creation_input_tokens: cacheCreate,
+    cache_read_input_tokens: cacheRead,
+    cost_usd: estimateCost(modelId, totalIn, totalOut, cacheCreate, cacheRead),
+    duration_ms: Date.now() - t0,
+    success: false,
+    error: lastError ?? "unknown",
+  })
+  if (auditError) {
+    // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
+    console.error("[callLLM] Failed to write llm_calls failure row:", auditError.message)
+  }
+  throw new CallLLMValidationError(`${task} validation failed after ${retries + 1} attempts: ${lastError}`)
+}
+
+export class CallLLMValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "CallLLMValidationError"
+  }
+}
+
+// Anthropic pricing as of model launch (USD per million tokens). Update when prices change.
+const MODEL_PRICING: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
+  "claude-haiku-4-5":  { input: 1.0, output: 5.0,  cacheWrite: 1.25, cacheRead: 0.10 },
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
+  "claude-opus-4-7":   { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
+}
+
+function estimateCost(
+  modelId: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheCreate: number,
+  cacheRead: number,
+): number {
+  const p = MODEL_PRICING[normalizeModelId(modelId)]
+  if (!p) return 0
+  // Anthropic Usage fields are disjoint: input_tokens is the non-cached portion only.
+  return (
+    (inputTokens * p.input +
+      outputTokens * p.output +
+      cacheCreate * p.cacheWrite +
+      cacheRead * p.cacheRead) /
+    1_000_000
+  )
+}
+
+// Anthropic accepts both alias ("claude-opus-4-7") and dated ("claude-opus-4-7-20251201").
+// MODEL_PRICING is keyed on the alias. Normalize before lookup.
+function normalizeModelId(modelId: string): string {
+  // Strip optional date suffix: "claude-haiku-4-5-20251001" -> "claude-haiku-4-5"
+  return modelId.replace(/-\d{8}$/, "")
+}

@@ -182,6 +182,7 @@ import {
   InstrumentationConfig,
   VoiceCharacterConfig,
   VoiceDeliveryConfig,
+  GenerativePipelineConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -330,6 +331,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
   "router": "Router",
+  "generative-pipeline": "Story → Video",
 }
 
 export function getNodeTypeDisplayName(type: string): string {
@@ -564,6 +566,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
         </Button>
       </>
     )
+    case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />
     default: return null
   }
 }
