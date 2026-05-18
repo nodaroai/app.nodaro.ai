@@ -19,4 +19,5 @@ Dockerfile
 .dockerignore
 
 *.md
+!backend/skills/**/*.md
 LICENSE
