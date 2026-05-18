@@ -1,5 +1,5 @@
 /**
- * Character LoRA routing decision.
+ * Character LoRA routing decision + identifier constants.
  *
  * Shared between backend (orchestrator's payload-builder) and frontend
  * (single-node Run's execute-node). MUST agree byte-for-byte — the backend
@@ -7,6 +7,22 @@
  * frontend stamps the `_internalLora` body hint off it. Mismatches would
  * silently degrade trained-character generations to ref injection.
  */
+
+/**
+ * Synthetic Replicate model id selected by the orchestrator (and the
+ * single-node Run pre-Zod swap) when a single trained `@character` mention
+ * is detected. Routes through `black-forest-labs/flux-dev-lora` with the
+ * character's trained version under `extraParams.lora_version`. Never
+ * appears in user-facing dropdowns.
+ */
+export const FLUX_LORA_CHARACTER_MODEL_ID = "flux-lora-character" as const
+
+/**
+ * `jobs.job_type` discriminator + credit identifier for character LoRA
+ * training jobs. Used for `STATIC_CREDIT_COSTS`/`model_pricing` lookup,
+ * `creditGuard` reservation, refund flow, and webhook job lookup.
+ */
+export const CHARACTER_LORA_TRAINING_JOB_TYPE = "character-lora-training" as const
 
 export interface LoraRouting {
   readonly characterSlug: string

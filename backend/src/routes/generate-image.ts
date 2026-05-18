@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -50,13 +50,13 @@ export const generateImageBody = z.object({
   // accept it via a union and require the paired `_internalLora` hint below.
   provider: z.union([
     z.enum(IMAGE_GEN_PROVIDERS),
-    z.literal("flux-lora-character"),
+    z.literal(FLUX_LORA_CHARACTER_MODEL_ID),
   ]).optional(),
   /**
    * Internal-only hint set by the frontend's single-node Run path (see
    * `execute-node.ts`) when the user runs a generate-image node that
    * references a trained character. NEVER set by SDK/public clients.
-   * Required when `provider === "flux-lora-character"`.
+   * Required when `provider === FLUX_LORA_CHARACTER_MODEL_ID`.
    */
   _internalLora: z.object({
     version: z.string().min(1),
@@ -98,7 +98,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // (2cr). Without this short-circuit, the preHandler would silently
     // under-bill by 1cr per LoRA inference.
     if (body && typeof body === "object" && "_internalLora" in body) {
-      return "flux-lora-character"
+      return FLUX_LORA_CHARACTER_MODEL_ID
     }
     const rawProvider = (body?.provider as string) ?? "nano-banana"
     const prompt = (body?.prompt as string) ?? ""
@@ -134,7 +134,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // Internal-only provider gate: flux-lora-character requires the paired
     // _internalLora hint. If a client somehow submits the provider literal
     // without the hint, reject — this is internal-orchestrator-only.
-    if (provider === "flux-lora-character" && !internalLora) {
+    if (provider === FLUX_LORA_CHARACTER_MODEL_ID && !internalLora) {
       return reply.status(400).send({
         error: {
           code: "internal_only_provider",
@@ -183,12 +183,12 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // version. Otherwise, auto-route T2I providers to their i2i sibling when
     // the user actually addresses reference images in the prompt.
     const effectiveProvider = internalLora
-      ? "flux-lora-character"
+      ? FLUX_LORA_CHARACTER_MODEL_ID
       : resolveEffectiveProvider(provider, prompt, referenceImageUrls)
 
     // Determine model identifier for credit reservation (composite for variable pricing).
     const modelIdentifier = internalLora
-      ? "flux-lora-character"
+      ? FLUX_LORA_CHARACTER_MODEL_ID
       : buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const mcpClient = extractMcpClient(req.body)
@@ -223,7 +223,7 @@ export async function generateImageRoutes(app: FastifyInstance) {
       referenceImageUrls: internalLora ? [] : referenceImageUrls,
       provider: effectiveProvider,
       // Hand the synthetic flux-lora-character model id to the Replicate provider.
-      model: internalLora ? "flux-lora-character" : undefined,
+      model: internalLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
       aspectRatio,
       resolution,
       quality,

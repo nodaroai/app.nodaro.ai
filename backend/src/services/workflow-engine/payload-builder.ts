@@ -37,6 +37,7 @@ import {
   buildFaceTemplateInputs,
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
+import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -1226,7 +1227,7 @@ export function buildPayload(
         jobName: "generate-image",
         queueName: "video-generation",
         modelIdentifier: lora
-          ? "flux-lora-character"
+          ? FLUX_LORA_CHARACTER_MODEL_ID
           : buildCreditModelIdentifier(
               provider,
               data.quality as string | undefined,
@@ -1240,7 +1241,7 @@ export function buildPayload(
           referenceImageUrls: lora ? [] : result.referenceImageUrls,
           provider: effectiveProvider,
           // Hand the synthetic model id to the Replicate provider when LoRA is active.
-          model: lora ? "flux-lora-character" : (data.model as string | undefined),
+          model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : (data.model as string | undefined),
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,

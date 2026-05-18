@@ -7,6 +7,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
+import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -746,7 +747,7 @@ export async function characterRoutes(app: FastifyInstance) {
               .from("jobs")
               .select("id")
               .eq("user_id", userId)
-              .eq("job_type", "character-lora-training")
+              .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
               .eq("metadata->>replicate_id", character.lora_training_replicate_id)
               .order("created_at", { ascending: false })
               .limit(1)

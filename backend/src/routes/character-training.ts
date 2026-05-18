@@ -28,6 +28,7 @@ import {
   refundReservedCreditsForJob,
   InsufficientImagesError,
 } from "../lib/character-lora.js"
+import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 import {
   createCharacterTraining,
   cancelCharacterTraining,
@@ -35,7 +36,8 @@ import {
 } from "../providers/replicate/training.js"
 
 const idParams = z.object({ id: z.string().uuid() })
-const TRAINING_CREDIT_ID = "character-lora-training"
+// Credit identifier === job type. One shared constant covers both.
+const TRAINING_CREDIT_ID = CHARACTER_LORA_TRAINING_JOB_TYPE
 
 export async function characterTrainingRoutes(app: FastifyInstance): Promise<void> {
   if (!hasCredits()) return
@@ -135,7 +137,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           .from("jobs")
           .insert({
             user_id: req.userId,
-            job_type: "character-lora-training",
+            job_type: CHARACTER_LORA_TRAINING_JOB_TYPE,
             status: "pending",
             input_data: { characterId, imageCount },
             metadata: { credit_identifier: TRAINING_CREDIT_ID },
@@ -319,7 +321,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           .from("jobs")
           .select("id")
           .eq("user_id", req.userId)
-          .eq("job_type", "character-lora-training")
+          .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
           .eq("metadata->>replicate_id", character.lora_training_replicate_id)
           .order("created_at", { ascending: false })
           .limit(1)

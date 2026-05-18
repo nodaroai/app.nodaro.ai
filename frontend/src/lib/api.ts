@@ -3,6 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowExport } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
 export const API_BASE_URL = ''
@@ -239,7 +240,7 @@ export async function generateImage(
   }
   if (internalLora) {
     body._internalLora = internalLora
-    body.provider = "flux-lora-character"
+    body.provider = FLUX_LORA_CHARACTER_MODEL_ID
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",

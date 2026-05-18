@@ -24,6 +24,7 @@ import { supabase } from "../lib/supabase.js"
 import { validateWebhook } from "../providers/replicate/client.js"
 import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 import { deleteCharacterLora } from "../providers/replicate/training.js"
+import { CHARACTER_LORA_TRAINING_JOB_TYPE } from "@nodaro/shared"
 
 export async function replicateTrainingWebhookRoutes(
   app: FastifyInstance,
@@ -132,7 +133,7 @@ export async function replicateTrainingWebhookRoutes(
         .from("jobs")
         .select("id")
         .eq("user_id", character.user_id)
-        .eq("job_type", "character-lora-training")
+        .eq("job_type", CHARACTER_LORA_TRAINING_JOB_TYPE)
         .eq("metadata->>replicate_id", body.id)
         .order("created_at", { ascending: false })
         .limit(1)
