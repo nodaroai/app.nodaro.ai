@@ -1,7 +1,7 @@
 ---
 node_type: location
-generated_at: 2026-05-18T13:23:37.734Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:29.005Z
+generated_from: af4193bd
 ---
 
 # Location
@@ -32,6 +32,15 @@ generated_from: cb1e786d
   "timeOfDay": [],
   "weather": [],
   "angles": [],
+  "lighting": [],
+  "lightingStatus": "idle",
+  "seasons": [],
+  "seasonsStatus": "idle",
+  "atmosphereMotions": [],
+  "atmosphereStatus": "idle",
+  "referencePhotos": [],
+  "canonicalDescription": "",
+  "styleLock": true,
   "timeOfDayStatus": "idle",
   "weatherStatus": "idle",
   "anglesStatus": "idle",
@@ -79,6 +88,15 @@ generated_from: cb1e786d
     "timeOfDay": [],
     "weather": [],
     "angles": [],
+    "lighting": [],
+    "lightingStatus": "idle",
+    "seasons": [],
+    "seasonsStatus": "idle",
+    "atmosphereMotions": [],
+    "atmosphereStatus": "idle",
+    "referencePhotos": [],
+    "canonicalDescription": "",
+    "styleLock": true,
     "timeOfDayStatus": "idle",
     "weatherStatus": "idle",
     "anglesStatus": "idle",

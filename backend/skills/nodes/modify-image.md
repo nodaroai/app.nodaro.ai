@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-05-18T13:23:37.328Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.576Z
+generated_from: af4193bd
 ---
 
 # Modify Image
@@ -35,6 +35,7 @@ generated_from: cb1e786d
 - `connectedMediaOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `extraRefs?: readonly ExtraRef[]`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`

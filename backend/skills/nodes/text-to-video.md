@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-05-18T13:23:37.358Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.609Z
+generated_from: af4193bd
 ---
 
 # Text to Video
@@ -40,6 +40,7 @@ generated_from: cb1e786d
 - `connectedRefImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `extraRefs?: readonly ExtraRef[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
