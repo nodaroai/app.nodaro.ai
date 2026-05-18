@@ -133,6 +133,16 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "flux-kontext-max":  { provider: "KIE.ai",    providerCostUsd: 0.050, markupPct: 25 },  // 10 KIE cr (Max)
   "flux-2-klein":      { provider: "Replicate", providerCostUsd: 0.025, markupPct: 25 },  // BFL Flux 2 9B (Open, uncensored)
   "kontext-multi":     { provider: "Replicate", providerCostUsd: 0.050, markupPct: 25 },  // multi-image-kontext-pro (Open, uncensored)
+  "flux-2-pro":        { provider: "Replicate", providerCostUsd: 0.060, markupPct: 25 },  // BFL Flux 2 Pro (safety_tolerance=5, max for Pro)
+  "flux-2-max":        { provider: "Replicate", providerCostUsd: 0.040, markupPct: 25 },  // BFL Flux 2 Max base (0 refs)
+  "flux-2-max:1ref":   { provider: "Replicate", providerCostUsd: 0.070, markupPct: 25 },  // 0.04 + 1×0.03
+  "flux-2-max:2ref":   { provider: "Replicate", providerCostUsd: 0.100, markupPct: 25 },
+  "flux-2-max:3ref":   { provider: "Replicate", providerCostUsd: 0.130, markupPct: 25 },
+  "flux-2-max:4ref":   { provider: "Replicate", providerCostUsd: 0.160, markupPct: 25 },
+  "flux-2-max:5ref":   { provider: "Replicate", providerCostUsd: 0.190, markupPct: 25 },
+  "flux-2-max:6ref":   { provider: "Replicate", providerCostUsd: 0.220, markupPct: 25 },
+  "flux-2-max:7ref":   { provider: "Replicate", providerCostUsd: 0.250, markupPct: 25 },
+  "flux-2-max:8ref":   { provider: "Replicate", providerCostUsd: 0.280, markupPct: 25 },
   "grok":              { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr
   "gpt-image":         { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (gpt image 1.5 medium)
   "gpt-image-2":       { provider: "KIE.ai",    providerCostUsd: 0.020, markupPct: 25 },  // 4 KIE cr (1K default; estimated until calibrated)

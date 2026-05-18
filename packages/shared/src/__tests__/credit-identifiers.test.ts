@@ -176,6 +176,26 @@ describe("buildCreditModelIdentifier", () => {
       expect(buildCreditModelIdentifier("unknown", "high", "4K", "TURBO", "8K")).toBe("unknown")
     })
   })
+
+  // --- Flux 2 Max — variable pricing by reference image count ---
+  describe("flux-2-max referenceImageCount", () => {
+    it("zero refs returns bare provider", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, 0)).toBe("flux-2-max")
+    })
+
+    it.each([1, 2, 3, 4, 5, 6, 7, 8])("%i refs returns composite identifier", (n) => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, n)).toBe(`flux-2-max:${n}ref`)
+    })
+
+    it("caps overflow at 8", () => {
+      expect(buildCreditModelIdentifier("flux-2-max", undefined, undefined, undefined, undefined, 12)).toBe("flux-2-max:8ref")
+    })
+
+    it("does not affect non-flux-2-max providers", () => {
+      expect(buildCreditModelIdentifier("nano-banana", undefined, undefined, undefined, undefined, 4)).toBe("nano-banana")
+      expect(buildCreditModelIdentifier("flux-2-pro", undefined, undefined, undefined, undefined, 4)).toBe("flux-2-pro")
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

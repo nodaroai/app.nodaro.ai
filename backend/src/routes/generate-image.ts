@@ -109,7 +109,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
+    // flux-2-max bills per reference image — pass the count so the identifier
+    // becomes `flux-2-max:Nref` and the right model_pricing row is hit.
+    const refCount = refs?.length ?? 0
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed, undefined, refCount)
   }) }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {

@@ -93,6 +93,86 @@ describe("ReplicateImageProvider.generateImage", () => {
     }))
   })
 
+  it("flux-2-pro maps refs to image_prompt_1..4 with safety_tolerance=5", async () => {
+    await provider.generateImage(
+      "open-content scene",
+      ["https://a.png", "https://b.png", "https://c.png", "https://d.png"],
+      "flux-2-pro",
+    )
+    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: "black-forest-labs/flux-2-pro",
+      input: expect.objectContaining({
+        prompt: "open-content scene",
+        image_prompt_1: "https://a.png",
+        image_prompt_2: "https://b.png",
+        image_prompt_3: "https://c.png",
+        image_prompt_4: "https://d.png",
+        aspect_ratio: "1:1",
+        output_format: "png",
+        safety_tolerance: 5,
+      }),
+    }))
+  })
+
+  it("flux-2-pro pure t2i (no refs) still sends safety_tolerance=5", async () => {
+    await provider.generateImage("solo prompt", undefined, "flux-2-pro")
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("black-forest-labs/flux-2-pro")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "solo prompt",
+      aspect_ratio: "1:1",
+      output_format: "png",
+      safety_tolerance: 5,
+    }))
+    expect(callArgs.input.image_prompt_1).toBeUndefined()
+    expect(callArgs.input.image_prompt_2).toBeUndefined()
+  })
+
+  it("flux-2-max maps refs to image_prompt_1..8 with safety_tolerance=5", async () => {
+    const refs = Array.from({ length: 8 }, (_, i) => `https://ref-${i + 1}.png`)
+    await provider.generateImage("eight-ref scene", refs, "flux-2-max")
+    expect(mocks.mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      model: "black-forest-labs/flux-2-max",
+      input: expect.objectContaining({
+        prompt: "eight-ref scene",
+        image_prompt_1: "https://ref-1.png",
+        image_prompt_2: "https://ref-2.png",
+        image_prompt_3: "https://ref-3.png",
+        image_prompt_4: "https://ref-4.png",
+        image_prompt_5: "https://ref-5.png",
+        image_prompt_6: "https://ref-6.png",
+        image_prompt_7: "https://ref-7.png",
+        image_prompt_8: "https://ref-8.png",
+        aspect_ratio: "1:1",
+        output_format: "png",
+        safety_tolerance: 5,
+      }),
+    }))
+  })
+
+  it("flux-2-max caps refs at 8 when more are passed", async () => {
+    const refs = Array.from({ length: 12 }, (_, i) => `https://r${i + 1}.png`)
+    await provider.generateImage("overflow", refs, "flux-2-max")
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.input.image_prompt_8).toBe("https://r8.png")
+    // Inputs 9..12 must NOT leak into the payload
+    expect(callArgs.input.image_prompt_9).toBeUndefined()
+    expect(callArgs.input.image_prompt_10).toBeUndefined()
+  })
+
+  it("flux-2-max pure t2i (no refs) sends safety_tolerance=5 and no image_prompt_*", async () => {
+    await provider.generateImage("pure t2i", undefined, "flux-2-max")
+    const callArgs = mocks.mockCreate.mock.calls[0][0]
+    expect(callArgs.model).toBe("black-forest-labs/flux-2-max")
+    expect(callArgs.input).toEqual(expect.objectContaining({
+      prompt: "pure t2i",
+      aspect_ratio: "1:1",
+      output_format: "png",
+      safety_tolerance: 5,
+    }))
+    expect(callArgs.input.image_prompt_1).toBeUndefined()
+  })
+
   it("extracts cost from prediction metrics", async () => {
     mocks.mockExtractCost.mockReturnValueOnce(0.01)
     const result = await provider.generateImage("test")

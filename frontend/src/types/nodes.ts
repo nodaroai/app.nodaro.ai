@@ -4442,6 +4442,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "seedream-5-lite", label: "Seedream 5 Lite" },
           { value: "z-image", label: "Z-Image" },
           { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
+          { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },
+          { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)" },
         ],
       },
       {

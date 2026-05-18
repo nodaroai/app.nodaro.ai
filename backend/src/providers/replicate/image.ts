@@ -97,6 +97,54 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       return input
     },
   },
+  // BFL Flux 2 Max — even larger sibling of Pro. Same safety_tolerance
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  // `buildCreditModelIdentifier`). Supports up to 8 image_prompt refs.
+  "flux-2-max": {
+    model: "black-forest-labs/flux-2-max",
+    buildInput: (prompt, referenceImageUrls, extraParams) => {
+      const { aspectRatio, seed } = readCommon(extraParams)
+      const refs = referenceImageUrls ?? []
+      const input: Record<string, unknown> = {
+        prompt,
+        aspect_ratio: aspectRatio,
+        output_format: "png",
+        safety_tolerance: 5,
+      }
+      // Map up to 8 references; flux-2-max charges $0.03 per ref so the
+      // cap is honored at the frontend (REF_IMAGE_MAX_LIMITS) and route
+      // pricing tier as well.
+      for (let i = 0; i < Math.min(refs.length, 8); i++) {
+        input[`image_prompt_${i + 1}`] = refs[i]
+      }
+      if (seed != null) input.seed = seed
+      return input
+    },
+  },
+  // BFL Flux 2 Pro — flagship Flux 2 with `safety_tolerance` (0-5) lever.
+  // We pin it to 5 (the max — Replicate caps Pro at 5, NOT 6). KIE's safety
+  // filter never sees the request. Supports up to 4 image_prompt refs for
+  // i2i consistency.
+  "flux-2-pro": {
+    model: "black-forest-labs/flux-2-pro",
+    buildInput: (prompt, referenceImageUrls, extraParams) => {
+      const { aspectRatio, seed } = readCommon(extraParams)
+      const refs = referenceImageUrls ?? []
+      const input: Record<string, unknown> = {
+        prompt,
+        aspect_ratio: aspectRatio,
+        output_format: "png",
+        safety_tolerance: 5,
+      }
+      if (refs[0]) input.image_prompt_1 = refs[0]
+      if (refs[1]) input.image_prompt_2 = refs[1]
+      if (refs[2]) input.image_prompt_3 = refs[2]
+      if (refs[3]) input.image_prompt_4 = refs[3]
+      if (seed != null) input.seed = seed
+      return input
+    },
+  },
 }
 
 // Both new models are reached via the `image-generation` router capability

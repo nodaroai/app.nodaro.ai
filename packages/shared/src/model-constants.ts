@@ -74,6 +74,8 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   // Replicate "Open" (uncensored) image models
   "flux-2-klein",
   "kontext-multi",
+  "flux-2-pro",
+  "flux-2-max",
 ])
 
 /**
@@ -132,9 +134,11 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "recraft-upscale": 1,
   "topaz-image-upscale": 1,
   // Replicate Open models — Klein takes an optional single ref; Kontext Multi
-  // accepts up to 4 numbered input images.
+  // accepts up to 4 numbered input images; Flux 2 Pro up to 4; Max up to 8.
   "flux-2-klein": 1,
   "kontext-multi": 4,
+  "flux-2-pro": 4,
+  "flux-2-max": 8,
 }
 
 export const DEFAULT_REF_IMAGE_MAX = 4
@@ -211,6 +215,8 @@ export const IMAGE_GEN_PROVIDERS = [
   "wan-2.7-pro",
   // Replicate Open (uncensored) — runs through Replicate, not KIE
   "flux-2-klein",
+  "flux-2-pro",
+  "flux-2-max",
 ] as const
 
 /** Image-to-image providers (require input image) */
@@ -234,6 +240,10 @@ export const IMAGE_I2I_PROVIDERS = [
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
   "kontext-multi",
+  // BFL Flux 2 Pro — runs through Replicate with safety_tolerance=5 (max for Pro)
+  "flux-2-pro",
+  // BFL Flux 2 Max — runs through Replicate with safety_tolerance=5, up to 8 refs
+  "flux-2-max",
 ] as const
 
 /** Image editing providers (upscale, remove bg, etc.) */

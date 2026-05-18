@@ -54,6 +54,8 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3 |
 | flux-2-klein | Flux 2 Klein (Open) | BFL Flux 2 9B Klein via Replicate — fast, no safety filter. 2 credits | Same as Flux |
+| flux-2-pro | Flux 2 Pro (Safety Tolerance) | BFL Flux 2 Pro flagship via Replicate — exposes `safety_tolerance` pinned to 5 (max for Pro). 4 credits | Same as Flux |
+| flux-2-max | Flux 2 Max (Safety Tolerance) | BFL Flux 2 Max — even larger sibling of Pro via Replicate, `safety_tolerance=5`, up to 8 reference images. **Variable pricing**: 3 credits (0 refs) → 18 credits (8 refs); each ref adds ~$0.03 of provider cost. | Same as Flux |
 
 ## Best Practices
 

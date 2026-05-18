@@ -1001,7 +1001,19 @@ export function resolveNodeInputs(
         inputs.prompt = output;
       }
     } else if (src.type === "upload-image") {
-      if (node.type === "generate-image" || node.type === "video-to-video") {
+      if (
+        node.type === "generate-image" ||
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
+      ) {
+        // Multi-upload aware: every wired Upload Image piles into
+        // `referenceImageUrls`. For modify-image / image-to-image the
+        // execute-node then promotes index 0 to the primary `imageUrl` and
+        // keeps the rest as refs. Without this branch, repeated upload-image
+        // edges overwrote `inputs.imageUrl` and silently dropped all but the
+        // last image — which broke multi-ref models like kontext-multi.
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
@@ -1076,7 +1088,15 @@ export function resolveNodeInputs(
         inputs.videoUrl = output;
       }
     } else if (src.type === "generate-image") {
-      if (node.type === "generate-image" || node.type === "video-to-video") {
+      if (
+        node.type === "generate-image" ||
+        (node.type as string) === "edit-image" ||
+        (node.type as string) === "image-to-image" ||
+        node.type === "modify-image" ||
+        node.type === "video-to-video"
+      ) {
+        // Same multi-source split as the upload-image branch above —
+        // execute-node promotes index 0 to the primary `imageUrl`.
         inputs.referenceImageUrls = [
           ...(inputs.referenceImageUrls ?? []),
           output,
