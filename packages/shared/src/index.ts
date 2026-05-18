@@ -65,6 +65,9 @@ export {
   CHARACTER_MOTION_PROVIDERS,
   VEO_PROVIDERS,
   isVeoProvider,
+  SceneInputModeSchema,
+  VIDEO_MODEL_CAPS,
+  modelsForInputMode,
 } from "./model-constants.js"
 
 export type {
@@ -92,6 +95,9 @@ export type {
   ModifyImageProvider,
   UpscaleImageProvider,
   CharacterMotionProvider,
+  SceneInputMode,
+  ModelPromptingStyle,
+  VideoModelCapabilities,
 } from "./model-constants.js"
 
 export {
@@ -892,4 +898,6 @@ export * from "./pipeline-events.js"
 export * from "./pipeline-types.js"
 export * from "./voice-matcher-types.js"
 export * from "./entity-approval-types.js"
+export * from "./scene-node-types.js"
+export * from "./provider-directive-defaults.js"
 export * from "./lora-routing.js"

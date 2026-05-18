@@ -103,6 +103,12 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   // (POST /v1/pipelines), not the DAG. Treated as a no-op leaf by the DAG
   // executor in Phase 1A — see executeNode() in node-executor.ts.
   "generative-pipeline",
+  // Phase 1B.2 pipeline-managed SceneNode — internal pipeline (keyframe gen
+  // → animate → speech → lip_sync → combine) runs via the pipeline
+  // orchestrator (Phase 1C). DAG treats it as a no-op success leaf — see
+  // node-executor.ts. The legacy `case "scene"` in payload-builder.ts is
+  // dead code as long as the short-circuit in node-executor.ts fires.
+  "scene",
 ])
 
 /**

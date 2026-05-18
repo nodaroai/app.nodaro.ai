@@ -5,6 +5,7 @@ import {
   PIPELINE_OUTPUT_RESOLUTIONS,
   PIPELINE_TYPES,
 } from "./pipeline-defaults.js"
+import { SceneMetadataSchema } from "./scene-node-types.js"
 
 // ─── Input schema (POST /v1/pipelines body) ───────────────────────────────────
 
@@ -336,5 +337,6 @@ export const EntityMetadataSchema = z.discriminatedUnion("entity_type", [
   CharacterMetadataSchema,
   ObjectMetadataSchema,
   LocationMetadataSchema,
+  SceneMetadataSchema, // new in Phase 1B.2
 ])
 export type EntityMetadata = z.infer<typeof EntityMetadataSchema>

@@ -7,10 +7,6 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   },
 }))
 
-vi.mock("@/lib/prompt-builder", () => ({
-  buildScenePrompt: vi.fn(() => "mock scene prompt"),
-}))
-
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
@@ -338,25 +334,34 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("http://combined.mp4")
   })
 
-  it("returns the scene prompt when scene node has no image results", () => {
-    const node = makeNode("1", "scene", {
-      characters: [],
-      objects: [],
-      locations: [],
-    })
-    expect(extractNodeOutput(node)).toBe("mock scene prompt")
+  // Phase 1B.2 pipeline-managed SceneNode — populated by the pipeline orchestrator
+  // in Phase 1C. Outputs are AssetRef objects (`{ url, type }`), not generatedResults.
+  it("returns undefined for scene node when no composite_video is set", () => {
+    const node = makeNode("1", "scene", {})
+    expect(extractNodeOutput(node)).toBeUndefined()
   })
 
-  it("returns generated image url from scene node when available", () => {
+  it("returns composite_video.url for scene node by default", () => {
     const node = makeNode("1", "scene", {
-      generatedResults: [
-        { url: "http://scene.png", timestamp: "t1", jobId: "j1" },
-      ],
-      activeResultIndex: 0,
-      characters: [],
-      objects: [],
+      composite_video: { url: "http://scene.mp4", type: "video" },
     })
-    expect(extractNodeOutput(node)).toBe("http://scene.png")
+    expect(extractNodeOutput(node)).toBe("http://scene.mp4")
+  })
+
+  it("returns last_frame.url when sourceHandle is 'last_frame'", () => {
+    const node = makeNode("1", "scene", {
+      composite_video: { url: "http://scene.mp4", type: "video" },
+      last_frame: { url: "http://scene-last.png", type: "image" },
+    })
+    expect(extractNodeOutput(node, "last_frame")).toBe("http://scene-last.png")
+  })
+
+  it("returns scene_audio_track.url when sourceHandle is 'audio_track'", () => {
+    const node = makeNode("1", "scene", {
+      composite_video: { url: "http://scene.mp4", type: "video" },
+      scene_audio_track: { url: "http://scene.mp3", type: "audio" },
+    })
+    expect(extractNodeOutput(node, "audio_track")).toBe("http://scene.mp3")
   })
 
   it("returns r2Url from upload-audio when present", () => {

@@ -215,6 +215,7 @@ AI-powered video composition and rendering. Create professional video production
 | [Motion Graphics](./composition/motion-graphics.md) | AI 2D motion graphics generation | Create lower thirds, title cards, kinetic typography |
 | [Composite](./composition/composite.md) | Multi-layer video compositing | Picture-in-picture, split screen, overlay with blend modes |
 | [Render Video](./composition/render-video.md) | Finalize composition to video file | Render any composition plan to final video output |
+| [Scene](./composition/scene.md) | Cloud-only. Pipeline-managed scene container with shot list, camera, motion. Created by the Story → Video pipeline (Phase 1B.2). | Populated by the Scene Director LLM in Stage 5; animated by the pipeline orchestrator in Phase 1C |
 
 ---
 

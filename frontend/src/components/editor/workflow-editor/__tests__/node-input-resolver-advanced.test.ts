@@ -62,141 +62,109 @@ beforeEach(() => {
 // resolveNodeInputs — scene node
 // ---------------------------------------------------------------------------
 
+// Phase 1B.2 pipeline-managed SceneNode — outputs are AssetRefs populated by the
+// pipeline orchestrator in Phase 1C. resolveNodeInputs routes by source-handle kind:
+//   - no/default handle → composite_video → routed like a video source
+//   - "last_frame"       → last_frame      → routed like an image source
+//   - "audio_track"      → scene_audio_track → routed like an audio source
+// The legacy buildScenePrompt + generatedResults/generatedImageUrl/character-ref
+// collection has been removed (Phase 1B.2). Production code no longer imports
+// buildScenePrompt.
 describe("resolveNodeInputs — scene node source", () => {
-  it("calls buildScenePrompt with sceneData and characterDefinitions", () => {
-    mockBuildScenePrompt.mockReturnValue("A dramatic scene in the desert")
-    mockExtractNodeOutput.mockReturnValue("http://scene-img.png")
+  it("routes composite_video output to videoUrl on a default-handle edge", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene.mp4")
 
     const sceneNode = makeNode("s1", "scene", {
-      characters: [{ assetId: "char1" }],
-      locations: [],
-      objects: [],
-      generatedImageUrl: "http://scene-img.png",
+      composite_video: { url: "http://scene.mp4", type: "video" },
     })
-    const target = makeNode("t1", "generate-image")
+    const target = makeNode("t1", "trim-video")
     const edges = [makeEdge("s1", "t1")]
 
-    resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(mockBuildScenePrompt).toHaveBeenCalledWith(
-      sceneNode.data,
-      mockCharacterDefinitions,
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.videoUrl).toBe("http://scene.mp4")
+  })
+
+  it("aggregates composite_video outputs into videoUrls for combine-videos targets", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene.mp4")
+
+    const sceneNode = makeNode("s1", "scene", {
+      composite_video: { url: "http://scene.mp4", type: "video" },
+    })
+    const target = makeNode("t1", "combine-videos")
+    const edges = [makeEdge("s1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.videoUrls).toContain("http://scene.mp4")
+  })
+
+  it("routes last_frame to referenceImageUrls when target is generate-image", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene-last.png")
+
+    const sceneNode = makeNode("s1", "scene", {
+      last_frame: { url: "http://scene-last.png", type: "image" },
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [makeEdge("s1", "t1", "last_frame")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.referenceImageUrls).toContain("http://scene-last.png")
+  })
+
+  it("routes last_frame to imageUrl when target is not an image-merger", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene-last.png")
+
+    const sceneNode = makeNode("s1", "scene", {
+      last_frame: { url: "http://scene-last.png", type: "image" },
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [makeEdge("s1", "t1", "last_frame")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.imageUrl).toBe("http://scene-last.png")
+  })
+
+  it("routes audio_track to audioUrl when target is a single-audio consumer", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene.mp3")
+
+    const sceneNode = makeNode("s1", "scene", {
+      scene_audio_track: { url: "http://scene.mp3", type: "audio" },
+    })
+    const target = makeNode("t1", "lip-sync")
+    const edges = [makeEdge("s1", "t1", "audio_track")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.audioUrl).toBe("http://scene.mp3")
+  })
+
+  it("routes audio_track to audioSources for merge-video-audio targets", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene.mp3")
+
+    const sceneNode = makeNode("s1", "scene", {
+      scene_audio_track: { url: "http://scene.mp3", type: "audio" },
+    })
+    const target = makeNode("t1", "merge-video-audio")
+    const edges = [makeEdge("s1", "t1", "audio_track")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.audioSources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ url: "http://scene.mp3", sourceNodeId: "s1" }),
+      ]),
     )
   })
 
-  it("sets prompt from buildScenePrompt result", () => {
-    mockBuildScenePrompt.mockReturnValue("cinematic desert landscape")
-    mockExtractNodeOutput.mockReturnValue("http://scene-img.png")
+  it("does not call buildScenePrompt — the legacy prompt path is gone", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene.mp4")
 
     const sceneNode = makeNode("s1", "scene", {
-      characters: [],
-      locations: [],
-      objects: [],
-      generatedImageUrl: "http://scene-img.png",
+      composite_video: { url: "http://scene.mp4", type: "video" },
     })
-    const target = makeNode("t1", "generate-image")
+    const target = makeNode("t1", "trim-video")
     const edges = [makeEdge("s1", "t1")]
 
     const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(inputs.prompt).toBe("cinematic desert landscape")
-  })
-
-  it("extracts imageUrl from generatedResults at activeResultIndex", () => {
-    mockBuildScenePrompt.mockReturnValue("prompt")
-    mockExtractNodeOutput.mockReturnValue("http://scene-result.png")
-
-    const sceneNode = makeNode("s1", "scene", {
-      characters: [],
-      locations: [],
-      objects: [],
-      generatedResults: [
-        { url: "http://scene-r0.png", timestamp: "t0", jobId: "j0" },
-        { url: "http://scene-r1.png", timestamp: "t1", jobId: "j1" },
-      ],
-      activeResultIndex: 1,
-    })
-    const target = makeNode("t1", "image-to-video")
-    const edges = [makeEdge("s1", "t1")]
-
-    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(inputs.imageUrl).toBe("http://scene-r1.png")
-  })
-
-  it("falls back to generatedImageUrl when no generatedResults", () => {
-    mockBuildScenePrompt.mockReturnValue("prompt")
-    mockExtractNodeOutput.mockReturnValue("http://fallback.png")
-
-    const sceneNode = makeNode("s1", "scene", {
-      characters: [],
-      locations: [],
-      objects: [],
-      generatedImageUrl: "http://fallback.png",
-    })
-    const target = makeNode("t1", "image-to-video")
-    const edges = [makeEdge("s1", "t1")]
-
-    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(inputs.imageUrl).toBe("http://fallback.png")
-  })
-
-  it("sets referenceImageUrls when target is generate-image", () => {
-    mockBuildScenePrompt.mockReturnValue("prompt")
-    mockExtractNodeOutput.mockReturnValue("http://scene-img.png")
-
-    const sceneNode = makeNode("s1", "scene", {
-      characters: [],
-      locations: [],
-      objects: [],
-      generatedImageUrl: "http://scene-img.png",
-    })
-    const target = makeNode("t1", "generate-image")
-    const edges = [makeEdge("s1", "t1")]
-
-    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(inputs.referenceImageUrls).toContain("http://scene-img.png")
-  })
-
-  it("collects reference images from character/location/object assets via characterDefinitions", () => {
-    mockBuildScenePrompt.mockReturnValue("prompt")
-    mockExtractNodeOutput.mockReturnValue("http://scene-img.png")
-
-    mockCharacterDefinitions.push(
-      { id: "char1", referenceImageUrl: "http://char1-ref.png" },
-      { id: "loc1", referenceImageUrl: "http://loc1-ref.png" },
-      { id: "obj1", referenceImageUrl: "http://obj1-ref.png" },
-    )
-
-    const sceneNode = makeNode("s1", "scene", {
-      characters: [{ assetId: "char1" }],
-      locations: [{ assetId: "loc1" }],
-      objects: [{ assetId: "obj1" }],
-      generatedImageUrl: "http://scene-img.png",
-    })
-    const target = makeNode("t1", "generate-image")
-    const edges = [makeEdge("s1", "t1")]
-
-    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    expect(inputs.referenceImageUrls).toContain("http://char1-ref.png")
-    expect(inputs.referenceImageUrls).toContain("http://loc1-ref.png")
-    expect(inputs.referenceImageUrls).toContain("http://obj1-ref.png")
-  })
-
-  it("skips assets not found in characterDefinitions", () => {
-    mockBuildScenePrompt.mockReturnValue("prompt")
-    mockExtractNodeOutput.mockReturnValue("http://scene-img.png")
-
-    // characterDefinitions is empty, so no asset matches
-    const sceneNode = makeNode("s1", "scene", {
-      characters: [{ assetId: "missing-char" }],
-      locations: [],
-      objects: [],
-      generatedImageUrl: "http://scene-img.png",
-    })
-    const target = makeNode("t1", "generate-image")
-    const edges = [makeEdge("s1", "t1")]
-
-    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
-    // Only the scene image itself should be in referenceImageUrls, no asset refs
-    expect(inputs.referenceImageUrls).toEqual(["http://scene-img.png"])
+    expect(mockBuildScenePrompt).not.toHaveBeenCalled()
+    expect(inputs.prompt).toBeUndefined()
   })
 })
 

@@ -1,12 +1,10 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildScenePrompt } from "@/lib/prompt-builder";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import type {
   WorkflowNode,
   WorkflowEdge,
   GenerateImageData,
   AdjustVolumeData,
-  SceneNodeDataType,
   GeneratedResult,
   LoopNodeData,
 } from "@/types/nodes";
@@ -1239,66 +1237,73 @@ export function resolveNodeInputs(
         inputs.audioUrl = output;
       }
     } else if (src.type === "scene") {
-      const sceneData = src.data as unknown as SceneNodeDataType;
-      const { characterDefinitions } = useWorkflowStore.getState();
-      inputs.prompt = buildScenePrompt(sceneData, characterDefinitions);
-      const sceneResults =
-        (sceneData.generatedResults as GeneratedResult[] | undefined) ?? [];
-      const sceneActiveIdx =
-        (sceneData.activeResultIndex as number | undefined) ?? 0;
-      const sceneImageUrl =
-        sceneResults[sceneActiveIdx]?.url ?? sceneData.generatedImageUrl;
-      if (sceneImageUrl) {
-        if (node.type === "generate-image" || node.type === "video-to-video") {
+      // Phase 1B.2 pipeline-managed SceneNode — outputs are populated by the
+      // pipeline orchestrator in Phase 1C. Three source handles:
+      //   `video`       → composite_video.url  (default when no handle)
+      //   `last_frame`  → last_frame.url       (image)
+      //   `audio_track` → scene_audio_track.url
+      // `output` was already routed through extractNodeOutput(src, sourceHandle)
+      // above, so we route it here by source-handle kind.
+      const sceneSourceHandle = srcEdge.sourceHandle as string | undefined;
+      if (sceneSourceHandle === "last_frame") {
+        // Treat as an image source — mirror upload-image routing below.
+        if (
+          node.type === "generate-image" ||
+          (node.type as string) === "edit-image" ||
+          (node.type as string) === "image-to-image" ||
+          node.type === "modify-image" ||
+          node.type === "video-to-video"
+        ) {
           inputs.referenceImageUrls = [
             ...(inputs.referenceImageUrls ?? []),
-            sceneImageUrl,
-          ];
-        } else {
-          inputs.imageUrl = sceneImageUrl;
-        }
-      }
-      // Extract video URL from scene video results
-      const sceneVideoResults =
-        (sceneData.generatedVideoResults as GeneratedResult[] | undefined) ?? [];
-      const sceneVideoActiveIdx =
-        (sceneData.activeVideoResultIndex as number | undefined) ?? 0;
-      const sceneVideoUrl =
-        sceneVideoResults[sceneVideoActiveIdx]?.url ?? sceneData.generatedVideoUrl;
-      if (sceneVideoUrl) {
-        if (node.type === "combine-videos") {
-          inputs.videoUrls = [...(inputs.videoUrls ?? []), sceneVideoUrl];
-          inputs.videoUrlsWithSourceIds = [
-            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
-            { nodeId: src.id, url: sceneVideoUrl },
+            output,
           ];
         } else if (node.type === "manual-edit") {
-          appendManualEditAsset(inputs, src.id, sceneVideoUrl, "video");
+          appendManualEditAsset(inputs, src.id, output, "image");
+        } else {
+          inputs.imageUrl = output;
+        }
+      } else if (sceneSourceHandle === "audio_track") {
+        // Treat as an audio source — mirror upload-audio routing.
+        if (node.type === "suno-mashup") {
+          routeSunoMashupAudio(inputs, output);
+        } else if (MULTI_AUDIO_INPUT_TYPES.has(node.type!)) {
+          inputs.audioUrls = [...(inputs.audioUrls ?? []), output];
+          inputs.audioUrlsWithSourceIds = [
+            ...(inputs.audioUrlsWithSourceIds ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "merge-video-audio") {
+          inputs.audioSources = [
+            ...(inputs.audioSources ?? []),
+            { url: output, sourceNodeId: src.id },
+          ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "audio");
+        } else {
+          inputs.audioUrl = output;
+        }
+      } else {
+        // Default → video (composite_video). Mirror VIDEO_OUTPUT_NODE_TYPES routing.
+        if (node.type === "combine-videos") {
+          inputs.videoUrls = [...(inputs.videoUrls ?? []), output];
+          inputs.videoUrlsWithSourceIds = [
+            ...((inputs.videoUrlsWithSourceIds as Array<{ nodeId: string; url: string }>) ?? []),
+            { nodeId: src.id, url: output },
+          ];
+        } else if (node.type === "manual-edit") {
+          appendManualEditAsset(inputs, src.id, output, "video");
         } else if (node.type === "merge-video-audio") {
           if (!inputs.videoUrl) {
-            inputs.videoUrl = sceneVideoUrl;
+            inputs.videoUrl = output;
           } else {
             inputs.audioSources = [
               ...(inputs.audioSources ?? []),
-              { url: sceneVideoUrl, sourceNodeId: src.id, sourceType: "video" as const },
+              { url: output, sourceNodeId: src.id, sourceType: "video" as const },
             ];
           }
         } else {
-          inputs.videoUrl = sceneVideoUrl;
-        }
-      }
-      const allAssetIds = [
-        ...sceneData.characters.map((c) => c.assetId),
-        ...(sceneData.locations ?? []).map((l) => l.assetId),
-        ...sceneData.objects.map((o) => o.assetId),
-      ];
-      for (const assetId of allAssetIds) {
-        const asset = characterDefinitions.find((a) => a.id === assetId);
-        if (asset?.referenceImageUrl) {
-          inputs.referenceImageUrls = [
-            ...(inputs.referenceImageUrls ?? []),
-            asset.referenceImageUrl,
-          ];
+          inputs.videoUrl = output;
         }
       }
     } else if (src.type === "upload-audio") {

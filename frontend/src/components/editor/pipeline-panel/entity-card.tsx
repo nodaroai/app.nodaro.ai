@@ -1,3 +1,4 @@
+import type { EntityStatus } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -7,6 +8,16 @@ interface Props {
   onApprove: () => void
   onReject: () => void
   disabled?: boolean
+}
+
+// Same status-pill table as scene-card.tsx — kept in lock-step.
+const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
+  pending: "bg-zinc-100 text-zinc-700",
+  generating: "bg-amber-100 text-amber-800",
+  awaiting_approval: "bg-blue-100 text-blue-800",
+  approved: "bg-green-100 text-green-800",
+  rejected: "bg-red-100 text-red-800",
+  failed: "bg-red-100 text-red-800",
 }
 
 export function EntityCard({ entity, onApprove, onReject, disabled }: Props) {
@@ -32,12 +43,7 @@ export function EntityCard({ entity, onApprove, onReject, disabled }: Props) {
         <div
           className={cn(
             "absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded",
-            status === "generating" && "bg-amber-100 text-amber-800",
-            status === "awaiting_approval" && "bg-blue-100 text-blue-800",
-            status === "approved" && "bg-green-100 text-green-800",
-            status === "rejected" && "bg-red-100 text-red-800",
-            status === "failed" && "bg-red-100 text-red-800",
-            status === "pending" && "bg-zinc-100 text-zinc-700",
+            STATUS_PILL_COLORS[status],
           )}
         >
           {status}

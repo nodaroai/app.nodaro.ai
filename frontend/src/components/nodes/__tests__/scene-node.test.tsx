@@ -1,141 +1,133 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { SceneNode } from "../scene-node"
+import type { SceneNodeFrontendData } from "@/types/nodes"
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
     <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
   ),
-  NodeResizer: () => null,
-  useStore: vi.fn(() => 1),
-  useNodeId: vi.fn(() => "test-node"),
-  useUpdateNodeInternals: vi.fn(() => () => {}),
 }))
 
-vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id, isRunning }: any) => (
-    <div data-testid="base-node" data-label={label} data-category={category} data-credits={credits} data-id={id} data-is-running={isRunning}>
-      {children}
-    </div>
-  ),
-}))
-
-vi.mock("lucide-react", () => {
-  const I = (p: any) => <span data-testid="mock-icon" {...p} />
+function makeData(overrides: Partial<SceneNodeFrontendData> = {}): SceneNodeFrontendData {
   return {
-    Clapperboard: I, Users: I, MapPin: I, Box: I, Loader2: I,
-    AlertCircle: I, X: I, Maximize2: I, Scissors: I, Play: I, Type: I,
-    FileVideo: I, FileImage: I, Share2: I, Heart: I, MessageCircle: I, Send: I, Expand: I,
-  }
-})
-
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) => selector({
-    updateNodeData: () => {},
-    runSingleNode: () => {},
-    characterDefinitions: [],
-    addCharacterDefinition: () => {},
-    autoOpenEditorNodeId: null,
-    setAutoOpenEditorNodeId: () => {},
-    nodes: [],
-    edges: [],
-  }),
-}))
-
-vi.mock("@/ee/hooks/use-model-credits", () => ({ useModelCredits: () => 2 }))
-vi.mock("@/components/editor/media-preview-modal", () => ({ MediaPreviewModal: () => null }))
-vi.mock("@/components/ui/delete-confirmation-dialog", () => ({ DeleteConfirmationDialog: () => null }))
-vi.mock("@/components/editor/scene-editor-modal", () => ({ SceneEditorModal: () => null }))
-vi.mock("@/components/editor/extract-references-modal", () => ({ ExtractReferencesModal: () => null }))
-vi.mock("@/components/editor/save-to-library-button", () => ({ SaveToLibraryButton: () => null }))
-vi.mock("@/components/ui/cached-image", () => ({
-  CachedImage: (props: any) => <img data-testid="cached-image" src={props.src} alt={props.alt} />,
-}))
-
-function renderNode(overrides: Record<string, unknown> = {}) {
-  const defaultProps = {
-    id: "node-1",
-    data: {
-      label: "Scene 1",
-      sceneName: "Scene 1",
-      characters: [],
-      objects: [],
-      locations: [],
-      shotType: "wide",
-      duration: 5,
-      aspectRatio: "16:9",
-    },
-    selected: false,
+    label: "Scene 1",
+    scene_index: 1,
+    description: "Establishing wide of the lighthouse at dawn",
+    emotional_beat: "setup",
+    duration_seconds: 12,
+    shot_input_mode: "first_frame",
+    cast_keys: [],
+    location_key: "lighthouse",
+    object_keys: [],
+    continuity_from_prev: "hard_cut",
+    image_model: "nano-banana-2",
+    video_model: "kling",
+    shots: [],
+    scene_anchor_keyframe: null,
+    generated_keyframes: [],
+    generated_clips: [],
+    composite_video: null,
+    last_frame: null,
+    scene_audio_track: null,
+    view_mode: "storyboard",
     ...overrides,
-  } as any
-  return render(<SceneNode {...defaultProps} />)
+  }
 }
 
-describe("SceneNode", () => {
+function renderNode(data: SceneNodeFrontendData, selected = false) {
+  return render(
+    <SceneNode
+      id="node-1"
+      data={data as any}
+      selected={selected}
+      type="scene"
+      dragging={false}
+      zIndex={0}
+      isConnectable={true}
+      positionAbsoluteX={0}
+      positionAbsoluteY={0}
+      {...({} as any)}
+    />,
+  )
+}
+
+describe("SceneNode (Phase 1B.2 pipeline)", () => {
   it("renders without crashing", () => {
-    renderNode()
-    expect(screen.getByTestId("base-node")).toBeInTheDocument()
+    renderNode(makeData())
+    expect(screen.getByTestId("scene-node")).toBeInTheDocument()
   })
 
-  it("passes correct category", () => {
-    renderNode()
-    expect(screen.getByTestId("base-node")).toHaveAttribute("data-category", "scene")
+  it("declares the four target handles for inputs", () => {
+    renderNode(makeData())
+    expect(screen.getByTestId("handle-characters")).toHaveAttribute("data-type", "target")
+    expect(screen.getByTestId("handle-location")).toHaveAttribute("data-type", "target")
+    expect(screen.getByTestId("handle-objects")).toHaveAttribute("data-type", "target")
+    expect(screen.getByTestId("handle-prev_last_frame")).toHaveAttribute("data-type", "target")
   })
 
-  it("shows idle placeholder", () => {
-    renderNode()
-    const dashed = document.querySelector(".border-dashed")
-    expect(dashed).toBeInTheDocument()
+  it("declares the three source handles for outputs", () => {
+    renderNode(makeData())
+    expect(screen.getByTestId("handle-video")).toHaveAttribute("data-type", "source")
+    expect(screen.getByTestId("handle-last_frame")).toHaveAttribute("data-type", "source")
+    expect(screen.getByTestId("handle-audio_track")).toHaveAttribute("data-type", "source")
   })
 
-  it("shows spinner when running", () => {
-    renderNode({
-      data: {
-        label: "Scene 1",
-        sceneName: "Scene 1",
-        characters: [],
-        objects: [],
-        locations: [],
-        shotType: "wide",
-        duration: 5,
-        aspectRatio: "16:9",
-        executionStatus: "running",
-      },
-    })
-    const spinner = document.querySelector(".animate-spin")
-    expect(spinner).toBeInTheDocument()
+  it("defaults to the storyboard view when view_mode is undefined", () => {
+    // view_mode omitted -> storyboard. Storyboard renders the "No shots yet" empty state.
+    const data = makeData({ view_mode: undefined as any })
+    renderNode(data)
+    expect(screen.getByText(/No shots yet/i)).toBeInTheDocument()
   })
 
-  it("shows Failed when failed", () => {
-    renderNode({
-      data: {
-        label: "Scene 1",
-        sceneName: "Scene 1",
-        characters: [],
-        objects: [],
-        locations: [],
-        shotType: "wide",
-        duration: 5,
-        aspectRatio: "16:9",
-        executionStatus: "failed",
-      },
-    })
-    expect(screen.getByText("Failed")).toBeInTheDocument()
+  it("renders the scripting view when view_mode='scripting'", () => {
+    const data = makeData({ view_mode: "scripting" })
+    renderNode(data)
+    // The scripting view shows the emotional_beat in its header row.
+    expect(screen.getByText("setup")).toBeInTheDocument()
   })
 
-  it("shows shot type badge", () => {
-    renderNode()
-    expect(screen.getByText("wide")).toBeInTheDocument()
+  it("renders the video view when view_mode='video'", () => {
+    const data = makeData({ view_mode: "video" })
+    renderNode(data)
+    expect(screen.getByText(/No composite yet/i)).toBeInTheDocument()
   })
 
-  it("shows duration", () => {
-    renderNode()
-    expect(screen.getByText("5s")).toBeInTheDocument()
+  it("renders the default view when view_mode='default'", () => {
+    const data = makeData({ view_mode: "default" })
+    renderNode(data)
+    // Default view shows "0 shots · 12s".
+    expect(screen.getByText(/0 shots/)).toBeInTheDocument()
   })
 
-  it("shows scene name as label", () => {
-    renderNode()
-    expect(screen.getByTestId("base-node")).toHaveAttribute("data-label", "Scene 1")
+  it("highlights the border when selected", () => {
+    const { rerender } = renderNode(makeData(), false)
+    expect(screen.getByTestId("scene-node").className).toContain("border-zinc-300")
+    rerender(
+      <SceneNode
+        id="node-1"
+        data={makeData() as any}
+        selected={true}
+        type="scene"
+        dragging={false}
+        zIndex={0}
+        isConnectable={true}
+        positionAbsoluteX={0}
+        positionAbsoluteY={0}
+        {...({} as any)}
+      />,
+    )
+    expect(screen.getByTestId("scene-node").className).toContain("border-blue-500")
+  })
+
+  it("adds the pipeline_owned ring when the scene is pipeline-managed", () => {
+    renderNode(makeData({ pipeline_owned: true }))
+    expect(screen.getByTestId("scene-node").className).toContain("ring-blue-200")
+  })
+
+  it("shows the scene label in the storyboard header", () => {
+    renderNode(makeData({ label: "Opening lighthouse", view_mode: "storyboard" }))
+    expect(screen.getByText("Opening lighthouse")).toBeInTheDocument()
   })
 })

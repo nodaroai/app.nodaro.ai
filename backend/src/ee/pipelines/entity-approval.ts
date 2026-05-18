@@ -42,8 +42,17 @@ export async function approveEntity(
   // unwind the approve — the DB row is already approved and the route will
   // still re-enqueue the engine; missing canvas reflection is a UX gap, not
   // a correctness issue. Phase 1B.4 will add ELK auto-layout + reconciliation.
+  //
+  // Phase 1B.2 extends this to scenes (entity_type='scene'): scenes have no
+  // main_asset at planning time (assets land in Stage 6 / Phase 1C), so the
+  // materialize path treats main_asset_id as optional.
   const entityType = row.entity_type as string
-  if (entityType === "character" || entityType === "object" || entityType === "location") {
+  if (
+    entityType === "character" ||
+    entityType === "object" ||
+    entityType === "location" ||
+    entityType === "scene"
+  ) {
     try {
       await materializeForApprovedEntity(supabase, pipelineId, entityId, entityType)
     } catch (err) {
@@ -55,35 +64,47 @@ export async function approveEntity(
 }
 
 /**
- * Loads the full entity + its main asset's r2_url, then calls
+ * Loads the full entity + (if present) its main asset's r2_url, then calls
  * `materializeEntityOnCanvas` with a Phase 1B.1 grid position.
  *
  * Split out so the entity-load + asset-load failure modes are unified in one
  * try/catch in `approveEntity` and the orchestration logic stays readable.
+ *
+ * Phase 1B.2 extension: scenes have no main_asset at planning time. The path
+ * still runs (so the SceneNode appears on canvas after Shot List approval),
+ * just without an asset fetch. Character/object/location keep the existing
+ * "no main_asset_id → bail" guard.
  */
 async function materializeForApprovedEntity(
   supabase: SupabaseClient,
   pipelineId: string,
   entityId: string,
-  entityType: "character" | "object" | "location",
+  entityType: "character" | "object" | "location" | "scene",
 ): Promise<void> {
   const { data: full } = await supabase
     .from("pipeline_entities")
     .select("id, entity_type, entity_key, metadata, main_asset_id")
     .eq("id", entityId)
     .single()
-  if (!full?.main_asset_id) return
+  if (!full) return
+  // Character/object/location require an asset before materializing (Phase 1B.1
+  // invariant — the node renders the asset URL). Scenes are planning-only at
+  // approval time and intentionally have no asset.
+  if (entityType !== "scene" && !full.main_asset_id) return
 
-  const { data: asset } = await supabase
-    .from("assets")
-    .select("r2_url")
-    .eq("id", full.main_asset_id)
-    .single()
-  const assetUrl = (asset?.r2_url as string | undefined) ?? ""
+  const assetUrl = full.main_asset_id
+    ? (
+        await supabase
+          .from("assets")
+          .select("r2_url")
+          .eq("id", full.main_asset_id)
+          .single()
+      ).data?.r2_url as string | undefined ?? ""
+    : ""
 
   const meta = (full.metadata ?? {}) as Record<string, unknown>
-  const entityName = String(meta.name ?? full.entity_key)
-  const visualDescription = String(meta.visual_description ?? "")
+  const entityName = String(meta.name ?? meta.scene_id ?? full.entity_key)
+  const visualDescription = String(meta.visual_description ?? meta.description ?? "")
 
   const { materializeEntityOnCanvas } = await import("./services/canvas-materializer.js")
   await materializeEntityOnCanvas({
@@ -94,9 +115,10 @@ async function materializeForApprovedEntity(
     entityKey: full.entity_key as string,
     entityName,
     visualDescription,
-    mainAssetId: full.main_asset_id as string,
-    mainAssetUrl: assetUrl,
+    mainAssetId: (full.main_asset_id as string | null) ?? null,
+    mainAssetUrl: full.main_asset_id ? assetUrl : null,
     position: computeCanvasPosition(entityType),
+    metadata: meta,
   })
 }
 
@@ -111,13 +133,19 @@ async function materializeForApprovedEntity(
 const _gridPositionCounts: Map<string, number> = new Map()
 
 function computeCanvasPosition(
-  entityType: "character" | "object" | "location",
+  entityType: "character" | "object" | "location" | "scene",
 ): { x: number; y: number } {
   const key = entityType
   const count = (_gridPositionCounts.get(key) ?? 0) + 1
   _gridPositionCounts.set(key, count)
-  const yBand = entityType === "character" ? 200 : entityType === "object" ? 450 : 700
-  return { x: 200 + count * 250, y: yBand }
+  // SceneNodes are wider than entity nodes in storyboard view; bump x-spacing
+  // for the whole grid so the rows feel consistent.
+  const yBand =
+    entityType === "character" ? 200
+    : entityType === "object" ? 450
+    : entityType === "location" ? 700
+    : 950 // scene
+  return { x: 200 + count * 320, y: yBand }
 }
 
 /**

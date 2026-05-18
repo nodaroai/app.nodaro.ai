@@ -59,6 +59,39 @@ in Phase 1C). Voice match is a Haiku call (~0.005 USD ≈ 0.3 credits). A typica
 3-object, 3-location run with default variants is ~50-80 credits beyond the Phase 1A
 30-credit Stage 1 estimate.
 
+## Stage 5 — Shot List (Phase 1B.2)
+
+After Locations batch approval, the engine fans out **N parallel Scene Director Sonnet calls** — one per scene from the Showrunner plan. Each call emits a complete `SceneNodeData` (shot list + camera + motion + model picks) constrained by the `shot_input_mode` and `VIDEO_MODEL_CAPS` capability registry.
+
+The **Shot List Critic** (always-on, like Script Critic) validates each scene's output. On blocking issues the Scene Director retries that scene up to 2x with critic feedback injected.
+
+Each scene materializes as a new **SceneNode** on the canvas:
+
+- Renders in **storyboard view** by default — keyframe grid + shot durations + camera shot types.
+- User reviews and approves **per scene** via the pipeline panel.
+- View mode is switchable per-node (default / storyboard / video / scripting). Video view shows `Pending Phase 1C` until the internal pipeline lands.
+
+### Scene Director output schema
+
+Per `@nodaro/shared/scene-node-types`:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `shot_input_mode` | enum | Gates which `video_model` values are valid via `modelsForInputMode()` |
+| `shots[].camera` | object | shot_type / angle / motion |
+| `shots[].duration_seconds` | number | Per-shot duration; sum ≈ scene duration ±10% |
+| `shots[].shot_intent` | object | Provider-neutral hints (needs_multishot_reference / is_loopable / needs_music_suppression / is_match_cut) |
+| `shots[].visual_keyframe_prompt` | string | Image prompt for the shot's start keyframe |
+| `shots[].end_keyframe_prompt` | string? | v4.1 Method 2 — required when `shot_input_mode='first_last_frame'` |
+| `shots[].extends_shot_id` | string? | v4.1 Method 3 — video continuation source shot |
+| `shots[].bridge_image_prompt` | string? | v4.1 Method 5 — i2i edit on prior last_frame |
+| `shots[].camera_path_directive` | object? | v4.1 Method 10 — parametric 3D camera path |
+| `scene_anchor_keyframe` | AssetRef? | v4.1 Method 6 — master keyframe (set in Phase 1C) |
+
+### Credits
+
+Scene Director (Sonnet, per scene) ~5-8 credits/scene + Shot List Critic ~2 credits/scene. An 8-scene short_film adds ~50-80 credits on top of the prior stages (~30 + ~80 = ~110 credits cumulative at end of 1B.2).
+
 ## Credits
 
 Phase 1A: ~30 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;

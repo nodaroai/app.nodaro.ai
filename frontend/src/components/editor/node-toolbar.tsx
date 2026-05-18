@@ -185,8 +185,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Object" },
   // Location
   { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Location" },
-  // Scene
-  { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "Scene" },
+  // Scene (Phase 1B.2 pipeline-managed SceneNode — replaces legacy scene)
+  { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["scene", "shot list", "storyboard", "camera", "pipeline"] },
   // Output
   { type: "save-to-storage", label: "Save to Storage", icon: <HardDrive className="h-4 w-4" />, category: "Output" },
   { type: "webhook-output", label: "Webhook Output", icon: <Webhook className="h-4 w-4" />, category: "Output" },

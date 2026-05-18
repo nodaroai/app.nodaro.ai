@@ -326,6 +326,18 @@ export async function executeNode(
     return { output: {} }
   }
 
+  // Phase 1B.2 pipeline-managed SceneNode — its internal pipeline (keyframe
+  // gen → animate → speech → lip_sync → combine) is driven by the pipeline
+  // orchestrator in Phase 1C, NOT the workflow DAG worker. From the DAG
+  // perspective the node is a no-op success leaf: outputs (composite_video,
+  // last_frame, scene_audio_track) are populated by the pipeline. Mirrors
+  // the generative-pipeline short-circuit above + the frontend execute-node
+  // no-op. The legacy case "scene" in payload-builder.ts is dead as long
+  // as this short-circuit fires before the worker-queued path.
+  if (node.type === "scene") {
+    return { output: {} }
+  }
+
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
     return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)

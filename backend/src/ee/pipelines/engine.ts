@@ -10,14 +10,14 @@ export interface DriveArgs {
 }
 
 // Canonical ordering used to pick the next pending stage when no in-flight row
-// exists. Phase 1B.1 covers Stages 1–4; Stages 5–8 land in Phase 1B.2+.
-const STAGE_ORDER = ["script", "characters", "objects", "locations"] as const
+// exists. Phase 1B.2 covers Stages 1–5; Stages 6–8 land in Phase 1B.3+.
+const STAGE_ORDER = ["script", "characters", "objects", "locations", "shot_list"] as const
 type StageOrderName = (typeof STAGE_ORDER)[number]
 
 /**
  * Engine entry. Reads the pipeline row, picks the next stage to run based on
  * `pipeline_stages` state, dispatches the corresponding stage orchestrator, and
- * advances through Stages 1–4 → `completed`. Returns early when a stage is
+ * advances through Stages 1–5 → `completed`. Returns early when a stage is
  * `awaiting_approval` (user must drive) or when the pipeline is in a terminal
  * state.
  */
@@ -69,7 +69,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       ? STAGE_ORDER.indexOf(lastApproved.stage_name as StageOrderName)
       : -1
     if (lastIdx < 0 || lastIdx + 1 >= STAGE_ORDER.length) {
-      // Phase 1B.1: after Locations stage, mark completed (Stages 5–8 land in 1B.2+).
+      // Phase 1B.2: after Shot List stage, mark completed (Stages 6–8 land in 1B.3+).
       await supabase.from("pipelines").update({ status: "completed" }).eq("id", pipelineId)
       pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "completed" })
       pipelineEvents.publish({ type: "pipeline:done", pipelineId })
@@ -98,6 +98,11 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
   if (stageToRun === "locations") {
     const { runLocationsStage } = await import("./stages/locations.js")
     await runLocationsStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "shot_list") {
+    const { runShotListStage } = await import("./stages/shot-list.js")
+    await runShotListStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
     return
   }
   // Exhaustive switch — should never reach.

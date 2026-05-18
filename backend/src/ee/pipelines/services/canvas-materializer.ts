@@ -9,6 +9,11 @@ import { randomUUID } from "node:crypto"
  * parent workflow's canvas so the user sees the bound DB row reflected in the
  * editor. ELK auto-layout + insertion animations land in Phase 1B.4.
  *
+ * Phase 1B.2 extension: also materializes Scene entities (entity_type='scene')
+ * as SceneNodes. Scenes don't have a main asset at planning time — the data
+ * payload is derived from `metadata.scene_node_data` (what the Scene Director
+ * emits) instead of name/visualDescription/asset URL.
+ *
  * Schema notes (verified against migrations 001 + 121):
  *  - `workflows` stores nodes in a `nodes` JSONB column and edges in a separate
  *    `edges` JSONB column (NOT a single `workflow_json` column).
@@ -28,17 +33,29 @@ export interface MaterializeEntityArgs {
   supabase: SupabaseClient
   pipelineId: string
   pipelineEntityId: string
-  entityType: "character" | "object" | "location"
+  entityType: "character" | "object" | "location" | "scene"
   entityKey: string
   entityName: string
   visualDescription: string
-  mainAssetId: string
-  mainAssetUrl: string
+  /**
+   * Phase 1B.1 entity types (character/object/location) always have a main
+   * asset at approval time. Phase 1B.2 scenes don't have an asset until
+   * Stage 6 — pass null for both fields.
+   */
+  mainAssetId: string | null
+  mainAssetUrl: string | null
   /**
    * Position on canvas. Phase 1B.1 uses a simple grid layout (see
    * `computeCanvasPosition` in entity-approval.ts). Phase 1B.4 swaps in ELK.
    */
   position: { x: number; y: number }
+  /**
+   * Pipeline_entities.metadata for the row being materialized. Required for
+   * scenes (the SceneNode data shape lives at `metadata.scene_node_data`);
+   * unused for character/object/location whose data is derived from the
+   * entityName/visualDescription args.
+   */
+  metadata?: Record<string, unknown>
 }
 
 /**
@@ -120,13 +137,15 @@ export async function materializeEntityOnCanvas(
 }
 
 function nodeTypeFor(
-  entityType: "character" | "object" | "location",
+  entityType: "character" | "object" | "location" | "scene",
 ): string {
   // Verified against `frontend/src/components/nodes/index.ts` nodeTypes map
   // and NODE_DEFINITIONS in `frontend/src/types/nodes.ts`.
   if (entityType === "character") return "character"
   if (entityType === "object") return "object"
-  return "location"
+  if (entityType === "location") return "location"
+  if (entityType === "scene") return "scene"
+  throw new Error(`Unknown entity_type: ${entityType as string}`)
 }
 
 /**
@@ -136,6 +155,21 @@ function nodeTypeFor(
  * on top so the frontend can recognize the node as pipeline-owned.
  */
 function buildEntityNodeData(args: MaterializeEntityArgs): Record<string, unknown> {
+  // Scenes derive their data shape from `metadata.scene_node_data` (what the
+  // Scene Director emits). They DON'T have an asset URL at planning time —
+  // the keyframes/clips populate during Phase 1C.
+  if (args.entityType === "scene") {
+    const sceneData = (args.metadata?.scene_node_data ?? {}) as Record<string, unknown>
+    return {
+      ...sceneData,
+      label: `Scene ${(sceneData.scene_index as number) ?? "?"}`,
+      pipeline_entity_id: args.pipelineEntityId,
+      pipeline_owned: true,
+      pipeline_state: "pipeline_owned_approved",
+      view_mode: "storyboard",
+    }
+  }
+
   // Common fields — every entity node has these (verified in
   // frontend/src/types/nodes.ts NODE_DEFINITIONS).
   const pipelineMeta: Record<string, unknown> = {

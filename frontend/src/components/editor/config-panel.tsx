@@ -20,11 +20,10 @@ import {
   type TextToVideoData,
   type FieldMappings,
   type PresentationDisplay,
-  type SceneNodeDataType,
 } from "@/types/nodes"
 import { PresentationDisplayConfig } from "./config-panels/presentation-display-config"
-import { SceneConfig } from "./scene-config"
-const SceneEditorModal = lazy(() => import("./scene-editor-modal").then(m => ({ default: m.SceneEditorModal })))
+// Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
+// Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
@@ -183,6 +182,7 @@ import {
   VoiceCharacterConfig,
   VoiceDeliveryConfig,
   GenerativePipelineConfig,
+  SceneConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -384,12 +384,11 @@ const RESULT_PRODUCING_TYPES = new Set([
 ))
 
 /** Extracted to isolate type checking scope — TS JSX children inference limit */
-function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandScene, onExpandDirector, update, selectedNodeId }: {
+function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExpandDirector, update, selectedNodeId }: {
   nodeType: string
   nodeData: Record<string, unknown>
   configProps: any
   updateNodeData: (id: string, data: Record<string, unknown>) => void
-  onExpandScene: () => void
   onExpandDirector: () => void
   update: (data: Record<string, unknown>) => void
   selectedNodeId: string | undefined
@@ -557,15 +556,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "face": return <FaceConfig {...configProps} />
     case "object": return <ObjectConfig {...configProps} />
     case "location": return <LocationConfig {...configProps} />
-    case "scene": return (
-      <>
-        <SceneConfig data={nodeData as SceneNodeDataType} onUpdate={update} nodeId={selectedNodeId} />
-        <Button variant="outline" className="w-full mt-2" onClick={onExpandScene}>
-          <Maximize2 className="w-4 h-4 mr-2" />
-          Expand Scene Editor
-        </Button>
-      </>
-    )
+    case "scene": return <SceneConfig {...configProps} />
     case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />
     default: return null
   }
@@ -618,7 +609,8 @@ export function ConfigPanel() {
     return (d.fieldMappings as FieldMappings) ?? {}
   }, [foundNode])
 
-  const [expandSceneOpen, setExpandSceneOpen] = useState(false)
+  // Phase 1B.2: `expandSceneOpen` state removed along with SceneEditorModal —
+  // the new SceneNode uses the pipeline panel for editing, not a legacy modal.
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const isMobile = useIsMobile()
@@ -881,7 +873,6 @@ export function ConfigPanel() {
             nodeData={nodeData}
             configProps={configProps}
             updateNodeData={updateNodeData}
-            onExpandScene={() => setExpandSceneOpen(true)}
             onExpandDirector={() => setExpandDirectorOpen(true)}
             update={update}
             selectedNodeId={selectedNodeId ?? undefined}
@@ -1028,15 +1019,10 @@ export function ConfigPanel() {
         </div>
       </div>
       )}
-      {nodeType === "scene" && expandSceneOpen && (
-        <Suspense fallback={null}>
-          <SceneEditorModal
-            isOpen={expandSceneOpen}
-            onClose={() => setExpandSceneOpen(false)}
-            nodeId={selectedNode.id}
-          />
-        </Suspense>
-      )}
+      {/* Phase 1B.2: legacy SceneEditorModal removed — new SceneNode is
+          pipeline-managed (see Section L's pipeline panel + Section H's
+          storyboard view). The expandSceneOpen state is retained as dead
+          state until the legacy scene-editor-modal.tsx cleanup pass. */}
       {KLING3_DIRECTOR_TYPES.has(nodeType) && expandDirectorOpen && (
         <Suspense fallback={null}>
           <Kling3DirectorModal

@@ -276,7 +276,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Output
   "save-to-storage": SaveToStorageNode,
   "webhook-output": WebhookOutputNode,
-  // Scene
+  // Scene (Phase 1B.2 pipeline SceneNode — replaces legacy scene component)
   scene: SceneNode,
   // Character
   character: CharacterNode,

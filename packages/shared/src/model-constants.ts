@@ -2,6 +2,7 @@
  * Model constants shared between frontend and backend.
  * Single source of truth for model capability sets and variable pricing rules.
  */
+import { z } from "zod"
 
 /** Base USD cost per 1 Nodaro credit (before markup). Used for cost→credit conversion. */
 export const CREDIT_BASE_USD = 0.02
@@ -770,3 +771,118 @@ export const CHARACTER_MOTION_PROVIDERS = [
   "wan-2.7-i2v",
 ] as const
 export type CharacterMotionProvider = typeof CHARACTER_MOTION_PROVIDERS[number]
+
+// =====================================================================
+// Scene Input Modes + Video Model Capability Registry (v4.0 + v4.1 spec §6.10)
+// =====================================================================
+
+/**
+ * SceneInputMode — the input-shape contract a video model exposes to the
+ * Scene Director. Gates which `video_model` values are valid for a given
+ * scene's `shot_input_mode`. Consumed by Scene Director LLM prompting,
+ * route Zod validation, and the frontend SceneNode config panel.
+ *
+ * See architecture spec §6.10 + v4.1 Methods 2/3/8/10 for per-mode semantics.
+ */
+export const SceneInputModeSchema = z.enum([
+  "text", // text-to-video
+  "first_frame", // i2v with start image only
+  "first_last_frame", // i2v with paired start+end (v4.1 Method 2)
+  "ref_images", // multi-ref consistency models
+  "multi_shot", // native multi-shot models (Kling Omni, Seedance multi)
+  "video_continuation", // v4.1 Method 3 — extend prior clip (VEO extend, Seedance video-ref)
+  "frame_interpolation", // v4.1 Method 8 — N sparse keyframes → interpolated video
+  "camera_path", // v4.1 Method 10 — parametric 3D camera path
+])
+export type SceneInputMode = z.infer<typeof SceneInputModeSchema>
+
+/**
+ * Prompting style each model expects from the Scene Director.
+ * Veo-family wants comma-separated cinematic tags; Kling-family wants
+ * natural-language prose; Hailuo-family wants compact single-sentence prompts.
+ */
+export type ModelPromptingStyle =
+  | "cinematic_tag_heavy" // Veo-family — comma-separated tags
+  | "natural_language" // Kling-family — prose descriptions
+  | "compact" // Hailuo-family — single-sentence
+
+export interface VideoModelCapabilities {
+  inputModes: SceneInputMode[]
+  maxShotsPerCall?: number // for multi_shot models
+  supportsLipSyncIntegrated?: boolean // Kling Avatar / VEO-3 etc
+  supportsVideoExtension?: boolean // v4.1 Method 3
+  supportsCameraPath?: boolean // v4.1 Method 10
+  maxInterpolationKeyframes?: number // v4.1 Method 8
+  maxDurationSeconds: number
+  prompting_style: ModelPromptingStyle
+}
+
+/**
+ * VIDEO_MODEL_CAPS — single source of truth for what each video model supports.
+ * Consumed by: Scene Director LLM (filters eligible models), route Zod validation
+ * (rejects invalid video_model for the chosen shot_input_mode), frontend SceneNode
+ * config panel (filters dropdown options).
+ *
+ * Adding a new video model: add an entry here, run audit-providers skill to verify
+ * downstream wiring.
+ */
+export const VIDEO_MODEL_CAPS: Record<string, VideoModelCapabilities> = {
+  "kling": {
+    inputModes: ["first_frame", "first_last_frame", "text"],
+    maxDurationSeconds: 10,
+    prompting_style: "natural_language",
+  },
+  "kling-3-omni": {
+    inputModes: ["ref_images", "multi_shot"],
+    maxShotsPerCall: 5,
+    maxDurationSeconds: 15,
+    prompting_style: "natural_language",
+  },
+  "veo3.1": {
+    inputModes: ["first_frame", "text", "video_continuation"],
+    supportsVideoExtension: true,
+    maxDurationSeconds: 8,
+    prompting_style: "cinematic_tag_heavy",
+  },
+  "seedance-2": {
+    inputModes: ["first_frame", "first_last_frame", "ref_images", "video_continuation"],
+    supportsVideoExtension: true,
+    maxDurationSeconds: 10,
+    prompting_style: "natural_language",
+  },
+  "hailuo-2.3-pro": {
+    inputModes: ["first_frame", "text"],
+    maxDurationSeconds: 10,
+    prompting_style: "compact",
+  },
+  "hailuo-standard": {
+    inputModes: ["first_frame", "first_last_frame"],
+    maxDurationSeconds: 6,
+    prompting_style: "compact",
+  },
+  "minimax": {
+    inputModes: ["first_frame", "first_last_frame"],
+    maxDurationSeconds: 6,
+    prompting_style: "compact",
+  },
+  "kling-turbo": {
+    inputModes: ["first_frame", "first_last_frame"],
+    maxDurationSeconds: 10,
+    prompting_style: "natural_language",
+  },
+  "bytedance-lite": {
+    inputModes: ["first_frame", "first_last_frame"],
+    maxDurationSeconds: 10,
+    prompting_style: "compact",
+  },
+}
+
+/**
+ * modelsForInputMode — filter VIDEO_MODEL_CAPS to models that support the given mode.
+ * Used at three call sites: Scene Director prompt construction, route Zod validation,
+ * frontend config panel dropdown options.
+ */
+export const modelsForInputMode = (mode: SceneInputMode): string[] =>
+  Object.entries(VIDEO_MODEL_CAPS)
+    .filter(([, caps]) => caps.inputModes.includes(mode))
+    .map(([model]) => model)

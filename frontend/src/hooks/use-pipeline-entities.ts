@@ -48,7 +48,17 @@ export function usePipelineEntities(
       return (await res.json()) as PipelineEntity[]
     },
     enabled: !!pipelineId,
-    refetchInterval: 5000,
+    // Poll only while anything is mid-flight. When every row has settled
+    // (approved / awaiting_approval / failed), stop polling — the panel's
+    // SSE hook still triggers a refetch on the next status transition.
+    refetchInterval: (q) => {
+      const rows = q.state.data
+      if (!rows || rows.length === 0) return 5000
+      const allSettled = rows.every((r) =>
+        ["approved", "awaiting_approval", "failed"].includes(r.status),
+      )
+      return allSettled ? false : 5000
+    },
   })
   return {
     data: query.data,
