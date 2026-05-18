@@ -75,6 +75,21 @@ export interface StorageProfile {
 }
 
 // ============================================================
+// Errors
+// ============================================================
+
+// See backend/CLAUDE.md "Hard-Fail Policy for Missing Prices" for the policy
+// rationale. Translated to HTTP 503 `price_not_configured` by credit-guard-impl.
+export class PriceNotConfiguredError extends Error {
+  readonly modelIdentifier: string
+  constructor(modelIdentifier: string) {
+    super(`Pricing is not configured for "${modelIdentifier}".`)
+    this.name = "PriceNotConfiguredError"
+    this.modelIdentifier = modelIdentifier
+  }
+}
+
+// ============================================================
 // Fallback Static Credit Costs (used when model_pricing table doesn't exist)
 // ============================================================
 
@@ -663,10 +678,17 @@ export function invalidateModelPricingCache(): void {
 
 /**
  * Returns the PRE-MARKUP base cost for a model (cached 60s).
+ *
  * Use this when the caller will apply markup separately (e.g. routes
  * composing dbCost + addon via the creditGuard computeCredits hook).
  * For most callers, prefer getModelCreditCostFromDB which returns
  * post-markup values matching what the user is charged.
+ *
+ * **Throws `PriceNotConfiguredError`** if the identifier has no row in the
+ * `model_pricing` table AND no entry in `STATIC_CREDIT_COSTS`. Per the
+ * 2026-05 hard-fail policy, pricing misconfig must fail loudly — we no
+ * longer silently default to 1 credit (which leaked revenue on missing
+ * entries like `seedance-2:8s:1080p-ref`).
  */
 export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
   const cached = modelPricingCache.get(modelIdentifier)
@@ -682,9 +704,14 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
   if (error || !data) {
     const staticCost = STATIC_CREDIT_COSTS[modelIdentifier]
     if (staticCost === undefined) {
-      console.warn(`[credits] Unknown model identifier "${modelIdentifier}" — no DB or static cost, defaulting to 1`)
+      console.error(
+        `[credits] PriceNotConfiguredError: unknown model identifier "${modelIdentifier}" — ` +
+          `no row in model_pricing AND no STATIC_CREDIT_COSTS entry. ` +
+          `This is a misconfiguration — see CLAUDE.md "Provider Enum Sync" steps 7 + 9.`,
+      )
+      throw new PriceNotConfiguredError(modelIdentifier)
     }
-    base = { creditCost: staticCost ?? 1, isEnabled: true, tierRestriction: null }
+    base = { creditCost: staticCost, isEnabled: true, tierRestriction: null }
   } else {
     base = { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
   }

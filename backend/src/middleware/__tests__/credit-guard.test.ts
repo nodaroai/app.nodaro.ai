@@ -40,12 +40,25 @@ vi.mock("@/lib/supabase.js", () => ({
   },
 }))
 
+// PriceNotConfiguredError must be the REAL class (not a vi.fn) so the
+// `err instanceof PriceNotConfiguredError` check in credit-guard-impl works.
+class PriceNotConfiguredError extends Error {
+  readonly modelIdentifier: string
+  constructor(modelIdentifier: string) {
+    super(`Pricing is not configured for "${modelIdentifier}".`)
+    this.name = "PriceNotConfiguredError"
+    this.modelIdentifier = modelIdentifier
+    Object.setPrototypeOf(this, PriceNotConfiguredError.prototype)
+  }
+}
+
 vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: {
     checkCreditsWithProfile: mockCheckCreditsWithProfile,
     checkStorageLimitWithProfile: mockCheckStorageLimitWithProfile,
     reserveCredits: mockReserveCredits,
   },
+  PriceNotConfiguredError,
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -524,5 +537,169 @@ describe("reserveCreditsForJob", () => {
       0,
       { watermarkOverride: undefined, isAppRun: true },
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests — PriceNotConfiguredError hard-fail policy (2026-05)
+// ---------------------------------------------------------------------------
+
+describe("creditGuard — PriceNotConfiguredError → 503", () => {
+  let app: FastifyInstance
+
+  afterEach(async () => {
+    if (app) await app.close()
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasCreditsRef.value = true
+  })
+
+  it("returns 503 price_not_configured when checkCreditsWithProfile throws PriceNotConfiguredError", async () => {
+    const profile = {
+      role: "user",
+      tier: "pro",
+      subscription_tier: null,
+      subscription_credits: 1000,
+      topup_credits: 0,
+      daily_spent_credits: 0,
+      last_daily_reset: new Date().toISOString(),
+      storage_used_bytes: 0,
+      storage_limit_bytes: 50_000_000_000,
+    }
+    mockFrom.mockReturnValue(createSupabaseProfileChain(profile))
+    mockCheckStorageLimitWithProfile.mockReturnValue({
+      allowed: true,
+      usedBytes: 0,
+      limitBytes: 50_000_000_000,
+    })
+    // Simulate: the underlying getModelCreditBaseCost throws because neither
+    // model_pricing nor STATIC_CREDIT_COSTS has the identifier.
+    mockCheckCreditsWithProfile.mockRejectedValue(
+      new PriceNotConfiguredError("seedance-2:8s:1080p-ref"),
+    )
+
+    app = await buildApp((req: unknown) => {
+      const body = (req as Record<string, unknown>).body as Record<string, unknown> | undefined
+      return (body?.provider as string) ?? "seedance-2:8s:1080p-ref"
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "user-1", provider: "seedance-2:8s:1080p-ref" },
+    })
+
+    expect(res.statusCode).toBe(503)
+    const body = res.json()
+    expect(body.error.code).toBe("price_not_configured")
+    expect(body.error.identifier).toBe("seedance-2:8s:1080p-ref")
+    expect(body.error.message).toContain("seedance-2:8s:1080p-ref")
+    expect(body.error.message).toContain("model_pricing")
+  })
+
+  it("returns 503 price_not_configured when computeCredits throws PriceNotConfiguredError", async () => {
+    // A computeCredits hook (e.g. generate-video.ts) that calls
+    // getModelCreditBaseCost on a missing identifier must surface the same
+    // 503 — not get swallowed and allow the request through.
+    const profile = {
+      role: "user",
+      tier: "pro",
+      subscription_tier: null,
+      subscription_credits: 1000,
+      topup_credits: 0,
+      daily_spent_credits: 0,
+      last_daily_reset: new Date().toISOString(),
+      storage_used_bytes: 0,
+      storage_limit_bytes: 50_000_000_000,
+    }
+    mockFrom.mockReturnValue(createSupabaseProfileChain(profile))
+    mockCheckStorageLimitWithProfile.mockReturnValue({
+      allowed: true,
+      usedBytes: 0,
+      limitBytes: 50_000_000_000,
+    })
+
+    // Build app with a creditGuard that has a computeCredits hook that throws
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (body?.userId && typeof body.userId === "string") {
+        req.userId = body.userId
+      }
+    })
+    app.post("/v1/test-route", {
+      preHandler: creditGuard(
+        () => "ghost-model",
+        {
+          computeCredits: async () => {
+            throw new PriceNotConfiguredError("ghost-model:variant")
+          },
+        },
+      ),
+    }, async () => ({ ok: true }))
+    await app.ready()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "user-1" },
+    })
+
+    expect(res.statusCode).toBe(503)
+    const body = res.json()
+    expect(body.error.code).toBe("price_not_configured")
+    expect(body.error.identifier).toBe("ghost-model:variant")
+    expect(mockCheckCreditsWithProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe("reserveCreditsForJob — PriceNotConfiguredError → 503", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasCreditsRef.value = true
+  })
+
+  it("returns 503 and deletes orphan job row when reserveCredits throws PriceNotConfiguredError", async () => {
+    // The reservation path is the second tripwire. Even if a route's
+    // creditGuard preHandler passed (e.g. computeCredits override), a
+    // missing-price model at reserve-time must still hard-fail. The job row
+    // (just inserted by the route) must be cleaned up to avoid a stale
+    // pending entry.
+    mockReserveCredits.mockRejectedValueOnce(
+      new PriceNotConfiguredError("missing-id"),
+    )
+    const deleteEq = vi.fn().mockResolvedValue({ error: null })
+    mockFrom.mockReturnValue({
+      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
+    })
+
+    const statusMock = vi.fn().mockReturnThis()
+    const sendMock = vi.fn()
+    const mockReq = {
+      userId: "user-1",
+      url: "/v1/test-route",
+      creditReservation: undefined,
+    } as unknown as Parameters<typeof reserveCreditsForJob>[0]
+    const mockReply = {
+      status: statusMock,
+      send: sendMock,
+    } as unknown as Parameters<typeof reserveCreditsForJob>[1]
+
+    const result = await reserveCreditsForJob(mockReq, mockReply, "job-99", "missing-id")
+
+    expect(result).toBeUndefined()
+    expect(statusMock).toHaveBeenCalledWith(503)
+    expect(sendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: "price_not_configured",
+          identifier: "missing-id",
+        }),
+      }),
+    )
+    // Orphan job row cleanup
+    expect(deleteEq).toHaveBeenCalledWith("id", "job-99")
   })
 })
