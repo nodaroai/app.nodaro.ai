@@ -65,6 +65,11 @@ const IDEMPOTENCY_ALLOWLIST: ReadonlySet<string> = new Set<string>([
   "094_mcp_dev_apps_kind.sql",
   "095_mcp_trigger_type.sql",
   "096_mcp_dynamic_tool_index.sql",
+  // The `is_forked` re-assert is inside a DO/EXCEPTION block that catches
+  // `undefined_column` — the bare ADD COLUMN only runs when the column is
+  // genuinely missing. Idempotent by design; the regex-based linter can't
+  // see through the PL/pgSQL wrapper.
+  "132_phase_1b4_schema.sql",
 ])
 
 const PROFILES_RECURSION_ALLOWLIST: ReadonlySet<string> = new Set<string>([

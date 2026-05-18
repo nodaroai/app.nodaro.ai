@@ -13,7 +13,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro/shared"
-import type { PresentationItem } from "@nodaro/shared"
+import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
@@ -400,6 +400,18 @@ interface WorkflowState {
   readonly addNode: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
+  /**
+   * Phase 1B.4 — patch `data` on every node whose
+   * `data.pipeline_entity_id === entityId`. Used by the pipeline SSE handler
+   * to apply `entity:state_change` / `entity:stale` events without needing to
+   * know each node's React Flow `id`. No-op when no match. Bypasses the
+   * label-rename / `{Ref}` sync logic since pipeline lifecycle patches never
+   * touch the node label.
+   */
+  readonly updateNodeDataByEntityId: (
+    entityId: string,
+    data: Record<string, unknown>,
+  ) => void
   readonly updateNodeWithData: (
     nodeId: string,
     nodeUpdates: Partial<WorkflowNode>,
@@ -440,6 +452,24 @@ interface WorkflowState {
   readonly setExpandStoryboard: (fn: ((scriptNodeId: string, options: { layout: "horizontal" | "vertical"; autoRun: boolean; includeCombine: boolean; narrationSource?: "visualDescription" | "action" | "imagePrompt"; nodeType?: "pipeline" | "scene" }) => void) | null) => void
   readonly autoOpenEditorNodeId: string | null
   readonly setAutoOpenEditorNodeId: (id: string | null) => void
+  /**
+   * Phase 1B.4 — id of the freshest pipeline-owned canvas node that just
+   * transitioned into `pipeline_owned_running`. Written by the pipeline SSE
+   * handler in `usePipelineEvents`; read by the canvas auto-pan hook so the
+   * viewport can follow the build live. Cleared when the panel unmounts
+   * or a new pipeline is opened.
+   */
+  readonly lastAddedPipelineNodeId: string | null
+  readonly setLastAddedPipelineNodeId: (id: string | null) => void
+  /**
+   * Phase 1B.4 — pipeline status snapshot mirrored from the SSE stream. Used
+   * by the canvas to decide whether the live-build hooks (ELK auto-layout,
+   * auto-pan) are active. Distinct from the per-node `data.status` on the
+   * generative-pipeline node so a closed pipeline panel doesn't lose this.
+   * `null` when no pipeline is active.
+   */
+  readonly activePipelineStatus: PipelineStatus | null
+  readonly setActivePipelineStatus: (status: PipelineStatus | null) => void
   /** Node ID whose Character Studio modal is open (null = closed). UI-only. */
   readonly characterStudioNodeId: string | null
   readonly setCharacterStudioNodeId: (id: string | null) => void
@@ -941,6 +971,33 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         node.id === nodeId ? { ...node, ...updates } : node,
       ),
     })),
+
+  // Phase 1B.4 — see interface JSDoc. Skips undo capture (lifecycle is
+  // backend-driven, not a user action) and skips label-rename / ref-sync.
+  // Shallow-equal skip: SSE handlers re-fire on reconnect; suppress no-op
+  // patches so React Flow doesn't re-render every entity card on every event.
+  updateNodeDataByEntityId: (entityId, data) => {
+    setSkipUndoCapture(true)
+    try {
+      set((state) => {
+        let touched = false
+        const patchKeys = Object.keys(data)
+        const nodes = state.nodes.map((node) => {
+          const d = node.data as Record<string, unknown>
+          if (d.pipeline_entity_id !== entityId) return node
+          const dataRec = data as Record<string, unknown>
+          const noChange = patchKeys.every((k) => d[k] === dataRec[k])
+          if (noChange) return node
+          touched = true
+          return { ...node, data: { ...d, ...data } as SceneNodeData }
+        })
+        if (!touched) return state
+        return { nodes }
+      })
+    } finally {
+      setSkipUndoCapture(false)
+    }
+  },
 
   updateNodeData: (nodeId, data) => {
     // If every key in the update is execution-related, tell the undo system
@@ -1584,6 +1641,11 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setExpandStoryboard: (fn) => set({ expandStoryboard: fn }),
   autoOpenEditorNodeId: null,
   setAutoOpenEditorNodeId: (id) => set({ autoOpenEditorNodeId: id }),
+  // Phase 1B.4 — live-build pipeline lifecycle (see interface JSDoc).
+  lastAddedPipelineNodeId: null,
+  setLastAddedPipelineNodeId: (id) => set({ lastAddedPipelineNodeId: id }),
+  activePipelineStatus: null,
+  setActivePipelineStatus: (status) => set({ activePipelineStatus: status }),
   characterStudioNodeId: null,
   setCharacterStudioNodeId: (id) => set({ characterStudioNodeId: id }),
   locationStudioNodeId: null,

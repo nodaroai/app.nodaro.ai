@@ -15,7 +15,7 @@ vi.mock("@/lib/pipelines-api", () => ({
   },
 }))
 vi.mock("@/hooks/use-pipeline-events", () => ({
-  usePipelineEvents: vi.fn(() => ({ events: [], connected: false })),
+  usePipelineEvents: vi.fn(() => ({ lastEvent: null, connected: false, drift: null })),
 }))
 
 import { pipelinesApi } from "@/lib/pipelines-api"

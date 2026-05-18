@@ -15,6 +15,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { hasCredits } from "@/lib/edition"
 import { createClient } from "@/lib/supabase"
 import { TrainedPill } from "@/components/editor/trained-pill"
+import { PipelineStateOverlay } from "./pipeline-state-overlay"
 import {
   Select,
   SelectContent,
@@ -118,7 +119,11 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
     variantName !== nodeData.characterName
 
   return (
-    <div className="relative" style={{ width: "100%", height: "100%" }}>
+    <div className="relative animate-fade-in-scale" style={{ width: "100%", height: "100%" }}>
+    <PipelineStateOverlay
+      state={nodeData.pipeline_state}
+      isStale={nodeData.is_stale}
+    />
     <EditableNodeLabel
       label={nodeData.label}
       icon={<UserCircle className="w-3.5 h-3.5" />}

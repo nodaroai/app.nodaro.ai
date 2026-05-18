@@ -3,9 +3,12 @@ import { useQuery } from "@tanstack/react-query"
 import type { PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { StageRow } from "./stage-row"
 import { EntityGrid } from "./entity-grid"
 import { SceneGrid } from "./scene-grid"
+import { DriftBanner } from "./drift-banner"
+import { ForkButton } from "./fork-button"
 import { Button } from "@/components/ui/button"
 
 interface Props {
@@ -16,6 +19,10 @@ interface Props {
 export function PipelinePanel({ pipelineId, onClose }: Props) {
   const [rejectMode, setRejectMode] = useState(false)
   const [feedback, setFeedback] = useState("")
+  // Phase 1B.4 — local "dismissed" flag for the drift banner. Clears on the
+  // next `pipeline:drift` SSE event (the hook returns a fresh object each
+  // time, so the effect below resets dismissal on a new drift).
+  const [driftDismissed, setDriftDismissed] = useState(false)
 
   const pipelineQuery = useQuery({
     queryKey: ["pipeline", pipelineId],
@@ -31,18 +38,44 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
     retry: false,
   })
 
-  const { events } = usePipelineEvents(pipelineId)
+  const { lastEvent, drift } = usePipelineEvents(pipelineId)
+  const setActivePipelineStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
+  // SSE `pipeline:forked` flips `activePipelineStatus` to "forked"; reading
+  // from the store wins over the polled value so the ForkButton hides
+  // immediately after a successful fork (before the next 3s poll).
+  const activePipelineStatus = useWorkflowStore((s) => s.activePipelineStatus)
 
-  // Refetch when SSE indicates a state change.
+  // Phase 1B.4 — seed the canvas's `activePipelineStatus` from the polled
+  // pipeline status. SSE events keep it fresh in real-time; this poll is the
+  // safety net (e.g. the panel opens against an in-flight pipeline that has
+  // already passed the initial status event).
   useEffect(() => {
-    if (events.length === 0) return
-    const latest = events[events.length - 1]
-    if (latest.type === "stage:status" || latest.type === "pipeline:status") {
+    if (pipelineQuery.data?.status) {
+      setActivePipelineStatus(pipelineQuery.data.status)
+    }
+  }, [pipelineQuery.data?.status, setActivePipelineStatus])
+
+  // Refetch when SSE indicates a state change. Keyed on `lastEvent?.type` so
+  // a no-op SSE re-fire (entity-level events) doesn't trigger a refetch.
+  useEffect(() => {
+    if (!lastEvent) return
+    if (
+      lastEvent.type === "stage:status" ||
+      lastEvent.type === "pipeline:status" ||
+      lastEvent.type === "pipeline:forked"
+    ) {
       void pipelineQuery.refetch()
       void stageQuery.refetch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events.length])
+  }, [lastEvent?.type])
+
+  // Phase 1B.4 — re-show the drift banner whenever a fresh drift summary
+  // arrives. `drift` is referentially-stable per event so the effect only
+  // fires on a real new event.
+  useEffect(() => {
+    if (drift) setDriftDismissed(false)
+  }, [drift])
 
   async function handleApprove() {
     await pipelinesApi.approveStage(pipelineId, "script")
@@ -68,16 +101,47 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
   const stage = stageQuery.data
   const plan = (stage?.output as { plan?: ShowrunnerPlan } | undefined)?.plan ?? null
   const status = (stage?.status as PipelineStageStatus | undefined) ?? "queued"
+  // Status the ForkButton uses to decide visibility. SSE-driven
+  // `activePipelineStatus` (set by `usePipelineEvents` on `pipeline:forked`)
+  // wins over the polled pipelines.get value so the button hides immediately
+  // after a successful fork, before the next 3s poll round-trips.
+  const effectiveStatus = activePipelineStatus ?? pipeline?.status ?? "queued"
 
   return (
     <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 bg-zinc-50 p-4 overflow-y-auto z-40">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex items-center justify-between mb-4 gap-2">
+        <div className="min-w-0">
           <div className="text-xs uppercase text-zinc-500">Pipeline</div>
-          <div className="font-semibold">{pipeline?.status ?? "loading..."}</div>
+          <div className="font-semibold truncate">{pipeline?.status ?? "loading..."}</div>
         </div>
-        <Button size="sm" variant="ghost" onClick={onClose}>×</Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ForkButton
+            pipelineId={pipelineId}
+            pipelineStatus={effectiveStatus}
+            onForked={() => {
+              void pipelineQuery.refetch()
+            }}
+          />
+          <Button size="sm" variant="ghost" onClick={onClose}>×</Button>
+        </div>
       </div>
+
+      {!driftDismissed && drift && (
+        <div className="mb-4">
+          <DriftBanner
+            drift={drift}
+            onFork={async () => {
+              try {
+                await pipelinesApi.forkPipeline(pipelineId)
+                void pipelineQuery.refetch()
+              } catch (err) {
+                console.error("[pipeline-panel] fork from drift failed:", err)
+              }
+            }}
+            onDismiss={() => setDriftDismissed(true)}
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <StageRow

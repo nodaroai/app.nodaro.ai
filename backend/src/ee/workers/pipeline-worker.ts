@@ -20,7 +20,8 @@ import { config } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 import { PIPELINE_HARD_TIMEOUT_MS } from "@nodaro/shared"
 import { drivePipeline } from "../pipelines/engine.js"
-import type { PipelineOrchestrationJobData } from "../pipelines/queue.js"
+import { pipelineOrchestrationQueue, type PipelineOrchestrationJobData } from "../pipelines/queue.js"
+import { resumeActiveOrchestrators } from "../pipelines/resume.js"
 
 const CONCURRENCY = Number(process.env.PIPELINE_WORKER_CONCURRENCY ?? "5")
 
@@ -52,6 +53,24 @@ export function startPipelineWorker(): Worker<PipelineOrchestrationJobData> {
   worker.on("completed", (job) => {
     console.log(`[pipeline-worker] job ${job.id} completed (pipeline ${job.data.pipelineId})`)
   })
+
+  // Phase 1B.4 — on boot, scan for active orchestrator jobs whose driver
+  // died mid-run (deploy / Railway rolling restart / crash) and re-attach
+  // them. Fire-and-forget — failures are logged but must not block the
+  // worker from accepting new jobs.
+  void (async () => {
+    try {
+      const result = await resumeActiveOrchestrators(supabase, pipelineOrchestrationQueue)
+      console.log(
+        `[pipeline-worker] boot resume: ${result.resumed} resumed, ${result.failed} failed (resume_limit_exceeded)`,
+      )
+    } catch (err) {
+      console.error(
+        "[pipeline-worker] boot resume scan failed:",
+        err instanceof Error ? err.message : err,
+      )
+    }
+  })()
 
   return worker
 }

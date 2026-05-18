@@ -3,6 +3,8 @@ import type { ShowrunnerPlan } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { ensureStageRow, failStage } from "../stage-utils.js"
+import { transitionEntityNodeAndEmit } from "../depends-on.js"
+import { emitDependentStaleEvents } from "../entity-approval.js"
 
 export interface RunObjectsStageArgs {
   supabase: SupabaseClient
@@ -86,6 +88,20 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
         .from("pipeline_entities")
         .update({ main_asset_id: assetId, status: "awaiting_approval" })
         .eq("id", entity.id)
+      // Phase 1B.4 (C1): the main_asset_id change fires the cascade-staleness
+      // trigger (migration 131). Surface the resulting `is_stale` flips to SSE
+      // subscribers — `emitDependentStaleEvents` is failure-tolerant and never
+      // throws, the trigger already wrote the truth.
+      await emitDependentStaleEvents(supabase, pipelineId, entity.id)
+      // Phase 1B.4 (D1): canvas-node flips to `awaiting_approval`. No-op when
+      // the entity has no pipeline_entity_nodes row yet.
+      await transitionEntityNodeAndEmit(
+        supabase,
+        pipelineId,
+        entity.id,
+        "pipeline_owned_awaiting_approval",
+        "objects",
+      )
       pipelineEvents.publish({
         type: "entity:status",
         pipelineId,

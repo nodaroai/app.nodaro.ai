@@ -16,6 +16,7 @@ import { useFullResolution } from "@/hooks/use-full-resolution"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
+import { PipelineStateOverlay } from "./pipeline-state-overlay"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ObjectNodeData } from "@/types/nodes"
 
@@ -67,7 +68,11 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ maxWidth: '220px' }}>
+    <div className="relative animate-fade-in-scale" style={{ maxWidth: '220px' }}>
+    <PipelineStateOverlay
+      state={nodeData.pipeline_state}
+      isStale={nodeData.is_stale}
+    />
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Package className="w-3.5 h-3.5" />}

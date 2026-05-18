@@ -91,6 +91,9 @@ vi.mock("../../lib/supabase.js", () => {
       },
       format: "short_film",
     } as Record<string, unknown> | null,
+    // Audit-trail rows captured by `pipeline_stage_attempts.insert(...)` —
+    // tests assert on this list after a helper succeeds (Phase 1B.4).
+    attemptInserts: [] as Array<Record<string, unknown>>,
   }
 
   function from(table: string) {
@@ -128,6 +131,14 @@ vi.mock("../../lib/supabase.js", () => {
             }),
           }),
         }),
+      }
+    }
+    if (table === "pipeline_stage_attempts") {
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          state.attemptInserts.push(row)
+          return { error: null }
+        },
       }
     }
     throw new Error(`Unmocked table: ${table}`)
@@ -171,7 +182,7 @@ async function makeApp() {
   return app
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   // Defaults — mutated only by specific tests below.
   ;(reserveHelperCredits as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -179,6 +190,12 @@ beforeEach(() => {
     usageLogId: "log-1",
   })
   ;(refundHelperCredits as ReturnType<typeof vi.fn>).mockResolvedValue(undefined)
+  // Clear the audit-trail capture between tests so each test asserts only on
+  // rows it triggered.
+  const supabaseMock = (await import("../../lib/supabase.js")) as unknown as {
+    __sceneHelpersState: { attemptInserts: Array<Record<string, unknown>> }
+  }
+  supabaseMock.__sceneHelpersState.attemptInserts.length = 0
 })
 
 // ---------------------------------------------------------------------------
@@ -208,6 +225,35 @@ describe("POST /v1/pipelines/:id/entities/:sceneId/helpers/audit_prompt", () => 
       }),
     )
     expect(refundHelperCredits).not.toHaveBeenCalled()
+    // Phase 1B.4: helper success writes a pipeline_stage_attempts audit row.
+    const supabaseMock = (await import("../../lib/supabase.js")) as unknown as {
+      __sceneHelpersState: { attemptInserts: Array<Record<string, unknown>> }
+    }
+    const inserts = supabaseMock.__sceneHelpersState.attemptInserts
+    expect(inserts).toHaveLength(1)
+    expect(inserts[0]).toMatchObject({
+      pipeline_stage_id: "stage-5",
+      attempt_n: 0,
+      trigger: "scene_helper:audit_prompt",
+    })
+    expect((inserts[0]!.output as Record<string, unknown>).scene_id).toBe("scene-1")
+    await app.close()
+  })
+
+  it("does NOT write a pipeline_stage_attempts row when the helper throws", async () => {
+    ;(runAuditPrompt as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("upstream api down"),
+    )
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/pipelines/p1/entities/scene-1/helpers/audit_prompt",
+    })
+    expect(res.statusCode).toBe(500)
+    const supabaseMock = (await import("../../lib/supabase.js")) as unknown as {
+      __sceneHelpersState: { attemptInserts: Array<Record<string, unknown>> }
+    }
+    expect(supabaseMock.__sceneHelpersState.attemptInserts).toHaveLength(0)
     await app.close()
   })
 

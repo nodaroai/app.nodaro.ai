@@ -12,6 +12,7 @@ import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
 import type { PipelineFormat, PipelineMode } from "@nodaro/shared"
 import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
+import type { PipelineState } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -3003,6 +3004,16 @@ export type CharacterNodeData = {
   // `aspect-ratio` CSS while keeping `object-fit: cover` so the image still
   // crops cleanly without stretching.
   readonly defaultAssetAspectRatio?: CharacterAspectRatio
+  // Phase 1B.4 — pipeline lifecycle. Set by canvas-materializer when the node
+  // is created from a pipeline_entity row; absent on user-created characters.
+  // Drives <PipelineStateOverlay>. `is_stale` is flipped to true by the
+  // backend cascade-staleness trigger (migration 131) when an upstream
+  // entity's main asset changes.
+  readonly pipeline_id?: string
+  readonly pipeline_entity_id?: string
+  readonly pipeline_owned?: boolean
+  readonly pipeline_state?: PipelineState
+  readonly is_stale?: boolean
 }
 
 // --- Object Node Data ---
@@ -3050,6 +3061,12 @@ export type ObjectNodeData = {
   variationsStatus: "idle" | "running" | "completed" | "failed"
   // Custom variations
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+  // Phase 1B.4 — pipeline lifecycle (see CharacterNodeData for full JSDoc).
+  readonly pipeline_id?: string
+  readonly pipeline_entity_id?: string
+  readonly pipeline_owned?: boolean
+  readonly pipeline_state?: PipelineState
+  readonly is_stale?: boolean
 }
 
 // --- Location Node Data ---
@@ -3115,6 +3132,12 @@ export type LocationNodeData = {
   anglesStatus: "idle" | "running" | "completed" | "failed"
   // Custom variations
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+  // Phase 1B.4 — pipeline lifecycle (see CharacterNodeData for full JSDoc).
+  readonly pipeline_id?: string
+  readonly pipeline_entity_id?: string
+  readonly pipeline_owned?: boolean
+  readonly pipeline_state?: PipelineState
+  readonly is_stale?: boolean
 }
 
 // --- Face Node Data ---
@@ -3717,7 +3740,11 @@ export type SceneNodeFrontendData = SharedSceneNodeData & {
   pipeline_id?: string
   pipeline_entity_id?: string
   pipeline_owned?: boolean
-  pipeline_state?: "pipeline_owned_running" | "pipeline_owned_awaiting_approval" | "pipeline_owned_approved" | "pipeline_orphaned"
+  /** Phase 1B.4 — see `@nodaro/shared/pipeline-state-types`. */
+  pipeline_state?: PipelineState
+  /** Phase 1B.4 — flipped to true by the backend cascade-staleness trigger
+   *  (migration 131) when an upstream entity's main asset changes. */
+  is_stale?: boolean
   /** Per-node view-mode override (defaults to "storyboard" in 1B.2; user can flip). */
   view_mode?: "default" | "storyboard" | "video" | "scripting"
 }

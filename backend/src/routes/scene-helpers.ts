@@ -23,10 +23,10 @@ import { supabase } from "../lib/supabase.js"
  * per-helper logic is captured in the {@link HELPERS} registry and dispatched
  * through {@link registerHelperRoute}.
  *
- * TODO Phase 1B.4: write a `pipeline_stage_attempts` row when undo lands
- * (requires migration extending the trigger CHECK to allow
- * `scene_helper:<name>`). The audit trail via `llm_calls` is sufficient for
- * 1B.3.
+ * Phase 1B.4: every successful helper run writes a `pipeline_stage_attempts`
+ * row with `trigger='scene_helper:<name>'`. Migration 132 extended the trigger
+ * CHECK to allow this. The row is the audit trail for the "undo" affordance
+ * and complements the per-LLM-call audit in `llm_calls`.
  */
 
 function gateEdition(reply: FastifyReply): boolean {
@@ -253,6 +253,27 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
           },
           parsedBody,
         )
+        // Audit-trail row — feeds the future "undo" affordance + provides a
+        // per-helper history for the panel. Migration 132 extends the trigger
+        // CHECK to allow `scene_helper:<name>`. Non-fatal: a failed insert
+        // logs but doesn't unwind the successful helper call.
+        if (ctx.stageId) {
+          const { error: auditError } = await supabase
+            .from("pipeline_stage_attempts")
+            .insert({
+              pipeline_stage_id: ctx.stageId,
+              attempt_n: 0,
+              trigger: `scene_helper:${cfg.name}`,
+              output: result as Record<string, unknown>,
+            })
+          if (auditError) {
+            // eslint-disable-next-line no-console -- audit-row failure must not be silently swallowed
+            console.error(
+              `[scene-helpers] Failed to write pipeline_stage_attempts row for ${cfg.name}:`,
+              auditError.message,
+            )
+          }
+        }
         return reply.send(result)
       } catch (err) {
         await refundHelperCredits(supabase, reservation.usageLogId)

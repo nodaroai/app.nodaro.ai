@@ -319,6 +319,33 @@ html, body {
   animation: node-pulse 1s ease-out 4;
 }
 
+/* Phase 1B.4 — fade-in-scale for newly materialized pipeline-owned nodes.
+   Distinct from `node-new-pulse` (which is a fuchsia attention-getter for
+   ALL new nodes); this animation runs once on mount, 300ms, with no
+   box-shadow. The `animate-fade-in-scale` utility maps 1:1 to the standard
+   Tailwind animation naming. */
+@keyframes fade-in-scale {
+  0% { opacity: 0; transform: scale(0.92); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in-scale {
+  animation: fade-in-scale 300ms ease-out;
+}
+
+/* Phase 1B.4 — edge fade-in on mount. React Flow re-keys edges whenever a
+   new node connects, and the default edge has no entrance transition; this
+   takes the harsh "edge appears in one frame" feel down to a softer 500ms
+   opacity ramp. Targets the SVG path React Flow renders for every edge. */
+.react-flow__edge-path {
+  animation: edge-fade-in 500ms ease-out;
+}
+
+@keyframes edge-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* Dark mode glassmorphism effect for nodes */
 .dark .node-glass {
   background: rgba(30, 30, 30, 0.9) !important;

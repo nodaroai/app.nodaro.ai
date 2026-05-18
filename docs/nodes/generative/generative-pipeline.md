@@ -116,7 +116,40 @@ Three vision-keyframe helpers need Stage 6 keyframes which don't exist until Pha
 
 ### Endpoints
 
-`POST /v1/pipelines/:id/entities/:sceneId/helpers/:name` (scope `pipelines:approve`, Cloud edition only) where `:name` is one of `audit_prompt`, `improve_prompt`, `generate_motion`, `optimize_for_model`, `add_broll`, `bridge_to_next_scene`, `anchor_scene_style`. The audit trail lives in `llm_calls` (Phase 1B.3); the spec-required `pipeline_stage_attempts` row lands in Phase 1B.4 alongside undo support.
+`POST /v1/pipelines/:id/entities/:sceneId/helpers/:name` (scope `pipelines:approve`, Cloud edition only) where `:name` is one of `audit_prompt`, `improve_prompt`, `generate_motion`, `optimize_for_model`, `add_broll`, `bridge_to_next_scene`, `anchor_scene_style`. Every successful invocation writes a `pipeline_stage_attempts` row with `trigger='scene_helper:<name>'` for audit + future undo (Phase 1B.4).
+
+## Mid-flight canvas edits (Phase 1B.4)
+
+While a pipeline is running, the engine writes nodes to the canvas. Each node carries an ownership flag (`pipeline_state`) that controls what the user can do:
+
+| State | Visual cue | What the user can do |
+|-------|-----------|---------------------|
+| `pipeline_owned_running` | Gray pulsing border + ⚙ badge | Move/relabel only — config locked |
+| `pipeline_owned_awaiting_approval` | Amber border + ⏸ badge | Edit config, approve, reject |
+| `pipeline_owned_approved` | Blue border + ✓ badge | Edit config (warns about downstream regen needed) |
+| `pipeline_orphaned` | No border | Anything — user-owned |
+
+State transitions stream via the `entity:state_change` SSE event. Adding a small orange "stale" pill (`entity:stale` event) signals that an upstream entity changed and the node may need regenerating — the smart-regen prompt lands in Phase 1D.
+
+### Fork
+
+`POST /v1/pipelines/:id/fork` (scope `pipelines:execute`, Cloud only) — takes the canvas off the pipeline's hands. All entities are marked `pipeline_orphaned`, unspent credits are refunded, and the pipeline transitions to `status='forked'`. **Terminal — no un-fork in v1.** Users who want to continue with AI assistance start a new pipeline from the forked canvas. Entity-level fork (per-scene) lands in Phase 1D.
+
+### Drift detection
+
+At each stage start, the engine validates the canvas against its plan. If entities are missing, disconnected, or forked, the pipeline pauses at `awaiting_approval` with `awaiting_reason='canvas_drift'` and emits a `pipeline:drift` SSE event. The panel surfaces a banner with a `Fork pipeline` action; the user can also edit the canvas back into shape and re-trigger approval. Sub-job-dequeue-time drift detection (mid-stage) is deferred to Phase 1D.
+
+### Dependency tracking
+
+Each scene entity's `depends_on` array records which character/object/location entities feed it. When an upstream entity changes (`main_asset_id` update), a Postgres trigger marks transitive dependents `is_stale=true` and `entity:stale` SSE events fire. The canvas surfaces this as a small orange "stale" pill. The smart-regen UX prompt ("8 scenes depend on Hero — regenerate?") lands in Phase 1D.
+
+## Resume
+
+When the BullMQ pipeline worker boots, it scans for `active` orchestration jobs and re-attaches. Each pipeline can resume up to 3 times before `failure_reason='resume_limit_exceeded'` and a refund. The `resume_count` counter is separate from `tool_retry_count` so backend crashes don't burn provider-flake budget. Stages are idempotent at the entity-key level (`pipeline_entities` UNIQUE constraint prevents duplicate inserts on retry).
+
+## Live canvas
+
+As entities materialize, the canvas runs ELK auto-layout (`elkjs`, `layered` algorithm, `RIGHT` direction) to position nodes without overlap. New nodes fade-in-scale (300ms); edges fade in (500ms). The viewport auto-pans to follow the build, but only when the user has been idle for 5+ seconds — the moment the user pans/zooms/clicks, auto-pan disengages until the user clicks the "Follow build →" mini-button to re-engage.
 
 ## Credits
 
