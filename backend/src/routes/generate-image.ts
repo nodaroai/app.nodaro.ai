@@ -240,9 +240,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
       : resolveEffectiveProvider(provider, prompt, referenceImageUrls)
 
     // Determine model identifier for credit reservation (composite for variable pricing).
+    // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
+    // so refCount drives the `:Nref` suffix the model_pricing row expects.
     const modelIdentifier = resolvedLora
       ? FLUX_LORA_CHARACTER_MODEL_ID
-      : buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
+      : buildCreditModelIdentifier(
+          effectiveProvider ?? "nano-banana",
+          quality,
+          resolution,
+          renderingSpeed,
+          undefined,
+          referenceImageUrls?.length ?? 0,
+        )
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
