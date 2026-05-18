@@ -97,6 +97,14 @@ export interface RefImageItem {
    * so insertion is purely a UX/display concern.
    */
   readonly defaultUsageMode?: UsageMode
+  /**
+   * Character LoRA training status, propagated from the upstream character
+   * node's `loraTrainingStatus`. Drives the `<TrainedPill>` next to the
+   * character name in the autocomplete root view — display-only, mirrors the
+   * canvas card badge. When `"succeeded"`, generations using this character
+   * route through the trained LoRA (see `selectLoraRoutingForMentions`).
+   */
+  readonly loraTrainingStatus?: string | null
 }
 
 type TriggerChar = "[" | "<" | "/" | "{" | "@"

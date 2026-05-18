@@ -92,6 +92,8 @@ interface VideoRefAutocompleteEntry {
   readonly variantSlug?: string
   readonly variantDisplayName?: string
   readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
+  /** Character LoRA training status — drives `<TrainedPill>` in autocomplete. */
+  readonly loraTrainingStatus?: string | null
 }
 
 function buildVideoRefAutocomplete(
@@ -111,6 +113,7 @@ function buildVideoRefAutocomplete(
       const slug = characterMentionSlug(charName)
       if (slug) {
         const defaultUsageMode = charData.defaultUsageMode
+        const loraTrainingStatus = charData.loraTrainingStatus ?? null
         const canonicalUrl =
           charData.defaultAssetUrl ||
           charData.sourceImageUrl ||
@@ -127,6 +130,7 @@ function buildVideoRefAutocomplete(
             variantSlug: undefined,
             variantDisplayName: "canonical",
             defaultUsageMode,
+            loraTrainingStatus,
           })
         }
         const assetArrays: Record<string, ReadonlyArray<{ readonly name: string; readonly url: string }>> = {
@@ -151,6 +155,7 @@ function buildVideoRefAutocomplete(
               variantSlug,
               variantDisplayName: item.name,
               defaultUsageMode,
+              loraTrainingStatus,
             })
           }
         }
@@ -207,6 +212,7 @@ function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): Ref
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,
     defaultUsageMode: ref.defaultUsageMode,
+    loraTrainingStatus: ref.loraTrainingStatus,
   }))
 }
 

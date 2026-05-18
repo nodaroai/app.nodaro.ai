@@ -490,6 +490,7 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
       defaultUsageMode: ref.defaultUsageMode,
+      loraTrainingStatus: ref.loraTrainingStatus,
     }))
   }, [connectedReferences])
 
@@ -1207,6 +1208,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
       defaultUsageMode: ref.defaultUsageMode,
+      loraTrainingStatus: ref.loraTrainingStatus,
     }))
   }, [connectedReferences])
 

@@ -1038,6 +1038,11 @@ export interface DbCharacter {
   motions?: { name: string; url: string }[]
   voice?: { voiceId: string; voiceName: string; traits: string } | null
   personality?: { mood: string; speechStyle: string; movementStyle: string; behavioralNotes: string } | null
+  /** Set when a successful LoRA training exists. Drives the `<TrainedPill>` on gallery + autocomplete. */
+  loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null
+  loraReplicateVersion?: string | null
+  loraTriggerWord?: string | null
+  loraTrainedAt?: string | null
   deletedAt?: string | null
   createdAt: string
   updatedAt: string

@@ -4,6 +4,7 @@ import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { UserCircle, Users, X, Loader2, AlertCircle, Plus, Trash2, ArchiveRestore } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CachedImage } from "@/components/ui/cached-image"
+import { TrainedPill } from "@/components/editor/trained-pill"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { deleteCharacter, getCharacterUsage, restoreCharacter, type DbCharacter } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
@@ -321,15 +322,22 @@ function ActivePane({
               onClick={() => onCardClick(c)}
               title={`View ${c.name}`}
             >
-              {c.sourceImageUrl ? (
-                <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
-                  <CachedImage src={c.sourceImageUrl} alt={c.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
-                </div>
-              ) : (
-                <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
-                  <UserCircle className="w-8 h-8 text-muted-foreground/30" />
-                </div>
-              )}
+              <div className="relative">
+                {c.sourceImageUrl ? (
+                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted/30">
+                    <CachedImage src={c.sourceImageUrl} alt={c.name} className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-muted/30 flex items-center justify-center">
+                    <UserCircle className="w-8 h-8 text-muted-foreground/30" />
+                  </div>
+                )}
+                {c.loraTrainingStatus === "succeeded" && (
+                  <div className="absolute -bottom-1 -right-1 z-10">
+                    <TrainedPill size="xs" />
+                  </div>
+                )}
+              </div>
               <span className="text-xs truncate w-full text-center">{c.name}</span>
               {isOnCanvas && <span className="text-[9px] text-muted-foreground">On canvas</span>}
             </button>
