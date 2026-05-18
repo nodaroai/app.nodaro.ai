@@ -101,6 +101,7 @@ import {
   VoiceRemixConfig,
   VoiceDesignConfig,
   ForcedAlignmentConfig,
+  SunoVoiceConfig,
   SunoGenerateConfig,
   SunoCoverConfig,
   SunoExtendConfig,
@@ -260,6 +261,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "voice-remix": "Voice Remix",
   "voice-design": "Voice Design",
   "forced-alignment": "Forced Alignment",
+  "suno-voice": "Suno Voice",
   "suno-generate": "Suno Generate",
   "suno-cover": "Suno Cover",
   "suno-extend": "Suno Extend",
@@ -480,6 +482,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "voice-remix": return <VoiceRemixConfig {...configProps} nodeId={selectedNodeId} />
     case "voice-design": return <VoiceDesignConfig {...configProps} nodeId={selectedNodeId} />
     case "forced-alignment": return <ForcedAlignmentConfig {...configProps} />
+    case "suno-voice": return <SunoVoiceConfig {...configProps} />
     case "suno-generate": return <SunoGenerateConfig {...configProps} nodeId={selectedNodeId} />
     case "suno-cover": return <SunoCoverConfig {...configProps} />
     case "suno-extend": return <SunoExtendConfig {...configProps} />

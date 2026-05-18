@@ -15,7 +15,6 @@
 
 import crypto from "node:crypto"
 import archiver from "archiver"
-import { supabase } from "./supabase.js"
 import { uploadBufferToR2 } from "./storage.js"
 import { characterMentionSlug } from "@nodaro/shared"
 
@@ -178,32 +177,6 @@ export function buildTriggerWord(name: string): string {
 export { selectLoraRoutingForMentions } from "@nodaro/shared"
 export type { LoraRouting, LoraEligibleRef } from "@nodaro/shared"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Refund helper
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Look up the reserved `usage_logs` rows for a job and refund each. Mirrors
- * the pattern in `backend/src/routes/cancel-jobs.ts:18-35`. `refundCredits`
- * itself is idempotent (CAS on `status='reserved'`), so duplicate calls are
- * safe.
- *
- * `await import` to avoid the static import landing in core code (`credits.ts`
- * lives under `ee/`).
- */
-export async function refundReservedCreditsForJob(jobId: string): Promise<void> {
-  const { CreditsService } = await import("../ee/billing/credits.js")
-  const { data: logs } = await supabase
-    .from("usage_logs")
-    .select("id")
-    .eq("job_id", jobId)
-    .eq("status", "reserved")
-  if (!logs?.length) return
-  for (const log of logs) {
-    await CreditsService.refundCredits(log.id).catch((err) => {
-      console.warn(
-        `[character-lora] refund failed log=${log.id}: ${(err as Error).message}`,
-      )
-    })
-  }
-}
+// Re-export so existing `from "./character-lora.js"` imports keep working.
+// Canonical implementation lives in `credits-job-lifecycle.ts`.
+export { refundReservedCreditsForJob } from "./credits-job-lifecycle.js"

@@ -1877,6 +1877,59 @@ export type TextToAudioData = {
   activeResultIndex?: number
 }
 
+export type SunoPersonaModel = "voice_persona" | "style_persona"
+
+export type SunoVoiceLanguage =
+  | "en" | "zh" | "es" | "fr" | "pt" | "de" | "ja" | "ko" | "hi" | "ru"
+
+export type SunoVoiceSkillLevel =
+  | "beginner" | "intermediate" | "advanced" | "professional"
+
+export type SunoVoiceStatus =
+  | "idle"           // never configured
+  | "validating"     // POST /validate → polling /validate-info
+  | "wait_validating"// validation phrase ready, awaiting user recording
+  | "generating"     // POST /generate → polling /record-info
+  | "success"        // voiceId stored
+  | "fail"
+
+/**
+ * Parameter/source node — emits a custom Suno voice persona at workflow runtime
+ * once the user has completed the modal-driven 2-stage setup flow.
+ *
+ * Output payload: { voiceId, voiceName, style, personaModel: "voice_persona" }
+ *
+ * No execution at runtime; the heavy work happens once during setup, similar to
+ * how character LoRA training works (CLAUDE.md).
+ */
+export type SunoVoiceData = {
+  [key: string]: unknown
+  label: string
+  // Source clip the user trimmed for the validation step.
+  sourceAudioUrl?: string
+  sourceVocalStartS?: number
+  sourceVocalEndS?: number
+  language?: SunoVoiceLanguage
+  // Output of the validate stage (the phrase the user must read aloud).
+  validateTaskId?: string
+  validateInfo?: string
+  // Recording of the user reading the phrase.
+  verifyAudioUrl?: string
+  // Voice metadata the user configured.
+  voiceName?: string
+  description?: string
+  style?: string
+  singerSkillLevel?: SunoVoiceSkillLevel
+  // Output of the generate stage — the canonical KIE voice persona id.
+  voiceId?: string
+  // Pipeline state for the modal.
+  status?: SunoVoiceStatus
+  errorMessage?: string
+  // Internal job tracking for the credit lifecycle.
+  generateJobId?: string
+  generateKieTaskId?: string
+}
+
 export type SunoGenerateData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -1893,6 +1946,8 @@ export type SunoGenerateData = {
   audioWeight?: number
   customMode?: boolean
   instrumental?: boolean
+  personaId?: string
+  personaModel?: SunoPersonaModel
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1915,6 +1970,8 @@ export type SunoCoverData = {
   vocalGender?: "male" | "female"
   customMode?: boolean
   instrumental?: boolean
+  personaId?: string
+  personaModel?: SunoPersonaModel
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -1939,6 +1996,8 @@ export type SunoExtendData = {
   weirdnessConstraint?: number
   audioWeight?: number
   instrumental?: boolean
+  personaId?: string
+  personaModel?: SunoPersonaModel
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
@@ -3602,6 +3661,14 @@ export interface GenerativePipelineNodeData {
 export type SceneNodeFrontendData = SharedSceneNodeData & {
   [key: string]: unknown
   label?: string
+  /**
+   * Canonical pointer to the parent pipeline. Populated by canvas-materializer
+   * when the scene node is created from a pipeline_entity row; absent on
+   * scene nodes that pre-date the §6.11 helper wiring. The §6.11 helper
+   * buttons require both `pipeline_id` and `pipeline_entity_id` to be set
+   * before they're enabled.
+   */
+  pipeline_id?: string
   pipeline_entity_id?: string
   pipeline_owned?: boolean
   pipeline_state?: "pipeline_owned_running" | "pipeline_owned_awaiting_approval" | "pipeline_owned_approved" | "pipeline_orphaned"
@@ -3668,6 +3735,7 @@ export type SceneNodeData =
   | QACheckData
   | GenerateMusicData
   | TextToAudioData
+  | SunoVoiceData
   | SunoGenerateData
   | SunoCoverData
   | SunoExtendData
@@ -3822,6 +3890,7 @@ export type SceneNodeType =
   | "qa-check"
   | "generate-music"
   | "text-to-audio"
+  | "suno-voice"
   | "suno-generate"
   | "suno-cover"
   | "suno-extend"
@@ -4704,6 +4773,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 22, step: 0.5 },
     ],
+  },
+  {
+    // Parameter/source node — emits a voiceId once the user completes setup.
+    // No DAG execution; cost is paid once during the modal flow (20cr).
+    type: "suno-voice",
+    label: "Suno Voice",
+    category: "parameter",
+    creditCost: 20,
+    inputs: [],
+    outputs: ["voicePersona"],
+    defaultData: {
+      label: "Suno Voice",
+      status: "idle",
+    } as SunoVoiceData,
   },
   {
     type: "suno-generate",

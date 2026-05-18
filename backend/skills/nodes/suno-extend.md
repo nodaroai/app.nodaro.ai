@@ -1,7 +1,7 @@
 ---
 node_type: suno-extend
-generated_at: 2026-05-18T13:23:37.400Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:01:16.002Z
+generated_from: 866224d8
 ---
 
 # Suno Extend
@@ -30,6 +30,8 @@ generated_from: cb1e786d
 - `weirdnessConstraint?: number`
 - `audioWeight?: number`
 - `instrumental?: boolean`
+- `personaId?: string`
+- `personaModel?: SunoPersonaModel`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

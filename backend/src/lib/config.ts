@@ -13,6 +13,17 @@ const envSchema = z.object({
   REPLICATE_API_TOKEN: z.string().default(""),
   /** Replicate Standard Webhooks signing secret. Required in Cloud edition for character LoRA training callbacks. */
   REPLICATE_WEBHOOK_SECRET: z.string().default(""),
+  /**
+   * Operational kill-switch for the character LoRA inference path. When
+   * "false" (or "0"), the orchestrator + single-node Run skip the swap to
+   * `flux-lora-character` and trained-character generations fall back to
+   * standard reference-image injection. Training routes still work; only
+   * the inference routing is gated. Default: enabled.
+   */
+  CHARACTER_LORA_ROUTING_ENABLED: z
+    .string()
+    .default("true")
+    .transform((s) => s.toLowerCase() !== "false" && s !== "0"),
   KIE_API_KEY: z.string().default(""),
   ANTHROPIC_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),

@@ -5,18 +5,23 @@ import {
   expireSubscriptions,
   renewSubscriptionCredits,
   sendStorageWarnings,
+  sweepStaleVoiceJobs,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
+import { reconcileOrphanedTrainings } from "../../lib/character-lora-reconciliation.js"
 
 /**
  * Start all billing cleanup cron jobs.
  *
  * Schedule:
- * - expireSubscriptions:       every hour at :00
- * - renewSubscriptionCredits:  every hour at :30
- * - cleanupFreeUserMedia:      daily at 03:00 UTC
- * - cleanupCanceledUserMedia:  daily at 03:30 UTC
- * - sendStorageWarnings:       daily at 09:00 UTC
+ * - expireSubscriptions:        every hour at :00
+ * - renewSubscriptionCredits:   every hour at :30
+ * - sweepStaleVoiceJobs:        every hour at :45 (refund abandoned suno-voice-create)
+ * - recordKieCreditSnapshot:    every hour at :15
+ * - reconcileOrphanedTrainings: every 10 minutes
+ * - cleanupFreeUserMedia:       daily at 03:00 UTC
+ * - cleanupCanceledUserMedia:   daily at 03:30 UTC
+ * - sendStorageWarnings:        daily at 09:00 UTC
  *
  * All jobs are idempotent and wrapped in try/catch to prevent server crashes.
  * Only runs in production or when ENABLE_CLEANUP_CRON=true.
@@ -55,6 +60,23 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] Credit renewal failed:", err)
+    }
+  })
+
+  // Sweep stale suno-voice jobs -- every hour at :45
+  cron.schedule("45 * * * *", async () => {
+    console.log("[cron] Starting suno-voice sweep...")
+    const start = Date.now()
+    try {
+      const result = await sweepStaleVoiceJobs()
+      console.log(
+        `[cron] Voice sweep done: ` +
+        `create.refunded=${result.created.refunded} create.failed=${result.created.markedFailed} ` +
+        `validate.failed=${result.validate.markedFailed} errors=${result.errors} ` +
+        `(${Date.now() - start}ms)`
+      )
+    } catch (err) {
+      console.error("[cron] Voice sweep failed:", err)
     }
   })
 
@@ -116,5 +138,23 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (6 schedules)")
+  // Character LoRA training reconciliation — every 10 minutes. Sweeps
+  // characters stuck in queued/training >30 min, polls Replicate, and
+  // applies the terminal-state updates the webhook would have. Catches
+  // webhook delivery failures, backend downtime, etc.
+  cron.schedule("*/10 * * * *", async () => {
+    const start = Date.now()
+    try {
+      const result = await reconcileOrphanedTrainings()
+      if (result.scanned > 0) {
+        console.log(
+          `[cron] LoRA reconciliation: scanned=${result.scanned} reconciled=${result.reconciled} stillInFlight=${result.stillInFlight} fetchFailures=${result.fetchFailures} (${Date.now() - start}ms)`,
+        )
+      }
+    } catch (err) {
+      console.error("[cron] LoRA reconciliation failed:", err)
+    }
+  })
+
+  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
 }

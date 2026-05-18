@@ -1160,6 +1160,24 @@ function routeOutput(
     return
   }
 
+  // --- Suno voice persona — voiceId → personaId on music-generation nodes ---
+  if (srcType === "suno-voice") {
+    if (
+      targetType === "suno-generate" ||
+      targetType === "suno-cover" ||
+      targetType === "suno-extend"
+    ) {
+      const voiceId =
+        (src.data.voiceId as string | undefined)?.trim() || output
+      if (voiceId) {
+        inputs.personaId = voiceId
+        inputs.personaModel =
+          (src.data.personaModel as string | undefined) ?? "voice_persona"
+      }
+    }
+    return
+  }
+
   // --- Adjust volume → could be audio or video ---
   if (srcType === "adjust-volume") {
     const lastInputType = (src.data.lastInputType as string | undefined) ?? "audio"

@@ -24,6 +24,36 @@ export const FLUX_LORA_CHARACTER_MODEL_ID = "flux-lora-character" as const
  */
 export const CHARACTER_LORA_TRAINING_JOB_TYPE = "character-lora-training" as const
 
+/**
+ * The three LoRA fields read off `CharacterNodeData` and stamped onto every
+ * `ConnectedReference` produced from a wired character. Shared between the
+ * backend's `expandWiredCharacterRefs` and the frontend's
+ * `expandCharacterNodeIntoRefs` so both sides emit the same three fields
+ * without copy-paste drift.
+ */
+export interface CharacterLoraFields {
+  readonly loraReplicateVersion: string | null
+  readonly loraTriggerWord: string | null
+  readonly loraTrainingStatus: string | null
+}
+
+/**
+ * Extract the three LoRA fields from a character node's `data`, normalized
+ * to `null` for missing/undefined values so downstream type-checks (e.g.
+ * `selectLoraRoutingForMentions`'s `=== "succeeded"`) are deterministic.
+ */
+export function extractCharacterLoraFields(charData: {
+  loraReplicateVersion?: string | null
+  loraTriggerWord?: string | null
+  loraTrainingStatus?: string | null
+}): CharacterLoraFields {
+  return {
+    loraReplicateVersion: charData.loraReplicateVersion ?? null,
+    loraTriggerWord: charData.loraTriggerWord ?? null,
+    loraTrainingStatus: charData.loraTrainingStatus ?? null,
+  }
+}
+
 export interface LoraRouting {
   readonly characterSlug: string
   readonly triggerWord: string

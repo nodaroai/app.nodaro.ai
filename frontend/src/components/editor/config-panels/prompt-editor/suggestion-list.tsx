@@ -3,6 +3,7 @@
 import { forwardRef, useImperativeHandle, useState, useEffect, useMemo, useCallback } from "react"
 import { USAGE_MODES, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
+import { TrainedPill } from "@/components/editor/trained-pill"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
@@ -433,6 +434,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                     <span className="text-slate-500 ml-1">/ {variantCount} variants</span>
                   )}
                 </span>
+                {item.loraTrainingStatus === "succeeded" && <TrainedPill size="xs" />}
                 <span className="text-slate-500 text-[12px] leading-4 shrink-0" aria-hidden>
                   &rsaquo;
                 </span>

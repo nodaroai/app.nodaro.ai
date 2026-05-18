@@ -333,6 +333,10 @@ export interface FrontendResolvedInputs {
   scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>;
   sunoTrackId?: string;
   sunoTaskId?: string;
+  /** Custom Suno voice persona id wired from an upstream suno-voice node. */
+  personaId?: string;
+  /** Persona kind, defaults to "voice_persona" when personaId is set. */
+  personaModel?: string;
   uploadUrl?: string;
   startFrameUrl?: string;
   endFrameUrl?: string;
@@ -1347,6 +1351,20 @@ export function resolveNodeInputs(
         appendManualEditAsset(inputs, src.id, output, "audio");
       } else {
         inputs.audioUrl = output;
+      }
+    } else if (src.type === "suno-voice") {
+      // Suno Voice persona: route voiceId → personaId on downstream music nodes.
+      // No-op for non-music targets so the edge stays valid but doesn't poison
+      // an unrelated string input.
+      if (
+        node.type === "suno-generate" ||
+        node.type === "suno-cover" ||
+        node.type === "suno-extend"
+      ) {
+        const srcData = src.data as Record<string, unknown>
+        inputs.personaId = output
+        inputs.personaModel =
+          (srcData.personaModel as string | undefined) ?? "voice_persona"
       }
     } else if (src.type === "suno-separate" && (srcEdge.sourceHandle === "instrumental-out" || srcEdge.sourceHandle === "vocal-out")) {
       const srcData = src.data as Record<string, unknown>;

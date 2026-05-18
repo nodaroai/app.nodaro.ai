@@ -201,7 +201,7 @@ import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
-import { selectLoraRoutingForMentions } from "@nodaro/shared";
+import { selectLoraRoutingForMentions, extractCharacterLoraFields } from "@nodaro/shared";
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
@@ -289,6 +289,19 @@ function resolveSunoIds(
   const audioId = (inputs.sunoTrackId as string | undefined) ?? (data.audioId as string | undefined);
   if (!taskId || !audioId) return null;
   return { taskId, audioId };
+}
+
+/** Resolve persona fields for a Suno music API call. Upstream wiring wins over
+ *  manual fields. Returns `{}` when no persona is set so spreading is a no-op. */
+function resolvePersona(
+  inputs: FrontendResolvedInputs,
+  d: Record<string, unknown>,
+): { personaId?: string; personaModel?: "voice_persona" | "style_persona" } {
+  const personaId = (inputs.personaId ?? (d.personaId as string | undefined)) || undefined;
+  if (!personaId) return {};
+  const personaModel = (inputs.personaModel ?? (d.personaModel as string | undefined)) as
+    | "voice_persona" | "style_persona" | undefined;
+  return { personaId, personaModel: personaModel ?? "voice_persona" };
 }
 
 function runProcessingNode(
@@ -442,13 +455,9 @@ function expandCharacterNodeIntoRefs(
   // carry an explicit `:mode` override. `undefined` ↔ "identical" (the global
   // default) is handled by the resolver, not here, to keep the JSON small.
   const defaultUsageMode = charData.defaultUsageMode;
-  // LoRA training fields — character-level (same across all variants). Drive
-  // `selectLoraRoutingForMentions` on the frontend so single-node Run injects
-  // `_internalLora` AND the orchestrator's payload-builder mirror also sees
-  // the same fields. Must stay in sync with backend `expandWiredCharacterRefs`.
-  const loraReplicateVersion = charData.loraReplicateVersion ?? null;
-  const loraTriggerWord = charData.loraTriggerWord ?? null;
-  const loraTrainingStatus = charData.loraTrainingStatus ?? null;
+  // LoRA training fields — character-level (same across all variants). Shared
+  // helper keeps this in lockstep with backend `expandWiredCharacterRefs`.
+  const loraFields = extractCharacterLoraFields(charData);
   const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl;
   if (canonicalUrl) {
     out.push([
@@ -464,9 +473,7 @@ function expandCharacterNodeIntoRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
-        loraReplicateVersion,
-        loraTriggerWord,
-        loraTrainingStatus,
+        ...loraFields,
       },
     ]);
   }
@@ -496,9 +503,7 @@ function expandCharacterNodeIntoRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
-          loraReplicateVersion,
-          loraTriggerWord,
-          loraTrainingStatus,
+          ...loraFields,
         },
       ]);
     }
@@ -1367,10 +1372,27 @@ export function executeNode(
     // (single-node Run → `_internalLora` body hint) and backend
     // (orchestrator → provider/model/extraParams swap). Single source of
     // truth in `@nodaro/shared`.
+    //
+    // The `_internalLora` body field carries `characterId` (NOT the resolved
+    // version/trigger) so a stolen JWT can't spoof another user's LoRA. The
+    // route looks up `lora_replicate_version` + `lora_trigger_word` scoped
+    // by `req.userId`.
     const loraRouting = selectLoraRoutingForMentions(connectedReferences);
-    const internalLora = loraRouting
-      ? { version: loraRouting.loraVersion, trigger: loraRouting.triggerWord }
-      : undefined;
+    let internalLora: { characterId: string } | undefined;
+    if (loraRouting) {
+      const matchingCharNode = nodes.find(
+        (n) =>
+          n.type === "character" &&
+          (n.data as CharacterNodeData).characterDbId &&
+          characterMentionSlug(
+            ((n.data as CharacterNodeData).characterName as string) ||
+              ((n.data as CharacterNodeData).label as string) ||
+              "",
+          ) === loraRouting.characterSlug,
+      );
+      const characterId = (matchingCharNode?.data as CharacterNodeData | undefined)?.characterDbId;
+      if (characterId) internalLora = { characterId };
+    }
 
     const result = buildImagePrompt({
       prompt: prompt ?? "",
@@ -2782,6 +2804,7 @@ export function executeNode(
           audioWeight: d.audioWeight,
           customMode: effectiveCustomMode,
           instrumental: d.instrumental ?? false,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
@@ -2820,6 +2843,7 @@ export function executeNode(
           vocalGender: d.vocalGender || undefined,
           customMode: d.customMode ?? hasCoverCustomFields,
           instrumental: d.instrumental ?? false,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
@@ -2855,6 +2879,7 @@ export function executeNode(
           styleWeight: d.styleWeight,
           weirdnessConstraint: d.weirdnessConstraint,
           audioWeight: d.audioWeight,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",

@@ -63,6 +63,7 @@ import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
 import { GenerateMusicNode } from "./generate-music-node";
 import { TextToAudioNode } from "./text-to-audio-node";
+import { SunoVoiceNode } from "./suno-voice-node";
 import { SunoGenerateNode } from "./suno-generate-node";
 import { SunoCoverNode } from "./suno-cover-node";
 import { SunoExtendNode } from "./suno-extend-node";
@@ -218,6 +219,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "qa-check": QACheckNode,
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
+  "suno-voice": SunoVoiceNode,
   "suno-generate": SunoGenerateNode,
   "suno-cover": SunoCoverNode,
   "suno-extend": SunoExtendNode,

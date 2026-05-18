@@ -37,7 +37,8 @@ import {
   buildFaceTemplateInputs,
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { config } from "../../lib/config.js"
+import { FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -235,13 +236,10 @@ function expandWiredCharacterRefs(
       | ConnectedReference["defaultUsageMode"]
       | undefined
     // LoRA training fields — character-level (same across all variants).
-    // Used by selectLoraRoutingForMentions to decide the LoRA inference path.
-    const loraReplicateVersion =
-      (charData.loraReplicateVersion as string | null | undefined) ?? null
-    const loraTriggerWord =
-      (charData.loraTriggerWord as string | null | undefined) ?? null
-    const loraTrainingStatus =
-      (charData.loraTrainingStatus as string | null | undefined) ?? null
+    // Shared helper keeps backend + frontend `expand*Refs` in lockstep.
+    const loraFields = extractCharacterLoraFields(
+      charData as { loraReplicateVersion?: string | null; loraTriggerWord?: string | null; loraTrainingStatus?: string | null },
+    )
     const canonicalUrl =
       (charData.defaultAssetUrl as string | undefined) ||
       (charData.sourceImageUrl as string | undefined)
@@ -258,9 +256,7 @@ function expandWiredCharacterRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
-        loraReplicateVersion,
-        loraTriggerWord,
-        loraTrainingStatus,
+        ...loraFields,
       })
     }
 
@@ -289,9 +285,7 @@ function expandWiredCharacterRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
-          loraReplicateVersion,
-          loraTriggerWord,
-          loraTrainingStatus,
+          ...loraFields,
         })
       }
     }
@@ -725,6 +719,21 @@ function simpleResult(
     modelIdentifier,
     payload,
   }
+}
+
+/**
+ * Resolve `personaId` + `personaModel` for a Suno music node. Upstream wiring
+ * (from a `suno-voice` node) wins over manual `data` fields. Returns an empty
+ * object when no persona is set so spreading into a payload is a no-op.
+ */
+function resolvePersona(
+  resolvedInputs: { personaId?: string; personaModel?: string },
+  data: Record<string, unknown>,
+): { personaId?: string; personaModel?: string } {
+  const personaId = resolvedInputs.personaId ?? (data.personaId as string | undefined)
+  if (!personaId) return {}
+  const personaModel = resolvedInputs.personaModel ?? (data.personaModel as string | undefined)
+  return { personaId, personaModel: personaModel ?? "voice_persona" }
 }
 
 // ---------------------------------------------------------------------------
@@ -1173,7 +1182,12 @@ export function buildPayload(
       // EXACTLY ONE distinct character mentioned AND that character has a
       // succeeded LoRA → swap to replicate/flux-lora-character, skip ref
       // injection, strip mention tokens, prepend trigger word.
-      const lora = selectLoraRoutingForMentions(wiredCharRefs)
+      // Gated by CHARACTER_LORA_ROUTING_ENABLED (default true) — operators
+      // can flip the env to "false" to disable the swap org-wide without
+      // a deploy if inference quality regresses.
+      const lora = config.CHARACTER_LORA_ROUTING_ENABLED
+        ? selectLoraRoutingForMentions(wiredCharRefs)
+        : null
       const effectiveProvider = lora ? "replicate" : provider
       const loraExtras = lora
         ? {
@@ -2349,6 +2363,7 @@ export function buildPayload(
         audioWeight: data.audioWeight,
         customMode: effectiveCustomMode,
         instrumental: data.instrumental ?? false,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }
@@ -2368,6 +2383,7 @@ export function buildPayload(
         vocalGender: data.vocalGender,
         customMode: data.customMode ?? hasCoverCustomFields,
         instrumental: data.instrumental ?? false,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }
@@ -2388,6 +2404,7 @@ export function buildPayload(
         styleWeight: data.styleWeight,
         weirdnessConstraint: data.weirdnessConstraint,
         audioWeight: data.audioWeight,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }

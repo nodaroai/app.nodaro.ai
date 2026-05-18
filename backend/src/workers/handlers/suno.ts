@@ -81,27 +81,29 @@ async function finalizeSunoJob(
 }
 
 const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx) {
-  const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental } = job.data as {
+  const { prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, personaId, personaModel } = job.data as {
     jobId: string; prompt: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
     customMode?: boolean; instrumental?: boolean
+    personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental})`)
+  console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental }),
+    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, personaId, personaModel }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno returned no tracks")
 }
 
 const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
-  const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental } = job.data as {
+  const { prompt, uploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel } = job.data as {
     jobId: string; prompt: string; uploadUrl: string; model?: SunoModel; lyrics?: string; style?: string; title?: string
     negativeStyle?: string; vocalGender?: string; customMode?: boolean; instrumental?: boolean
+    personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental})`)
+  console.log(`[worker] suno-cover ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   // If upload_url is a social media URL, download audio to R2 first
   let resolvedUploadUrl = uploadUrl
   if (isSocialUrl(uploadUrl)) {
@@ -112,22 +114,23 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental }),
+    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks")
 }
 
 const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
-  const { audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight } = job.data as {
+  const { audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel } = job.data as {
     jobId: string; audioId: string; defaultParamFlag?: boolean; prompt?: string; model?: SunoModel; style?: string; title?: string
     continueAt?: number; negativeStyle?: string; vocalGender?: string; styleWeight?: number; weirdnessConstraint?: number; audioWeight?: number
+    personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
-  console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight }),
+    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks")
 }

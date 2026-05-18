@@ -151,6 +151,15 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     providers: ["suno-v4", "suno-v5"],
   },
   {
+    type: "suno-voice",
+    label: "Suno Voice Persona",
+    category: "ai-audio",
+    description:
+      "Create a custom Suno voice persona from a short recording. Configured once via a setup modal that runs the 2-step KIE voice/validate + voice/generate flow; emits a voiceId for use as personaId in suno-generate / suno-cover / suno-extend.",
+    outputType: "none",
+    creditCost: 20,
+  },
+  {
     type: "ai-writer",
     label: "AI Agent",
     category: "ai-text",

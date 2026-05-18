@@ -72,6 +72,10 @@ export interface NodeOutput {
   webhookResponseBody?: string
   /** Word-timed captions output (transcribe node when wordTimestamps enabled). */
   captions?: Caption[]
+  /** Suno-voice source node — custom voice persona identifier. Consumed by
+   *  `getPrimaryOutput` and routed to `personaId` on music nodes by the input
+   *  resolver. */
+  voiceId?: string
 }
 
 export type NodeExecutionStatus =
@@ -191,6 +195,10 @@ export interface ResolvedInputs {
   scriptLocations?: Array<{ name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>
   sunoTrackId?: string
   sunoTaskId?: string
+  /** Custom Suno voice persona id wired from an upstream suno-voice node. */
+  personaId?: string
+  /** Persona kind, defaults to "voice_persona" when personaId is set. */
+  personaModel?: string
   uploadUrl?: string
   uploadUrlList?: string[]
   startFrameUrl?: string

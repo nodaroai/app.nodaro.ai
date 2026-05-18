@@ -29,6 +29,8 @@ const SUNO_MAX_POLL_ATTEMPTS = 60 // 5 minutes (60 * 5s)
 // =============================================================================
 
 
+export type SunoPersonaModel = "voice_persona" | "style_persona"
+
 export interface SunoGenerateParams {
   /** Song description (simple mode) or ignored when custom lyrics provided */
   prompt: string
@@ -54,6 +56,10 @@ export interface SunoGenerateParams {
   customMode?: boolean
   /** Whether the song is instrumental (no vocals) */
   instrumental?: boolean
+  /** Custom voice persona id (from /api/v1/voice/generate). Sent as `personaId`. */
+  personaId?: string
+  /** Persona kind. Defaults to "voice_persona" when personaId is set. */
+  personaModel?: SunoPersonaModel
 }
 
 export interface SunoCoverParams {
@@ -77,6 +83,10 @@ export interface SunoCoverParams {
   customMode?: boolean
   /** Whether the song is instrumental (no vocals) */
   instrumental?: boolean
+  /** Custom voice persona id (from /api/v1/voice/generate). Sent as `personaId`. */
+  personaId?: string
+  /** Persona kind. Defaults to "voice_persona" when personaId is set. */
+  personaModel?: SunoPersonaModel
 }
 
 export interface SunoExtendParams {
@@ -104,6 +114,10 @@ export interface SunoExtendParams {
   weirdnessConstraint?: number
   /** Audio weight 0-1 */
   audioWeight?: number
+  /** Custom voice persona id (from /api/v1/voice/generate). Sent as `personaId`. */
+  personaId?: string
+  /** Persona kind. Defaults to "voice_persona" when personaId is set. */
+  personaModel?: SunoPersonaModel
 }
 
 export interface SunoLyricsParams {
@@ -317,6 +331,10 @@ export async function sunoGenerate(
   if (params.styleWeight != null) body.style_weight = params.styleWeight
   if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audio_weight = params.audioWeight
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
 
   if (DEBUG) console.log(`[Suno] Generating song with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
@@ -404,6 +422,10 @@ export async function sunoCover(
   if (params.title) body.title = params.title
   if (params.negativeStyle) body.negative_style = params.negativeStyle
   if (params.vocalGender) body.vocal_gender = params.vocalGender
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
 
   if (DEBUG) console.log(`[Suno] Creating cover with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
@@ -493,6 +515,10 @@ export async function sunoExtend(
   if (params.styleWeight != null) body.style_weight = params.styleWeight
   if (params.weirdnessConstraint != null) body.weirdness_constraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audio_weight = params.audioWeight
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
 
   if (DEBUG) console.log(`[Suno] Extending track ${params.audioId} with model ${model}`)
   if (DEBUG) console.log(`[Suno] Request:`, JSON.stringify(body, null, 2))
@@ -1857,4 +1883,289 @@ export async function sunoUploadExtend(
 
   if (DEBUG) console.log(`[Suno] Upload extend task created: ${taskId}`)
   return pollSunoTask(taskId)
+}
+
+// =============================================================================
+// VOICE PERSONA API
+// =============================================================================
+//
+// Two-stage human-in-the-loop flow:
+//   1. validate → poll validate-info → user reads phrase
+//   2. generate → poll record-info → voiceId
+//
+// Unlike the music functions above, voice methods are thin proxies. The
+// frontend modal owns the polling loop because step (2) requires user
+// interaction (recording the phrase) that happens between the two stages.
+
+export type SunoVoiceLanguage =
+  | "en" | "zh" | "es" | "fr" | "pt" | "de" | "ja" | "ko" | "hi" | "ru"
+
+export type SunoVoiceSkillLevel =
+  | "beginner" | "intermediate" | "advanced" | "professional"
+
+export interface SunoVoiceValidateParams {
+  voiceUrl: string
+  vocalStartS: number
+  vocalEndS: number
+  language?: SunoVoiceLanguage
+}
+
+export interface SunoVoiceGenerateApiParams {
+  taskId: string
+  verifyUrl: string
+  voiceName?: string
+  description?: string
+  style?: string
+  singerSkillLevel?: SunoVoiceSkillLevel
+}
+
+export type SunoVoiceValidateStatus =
+  | "wait_processing"
+  | "processing_validate"
+  | "processing_validate_fail"
+  | "wait_validating"
+  | "success"
+  | "fail"
+
+// KIE returns the same status enum for both stages.
+export type SunoVoiceRecordStatus = SunoVoiceValidateStatus
+
+export interface SunoVoiceValidateInfo {
+  taskId: string
+  validateInfo: string | null
+  status: SunoVoiceValidateStatus
+  errorCode: number | null
+  errorMessage: string
+}
+
+export interface SunoVoiceRecordInfo {
+  taskId: string
+  voiceId: string | null
+  status: SunoVoiceRecordStatus
+  errorCode: number | null
+  errorMessage: string
+}
+
+interface VoiceCreateResponse {
+  code: number
+  msg?: string
+  message?: string
+  data?: { taskId: string }
+}
+
+interface VoiceValidateInfoResponse {
+  code: number
+  msg?: string
+  data?: {
+    taskId: string
+    validateInfo?: string | null
+    status?: string
+    errorCode?: number | null
+    errorMessage?: string
+  }
+}
+
+interface VoiceRecordInfoResponse {
+  code: number
+  msg?: string
+  data?: {
+    taskId: string
+    voiceId?: string | null
+    status?: string
+    errorCode?: number | null
+    errorMessage?: string
+  }
+}
+
+async function postVoiceJson(
+  path: string,
+  body: Record<string, unknown>,
+  errLabel: string
+): Promise<string> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(`KIE_API_KEY is not configured`, errLabel)
+  }
+
+  if (DEBUG) console.log(`[Suno Voice] POST ${path}`, JSON.stringify(body))
+
+  const response = await fetch(`${KIE_API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(30_000),
+  })
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno Voice] ${path} status=${response.status} body=${responseText.substring(0, 300)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `${errLabel} HTTP ${response.status}: ${responseText}`,
+      errLabel
+    )
+  }
+
+  let parsed: VoiceCreateResponse
+  try {
+    parsed = JSON.parse(responseText) as VoiceCreateResponse
+  } catch {
+    throw createSanitizedError(`${errLabel} response is not JSON: ${responseText}`, errLabel)
+  }
+
+  if (parsed.code !== 0 && parsed.code !== 200) {
+    throw createSanitizedError(
+      `${errLabel} error (code ${parsed.code}): ${parsed.msg ?? parsed.message ?? "unknown"}`,
+      errLabel
+    )
+  }
+
+  const taskId = parsed.data?.taskId
+  if (!taskId) {
+    throw createSanitizedError(
+      `${errLabel} response missing taskId: ${JSON.stringify(parsed)}`,
+      errLabel
+    )
+  }
+  return taskId
+}
+
+async function getVoiceJson<T extends VoiceValidateInfoResponse | VoiceRecordInfoResponse>(
+  path: string,
+  taskId: string,
+  errLabel: string
+): Promise<T> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError(`KIE_API_KEY is not configured`, errLabel)
+  }
+
+  const url = new URL(`${KIE_API_BASE}${path}`)
+  url.searchParams.set("taskId", taskId)
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10_000),
+  })
+
+  const responseText = await response.text()
+  if (DEBUG) console.log(`[Suno Voice] GET ${path} status=${response.status} body=${responseText.substring(0, 300)}`)
+
+  if (!response.ok) {
+    throw createSanitizedError(
+      `${errLabel} HTTP ${response.status}: ${responseText}`,
+      errLabel
+    )
+  }
+
+  let parsed: T
+  try {
+    parsed = JSON.parse(responseText) as T
+  } catch {
+    throw createSanitizedError(`${errLabel} response is not JSON: ${responseText}`, errLabel)
+  }
+
+  if (parsed.code !== 0 && parsed.code !== 200) {
+    throw createSanitizedError(
+      `${errLabel} error (code ${parsed.code}): ${parsed.msg ?? "unknown"}`,
+      errLabel
+    )
+  }
+
+  return parsed
+}
+
+/**
+ * Stage 1 — submit source audio + segment, get a validation taskId.
+ * The validation phrase is generated asynchronously; poll {@link sunoVoiceValidateInfo}.
+ */
+export async function sunoVoiceValidate(
+  params: SunoVoiceValidateParams
+): Promise<{ taskId: string }> {
+  const body: Record<string, unknown> = {
+    voiceUrl: params.voiceUrl,
+    vocalStartS: params.vocalStartS,
+    vocalEndS: params.vocalEndS,
+  }
+  if (params.language) body.language = params.language
+
+  const taskId = await postVoiceJson("/api/v1/voice/validate", body, "Suno voice validate")
+  return { taskId }
+}
+
+/**
+ * Poll for the validation phrase. Returns `validateInfo` (the phrase the user
+ * must read) once status flips to `wait_validating`.
+ */
+export async function sunoVoiceValidateInfo(taskId: string): Promise<SunoVoiceValidateInfo> {
+  const parsed = await getVoiceJson<VoiceValidateInfoResponse>(
+    "/api/v1/voice/validate-info",
+    taskId,
+    "Suno voice validate-info"
+  )
+  const data = parsed.data
+  return {
+    taskId: data?.taskId ?? taskId,
+    validateInfo: data?.validateInfo ?? null,
+    status: (data?.status as SunoVoiceValidateStatus) ?? "wait_processing",
+    errorCode: data?.errorCode ?? null,
+    errorMessage: data?.errorMessage ?? "",
+  }
+}
+
+/**
+ * Regenerate the validation phrase for an existing task.
+ */
+export async function sunoVoiceRegenerate(taskId: string): Promise<{ taskId: string }> {
+  // KIE doc uses `calBackUrl` (sic) and marks it required. We pass a placeholder
+  // since we poll instead of using callbacks.
+  const newTaskId = await postVoiceJson(
+    "/api/v1/voice/regenerate",
+    { taskId, calBackUrl: "https://callback.placeholder" },
+    "Suno voice regenerate"
+  )
+  return { taskId: newTaskId }
+}
+
+/**
+ * Stage 2 — submit the user's reading of the validation phrase. Returns the
+ * generation taskId; poll {@link sunoVoiceRecordInfo} until status = success.
+ */
+export async function sunoVoiceGenerate(
+  params: SunoVoiceGenerateApiParams
+): Promise<{ taskId: string }> {
+  const body: Record<string, unknown> = {
+    taskId: params.taskId,
+    verifyUrl: params.verifyUrl,
+  }
+  if (params.voiceName) body.voiceName = params.voiceName
+  if (params.description) body.description = params.description
+  if (params.style) body.style = params.style
+  if (params.singerSkillLevel) body.singerSkillLevel = params.singerSkillLevel
+
+  const taskId = await postVoiceJson("/api/v1/voice/generate", body, "Suno voice generate")
+  return { taskId }
+}
+
+/**
+ * Poll the voice creation task. Returns `voiceId` once status = "success".
+ */
+export async function sunoVoiceRecordInfo(taskId: string): Promise<SunoVoiceRecordInfo> {
+  const parsed = await getVoiceJson<VoiceRecordInfoResponse>(
+    "/api/v1/voice/record-info",
+    taskId,
+    "Suno voice record-info"
+  )
+  const data = parsed.data
+  return {
+    taskId: data?.taskId ?? taskId,
+    voiceId: data?.voiceId ?? null,
+    status: (data?.status as SunoVoiceRecordStatus) ?? "wait_processing",
+    errorCode: data?.errorCode ?? null,
+    errorMessage: data?.errorMessage ?? "",
+  }
 }

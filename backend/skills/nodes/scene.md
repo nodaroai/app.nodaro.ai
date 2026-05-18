@@ -1,7 +1,7 @@
 ---
 node_type: scene
-generated_at: 2026-05-18T13:23:37.741Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T17:47:29.052Z
+generated_from: ae6ff928
 ---
 
 # Scene
@@ -10,56 +10,12 @@ generated_from: cb1e786d
 **Type:** `scene`
 **Category:** scene
 **Credit cost:** 0
-**Inputs (target handles):** `in`, `audio1`, `audio2`, `audio3`, `audio4`, `audio5`
-**Outputs (source handles):** `prompt`, `imageRefs`, `narration`, `dialogue`, `duration`
+**Inputs (target handles):** `characters`, `location`, `objects`, `prev_last_frame`
+**Outputs (source handles):** `video`, `last_frame`, `audio_track`
 
 **Default data:**
 ```json
-{
-  "label": "Scene",
-  "sceneName": "",
-  "sceneNumber": 1,
-  "duration": 5,
-  "summary": "",
-  "characters": [],
-  "dialogue": [],
-  "locations": [],
-  "timeOfDay": "noon",
-  "weather": "clear",
-  "lighting": "natural",
-  "objects": [],
-  "aspectRatio": "16:9",
-  "shotType": "medium",
-  "cameraAngle": "eye-level",
-  "cameraMovement": "static",
-  "depthOfField": "medium",
-  "lensType": "normal",
-  "mood": [],
-  "colorPalette": [],
-  "visualStyle": "cinematic",
-  "narration": "",
-  "musicMood": "",
-  "soundEffects": [],
-  "transitionIn": "cut",
-  "transitionOut": "cut",
-  "directorNotes": "",
-  "referenceUrls": [],
-  "generatedPrompt": "",
-  "executionStatus": "idle",
-  "generatedResults": [],
-  "activeResultIndex": 0,
-  "generatedImageUrl": "",
-  "fieldMappings": {},
-  "sourceScriptNodeId": "",
-  "sourceSceneIndex": -1,
-  "autoSyncWithScript": false,
-  "audioAssignments": [],
-  "videoProvider": "minimax",
-  "generatedVideoResults": [],
-  "activeVideoResultIndex": 0,
-  "generatedVideoUrl": "",
-  "videoExecutionStatus": "idle"
-}
+{}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
@@ -85,51 +41,7 @@ generated_from: cb1e786d
     "x": 0,
     "y": 0
   },
-  "data": {
-    "label": "Scene",
-    "sceneName": "",
-    "sceneNumber": 1,
-    "duration": 5,
-    "summary": "",
-    "characters": [],
-    "dialogue": [],
-    "locations": [],
-    "timeOfDay": "noon",
-    "weather": "clear",
-    "lighting": "natural",
-    "objects": [],
-    "aspectRatio": "16:9",
-    "shotType": "medium",
-    "cameraAngle": "eye-level",
-    "cameraMovement": "static",
-    "depthOfField": "medium",
-    "lensType": "normal",
-    "mood": [],
-    "colorPalette": [],
-    "visualStyle": "cinematic",
-    "narration": "",
-    "musicMood": "",
-    "soundEffects": [],
-    "transitionIn": "cut",
-    "transitionOut": "cut",
-    "directorNotes": "",
-    "referenceUrls": [],
-    "generatedPrompt": "",
-    "executionStatus": "idle",
-    "generatedResults": [],
-    "activeResultIndex": 0,
-    "generatedImageUrl": "",
-    "fieldMappings": {},
-    "sourceScriptNodeId": "",
-    "sourceSceneIndex": -1,
-    "autoSyncWithScript": false,
-    "audioAssignments": [],
-    "videoProvider": "minimax",
-    "generatedVideoResults": [],
-    "activeVideoResultIndex": 0,
-    "generatedVideoUrl": "",
-    "videoExecutionStatus": "idle"
-  }
+  "data": {}
 }
 ```
 <!-- AUTO-GEN:END examples -->

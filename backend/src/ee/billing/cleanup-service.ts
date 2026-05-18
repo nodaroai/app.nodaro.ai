@@ -634,6 +634,82 @@ export async function sendStorageWarnings(): Promise<WarningResult> {
 }
 
 // ============================================================
+// F) Sweep stale Suno voice persona jobs
+// ============================================================
+// suno-voice-create has no KIE webhook fallback (unlike character-lora), so
+// abandoned reservations must be swept here. Validate rows have no credits —
+// GC only.
+
+interface VoiceJobSweepResult {
+  readonly created: { refunded: number; markedFailed: number }
+  readonly validate: { markedFailed: number }
+  readonly errors: number
+}
+
+export async function sweepStaleVoiceJobs(): Promise<VoiceJobSweepResult> {
+  const result = {
+    created: { refunded: 0, markedFailed: 0 },
+    validate: { markedFailed: 0 },
+    errors: 0,
+  }
+
+  const createCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const { data: createStale, error: createErr } = await supabase
+    .from("jobs")
+    .select("id")
+    .eq("model_identifier", "suno-voice-create")
+    .in("status", ["pending", "processing"])
+    .lt("created_at", createCutoff)
+    .limit(BATCH_SIZE)
+
+  if (createErr) {
+    console.error("[cleanup] sweep suno-voice-create query failed:", createErr.message)
+    result.errors++
+  } else if (createStale && createStale.length > 0) {
+    const { refundReservedCreditsForJob } = await import("../../lib/credits-job-lifecycle.js")
+    for (const job of createStale) {
+      try {
+        await refundReservedCreditsForJob(job.id)
+        result.created.refunded++
+        // CAS on status guards against a concurrent poll racing to commit.
+        await supabase
+          .from("jobs")
+          .update({
+            status: "failed",
+            error: "voice generation abandoned — credits refunded by cleanup sweep",
+          })
+          .eq("id", job.id)
+          .in("status", ["pending", "processing"])
+        result.created.markedFailed++
+      } catch (err) {
+        console.error(`[cleanup] voice-create sweep failed for job ${job.id}:`, err)
+        result.errors++
+      }
+    }
+  }
+
+  const validateCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { error: validateErr, count } = await supabase
+    .from("jobs")
+    .update({
+      status: "failed",
+      error: "voice validate abandoned — cleaned up by cron",
+    }, { count: "exact" })
+    .eq("model_identifier", "suno-voice-validate")
+    .in("status", ["pending", "processing"])
+    .lt("created_at", validateCutoff)
+
+  if (validateErr) {
+    console.error("[cleanup] sweep suno-voice-validate failed:", validateErr.message)
+    result.errors++
+  } else if (count) {
+    result.validate.markedFailed = count
+  }
+
+  return result
+}
+
+// ============================================================
 // Formatting helper
 // ============================================================
 

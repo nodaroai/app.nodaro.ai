@@ -46,6 +46,7 @@ vi.mock("@/lib/config.js", () => ({
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
+    CHARACTER_LORA_ROUTING_ENABLED: true,
   },
   isCloud: () => true,
   hasCredits: () => true,
@@ -66,6 +67,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { generateImageRoutes } from "../generate-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -97,6 +99,41 @@ beforeEach(async () => {
 afterEach(async () => {
   await app.close()
 })
+
+// ---------------------------------------------------------------------------
+// Shared mock builder: wires a chainable
+//   supabase.from("characters").select().eq().eq().is().single()
+// stub paired with a chainable
+//   supabase.from("jobs").insert().select().single()
+// stub. Both the identity-injection tests and the _internalLora spoof tests
+// hit the same .select().eq().eq().is().single() shape, so they share this.
+// ---------------------------------------------------------------------------
+
+function setupSupabaseMock(opts: {
+  charRow?: Record<string, unknown> | null
+  charError?: { code?: string } | null
+}) {
+  const charSingle = vi.fn().mockResolvedValue({
+    data: opts.charRow ?? null,
+    error: opts.charError ?? null,
+  })
+  const charIs = vi.fn().mockReturnValue({ single: charSingle })
+  const charEq2 = vi.fn().mockReturnValue({ is: charIs })
+  const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
+  const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
+
+  const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
+  const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
+  const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
+
+  const fromMock = vi.mocked(supabase.from)
+  fromMock.mockImplementation((table: string) => {
+    if (table === "characters") return { select: charSelect } as never
+    if (table === "jobs") return { insert: jobInsert } as never
+    return {} as never
+  })
+  return { charSelect, charEq1, charEq2, charIs, charSingle, jobInsert, fromMock }
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -211,32 +248,6 @@ describe("POST /v1/generate-image", () => {
   describe("identity injection (injectCharacterContext)", () => {
     const CHARACTER_ID = "00000000-0000-4000-8000-0000000000aa"
     const VALID_UUID = "00000000-0000-4000-8000-000000000001"
-
-    function setupSupabaseMock(opts: {
-      charRow?: { canonical_description: string | null; description: string | null; name: string | null } | null
-      charError?: { code?: string } | null
-    }) {
-      const charSingle = vi.fn().mockResolvedValue({
-        data: opts.charRow ?? null,
-        error: opts.charError ?? null,
-      })
-      const charIs = vi.fn().mockReturnValue({ single: charSingle })
-      const charEq2 = vi.fn().mockReturnValue({ is: charIs })
-      const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
-      const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
-
-      const jobSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
-      const jobSelect = vi.fn().mockReturnValue({ single: jobSingle })
-      const jobInsert = vi.fn().mockReturnValue({ select: jobSelect })
-
-      const fromMock = vi.mocked(supabase.from)
-      fromMock.mockImplementation((table: string) => {
-        if (table === "characters") return { select: charSelect } as never
-        if (table === "jobs") return { insert: jobInsert } as never
-        return {} as never
-      })
-      return { charSelect, charEq1, charEq2, charIs, charSingle, jobInsert, fromMock }
-    }
 
     it("does NOT query characters when injectCharacterContext is omitted (default off)", async () => {
       const { fromMock } = setupSupabaseMock({ charRow: { canonical_description: "ignored", description: null, name: "Kira" } })
@@ -369,6 +380,65 @@ describe("POST /v1/generate-image", () => {
       expect(charEq1).toHaveBeenCalledWith("id", CHARACTER_ID)
       expect(charEq2).toHaveBeenCalledWith("user_id", VALID_UUID)
       expect(charIs).toHaveBeenCalledWith("deleted_at", null)
+    })
+  })
+
+  // Regression net for PR #2474, which moved _internalLora resolution from a
+  // raw Replicate version hash (spoofable) to a server-side characterId
+  // lookup scoped by (id, user_id). These tests pin the ownership check.
+  describe("_internalLora cross-user spoof guard", () => {
+    const VICTIM_USER_ID = "00000000-0000-4000-8000-0000000000aa"
+    const VICTIM_CHARACTER_ID = "00000000-0000-4000-8000-0000000000bb"
+    const ATTACKER_USER_ID = "00000000-0000-4000-8000-0000000000cc"
+
+    it("returns 400 character_not_trained when characterId belongs to a different user", async () => {
+      // Foreign-owned characterId: (id, user_id) filter matches no row.
+      const { charEq1, charEq2, jobInsert } = setupSupabaseMock({ charRow: null })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: ATTACKER_USER_ID,
+          provider: FLUX_LORA_CHARACTER_MODEL_ID,
+          _internalLora: { characterId: VICTIM_CHARACTER_ID },
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("character_not_trained")
+      expect(charEq1).toHaveBeenCalledWith("id", VICTIM_CHARACTER_ID)
+      expect(charEq2).toHaveBeenCalledWith("user_id", ATTACKER_USER_ID)
+      expect(charEq2).not.toHaveBeenCalledWith("user_id", VICTIM_USER_ID)
+      expect(jobInsert).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("returns 400 character_not_trained when character exists but lora_training_status != 'succeeded'", async () => {
+      // Same-user characterId, but the LoRA hasn't finished training yet.
+      const { jobInsert } = setupSupabaseMock({
+        charRow: {
+          lora_replicate_version: "v_in_progress",
+          lora_trigger_word: "TOK_kira",
+          lora_training_status: "training",
+        },
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VICTIM_USER_ID,
+          provider: FLUX_LORA_CHARACTER_MODEL_ID,
+          _internalLora: { characterId: VICTIM_CHARACTER_ID },
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("character_not_trained")
+      expect(jobInsert).not.toHaveBeenCalled()
     })
   })
 })

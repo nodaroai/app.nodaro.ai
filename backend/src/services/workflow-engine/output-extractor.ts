@@ -104,6 +104,14 @@ export function extractSourceNodeOutput(
       return url ? { audioUrl: url } : undefined
     }
 
+    case "suno-voice": {
+      // Source node — voiceId stored on data after one-time setup. Consumer
+      // routing reads `voiceId` and maps it to `personaId` on suno-generate /
+      // cover / extend (see input-resolver.ts).
+      const voiceId = (data.voiceId as string | undefined)?.trim()
+      return voiceId ? { voiceId } : undefined
+    }
+
     case "youtube-video": {
       const url =
         (data.downloadedVideoUrl as string | undefined)?.trim() ||
@@ -307,6 +315,15 @@ export function getPrimaryOutput(
   // Voice-design: support voiceId routing via sourceHandle
   if (sourceType === "voice-design" && sourceHandle === "voiceId") {
     return output.generatedVoiceId
+  }
+
+  // Suno-voice: primary output is the voice persona id. Without this case the
+  // orchestrator's `if (!output) continue` in resolveNodeInputs skips the
+  // suno-voice → personaId routing block (input-resolver.ts), so workflow runs
+  // would silently omit personaId. Frontend single-node Run is unaffected (it
+  // pulls data.voiceId from extractNodeOutput in execution-graph.ts).
+  if (sourceType === "suno-voice") {
+    return output.voiceId
   }
 
   // Web-scrape: single `json` output handle. Stringify here so non-Extract-Field
