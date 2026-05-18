@@ -58,6 +58,63 @@ export const CHARACTER_ATTACH_COLUMNS = [
 export type CharacterAttachColumn = (typeof CHARACTER_ATTACH_COLUMNS)[number]
 
 /**
+ * Location asset-type enum — the kinds of variant a user can generate off a
+ * location's anchor establishing shot. Mirrors the literal accepted by
+ * `POST /v1/generate-location-asset` (`backend/src/routes/generate-location-asset.ts`)
+ * and consumed by the MCP `generate_location` verb (kind="asset").
+ *
+ * `lighting` is the bucket key (the DB column is `lighting`). `custom` is the
+ * free-form bucket where callers must supply `attachToColumn` explicitly since
+ * the worker can't infer the destination from the asset type.
+ */
+export const LOCATION_ASSET_TYPES = [
+  "timeOfDay",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "custom",
+] as const
+export type LocationAssetType = (typeof LOCATION_ASSET_TYPES)[number]
+
+/**
+ * DB columns the location-asset worker may auto-attach to. Required when
+ * `assetType === "custom"` (the worker can't infer the bucket from the asset
+ * type); for canonical asset types the column is derived automatically.
+ *
+ * Mirrors the literal accepted by the route's `attachToColumn` Zod field.
+ */
+export const LOCATION_ATTACH_COLUMNS = [
+  "time_of_day",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "atmosphere_motions",
+] as const
+export type LocationAttachColumn = (typeof LOCATION_ATTACH_COLUMNS)[number]
+
+/**
+ * Reference-photo kind discriminator — the mood-board roles a user can attach
+ * to a location row. Single source of truth shared between:
+ *  - Backend route Zod enum (`backend/src/routes/locations.ts`)
+ *  - Backend export/import bundle schema (`backend/src/lib/workflow-assets.ts`)
+ *  - Frontend Studio picker (`reference-photos-section.tsx`)
+ *  - Frontend `LocationNodeData.referencePhotos.kind` union (`frontend/src/types/nodes.ts`)
+ *
+ * `other` is the free-form bucket; the rest are user-curated mood-board roles.
+ */
+export const LOCATION_REFERENCE_PHOTO_KINDS = [
+  "wide",
+  "interior",
+  "exterior",
+  "detail",
+  "moodBoard",
+  "other",
+] as const
+export type LocationReferencePhotoKind = (typeof LOCATION_REFERENCE_PHOTO_KINDS)[number]
+
+/**
  * Reserved name the Character Studio auto-assigns when a user clicks Generate
  * before naming the character. Treated as "no name" by prompt builders so the
  * literal string "Untitled character" never leaks into a generation prompt.

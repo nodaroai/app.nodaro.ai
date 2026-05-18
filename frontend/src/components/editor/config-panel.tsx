@@ -558,7 +558,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "character": return <CharacterConfig {...configProps} nodeId={selectedNodeId} />
     case "face": return <FaceConfig {...configProps} />
     case "object": return <ObjectConfig {...configProps} />
-    case "location": return <LocationConfig {...configProps} />
+    case "location": return <LocationConfig {...configProps} nodeId={selectedNodeId!} />
     case "scene": return <SceneConfig {...configProps} />
     case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />
     default: return null

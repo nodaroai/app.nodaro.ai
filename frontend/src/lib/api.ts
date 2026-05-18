@@ -76,6 +76,23 @@ export class TutorialCategoryInUseError extends Error {
 }
 
 /**
+ * Thrown when an UPDATE call to a studio resource (location, character, etc.)
+ * fails the optimistic-concurrency check because the row's `updated_at`
+ * advanced between the caller's last fetch and this write. Callers should
+ * re-fetch the row, merge, and retry. `updatedAt` is the CURRENT row's
+ * server-side updated_at so the caller can rebase against it.
+ */
+export class ConcurrentModificationError extends Error {
+  readonly updatedAt: string
+
+  constructor(message: string, updatedAt: string) {
+    super(message)
+    this.name = "ConcurrentModificationError"
+    this.updatedAt = updatedAt
+  }
+}
+
+/**
  * Throws StorageExceededError if the parsed error JSON indicates storage_limit_exceeded.
  * Throws InsufficientCreditsError for credit-related 402 errors.
  * Otherwise throws a plain Error with the message (or the given fallback).
@@ -111,6 +128,12 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.message as string) ?? fallback,
       (errObj.videoCount as number) ?? 0,
       (errObj.flowCount as number) ?? 0,
+    )
+  }
+  if (errObj?.code === "concurrent_modification") {
+    throw new ConcurrentModificationError(
+      (errObj.message as string) ?? fallback,
+      (errObj.updatedAt as string) ?? "",
     )
   }
   throw new Error((errObj?.message as string) ?? fallback)
@@ -1220,7 +1243,16 @@ export async function generateLocation(data: {
   sourceImageUrl?: string
   provider?: string
   userId?: string
-}): Promise<{ jobId: string }> {
+  /** 1 | 2 | 4 — request multi-candidate batch. count=1 keeps the legacy
+   *  `{ jobId }` response shape for backward compat; count>1 returns
+   *  `{ jobIds: string[] }`. The studio reads `jobIds ?? [jobId]`. */
+  count?: 1 | 2 | 4
+  /** Auto-attach the resulting URL to this location row on worker completion.
+   *  ⚠️ Only honored by the backend when count === 1. For multi-candidate
+   *  batches, the studio approves a candidate explicitly via
+   *  `approveLocationMainImage`. */
+  attachToLocationId?: string
+}): Promise<{ jobId?: string; jobIds?: readonly string[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1269,7 +1301,21 @@ export async function saveLocation(data: {
   timeOfDay?: { name: string; url: string }[]
   weather?: { name: string; url: string }[]
   angles?: { name: string; url: string }[]
-}): Promise<{ id: string }> {
+  // Phase 2 — Location Studio additions
+  lighting?: { name: string; url: string }[]
+  seasons?: { name: string; url: string }[]
+  atmosphereMotions?: { name: string; url: string }[]
+  referencePhotos?: { kind: string; url: string }[]
+  canonicalDescription?: string
+  styleLock?: boolean
+  /**
+   * Optimistic-concurrency token. When present, the backend only UPDATEs the
+   * row if `updated_at` still matches. On mismatch the API returns 409 and
+   * this client throws `ConcurrentModificationError` so the caller can
+   * re-fetch + merge instead of overwriting a concurrent worker write.
+   */
+  expectedUpdatedAt?: string
+}): Promise<{ id: string; updatedAt?: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/locations`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1282,7 +1328,105 @@ export async function saveLocation(data: {
   return res.json()
 }
 
-export async function deleteLocation(locationId: string): Promise<{ success: boolean }> {
+/**
+ * Approve a candidate-generation job as the location's permanent
+ * source_image_url. Also fires the Claude Sonnet vision caption inline to
+ * populate `canonical_description`. Returns 200 with `canonicalDescription:
+ * ""` on caption sub-failure (frontend retries via `recaptionLocation`).
+ */
+export async function approveLocationMainImage(
+  locationId: string,
+  candidateJobId: string,
+): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+      body: JSON.stringify({ candidateJobId }),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to approve location main image")
+  }
+  return res.json()
+}
+
+/**
+ * Re-runs the Claude Sonnet vision caption against the location's existing
+ * `source_image_url` and persists the result. Used by the studio's "retry
+ * caption" affordance when `approveLocationMainImage` returned an empty
+ * canonicalDescription. Throws on 502 caption_failed (caller should surface
+ * a retry).
+ */
+export async function recaptionLocation(
+  locationId: string,
+): Promise<{ readonly canonicalDescription: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/llm-caption`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to caption location")
+  }
+  return res.json()
+}
+
+/**
+ * Un-archive a soft-deleted location (mirror of restoreCharacter). On name
+ * collision with an active row, the backend auto-suffixes "(restored)" so
+ * the returned name may differ from the original.
+ */
+export async function restoreLocation(
+  locationId: string,
+): Promise<{ id: string; name: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/restore`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to restore location")
+  }
+  return res.json()
+}
+
+/**
+ * Light batch-status poll for studio UIs (called every ~2s while assets are
+ * generating). Returns at most 100 jobs — cross-user / non-existent ids are
+ * silently omitted by the backend. Empty input short-circuits to no fetch.
+ *
+ * Distinct from `getBatchJobStatus`: this hits the GET /v1/jobs/status
+ * endpoint (capped at 100, returns `{ jobs: [...] }`) and is the canonical
+ * surface for studio batch polling.
+ */
+export async function getJobStatusBatch(
+  jobIds: readonly string[],
+): Promise<{
+  jobs: ReadonlyArray<{ id: string; status: string; output_data: unknown }>
+}> {
+  if (jobIds.length === 0) return { jobs: [] }
+  const ids = encodeURIComponent(jobIds.join(","))
+  const res = await fetch(`${API_BASE_URL}/v1/jobs/status?ids=${ids}`, {
+    method: "GET",
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch batch job status")
+  }
+  return res.json()
+}
+
+export async function deleteLocation(locationId: string): Promise<{ success: boolean; archived?: boolean }> {
   const authHeaders = await getAuthHeaders()
   const res = await fetch(`${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}`, {
     method: "DELETE",
@@ -1290,7 +1434,7 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete location")
+    throwApiError(err, "Failed to archive location")
   }
   return res.json()
 }
@@ -1308,6 +1452,14 @@ export interface DbLocation {
   timeOfDay: { name: string; url: string }[]
   weather: { name: string; url: string }[]
   angles: { name: string; url: string }[]
+  // Phase 2 — Location Studio additions
+  lighting: { name: string; url: string }[]
+  seasons: { name: string; url: string }[]
+  atmosphereMotions: { name: string; url: string }[]
+  referencePhotos: { kind: string; url: string }[]
+  canonicalDescription: string
+  styleLock: boolean
+  deletedAt?: string | null
   createdAt: string
   updatedAt: string
 }

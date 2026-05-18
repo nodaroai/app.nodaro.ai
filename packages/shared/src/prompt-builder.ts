@@ -675,6 +675,20 @@ export interface BuildImagePromptConfig {
    */
   suppressedCanonicalCharacterIds?: readonly string[]
   /**
+   * Location slugs (or DB ids) whose canonical-fallback the user has hidden
+   * via the × button. Mirrors `suppressedCanonicalCharacterIds`: the upstream
+   * `wired-location` ref still attaches, but the canonical establishing-shot
+   * URL is dropped from the injected reference list.
+   *
+   * NOTE (Phase 1A): the location canonical-fallback path is wired up in a
+   * follow-up PR (`injected-reference-helpers.ts`). Until then, this
+   * parameter is accepted but inert — callers can pass it through without
+   * any behavior change. Once the canonical-fallback logic lands, the
+   * builder will filter `connectedReferences` with `source === "wired-location"`
+   * and a matching slug, exactly like the character path does.
+   */
+  suppressedCanonicalLocationIds?: readonly string[]
+  /**
    * When true, skip the entire mention-resolution block (character identity
    * directives, `Image N (Kira)` bullets, additional ref URLs from
    * `connectedReferences`) AND strip raw `@slug[:V[:variant]]` tokens from

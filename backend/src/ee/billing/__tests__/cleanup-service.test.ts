@@ -461,6 +461,76 @@ describe("cleanup-service", () => {
       expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
     })
 
+    it("scans the locations table for R2 keys and deletes them (skips soft-deleted rows)", async () => {
+      // Free-tier user with a single active location containing 6 R2 URLs across
+      // source_image_url + 3 lighting variants + 2 reference photos.
+      // A separate soft-deleted location MUST NOT have its keys scanned —
+      // restore would then fail with broken URLs after cleanup runs.
+      mockTableQueue("profiles", [
+        {
+          data: [{ id: "user-1", tier: "pro", subscription_tier: null }],
+          error: null,
+        },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+      ])
+      // Locations response: ONLY the active row (deleted_at IS NULL filter is
+      // applied by the helper before this mock is hit; we model that by
+      // returning only the row that should match the filter).
+      mockTableQueue("locations", [
+        {
+          data: [
+            {
+              source_image_url: "https://cdn.example.com/locations/main.png",
+              time_of_day: null,
+              weather: null,
+              seasons: null,
+              angles: null,
+              lighting: [
+                { name: "morning", url: "https://cdn.example.com/locations/lighting-1.png" },
+                { name: "noon",    url: "https://cdn.example.com/locations/lighting-2.png" },
+                { name: "dusk",    url: "https://cdn.example.com/locations/lighting-3.png" },
+              ],
+              atmosphere_motions: null,
+              reference_photos: [
+                { kind: "mood",      url: "https://cdn.example.com/locations/ref-1.jpg" },
+                { kind: "reference", url: "https://cdn.example.com/locations/ref-2.jpg" },
+              ],
+            },
+          ],
+          error: null,
+        },
+      ])
+
+      // Track every key passed to batchDeleteFromR2 across all calls so we can
+      // assert the location keys ended up in the batch regardless of where in
+      // the cleanup pass they were flushed.
+      const allKeysSeen: string[] = []
+      mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) => {
+        allKeysSeen.push(...keys)
+        return Promise.resolve({ deleted: keys.length, errors: 0 })
+      })
+
+      await cleanupCanceledUserMedia()
+
+      // All 6 R2 keys from the active location must be included
+      expect(allKeysSeen).toEqual(
+        expect.arrayContaining([
+          "locations/main.png",
+          "locations/lighting-1.png",
+          "locations/lighting-2.png",
+          "locations/lighting-3.png",
+          "locations/ref-1.jpg",
+          "locations/ref-2.jpg",
+        ]),
+      )
+      expect(allKeysSeen.length).toBe(6)
+    })
+
     it("terminates when a full BATCH_SIZE of _cleaned jobs returns (regression: was infinite loop)", async () => {
       // Without the SQL `.is("output_data->>_cleaned", null)` filter AND the
       // defensive `jobsToClean.length === 0` break, this scenario looped
@@ -724,6 +794,63 @@ describe("cleanup-service", () => {
 
       const result = await cleanupFreeUserMedia()
       expect(result.errors).toBe(1)
+    })
+
+    it("scans the locations table for R2 keys for free-tier users", async () => {
+      // Same locations contract as the canceled-user test, scoped to free users.
+      mockTableQueue("profiles", [
+        { data: [{ id: "free-user-1" }], error: null },
+      ])
+      mockTableQueue("assets", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+      ])
+      mockTableQueue("locations", [
+        {
+          data: [
+            {
+              source_image_url: "https://cdn.example.com/locations/main.png",
+              time_of_day: null,
+              weather: null,
+              seasons: null,
+              angles: null,
+              lighting: [
+                { name: "morning", url: "https://cdn.example.com/locations/lighting-1.png" },
+                { name: "noon",    url: "https://cdn.example.com/locations/lighting-2.png" },
+                { name: "dusk",    url: "https://cdn.example.com/locations/lighting-3.png" },
+              ],
+              atmosphere_motions: null,
+              reference_photos: [
+                { kind: "mood",      url: "https://cdn.example.com/locations/ref-1.jpg" },
+                { kind: "reference", url: "https://cdn.example.com/locations/ref-2.jpg" },
+              ],
+            },
+          ],
+          error: null,
+        },
+      ])
+
+      const allKeysSeen: string[] = []
+      mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) => {
+        allKeysSeen.push(...keys)
+        return Promise.resolve({ deleted: keys.length, errors: 0 })
+      })
+
+      await cleanupFreeUserMedia()
+
+      expect(allKeysSeen).toEqual(
+        expect.arrayContaining([
+          "locations/main.png",
+          "locations/lighting-1.png",
+          "locations/lighting-2.png",
+          "locations/lighting-3.png",
+          "locations/ref-1.jpg",
+          "locations/ref-2.jpg",
+        ]),
+      )
+      expect(allKeysSeen.length).toBe(6)
     })
   })
 })

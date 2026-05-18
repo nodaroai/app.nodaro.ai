@@ -17,6 +17,43 @@ import {
   resolveAssetColumn,
   type CharacterAssetColumn,
 } from "../../lib/character-auto-attach.js"
+import { supabase } from "../../lib/supabase.js"
+import { LOCATION_ATTACH_COLUMNS, type LocationAttachColumn } from "@nodaro/shared"
+
+const LOCATION_ATTACH_COLUMN_SET: ReadonlySet<string> = new Set(LOCATION_ATTACH_COLUMNS)
+
+/**
+ * Atomic append of a `{name, url}` entry to a `locations` JSONB column via
+ * the `append_location_asset` RPC (migration 124). The RPC itself dedups by
+ * URL and silently no-ops when the row is soft-deleted (`deleted_at IS NOT
+ * NULL`), so this helper just forwards args and logs RPC errors.
+ *
+ * Errors are swallowed by design: the job result already lives on
+ * `jobs.output_data`, credits are already committed, and throwing here would
+ * only orphan a successful generation.
+ */
+async function attachAssetToLocation(
+  locationId: string,
+  column: LocationAttachColumn,
+  item: { name: string; url: string },
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc("append_location_asset", {
+      p_location_id: locationId,
+      p_column: column,
+      p_value: item,
+    })
+    if (error) {
+      console.warn(
+        `[location-attach] rpc append failed (location=${locationId}, column=${column}): ${error.message}`,
+      )
+    }
+  } catch (e) {
+    console.warn(
+      `[location-attach] rpc append threw (location=${locationId}, column=${column}): ${String(e)}`,
+    )
+  }
+}
 
 interface EntityImageJobData {
   jobId: string
@@ -29,8 +66,19 @@ interface EntityImageJobData {
   // directly to the user's characters row — so closing the studio mid-job
   // doesn't orphan the result. See `lib/character-auto-attach.ts`.
   attachToCharacterId?: string
-  attachToColumn?: string // "expressions" | "poses" | "angles" | "lighting_variations" | undefined
+  // `attachToColumn` is shared between the Character and Location auto-attach
+  // paths — the Character path narrows via `resolveAssetColumn`, the Location
+  // path narrows against `LOCATION_ATTACH_COLUMNS`. Typed `string` here so a
+  // single field shape works for both.
+  attachToColumn?: string
   attachName?: string
+  // Location Studio auto-attach. Mirrors the Character fields but writes to
+  // the `locations` table via the `append_location_asset` RPC (migration
+  // 124). When `attachToLocationId` is set the worker performs a
+  // belt-and-braces ownership re-query against `(id, user_id, deleted_at IS
+  // NULL)` before firing the RPC, so a forged BullMQ payload can't attach to
+  // someone else's location row.
+  attachToLocationId?: string
   // Richer Character Studio fields that travel alongside the asset for
   // downstream prompt enrichment. Routes (later tasks) put these on
   // `job.data`; the worker only reads + forwards them.
@@ -58,6 +106,7 @@ function makeEntityImageHandler(
       attachToCharacterId,
       attachToColumn,
       attachName,
+      attachToLocationId,
       description,
       motionDescription,
       realLifeRefs,
@@ -125,6 +174,34 @@ function makeEntityImageHandler(
             },
           })
         }
+      }
+    }
+
+    // Location Studio auto-attach. Mirrors the Character path but writes via
+    // `append_location_asset` (migration 124). The RPC has its own dedup +
+    // soft-delete guard, but we ALSO re-verify `(id, user_id, deleted_at IS
+    // NULL)` here so a forged BullMQ payload can't trick the worker into
+    // attaching to another user's row (defense in depth).
+    if (
+      attachToLocationId
+      && attachToColumn
+      && attachName
+      && ctx.jobUserId
+      && LOCATION_ATTACH_COLUMN_SET.has(attachToColumn)
+    ) {
+      const { data: row } = await supabase
+        .from("locations")
+        .select("id")
+        .eq("id", attachToLocationId)
+        .eq("user_id", ctx.jobUserId)
+        .is("deleted_at", null)
+        .single()
+      if (row) {
+        await attachAssetToLocation(
+          attachToLocationId,
+          attachToColumn as LocationAttachColumn,
+          { name: attachName, url: r2Url },
+        )
       }
     }
 

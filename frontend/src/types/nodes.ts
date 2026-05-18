@@ -9,6 +9,7 @@ import type {
   SunoModel, VoiceDesignModel, CaptionStyle,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
+import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
 import type { PipelineFormat, PipelineMode } from "@nodaro/shared"
 import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
@@ -1317,6 +1318,8 @@ export type GenerateImageData = {
    * Mention variants for the same character still attach.
    */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   /** Per-identity (imageIndex+label) user overrides for fidelity / custom text. */
   identityMeta?: readonly IdentityMeta[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1384,6 +1387,8 @@ export type ImageToImageData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
@@ -1419,6 +1424,8 @@ export type ModifyImageData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   fieldMappings: FieldMappings
@@ -1527,6 +1534,8 @@ export type ImageToVideoData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   veoMode?: "frame-to-frame" | "reference"  // VEO 3/3.1: toggle between start+end frame and reference mode
   seedance2InputMode?: "frames" | "references"  // Seedance 2: toggle between start/end frames and reference media
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
@@ -1595,6 +1604,8 @@ export type TextToVideoData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -1635,6 +1646,8 @@ export type VideoToVideoData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   /** Extra reference images with per-ref descriptions. See `ExtraRef`. */
   extraRefs?: readonly ExtraRef[]
   videoPlayState?: "loop" | "paused" | "stopped"
@@ -1682,6 +1695,8 @@ export type LipSyncData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1710,6 +1725,8 @@ export type SpeechToVideoData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1737,6 +1754,8 @@ export type MotionTransferData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -1797,6 +1816,8 @@ export type FaceSwapData = {
   referenceOrder?: readonly string[]
   /** See GenerateImageData.suppressedCanonicalCharacterIds. */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /** See GenerateImageData.suppressedCanonicalCharacterIds — location equivalent. */
+  suppressedCanonicalLocationIds?: readonly string[]
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
@@ -3038,12 +3059,28 @@ export interface LocationAssetItem {
   readonly url: string
 }
 
-export type LocationAssetType = "timeOfDay" | "weather" | "angles" | "custom"
+export type LocationReferencePhotoKind = SharedLocationReferencePhotoKind
+
+export interface LocationReferencePhoto {
+  readonly kind: LocationReferencePhotoKind
+  readonly url: string
+}
+
+export type AssetStatus = "idle" | "running" | "completed" | "failed"
+
+export type LocationAssetType = "timeOfDay" | "weather" | "seasons" | "angles" | "lighting" | "custom"
 
 export type LocationNodeData = {
   [key: string]: unknown
   label: string
   locationDbId: string
+  /**
+   * ISO-8601 last-write timestamp from `locations.updated_at`, mirrored to the
+   * canvas at save time. Used as the optimistic-concurrency token for
+   * subsequent saves — the Location Studio passes this to the route's
+   * `expectedUpdatedAt` field so a stale tab can't clobber a concurrent writer.
+   */
+  updatedAt?: string
   locationName: string
   description: string
   category: "indoor" | "outdoor" | "urban" | "nature" | "fantasy" | "sci-fi" | "historical" | "futuristic" | "other"
@@ -3063,6 +3100,15 @@ export type LocationNodeData = {
   timeOfDay: LocationAssetItem[]
   weather: LocationAssetItem[]
   angles: LocationAssetItem[]
+  lighting: LocationAssetItem[]
+  lightingStatus: AssetStatus
+  seasons: LocationAssetItem[]
+  seasonsStatus: AssetStatus
+  atmosphereMotions: LocationAssetItem[]
+  atmosphereStatus: AssetStatus
+  referencePhotos: LocationReferencePhoto[]
+  canonicalDescription: string
+  styleLock: boolean
   // Asset generation status
   timeOfDayStatus: "idle" | "running" | "completed" | "failed"
   weatherStatus: "idle" | "running" | "completed" | "failed"
@@ -5656,6 +5702,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       timeOfDay: [],
       weather: [],
       angles: [],
+      lighting: [],
+      lightingStatus: "idle",
+      seasons: [],
+      seasonsStatus: "idle",
+      atmosphereMotions: [],
+      atmosphereStatus: "idle",
+      referencePhotos: [],
+      canonicalDescription: "",
+      styleLock: true,
       timeOfDayStatus: "idle",
       weatherStatus: "idle",
       anglesStatus: "idle",

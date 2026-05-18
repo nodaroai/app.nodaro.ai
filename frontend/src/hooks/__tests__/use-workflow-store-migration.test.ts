@@ -188,3 +188,116 @@ describe("useWorkflowStore — characterStudioNodeId state", () => {
     expect(useWorkflowStore.getState().characterStudioNodeId).toBeNull()
   })
 })
+
+describe("loadWorkflow — location node migration", () => {
+  it("migrates customVariations into angles and clears the deprecated field", () => {
+    const nodes = [{
+      id: "loc1", type: "location", position: { x: 0, y: 0 },
+      data: {
+        label: "loc", locationName: "Forest", fieldMappings: {},
+        angles: [],
+        customVariations: [{ prompt: "from above", url: "https://x/a.png", createdAt: "2026-01-01" }],
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "loc1")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.angles).toEqual([{ name: "from above", url: "https://x/a.png" }])
+    expect(data.customVariations).toEqual([])
+  })
+
+  it("de-dupes customVariations against existing angle urls when migrating", () => {
+    const nodes = [{
+      id: "loc1", type: "location", position: { x: 0, y: 0 },
+      data: {
+        label: "loc", locationName: "Forest", fieldMappings: {},
+        angles: [{ name: "existing", url: "https://x/a.png" }],
+        customVariations: [
+          { prompt: "from above", url: "https://x/a.png", createdAt: "2026-01-01" },
+          { prompt: "low angle", url: "https://x/b.png", createdAt: "2026-01-02" },
+        ],
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "loc1")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.angles).toEqual([
+      { name: "existing", url: "https://x/a.png" },
+      { name: "low angle", url: "https://x/b.png" },
+    ])
+    expect(data.customVariations).toEqual([])
+  })
+
+  it("defaults the 9 new Phase-2 location fields on legacy nodes", () => {
+    const nodes = [{
+      id: "loc2", type: "location", position: { x: 0, y: 0 },
+      data: { label: "loc", locationName: "Legacy", fieldMappings: {}, angles: [], customVariations: [] },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "loc2")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.lighting).toEqual([])
+    expect(data.lightingStatus).toBe("idle")
+    expect(data.seasons).toEqual([])
+    expect(data.seasonsStatus).toBe("idle")
+    expect(data.atmosphereMotions).toEqual([])
+    expect(data.atmosphereStatus).toBe("idle")
+    expect(data.referencePhotos).toEqual([])
+    expect(data.canonicalDescription).toBe("")
+    expect(data.styleLock).toBe(true)
+  })
+
+  it("preserves existing Phase-2 location values when present", () => {
+    const lighting = [{ name: "golden hour", url: "https://x/golden.png" }]
+    const seasons = [{ name: "winter", url: "https://x/winter.png" }]
+    const atmosphereMotions = [{ name: "fog drift", url: "https://x/fog.mp4" }]
+    const referencePhotos = [{ kind: "wide", url: "https://x/wide.png" }]
+    const nodes = [{
+      id: "loc3", type: "location", position: { x: 0, y: 0 },
+      data: {
+        label: "loc", locationName: "Full", fieldMappings: {}, angles: [], customVariations: [],
+        lighting, lightingStatus: "completed",
+        seasons, seasonsStatus: "running",
+        atmosphereMotions, atmosphereStatus: "failed",
+        referencePhotos,
+        canonicalDescription: "A misty pine forest",
+        styleLock: false,
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "loc3")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.lighting).toEqual(lighting)
+    expect(data.lightingStatus).toBe("completed")
+    expect(data.seasons).toEqual(seasons)
+    expect(data.seasonsStatus).toBe("running")
+    expect(data.atmosphereMotions).toEqual(atmosphereMotions)
+    expect(data.atmosphereStatus).toBe("failed")
+    expect(data.referencePhotos).toEqual(referencePhotos)
+    expect(data.canonicalDescription).toBe("A misty pine forest")
+    expect(data.styleLock).toBe(false)
+  })
+
+  it("leaves non-location nodes untouched", () => {
+    const nodes = [{
+      id: "n1", type: "character", position: { x: 0, y: 0 },
+      data: { label: "char", characterName: "Ada", fieldMappings: {}, expressions: [], customVariations: [] },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "n1")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.lighting).toBeUndefined()
+    expect(data.seasonsStatus).toBeUndefined()
+    expect(data.atmosphereMotions).toBeUndefined()
+  })
+})
+
+describe("useWorkflowStore — locationStudioNodeId state", () => {
+  it("starts null and is updated by setLocationStudioNodeId", () => {
+    expect(useWorkflowStore.getState().locationStudioNodeId).toBeNull()
+    useWorkflowStore.getState().setLocationStudioNodeId("loc1")
+    expect(useWorkflowStore.getState().locationStudioNodeId).toBe("loc1")
+    useWorkflowStore.getState().setLocationStudioNodeId(null)
+    expect(useWorkflowStore.getState().locationStudioNodeId).toBeNull()
+  })
+})

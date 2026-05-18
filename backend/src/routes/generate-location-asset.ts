@@ -7,14 +7,20 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate, extractProvider } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
-const assetTypeEnum = z.enum(["timeOfDay", "weather", "angles", "custom"])
+// Single source of truth for the asset-type and attach-column enums lives in
+// `@nodaro/shared/entity-prompts` — reused by the MCP `generate_location` verb
+// so the Zod enum here and the MCP tool's input enum can't drift.
+const assetTypeEnum = z.enum(LOCATION_ASSET_TYPES)
 
 const VARIANTS: Record<string, readonly string[]> = {
-  timeOfDay: ["dawn", "morning", "noon", "afternoon", "dusk", "night"],
-  weather: ["clear", "cloudy", "rain", "storm", "snow", "fog"],
-  angles: ["wide", "medium", "closeup", "aerial", "low-angle"],
+  timeOfDay: ["dawn", "morning", "noon", "afternoon", "golden hour", "dusk", "blue hour", "night", "midnight"],
+  weather: ["clear", "cloudy", "light rain", "heavy rain", "storm", "snow", "blizzard", "fog", "mist"],
+  seasons: ["spring", "summer", "autumn", "winter"],
+  angles: ["wide", "medium", "closeup", "aerial", "low-angle", "eye-level", "bird's-eye", "dutch tilt"],
+  lighting: ["soft natural", "harsh sunlight", "golden", "blue hour", "neon", "candlelit", "cinematic", "dramatic chiaroscuro"],
 }
 
 const generateLocationAssetBody = z.object({
@@ -28,6 +34,14 @@ const generateLocationAssetBody = z.object({
   sourceImageUrl: safeUrlSchema.optional(),
   provider: z.string().optional().default("nano-banana"),
   userId: z.string().uuid().optional(),
+  // Location Studio auto-attach: when all three are set, the worker appends
+  // `{name: attachName, url: <result>}` to the named JSONB array column on the
+  // user's location row after generation. `attachToColumn` is the DB column;
+  // for canonical asset types it can be derived, but `custom` REQUIRES the
+  // caller to set it explicitly (the worker can't infer the bucket).
+  attachToLocationId: z.string().uuid().optional(),
+  attachToColumn: z.enum(LOCATION_ATTACH_COLUMNS).optional(),
+  attachName: z.string().min(1).max(200).optional(),
 })
 
 function buildVariantPrompt(
@@ -37,6 +51,7 @@ function buildVariantPrompt(
   description?: string,
   category?: string,
   style?: string,
+  userPrompt?: string,
 ): string {
   const categoryDesc = category ?? "location"
   const descPart = description ? `, ${description}` : ""
@@ -44,8 +59,12 @@ function buildVariantPrompt(
 
   const base = `${categoryDesc} scene, ${name}${descPart}. ${styleDesc} art style, 4k, highly detailed, cinematic lighting, no people, no text, no labels, no watermarks.`
 
+  // Custom assets: prefer the long free-form `userPrompt` (typically the
+  // multi-sentence text the studio UI collects in the description field) over
+  // the short `variant` literal (which is usually just "custom" in the UI).
+  // Mirrors the character-asset route's GAP-48 fix.
   if (assetType === "custom") {
-    return `${variant}. ${base}`
+    return `${userPrompt ?? variant}. ${base}`
   }
 
   if (assetType === "timeOfDay") {
@@ -54,8 +73,11 @@ function buildVariantPrompt(
       morning: "in the morning, bright natural daylight, fresh atmosphere",
       noon: "at noon, harsh overhead sun, strong shadows",
       afternoon: "in the afternoon, warm golden hour light",
+      "golden hour": "at golden hour, low warm sun, long shadows, honey-toned light",
       dusk: "at dusk, purple and orange sunset, twilight",
+      "blue hour": "at blue hour, deep blue twilight sky, ambient cool light",
       night: "at night, moonlight, stars visible, nighttime atmosphere",
+      midnight: "at midnight, deep dark sky, moonlit highlights, quiet stillness",
     }
     const time = timeMap[variant] ?? `at ${variant}`
     return `${name}, ${time}. ${base}`
@@ -65,13 +87,42 @@ function buildVariantPrompt(
     const weatherMap: Record<string, string> = {
       clear: "on a clear day, blue sky, perfect weather",
       cloudy: "on a cloudy day, overcast sky, soft diffused light",
-      rain: "during rain, wet surfaces, water droplets, moody atmosphere",
+      "light rain": "during light rain, damp surfaces, gentle drizzle, soft mood",
+      "heavy rain": "during heavy rain, slick wet surfaces, droplets streaking through air, moody atmosphere",
       storm: "during a storm, dramatic clouds, lightning, intense weather",
       snow: "covered in snow, winter scene, cold atmosphere, frost",
+      blizzard: "in a blizzard, whiteout snow, near-zero visibility, violent wind",
       fog: "in thick fog, mysterious atmosphere, limited visibility",
+      mist: "in soft mist, ethereal haze, diffused light",
     }
     const weather = weatherMap[variant] ?? `with ${variant} weather`
     return `${name}, ${weather}. ${base}`
+  }
+
+  if (assetType === "seasons") {
+    const seasonMap: Record<string, string> = {
+      spring: "in spring, fresh green growth, blossoms, mild light",
+      summer: "in summer, lush warm palette, bright midday sun",
+      autumn: "in autumn, amber and rust foliage, low warm light",
+      winter: "in winter, snowy ground, bare trees, cold cyan-grey palette",
+    }
+    const season = seasonMap[variant] ?? `during ${variant}`
+    return `${name}, ${season}. ${base}`
+  }
+
+  if (assetType === "lighting") {
+    const lightingMap: Record<string, string> = {
+      "soft natural": "soft natural lighting, diffused window light, gentle shadows",
+      "harsh sunlight": "harsh direct sunlight, strong contrast, hard-edged shadows",
+      golden: "golden lighting, warm honey-toned glow, long shadows",
+      "blue hour": "blue-hour lighting, cool ambient twilight glow",
+      neon: "neon lighting, saturated magenta and cyan signage glow, cyberpunk mood",
+      candlelit: "candlelit lighting, warm flickering glow, deep shadows",
+      cinematic: "cinematic lighting, motivated key, soft fill, controlled rim",
+      "dramatic chiaroscuro": "dramatic chiaroscuro lighting, deep black shadows, sculpted highlights",
+    }
+    const lighting = lightingMap[variant] ?? `${variant} lighting`
+    return `${name}, ${lighting}. ${base}`
   }
 
   // angles
@@ -81,6 +132,9 @@ function buildVariantPrompt(
     closeup: "close-up detail shot, focusing on textures and elements",
     aerial: "aerial view, drone perspective, bird's eye view",
     "low-angle": "low angle shot, dramatic perspective looking up",
+    "eye-level": "eye-level shot, natural human perspective",
+    "bird's-eye": "bird's-eye view, straight-down overhead perspective",
+    "dutch tilt": "dutch-tilt shot, canted horizon, unsettled mood",
   }
   const angle = angleMap[variant] ?? `${variant} shot`
   return `${name}, ${angle}. ${base}`
@@ -95,7 +149,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       })
     }
 
-    const { assetType, variant, name, description, category, style, sourceImageUrl } = parsed.data
+    const { assetType, variant, name, description, category, style, sourceImageUrl, userPrompt, attachToLocationId, attachToColumn, attachName } = parsed.data
     const userId = req.userId
 
     if (assetType !== "custom") {
@@ -118,7 +172,7 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
 
     const modelIdentifier = parsed.data.provider
 
-    const prompt = buildVariantPrompt(assetType, variant, name, description, category, style)
+    const prompt = buildVariantPrompt(assetType, variant, name, description, category, style, userPrompt)
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
@@ -153,6 +207,9 @@ export async function generateLocationAssetRoutes(app: FastifyInstance) {
       variant,
       provider: parsed.data.provider,
       usageLogId,
+      attachToLocationId,
+      attachToColumn,
+      attachName,
     })
 
     return { jobId: job.id }

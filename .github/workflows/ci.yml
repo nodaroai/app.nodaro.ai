@@ -127,11 +127,23 @@ jobs:
       - name: Check admin-client imports
         run: node backend/scripts/check-admin-client-import.mjs
 
+  check-ee-imports:
+    name: Check EE Imports
+    runs-on: ubuntu-latest
+    needs: [frontend-tests, backend-tests, typecheck]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check core does not import from ee/
+        run: node tools/check-ee-imports.mjs
+
   migrate:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-ee-imports]
     steps:
       - uses: actions/checkout@v5
       - uses: supabase/setup-cli@v1

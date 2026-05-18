@@ -80,6 +80,65 @@ function extractR2UrlsFromOutput(outputData: Record<string, unknown>): string[] 
 }
 
 /**
+ * Collect every R2 key referenced by the user's active locations.
+ *
+ * Scans `locations.source_image_url`, the 6 JSONB asset columns (time_of_day,
+ * weather, seasons, angles, lighting, atmosphere_motions), and
+ * `reference_photos`. Soft-deleted rows (`deleted_at IS NOT NULL`) are skipped
+ * — restore would otherwise fail with broken URLs after cleanup runs.
+ *
+ * URLs that don't match the configured R2 public URL (e.g. external CDNs the
+ * user pasted in) are filtered out — `r2KeyFromUrl` returns null for those.
+ */
+async function collectLocationR2Keys(userId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("locations")
+    .select(
+      "source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
+    )
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .limit(1000)
+
+  const keys: string[] = []
+  const JSONB_COLUMNS = [
+    "time_of_day",
+    "weather",
+    "seasons",
+    "angles",
+    "lighting",
+    "atmosphere_motions",
+  ] as const
+
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+    if (typeof row.source_image_url === "string") {
+      const key = r2KeyFromUrl(row.source_image_url)
+      if (key) keys.push(key)
+    }
+    for (const col of JSONB_COLUMNS) {
+      const items = row[col]
+      if (!Array.isArray(items)) continue
+      for (const item of items) {
+        const url = (item as { url?: unknown } | null)?.url
+        if (typeof url !== "string") continue
+        const key = r2KeyFromUrl(url)
+        if (key) keys.push(key)
+      }
+    }
+    const refPhotos = row.reference_photos
+    if (Array.isArray(refPhotos)) {
+      for (const photo of refPhotos) {
+        const url = (photo as { url?: unknown } | null)?.url
+        if (typeof url !== "string") continue
+        const key = r2KeyFromUrl(url)
+        if (key) keys.push(key)
+      }
+    }
+  }
+  return keys
+}
+
+/**
  * Delete a single R2 file by key, returning the freed bytes.
  * Returns 0 if deletion fails (best-effort).
  */
@@ -256,6 +315,20 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     if (jobs.length < BATCH_SIZE) hasMoreJobs = false
   }
 
+  // --- Phase A3: Locations table — sweep R2 keys for every free user ---
+  // The locations table holds 6 JSONB asset columns + source_image_url +
+  // reference_photos, NONE of which appear in `assets` or `jobs.output_data`.
+  // Without this pass, every location asset uploaded by a free-tier user
+  // would orphan its R2 object forever. Soft-deleted rows are skipped by
+  // collectLocationR2Keys so /restore still works after cleanup runs.
+  for (const userId of freeUserIds) {
+    const locationKeys = await collectLocationR2Keys(userId)
+    if (locationKeys.length === 0) continue
+    const batchResult = await batchDeleteFromR2(locationKeys)
+    filesDeleted += batchResult.deleted
+    errors += batchResult.errors
+  }
+
   console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors)`)
   return { filesDeleted, bytesFreed, errors }
 }
@@ -390,6 +463,15 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       }
 
       if (jobs.length < BATCH_SIZE) hasMore = false
+    }
+
+    // Locations sweep — same rationale as Phase A3 in cleanupFreeUserMedia.
+    // Soft-deleted rows are skipped by collectLocationR2Keys.
+    const locationKeys = await collectLocationR2Keys(user.id)
+    if (locationKeys.length > 0) {
+      const batchResult = await batchDeleteFromR2(locationKeys)
+      userFilesDeleted += batchResult.deleted
+      errors += batchResult.errors
     }
 
     // Downgrade user to free tier and reset storage

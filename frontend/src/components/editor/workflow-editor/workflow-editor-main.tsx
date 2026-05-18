@@ -73,6 +73,7 @@ const FreeCutEditorModal = lazy(() => import("../freecut-editor-modal").then(m =
 const FilerobotEditorModal = lazy(() => import("../filerobot-editor-modal").then(m => ({ default: m.FilerobotEditorModal })));
 const PresentationViewLazy = lazy(() => import("../../presentation/presentation-view").then(m => ({ default: m.PresentationView })));
 const CharacterStudioModal = lazy(() => import("../character-studio"));
+const LocationStudioModal = lazy(() => import("../location-studio/location-studio-modal"));
 
 interface WorkflowEditorProps {
   readonly projectId?: string;
@@ -234,6 +235,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   const characterStudioNodeId = useWorkflowStore((s) => s.characterStudioNodeId);
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId);
+  const locationStudioNodeId = useWorkflowStore((s) => s.locationStudioNodeId);
+  const setLocationStudioNodeId = useWorkflowStore((s) => s.setLocationStudioNodeId);
 
   const imageEditUrl = imageEdit?.imageUrl ?? "";
   const imageEditDesignStateUrl = imageEdit?.designStateUrl;
@@ -1224,6 +1227,15 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
           <CharacterStudioModal
             nodeId={characterStudioNodeId}
             onClose={() => setCharacterStudioNodeId(null)}
+          />
+        </Suspense>
+      )}
+
+      {locationStudioNodeId && (
+        <Suspense fallback={null}>
+          <LocationStudioModal
+            nodeId={locationStudioNodeId}
+            onClose={() => setLocationStudioNodeId(null)}
           />
         </Suspense>
       )}

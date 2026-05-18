@@ -58,6 +58,10 @@ export function makeRemoveWiredSource(
  * Add a character slug to the consumer node's `suppressedCanonicalCharacterIds`
  * array (the user has clicked × on the canonical-fallback tile). Dedupes — if
  * the slug is already in the list, the update is a no-op.
+ *
+ * Also used for locations via `suppressedCanonicalLocationIds` (the
+ * symmetric field). The helper is intentionally generic — slugs are the only
+ * thing it cares about.
  */
 export function appendSuppressedSlug(
   current: readonly string[] | undefined,
@@ -65,4 +69,33 @@ export function appendSuppressedSlug(
 ): readonly string[] {
   if (current && current.includes(slug)) return current
   return [...(current ?? []), slug]
+}
+
+/**
+ * Build a callback that auto-attaches a wired location's `sourceImageUrl`
+ * as a canonical-fallback reference for a consumer node — symmetric to the
+ * character canonical-fallback in `compute-injected-refs.ts`.
+ *
+ * Behavior:
+ *   - Returns the URL when the location has a non-empty `sourceImageUrl` AND
+ *     its slug is NOT in `suppressedSlugs` (the consumer's
+ *     `suppressedCanonicalLocationIds` field).
+ *   - Returns `undefined` when suppressed, when the location has no anchor
+ *     image, or when no slug is available.
+ *
+ * The location "slug" mirrors character slugs — lower-cased + hyphenated
+ * `locationName`. Callers pass the same slug used by `@-mention` parsing
+ * so the dedupe stays consistent.
+ */
+export function resolveLocationCanonicalFallback(input: {
+  readonly locationName: string | undefined
+  readonly sourceImageUrl: string | undefined
+  readonly suppressedSlugs: readonly string[] | undefined
+}): { readonly slug: string; readonly url: string } | undefined {
+  const { locationName, sourceImageUrl, suppressedSlugs } = input
+  if (!locationName || !sourceImageUrl) return undefined
+  const slug = locationName.toLowerCase().trim().replace(/\s+/g, "-")
+  if (!slug) return undefined
+  if (suppressedSlugs && suppressedSlugs.includes(slug)) return undefined
+  return { slug, url: sourceImageUrl }
 }
