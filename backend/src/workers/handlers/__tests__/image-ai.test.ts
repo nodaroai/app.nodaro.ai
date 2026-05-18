@@ -11,6 +11,15 @@ const mocks = vi.hoisted(() => {
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
   const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
+  const mockUploadImageVariantsMaybeWatermark = vi
+    .fn<(urls: readonly string[], jobId: string) => Promise<readonly string[]>>()
+    .mockImplementation(async (urls, jobId) =>
+      urls.map((_, i) =>
+        i === 0
+          ? `https://r2.example.com/images/${jobId}.png`
+          : `https://r2.example.com/images/${jobId}-v${i}.png`,
+      ),
+    )
   const mockAttach = vi.fn().mockResolvedValue(true)
 
   // Supabase chain
@@ -25,6 +34,7 @@ const mocks = vi.hoisted(() => {
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
     mockUploadImageMaybeWatermark,
+    mockUploadImageVariantsMaybeWatermark,
     mockAttach,
     mockFrom,
     mockUpdate,
@@ -58,6 +68,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
     shouldSaveJobResult: mocks.mockShouldSaveJobResult,
     markJobCompleted: mocks.mockMarkJobCompleted,
     uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
+    uploadImageVariantsMaybeWatermark: mocks.mockUploadImageVariantsMaybeWatermark,
     setJobProgress: vi.fn().mockResolvedValue(undefined),
     startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
   }
@@ -125,8 +136,8 @@ describe("generate-image handler", () => {
     await handler(job as never, ctx)
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a cat", "nano-banana", undefined, undefined)
-    expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(
-      PROVIDER_RESULT.url, "job-1", "user-1", false,
+    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
+      [PROVIDER_RESULT.url], "job-1", "user-1", false,
     )
     // Progress is now written through the `setJobProgress` helper in
     // shared.ts (mocked above as a no-op). The handler still passes
@@ -177,7 +188,7 @@ describe("generate-image handler", () => {
     const job = makeJob("generate-image", { prompt: "cancelled" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
   })
@@ -186,9 +197,62 @@ describe("generate-image handler", () => {
     const job = makeJob("generate-image", { prompt: "watermarked" })
     await handler(job as never, makeCtx({ shouldWatermark: true }))
 
-    expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(
-      PROVIDER_RESULT.url, "job-1", "user-1", true,
+    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
+      [PROVIDER_RESULT.url], "job-1", "user-1", true,
     )
+  })
+
+  // Regression net for the Grok bug: KIE's grok-imagine endpoint returns up
+  // to 6 image variants per task in resultUrls. Pre-fix, the provider took
+  // resultUrls[0] and dropped the others. Now extraUrls is forwarded all the
+  // way to output_data.imageUrls so the frontend can fan out N results.
+  it("fans out all provider variants to output_data.imageUrls", async () => {
+    const variants = [
+      "https://provider.example.com/img-a.jpg",
+      "https://provider.example.com/img-b.jpg",
+      "https://provider.example.com/img-c.jpg",
+      "https://provider.example.com/img-d.jpg",
+      "https://provider.example.com/img-e.jpg",
+      "https://provider.example.com/img-f.jpg",
+    ]
+    mocks.mockGenerateImage.mockResolvedValueOnce({
+      url: variants[0],
+      extraUrls: variants.slice(1),
+      providerUsed: "grok",
+      cost: 0.04,
+      displayCost: 0.05,
+    })
+    const job = makeJob("generate-image", { prompt: "grok grid", provider: "grok" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
+      variants, "job-1", "user-1", false,
+    )
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({
+        imageUrl: "https://r2.example.com/images/job-1.png",
+        imageUrls: [
+          "https://r2.example.com/images/job-1.png",
+          "https://r2.example.com/images/job-1-v1.png",
+          "https://r2.example.com/images/job-1-v2.png",
+          "https://r2.example.com/images/job-1-v3.png",
+          "https://r2.example.com/images/job-1-v4.png",
+          "https://r2.example.com/images/job-1-v5.png",
+        ],
+      }),
+    }))
+  })
+
+  // The inverse: single-result providers must NOT add imageUrls to output_data
+  // (downstream code distinguishes single vs multi by array presence). Pre-fix
+  // a stray empty array would have triggered the multi-variant UI for every job.
+  it("omits imageUrls when provider returns only a single variant", async () => {
+    const job = makeJob("generate-image", { prompt: "single" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.not.objectContaining({ imageUrls: expect.anything() }),
+    }))
   })
 })
 
@@ -206,7 +270,7 @@ describe("edit-image handler", () => {
     await handler(job as never, ctx)
 
     expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", "upscale", undefined)
-    expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalled()
+    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 

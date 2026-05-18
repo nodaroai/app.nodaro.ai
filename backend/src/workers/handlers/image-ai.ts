@@ -5,6 +5,7 @@ import {
   markJobCompleted,
   buildProviderMeta,
   uploadImageMaybeWatermark,
+  uploadImageVariantsMaybeWatermark,
   setJobProgress,
   startProgressRamp,
   type HandlerFn,
@@ -52,13 +53,19 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   }
   await setJobProgress(job, ctx.jobId, 85)
 
-  const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const allSourceUrls = [result.url, ...(result.extraUrls ?? [])]
+  const r2Urls = await uploadImageVariantsMaybeWatermark(allSourceUrls, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = r2Urls[0]!
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
+    output_data: {
+      imageUrl: r2Url,
+      ...(r2Urls.length > 1 ? { imageUrls: r2Urls } : {}),
+      ...buildProviderMeta(result),
+    },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -66,7 +73,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}${r2Urls.length > 1 ? ` (+${r2Urls.length - 1} variants)` : ""} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
@@ -119,13 +126,19 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   }
   await setJobProgress(job, ctx.jobId, 60)
 
-  const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const allSourceUrls = [result.url, ...(result.extraUrls ?? [])]
+  const r2Urls = await uploadImageVariantsMaybeWatermark(allSourceUrls, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = r2Urls[0]!
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
+    output_data: {
+      imageUrl: r2Url,
+      ...(r2Urls.length > 1 ? { imageUrls: r2Urls } : {}),
+      ...buildProviderMeta(result),
+    },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
@@ -133,7 +146,7 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   if (!ok) return
 
   await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}${r2Urls.length > 1 ? ` (+${r2Urls.length - 1} variants)` : ""} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
@@ -196,13 +209,19 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   }
   await setJobProgress(job, ctx.jobId, 60)
 
-  const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const allSourceUrls = [result.url, ...(result.extraUrls ?? [])]
+  const r2Urls = await uploadImageVariantsMaybeWatermark(allSourceUrls, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  const r2Url = r2Urls[0]!
   await setJobProgress(job, ctx.jobId, 100)
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
   const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { imageUrl: r2Url, ...buildProviderMeta(result) },
+    output_data: {
+      imageUrl: r2Url,
+      ...(r2Urls.length > 1 ? { imageUrls: r2Urls } : {}),
+      ...buildProviderMeta(result),
+    },
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,

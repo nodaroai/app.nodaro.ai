@@ -122,6 +122,50 @@ describe("suno-generate handler", () => {
     const job = makeJob("suno-generate", { prompt: "no tracks" })
     await expect(handler(job as never, makeCtx())).rejects.toThrow("Suno returned no tracks")
   })
+
+  // Regression net: Suno always returns 2 tracks per generation. Pre-fix the
+  // handler uploaded only tracks[0] and silently discarded the second. Now the
+  // worker uploads every track in parallel under suffixed keys and persists
+  // both audioUrls + sunoTracks so the frontend version pill surfaces both.
+  it("uploads all tracks and surfaces audioUrls + sunoTracks for multi-track results", async () => {
+    const t1 = { id: "t1", audioUrl: "https://suno.example.com/a.mp3", title: "Take 1", duration: 100, imageUrl: "https://suno.example.com/a.jpg" }
+    const t2 = { id: "t2", audioUrl: "https://suno.example.com/b.mp3", title: "Take 2", duration: 110, imageUrl: "https://suno.example.com/b.jpg" }
+    mocks.mockSunoGenerate.mockResolvedValueOnce({ taskId: "suno-task-1", tracks: [t1, t2] })
+    // Distinct R2 URLs per call so the assertion can verify suffix-keyed routing.
+    mocks.mockUploadToR2
+      .mockResolvedValueOnce("https://r2.example.com/audio/job-1.mp3")
+      .mockResolvedValueOnce("https://r2.example.com/audio/job-1-v1.mp3")
+    const job = makeJob("suno-generate", { prompt: "epic rock song" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockUploadToR2).toHaveBeenNthCalledWith(1, t1.audioUrl, "job-1", "audio", "user-1")
+    expect(mocks.mockUploadToR2).toHaveBeenNthCalledWith(2, t2.audioUrl, "job-1-v1", "audio", "user-1")
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.objectContaining({
+        audioUrl: "https://r2.example.com/audio/job-1.mp3",
+        audioUrls: [
+          "https://r2.example.com/audio/job-1.mp3",
+          "https://r2.example.com/audio/job-1-v1.mp3",
+        ],
+        sunoTracks: [
+          { id: "t1", title: "Take 1", duration: 100, imageUrl: "https://suno.example.com/a.jpg", audioUrl: "https://r2.example.com/audio/job-1.mp3" },
+          { id: "t2", title: "Take 2", duration: 110, imageUrl: "https://suno.example.com/b.jpg", audioUrl: "https://r2.example.com/audio/job-1-v1.mp3" },
+        ],
+        trackCount: 2,
+      }),
+    }))
+  })
+
+  // Inverse case: single-track results must NOT add audioUrls to output_data
+  // (so the frontend doesn't mis-trigger the multi-variant fan-out path).
+  it("omits audioUrls when only one track returned", async () => {
+    const job = makeJob("suno-generate", { prompt: "single take" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: expect.not.objectContaining({ audioUrls: expect.anything() }),
+    }))
+  })
 })
 
 describe("suno-cover handler", () => {

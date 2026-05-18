@@ -52,6 +52,8 @@ vi.mock("lucide-react", () => ({
   Expand: MockIcon,
   Scissors: MockIcon,
   Pencil: MockIcon,
+  Plus: MockIcon,
+  LayoutGrid: MockIcon,
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -97,6 +99,10 @@ vi.mock("@/components/editor/media-preview-modal", () => ({
   MediaPreviewModal: () => null,
 }))
 
+vi.mock("@/components/ui/delete-confirmation-dialog", () => ({
+  DeleteConfirmationDialog: () => null,
+}))
+
 vi.mock("@/components/editor/save-to-library-button", () => ({
   SaveToLibraryButton: () => null,
 }))
@@ -104,6 +110,10 @@ vi.mock("@/components/editor/save-to-library-button", () => ({
 vi.mock("@/lib/utils", () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(" "),
   copyToClipboard: vi.fn(),
+  computeDeleteResultUpdates: vi.fn().mockReturnValue({
+    generatedResults: [],
+    activeResultIndex: 0,
+  }),
 }))
 
 vi.mock("../audio-result-overlay", () => ({
@@ -178,9 +188,11 @@ describe("UploadImageNode", () => {
     expect(screen.getByText("Choose Image")).toBeInTheDocument()
   })
 
-  it("shows 'or use URL' toggle text", () => {
+  it("shows URL input field in empty state", () => {
     renderImageNode()
-    expect(screen.getByText("or use URL")).toBeInTheDocument()
+    // The modernized empty state shows the URL field inline with the upload
+    // button (instead of a toggle). The placeholder is the affordance.
+    expect(screen.getByPlaceholderText("or paste image URL...")).toBeInTheDocument()
   })
 
   it("has correct source handle", () => {

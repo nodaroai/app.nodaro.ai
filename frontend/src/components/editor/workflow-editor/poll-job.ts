@@ -33,6 +33,13 @@ const OUTPUT_URL_KEY: Record<OutputKey, string> = {
   generatedAudioUrl: "audioUrl",
 };
 
+/** Map store output key → backend output_data array field (multi-variant). */
+const OUTPUT_URLS_KEY: Record<OutputKey, string> = {
+  generatedVideoUrl: "videoUrls",
+  generatedImageUrl: "imageUrls",
+  generatedAudioUrl: "audioUrls",
+};
+
 export function pollJobToCompletion(
   jobId: string,
   ctx: ExecutionContext,
@@ -117,18 +124,38 @@ function handleJobCompleted(
       ? extraOutputFields(job.output_data as Record<string, unknown>)
       : {};
 
-  const newResult: GeneratedResult = {
-    url: url as string,
-    thumbnailUrl,
-    timestamp: new Date().toISOString(),
-    jobId,
-    ...extraFields,
-  };
+  // Multi-variant fan-out: when the provider returned multiple variants (Grok
+  // images, Suno tracks, etc.) the worker persists `imageUrls`/`audioUrls`/
+  // `videoUrls`. Each variant becomes its own GeneratedResult so users can
+  // browse them via the version pill. Primary lives at index 0 of the array.
+  const allUrlsRaw = job.output_data?.[OUTPUT_URLS_KEY[outputKey]];
+  const variantUrls = Array.isArray(allUrlsRaw)
+    ? (allUrlsRaw.filter((u) => typeof u === "string" && u.length > 0) as string[])
+    : [];
+
+  const newResults: GeneratedResult[] =
+    variantUrls.length > 1
+      ? variantUrls.map((variantUrl, i) => ({
+          url: variantUrl,
+          thumbnailUrl,
+          timestamp: new Date().toISOString(),
+          jobId: i === 0 ? jobId : `${jobId}-v${i}`,
+          ...extraFields,
+        }))
+      : [
+          {
+            url: url as string,
+            thumbnailUrl,
+            timestamp: new Date().toISOString(),
+            jobId,
+            ...extraFields,
+          },
+        ];
 
   updateNodeData(nodeId, {
     executionStatus: "completed",
     [outputKey]: url,
-    generatedResults: [newResult, ...existingResults],
+    generatedResults: [...newResults, ...existingResults],
     activeResultIndex: 0,
     currentJobId: undefined,
     currentJobProgress: undefined,

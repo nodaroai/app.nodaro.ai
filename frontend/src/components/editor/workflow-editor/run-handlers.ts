@@ -833,6 +833,11 @@ interface NodeExecutionState {
     imageUrl?: string;
     videoUrl?: string;
     audioUrl?: string;
+    /** Multi-variant arrays from a single job (Grok = 6, Suno = 2, etc.). Mirrors
+     *  the backend NodeOutput shape — primary at index 0, fan out in the UI. */
+    imageUrls?: readonly string[];
+    audioUrls?: readonly string[];
+    videoUrls?: readonly string[];
     text?: string;
     script?: unknown;
     generatedVoiceId?: string;
@@ -1007,20 +1012,53 @@ function syncNodeStatesToStore(
             updates.activeResultIndex = 0;
           }
         } else {
-          const outputUrl =
-            state.output.imageUrl ??
-            state.output.videoUrl ??
-            state.output.audioUrl;
-          if (outputUrl && !existingUrls.has(outputUrl)) {
-            updates.generatedResults = [
-              {
-                url: outputUrl,
+          // Multi-variant fan-out: a single job that returned multiple URLs
+          // (Grok = 6 images, Suno = 2 tracks). Worker stores the array on
+          // output.imageUrls/audioUrls/videoUrls; we fan each one into its
+          // own GeneratedResult so the version pill surfaces every variant.
+          // Mirrors poll-job.ts so single-node and orchestrator paths produce
+          // identical generatedResults for the same job.
+          const variantUrls: readonly string[] =
+            (state.output.imageUrls && state.output.imageUrls.length > 1
+              ? state.output.imageUrls
+              : null) ??
+            (state.output.audioUrls && state.output.audioUrls.length > 1
+              ? state.output.audioUrls
+              : null) ??
+            (state.output.videoUrls && state.output.videoUrls.length > 1
+              ? state.output.videoUrls
+              : null) ??
+            [];
+
+          if (variantUrls.length > 1) {
+            const baseJobId = state.jobId ?? `exec-${node.id}`;
+            const newResults = variantUrls
+              .filter((u) => !existingUrls.has(u))
+              .map((variantUrl, i) => ({
+                url: variantUrl,
                 timestamp: new Date().toISOString(),
-                jobId: state.jobId ?? `exec-${node.id}`,
-              },
-              ...prev,
-            ];
-            updates.activeResultIndex = 0;
+                jobId: i === 0 ? baseJobId : `${baseJobId}-v${i}`,
+              }));
+            if (newResults.length > 0) {
+              updates.generatedResults = [...newResults, ...prev];
+              updates.activeResultIndex = 0;
+            }
+          } else {
+            const outputUrl =
+              state.output.imageUrl ??
+              state.output.videoUrl ??
+              state.output.audioUrl;
+            if (outputUrl && !existingUrls.has(outputUrl)) {
+              updates.generatedResults = [
+                {
+                  url: outputUrl,
+                  timestamp: new Date().toISOString(),
+                  jobId: state.jobId ?? `exec-${node.id}`,
+                },
+                ...prev,
+              ];
+              updates.activeResultIndex = 0;
+            }
           }
         }
       }

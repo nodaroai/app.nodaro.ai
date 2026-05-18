@@ -316,6 +316,28 @@ export async function uploadImageMaybeWatermark(
 }
 
 /**
+ * Upload N image variants to R2 in parallel, optionally watermarking each.
+ * Returns R2 URLs in the same order as `sourceUrls` — primary first, extras
+ * after. Variants are stored under suffixed keys (`${jobId}`, `${jobId}-v1`,
+ * `${jobId}-v2`, …) so each variant has its own permanent URL.
+ *
+ * If `sourceUrls.length === 1` this is equivalent to a single
+ * uploadImageMaybeWatermark call.
+ */
+export async function uploadImageVariantsMaybeWatermark(
+  sourceUrls: readonly string[],
+  jobId: string,
+  jobUserId: string | undefined,
+  watermark: boolean,
+): Promise<readonly string[]> {
+  return Promise.all(
+    sourceUrls.map((url, i) =>
+      uploadImageMaybeWatermark(url, i === 0 ? jobId : `${jobId}-v${i}`, jobUserId, watermark),
+    ),
+  )
+}
+
+/**
  * Upload video to R2, optionally applying a watermark first.
  * When watermark is true, downloads to a temp file, runs ffmpeg drawtext,
  * then uploads the watermarked file.
