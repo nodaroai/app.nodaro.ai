@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link, Pencil, Aperture } from "lucide-react"
+import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil, Aperture } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -45,6 +45,7 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
+  const setLocationStudioNodeId = useWorkflowStore((s) => s.setLocationStudioNodeId)
   const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -53,13 +54,20 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.sourceImageUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [assetsExpanded, setAssetsExpanded] = useState(false)
 
-  const timeOfDayCount = (nodeData.timeOfDay ?? []).length
-  const weatherCount = (nodeData.weather ?? []).length
-  const anglesCount = (nodeData.angles ?? []).length
-  const totalAssets = timeOfDayCount + weatherCount + anglesCount
-  const anyAssetRunning = nodeData.timeOfDayStatus === "running" || nodeData.weatherStatus === "running" || nodeData.anglesStatus === "running"
+  const counts = {
+    timeOfDay: (nodeData.timeOfDay ?? []).length,
+    weather: (nodeData.weather ?? []).length,
+    seasons: (nodeData.seasons ?? []).length,
+    angles: (nodeData.angles ?? []).length,
+    lighting: (nodeData.lighting ?? []).length,
+  }
+  const anyAssetRunning =
+    nodeData.timeOfDayStatus === "running" ||
+    nodeData.weatherStatus === "running" ||
+    nodeData.seasonsStatus === "running" ||
+    nodeData.anglesStatus === "running" ||
+    nodeData.lightingStatus === "running"
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete))
@@ -254,28 +262,28 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Collapsible asset summary */}
-        {(totalAssets > 0 || anyAssetRunning) && (
-          <button
-            type="button"
-            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              setAssetsExpanded((v) => !v)
-            }}
-          >
-            {assetsExpanded ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
-            <span>Assets ({totalAssets})</span>
-          </button>
-        )}
+        {/* Compact 5-bucket asset grid (atmosphere badge defers to PR-2) */}
+        <div className="grid grid-cols-5 gap-1 text-[9px]">
+          <AssetBadge icon="🌅" label="TOD" count={counts.timeOfDay} status={nodeData.timeOfDayStatus ?? "idle"} />
+          <AssetBadge icon="🌧" label="Weather" count={counts.weather} status={nodeData.weatherStatus ?? "idle"} />
+          <AssetBadge icon="🍁" label="Seasons" count={counts.seasons} status={nodeData.seasonsStatus ?? "idle"} />
+          <AssetBadge icon="📐" label="Angles" count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
+          <AssetBadge icon="💡" label="Lighting" count={counts.lighting} status={nodeData.lightingStatus ?? "idle"} />
+        </div>
 
-        {assetsExpanded && (
-          <div className="flex flex-col gap-1 text-[9px] text-muted-foreground">
-            <AssetBadge label="Time of Day" count={timeOfDayCount} status={nodeData.timeOfDayStatus ?? "idle"} />
-            <AssetBadge label="Weather" count={weatherCount} status={nodeData.weatherStatus ?? "idle"} />
-            <AssetBadge label="Angles" count={anglesCount} status={nodeData.anglesStatus ?? "idle"} />
-          </div>
-        )}
+        {/* Open Studio button */}
+        <button
+          type="button"
+          aria-label="Open Location Studio"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-[#0e3a4a] border border-[#22D3EE44] text-[#67e8f9] rounded hover:bg-[#114b5f] transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            setLocationStudioNodeId(id)
+          }}
+        >
+          <span>⬡</span>
+          <span>Open Studio</span>
+        </button>
 
         {/* Metadata */}
         <div className="flex justify-between text-muted-foreground text-[10px]">
@@ -316,19 +324,28 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-function AssetBadge({ label, count, status }: { readonly label: string; readonly count: number; readonly status: string }) {
+function AssetBadge({ icon, label, count, status }: { readonly icon: string; readonly label: string; readonly count: number; readonly status: string }) {
   if (status === "running") {
     return (
-      <span className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted/50">
+      <span
+        title={`${label} — generating`}
+        className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
+      >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />
-        {label}
+        <span className="text-[8px] text-muted-foreground">{label}</span>
       </span>
     )
   }
-  if (count === 0) return null
+  const hasItems = count > 0
   return (
-    <span className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-cyan-500/10 text-cyan-600">
-      {label} {count}
+    <span
+      title={`${label}${hasItems ? ` — ${count}` : ""}`}
+      className={`flex flex-col items-center gap-0 px-0.5 py-0.5 rounded ${
+        hasItems ? "bg-cyan-500/10 text-cyan-600" : "bg-muted/30 text-muted-foreground/40"
+      }`}
+    >
+      <span className="leading-none">{icon}</span>
+      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${count}` : label}</span>
     </span>
   )
 }

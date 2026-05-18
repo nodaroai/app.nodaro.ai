@@ -39,6 +39,7 @@ export { DeveloperAppsResource } from "./resources/developer-apps.js"
 export { OAuthResource } from "./resources/oauth.js"
 export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
+export { LocationsResource } from "./resources/locations.js"
 
 // --- Resource type definitions ---
 export type {
@@ -127,3 +128,25 @@ export {
   CHARACTER_ASPECT_OPTIONS,
   CHARACTER_ASPECT_DEFAULTS,
 } from "./resources/characters.js"
+
+export type {
+  Location,
+  LocationDetail,
+  LocationReferencePhoto,
+  LocationReferencePhotoKind,
+  CreateLocationInput,
+  UpdateLocationInput,
+  UpdateLocationResult,
+  ListLocationsParams,
+  GenerateLocationInput,
+  GenerateLocationResult,
+  GenerateLocationAssetInput,
+  ApproveMainImageResult,
+  RecaptionLocationResult,
+  LocationAssetType,
+  LocationAttachColumn,
+} from "./resources/locations.js"
+export {
+  LOCATION_ASSET_TYPES,
+  LOCATION_ATTACH_COLUMNS,
+} from "./resources/locations.js"

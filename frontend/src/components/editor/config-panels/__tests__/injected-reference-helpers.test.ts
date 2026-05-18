@@ -3,6 +3,7 @@ import {
   removeMentionToken,
   makeRemoveWiredSource,
   appendSuppressedSlug,
+  resolveLocationCanonicalFallback,
 } from "../injected-reference-helpers"
 import type { WorkflowEdge } from "@/types/nodes"
 
@@ -74,5 +75,56 @@ describe("appendSuppressedSlug", () => {
 
   it("handles undefined input", () => {
     expect(appendSuppressedSlug(undefined, "kira")).toEqual(["kira"])
+  })
+})
+
+describe("resolveLocationCanonicalFallback", () => {
+  it("returns slug + url for a wired location without suppression", () => {
+    expect(resolveLocationCanonicalFallback({
+      locationName: "Ancient Forest",
+      sourceImageUrl: "http://main.png",
+      suppressedSlugs: undefined,
+    })).toEqual({ slug: "ancient-forest", url: "http://main.png" })
+  })
+
+  it("hyphenates and lowercases the slug", () => {
+    const r = resolveLocationCanonicalFallback({
+      locationName: "  The Ancient Forest  ",
+      sourceImageUrl: "http://main.png",
+      suppressedSlugs: [],
+    })
+    expect(r?.slug).toBe("the-ancient-forest")
+  })
+
+  it("returns undefined when the slug is in suppressedSlugs", () => {
+    expect(resolveLocationCanonicalFallback({
+      locationName: "Ancient Forest",
+      sourceImageUrl: "http://main.png",
+      suppressedSlugs: ["ancient-forest"],
+    })).toBeUndefined()
+  })
+
+  it("returns undefined with no sourceImageUrl", () => {
+    expect(resolveLocationCanonicalFallback({
+      locationName: "Ancient Forest",
+      sourceImageUrl: undefined,
+      suppressedSlugs: undefined,
+    })).toBeUndefined()
+  })
+
+  it("returns undefined with no locationName", () => {
+    expect(resolveLocationCanonicalFallback({
+      locationName: undefined,
+      sourceImageUrl: "http://main.png",
+      suppressedSlugs: undefined,
+    })).toBeUndefined()
+  })
+
+  it("returns undefined when locationName is whitespace-only", () => {
+    expect(resolveLocationCanonicalFallback({
+      locationName: "   ",
+      sourceImageUrl: "http://main.png",
+      suppressedSlugs: undefined,
+    })).toBeUndefined()
   })
 })

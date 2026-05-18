@@ -369,6 +369,62 @@ function routeSunoMashupAudio(inputs: FrontendResolvedInputs, output: string): v
   }
 }
 
+/**
+ * Inject a location upstream's image reference into the consumer's `referenceImageUrls`.
+ *
+ * Mirrors the character injection pattern at the upstream-routing call-site below.
+ * Behavior:
+ *  - If the consumer's `fieldMappings` selects a specific variant of this location
+ *    (e.g. `lighting[0]`, `weather[2]`), resolve that bucket's entry by index and
+ *    use its `url`.
+ *  - Otherwise (no mapping, malformed mapping, or out-of-range index), fall back
+ *    to the location's `sourceImageUrl` (the canonical anchor image).
+ *  - When neither produces a URL, the helper is a no-op — keeps the
+ *    referenceImageUrls list stable for callers.
+ *
+ * `consumerFieldKey` is the key in `consumerFieldMappings` that holds the
+ * bucket-path string. Callers default it to `"locationRef"` (the consumer
+ * input-handle id) which is the natural pairing for the location ref handle.
+ *
+ * The plan's spec uses `"lighting[0]"` style string paths. The current
+ * `FieldMappings` type is `Record<string, { sourceNodeId: string }>`, so this
+ * helper accepts the more general `unknown` shape and discriminates at runtime
+ * — when the field-mappings UI extension lands, the same helper accepts it
+ * without changes.
+ */
+function injectLocationContext(
+  inputs: FrontendResolvedInputs,
+  srcNode: WorkflowNode,
+  consumerFieldMappings: Readonly<Record<string, unknown>> | undefined,
+  consumerFieldKey: string,
+): void {
+  const data = srcNode.data as Record<string, unknown>;
+
+  let urlToInject: string | undefined = typeof data.sourceImageUrl === "string" && data.sourceImageUrl.length > 0
+    ? data.sourceImageUrl
+    : undefined;
+
+  const mapping = consumerFieldMappings?.[consumerFieldKey];
+  if (mapping && typeof mapping === "string") {
+    const match = mapping.match(/^(\w+)\[(\d+)\]$/);
+    if (match) {
+      const bucket = match[1];
+      const idx = parseInt(match[2], 10);
+      const arr = data[bucket];
+      if (Array.isArray(arr)) {
+        const entry = arr[idx] as { url?: unknown } | undefined;
+        if (entry && typeof entry.url === "string" && entry.url.length > 0) {
+          urlToInject = entry.url;
+        }
+      }
+    }
+  }
+
+  if (urlToInject) {
+    inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), urlToInject];
+  }
+}
+
 /** Node types that produce a Suno track/task ID for downstream passthrough */
 const SUNO_TRACK_NODE_TYPES = new Set([
   "suno-generate",
@@ -1028,8 +1084,7 @@ export function resolveNodeInputs(
     } else if (
       src.type === "character" ||
       src.type === "face" ||
-      src.type === "object" ||
-      src.type === "location"
+      src.type === "object"
     ) {
       if (node.type === "lip-sync" || node.type === "speech-to-video") {
         inputs.imageUrl = output;
@@ -1054,6 +1109,19 @@ export function resolveNodeInputs(
           inputs.injectCharacterContext = true;
           inputs.attachToCharacterId = dbId;
         }
+      }
+    } else if (src.type === "location") {
+      // Locations have a richer reference model than character/face/object —
+      // beyond the canonical `sourceImageUrl`, they expose 6 variant buckets
+      // (timeOfDay/weather/seasons/angles/lighting/atmosphereMotions). The
+      // consumer can field-map a specific variant via a `"bucket[idx]"`
+      // string in its `fieldMappings`; otherwise the helper falls back to
+      // the anchor image. See `injectLocationContext` above for details.
+      if (node.type === "lip-sync" || node.type === "speech-to-video") {
+        inputs.imageUrl = output;
+      } else {
+        const consumerFieldMappings = (node.data as Record<string, unknown> | undefined)?.fieldMappings as Readonly<Record<string, unknown>> | undefined;
+        injectLocationContext(inputs, src, consumerFieldMappings, "locationRef");
       }
     } else if (src.type === "upload-video" || src.type === "youtube-video") {
       if (node.type === "suno-cover" && src.type === "youtube-video") {

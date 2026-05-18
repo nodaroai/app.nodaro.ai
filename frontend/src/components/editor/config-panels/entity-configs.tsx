@@ -735,244 +735,74 @@ export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapFiel
   )
 }
 
-export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<LocationNodeData>) {
-  const generateAsset = useWorkflowStore((s) => s.generateLocationAssetFn)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const locMediaEditor = useMediaEditor({
-    onComplete: async (results) => {
-      const result = results[0]
-      if (!result) return
-      const url = result.processedUrl ?? result.uploadResult.url
-      onUpdate({ sourceImageUrl: url })
-      setUploading(false)
-    },
-    onCancel: () => setUploading(false),
-  })
+type LocationConfigProps = ConfigProps<LocationNodeData> & { nodeId?: string }
 
-  useEffect(() => {
-    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
-  }, [])
-  const creditCost = useModelCredits(data.provider || "nano-banana")
+export function LocationConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: LocationConfigProps) {
+  const setLocationStudioNodeId = useWorkflowStore((s) => s.setLocationStudioNodeId)
 
-  const hasImage = Boolean(((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl)
-  const isRunning = data.executionStatus === "running"
-
-  const scriptLocSource = sources.find(
-    (s) => s.type === "generate-script" && s.sourceHandle === "locations"
-  )
-  const scriptLocations = useMemo(() => {
-    if (!scriptLocSource?.nodeData) return []
-    const sd = scriptLocSource.nodeData as Record<string, unknown>
-    const results = sd.generatedResults as GeneratedScriptResult[] | undefined
-    const activeIndex = (sd.activeResultIndex as number | undefined) ?? 0
-    const script = results?.[activeIndex]?.script ?? (sd.generatedScript as GeneratedScript | undefined)
-    if (!script?.scenes) return []
-    const seen = new Map<string, { name: string; description: string; timeOfDay: string; weather?: string; lighting?: string }>()
-    for (const scene of script.scenes) {
-      if (!scene.location) continue
-      const key = scene.location.name.toLowerCase()
-      if (!seen.has(key)) seen.set(key, {
-        name: scene.location.name,
-        description: scene.location.description,
-        timeOfDay: scene.location.timeOfDay,
-        weather: scene.location.weather,
-        lighting: scene.location.lighting,
-      })
-    }
-    return Array.from(seen.values())
-  }, [scriptLocSource])
-
-  const existingNames = useMemo(() => {
-    const names: string[] = []
-    for (const n of nodes) {
-      if (n.type === "location" && n.id !== selectedNodeId) {
-        const nd = n.data as LocationNodeData
-        if (nd.locationName) names.push(nd.locationName)
-      }
-    }
-    return names
-  }, [nodes, selectedNodeId])
-
-  function handleNameChange(newName: string) {
-    if (!newName) { onUpdate({ locationName: newName }); return }
-    const baseName = newName
-    let finalName = baseName
-    let version = 2
-    const wasVersioned = existingNames.includes(baseName)
-    while (existingNames.includes(finalName)) { finalName = `${baseName} (${version})`; version++ }
-    if (wasVersioned) {
-      onUpdate({ locationName: finalName, sourceImageUrl: "", generatedResults: [], activeResultIndex: 0, executionStatus: "idle" })
-    } else {
-      onUpdate({ locationName: finalName })
-    }
-  }
-
-  const duplicateWarning = useMemo(() => {
-    if (!data.locationName) return null
-    if (data.locationDbId) return null
-    const exactMatch = existingNames.includes(data.locationName)
-    if (exactMatch) return `A location named "${data.locationName}" already exists. It will be auto-versioned on blur.`
-    return null
-  }, [data.locationName, data.locationDbId, existingNames])
-
-  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    locMediaEditor.openEditor([file])
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  function handleGenerateAsset(assetType: "timeOfDay" | "weather" | "angles") {
-    if (!selectedNodeId || !generateAsset) return
-    generateAsset(selectedNodeId, assetType)
-  }
+  const todCount = (data.timeOfDay ?? []).length
+  const weatherCount = (data.weather ?? []).length
+  const seasonsCount = (data.seasons ?? []).length
+  const anglesCount = (data.angles ?? []).length
+  const lightingCount = (data.lighting ?? []).length
 
   return (
-    <div className="flex flex-col gap-3">
-      {scriptLocations.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs text-muted-foreground">From Script</Label>
-          <Select
-            value={data.scriptLocationIndex != null ? String(data.scriptLocationIndex) : ""}
-            onValueChange={(v) => {
-              const idx = Number(v)
-              const loc = scriptLocations[idx]
-              if (loc) {
-                onUpdate({
-                  scriptLocationIndex: idx,
-                  locationName: loc.name,
-                  description: [loc.description, loc.timeOfDay, loc.weather, loc.lighting].filter(Boolean).join(". "),
-                } as any)
-              }
-            }}
-          >
-            <SelectTrigger><SelectValue placeholder="Select location..." /></SelectTrigger>
-            <SelectContent>
-              {scriptLocations.map((l, i) => (
-                <SelectItem key={i} value={String(i)}>{l.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-      <MappableField field="locationName" label="Location Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input id="loc-name" value={data.locationName} onChange={(e) => onUpdate({ locationName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Ancient Forest (use {} to inject input)" />
-        {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
-      </MappableField>
-      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea id="loc-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A mystical forest with ancient trees... (use {} to inject input)" rows={3} />
-      </MappableField>
+    <div className="flex flex-col gap-4">
       <div>
-        <Label htmlFor="loc-category">Category</Label>
-        <Select value={data.category} onValueChange={(v) => onUpdate({ category: v as LocationNodeData["category"] })}>
-          <SelectTrigger id="loc-category"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="indoor">Indoor</SelectItem>
-            <SelectItem value="outdoor">Outdoor</SelectItem>
-            <SelectItem value="urban">Urban</SelectItem>
-            <SelectItem value="nature">Nature</SelectItem>
-            <SelectItem value="fantasy">Fantasy</SelectItem>
-            <SelectItem value="sci-fi">Sci-Fi</SelectItem>
-            <SelectItem value="historical">Historical</SelectItem>
-            <SelectItem value="futuristic">Futuristic</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="loc-style">Style</Label>
-        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as LocationNodeData["style"] })}>
-          <SelectTrigger id="loc-style"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="realistic">Realistic</SelectItem>
-            <SelectItem value="anime">Anime</SelectItem>
-            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
-            <SelectItem value="illustration">Illustration</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="loc-image">Reference Image</Label>
-        <div className="flex gap-1.5">
-          <Input id="loc-image" value={data.sourceImageUrl} onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })} placeholder="https://... or upload" className="flex-1" />
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif" className="hidden" onChange={handleUploadImage} />
-          <Button variant="outline" size="icon" className="shrink-0 h-9 w-9" disabled={uploading} onClick={() => fileInputRef.current?.click()} title="Upload image from computer" aria-label="Upload image from computer">
-            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          </Button>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Location</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.locationName || "(unnamed location)"}</div>
+        <div className="text-[10px] text-muted-foreground">
+          {data.style} · {data.category} · {todCount} tod · {weatherCount} weather · {seasonsCount} seasons · {anglesCount} angles · {lightingCount} lighting
         </div>
       </div>
 
-      <MappableField field="provider" label="Image Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
-          <SelectTrigger className="h-8 text-xs" aria-label="Image model"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999] max-h-72">
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
-      </MappableField>
-      <ModelDescriptionHint modelId={data.provider} />
-
-      <Separator />
-
-      <Button
-        size="sm"
-        className="w-full text-xs h-8 text-white hover:opacity-90"
-        style={{ backgroundColor: '#ff0073' }}
-        disabled={isRunning || !data.locationName}
-        onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
+      <button
+        type="button"
+        onClick={() => nodeId && setLocationStudioNodeId(nodeId)}
+        className="w-full text-left bg-[#0e3a4a] border border-[#22D3EE44] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b5f] transition-colors disabled:opacity-50"
+        disabled={!nodeId}
+        aria-label="Open Location Studio"
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
-      </Button>
+        <span className="text-base leading-none">⬡</span>
+        <span>
+          <span className="block text-[11px] font-semibold text-[#67e8f9]">Open Location Studio</span>
+          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets &amp; atmosphere</span>
+        </span>
+        <span className="ml-auto text-[#22D3EE]">→</span>
+      </button>
 
-      <Separator />
+      <div className="border-t border-border pt-3 flex flex-col gap-3">
+        {/* Style Lock — when enabled, downstream image/video nodes wired to this
+            location will use the canonical caption + style lock for better
+            visual consistency. Default ON. */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="loc-style-lock"
+              checked={data.styleLock ?? true}
+              onChange={(e) => onUpdate({ styleLock: e.target.checked })}
+            />
+            <Label htmlFor="loc-style-lock" className="text-xs">
+              Style Lock
+            </Label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            When enabled, downstream image/video nodes wired to this location will use the canonical caption for better consistency.
+          </p>
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold uppercase text-muted-foreground">Location Assets</Label>
-        {!hasImage && (<p className="text-[10px] text-muted-foreground">Generate or upload a main image first, then generate assets below.</p>)}
-
-        <Accordion type="multiple" className="w-full">
-          <AccordionItem value="timeOfDay">
-            <AccordionTrigger className="text-xs py-1.5">Time of Day ({(data.timeOfDay ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <LocationAssetButton label="Generate Time of Day" status={data.timeOfDayStatus ?? "idle"} itemCount={(data.timeOfDay ?? []).length} onClick={() => handleGenerateAsset("timeOfDay")} disabled={!hasImage} />
-              <LocationAssetGrid items={data.timeOfDay ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="weather">
-            <AccordionTrigger className="text-xs py-1.5">Weather ({(data.weather ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <LocationAssetButton label="Generate Weather" status={data.weatherStatus ?? "idle"} itemCount={(data.weather ?? []).length} onClick={() => handleGenerateAsset("weather")} disabled={!hasImage} />
-              <LocationAssetGrid items={data.weather ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="angles">
-            <AccordionTrigger className="text-xs py-1.5">Angles ({(data.angles ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <LocationAssetButton label="Generate Angles" status={data.anglesStatus ?? "idle"} itemCount={(data.angles ?? []).length} onClick={() => handleGenerateAsset("angles")} disabled={!hasImage} />
-              <LocationAssetGrid items={data.angles ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        <Button
-          variant="outline" size="sm" className="w-full text-xs h-8 mt-1"
-          disabled={!hasImage || data.timeOfDayStatus === "running" || data.weatherStatus === "running" || data.anglesStatus === "running" || !data.locationName}
-          onClick={() => { handleGenerateAsset("timeOfDay"); setTimeout(() => handleGenerateAsset("weather"), 500); setTimeout(() => handleGenerateAsset("angles"), 1000) }}
-        >
-          <Sparkles className="w-3 h-3 mr-1.5" />
-          Generate All Assets
-        </Button>
+        {/* Field Mappings — keep the {} input-injection mapping for the Location Name,
+            the one referenceable field that survives the move to the studio. */}
+        <MappableField field="locationName" label="Location Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            id="loc-name"
+            value={data.locationName}
+            onChange={(e) => onUpdate({ locationName: e.target.value })}
+            placeholder="e.g. Ancient Forest (use {} to inject input)"
+          />
+        </MappableField>
       </div>
-
-      <MediaEditorModal editor={locMediaEditor} />
     </div>
   )
 }

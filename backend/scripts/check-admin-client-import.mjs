@@ -122,6 +122,18 @@ const ALLOWED_PATHS = [
   // `character.user_id`.
   /^src\/routes\/replicate-training-webhook\.ts$/,
 
+  // Location LLM caption: service-role for jobs lookup + locations UPDATE.
+  // Every query is scoped by `user_id` in-handler (verified line 82, 122).
+  /^src\/routes\/location-llm-caption\.ts$/,
+
+  // Location main-image approval: service-role for parallel jobs + locations
+  // fetch. Every query is scoped by `.eq("user_id", userId)` in-handler.
+  /^src\/routes\/location-main-image-approval\.ts$/,
+
+  // Location restore: service-role for soft-delete restore. Every query is
+  // scoped by `.eq("user_id", userId)` in-handler.
+  /^src\/routes\/location-restore\.ts$/,
+
   // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
   // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
   // child tables; cross-user rows return 404 to avoid existence leak — audited

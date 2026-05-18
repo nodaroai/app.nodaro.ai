@@ -29,6 +29,7 @@ vi.mock("@/lib/sse-client", () => ({
 import {
   getAuthHeaders,
   StorageExceededError,
+  ConcurrentModificationError,
   getImageProxyUrl,
   generateImage,
   uploadFile,
@@ -37,6 +38,11 @@ import {
   getJobStatus,
   subscribeToDownloadProgress,
   generateAIWriterStream,
+  saveLocation,
+  approveLocationMainImage,
+  recaptionLocation,
+  restoreLocation,
+  getJobStatusBatch,
 } from "../api"
 
 // ---------------------------------------------------------------------------
@@ -537,5 +543,260 @@ describe("generateAIWriterStream", () => {
     await expect(
       generateAIWriterStream({ ...baseParams, onToken: vi.fn() }),
     ).rejects.toThrow("Stream ended without completion")
+  })
+})
+
+// ---- ConcurrentModificationError ------------------------------------------
+
+describe("ConcurrentModificationError", () => {
+  it("has correct name and updatedAt property", () => {
+    const err = new ConcurrentModificationError("Stale token", "2026-05-18T10:00:00.000Z")
+    expect(err).toBeInstanceOf(Error)
+    expect(err.name).toBe("ConcurrentModificationError")
+    expect(err.message).toBe("Stale token")
+    expect(err.updatedAt).toBe("2026-05-18T10:00:00.000Z")
+  })
+})
+
+// ---- saveLocation ---------------------------------------------------------
+
+describe("saveLocation", () => {
+  it("posts the full payload (new fields + expectedUpdatedAt) and returns id + updatedAt", async () => {
+    sessionWith("tok-sl")
+    const mock = mockFetchJson({ id: "loc-1", updatedAt: "2026-05-18T11:00:00.000Z" })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await saveLocation({
+      id: "loc-1",
+      nodeId: "node_1",
+      name: "Forest",
+      lighting: [{ name: "golden hour", url: "https://x/golden.png" }],
+      seasons: [{ name: "winter", url: "https://x/winter.png" }],
+      atmosphereMotions: [{ name: "fog drift", url: "https://x/fog.mp4" }],
+      referencePhotos: [{ kind: "wide", url: "https://x/wide.png" }],
+      canonicalDescription: "A misty pine forest",
+      styleLock: false,
+      expectedUpdatedAt: "2026-05-18T10:00:00.000Z",
+    })
+
+    expect(mock).toHaveBeenCalledWith(
+      "/v1/locations",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer tok-sl" },
+      }),
+    )
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).toMatchObject({
+      id: "loc-1",
+      nodeId: "node_1",
+      name: "Forest",
+      lighting: [{ name: "golden hour", url: "https://x/golden.png" }],
+      seasons: [{ name: "winter", url: "https://x/winter.png" }],
+      atmosphereMotions: [{ name: "fog drift", url: "https://x/fog.mp4" }],
+      referencePhotos: [{ kind: "wide", url: "https://x/wide.png" }],
+      canonicalDescription: "A misty pine forest",
+      styleLock: false,
+      expectedUpdatedAt: "2026-05-18T10:00:00.000Z",
+    })
+    expect(result).toEqual({ id: "loc-1", updatedAt: "2026-05-18T11:00:00.000Z" })
+  })
+
+  it("throws ConcurrentModificationError on 409 concurrent_modification", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(409, {
+        error: {
+          code: "concurrent_modification",
+          updatedAt: "2026-05-18T11:30:00.000Z",
+          message: "Location was modified concurrently",
+        },
+      }),
+    )
+
+    await expect(
+      saveLocation({
+        id: "loc-1",
+        nodeId: "node_1",
+        name: "Forest",
+        expectedUpdatedAt: "2026-05-18T10:00:00.000Z",
+      }),
+    ).rejects.toBeInstanceOf(ConcurrentModificationError)
+  })
+
+  it("exposes updatedAt on the thrown ConcurrentModificationError", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(409, {
+        error: {
+          code: "concurrent_modification",
+          updatedAt: "2026-05-18T11:30:00.000Z",
+          message: "Location was modified concurrently",
+        },
+      }),
+    )
+
+    try {
+      await saveLocation({
+        id: "loc-1",
+        nodeId: "node_1",
+        name: "Forest",
+        expectedUpdatedAt: "2026-05-18T10:00:00.000Z",
+      })
+      throw new Error("did not throw")
+    } catch (err) {
+      expect(err).toBeInstanceOf(ConcurrentModificationError)
+      expect((err as ConcurrentModificationError).updatedAt).toBe(
+        "2026-05-18T11:30:00.000Z",
+      )
+    }
+  })
+
+  it("falls back to a plain Error on other failures", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(500, { error: { message: "DB down" } }),
+    )
+    await expect(
+      saveLocation({ nodeId: "node_1", name: "Forest" }),
+    ).rejects.toThrow("DB down")
+  })
+})
+
+// ---- approveLocationMainImage --------------------------------------------
+
+describe("approveLocationMainImage", () => {
+  it("posts candidateJobId and returns sourceImageUrl + canonicalDescription", async () => {
+    sessionWith("tok-approve")
+    const mock = mockFetchJson({
+      sourceImageUrl: "https://x/loc.png",
+      canonicalDescription: "A pine forest",
+    })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await approveLocationMainImage("loc-1", "job-1")
+
+    expect(mock.mock.calls[0][0]).toBe("/v1/locations/loc-1/approve-main-image")
+    expect(mock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(mock.mock.calls[0][1].body as string)).toEqual({
+      candidateJobId: "job-1",
+    })
+    expect(result).toEqual({
+      sourceImageUrl: "https://x/loc.png",
+      canonicalDescription: "A pine forest",
+    })
+  })
+
+  it("URL-encodes the location id", async () => {
+    noSession()
+    const mock = mockFetchJson({ sourceImageUrl: "u", canonicalDescription: "" })
+    vi.stubGlobal("fetch", mock)
+    await approveLocationMainImage("loc/with slash", "job-1")
+    expect(mock.mock.calls[0][0]).toBe(
+      "/v1/locations/loc%2Fwith%20slash/approve-main-image",
+    )
+  })
+
+  it("throws on non-ok response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(404, { error: { message: "Candidate not found" } }),
+    )
+    await expect(
+      approveLocationMainImage("loc-1", "job-1"),
+    ).rejects.toThrow("Candidate not found")
+  })
+})
+
+// ---- recaptionLocation ----------------------------------------------------
+
+describe("recaptionLocation", () => {
+  it("posts with no body and returns canonicalDescription", async () => {
+    sessionWith("tok-cap")
+    const mock = mockFetchJson({ canonicalDescription: "A fresh caption" })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await recaptionLocation("loc-1")
+
+    expect(mock.mock.calls[0][0]).toBe("/v1/locations/loc-1/llm-caption")
+    expect(mock.mock.calls[0][1].method).toBe("POST")
+    expect(result).toEqual({ canonicalDescription: "A fresh caption" })
+  })
+
+  it("throws on 502 caption_failed", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(502, { error: { message: "Caption failed" } }),
+    )
+    await expect(recaptionLocation("loc-1")).rejects.toThrow("Caption failed")
+  })
+})
+
+// ---- restoreLocation ------------------------------------------------------
+
+describe("restoreLocation", () => {
+  it("posts to restore endpoint and returns id + name", async () => {
+    sessionWith("tok-rest")
+    const mock = mockFetchJson({ id: "loc-1", name: "Forest" })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await restoreLocation("loc-1")
+
+    expect(mock.mock.calls[0][0]).toBe("/v1/locations/loc-1/restore")
+    expect(mock.mock.calls[0][1].method).toBe("POST")
+    expect(result).toEqual({ id: "loc-1", name: "Forest" })
+  })
+
+  it("throws on non-ok response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(404, { error: { message: "Not found" } }),
+    )
+    await expect(restoreLocation("loc-1")).rejects.toThrow("Not found")
+  })
+})
+
+// ---- getJobStatusBatch ----------------------------------------------------
+
+describe("getJobStatusBatch", () => {
+  it("returns { jobs: [] } for empty ids without fetching", async () => {
+    const mock = vi.fn()
+    vi.stubGlobal("fetch", mock)
+
+    const result = await getJobStatusBatch([])
+
+    expect(result).toEqual({ jobs: [] })
+    expect(mock).not.toHaveBeenCalled()
+  })
+
+  it("sends comma-joined ids in the ?ids= query and returns body", async () => {
+    sessionWith("tok-batch")
+    const jobs = [
+      { id: "j1", status: "completed", output_data: { imageUrl: "u" } },
+      { id: "j2", status: "pending", output_data: null },
+    ]
+    const mock = mockFetchJson({ jobs })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await getJobStatusBatch(["j1", "j2"])
+
+    expect(mock.mock.calls[0][0]).toBe("/v1/jobs/status?ids=j1%2Cj2")
+    expect(mock.mock.calls[0][1].method).toBe("GET")
+    expect(result).toEqual({ jobs })
+  })
+
+  it("throws on non-ok response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(400, { error: { message: "Bad ids" } }),
+    )
+    await expect(getJobStatusBatch(["j1"])).rejects.toThrow("Bad ids")
   })
 })

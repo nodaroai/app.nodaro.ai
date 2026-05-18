@@ -18,7 +18,7 @@ import { useCharacters, useObjects, useLocations, useFaces } from "@/hooks/queri
 import { queryKeys } from "@/lib/query-keys"
 const CharacterPageModal = lazy(() => import("./character-page-modal").then(m => ({ default: m.CharacterPageModal })))
 const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
-const LocationPageModal = lazy(() => import("./location-page-modal").then(m => ({ default: m.LocationPageModal })))
+const LocationStudioModal = lazy(() => import("./location-studio/location-studio-modal"))
 import { createClient } from "@/lib/supabase"
 import type { DbCharacter, DbObject, DbLocation, DbFace } from "@/lib/api"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -616,8 +616,8 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
       )}
       {locationPageNodeId && (
         <Suspense fallback={null}>
-          <LocationPageModal
-            locationNodeId={locationPageNodeId}
+          <LocationStudioModal
+            nodeId={locationPageNodeId}
             onClose={() => {
               setLocationPageNodeId(null)
               invalidateAssets()
@@ -1144,8 +1144,8 @@ export function UnifiedAssetLibraryButton() {
       )}
       {locationPageNodeId && (
         <Suspense fallback={null}>
-          <LocationPageModal
-            locationNodeId={locationPageNodeId}
+          <LocationStudioModal
+            nodeId={locationPageNodeId}
             onClose={() => {
               setLocationPageNodeId(null)
               invalidateAssets()

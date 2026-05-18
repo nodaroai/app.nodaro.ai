@@ -1,8 +1,16 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+
+// Reference-photo kinds — mirrors the migration 124 schema. Single source of
+// truth: `LOCATION_REFERENCE_PHOTO_KINDS` from `@nodaro/shared/entity-prompts`.
+const referencePhoto = z.object({
+  kind: z.enum(LOCATION_REFERENCE_PHOTO_KINDS),
+  url: safeUrlSchema,
+})
 
 const upsertLocationBody = z.object({
   id: z.string().uuid().optional(),
@@ -15,9 +23,25 @@ const upsertLocationBody = z.object({
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
+  // Asset buckets — worker-owned on UPDATE, free-to-set on INSERT. The UPDATE
+  // branch deliberately drops these so the worker's atomic
+  // `append_location_asset()` RPC cannot be clobbered by a Studio auto-save
+  // that snapshotted a stale array.
   timeOfDay: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   weather: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
   angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  lighting: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  seasons: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  atmosphereMotions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  // User-owned mood-board + caption + style-lock flag. These ARE allowed in
+  // both INSERT and UPDATE — the caller drives them.
+  referencePhotos: z.array(referencePhoto).max(20).optional(),
+  canonicalDescription: z.string().max(4000).optional(),
+  styleLock: z.boolean().optional(),
+  // Optimistic-concurrency token: when present, UPDATE only succeeds if the
+  // row's `updated_at` still matches. On mismatch we return 409 so the Studio
+  // can re-fetch + merge instead of silently overwriting a worker write.
+  expectedUpdatedAt: z.string().datetime().optional(),
 })
 
 const deleteLocationParams = z.object({
@@ -27,10 +51,71 @@ const deleteLocationParams = z.object({
 const listLocationsQuery = z.object({
   projectId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
+  // Default view hides archived rows. `?archived=true` flips the filter for
+  // the Studio's "Archived" tab.
+  archived: z.enum(["true", "false"]).optional(),
 })
 
+// Single source of truth for the GET column list — keeps single + list in lock-step.
+const SELECT_COLUMNS =
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, deleted_at, created_at, updated_at"
+
+type LocationRow = {
+  id: string
+  user_id: string
+  node_id: string
+  project_id: string | null
+  name: string
+  description: string | null
+  category: string | null
+  style: string | null
+  source_image_url: string | null
+  time_of_day: { name: string; url: string }[] | null
+  weather: { name: string; url: string }[] | null
+  angles: { name: string; url: string }[] | null
+  lighting: { name: string; url: string }[] | null
+  seasons: { name: string; url: string }[] | null
+  atmosphere_motions: { name: string; url: string }[] | null
+  reference_photos: { kind: string; url: string }[] | null
+  canonical_description: string | null
+  style_lock: boolean | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// snake_case → camelCase wire shape. Coerces NULL canonical_description to ""
+// so callers don't have to defensively `?? ""` everywhere.
+function toCamel(loc: LocationRow) {
+  return {
+    id: loc.id,
+    userId: loc.user_id,
+    nodeId: loc.node_id,
+    projectId: loc.project_id,
+    name: loc.name,
+    description: loc.description,
+    category: loc.category,
+    style: loc.style,
+    sourceImageUrl: loc.source_image_url,
+    timeOfDay: loc.time_of_day ?? [],
+    weather: loc.weather ?? [],
+    angles: loc.angles ?? [],
+    lighting: loc.lighting ?? [],
+    seasons: loc.seasons ?? [],
+    atmosphereMotions: loc.atmosphere_motions ?? [],
+    referencePhotos: loc.reference_photos ?? [],
+    canonicalDescription: loc.canonical_description ?? "",
+    styleLock: loc.style_lock ?? true,
+    deletedAt: loc.deleted_at,
+    createdAt: loc.created_at,
+    updatedAt: loc.updated_at,
+  }
+}
+
 export async function locationRoutes(app: FastifyInstance) {
-  // List locations for a project
+  // ---------------------------------------------------------------------------
+  // List locations
+  // ---------------------------------------------------------------------------
   app.get("/v1/locations", async (req, reply) => {
     const parsed = listLocationsQuery.safeParse(req.query)
     if (!parsed.success) {
@@ -42,12 +127,13 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { projectId } = parsed.data
+    const { projectId, archived } = parsed.data
     const userId = req.userId
+    const wantArchived = archived === "true"
 
     let query = supabase
       .from("locations")
-      .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, created_at, updated_at")
+      .select(SELECT_COLUMNS)
       .order("created_at", { ascending: false })
 
     if (projectId) {
@@ -55,6 +141,12 @@ export async function locationRoutes(app: FastifyInstance) {
     }
     if (userId) {
       query = query.eq("user_id", userId)
+    }
+    // Default view hides archived. Archived view flips the filter.
+    if (wantArchived) {
+      query = query.not("deleted_at", "is", null)
+    } else {
+      query = query.is("deleted_at", null)
     }
 
     const { data, error } = await query
@@ -65,28 +157,13 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    // Transform snake_case to camelCase for frontend
-    const locations = (data ?? []).map((loc) => ({
-      id: loc.id,
-      userId: loc.user_id,
-      nodeId: loc.node_id,
-      projectId: loc.project_id,
-      name: loc.name,
-      description: loc.description,
-      category: loc.category,
-      style: loc.style,
-      sourceImageUrl: loc.source_image_url,
-      timeOfDay: loc.time_of_day,
-      weather: loc.weather,
-      angles: loc.angles,
-      createdAt: loc.created_at,
-      updatedAt: loc.updated_at,
-    }))
-
+    const locations = (data ?? []).map((loc) => toCamel(loc as LocationRow))
     return { locations }
   })
 
+  // ---------------------------------------------------------------------------
   // Get single location by ID
+  // ---------------------------------------------------------------------------
   app.get("/v1/locations/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -107,12 +184,33 @@ export async function locationRoutes(app: FastifyInstance) {
 
     const { id } = parsed.data
 
-    const { data, error } = await supabase
-      .from("locations")
-      .select("id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, created_at, updated_at")
-      .eq("id", id)
-      .eq("user_id", userId)
-      .single()
+    // The two queries below are independent — the pendingJobs query keys off
+    // `userId` + route param `id` only, NOT the fetched location row. Run them
+    // in parallel via Promise.all to shave ~30-80ms of sequential round-trip
+    // latency. Mirrors the characters.ts GET /:id pattern.
+    const [locationResult, jobsResult] = await Promise.all([
+      supabase
+        .from("locations")
+        .select(SELECT_COLUMNS)
+        .eq("id", id)
+        .eq("user_id", userId)
+        .single(),
+      // pendingJobs: asset-generation jobs still in flight for this location so
+      // the Studio can re-attach spinners on reopen. Defensive LIMIT 100 in case
+      // a stuck worker has left dozens of pending rows; the studio only renders
+      // a small grid of spinners.
+      supabase
+        .from("jobs")
+        .select("id, input_data, status")
+        .eq("user_id", userId)
+        .in("status", ["pending", "running"])
+        .filter("input_data->>attachToLocationId", "eq", id)
+        .order("created_at", { ascending: false })
+        .limit(100),
+    ])
+
+    const { data, error } = locationResult
+    const { data: jobsRows } = jobsResult
 
     if (error) {
       if (error.code === "PGRST116") {
@@ -125,26 +223,30 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    // Transform snake_case to camelCase for frontend
-    return {
-      id: data.id,
-      userId: data.user_id,
-      nodeId: data.node_id,
-      projectId: data.project_id,
-      name: data.name,
-      description: data.description,
-      category: data.category,
-      style: data.style,
-      sourceImageUrl: data.source_image_url,
-      timeOfDay: data.time_of_day,
-      weather: data.weather,
-      angles: data.angles,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+    type PendingJob = {
+      jobId: string
+      assetType: string
+      name: string
+      status: string
     }
+    const pendingJobs: PendingJob[] = (jobsRows ?? []).map((row) => {
+      const inp = (row.input_data ?? {}) as Record<string, unknown>
+      const assetType = typeof inp.assetType === "string" ? inp.assetType : "main"
+      const name = typeof inp.attachName === "string" ? inp.attachName : "(unnamed)"
+      return {
+        jobId: row.id as string,
+        assetType,
+        name,
+        status: row.status as string,
+      }
+    })
+
+    return { ...toCamel(data as LocationRow), pendingJobs }
   })
 
+  // ---------------------------------------------------------------------------
   // Upsert location (create or update)
+  // ---------------------------------------------------------------------------
   app.post("/v1/locations", async (req, reply) => {
     const parsed = upsertLocationBody.safeParse(req.body)
     if (!parsed.success) {
@@ -153,7 +255,27 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const { id, nodeId, workflowId, projectId, name, description, category, style, sourceImageUrl, timeOfDay, weather, angles } = parsed.data
+    const {
+      id,
+      nodeId,
+      workflowId,
+      projectId,
+      name,
+      description,
+      category,
+      style,
+      sourceImageUrl,
+      timeOfDay,
+      weather,
+      angles,
+      lighting,
+      seasons,
+      atmosphereMotions,
+      referencePhotos,
+      canonicalDescription,
+      styleLock,
+      expectedUpdatedAt,
+    } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -162,7 +284,71 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const row = {
+    if (id) {
+      // UPDATE — deliberately EXCLUDE worker-owned columns so a Studio
+      // auto-save with a stale snapshot can't clobber the worker's atomic
+      // `append_location_asset()` writes. Excluded columns:
+      //   lighting, seasons, atmosphere_motions, time_of_day, weather, angles.
+      // User-owned columns (reference_photos, canonical_description,
+      // style_lock, identity fields) flow through normally.
+      //
+      // Only touch columns the caller explicitly sent (omitted fields stay
+      // untouched on the row). Mirrors the characters.ts UPDATE pattern so
+      // partial-update semantics are consistent across studio routes.
+      const updateRow: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      }
+      if (name !== undefined) updateRow.name = name
+      if (description !== undefined) updateRow.description = description ?? null
+      if (category !== undefined) updateRow.category = category ?? null
+      if (style !== undefined) updateRow.style = style ?? null
+      if (sourceImageUrl !== undefined) updateRow.source_image_url = sourceImageUrl ?? null
+      if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
+      if (canonicalDescription !== undefined) updateRow.canonical_description = canonicalDescription
+      if (styleLock !== undefined) updateRow.style_lock = styleLock
+
+      let query = supabase
+        .from("locations")
+        .update(updateRow)
+        .eq("id", id)
+        .eq("user_id", userId)
+      if (expectedUpdatedAt) {
+        query = query.eq("updated_at", expectedUpdatedAt)
+      }
+      const { data: updated, error: updateErr } = await query.select("id, updated_at").single()
+
+      if (updateErr || !updated) {
+        // Optimistic-concurrency path: distinguish "row was modified
+        // concurrently" (409 — caller passed a stale token) from "row doesn't
+        // exist or isn't yours" (404). We only do the follow-up SELECT when
+        // the caller actually sent expectedUpdatedAt.
+        if (expectedUpdatedAt) {
+          const { data: current } = await supabase
+            .from("locations")
+            .select("updated_at, name, source_image_url, canonical_description")
+            .eq("id", id)
+            .eq("user_id", userId)
+            .single()
+          if (current) {
+            return reply.status(409).send({
+              error: {
+                code: "concurrent_modification",
+                updatedAt: (current as { updated_at: string }).updated_at,
+                message: "Location was modified concurrently",
+              },
+            })
+          }
+        }
+        return reply.status(404).send({
+          error: { code: "location_not_found", message: "Location not found" },
+        })
+      }
+      return { id: updated.id, updatedAt: updated.updated_at }
+    }
+
+    // INSERT — accepts ALL fields. New rows start with empty asset buckets
+    // (unless the caller explicitly sent values, useful for templates/imports).
+    const insertRow = {
       user_id: userId,
       node_id: nodeId,
       workflow_id: workflowId ?? null,
@@ -175,33 +361,18 @@ export async function locationRoutes(app: FastifyInstance) {
       time_of_day: timeOfDay ?? [],
       weather: weather ?? [],
       angles: angles ?? [],
+      lighting: lighting ?? [],
+      seasons: seasons ?? [],
+      atmosphere_motions: atmosphereMotions ?? [],
+      reference_photos: referencePhotos ?? [],
+      canonical_description: canonicalDescription ?? null,
+      style_lock: styleLock ?? true,
       updated_at: new Date().toISOString(),
     }
 
-    if (id) {
-      // Update existing. Scope by user_id so a caller cannot overwrite another
-      // user's row by passing their id (the update would otherwise rewrite
-      // user_id to the caller, silently stealing the record).
-      const { data: updated, error } = await supabase
-        .from("locations")
-        .update(row)
-        .eq("id", id)
-        .eq("user_id", userId)
-        .select("id")
-        .single()
-
-      if (error) {
-        return reply.status(500).send({
-          error: { code: "internal_error", message: error.message },
-        })
-      }
-      return { id: updated.id }
-    }
-
-    // Insert new
     const { data: created, error } = await supabase
       .from("locations")
-      .insert(row)
+      .insert(insertRow)
       .select("id")
       .single()
 
@@ -214,7 +385,9 @@ export async function locationRoutes(app: FastifyInstance) {
     return { id: created.id }
   })
 
-  // Delete location permanently
+  // ---------------------------------------------------------------------------
+  // Soft-delete location (sets deleted_at, leaves row intact for restore)
+  // ---------------------------------------------------------------------------
   app.delete("/v1/locations/:id", async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -237,16 +410,17 @@ export async function locationRoutes(app: FastifyInstance) {
 
     const { error } = await supabase
       .from("locations")
-      .delete()
+      .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("user_id", userId)
+      .is("deleted_at", null)
 
     if (error) {
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "delete_failed", message: error.message },
       })
     }
 
-    return { success: true }
+    return { success: true, archived: true }
   })
 }

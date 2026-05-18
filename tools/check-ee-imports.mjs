@@ -63,6 +63,11 @@ const ALLOWLIST = new Set([
   "backend/src/routes/workflow-execution.ts",
   "backend/src/routes/workflow-templates.ts",
 
+  // TODO Phase 3.5 — refactor: ee/billing/cleanup-service should expose a core
+  // facade for R2-key collection; the dynamic-require shim pattern doesn't fit
+  // here because the call site is a synchronous one-shot collector.
+  "backend/src/lib/collect-app-r2-keys.ts",                // ee/billing/cleanup-service
+
   // TODO Phase 4.5 — convert frontend imports of useModelCredits, CreditBalance,
   // GenerateButton, InsufficientCreditsModal, StorageExceededModal etc. into core
   // shims that return null/no-op when !hasCredits(). Most imports are useModelCredits
@@ -72,6 +77,9 @@ const ALLOWLIST = new Set([
   "frontend/src/app/pricing/page.tsx",
   "frontend/src/components/app-runner/mobile-app-header.tsx",
   "frontend/src/components/app-runner/mobile-app-shell.tsx",
+  "frontend/src/components/editor/character-studio/appearance-tab.tsx",
+  "frontend/src/components/editor/character-studio/asset-card.tsx",
+  "frontend/src/components/editor/character-studio/generation-bar.tsx",
   "frontend/src/components/editor/config-panel.tsx",
   "frontend/src/components/editor/config-panels/entity-configs.tsx",
   "frontend/src/components/editor/config-panels/image-configs.tsx",
@@ -100,9 +108,11 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/extend-video-node.tsx",
   "frontend/src/components/nodes/extract-frame-node.tsx",
   "frontend/src/components/nodes/face-node.tsx",
+  "frontend/src/components/nodes/face-swap-node.tsx",
   "frontend/src/components/nodes/fade-video-node.tsx",
   "frontend/src/components/nodes/forced-alignment-node.tsx",
   "frontend/src/components/nodes/generate-image-node.tsx",
+  "frontend/src/components/nodes/generate-mask-node.tsx",
   "frontend/src/components/nodes/generate-music-node.tsx",
   "frontend/src/components/nodes/generate-script-node.tsx",
   "frontend/src/components/nodes/image-to-image-node.tsx",

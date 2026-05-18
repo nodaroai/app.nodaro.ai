@@ -11,10 +11,25 @@ const mocks = vi.hoisted(() => {
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   const mockAttach = vi.fn().mockResolvedValue(true)
   const mockSetPortrait = vi.fn().mockResolvedValue(true)
+  const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null })
+
+  // Default chain for `.from("locations").select(...).eq(...).eq(...).is(...).single()`
+  // returns a row (ownership succeeds). Individual tests override via
+  // `mockLocationSingle.mockResolvedValueOnce(...)`.
+  const mockLocationSingle = vi.fn().mockResolvedValue({ data: { id: "loc-1" }, error: null })
+  const mockLocationIs = vi.fn().mockReturnValue({ single: mockLocationSingle })
+  const mockLocationEq2 = vi.fn().mockReturnValue({ is: mockLocationIs })
+  const mockLocationEq1 = vi.fn().mockReturnValue({ eq: mockLocationEq2 })
+  const mockLocationSelect = vi.fn().mockReturnValue({ eq: mockLocationEq1 })
 
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
-  const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
+  // `from` routes by table name — locations gets the select chain, anything
+  // else gets the old update chain (back-compat for existing character tests).
+  const mockFrom = vi.fn((table: string) => {
+    if (table === "locations") return { select: mockLocationSelect }
+    return { update: mockUpdate }
+  })
 
   return {
     mockGenerateImage,
@@ -27,13 +42,19 @@ const mocks = vi.hoisted(() => {
     mockUploadVideoMaybeWatermark,
     mockAttach,
     mockSetPortrait,
+    mockRpc,
     mockFrom,
     mockUpdate,
     mockEq,
+    mockLocationSelect,
+    mockLocationEq1,
+    mockLocationEq2,
+    mockLocationIs,
+    mockLocationSingle,
   }
 })
 
-vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
+vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom, rpc: mocks.mockRpc } }))
 vi.mock("@/providers/index.js", () => ({ generateImage: mocks.mockGenerateImage, imageToVideo: mocks.mockImageToVideo }))
 vi.mock("@/providers/script/script-generator.js", () => ({ generateScript: mocks.mockGenerateScript }))
 vi.mock("@/lib/character-auto-attach.js", () => ({
@@ -86,6 +107,9 @@ beforeEach(() => {
   mocks.mockGenerateScript.mockResolvedValue({ title: "My Script", scenes: [{ description: "Scene 1" }] })
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
   mocks.mockMarkJobCompleted.mockResolvedValue(true)
+  mocks.mockRpc.mockResolvedValue({ data: null, error: null })
+  // Restore the active-location default for ownership re-queries.
+  mocks.mockLocationSingle.mockResolvedValue({ data: { id: "loc-1" }, error: null })
 })
 
 describe("generate-character handler", () => {
@@ -209,6 +233,7 @@ describe("generate-location handler", () => {
 
 describe("generate-location-asset handler", () => {
   const handler = entityHandlers["generate-location-asset"]
+  const TEST_LOCATION_ID = "00000000-0000-0000-0000-000000000aaa"
 
   it("includes assetType in output", async () => {
     const job = makeJob("generate-location-asset", { prompt: "a castle", assetType: "background" })
@@ -216,6 +241,105 @@ describe("generate-location-asset handler", () => {
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { imageUrl: "https://r2.example.com/images/job-1.png", assetType: "background" },
     }))
+  })
+
+  it("auto-attaches to locations row via append_location_asset RPC when attach fields present", async () => {
+    const job = makeJob("generate-location-asset", {
+      prompt: "neon at night",
+      assetType: "lighting",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "lighting",
+      attachName: "neon",
+    })
+    await handler(job as never, makeCtx())
+
+    // Belt-and-braces ownership re-query MUST run first against `locations`,
+    // scoped to (id, user_id, deleted_at IS NULL).
+    expect(mocks.mockFrom).toHaveBeenCalledWith("locations")
+    expect(mocks.mockLocationSelect).toHaveBeenCalledWith("id")
+    expect(mocks.mockLocationEq1).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
+    expect(mocks.mockLocationEq2).toHaveBeenCalledWith("user_id", "user-1")
+    expect(mocks.mockLocationIs).toHaveBeenCalledWith("deleted_at", null)
+
+    // Then the RPC fires with the uploaded URL.
+    expect(mocks.mockRpc).toHaveBeenCalledWith("append_location_asset", {
+      p_location_id: TEST_LOCATION_ID,
+      p_column: "lighting",
+      p_value: { name: "neon", url: "https://r2.example.com/images/job-1.png" },
+    })
+  })
+
+  it("does NOT fire RPC when attachToLocationId is missing (backward compat)", async () => {
+    const job = makeJob("generate-location-asset", {
+      prompt: "old payload shape",
+      assetType: "lighting",
+      // No attachToLocationId / attachToColumn / attachName at all — mirrors a
+      // BullMQ payload enqueued before the route was extended (Pass 9 AA-1).
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    // Locations table is not touched either — no ownership re-query.
+    expect(mocks.mockFrom).not.toHaveBeenCalledWith("locations")
+  })
+
+  it("does NOT fire RPC when the ownership re-query returns no row", async () => {
+    // Re-query yields nothing — either the row doesn't exist, belongs to a
+    // different user, or is soft-deleted. All three collapse to "no row".
+    mocks.mockLocationSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    const job = makeJob("generate-location-asset", {
+      prompt: "forged or stale",
+      assetType: "lighting",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "lighting",
+      attachName: "neon",
+    })
+    await handler(job as never, makeCtx({ jobUserId: "user-not-owner" }))
+
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+  })
+
+  it("does NOT fire RPC or re-query when jobUserId is missing", async () => {
+    // Without a user context the belt-and-braces ownership check can't run,
+    // so the attach is skipped entirely (matches the character analog's
+    // `attachToCharacterId && ctx.jobUserId` guard).
+    const job = makeJob("generate-location-asset", {
+      prompt: "no user",
+      assetType: "lighting",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "lighting",
+      attachName: "neon",
+    })
+    await handler(job as never, makeCtx({ jobUserId: undefined }))
+
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    expect(mocks.mockFrom).not.toHaveBeenCalledWith("locations")
+  })
+
+  it("logs but does not throw when the RPC returns an error (soft-delete / no-op)", async () => {
+    // Mirrors the RPC's own behaviour: silent no-op when the row is
+    // soft-deleted. Even if Supabase returns an error envelope, the handler
+    // must complete normally (credits are already committed).
+    mocks.mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "row was soft-deleted" },
+    })
+
+    const job = makeJob("generate-location-asset", {
+      prompt: "deleted row",
+      assetType: "lighting",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "lighting",
+      attachName: "neon",
+    })
+    await expect(handler(job as never, makeCtx())).resolves.toBeUndefined()
+
+    // RPC was attempted (the ownership check passed) — the soft-delete
+    // guard is internal to the SQL function.
+    expect(mocks.mockRpc).toHaveBeenCalledTimes(1)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
   })
 })
 

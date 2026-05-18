@@ -71,6 +71,13 @@ const DB_LOCATION = {
   time_of_day: [],
   weather: [],
   angles: [],
+  lighting: [],
+  seasons: [],
+  atmosphere_motions: [],
+  reference_photos: [],
+  canonical_description: null,
+  style_lock: true,
+  deleted_at: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 }
@@ -88,6 +95,13 @@ const CAMEL_LOCATION = {
   timeOfDay: [],
   weather: [],
   angles: [],
+  lighting: [],
+  seasons: [],
+  atmosphereMotions: [],
+  referencePhotos: [],
+  canonicalDescription: "", // coerced from null
+  styleLock: true,
+  deletedAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
 }
@@ -95,6 +109,8 @@ const CAMEL_LOCATION = {
 function mockListChain(result: { data: unknown; error: unknown }) {
   const chainable: Record<string, unknown> = {
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
   }
   chainable.then = (resolve: (value: { data: unknown; error: unknown }) => unknown) => Promise.resolve(result).then(resolve)
   const mockOrder = vi.fn().mockReturnValue(chainable)
@@ -196,6 +212,19 @@ describe("GET /v1/locations/:id", () => {
     return { mockSelect, chain, mockSingle }
   }
 
+  // Second .from() call in the success path: jobs query for pendingJobs.
+  function jobsChain(jobsResult: { data: unknown; error: unknown } = { data: [], error: null }) {
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockReturnThis(),
+      filter: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue(jobsResult),
+    }
+    const mockSelect = vi.fn().mockReturnValue(chain)
+    return { mockSelect, chain }
+  }
+
   it("returns 401 when unauthenticated", async () => {
     const res = await app.inject({
       method: "GET",
@@ -206,8 +235,11 @@ describe("GET /v1/locations/:id", () => {
   })
 
   it("returns 200 with camelCase data and scopes by user_id", async () => {
-    const { mockSelect, chain } = getByIdChain({ data: DB_LOCATION, error: null })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const { mockSelect: locSelect, chain: locChain } = getByIdChain({ data: DB_LOCATION, error: null })
+    const { mockSelect: jobsSelect } = jobsChain()
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -216,17 +248,23 @@ describe("GET /v1/locations/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual(CAMEL_LOCATION)
-    expect(chain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
-    expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    // GET /:id now also returns pendingJobs alongside the row.
+    expect(res.json()).toEqual({ ...CAMEL_LOCATION, pendingJobs: [] })
+    expect(locChain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
+    expect(locChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
   })
 
   it("returns 404 on PGRST116 (not found OR not owned)", async () => {
-    const { mockSelect } = getByIdChain({
+    const { mockSelect: locSelect } = getByIdChain({
       data: null,
       error: { code: "PGRST116", message: "not found" },
     })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    // GET /:id parallelizes the location + jobs queries via Promise.all, so
+    // both .from() calls fire even on the not-found path. Mock both chains.
+    const { mockSelect: jobsSelect } = jobsChain()
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -239,11 +277,14 @@ describe("GET /v1/locations/:id", () => {
   })
 
   it("returns 500 on DB error", async () => {
-    const { mockSelect } = getByIdChain({
+    const { mockSelect: locSelect } = getByIdChain({
       data: null,
       error: { code: "OTHER", message: "DB error" },
     })
-    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+    const { mockSelect: jobsSelect } = jobsChain()
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: locSelect } as never)
+      .mockReturnValueOnce({ select: jobsSelect } as never)
 
     const res = await app.inject({
       method: "GET",
@@ -352,15 +393,16 @@ describe("POST /v1/locations", () => {
 // DELETE /v1/locations/:id
 // ---------------------------------------------------------------------------
 
-describe("DELETE /v1/locations/:id", () => {
-  function deleteChain(result: { error: unknown }) {
+describe("DELETE /v1/locations/:id (soft-delete)", () => {
+  function softDeleteChain(result: { error: unknown }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockReturnThis(),
       then: (resolve: (value: { error: unknown }) => unknown) =>
         Promise.resolve(result).then(resolve),
     }
-    const mockDelete = vi.fn().mockReturnValue(chain)
-    return { mockDelete, chain }
+    const mockUpdate = vi.fn().mockReturnValue(chain)
+    return { mockUpdate, chain }
   }
 
   it("returns 401 when unauthenticated", async () => {
@@ -372,9 +414,9 @@ describe("DELETE /v1/locations/:id", () => {
     expect(res.json().error.code).toBe("unauthorized")
   })
 
-  it("returns 200 on success and scopes by user_id", async () => {
-    const { mockDelete, chain } = deleteChain({ error: null })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  it("returns 200 on success, scopes by user_id, returns archived: true", async () => {
+    const { mockUpdate, chain } = softDeleteChain({ error: null })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "DELETE",
@@ -383,14 +425,16 @@ describe("DELETE /v1/locations/:id", () => {
     })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json().success).toBe(true)
+    expect(res.json()).toEqual({ success: true, archived: true })
     expect(chain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
     expect(chain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+    // Only active rows can be archived — second archive is a no-op.
+    expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
   })
 
-  it("returns 500 on DB error", async () => {
-    const { mockDelete } = deleteChain({ error: { message: "FK constraint" } })
-    vi.mocked(supabase.from).mockReturnValue({ delete: mockDelete } as never)
+  it("returns 500 with delete_failed on DB error", async () => {
+    const { mockUpdate } = softDeleteChain({ error: { message: "FK constraint" } })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
 
     const res = await app.inject({
       method: "DELETE",
@@ -399,6 +443,6 @@ describe("DELETE /v1/locations/:id", () => {
     })
 
     expect(res.statusCode).toBe(500)
-    expect(res.json().error.code).toBe("internal_error")
+    expect(res.json().error.code).toBe("delete_failed")
   })
 })

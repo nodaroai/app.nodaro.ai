@@ -476,7 +476,16 @@ export function runLocationGeneration(
       provider: data.provider,
       userId: ctx.userId,
     })
-      .then(({ jobId }) => {
+      .then(({ jobId: maybeJobId, jobIds }) => {
+        // Legacy single-candidate path: backend returns { jobId }. The studio
+        // batch path returns { jobIds[] } and is handled by AppearanceTab —
+        // this executor is the workflow-canvas Run-Node fallback and only
+        // ever generates count=1.
+        const jobId = maybeJobId ?? jobIds?.[0];
+        if (!jobId) {
+          reject(new Error("Backend returned no job id"));
+          return;
+        }
         guardedToast.info("Location generation started", {
           description: `Job ID: ${jobId}`,
         });

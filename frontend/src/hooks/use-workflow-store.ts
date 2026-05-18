@@ -443,6 +443,9 @@ interface WorkflowState {
   /** Node ID whose Character Studio modal is open (null = closed). UI-only. */
   readonly characterStudioNodeId: string | null
   readonly setCharacterStudioNodeId: (id: string | null) => void
+  /** Node ID whose Location Studio modal is open (null = closed). UI-only. */
+  readonly locationStudioNodeId: string | null
+  readonly setLocationStudioNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
@@ -1374,6 +1377,43 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { ...n, data: newData as typeof n.data }
     })
 
+    // Migrate legacy LocationNodeData:
+    //  - Backfill the Phase-2 Location Studio fields (lighting / lightingStatus
+    //    / seasons / seasonsStatus / atmosphereMotions / atmosphereStatus /
+    //    referencePhotos / canonicalDescription / styleLock) on location nodes
+    //    saved before they existed.
+    //  - One-way, non-destructive migration of the deprecated `customVariations`
+    //    array into `angles`: each `{ prompt, url }` whose url is not already
+    //    an angle becomes `{ name: prompt.substring(0,50), url }`, then
+    //    `customVariations` is emptied. The field itself stays for compat.
+    //  - In-store only — never written back to the DB (the locations table
+    //    already has its own canonical columns).
+    migratedNodes = migratedNodes.map((n) => {
+      if (n.type !== "location") return n
+      const data = n.data as Record<string, unknown>
+      const newData = { ...data } as Record<string, unknown>
+      newData.lighting = (data.lighting as unknown[] | undefined) ?? []
+      newData.lightingStatus = (data.lightingStatus as string | undefined) ?? "idle"
+      newData.seasons = (data.seasons as unknown[] | undefined) ?? []
+      newData.seasonsStatus = (data.seasonsStatus as string | undefined) ?? "idle"
+      newData.atmosphereMotions = (data.atmosphereMotions as unknown[] | undefined) ?? []
+      newData.atmosphereStatus = (data.atmosphereStatus as string | undefined) ?? "idle"
+      newData.referencePhotos = (data.referencePhotos as unknown[] | undefined) ?? []
+      newData.canonicalDescription = (data.canonicalDescription as string | undefined) ?? ""
+      newData.styleLock = (data.styleLock as boolean | undefined) ?? true
+      const cv = (data.customVariations ?? []) as Array<{ prompt: string; url: string }>
+      if (cv.length > 0) {
+        const existing = (data.angles ?? []) as Array<{ name: string; url: string }>
+        const existingUrls = new Set(existing.map((e) => e.url))
+        const migrated = cv
+          .filter((item) => !existingUrls.has(item.url))
+          .map((item) => ({ name: item.prompt.substring(0, 50), url: item.url }))
+        newData.angles = [...existing, ...migrated]
+        newData.customVariations = []
+      }
+      return { ...n, data: newData as typeof n.data }
+    })
+
     // Strip fixed width from teleport nodes so they auto-size
     migratedNodes = migratedNodes.map((n) =>
       (n.type === "teleport-send" || n.type === "teleport-receive") && n.width
@@ -1546,6 +1586,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setAutoOpenEditorNodeId: (id) => set({ autoOpenEditorNodeId: id }),
   characterStudioNodeId: null,
   setCharacterStudioNodeId: (id) => set({ characterStudioNodeId: id }),
+  locationStudioNodeId: null,
+  setLocationStudioNodeId: (id) => set({ locationStudioNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,

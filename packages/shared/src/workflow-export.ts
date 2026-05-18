@@ -6,6 +6,12 @@ interface AssetVariant {
   url: string
 }
 
+/** A mood-board / scrap photo attached to a location ({@link WorkflowExportLocation.referencePhotos}). */
+interface ReferencePhoto {
+  kind: string
+  url: string
+}
+
 export interface WorkflowExportCharacter {
   id: string
   nodeId: string
@@ -42,6 +48,13 @@ export interface WorkflowExportLocation {
   timeOfDay?: AssetVariant[]
   weather?: AssetVariant[]
   angles?: AssetVariant[]
+  // Location Studio Phase 1 (migration 124).
+  lighting?: AssetVariant[]
+  seasons?: AssetVariant[]
+  atmosphereMotions?: AssetVariant[]
+  referencePhotos?: ReferencePhoto[]
+  canonicalDescription?: string | null
+  styleLock?: boolean | null
 }
 
 export interface WorkflowExport {
@@ -72,7 +85,17 @@ const GENERATED_FIELDS = [
 const NODE_EXTRA_FIELDS: Record<string, string[]> = {
   character: ["expressions", "poses", "lightingVariations", "angles", "customVariations"],
   object: ["angles", "materials", "variations", "customVariations"],
-  location: ["timeOfDay", "weather", "angles", "customVariations"],
+  location: [
+    "timeOfDay",
+    "weather",
+    "angles",
+    "lighting",
+    "seasons",
+    "atmosphereMotions",
+    "customVariations",
+    "referencePhotos",
+    "canonicalDescription",
+  ],
 }
 
 /** Strip generated/transient content from nodes for template export. Returns new node objects; inputs are not mutated. */

@@ -737,6 +737,87 @@ describe("generate_location verb", () => {
     expect(received.body?.category).toBe("nature")
   })
 
+  it("accepts seasons asset_type and forwards attach_to_location_id + attach_name", async () => {
+    // Seasons is a NEW asset_type added in Location Studio PR-1 — the old enum
+    // only had timeOfDay/weather/angles/custom. Also verifies the studio
+    // attach-* fields land on the route as camelCase.
+    const FOREST_ID = "22222222-2222-4222-8222-222222222222"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-location-asset",
+      { jobId: "job-season-autumn" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_location", {
+      kind: "asset",
+      name: "Forest",
+      asset_type: "seasons",
+      variant: "autumn",
+      attach_to_location_id: FOREST_ID,
+      attach_name: "Autumn",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("job-season-autumn")
+    expect(received.body?.assetType).toBe("seasons")
+    expect(received.body?.variant).toBe("autumn")
+    expect(received.body?.attachToLocationId).toBe(FOREST_ID)
+    expect(received.body?.attachName).toBe("Autumn")
+  })
+
+  it("accepts lighting asset_type (new in PR-1)", async () => {
+    const FOREST_ID = "22222222-2222-4222-8222-222222222222"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-location-asset",
+      { jobId: "job-light-golden" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_location", {
+      kind: "asset",
+      name: "Forest",
+      asset_type: "lighting",
+      variant: "golden-hour",
+      attach_to_location_id: FOREST_ID,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.assetType).toBe("lighting")
+    expect(received.body?.attachToLocationId).toBe(FOREST_ID)
+    // No attachToColumn for canonical asset types — route derives the bucket.
+    expect(received.body?.attachToColumn).toBeUndefined()
+  })
+
+  it("forwards custom + attach_to_column when supplied", async () => {
+    const FOREST_ID = "22222222-2222-4222-8222-222222222222"
+    const { fastify, received } = stubRoute(
+      "POST",
+      "/v1/generate-location-asset",
+      { jobId: "job-custom-loc" },
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "generate_location", {
+      kind: "asset",
+      name: "Forest",
+      asset_type: "custom",
+      variant: "misty",
+      attach_to_location_id: FOREST_ID,
+      attach_to_column: "atmosphere_motions",
+      attach_name: "Misty",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.assetType).toBe("custom")
+    expect(received.body?.attachToColumn).toBe("atmosphere_motions")
+    expect(received.body?.attachName).toBe("Misty")
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const fastify = Fastify()
     const server = buildServer()

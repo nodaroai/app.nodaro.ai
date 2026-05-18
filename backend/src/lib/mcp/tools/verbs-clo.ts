@@ -2,6 +2,8 @@ import { z } from "zod"
 import {
   CHARACTER_ASSET_TYPES,
   CHARACTER_ATTACH_COLUMNS,
+  LOCATION_ASSET_TYPES,
+  LOCATION_ATTACH_COLUMNS,
 } from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { config } from "../../config.js"
@@ -177,7 +179,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
     {
       title: "Generate Location",
       description:
-        "Generate a location/scene image (kind: 'main') or a variant (kind: 'asset' with asset_type — timeOfDay/weather/angles).",
+        "Generate a location/scene image (kind: 'main') or a variant asset (kind: 'asset' with asset_type + variant). Asset types: timeOfDay, weather, seasons, angles, lighting, custom. When attach_to_location_id is set, the result auto-attaches to the location's matching bucket and the anchor establishing shot is reused as the i2i source.",
       inputSchema: {
         kind: z.enum(["main", "asset"]).default("main"),
         name: z.string().min(1).max(200),
@@ -199,13 +201,39 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         source_image_url: z.string().url().optional(),
         model: z.string().optional().describe("Image model (defaults to nano-banana)"),
         // asset-only
-        asset_type: z.enum(["timeOfDay", "weather", "angles", "custom"]).optional(),
+        asset_type: z
+          .enum(LOCATION_ASSET_TYPES)
+          .optional()
+          .describe(
+            "Required when kind='asset'. One of: timeOfDay, weather, seasons, angles, lighting, custom.",
+          ),
         variant: z
           .string()
           .min(1)
           .max(100)
           .optional()
-          .describe("Required when kind='asset'. e.g. 'dawn', 'rain', 'aerial'."),
+          .describe(
+            "Required when kind='asset'. e.g. timeOfDay: 'dawn'/'noon'/'dusk'/'night'; weather: 'rain'/'snow'/'fog'; seasons: 'spring'/'summer'/'autumn'/'winter'; angles: 'aerial'/'street-level'/'wide'; lighting: 'golden-hour'/'overcast'/'neon'; or any short label for custom.",
+          ),
+        attach_to_location_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "If provided, the generated asset is auto-attached to this location row. The location's anchor establishing shot is reused as the i2i source; the route returns `main_image_required` (400) if no approved main image exists. Required for the studio path.",
+          ),
+        attach_to_column: z
+          .enum(LOCATION_ATTACH_COLUMNS)
+          .optional()
+          .describe(
+            "Required with attach_to_location_id when asset_type='custom' (the worker can't infer the bucket). For canonical asset types the column is derived automatically. One of: time_of_day, weather, seasons, angles, lighting, atmosphere_motions.",
+          ),
+        attach_name: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Display name for the attached asset entry (defaults to variant)."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -252,6 +280,14 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
       if (isAsset) {
         payload.assetType = args.asset_type
         payload.variant = args.variant
+        // Auto-attach studio fields — forwarded only on asset-mode requests.
+        // The main route ignores them but we keep the payload tight so the
+        // wire-shape mirrors `/v1/generate-location-asset`'s Zod schema.
+        if (args.attach_to_location_id) {
+          payload.attachToLocationId = args.attach_to_location_id
+        }
+        if (args.attach_to_column) payload.attachToColumn = args.attach_to_column
+        if (args.attach_name) payload.attachName = args.attach_name
       }
       const url = isAsset ? "/v1/generate-location-asset" : "/v1/generate-location"
       const res = await fastify.inject({

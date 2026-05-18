@@ -85,6 +85,35 @@ describe("resolveNodeInputs", () => {
     expect(inputs.referenceImageUrls).toContain("http://face.png")
   })
 
+  it("resolves location node sourceImageUrl into referenceImageUrls (no field mapping)", () => {
+    const locNode = makeNode("loc1", "location", {
+      sourceImageUrl: "http://loc-main.png",
+      lighting: [{ name: "noon", url: "http://noon.png" }],
+    })
+    const target = makeNode("t1", "generate-image")
+    const edges = [makeEdge("loc1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [locNode, target], edges)
+    expect(inputs.referenceImageUrls).toEqual(["http://loc-main.png"])
+  })
+
+  it("resolves location node bucket[idx] field mapping into referenceImageUrls", () => {
+    const locNode = makeNode("loc1", "location", {
+      sourceImageUrl: "http://loc-main.png",
+      lighting: [
+        { name: "noon", url: "http://noon.png" },
+        { name: "dusk", url: "http://dusk.png" },
+      ],
+    })
+    const target = makeNode("t1", "generate-image", {
+      fieldMappings: { locationRef: "lighting[1]" },
+    })
+    const edges = [makeEdge("loc1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [locNode, target], edges)
+    expect(inputs.referenceImageUrls).toEqual(["http://dusk.png"])
+  })
+
   it("resolves multiple upload-video sources into videoUrls for combine-videos", () => {
     const vid1 = makeNode("v1", "upload-video", { url: "http://v1.mp4" })
     const vid2 = makeNode("v2", "upload-video", { url: "http://v2.mp4" })

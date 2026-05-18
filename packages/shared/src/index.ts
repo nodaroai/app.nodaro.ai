@@ -260,6 +260,12 @@ export {
   CHARACTER_STYLES,
   CHARACTER_ASSET_TYPES,
   CHARACTER_ATTACH_COLUMNS,
+  LOCATION_ASSET_TYPES,
+  LOCATION_ATTACH_COLUMNS,
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  type LocationAssetType,
+  type LocationAttachColumn,
+  type LocationReferencePhotoKind,
   type EntityStyle,
   type CharacterAssetType,
   type CharacterAttachColumn,
@@ -517,7 +523,7 @@ export { extractAllGeneratedResults, extractGeneratedJsonAsList, spreadJsonArray
 
 export { getParameterPromptHint } from "./parameter-prompt-hint.js"
 
-export { resolveFieldMappings } from "./resolve-field-mappings.js"
+export { resolveFieldMappings, resolveLocationFields } from "./resolve-field-mappings.js"
 
 export { resolveNodeRefs } from "./node-refs.js"
 

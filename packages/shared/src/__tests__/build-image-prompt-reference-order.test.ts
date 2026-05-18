@@ -253,3 +253,61 @@ describe("buildImagePrompt — suppressedCanonicalCharacterIds", () => {
     ])
   })
 })
+
+describe("buildImagePrompt — suppressedCanonicalLocationIds", () => {
+  // The location canonical-fallback path will be added in a follow-up PR (the
+  // Location Studio Phase 1 spec is what adds the actual `wired-location`
+  // canonical injection via `injected-reference-helpers.ts`). For now, this
+  // test pins the cross-cutting contract: the parameter is accepted, the
+  // signature matches `suppressedCanonicalCharacterIds`, and the helper never
+  // crashes when location ids are passed.
+
+  it("accepts suppressedCanonicalLocationIds as an empty array", () => {
+    const result = buildImagePrompt({
+      prompt: "scenic shot",
+      provider: "nano-banana-pro",
+      suppressedCanonicalLocationIds: [],
+    })
+    expect(result.prompt).toContain("scenic shot")
+  })
+
+  it("accepts a non-empty suppressedCanonicalLocationIds without crashing", () => {
+    const result = buildImagePrompt({
+      prompt: "scenic shot",
+      provider: "nano-banana-pro",
+      connectedReferences: [wiredUpload],
+      referenceImageUrls: [wiredUpload.url],
+      suppressedCanonicalLocationIds: ["beach", "rooftop"],
+    })
+    // Pre-existing refs flow through untouched; the parameter is a no-op
+    // until the location canonical-fallback path lands in a follow-up.
+    expect(result.referenceImageUrls).toEqual([wiredUpload.url])
+  })
+
+  it("does not affect character canonical refs", () => {
+    const result = buildImagePrompt({
+      prompt: "",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, adamCanonical],
+      suppressedCanonicalLocationIds: ["kira", "adam"],
+    })
+    expect(result.referenceImageUrls).toEqual([
+      kiraCanonical.url,
+      adamCanonical.url,
+    ])
+  })
+
+  it("composes cleanly with suppressedCanonicalCharacterIds", () => {
+    const result = buildImagePrompt({
+      prompt: "",
+      provider: "nano-banana-pro",
+      connectedReferences: [kiraCanonical, adamCanonical],
+      suppressedCanonicalCharacterIds: ["kira"],
+      suppressedCanonicalLocationIds: ["beach"],
+    })
+    // Character suppression still drops Kira; location ids are inert today.
+    expect(result.referenceImageUrls).toEqual([adamCanonical.url])
+    expect(result.prompt).toContain("(Adam)")
+    expect(result.prompt).not.toContain("(Kira)")
+  })
+})

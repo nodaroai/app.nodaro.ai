@@ -5,6 +5,7 @@ import type {
   WorkflowExportLocation,
   WorkflowExportObject,
 } from "@nodaro/shared"
+import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 
 /**
@@ -19,6 +20,11 @@ import { supabase } from "./supabase.js"
  */
 
 const assetVariantSchema = z.object({ name: z.string(), url: z.string() })
+
+const referencePhotoSchema = z.object({
+  kind: z.enum(LOCATION_REFERENCE_PHOTO_KINDS),
+  url: z.string(),
+})
 
 const exportCharacterSchema = z.object({
   id: z.string(),
@@ -56,6 +62,13 @@ const exportLocationSchema = z.object({
   timeOfDay: z.array(assetVariantSchema).optional(),
   weather: z.array(assetVariantSchema).optional(),
   angles: z.array(assetVariantSchema).optional(),
+  // Location Studio Phase 1 (migration 124).
+  lighting: z.array(assetVariantSchema).optional(),
+  seasons: z.array(assetVariantSchema).optional(),
+  atmosphereMotions: z.array(assetVariantSchema).optional(),
+  referencePhotos: z.array(referencePhotoSchema).optional(),
+  canonicalDescription: z.string().nullish(),
+  styleLock: z.boolean().nullish(),
 })
 
 /** Zod shape of the JSON bundle produced by `export_workflow` / `GET /v1/workflows/:id/export`. */
@@ -105,6 +118,10 @@ function asVariants(value: unknown): Array<{ name: string; url: string }> {
   return Array.isArray(value) ? (value as Array<{ name: string; url: string }>) : []
 }
 
+function asReferencePhotos(value: unknown): Array<{ kind: string; url: string }> {
+  return Array.isArray(value) ? (value as Array<{ kind: string; url: string }>) : []
+}
+
 function fetchByIds(table: string, columns: string, ids: string[], userId: string) {
   if (ids.length === 0) {
     return Promise.resolve({ data: [] as Record<string, unknown>[], error: null })
@@ -138,7 +155,7 @@ export async function fetchExportAssets(
     ),
     fetchByIds(
       "locations",
-      "id, node_id, name, description, style, source_image_url, time_of_day, weather, angles",
+      "id, node_id, name, description, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock",
       ids.locationIds,
       userId,
     ),
@@ -190,6 +207,13 @@ export async function fetchExportAssets(
         timeOfDay: asVariants(r.time_of_day),
         weather: asVariants(r.weather),
         angles: asVariants(r.angles),
+        // Location Studio Phase 1 (migration 124).
+        lighting: asVariants(r.lighting),
+        seasons: asVariants(r.seasons),
+        atmosphereMotions: asVariants(r.atmosphere_motions),
+        referencePhotos: asReferencePhotos(r.reference_photos),
+        canonicalDescription: (r.canonical_description ?? null) as string | null,
+        styleLock: (r.style_lock ?? null) as boolean | null,
       }
     }),
   }
@@ -280,6 +304,15 @@ export async function reCreateAssets(
       time_of_day: l.timeOfDay ?? [],
       weather: l.weather ?? [],
       angles: l.angles ?? [],
+      // Location Studio Phase 1 (migration 124). `style_lock` defaults to TRUE
+      // — the DB column default + UX default both treat it as enabled when the
+      // bundle predates the column.
+      lighting: l.lighting ?? [],
+      seasons: l.seasons ?? [],
+      atmosphere_motions: l.atmosphereMotions ?? [],
+      reference_photos: l.referencePhotos ?? [],
+      canonical_description: l.canonicalDescription ?? null,
+      style_lock: l.styleLock ?? true,
     })
     if (err) return { error: err }
   }

@@ -9,6 +9,15 @@ const batchStatusBody = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
 })
 
+// GET /v1/jobs/status?ids=a,b,c — light batch poll for studio UIs.
+// Returns at most 100 jobs (DoS cap). Cross-user / non-existent ids
+// are silently omitted (caller reconciles locally).
+const batchStatusQuery = z.object({
+  ids: z
+    .string()
+    .transform((s) => s.split(",").map((x) => x.trim()).filter(Boolean)),
+})
+
 const JobSummary = z
   .object({
     id: z.string().uuid(),
@@ -132,6 +141,51 @@ export function sanitizeJobForPublic(job: JobRecord, isAdmin: boolean): JobRecor
 }
 
 export async function jobRoutes(app: FastifyInstance) {
+  // Light batch-status endpoint for studio polling (every ~2s).
+  // Declared BEFORE /v1/jobs/:id so the literal `status` segment wins
+  // over the parametric route in Fastify's radix tree.
+  app.get("/v1/jobs/status", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+
+    const parsed = batchStatusQuery.safeParse(req.query)
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: "invalid_query", message: "Missing or invalid `ids` query parameter" },
+      })
+    }
+
+    const { ids } = parsed.data
+    if (ids.length === 0) return { jobs: [] }
+    if (ids.length > 100) {
+      return reply.status(400).send({
+        error: { code: "too_many_ids", message: "At most 100 ids per request" },
+      })
+    }
+
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("id, status, output_data")
+      .in("id", ids)
+      .eq("user_id", req.userId)
+
+    if (error) {
+      return reply.status(500).send({
+        error: { code: "internal_error", message: error.message },
+      })
+    }
+
+    return { jobs: data ?? [] }
+  })
+
   app.get<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
