@@ -101,7 +101,18 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = buildCreditModelIdentifier(provider ?? "nano-banana", quality, resolution, renderingSpeed)
+    // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
+    // and in i2i the primary `imageUrl` counts as one of the up-to-8 refs (the worker
+    // concatenates [imageUrl, ...refs] before dispatch).
+    const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
+    const modelIdentifier = buildCreditModelIdentifier(
+      provider ?? "nano-banana",
+      quality,
+      resolution,
+      renderingSpeed,
+      undefined,
+      i2iRefCount,
+    )
 
     // ─────────────────────────────────────────────────────────────────────
     // Studio path — when attachToCharacterId is set AND the caller has NOT

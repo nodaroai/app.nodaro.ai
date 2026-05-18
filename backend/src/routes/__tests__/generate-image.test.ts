@@ -67,6 +67,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { generateImageRoutes } from "../generate-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
@@ -440,5 +441,57 @@ describe("POST /v1/generate-image", () => {
       expect(res.json().error.code).toBe("character_not_trained")
       expect(jobInsert).not.toHaveBeenCalled()
     })
+  })
+
+  // Regression net for the flux-2-max underbilling bug: the preHandler check
+  // and the handler reservation MUST resolve to the same modelIdentifier.
+  // Previously the handler dropped the refCount arg, so the preHandler verified
+  // the user could afford e.g. `flux-2-max:4ref` (10cr) but the reservation
+  // debited the bare `flux-2-max` row (3cr) — 7cr free per generation.
+  describe("flux-2-max reservation identifier parity", () => {
+    const VALID_UUID = "00000000-0000-4000-8000-000000000001"
+
+    it("reserves at bare `flux-2-max` when no refs are attached", async () => {
+      setupSupabaseMock({})
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "lone subject",
+          userId: VALID_UUID,
+          provider: "flux-2-max",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      expect(reserveMock).toHaveBeenCalledTimes(1)
+      // 4th arg is the modelIdentifier.
+      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max")
+    })
+
+    it.each([1, 2, 4, 8])(
+      "reserves at composite `flux-2-max:Nref` when %d refs are attached",
+      async (n) => {
+        setupSupabaseMock({})
+        const refs = Array.from({ length: n }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`)
+
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/generate-image",
+          payload: {
+            prompt: "subject with refs",
+            userId: VALID_UUID,
+            provider: "flux-2-max",
+            referenceImageUrls: refs,
+          },
+        })
+
+        expect(res.statusCode).toBe(200)
+        const reserveMock = vi.mocked(reserveCreditsForJob)
+        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(`flux-2-max:${n}ref`)
+      },
+    )
   })
 })

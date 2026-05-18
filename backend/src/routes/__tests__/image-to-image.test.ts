@@ -75,6 +75,7 @@ import { imageToImageRoutes } from "../image-to-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { llmComplete } from "../../lib/llm-client.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -895,5 +896,62 @@ describe("POST /v1/image-to-image", () => {
       expect(charEq2).toHaveBeenCalledWith("user_id", VALID_UUID)
       expect(charIs).toHaveBeenCalledWith("deleted_at", null)
     })
+  })
+
+  // Regression net for the flux-2-max underbilling bug: the preHandler check
+  // and the handler reservation MUST resolve to the same modelIdentifier.
+  // In image-to-image the primary `imageUrl` counts as one of the up-to-8 refs
+  // because the worker concatenates [imageUrl, ...referenceImageUrls] before
+  // dispatching to Replicate — so the bare i2i call against flux-2-max with
+  // zero extra refs must still reserve at `flux-2-max:1ref`.
+  describe("flux-2-max reservation identifier parity", () => {
+    it("reserves at `flux-2-max:1ref` when only the primary imageUrl is supplied", async () => {
+      mockJobInsert()
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/image-to-image",
+        payload: {
+          imageUrl: "https://example.com/primary.png",
+          prompt: "stylize this",
+          userId: VALID_UUID,
+          provider: "flux-2-max",
+        },
+      })
+
+      expect(res.statusCode).toBe(200)
+      const reserveMock = vi.mocked(reserveCreditsForJob)
+      expect(reserveMock).toHaveBeenCalledTimes(1)
+      expect(reserveMock.mock.calls[0][3]).toBe("flux-2-max:1ref")
+    })
+
+    it.each([
+      [0, "flux-2-max:1ref"],
+      [1, "flux-2-max:2ref"],
+      [3, "flux-2-max:4ref"],
+      [7, "flux-2-max:8ref"],
+    ])(
+      "reserves at composite identifier matching primary+%d extras → %s",
+      async (extras, expected) => {
+        mockJobInsert()
+        const refs = Array.from({ length: extras }, (_, i) => `https://r2.nodaro.ai/ref-${i}.png`)
+
+        const res = await app.inject({
+          method: "POST",
+          url: "/v1/image-to-image",
+          payload: {
+            imageUrl: "https://example.com/primary.png",
+            prompt: "stylize this",
+            userId: VALID_UUID,
+            provider: "flux-2-max",
+            referenceImageUrls: refs,
+          },
+        })
+
+        expect(res.statusCode).toBe(200)
+        const reserveMock = vi.mocked(reserveCreditsForJob)
+        expect(reserveMock.mock.calls.at(-1)?.[3]).toBe(expected)
+      },
+    )
   })
 })

@@ -63,6 +63,7 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
 - \`referenceImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
+- \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`identityMeta?: readonly IdentityMeta[]\`
 - \`extraRefs?: readonly ExtraRef[]\`
 - \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
@@ -269,6 +270,7 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`connectedRefImageOrder?: readonly string[]\`
 - \`referenceOrder?: readonly string[]\`
 - \`suppressedCanonicalCharacterIds?: readonly string[]\`
+- \`suppressedCanonicalLocationIds?: readonly string[]\`
 - \`veoMode?: "frame-to-frame" | "reference"\`
 - \`seedance2InputMode?: "frames" | "references"\`
 - \`extraRefs?: readonly ExtraRef[]\`
