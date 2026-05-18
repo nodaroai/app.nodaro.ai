@@ -46,6 +46,7 @@ vi.mock("@/lib/config.js", () => ({
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
+    CHARACTER_LORA_ROUTING_ENABLED: true,
   },
   isCloud: () => true,
   hasCredits: () => true,
@@ -369,6 +370,104 @@ describe("POST /v1/generate-image", () => {
       expect(charEq1).toHaveBeenCalledWith("id", CHARACTER_ID)
       expect(charEq2).toHaveBeenCalledWith("user_id", VALID_UUID)
       expect(charIs).toHaveBeenCalledWith("deleted_at", null)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // _internalLora cross-user spoof — a stolen-JWT caller submits another
+  // user's characterId. The characters query is scoped by (id, user_id),
+  // so the foreign-owned row never matches and the lookup returns null →
+  // 400 character_not_trained. This is the regression net for PR #2474
+  // where the original design accepted a raw Replicate version hash from
+  // the body (no userId binding); the fix moved to server-side characterId
+  // lookup.
+  // -------------------------------------------------------------------------
+
+  describe("_internalLora cross-user spoof guard", () => {
+    const VICTIM_USER_ID = "00000000-0000-4000-8000-0000000000aa"
+    const VICTIM_CHARACTER_ID = "00000000-0000-4000-8000-0000000000bb"
+    const ATTACKER_USER_ID = "00000000-0000-4000-8000-0000000000cc"
+
+    it("returns 400 character_not_trained when characterId belongs to a different user", async () => {
+      // Mock the characters lookup to return null — mimics what the real DB
+      // does when `.eq("id", VICTIM_CHARACTER_ID).eq("user_id", ATTACKER_USER_ID)`
+      // matches no row (RLS analog at the application layer).
+      const charSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+      const charIs = vi.fn().mockReturnValue({ single: charSingle })
+      const charEq2 = vi.fn().mockReturnValue({ is: charIs })
+      const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
+      const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
+
+      // jobs.insert is set up but should never be reached.
+      const jobInsert = vi.fn()
+      const fromMock = vi.mocked(supabase.from)
+      fromMock.mockImplementation((table: string) => {
+        if (table === "characters") return { select: charSelect } as never
+        if (table === "jobs") return { insert: jobInsert } as never
+        return {} as never
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: ATTACKER_USER_ID,
+          provider: "flux-lora-character",
+          _internalLora: { characterId: VICTIM_CHARACTER_ID },
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("character_not_trained")
+
+      // Scope filters were applied — attacker's userId, not victim's.
+      expect(charEq1).toHaveBeenCalledWith("id", VICTIM_CHARACTER_ID)
+      expect(charEq2).toHaveBeenCalledWith("user_id", ATTACKER_USER_ID)
+      expect(charEq2).not.toHaveBeenCalledWith("user_id", VICTIM_USER_ID)
+
+      // No job row was created — the spoof must short-circuit before insert.
+      expect(jobInsert).not.toHaveBeenCalled()
+      expect(videoQueue.add).not.toHaveBeenCalled()
+    })
+
+    it("returns 400 character_not_trained when character exists but lora_training_status != 'succeeded'", async () => {
+      // Same-user characterId, but the LoRA hasn't finished training yet.
+      // The route's status guard rejects this — preventing an in-flight or
+      // failed training from being used as if it were ready.
+      const charSingle = vi.fn().mockResolvedValue({
+        data: {
+          lora_replicate_version: "v_in_progress",
+          lora_trigger_word: "TOK_kira",
+          lora_training_status: "training",
+        },
+        error: null,
+      })
+      const charIs = vi.fn().mockReturnValue({ single: charSingle })
+      const charEq2 = vi.fn().mockReturnValue({ is: charIs })
+      const charEq1 = vi.fn().mockReturnValue({ eq: charEq2 })
+      const charSelect = vi.fn().mockReturnValue({ eq: charEq1 })
+      const jobInsert = vi.fn()
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        if (table === "characters") return { select: charSelect } as never
+        if (table === "jobs") return { insert: jobInsert } as never
+        return {} as never
+      })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/generate-image",
+        payload: {
+          prompt: "a portrait",
+          userId: VICTIM_USER_ID,
+          provider: "flux-lora-character",
+          _internalLora: { characterId: VICTIM_CHARACTER_ID },
+        },
+      })
+
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("character_not_trained")
+      expect(jobInsert).not.toHaveBeenCalled()
     })
   })
 })
