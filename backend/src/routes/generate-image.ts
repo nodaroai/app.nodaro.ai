@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
+import { config } from "../lib/config.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
@@ -102,8 +103,15 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // Character LoRA single-node Run hint — runs BEFORE Zod, so credits
     // reserve as flux-lora-character (3cr) instead of the default nano-banana
     // (2cr). Without this short-circuit, the preHandler would silently
-    // under-bill by 1cr per LoRA inference.
-    if (body && typeof body === "object" && "_internalLora" in body) {
+    // under-bill by 1cr per LoRA inference. Mirrors the kill-switch gate
+    // in the handler below — when routing is disabled, fall through to the
+    // default identifier so the handler and the preHandler agree.
+    if (
+      body &&
+      typeof body === "object" &&
+      "_internalLora" in body &&
+      config.CHARACTER_LORA_ROUTING_ENABLED
+    ) {
       return FLUX_LORA_CHARACTER_MODEL_ID
     }
     const rawProvider = (body?.provider as string) ?? "nano-banana"
@@ -157,7 +165,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // ensures we only route through fully-trained models (in-flight or
     // failed trainings fall back to the generic provider).
     let resolvedLora: { version: string; trigger: string } | null = null
-    if (internalLora) {
+    // Gated by CHARACTER_LORA_ROUTING_ENABLED — when "false", we ignore the
+    // body hint entirely and the request proceeds as the default provider.
+    // The frontend may still send `_internalLora`; the server is the
+    // authority on whether to swap.
+    if (internalLora && config.CHARACTER_LORA_ROUTING_ENABLED) {
       const { data: char } = await supabase
         .from("characters")
         .select("lora_replicate_version, lora_trigger_word, lora_training_status")

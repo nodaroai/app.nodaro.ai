@@ -37,6 +37,7 @@ import {
   buildFaceTemplateInputs,
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
+import { config } from "../../lib/config.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
@@ -1173,7 +1174,12 @@ export function buildPayload(
       // EXACTLY ONE distinct character mentioned AND that character has a
       // succeeded LoRA → swap to replicate/flux-lora-character, skip ref
       // injection, strip mention tokens, prepend trigger word.
-      const lora = selectLoraRoutingForMentions(wiredCharRefs)
+      // Gated by CHARACTER_LORA_ROUTING_ENABLED (default true) — operators
+      // can flip the env to "false" to disable the swap org-wide without
+      // a deploy if inference quality regresses.
+      const lora = config.CHARACTER_LORA_ROUTING_ENABLED
+        ? selectLoraRoutingForMentions(wiredCharRefs)
+        : null
       const effectiveProvider = lora ? "replicate" : provider
       const loraExtras = lora
         ? {
