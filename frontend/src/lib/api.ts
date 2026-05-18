@@ -192,8 +192,11 @@ export async function generateImage(
    * single wired character has a successful LoRA. The backend swaps to
    * `flux-lora-character` (3cr) when this is set; the public SDK never sets
    * it. Pair with `provider = "flux-lora-character"`.
+   *
+   * Carries the character row id — backend looks up the resolved Replicate
+   * version + trigger word server-side scoped by `req.userId`.
    */
-  internalLora?: { readonly version: string; readonly trigger: string },
+  internalLora?: { readonly characterId: string },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {

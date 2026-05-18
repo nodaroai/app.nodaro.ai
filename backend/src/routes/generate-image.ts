@@ -57,10 +57,16 @@ export const generateImageBody = z.object({
    * `execute-node.ts`) when the user runs a generate-image node that
    * references a trained character. NEVER set by SDK/public clients.
    * Required when `provider === FLUX_LORA_CHARACTER_MODEL_ID`.
+   *
+   * Carries the character row id (NOT the resolved version + trigger) —
+   * the route looks up `lora_replicate_version` + `lora_trigger_word`
+   * server-side scoped by `req.userId`. Without this lookup, a caller
+   * could submit any guessed/leaked Replicate version hash and run
+   ***REDACTED-OSS-SCRUB***
+   ***REDACTED-OSS-SCRUB***
    */
   _internalLora: z.object({
-    version: z.string().min(1),
-    trigger: z.string().min(1),
+    characterId: z.string().uuid(),
   }).optional(),
   // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — keeping the
   // enum permissive here and letting the per-provider config / fail-safe in
@@ -143,6 +149,41 @@ export async function generateImageRoutes(app: FastifyInstance) {
       })
     }
 
+    // Resolve `_internalLora.characterId` to `{ version, trigger }` via a
+    // server-side lookup scoped by `req.userId`. The caller never sees the
+    // raw Replicate version hash — preventing a stolen JWT from running
+    // inference against another user's trained model by submitting a
+    // guessed version string. The `lora_training_status='succeeded'` filter
+    // ensures we only route through fully-trained models (in-flight or
+    // failed trainings fall back to the generic provider).
+    let resolvedLora: { version: string; trigger: string } | null = null
+    if (internalLora) {
+      const { data: char } = await supabase
+        .from("characters")
+        .select("lora_replicate_version, lora_trigger_word, lora_training_status")
+        .eq("id", internalLora.characterId)
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .single()
+      if (
+        !char ||
+        char.lora_training_status !== "succeeded" ||
+        !char.lora_replicate_version ||
+        !char.lora_trigger_word
+      ) {
+        return reply.status(400).send({
+          error: {
+            code: "character_not_trained",
+            message: "Character not found or has no successful LoRA training.",
+          },
+        })
+      }
+      resolvedLora = {
+        version: char.lora_replicate_version,
+        trigger: char.lora_trigger_word,
+      }
+    }
+
     // Append character descriptions to prompt
     const descSuffix = (characterDescriptions ?? []).map((d) => d).join(" ")
     let prompt = descSuffix ? `${rawPrompt}\n${descSuffix}` : rawPrompt
@@ -182,12 +223,12 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // flux-lora-character provider always lands on Replicate with the trained
     // version. Otherwise, auto-route T2I providers to their i2i sibling when
     // the user actually addresses reference images in the prompt.
-    const effectiveProvider = internalLora
+    const effectiveProvider = resolvedLora
       ? FLUX_LORA_CHARACTER_MODEL_ID
       : resolveEffectiveProvider(provider, prompt, referenceImageUrls)
 
     // Determine model identifier for credit reservation (composite for variable pricing).
-    const modelIdentifier = internalLora
+    const modelIdentifier = resolvedLora
       ? FLUX_LORA_CHARACTER_MODEL_ID
       : buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
 
@@ -220,10 +261,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
       jobId: job.id,
       prompt,
       // LoRA path: trained model + trigger word carry identity — emit zero refs.
-      referenceImageUrls: internalLora ? [] : referenceImageUrls,
+      referenceImageUrls: resolvedLora ? [] : referenceImageUrls,
       provider: effectiveProvider,
       // Hand the synthetic flux-lora-character model id to the Replicate provider.
-      model: internalLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
+      model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
       aspectRatio,
       resolution,
       quality,
@@ -233,8 +274,9 @@ export async function generateImageRoutes(app: FastifyInstance) {
       styleType,
       expandPrompt,
       // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
-      extraParams: internalLora
-        ? { lora_version: internalLora.version, lora_trigger: internalLora.trigger }
+      // Values resolved server-side from the character row (see top of handler).
+      extraParams: resolvedLora
+        ? { lora_version: resolvedLora.version, lora_trigger: resolvedLora.trigger }
         : undefined,
       usageLogId,
     })

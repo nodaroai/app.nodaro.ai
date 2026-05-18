@@ -1367,10 +1367,27 @@ export function executeNode(
     // (single-node Run → `_internalLora` body hint) and backend
     // (orchestrator → provider/model/extraParams swap). Single source of
     // truth in `@nodaro/shared`.
+    //
+    // The `_internalLora` body field carries `characterId` (NOT the resolved
+    // version/trigger) so a stolen JWT can't spoof another user's LoRA. The
+    // route looks up `lora_replicate_version` + `lora_trigger_word` scoped
+    // by `req.userId`.
     const loraRouting = selectLoraRoutingForMentions(connectedReferences);
-    const internalLora = loraRouting
-      ? { version: loraRouting.loraVersion, trigger: loraRouting.triggerWord }
-      : undefined;
+    let internalLora: { characterId: string } | undefined;
+    if (loraRouting) {
+      const matchingCharNode = nodes.find(
+        (n) =>
+          n.type === "character" &&
+          (n.data as CharacterNodeData).characterDbId &&
+          characterMentionSlug(
+            ((n.data as CharacterNodeData).characterName as string) ||
+              ((n.data as CharacterNodeData).label as string) ||
+              "",
+          ) === loraRouting.characterSlug,
+      );
+      const characterId = (matchingCharNode?.data as CharacterNodeData | undefined)?.characterDbId;
+      if (characterId) internalLora = { characterId };
+    }
 
     const result = buildImagePrompt({
       prompt: prompt ?? "",
