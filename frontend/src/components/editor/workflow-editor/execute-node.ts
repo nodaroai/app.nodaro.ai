@@ -201,7 +201,7 @@ import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
-import { selectLoraRoutingForMentions } from "@nodaro/shared";
+import { selectLoraRoutingForMentions, extractCharacterLoraFields } from "@nodaro/shared";
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
@@ -442,13 +442,9 @@ function expandCharacterNodeIntoRefs(
   // carry an explicit `:mode` override. `undefined` ↔ "identical" (the global
   // default) is handled by the resolver, not here, to keep the JSON small.
   const defaultUsageMode = charData.defaultUsageMode;
-  // LoRA training fields — character-level (same across all variants). Drive
-  // `selectLoraRoutingForMentions` on the frontend so single-node Run injects
-  // `_internalLora` AND the orchestrator's payload-builder mirror also sees
-  // the same fields. Must stay in sync with backend `expandWiredCharacterRefs`.
-  const loraReplicateVersion = charData.loraReplicateVersion ?? null;
-  const loraTriggerWord = charData.loraTriggerWord ?? null;
-  const loraTrainingStatus = charData.loraTrainingStatus ?? null;
+  // LoRA training fields — character-level (same across all variants). Shared
+  // helper keeps this in lockstep with backend `expandWiredCharacterRefs`.
+  const loraFields = extractCharacterLoraFields(charData);
   const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl;
   if (canonicalUrl) {
     out.push([
@@ -464,9 +460,7 @@ function expandCharacterNodeIntoRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
-        loraReplicateVersion,
-        loraTriggerWord,
-        loraTrainingStatus,
+        ...loraFields,
       },
     ]);
   }
@@ -496,9 +490,7 @@ function expandCharacterNodeIntoRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
-          loraReplicateVersion,
-          loraTriggerWord,
-          loraTrainingStatus,
+          ...loraFields,
         },
       ]);
     }

@@ -38,7 +38,7 @@ import {
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
-import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -236,13 +236,10 @@ function expandWiredCharacterRefs(
       | ConnectedReference["defaultUsageMode"]
       | undefined
     // LoRA training fields — character-level (same across all variants).
-    // Used by selectLoraRoutingForMentions to decide the LoRA inference path.
-    const loraReplicateVersion =
-      (charData.loraReplicateVersion as string | null | undefined) ?? null
-    const loraTriggerWord =
-      (charData.loraTriggerWord as string | null | undefined) ?? null
-    const loraTrainingStatus =
-      (charData.loraTrainingStatus as string | null | undefined) ?? null
+    // Shared helper keeps backend + frontend `expand*Refs` in lockstep.
+    const loraFields = extractCharacterLoraFields(
+      charData as { loraReplicateVersion?: string | null; loraTriggerWord?: string | null; loraTrainingStatus?: string | null },
+    )
     const canonicalUrl =
       (charData.defaultAssetUrl as string | undefined) ||
       (charData.sourceImageUrl as string | undefined)
@@ -259,9 +256,7 @@ function expandWiredCharacterRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
-        loraReplicateVersion,
-        loraTriggerWord,
-        loraTrainingStatus,
+        ...loraFields,
       })
     }
 
@@ -290,9 +285,7 @@ function expandWiredCharacterRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
-          loraReplicateVersion,
-          loraTriggerWord,
-          loraTrainingStatus,
+          ...loraFields,
         })
       }
     }
