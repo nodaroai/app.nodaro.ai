@@ -3602,6 +3602,14 @@ export interface GenerativePipelineNodeData {
 export type SceneNodeFrontendData = SharedSceneNodeData & {
   [key: string]: unknown
   label?: string
+  /**
+   * Canonical pointer to the parent pipeline. Populated by canvas-materializer
+   * when the scene node is created from a pipeline_entity row; absent on
+   * scene nodes that pre-date the §6.11 helper wiring. The §6.11 helper
+   * buttons require both `pipeline_id` and `pipeline_entity_id` to be set
+   * before they're enabled.
+   */
+  pipeline_id?: string
   pipeline_entity_id?: string
   pipeline_owned?: boolean
   pipeline_state?: "pipeline_owned_running" | "pipeline_owned_awaiting_approval" | "pipeline_owned_approved" | "pipeline_orphaned"

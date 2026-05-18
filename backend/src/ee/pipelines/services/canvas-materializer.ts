@@ -163,6 +163,11 @@ function buildEntityNodeData(args: MaterializeEntityArgs): Record<string, unknow
     return {
       ...sceneData,
       label: `Scene ${(sceneData.scene_index as number) ?? "?"}`,
+      // pipeline_id is consumed by §6.11 Scene-Context helper buttons on the
+      // SceneNode config panel — they need both pipeline_id + entity_id to
+      // call POST /v1/pipelines/:id/entities/:eid/helpers/:name. Without
+      // pipeline_id the buttons stay disabled.
+      pipeline_id: args.pipelineId,
       pipeline_entity_id: args.pipelineEntityId,
       pipeline_owned: true,
       pipeline_state: "pipeline_owned_approved",

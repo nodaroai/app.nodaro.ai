@@ -92,6 +92,32 @@ Per `@nodaro/shared/scene-node-types`:
 
 Scene Director (Sonnet, per scene) ~5-8 credits/scene + Shot List Critic ~2 credits/scene. An 8-scene short_film adds ~50-80 credits on top of the prior stages (~30 + ~80 = ~110 credits cumulative at end of 1B.2).
 
+## Scene-Context Helpers (Phase 1B.3)
+
+After Stage 5 plans the shots for each scene, the user can refine via 7 LLM-backed helper buttons on the SceneNode config panel. Each helper is **user-triggered only** — never auto-runs — returns a structured suggestion the user accepts (patches the SceneNodeData) or rejects. Credits reserved at invocation; refunded on failure.
+
+| Helper | Model | Credits | Purpose |
+|--------|-------|---------|---------|
+| 🔍 Audit Prompt | Haiku | 1 | Check shots for contradictions with the scene description / emotional beat / format |
+| ✨ Improve Prompt | Sonnet | 2 | Rewrite a shot's action / motion_prompt / dialogue with model-aware phrasing |
+| 🎬 Generate Motion | Haiku | 1 | Fill motion_prompt for shots missing one |
+| 🎯 Optimize for Model | Sonnet | 3 | Rewrite all shots for current `video_model`'s prompting style |
+| 🎞️ Add B-Roll | Sonnet | 2 | Propose 1-4 insert shots (reaction / cutaway / establishing / transition) |
+| 🌉 Bridge to Next Scene | Sonnet | 2 | Generate `bridge_image_prompt` for i2i edit between shots (v4.1 Method 5) |
+| 🎨 Anchor Scene Style | Sonnet + image gen | 5 | Plan + generate a master keyframe for the scene (v4.1 Method 6) |
+
+### Deferred to Phase 1C
+
+Three vision-keyframe helpers need Stage 6 keyframes which don't exist until Phase 1C. Their buttons render in the SceneNode panel but are disabled with a "Pending Phase 1C — requires Stage 6 keyframes." tooltip:
+
+- 🔍 **Audit Images** — wraps the Image Critic over generated keyframes
+- 🔗 **Fix Continuity** — vision check across the scene boundary
+- 🎯 **Validate Match Cut** — MatchCutCritic for shot pairs
+
+### Endpoints
+
+`POST /v1/pipelines/:id/entities/:sceneId/helpers/:name` (scope `pipelines:approve`, Cloud edition only) where `:name` is one of `audit_prompt`, `improve_prompt`, `generate_motion`, `optimize_for_model`, `add_broll`, `bridge_to_next_scene`, `anchor_scene_style`. The audit trail lives in `llm_calls` (Phase 1B.3); the spec-required `pipeline_stage_attempts` row lands in Phase 1B.4 alongside undo support.
+
 ## Credits
 
 Phase 1A: ~30 credits per Stage 1 run (LLM calls only). Reserved upfront on POST;

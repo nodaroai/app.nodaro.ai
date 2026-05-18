@@ -131,6 +131,14 @@ const ALLOWED_PATHS = [
   // types between route and worker would fork the helper contract.
   /^src\/routes\/pipelines\.ts$/,
 
+  // Story-to-Video Scene-Context helpers (Phase 1B.3): same justification as
+  // pipelines.ts above — every handler ownership-checks the parent pipeline
+  // via `.eq("user_id", userId)` in `loadHelperContext` and returns 404 for
+  // cross-user rows. Service-role required because the helper LLM dispatch
+  // path (`runXxx` in ee/pipelines/llms/helpers/) shares the same supabase
+  // client with the BullMQ pipeline worker.
+  /^src\/routes\/scene-helpers\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]

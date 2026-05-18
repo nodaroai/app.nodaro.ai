@@ -583,6 +583,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Stage 1-only run (Detection + Showrunner + 2 critics ≈ 30 credits).
   "pipeline-orchestration": 30,
   "pipeline-orchestration:stage_1_only": 30,
+  // ── Scene-Context Helpers (Phase 1B.3, §6.11) ──
+  // Per-call LLM micro-actions invoked from a SceneNode's context panel.
+  // Reserve/refund via backend/src/ee/pipelines/scene-helper-credits.ts.
+  // DB source-of-truth: supabase/migrations/130_seed_scene_helper_pricing.sql.
+  "scene-helper:audit_prompt": 1,
+  "scene-helper:improve_prompt": 2,
+  "scene-helper:generate_motion": 1,
+  "scene-helper:optimize_for_model": 3,
+  "scene-helper:add_broll": 2,
+  "scene-helper:bridge_to_next_scene": 2,
+  "scene-helper:anchor_scene_style": 5,
 }
 
 // Tier order for restriction checks

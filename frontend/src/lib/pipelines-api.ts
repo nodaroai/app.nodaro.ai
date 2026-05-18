@@ -3,6 +3,14 @@ import type {
   PipelineEvent,
   PipelineStatus,
   PipelineStageName,
+  AuditPromptResult,
+  ImprovePromptResult,
+  ImprovePromptInput,
+  GenerateMotionResult,
+  OptimizeForModelResult,
+  AddBRollResult,
+  BridgeToNextSceneResult,
+  AnchorSceneStyleResult,
 } from "@nodaro/shared"
 import { getAuthHeaders } from "@/lib/api"
 
@@ -42,6 +50,36 @@ export interface PipelineRecord {
   upfront_credit_estimate: number
 }
 
+/**
+ * §6.11 Scene-Context helpers — each helper has its own request-body shape and
+ * its own typed result. The runSceneHelper generic ties the two together so a
+ * caller can't pass the wrong body shape for a given helper name.
+ *
+ * Helpers that take no body (audit_prompt, add_broll, anchor_scene_style) have
+ * `undefined` as their body type — the runSceneHelper wrapper POSTs an empty
+ * object in that case so the backend route's Zod parser still sees a valid
+ * JSON body.
+ */
+export type SceneHelperBody = {
+  audit_prompt: undefined
+  improve_prompt: ImprovePromptInput
+  generate_motion: { shot_ids: string[] }
+  optimize_for_model: { target_model: string }
+  add_broll: undefined
+  bridge_to_next_scene: { target_shot_id: string }
+  anchor_scene_style: undefined
+}
+
+export type SceneHelperResult = {
+  audit_prompt: AuditPromptResult
+  improve_prompt: ImprovePromptResult
+  generate_motion: GenerateMotionResult
+  optimize_for_model: OptimizeForModelResult
+  add_broll: AddBRollResult
+  bridge_to_next_scene: BridgeToNextSceneResult
+  anchor_scene_style: AnchorSceneStyleResult
+}
+
 export const pipelinesApi = {
   create: (body: PipelineInput) => postJson<{ id: string }>("/v1/pipelines", body),
   get: (id: string) => getJson<PipelineRecord>(`/v1/pipelines/${id}`),
@@ -67,6 +105,22 @@ export const pipelinesApi = {
       `/v1/pipelines/${id}/stages/${stage}`,
     ),
   eventsUrl: (id: string) => `${API_BASE}/v1/pipelines/${id}/events`,
+  /**
+   * Run a §6.11 scene-context helper. The generic ties the helper name to its
+   * expected body shape (compile-time error if the wrong body is passed) and
+   * its returned result shape.
+   */
+  runSceneHelper<N extends keyof SceneHelperBody>(
+    pipelineId: string,
+    sceneId: string,
+    name: N,
+    body: SceneHelperBody[N],
+  ): Promise<SceneHelperResult[N]> {
+    return postJson<SceneHelperResult[N]>(
+      `/v1/pipelines/${pipelineId}/entities/${sceneId}/helpers/${name}`,
+      body ?? {},
+    )
+  },
 }
 
 export type { PipelineEvent }
