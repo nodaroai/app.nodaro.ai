@@ -2,7 +2,8 @@
 
 import { memo, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Expand, Upload, Link, Download, Loader2, AlertCircle, X, Pencil, LayoutGrid, Plus } from "lucide-react"
+import { ImageIcon, Expand, Upload, Link, Download, Loader2, AlertCircle, X, Pencil, LayoutGrid, Plus, ExternalLink } from "lucide-react"
+import { normalizePinterestUrl } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -70,6 +71,18 @@ function UploadPicker({ isDragOver, setIsDragOver, onFileClick, onDrop, urlValue
           className="w-full bg-transparent border-b border-muted-foreground/20 text-xs py-1 outline-none focus:border-[#38BDF8] transition-colors placeholder:text-muted-foreground/30"
         />
       </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          window.open("https://www.pinterest.com/search/pins/", "_blank", "noopener,noreferrer")
+        }}
+        title="Open Pinterest in a new tab — find an image, right-click → Copy Image Address, paste here"
+        className="self-center flex items-center gap-1 px-2 py-0.5 text-[10px] text-muted-foreground/50 hover:text-[#E60023] transition-colors"
+      >
+        <span>or browse on Pinterest</span>
+        <ExternalLink className="w-2.5 h-2.5" />
+      </button>
     </div>
   )
 }
@@ -138,7 +151,7 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   // prevents the loop after the push.
   useEffect(() => {
     if ((nodeData.generatedResults?.length ?? 0) > 0) return
-    const legacyUrl = nodeData.externalUrl || nodeData.r2Url || nodeData.url
+    const legacyUrl = normalizePinterestUrl(nodeData.externalUrl || nodeData.r2Url || nodeData.url)
     if (!legacyUrl) return
     updateNodeData(id, {
       generatedResults: [{
@@ -151,6 +164,9 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
           : {}),
       }],
       activeResultIndex: 0,
+      ...(legacyUrl !== (nodeData.externalUrl || nodeData.r2Url || nodeData.url)
+        ? { url: legacyUrl, externalUrl: nodeData.externalUrl ? legacyUrl : nodeData.externalUrl }
+        : {}),
     })
   }, [id, nodeData.externalUrl, nodeData.r2Url, nodeData.url, nodeData.thumbnailUrl, nodeData.generatedResults, nodeData.metadata, updateNodeData])
 
@@ -174,7 +190,10 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   const handleAddUrl = () => {
-    const url = pendingUrl.trim()
+    // Pinterest CDN URLs land in /236x/ /474x/ etc. variants by default;
+    // rewrite to /originals/ so downstream describe-image / image-to-image
+    // get the highest-resolution source.
+    const url = normalizePinterestUrl(pendingUrl.trim())
     if (!url) return
     const newResult: GeneratedResult = {
       url,

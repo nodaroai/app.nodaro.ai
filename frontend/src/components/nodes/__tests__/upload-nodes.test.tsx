@@ -54,6 +54,7 @@ vi.mock("lucide-react", () => ({
   Pencil: MockIcon,
   Plus: MockIcon,
   LayoutGrid: MockIcon,
+  ExternalLink: MockIcon,
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -193,6 +194,11 @@ describe("UploadImageNode", () => {
     // The modernized empty state shows the URL field inline with the upload
     // button (instead of a toggle). The placeholder is the affordance.
     expect(screen.getByPlaceholderText("or paste image URL...")).toBeInTheDocument()
+  })
+
+  it("shows the Pinterest discovery button in the empty state", () => {
+    renderImageNode()
+    expect(screen.getByText("or browse on Pinterest")).toBeInTheDocument()
   })
 
   it("has correct source handle", () => {
