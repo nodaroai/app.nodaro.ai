@@ -58,6 +58,13 @@ export function runImageGeneration(
     injectCharacterContext?: boolean
     attachToCharacterId?: string
   },
+  /**
+   * Internal-only LoRA hint for single-node Run of a generate-image node
+   * whose single wired character has a successful LoRA. The api.ts
+   * `generateImage` wrapper attaches this as `_internalLora` on the body
+   * AND forces `provider = "flux-lora-character"`. See design §6.4.
+   */
+  internalLora?: { readonly version: string; readonly trigger: string },
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -77,6 +84,7 @@ export function runImageGeneration(
         styleType,
         expandPrompt,
         identity,
+        internalLora,
       ),
     "generatedImageUrl",
     "Image generation",

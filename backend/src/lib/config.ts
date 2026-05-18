@@ -11,6 +11,8 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().default("scenenode-assets"),
   R2_PUBLIC_URL: z.string().default(""),
   REPLICATE_API_TOKEN: z.string().default(""),
+  /** Replicate Standard Webhooks signing secret. Required in Cloud edition for character LoRA training callbacks. */
+  REPLICATE_WEBHOOK_SECRET: z.string().default(""),
   KIE_API_KEY: z.string().default(""),
   ANTHROPIC_API_KEY: z.string().default(""),
   ELEVENLABS_API_KEY: z.string().default(""),

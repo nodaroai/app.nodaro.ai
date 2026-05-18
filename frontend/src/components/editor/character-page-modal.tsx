@@ -1,13 +1,24 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Trash2, Plus, Maximize2, Sparkles, Expand } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { generateCharacterAsset, getJobStatus, deleteCharacter, generateImage, saveCharacter } from "@/lib/api"
+import { hasCredits } from "@/lib/edition"
+import {
+  generateCharacterAsset,
+  getJobStatus,
+  deleteCharacter,
+  generateImage,
+  saveCharacter,
+  startCharacterTraining,
+  getCharacterTraining,
+  deleteCharacterLora,
+  type TrainingStatus,
+} from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
@@ -218,6 +229,11 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const [refineLightboxSrc, setRefineLightboxSrc] = useState<string | null>(null)
   const [refinementCompleted, setRefinementCompleted] = useState(false)
   const [generatingAllAssets, setGeneratingAllAssets] = useState(false)
+  // ── Character LoRA training (Cloud only) ──────────────────────────────────
+  const trainingEnabled = hasCredits()
+  const [training, setTraining] = useState<TrainingStatus | null>(null)
+  const [trainingBusy, setTrainingBusy] = useState(false)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -231,6 +247,115 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const data = (node?.type === "character" ? node.data : null) as CharacterNodeData | null
   const activeResult = data ? (data.generatedResults ?? [])[data.activeResultIndex ?? 0] : null
   const mainImageUrl = activeResult?.url ?? data?.sourceImageUrl ?? null
+
+  // ── LoRA training: image count, polling, handlers ───────────────────────
+  // Mirror of backend `collectTrainingImages` — must include all 8 buckets
+  // or the "N / 4 photos" gate disagrees with the route's actual count
+  // (route would 400 with "insufficient_training_images" or accept training
+  // we showed as too few). Keep in sync with backend/src/lib/character-lora.ts.
+  const trainingImageCount = useMemo(() => {
+    if (!data) return 0
+    const urls = new Set<string>()
+    if (data.sourceImageUrl) urls.add(data.sourceImageUrl)
+    for (const r of data.referencePhotos ?? []) if (r.url) urls.add(r.url)
+    for (const a of data.expressions ?? []) if (a.url) urls.add(a.url)
+    for (const a of data.poses ?? []) if (a.url) urls.add(a.url)
+    for (const a of data.angles ?? []) if (a.url) urls.add(a.url)
+    for (const a of data.bodyAngles ?? []) if (a.url) urls.add(a.url)
+    for (const a of data.lightingVariations ?? []) if (a.url) urls.add(a.url)
+    return urls.size
+  }, [data])
+
+  // Fetch + 8s-interval poll while in-flight. Mirrors the design's
+  // polling-primary live-update story (§6.5).
+  useEffect(() => {
+    if (!trainingEnabled || !data?.characterDbId) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const t = await getCharacterTraining(data.characterDbId)
+        if (cancelled) return
+        setTraining(t)
+        // Only write to canvas when something actually changed. Polling every
+        // 8s for ~15 min would otherwise produce ~112 noisy updateNodeData
+        // calls per training, even with EXECUTION_DATA_KEYS gating undo —
+        // saves the array map across all canvas nodes and any downstream
+        // memo that didn't account for change-equality.
+        const nextStatus = t.status === "untrained" ? null : t.status
+        const currentNode = useWorkflowStore.getState().nodes.find((n) => n.id === characterNodeId)
+        const currentData = currentNode?.data as CharacterNodeData | undefined
+        if (
+          currentData?.loraTrainingStatus !== nextStatus ||
+          currentData?.loraReplicateVersion !== t.version ||
+          currentData?.loraTriggerWord !== t.triggerWord
+        ) {
+          updateNodeData(characterNodeId, {
+            loraTrainingStatus: nextStatus,
+            loraReplicateVersion: t.version,
+            loraTriggerWord: t.triggerWord,
+          })
+        }
+        if (t.status === "queued" || t.status === "training") {
+          pollTimerRef.current = setTimeout(tick, 8000)
+        }
+      } catch {
+        // Network blip — retry once after 8s.
+        if (!cancelled) pollTimerRef.current = setTimeout(tick, 8000)
+      }
+    }
+    tick()
+    return () => {
+      cancelled = true
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+  }, [trainingEnabled, data?.characterDbId, characterNodeId, updateNodeData])
+
+  const handleStartTraining = useCallback(async () => {
+    if (!data?.characterDbId || trainingBusy) return
+    setTrainingBusy(true)
+    try {
+      await startCharacterTraining(data.characterDbId)
+      toast.success("Training started — usually takes 15 minutes.")
+      // Force-update local state and let the polling effect pick up status.
+      setTraining({
+        status: "queued",
+        trainingId: null,
+        error: null,
+        trainedAt: null,
+        version: null,
+        triggerWord: null,
+        imageCount: trainingImageCount,
+      })
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setTrainingBusy(false)
+    }
+  }, [data?.characterDbId, trainingBusy, trainingImageCount])
+
+  const handleRemoveTraining = useCallback(async () => {
+    if (!data?.characterDbId || trainingBusy) return
+    if (!window.confirm("Remove the trained model? Generations will fall back to reference images.")) return
+    setTrainingBusy(true)
+    try {
+      await deleteCharacterLora(data.characterDbId)
+      toast.success("Trained model removed.")
+      setTraining({
+        status: "untrained",
+        trainingId: null, error: null, trainedAt: null,
+        version: null, triggerWord: null, imageCount: null,
+      })
+      updateNodeData(characterNodeId, {
+        loraTrainingStatus: null,
+        loraReplicateVersion: null,
+        loraTriggerWord: null,
+      })
+    } catch (err) {
+      toast.error((err as Error).message)
+    } finally {
+      setTrainingBusy(false)
+    }
+  }, [data?.characterDbId, trainingBusy, characterNodeId, updateNodeData])
 
   // Add image to canvas as generate-image node with result already set
   const handleAddImageToCanvas = useCallback((imageUrl: string) => {
@@ -777,6 +902,110 @@ centered composition, high quality, single character`
                   <p className="text-sm text-muted-foreground text-center py-12">
                     No portrait generated yet. Generate or upload one from the config panel.
                   </p>
+                )}
+
+                {/* High-fidelity model (LoRA training) — Cloud only */}
+                {trainingEnabled && (
+                  <section className="mb-6 border-t border-[#2D2D2D] pt-4">
+                    <header className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold">High-fidelity model</h3>
+                      <span className="text-[11px] text-muted-foreground">150 credits · ~15 min</span>
+                    </header>
+                    {(() => {
+                      const status = training?.status ?? "untrained"
+                      if (status === "succeeded") {
+                        return (
+                          <div className="flex items-center gap-3 text-sm flex-wrap">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+                              Trained
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              {training?.trainedAt
+                                ? `Trained ${new Date(training.trainedAt).toLocaleDateString()}`
+                                : ""}
+                            </span>
+                            <button
+                              type="button"
+                              className="text-xs underline text-muted-foreground hover:text-foreground disabled:opacity-40"
+                              disabled={trainingBusy || trainingImageCount < 4}
+                              onClick={handleStartTraining}
+                              title="Re-training replaces the current model."
+                            >
+                              Re-train
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs underline text-muted-foreground hover:text-red-500 ml-auto disabled:opacity-40"
+                              disabled={trainingBusy}
+                              onClick={handleRemoveTraining}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )
+                      }
+                      if (status === "queued" || status === "training") {
+                        return (
+                          <div className="flex items-center gap-3 text-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            <span className="text-muted-foreground">Training… (~15 min)</span>
+                            <button
+                              type="button"
+                              className="text-xs underline text-muted-foreground hover:text-red-500 ml-auto disabled:opacity-40"
+                              disabled={trainingBusy}
+                              onClick={handleRemoveTraining}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )
+                      }
+                      if (status === "failed") {
+                        return (
+                          <div className="flex flex-col gap-2 text-sm">
+                            <div className="text-red-500 text-xs">
+                              Training failed: {training?.error ?? "Unknown error"}
+                            </div>
+                            <button
+                              type="button"
+                              className="self-start text-xs underline hover:text-foreground disabled:opacity-40"
+                              disabled={trainingBusy || trainingImageCount < 4}
+                              onClick={handleStartTraining}
+                            >
+                              Try again
+                            </button>
+                          </div>
+                        )
+                      }
+                      // "untrained" (default)
+                      return (
+                        <div className="flex flex-col gap-2 text-sm">
+                          <p className="text-muted-foreground text-xs">
+                            Train a custom model on this character's references for the
+                            highest-fidelity identity match in image generations.
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              onClick={handleStartTraining}
+                              disabled={trainingBusy || trainingImageCount < 4}
+                              className="bg-[#ff0073] hover:bg-[#ff0073]/90 text-white text-xs font-medium"
+                            >
+                              {trainingBusy ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                "Train high-fidelity model"
+                              )}
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              {trainingImageCount} / 4 photos
+                              {trainingImageCount < 4 && " — add more references first"}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </section>
                 )}
 
                 {(data.generatedResults ?? []).length > 1 && (

@@ -523,8 +523,10 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
-      // identity (trailing arg) — undefined when no upstream Character has
+      // identity — undefined when no upstream Character has
       // injectIdentityInPrompts enabled.
+      undefined,
+      // internalLora (trailing arg) — undefined when no wired trained character.
       undefined,
     )
   })
@@ -552,7 +554,9 @@ describe("generate-image", () => {
       undefined,
       undefined,
       undefined,
-      // identity (trailing arg).
+      // identity.
+      undefined,
+      // internalLora (trailing arg).
       undefined,
     )
   })
@@ -1349,7 +1353,9 @@ describe("text-to-video", () => {
         duration: undefined,
         // Seedance 2 silently defaults to 16:9 when data.aspectRatio is unset
         aspectRatio: "16:9",
-        resolution: "720p",
+        // Default resolution = lowest available tier from MODEL_CATALOG
+        // (per #2453). For seedance-2-fast that's "480p".
+        resolution: "480p",
         generateAudio: true,
       }),
     )

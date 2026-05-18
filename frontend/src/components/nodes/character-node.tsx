@@ -1,6 +1,6 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { UserCircle, Loader2, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -12,6 +12,9 @@ import { useConnectionCount } from "@/hooks/use-connection-count"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { hasCredits } from "@/lib/edition"
+import { createClient } from "@/lib/supabase"
+import { TrainedPill } from "@/components/editor/trained-pill"
 import {
   Select,
   SelectContent,
@@ -65,6 +68,44 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const aspectRatio = nodeData.defaultAssetAspectRatio ?? "1:1"
   const aspectRatioCss = aspectRatio.replace(":", " / ")
 
+  // ── Character LoRA training (Cloud edition) ──────────────────────────────
+  // Backfill `lora_*` fields onto CharacterNodeData on mount when they're
+  // absent — this is the path that handles workflows saved BEFORE training
+  // existed. The orchestrator's expandWiredCharacterRefs reads these straight
+  // off node data, so without this backfill, pre-existing workflows would
+  // silently route through ref injection forever (per design §9.2).
+  useEffect(() => {
+    if (!hasCredits()) return
+    if (nodeData.loraTrainingStatus !== undefined) return
+    if (!nodeData.characterDbId) return
+    let cancelled = false
+    ;(async () => {
+      const supabase = createClient()
+      // Cast: the Supabase JS generated types don't know about migration 126
+      // columns yet — we shipped the columns + the typegen out-of-band. The
+      // values are still validated by the migration's CHECK constraint.
+      const { data } = await supabase
+        .from("characters")
+        .select("lora_replicate_version, lora_trigger_word, lora_training_status")
+        .eq("id", nodeData.characterDbId)
+        .single()
+      const row = data as unknown as {
+        lora_replicate_version: string | null
+        lora_trigger_word: string | null
+        lora_training_status: string | null
+      } | null
+      if (cancelled || !row) return
+      updateNodeData(id, {
+        loraReplicateVersion: row.lora_replicate_version,
+        loraTriggerWord: row.lora_trigger_word,
+        loraTrainingStatus: row.lora_training_status,
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [nodeData.characterDbId, nodeData.loraTrainingStatus, id, updateNodeData])
+
   // The variant suffix in "Kira • Smiling" should only show when the user
   // actually picked a non-canonical asset as the default. Skip when the asset
   // name is missing, equals "canonical" (the default portrait), or matches
@@ -106,6 +147,19 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-[11px] font-semibold text-[#93c5fd]">Character</span>
         <span className="ml-auto text-[9px] text-[#3b82f6] bg-[#0f1e40] px-1.5 py-0.5 rounded">entity</span>
       </div>
+
+      {nodeData.loraTrainingStatus === "succeeded" && (
+        <div className="absolute top-1.5 right-1.5 z-10">
+          <TrainedPill size="sm" />
+        </div>
+      )}
+      {(nodeData.loraTrainingStatus === "queued" ||
+        nodeData.loraTrainingStatus === "training") && (
+        <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/60 text-[9px] text-slate-300 border border-slate-600">
+          <Loader2 className="h-2.5 w-2.5 animate-spin" />
+          Training…
+        </div>
+      )}
 
       {/* Portrait preview — uses defaultAssetUrl when the user star'd a
           studio asset, otherwise falls back to the approved portrait. The

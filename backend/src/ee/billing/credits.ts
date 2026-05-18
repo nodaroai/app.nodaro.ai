@@ -129,6 +129,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   "flux-2-klein": 2,             // ~$0.025, BFL Flux 2 9B Klein via Replicate
   "kontext-multi": 4,            // ~$0.05, multi-image-kontext-pro via Replicate
+  "flux-lora-character": 3,      // ~$0.04, flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
+  ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***

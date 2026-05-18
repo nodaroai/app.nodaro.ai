@@ -12,11 +12,17 @@ import {
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
-  const { prompt, referenceImageUrls, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = job.data as {
+  const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras } = job.data as {
     jobId: string
     prompt: string
     referenceImageUrls?: string[]
     provider?: string
+    /** Synthetic model id (e.g. "flux-lora-character") when the orchestrator
+     *  or single-node route swaps to an internal-only model. The router's
+     *  second positional arg is the *model* id, not the provider — without
+     *  this destructure the worker would pass `provider` as the model and
+     *  break LoRA routing. */
+    model?: string
     aspectRatio?: string
     resolution?: string
     quality?: string
@@ -25,13 +31,19 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     renderingSpeed?: string
     styleType?: string
     expandPrompt?: boolean
+    /** Upstream-supplied provider-specific params (e.g. `lora_version` +
+     *  `lora_trigger` for `flux-lora-character`). Merged with the rebuilt
+     *  per-field params below. */
+    extraParams?: Record<string, unknown>
   }
-  console.log(`[worker] generate-image ${ctx.jobId} (provider: ${provider ?? "nano-banana"}): "${prompt}"`)
+  const resolvedModel = model ?? provider ?? "nano-banana"
+  console.log(`[worker] generate-image ${ctx.jobId} (model: ${resolvedModel}): "${prompt}"`)
   if (referenceImageUrls?.length) {
     console.log(`[worker] Reference images (${referenceImageUrls.length}): ${referenceImageUrls.join(", ")}`)
   }
 
   const extraParams: Record<string, unknown> = {
+    ...(upstreamExtras ?? {}),
     ...(aspectRatio && { aspect_ratio: aspectRatio }),
     ...(resolution && { resolution }),
     ...(quality && { quality }),
@@ -46,7 +58,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   const ramp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 80 })
   let result
   try {
-    result = await generateImage(prompt, provider ?? "nano-banana", referenceImageUrls, hasExtraParams ? extraParams : undefined)
+    result = await generateImage(prompt, resolvedModel, referenceImageUrls, hasExtraParams ? extraParams : undefined)
   } finally {
     ramp.stop()
   }

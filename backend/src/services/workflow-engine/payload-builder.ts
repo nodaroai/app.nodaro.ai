@@ -36,6 +36,7 @@ import {
   buildLocationPrompt,
   buildFaceTemplateInputs,
 } from "@nodaro/shared"
+import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
 
@@ -232,6 +233,14 @@ function expandWiredCharacterRefs(
     const defaultUsageMode = charData.defaultUsageMode as
       | ConnectedReference["defaultUsageMode"]
       | undefined
+    // LoRA training fields — character-level (same across all variants).
+    // Used by selectLoraRoutingForMentions to decide the LoRA inference path.
+    const loraReplicateVersion =
+      (charData.loraReplicateVersion as string | null | undefined) ?? null
+    const loraTriggerWord =
+      (charData.loraTriggerWord as string | null | undefined) ?? null
+    const loraTrainingStatus =
+      (charData.loraTrainingStatus as string | null | undefined) ?? null
     const canonicalUrl =
       (charData.defaultAssetUrl as string | undefined) ||
       (charData.sourceImageUrl as string | undefined)
@@ -248,6 +257,9 @@ function expandWiredCharacterRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
+        loraReplicateVersion,
+        loraTriggerWord,
+        loraTrainingStatus,
       })
     }
 
@@ -276,6 +288,9 @@ function expandWiredCharacterRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
+          loraReplicateVersion,
+          loraTriggerWord,
+          loraTrainingStatus,
         })
       }
     }
@@ -1153,6 +1168,19 @@ export function buildPayload(
       const hasWiredCharacter = wiredCharRefs.length > 0
       const useConnectedRefs = hasWiredCharacter || extraRefEntries.length > 0
 
+      // ─── Character LoRA routing decision (see design §6.3) ─────────────
+      // EXACTLY ONE distinct character mentioned AND that character has a
+      // succeeded LoRA → swap to replicate/flux-lora-character, skip ref
+      // injection, strip mention tokens, prepend trigger word.
+      const lora = selectLoraRoutingForMentions(wiredCharRefs)
+      const effectiveProvider = lora ? "replicate" : provider
+      const loraExtras = lora
+        ? {
+            lora_version: lora.loraVersion,
+            lora_trigger: lora.triggerWord,
+          }
+        : undefined
+
       // Use shared prompt builder (single source of truth with frontend)
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
       const generateRefOrder = readStringArray(data.referenceOrder)
@@ -1160,7 +1188,7 @@ export function buildPayload(
       const result = useConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
-            provider,
+            provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
             negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
             characterDefs: charDefs as CharacterDef[],
@@ -1177,10 +1205,12 @@ export function buildPayload(
             ancestorRefs,
             referenceOrder: generateRefOrder,
             suppressedCanonicalCharacterIds: generateSuppressed,
+            // LoRA path: skip mention machinery (trigger word + LoRA carry identity).
+            skipCharacterMentions: lora !== null,
           })
         : buildImagePrompt({
             prompt: rawPrompt,
-            provider,
+            provider: effectiveProvider,
             style: styleBypass ? undefined : (typeof data.style === "string" ? data.style : undefined),
             negativePrompt: typeof data.negativePrompt === "string" ? data.negativePrompt : undefined,
             characterDefs: charDefs as CharacterDef[],
@@ -1195,17 +1225,22 @@ export function buildPayload(
       return {
         jobName: "generate-image",
         queueName: "video-generation",
-        modelIdentifier: buildCreditModelIdentifier(
-          provider,
-          data.quality as string | undefined,
-          data.resolution as string | undefined,
-          data.renderingSpeed as string | undefined,
-        ),
+        modelIdentifier: lora
+          ? "flux-lora-character"
+          : buildCreditModelIdentifier(
+              provider,
+              data.quality as string | undefined,
+              data.resolution as string | undefined,
+              data.renderingSpeed as string | undefined,
+            ),
         payload: {
           jobId,
           prompt: result.prompt,
-          referenceImageUrls: result.referenceImageUrls,
-          provider,
+          // LoRA path emits zero refs — the trained LoRA + trigger word carry identity.
+          referenceImageUrls: lora ? [] : result.referenceImageUrls,
+          provider: effectiveProvider,
+          // Hand the synthetic model id to the Replicate provider when LoRA is active.
+          model: lora ? "flux-lora-character" : (data.model as string | undefined),
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
@@ -1214,6 +1249,8 @@ export function buildPayload(
           renderingSpeed: data.renderingSpeed,
           styleType: data.styleType,
           expandPrompt: data.expandPrompt,
+          // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
+          extraParams: loraExtras,
           usageLogId,
         },
       }

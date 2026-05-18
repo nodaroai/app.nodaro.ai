@@ -66,3 +66,14 @@ export function extractCost(
   }
   return null
 }
+
+/**
+ * Standard Webhooks signature verifier exported by the Replicate SDK as a
+ * top-level function (NOT a static method on the `Replicate` class). The
+ * second overload — `{ id, timestamp, signature, body, secret }` — is the
+ * one we use, because Fastify's `req.raw` is a Node `IncomingMessage` and
+ * NOT a Fetch `Request` (the first overload expects the latter).
+ *
+ * THROWS on empty `id`/`body`/`secret` — callers MUST wrap in try/catch.
+ */
+export { validateWebhook } from "replicate"

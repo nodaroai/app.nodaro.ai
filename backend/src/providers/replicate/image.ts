@@ -30,7 +30,12 @@ function readCommon(extraParams: Record<string, unknown> | undefined): CommonExt
 }
 
 interface ReplicateModelSpec {
-  model: `${string}/${string}`
+  /**
+   * Static `owner/name` Replicate model identifier, OR `null` for synthetic
+   * ids whose model+version are resolved per-request from
+   * `extraParams.lora_version` (used by `flux-lora-character`).
+   */
+  model: `${string}/${string}` | null
   buildInput: (
     prompt: string,
     referenceImageUrls: string[] | undefined,
@@ -50,6 +55,26 @@ const IMAGE_MODELS: Record<string, ReplicateModelSpec> = {
       }
       if (seed != null) input.seed = seed
       if (referenceImageUrls?.length) input.image = referenceImageUrls[0]
+      return input
+    },
+  },
+  // Synthetic id — selected internally by payload-builder.ts when a single
+  // trained @character mention is detected. NEVER appears in dropdowns.
+  // The actual Replicate model+version comes from extraParams.lora_version
+  // at request time (the character's stored lora_replicate_version, e.g.
+  // "nodaroai/char-<uuid>:abc123...").
+  "flux-lora-character": {
+    model: null,
+    buildInput: (prompt, _refs, extraParams) => {
+      const { aspectRatio, seed } = readCommon(extraParams)
+      const triggerWord = (extraParams?.lora_trigger as string | undefined) ?? ""
+      const input: Record<string, unknown> = {
+        prompt: triggerWord ? `${triggerWord}, ${prompt}` : prompt,
+        aspect_ratio: aspectRatio,
+        lora_scale: 1.0,
+        num_inference_steps: 28,
+      }
+      if (seed != null) input.seed = seed
       return input
     },
   },
@@ -98,10 +123,27 @@ async function runImagePrediction(
 
   const input = spec.buildInput(englishPrompt, referenceImageUrls, extraParams)
 
-  const prediction = await replicate.predictions.create({
-    model: spec.model,
-    input,
-  })
+  // Resolve dynamic model (flux-lora-character) per-request from extraParams.
+  let prediction
+  if (spec.model === null) {
+    const loraVersion = extraParams?.lora_version as string | undefined
+    if (!loraVersion) {
+      throw new Error(
+        `[Replicate:image] model=${model} requires extraParams.lora_version`,
+      )
+    }
+    // Versioned references contain ":" (owner/name:hash). Use the `version`
+    // field on predictions.create rather than `model`.
+    const versionHash = loraVersion.includes(":")
+      ? loraVersion.split(":").pop()!
+      : loraVersion
+    prediction = await replicate.predictions.create({ version: versionHash, input })
+  } else {
+    prediction = await replicate.predictions.create({
+      model: spec.model,
+      input,
+    })
+  }
   const completed = await replicate.wait(prediction)
   const output = completed.output
 

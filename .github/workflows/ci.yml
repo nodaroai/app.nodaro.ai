@@ -68,6 +68,10 @@ jobs:
         run: npm run build:packages
       - name: Verify skill content is up to date (gen-skills drift gate)
         run: cd backend && npm run gen:skills:check
+        env:
+          SUPABASE_URL: https://stub.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
+          INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
       - name: Run tests with coverage
         run: npm run test:coverage
         working-directory: backend

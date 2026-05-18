@@ -4,6 +4,9 @@ import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { hasCredits } from "../lib/config.js"
+import { cancelCharacterTraining, deleteCharacterLora } from "../providers/replicate/training.js"
+import { refundReservedCreditsForJob } from "../lib/character-lora.js"
 
 /**
  * Characters API. Soft-delete + case-insensitive unique name per user
@@ -714,6 +717,62 @@ export async function characterRoutes(app: FastifyInstance) {
     }
 
     const { id } = parsed.data
+
+    // Pre-fetch character to learn about any in-flight LoRA training or
+    // trained model that needs cleanup BEFORE we soft-delete (per design §9.3).
+    // Cloud edition only — Community/Business never populate the lora_* columns.
+    // The entire block is best-effort: any failure (DB blip, race with another
+    // delete, missing column on old schemas) logs and falls through to the
+    // actual soft-delete, which must always succeed when the user clicks it.
+    if (hasCredits()) {
+      try {
+        const { data: character } = await supabase
+          .from("characters")
+          .select("id, lora_training_status, lora_training_replicate_id, lora_replicate_version")
+          .eq("id", id)
+          .eq("user_id", userId)
+          .is("deleted_at", null)
+          .single()
+        if (character) {
+          // (a) Cancel in-flight Replicate training.
+          if (
+            (character.lora_training_status === "queued" ||
+              character.lora_training_status === "training") &&
+            character.lora_training_replicate_id
+          ) {
+            await cancelCharacterTraining(character.lora_training_replicate_id)
+            // (b) Refund any reserved credits for that training job.
+            const { data: trainingJob } = await supabase
+              .from("jobs")
+              .select("id")
+              .eq("user_id", userId)
+              .eq("job_type", "character-lora-training")
+              .eq("metadata->>replicate_id", character.lora_training_replicate_id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .single()
+            if (trainingJob) {
+              await refundReservedCreditsForJob(trainingJob.id).catch(() => {})
+              await supabase
+                .from("jobs")
+                .update({ status: "cancelled" })
+                .eq("id", trainingJob.id)
+                .eq("user_id", userId)
+                .then(() => {}, () => {})
+            }
+          }
+          // (c) Delete the trained Replicate model. Idempotent (404 swallowed).
+          if (character.lora_replicate_version || character.lora_training_status === "succeeded") {
+            await deleteCharacterLora(`nodaroai/char-${id}`)
+          }
+        }
+      } catch (err) {
+        req.log.warn(
+          { err: (err as Error).message, characterId: id },
+          "[characters/delete] LoRA pre-fetch failed; proceeding with soft-delete",
+        )
+      }
+    }
 
     const { error } = await supabase
       .from("characters")

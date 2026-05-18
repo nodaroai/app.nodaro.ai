@@ -76,3 +76,9 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 - Use 1K resolution and medium quality during iteration, then switch to higher settings for final output.
 - The style dropdown supports a "Custom..." option for free-text style descriptions when presets are insufficient.
 - When connecting a Provider parameter node upstream, it overrides the provider selection on this node, which is useful for batch-switching models across multiple Generate Image nodes.
+
+## Trained character routing (Cloud edition)
+
+When you `@mention` a [trained character](../../features/character-training.md) — a character with a successful LoRA — in the prompt, this node automatically routes through the trained Flux LoRA on Replicate instead of the selected provider. The dropdown provider's price is **replaced** by 3 credits/image.
+
+Two or more trained `@-mentions` in one prompt fall back to the selected provider + reference-image injection (multi-character LoRA composition is Phase 2).

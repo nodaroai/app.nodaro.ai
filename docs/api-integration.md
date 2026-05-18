@@ -388,8 +388,76 @@ to `StaticTokenAuth`. It also has `supabaseAuth` for browser apps. See
 [SDK Quickstart](./sdk-quickstart.md) and the
 [SDK Reference](./sdk-reference.md) for the full surface.
 
+## Character LoRA training
+
+> **Cloud edition only.** Trains a Flux LoRA on Replicate for a character so
+> `generate-image` can route through the trained model for highest-fidelity
+> identity match. See [Character Training](./features/character-training.md)
+> for the user-facing feature doc.
+
+### `POST /v1/characters/:id/train` — start training
+
+Reserves **150 credits** and submits a training to Replicate. Requires the
+character to have **≥ 4** reference photos across:
+`source_image_url`, `reference_photos`, `expressions`, `poses`, `angles`,
+`body_angles`, `lighting_variations`, `character_sheet`.
+
+**Response (202):**
+```json
+{ "jobId": "uuid", "trainingId": "<replicate-id>", "triggerWord": "TOK_<slug>_<6hex>" }
+```
+
+**Errors:**
+- `400 insufficient_training_images` — fewer than 4 deduped URLs available
+- `409 already_training_or_not_found` — a training is already in flight (atomic
+  CAS guard; double-click safe)
+- `503 public_url_not_configured` — `PUBLIC_URL` not set in this instance
+- `503 webhook_not_configured` — `REPLICATE_WEBHOOK_SECRET` not set
+- `502 training_dispatch_failed` — Replicate rejected the request; reservation
+  is refunded and the orphan zip in R2 is cleaned up
+
+Rate-limited to **3 / minute** per token.
+
+### `GET /v1/characters/:id/training` — poll status
+
+**Response:**
+```json
+{
+  "status": "untrained" | "queued" | "training" | "succeeded" | "failed" | "cancelled",
+  "trainingId": "<replicate-id>" | null,
+  "error": "<message>" | null,
+  "trainedAt": "ISO8601" | null,
+  "version": "nodaroai/char-<id>:<hash>" | null,
+  "triggerWord": "TOK_<slug>_<6hex>" | null,
+  "imageCount": 12 | null
+}
+```
+
+### `DELETE /v1/characters/:id/lora` — tear down
+
+Cancels any in-flight training (refunds reserved credits), deletes the
+Replicate model (`nodaroai/char-<characterId>`), and nulls out the LoRA
+columns on the character row.
+
+**Response:** `{ "ok": true }`
+
+### Routing decision
+
+When you call `POST /v1/generate-image` with a prompt that `@mentions` a
+single trained character (and that character is wired upstream of the node),
+the orchestrator transparently swaps:
+
+- `provider` → `replicate`
+- `model` → `flux-lora-character`
+- `referenceImageUrls` → `[]`
+- Prompt → `TOK_<slug>_<6hex>, <your prompt with @-tokens stripped>`
+
+The credit identifier becomes `flux-lora-character` (**3 cr**). Multi-character
+mentions fall back to the selected provider + ref injection.
+
 ## See also
 
+- [Character Training](./features/character-training.md) — user-facing feature doc
 - [OAuth Flow](./oauth-flow.md) — third-party app authorization
 - [SDK Quickstart](./sdk-quickstart.md) — TypeScript client walkthrough
 - [SDK Reference](./sdk-reference.md) — full method index

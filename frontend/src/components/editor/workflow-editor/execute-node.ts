@@ -201,6 +201,7 @@ import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
+import { selectLoraRoutingForMentions } from "@nodaro/shared";
 import { expandExtraRefsToConnectedReferences } from "@nodaro/shared";
 import { collectIdentityLockClause } from "@nodaro/shared";
 import { resolveSeparator } from "@nodaro/shared";
@@ -441,6 +442,13 @@ function expandCharacterNodeIntoRefs(
   // carry an explicit `:mode` override. `undefined` ↔ "identical" (the global
   // default) is handled by the resolver, not here, to keep the JSON small.
   const defaultUsageMode = charData.defaultUsageMode;
+  // LoRA training fields — character-level (same across all variants). Drive
+  // `selectLoraRoutingForMentions` on the frontend so single-node Run injects
+  // `_internalLora` AND the orchestrator's payload-builder mirror also sees
+  // the same fields. Must stay in sync with backend `expandWiredCharacterRefs`.
+  const loraReplicateVersion = charData.loraReplicateVersion ?? null;
+  const loraTriggerWord = charData.loraTriggerWord ?? null;
+  const loraTrainingStatus = charData.loraTrainingStatus ?? null;
   const canonicalUrl = charData.defaultAssetUrl || fallbackUrl || charData.sourceImageUrl;
   if (canonicalUrl) {
     out.push([
@@ -456,6 +464,9 @@ function expandCharacterNodeIntoRefs(
         variantDescription: null,
         variantDisplayName: "canonical",
         defaultUsageMode,
+        loraReplicateVersion,
+        loraTriggerWord,
+        loraTrainingStatus,
       },
     ]);
   }
@@ -485,6 +496,9 @@ function expandCharacterNodeIntoRefs(
           variantDescription: null,
           variantDisplayName: item.name,
           defaultUsageMode,
+          loraReplicateVersion,
+          loraTriggerWord,
+          loraTrainingStatus,
         },
       ]);
     }
@@ -1349,6 +1363,15 @@ export function executeNode(
       if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
     }
 
+    // Character LoRA routing decision — shared helper between frontend
+    // (single-node Run → `_internalLora` body hint) and backend
+    // (orchestrator → provider/model/extraParams swap). Single source of
+    // truth in `@nodaro/shared`.
+    const loraRouting = selectLoraRoutingForMentions(connectedReferences);
+    const internalLora = loraRouting
+      ? { version: loraRouting.loraVersion, trigger: loraRouting.triggerWord }
+      : undefined;
+
     const result = buildImagePrompt({
       prompt: prompt ?? "",
       provider: providerKey,
@@ -1364,6 +1387,8 @@ export function executeNode(
       // identical URL lists.
       referenceOrder: imgData.referenceOrder ?? undefined,
       suppressedCanonicalCharacterIds: imgData.suppressedCanonicalCharacterIds ?? undefined,
+      // LoRA path: strip @-mention tokens, skip Phase-0 ref injection.
+      skipCharacterMentions: internalLora !== undefined,
     });
 
     // Post-assembly empty-prompt check: a Character / @-mention / style / etc.
@@ -1381,7 +1406,8 @@ export function executeNode(
       node.id,
       result.prompt,
       ctx,
-      result.referenceImageUrls,
+      // LoRA path: zero refs (trained model + trigger word carry identity).
+      internalLora ? [] : result.referenceImageUrls,
       providerKey,
       imgData.aspectRatio || undefined,
       imgData.resolution || undefined,
@@ -1396,6 +1422,7 @@ export function executeNode(
       inputs.injectCharacterContext && inputs.attachToCharacterId
         ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
         : undefined,
+      internalLora,
     );
   }
 

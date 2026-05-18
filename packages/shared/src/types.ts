@@ -103,6 +103,15 @@ export interface ConnectedReference {
    * auto-attach), which is exactly what we DON'T want for explicit extras.
    */
   readonly isExtraRef?: boolean
+  // ─── Character LoRA training (Cloud edition) ──────────────────────────────
+  // Propagated from CharacterNodeData on the upstream character node. Used
+  // by selectLoraRoutingForMentions (`@nodaro/shared` + backend mirror) to
+  // decide whether to route generate-image through `flux-lora-character`
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  readonly loraReplicateVersion?: string | null
+  readonly loraTriggerWord?: string | null
+  readonly loraTrainingStatus?: string | null
 }
 
 /** Default label per source — used by `@` autocomplete and inventory fallback. */
