@@ -1,7 +1,7 @@
 ---
 node_type: merge-video-audio
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:37.525Z
+generated_from: cb1e786d
 ---
 
 # merge-video-audio
@@ -9,39 +9,58 @@ generated_from: hand-written
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `merge-video-audio`
 **Category:** processing
-**Credit cost:** 0 (FFmpeg)
-**Inputs (target handles):** `in` (video + audio routed via fieldMappings)
+**Credit cost:** 1
+**Inputs (target handles):** `in`
 **Outputs (source handles):** `video`
 
-**Required data fields (config):**
+**Required data fields:**
 - `label: string`
 - `audioType: "voiceover" | "background" | "both"`
-- `voiceoverVolume: number` — 0-100
-- `backgroundVolume: number` — 0-100
-- `keepOriginalAudio: boolean`
-- `originalAudioVolume: number` — 0-100
-- `originalAudioRole: "background" | "effect" | "narration"`
-- `trackSettings: Record<string, unknown>`
-- `fieldMappings: Record<string, string>`
+- `voiceoverVolume: number`
+- `backgroundVolume: number`
+- `fieldMappings: FieldMappings`
 
-**Required result fields (when attaching a completed merge operation):**
-- `executionStatus: "completed"`
-- `generatedVideoUrl: string`
-
-**Recommended result fields:**
-- `generatedResults: [{ url, jobId, timestamp }]`
-- `activeResultIndex: 0`
+**Optional data fields:**
+- `currentJobProgress?: number`
+- `keepOriginalAudio?: boolean`
+- `originalAudioVolume?: number`
+- `originalAudioRole?: "background" | "effect" | "narration"`
+- `trackSettings?: Record<string, { role: string; volume?: number; startTime?: number }>`
+- `audioOffsets?: Record<string, number>`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedVideoUrl?: string`
+- `generatedResults?: readonly GeneratedResult[]`
+- `activeResultIndex?: number`
 
 **Default data:**
 ```json
-{ "label": "Merge Video & Audio", "audioType": "voiceover", "voiceoverVolume": 100, "backgroundVolume": 30, "keepOriginalAudio": true, "originalAudioVolume": 30, "originalAudioRole": "background", "trackSettings": {}, "fieldMappings": {} }
+{
+  "label": "Merge Video & Audio",
+  "audioType": "voiceover",
+  "voiceoverVolume": 100,
+  "backgroundVolume": 30,
+  "keepOriginalAudio": true,
+  "originalAudioVolume": 30,
+  "originalAudioRole": "background",
+  "trackSettings": {},
+  "fieldMappings": {}
+}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `merge_video_audio`
 
-Pass the combined video URL + the music track URL. Capture the response URL and write to `data.generatedVideoUrl`.
+**Input parameters:**
+- `video_url`
+- `video_asset_id`
+- `audio_url`
+- `audio_asset_id`
+- `audio_tracks`
+- `voiceover_volume`
+- `background_volume`
+- `keep_original_audio`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use
@@ -58,21 +77,22 @@ Stage 8 final step — marries the stitched video with the soundtrack from `gene
 
 ```json
 {
-  "id": "final-1",
+  "id": "merge-video-audio-1",
   "type": "merge-video-audio",
-  "position": { "x": 2040, "y": 0 },
+  "position": {
+    "x": 0,
+    "y": 0
+  },
   "data": {
-    "label": "Final Mix",
-    "audioType": "background",
-    "voiceoverVolume": 0,
-    "backgroundVolume": 80,
-    "keepOriginalAudio": false,
-    "originalAudioVolume": 0,
+    "label": "Merge Video & Audio",
+    "audioType": "voiceover",
+    "voiceoverVolume": 100,
+    "backgroundVolume": 30,
+    "keepOriginalAudio": true,
+    "originalAudioVolume": 30,
     "originalAudioRole": "background",
     "trackSettings": {},
-    "fieldMappings": {},
-    "executionStatus": "completed",
-    "generatedVideoUrl": "https://r2.nodaro.ai/jobs/pqr678/output.mp4"
+    "fieldMappings": {}
   }
 }
 ```

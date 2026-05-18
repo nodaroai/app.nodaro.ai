@@ -1,7 +1,7 @@
 ---
 node_type: text-prompt
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:36.988Z
+generated_from: cb1e786d
 ---
 
 # text-prompt
@@ -16,13 +16,25 @@ generated_from: hand-written
 **Required data fields:**
 - `label: string`
 - `text: string`
-- `variables: Record<string, string>` (empty object is fine)
+- `variables: Record<string, string>`
 
-**No `fieldMappings` on this type.**
+**Optional data fields:**
+- `color?: string`
+- `textStyle?: string`
+- `bold?: boolean`
+- `italic?: boolean`
+- `outputTarget?: "text" | "voice" | "lyrics"`
+- `alignment?: string`
+- `width?: number`
+- `height?: number`
 
 **Default data:**
 ```json
-{ "label": "Text Prompt", "text": "", "variables": {} }
+{
+  "label": "Text Prompt",
+  "text": "",
+  "variables": {}
+}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
@@ -40,12 +52,15 @@ Display the approved script, a story brief, narration, or any human-readable tex
 
 ```json
 {
-  "id": "script-1",
+  "id": "text-prompt-1",
   "type": "text-prompt",
-  "position": { "x": 0, "y": 0 },
+  "position": {
+    "x": 0,
+    "y": 0
+  },
   "data": {
-    "label": "Script",
-    "text": "INT. SPACESHIP - NIGHT\n\nHero suits up in the cockpit...",
+    "label": "Text Prompt",
+    "text": "",
     "variables": {}
   }
 }

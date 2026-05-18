@@ -7,7 +7,7 @@
     "predev": "npm -w @nodaro/shared run build",
     "dev": "tsx watch src/server.ts",
     "prebuild": "npm -w @nodaro/shared run build",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "worker": "tsx watch src/worker.ts",
     "render-worker": "tsx watch src/render-worker.ts",
@@ -21,7 +21,9 @@
     "test:coverage": "vitest run --coverage",
     "flush-queue": "tsx src/scripts/flush-queue.ts",
     "backfill-video-thumbnails": "tsx src/scripts/backfill-video-thumbnails.ts",
-    "backfill-template-previews": "tsx src/scripts/backfill-template-previews.ts"
+    "backfill-template-previews": "tsx src/scripts/backfill-template-previews.ts",
+    "gen:skills": "tsx scripts/gen-skills.ts",
+    "gen:skills:check": "tsx scripts/gen-skills.ts --check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.74.0",
@@ -62,6 +64,7 @@
     "@types/node-cron": "^3.0.11",
     "@types/sharp": "^0.31.1",
     "@vitest/coverage-v8": "^4.0.18",
+    "ts-morph": "^24.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^4.0.18"

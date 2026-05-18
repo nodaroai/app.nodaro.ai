@@ -1,7 +1,7 @@
 ---
 node_type: trim-video
-generated_at: 2026-05-18T00:00:00Z
-generated_from: hand-written
+generated_at: 2026-05-18T13:23:37.575Z
+generated_from: cb1e786d
 ---
 
 # trim-video
@@ -9,34 +9,53 @@ generated_from: hand-written
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `trim-video`
 **Category:** processing
-**Credit cost:** 0 (FFmpeg)
+**Credit cost:** 0
 **Inputs (target handles):** `in`
 **Outputs (source handles):** `video`
 
-**Required data fields (config):**
+**Required data fields:**
 - `label: string`
-- `startTime: number` — seconds from the start of the input video
-- `endTime: number` — seconds from the start of the input video
-- `fieldMappings: Record<string, string>`
+- `startTime: number`
+- `endTime: number`
+- `fieldMappings: FieldMappings`
 
-**Required result fields (when attaching a completed trim operation):**
-- `executionStatus: "completed"`
-- `generatedVideoUrl: string`
-
-**Recommended result fields:**
-- `generatedResults: [{ url, jobId, timestamp }]`
-- `activeResultIndex: 0`
+**Optional data fields:**
+- `currentJobProgress?: number`
+- `trimMode?: "time" | "frames" | "smart-loop-cut"`
+- `trimStartFrames?: number`
+- `trimEndFrames?: number`
+- `smartLoopCutLookback?: number`
+- `outputSilentVideo?: boolean`
+- `executionStatus?: "idle" | "running" | "completed" | "failed"`
+- `errorMessage?: string`
+- `generatedVideoUrl?: string`
+- `generatedResults?: readonly GeneratedResult[]`
+- `activeResultIndex?: number`
 
 **Default data:**
 ```json
-{ "label": "Trim Video", "startTime": 0, "endTime": 0, "fieldMappings": {} }
+{
+  "label": "Trim Video",
+  "startTime": 0,
+  "endTime": 0,
+  "fieldMappings": {}
+}
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `trim_video`
 
-Pass the source video URL plus `startTime` + `endTime`. Capture the response URL and write to `data.generatedVideoUrl`.
+**Input parameters:**
+- `video_url`
+- `video_asset_id`
+- `start_time`
+- `end_time`
+- `trim_start_frames`
+- `trim_end_frames`
+- `smart_loop_cut`
+- `smart_loop_cut_lookback`
+- `silent`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## When to use
@@ -53,16 +72,17 @@ Cut a video clip to a precise time range. Common uses: shortening an animation t
 
 ```json
 {
-  "id": "trim-1",
+  "id": "trim-video-1",
   "type": "trim-video",
-  "position": { "x": 1360, "y": 0 },
+  "position": {
+    "x": 0,
+    "y": 0
+  },
   "data": {
-    "label": "Shot 1 — Trim",
+    "label": "Trim Video",
     "startTime": 0,
-    "endTime": 2.5,
-    "fieldMappings": {},
-    "executionStatus": "completed",
-    "generatedVideoUrl": "https://r2.nodaro.ai/jobs/jkl012/output.mp4"
+    "endTime": 0,
+    "fieldMappings": {}
   }
 }
 ```

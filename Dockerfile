@@ -75,7 +75,11 @@ WORKDIR /app/backend
 # Skip the `prebuild` lifecycle hook (which would re-run tsup against
 # packages/shared/src — but src isn't copied to this stage; the prebuilt
 # dist is already in place from shared-build above).
-RUN npx tsc
+# Use tsconfig.build.json (rootDir=./src, emit on, tests excluded). The
+# top-level tsconfig.json is the noEmit typecheck config — see
+# backend/scripts/lib/gen-skills/ which is part of typecheck scope but
+# not part of the production build.
+RUN npx tsc -p tsconfig.build.json
 
 # ── Stage 4: Build frontend (vite) ────────────────────────────────────
 # Vite resolves @nodaro/shared via the same workspace symlink. The
