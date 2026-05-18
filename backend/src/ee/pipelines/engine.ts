@@ -9,10 +9,17 @@ export interface DriveArgs {
   pipelineId: string
 }
 
+// Canonical ordering used to pick the next pending stage when no in-flight row
+// exists. Phase 1B.1 covers Stages 1–4; Stages 5–8 land in Phase 1B.2+.
+const STAGE_ORDER = ["script", "characters", "objects", "locations"] as const
+type StageOrderName = (typeof STAGE_ORDER)[number]
+
 /**
- * Engine entry. Reads the pipeline row, runs the current stage (Phase 1A: only Stage 1),
- * persists outcome, sets status, and emits SSE events. Phase 1B+ extends the switch
- * with Stages 2–8.
+ * Engine entry. Reads the pipeline row, picks the next stage to run based on
+ * `pipeline_stages` state, dispatches the corresponding stage orchestrator, and
+ * advances through Stages 1–4 → `completed`. Returns early when a stage is
+ * `awaiting_approval` (user must drive) or when the pipeline is in a terminal
+ * state.
  */
 export async function drivePipeline(args: DriveArgs): Promise<void> {
   const { supabase, pipelineId } = args
@@ -30,9 +37,86 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
   await supabase.from("pipelines").update({ status: "running" }).eq("id", pipelineId)
   pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "running" })
 
-  // Phase 1A: only stage 1.
+  // Determine current stage by reading pipeline_stages.
+  const { data: stages } = await supabase
+    .from("pipeline_stages")
+    .select("stage_name, status, stage_order")
+    .eq("pipeline_id", pipelineId)
+    .order("stage_order", { ascending: true })
+
+  const stageRows = (stages ?? []) as Array<{
+    stage_name: string
+    status: string
+    stage_order: number
+  }>
+
+  // First non-terminal stage row, in stage_order. Status counts as "in flight"
+  // unless it's approved/cancelled/failed.
+  const nextStage = stageRows.find(
+    (s) => s.status !== "approved" && s.status !== "cancelled" && s.status !== "failed",
+  )
+
+  // If no in-flight stage, find the next pending stage to insert.
+  let stageToRun: StageOrderName
+  if (nextStage) {
+    if (nextStage.status === "awaiting_approval") return // wait for user
+    stageToRun = nextStage.stage_name as StageOrderName
+  } else {
+    // All current rows approved — advance to next pending stage in sequence.
+    const approvedRows = stageRows.filter((s) => s.status === "approved")
+    const lastApproved = approvedRows[approvedRows.length - 1]
+    const lastIdx = lastApproved
+      ? STAGE_ORDER.indexOf(lastApproved.stage_name as StageOrderName)
+      : -1
+    if (lastIdx < 0 || lastIdx + 1 >= STAGE_ORDER.length) {
+      // Phase 1B.1: after Locations stage, mark completed (Stages 5–8 land in 1B.2+).
+      await supabase.from("pipelines").update({ status: "completed" }).eq("id", pipelineId)
+      pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "completed" })
+      pipelineEvents.publish({ type: "pipeline:done", pipelineId })
+      return
+    }
+    stageToRun = STAGE_ORDER[lastIdx + 1]!
+  }
+
+  // Dispatch.
   const userTier = await resolveUserTier(supabase, pipeline.user_id)
 
+  if (stageToRun === "script") {
+    await runScriptAndPersist(args, pipeline, userTier)
+    return
+  }
+  if (stageToRun === "characters") {
+    const { runCharactersStage } = await import("./stages/characters.js")
+    await runCharactersStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "objects") {
+    const { runObjectsStage } = await import("./stages/objects.js")
+    await runObjectsStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "locations") {
+    const { runLocationsStage } = await import("./stages/locations.js")
+    await runLocationsStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  // Exhaustive switch — should never reach.
+  throw new Error(`Unknown stage to run: ${stageToRun as string}`)
+}
+
+/**
+ * Stage 1 (Script) dispatch + outcome persistence. Extracted so `drivePipeline`'s
+ * switch stays tight. `pipeline` carries the loose shape `select("*").single()`
+ * returns from the un-typed supabase client; we trust the schema since the row
+ * was already loaded by `drivePipeline`.
+ */
+async function runScriptAndPersist(
+  args: DriveArgs,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pipeline: any,
+  userTier: string,
+): Promise<void> {
+  const { supabase, pipelineId } = args
   const outcome = await runScriptStage({
     supabase,
     pipelineId,
@@ -108,8 +192,9 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
 }
 
 /**
- * Phase 1A: after Script approval, the pipeline jumps to status='completed' since
- * Stages 2-8 are not implemented yet. Phase 1B will replace this with advanceToStage(2).
+ * Phase 1B.1: after Script approval, re-enqueue the orchestrator to drive
+ * Stage 2 (Characters). The pipeline is marked `completed` only once
+ * `drivePipeline` reaches the end of the canonical stage sequence.
  */
 export async function approveScriptStage(
   supabase: SupabaseClient,
@@ -130,14 +215,17 @@ export async function approveScriptStage(
   if (error) return { ok: false, reason: error.message }
   if (!data || data.length === 0) return { ok: false, reason: "stage_already_advanced" }
 
-  // Phase 1A: mark pipeline completed.
-  await supabase
-    .from("pipelines")
-    .update({ status: "completed" })
-    .eq("id", pipelineId)
-  pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "completed" })
+  // Phase 1B.1: after Script approval, advance to Characters stage.
   pipelineEvents.publish({ type: "stage:status", pipelineId, stageName: "script", status: "approved" })
-  pipelineEvents.publish({ type: "pipeline:done", pipelineId })
+
+  // Re-enqueue the orchestrator to drive Stage 2. Lazy-loaded to avoid circular
+  // module imports (queue.ts imports config which can pull in supabase setup).
+  const { enqueuePipelineRun } = await import("./queue.js")
+  await enqueuePipelineRun({
+    pipelineId,
+    userId: await resolveUserId(supabase, pipelineId),
+    reason: "stage_advance",
+  })
   return { ok: true }
 }
 
@@ -178,4 +266,13 @@ export async function rejectScriptStage(
 async function resolveUserTier(supabase: SupabaseClient, userId: string): Promise<string> {
   const { data } = await supabase.from("profiles").select("tier").eq("id", userId).single()
   return data?.tier ?? "free"
+}
+
+async function resolveUserId(supabase: SupabaseClient, pipelineId: string): Promise<string> {
+  const { data } = await supabase
+    .from("pipelines")
+    .select("user_id")
+    .eq("id", pipelineId)
+    .single()
+  return data?.user_id ?? ""
 }

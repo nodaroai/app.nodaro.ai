@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import {
+  ENTITY_TYPES,
+  EntityRejectInputSchema,
   PipelineInputSchema,
   validateDurationForFormat,
   validateModeActivation,
@@ -420,6 +422,175 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       const result = await rejectScriptStage(supabase, req.params.id, body.data.feedback)
       if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
       // Re-enqueue so the worker re-runs Stage 1 with the feedback baked in.
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "user_reject",
+      })
+      return reply.send({ ok: true })
+    },
+  )
+
+  // ── GET /v1/pipelines/:id/entities?type=character|object|location|scene ──
+  app.get<{ Params: { id: string }; Querystring: { type: string } }>(
+    "/v1/pipelines/:id/entities",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:read")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      // Ownership check on the parent pipeline row.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const typeFilter = req.query.type
+      if (!(ENTITY_TYPES as readonly string[]).includes(typeFilter)) {
+        return reply.status(400).send({ error: { code: "invalid_entity_type" } })
+      }
+
+      const { data: entities, error } = await supabase
+        .from("pipeline_entities")
+        .select("id, entity_type, entity_key, status, main_asset_id, metadata")
+        .eq("pipeline_id", req.params.id)
+        .eq("entity_type", typeFilter)
+        .order("created_at", { ascending: true })
+      if (error) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: error.message } })
+      }
+
+      const ids = (entities ?? []).map((e) => e.id)
+      const { data: variants } = ids.length
+        ? await supabase
+            .from("pipeline_entity_variants")
+            .select("entity_id, variant_key, asset_id, status")
+            .in("entity_id", ids)
+        : {
+            data: [] as Array<{
+              entity_id: string
+              variant_key: string
+              asset_id: string | null
+              status: string
+            }>,
+          }
+
+      const assetIds = [
+        ...new Set([
+          ...((entities ?? [])
+            .map((e) => e.main_asset_id)
+            .filter(Boolean) as string[]),
+          ...((variants ?? [])
+            .map((v) => v.asset_id)
+            .filter(Boolean) as string[]),
+        ]),
+      ]
+      const { data: assets } = assetIds.length
+        ? await supabase
+            .from("assets")
+            .select("id, r2_url")
+            .in("id", assetIds)
+        : { data: [] as Array<{ id: string; r2_url: string }> }
+      const urlById = new Map((assets ?? []).map((a) => [a.id, a.r2_url]))
+
+      const result = (entities ?? []).map((e) => ({
+        ...e,
+        main_asset_url: e.main_asset_id
+          ? (urlById.get(e.main_asset_id) ?? null)
+          : null,
+        variants: (variants ?? [])
+          .filter((v) => v.entity_id === e.id)
+          .map((v) => ({
+            variant_key: v.variant_key,
+            asset_id: v.asset_id,
+            asset_url: v.asset_id ? (urlById.get(v.asset_id) ?? null) : null,
+            status: v.status,
+          })),
+      }))
+
+      return result
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/approve ───────────────────
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/approve",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      // Ownership check on the parent pipeline row.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { approveEntity } = await import("../ee/pipelines/entity-approval.js")
+      const result = await approveEntity(supabase, req.params.id, req.params.entity_id)
+      if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
+      // Re-drive the engine so the orchestrator picks up the approval and advances
+      // (e.g. runs ensureCharacterVariants for the just-approved entity).
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+      return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/reject ────────────────────
+  app.post<{
+    Params: { id: string; entity_id: string }
+    Body: { feedback: string }
+  }>(
+    "/v1/pipelines/:id/entities/:entity_id/reject",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      // Ownership check on the parent pipeline row.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const parsed = EntityRejectInputSchema.safeParse(req.body)
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: { code: "validation_error", issues: parsed.error.issues } })
+      }
+      const { rejectEntity } = await import("../ee/pipelines/entity-approval.js")
+      const result = await rejectEntity(
+        supabase,
+        req.params.id,
+        req.params.entity_id,
+        parsed.data.feedback,
+      )
+      if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
+      // Re-drive the engine so the orchestrator regenerates the rejected entity's main image.
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
       await enqueuePipelineRun({
         pipelineId: req.params.id,
         userId,

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { EntityStatus, EntityType } from "./entity-approval-types.js"
 
 export const PipelineStageNameSchema = z.enum([
   "script",
@@ -51,3 +52,19 @@ export type PipelineEvent =
       message: string
     }
   | { type: "pipeline:done"; pipelineId: string }
+  | {
+      type: "entity:status"
+      pipelineId: string
+      entityId: string
+      entityType: EntityType
+      entityKey: string
+      status: EntityStatus
+      mainAssetUrl?: string
+    }
+  | {
+      type: "entity:variant:added"
+      pipelineId: string
+      entityId: string
+      variantKey: string
+      assetUrl: string
+    }

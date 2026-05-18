@@ -14,7 +14,7 @@ import { runShowrunner } from "../llms/showrunner.js"
 import { runScriptCritic } from "../llms/script-critic.js"
 import { runCastCoverageCritic } from "../llms/cast-coverage-critic.js"
 import { pipelineEvents } from "../events.js"
-import { incrementCriticRetry } from "../stage-utils.js"
+import { ensureStageRow, incrementCriticRetry } from "../stage-utils.js"
 
 export interface RunScriptStageArgs {
   supabase: SupabaseClient
@@ -162,34 +162,5 @@ function hasBlockingIssue(s: ScriptCriticVerdict, c: CastCoverageCriticVerdict):
     s.issues.some((i) => i.severity === "blocking") ||
     c.issues.some((i) => i.severity === "blocking")
   )
-}
-
-async function ensureStageRow(
-  supabase: SupabaseClient,
-  pipelineId: string,
-  stageName: "script",
-  stageOrder: number,
-): Promise<string> {
-  // UPSERT-equivalent. UNIQUE (pipeline_id, stage_name) makes the second create idempotent.
-  const { data: existing } = await supabase
-    .from("pipeline_stages")
-    .select("id")
-    .eq("pipeline_id", pipelineId)
-    .eq("stage_name", stageName)
-    .maybeSingle()
-  if (existing?.id) return existing.id
-  const { data, error } = await supabase
-    .from("pipeline_stages")
-    .insert({
-      pipeline_id: pipelineId,
-      stage_name: stageName,
-      stage_order: stageOrder,
-      status: "running",
-      started_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single()
-  if (error || !data) throw new Error(`Failed to create stage row: ${error?.message}`)
-  return data.id
 }
 

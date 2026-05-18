@@ -83,3 +83,21 @@ export const TIER_MAX_PIPELINE_COST_CREDITS: Record<string, number> = {
 // Per-stage soft timeout (matches workflow-orchestration)
 export const PIPELINE_STAGE_TIMEOUT_MS = 30 * 60 * 1000
 export const PIPELINE_HARD_TIMEOUT_MS = 90 * 60 * 1000
+
+/**
+ * Per-stage hard retry caps applied to image-gen for that stage.
+ * Pipeline-level credit cap (max_cost_credits) is the ultimate guard, but
+ * these prevent a single stage from sucking all the budget.
+ */
+export const ENTITY_TOOL_RETRY_CAP = 3 // tool-level failure retries per entity
+
+/**
+ * Default variant counts when ShowrunnerPlan doesn't suggest specifics.
+ */
+export const DEFAULT_CHARACTER_ANGLE_COUNT = 3 // main + 2 variants for non-protagonist
+export const DEFAULT_CHARACTER_EXPRESSION_COUNT = 2 // baseline expression variants
+
+/**
+ * Max location variants generated even if Showrunner suggests more — cost guard.
+ */
+export const MAX_LOCATION_VARIANTS = 4
