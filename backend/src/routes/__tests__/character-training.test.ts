@@ -5,10 +5,15 @@ import { characterTrainingRoutes } from "../character-training.js"
 
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 
+// Lazy-getter for PUBLIC_URL so the missing-env test can flip it for one
+// assertion without re-mocking the module + rebuilding the Fastify app.
+let publicUrlValue = "https://app.test.local"
 vi.mock("../../lib/config.js", () => ({
   config: {
     EDITION: "cloud",
-    PUBLIC_URL: "https://app.test.local",
+    get PUBLIC_URL() {
+      return publicUrlValue
+    },
     REPLICATE_API_TOKEN: "test-key",
     REPLICATE_WEBHOOK_SECRET: "test-secret",
     R2_BUCKET_NAME: "test-bucket",
@@ -126,7 +131,6 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
             return { eq: eq1 }
           }),
           select: vi.fn().mockImplementation(() => {
-            // Reload returns the full row regardless of which call.
             const single = vi.fn().mockResolvedValue({ data: characterFullRow, error: null })
             const eq2 = vi.fn().mockReturnValue({ single })
             const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
@@ -151,62 +155,29 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
     return { fromMock, updateCallCount }
   }
 
-  it("two concurrent POSTs return exactly one 202 and one 409", async () => {
+  it("two concurrent POSTs return one 202 + one 409 with code 'already_training_or_not_found'", async () => {
     const { fromMock } = mockCasRace()
     vi.mocked(supabase.from).mockImplementation(fromMock as never)
 
-    // Mock Replicate's training dispatch — the winner should call it exactly once.
     const replicateTraining = await import("../../providers/replicate/training.js")
     vi.mocked(replicateTraining.createCharacterTraining).mockResolvedValue({
       trainingId: "test-replicate-id",
     })
 
-    const [r1, r2] = await Promise.all([
-      app.inject({
-        method: "POST",
-        url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-        headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
-        payload: {},
-      }),
-      app.inject({
-        method: "POST",
-        url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-        headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
-        payload: {},
-      }),
-    ])
+    const trainPayload = {
+      method: "POST" as const,
+      url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
+      headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
+      payload: {},
+    }
+    const [r1, r2] = await Promise.all([app.inject(trainPayload), app.inject(trainPayload)])
 
     const codes = [r1.statusCode, r2.statusCode].sort()
     expect(codes).toEqual([202, 409])
-    // Replicate's training was dispatched exactly once — the winner only.
+    // Replicate's training dispatched exactly once — the winner only.
     expect(replicateTraining.createCharacterTraining).toHaveBeenCalledTimes(1)
-  })
-
-  it("loser's 409 response carries error code 'already_training_or_not_found'", async () => {
-    const { fromMock } = mockCasRace()
-    vi.mocked(supabase.from).mockImplementation(fromMock as never)
-    const replicateTraining = await import("../../providers/replicate/training.js")
-    vi.mocked(replicateTraining.createCharacterTraining).mockResolvedValue({
-      trainingId: "test-replicate-id",
-    })
-
-    const [r1, r2] = await Promise.all([
-      app.inject({
-        method: "POST",
-        url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-        headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
-        payload: {},
-      }),
-      app.inject({
-        method: "POST",
-        url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-        headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
-        payload: {},
-      }),
-    ])
-
+    // Loser carries the documented error code.
     const loser = r1.statusCode === 409 ? r1 : r2
-    expect(loser.statusCode).toBe(409)
     expect(loser.json().error).toBe("already_training_or_not_found")
   })
 
@@ -214,7 +185,6 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
     const res = await app.inject({
       method: "POST",
       url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-      // No x-user-id header
       headers: { "content-type": "application/json" },
       payload: {},
     })
@@ -222,53 +192,20 @@ describe("POST /v1/characters/:id/train — atomic CAS slot claim", () => {
     expect(res.json().error).toBe("unauthorized")
     expect(supabase.from).not.toHaveBeenCalled()
   })
-})
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pre-flight: missing PUBLIC_URL → 503
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("POST /v1/characters/:id/train — pre-flight env checks", () => {
   it("returns 503 public_url_not_configured when config.PUBLIC_URL is empty", async () => {
-    // Swap the config mock for this test only.
-    vi.doMock("../../lib/config.js", () => ({
-      config: {
-        EDITION: "cloud",
-        PUBLIC_URL: "", // empty → 503
-        REPLICATE_API_TOKEN: "test-key",
-        REPLICATE_WEBHOOK_SECRET: "test-secret",
-        R2_BUCKET_NAME: "test-bucket",
-        CHARACTER_LORA_ROUTING_ENABLED: true,
-      },
-      isCloud: () => true,
-      hasCredits: () => true,
-      isCommunity: () => false,
-      isBusiness: () => false,
-      hasAdmin: () => true,
-    }))
-    vi.resetModules()
-    const mod = await import("../character-training.js")
-    const localApp = Fastify({ logger: false })
-    localApp.addHook("preHandler", async (req) => {
-      const header = req.headers["x-user-id"]
-      if (typeof header === "string") req.userId = header
-    })
-    await localApp.register(async (i) => {
-      await mod.characterTrainingRoutes(i)
-    })
-    await localApp.ready()
-
-    const res = await localApp.inject({
-      method: "POST",
-      url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
-      headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
-      payload: {},
-    })
-    expect(res.statusCode).toBe(503)
-    expect(res.json().error).toBe("public_url_not_configured")
-
-    await localApp.close()
-    vi.doUnmock("../../lib/config.js")
-    vi.resetModules()
+    publicUrlValue = ""
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: `/v1/characters/${TEST_CHARACTER_ID}/train`,
+        headers: { "x-user-id": TEST_USER_ID, "content-type": "application/json" },
+        payload: {},
+      })
+      expect(res.statusCode).toBe(503)
+      expect(res.json().error).toBe("public_url_not_configured")
+    } finally {
+      publicUrlValue = "https://app.test.local"
+    }
   })
 })
