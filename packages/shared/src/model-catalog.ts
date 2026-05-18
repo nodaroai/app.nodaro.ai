@@ -997,13 +997,15 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    resolutions: ["480p", "720p"],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance-2", credits: 38, note: "default — see :NsR variants for exact" },
       { identifier: "seedance-2:8s:480p", credits: 38, note: "8s 480p" },
       { identifier: "seedance-2:8s:720p", credits: 82, note: "8s 720p" },
+      { identifier: "seedance-2:8s:1080p", credits: 123, note: "8s 1080p" },
       { identifier: "seedance-2:8s:480p-ref", credits: 23, note: "8s 480p with reference" },
       { identifier: "seedance-2:8s:720p-ref", credits: 50, note: "8s 720p with reference" },
+      { identifier: "seedance-2:8s:1080p-ref", credits: 75, note: "8s 1080p with reference" },
     ],
   },
   "seedance-2-fast": {
@@ -1017,13 +1019,15 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-    resolutions: ["480p", "720p"],
+    resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance-2-fast", credits: 31, note: "default — see :NsR variants" },
       { identifier: "seedance-2-fast:8s:480p", credits: 31 },
       { identifier: "seedance-2-fast:8s:720p", credits: 66 },
+      { identifier: "seedance-2-fast:8s:1080p", credits: 99 },
       { identifier: "seedance-2-fast:8s:480p-ref", credits: 16 },
       { identifier: "seedance-2-fast:8s:720p-ref", credits: 40 },
+      { identifier: "seedance-2-fast:8s:1080p-ref", credits: 60 },
     ],
   },
 

@@ -837,6 +837,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1762,6 +1763,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
               <SelectContent>
                 <SelectItem value="480p">480p</SelectItem>
                 <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
               </SelectContent>
             </Select>
           </div>

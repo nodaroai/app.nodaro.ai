@@ -64,7 +64,7 @@ vi.mock("@/lib/config.js", () => ({
 // Import module under test (after mocks are registered)
 // ---------------------------------------------------------------------------
 
-import { CreditsService, invalidateModelPricingCache } from "../credits.js"
+import { CreditsService, invalidateModelPricingCache, STATIC_CREDIT_COSTS } from "../credits.js"
 import type { CreditProfile, StorageProfile } from "../credits.js"
 
 // ---------------------------------------------------------------------------
@@ -894,6 +894,64 @@ describe("CreditsService", () => {
         { type: "suno-separate", data: { type: "split_stem" } },                        // 16
       ]
       expect(CreditsService.estimateWorkflowCredits(nodes)).toBe(153)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // STATIC_CREDIT_COSTS — Seedance 2 1080p coverage (no DB dependency)
+  // ════════════════════════════════════════════════════════════════════════
+  // `estimateWorkflowCredits` doesn't thread `resolution`/`hasVideoRef`
+  // into buildVideoCreditModelIdentifier (uses defaults), so the 1080p
+  // composites are exercised in production via the route handler path
+  // (`generate-video.ts` / `text-to-video.ts` / `lip-sync.ts`) which
+  // calls `buildVideoCreditModelIdentifier` with the full param set.
+  // These assertions cover the lookup table directly so missing entries
+  // — which would silently fall back to `creditCost: 1` per
+  // `getModelCreditBaseCost` — fail CI.
+  describe("STATIC_CREDIT_COSTS — seedance-2 family 1080p tier", () => {
+    it.each([
+      ["seedance-2:4s:1080p", 62],
+      ["seedance-2:8s:1080p", 123],
+      ["seedance-2:12s:1080p", 185],
+      ["seedance-2:15s:1080p", 231],
+      ["seedance-2:4s:1080p-ref", 38],
+      ["seedance-2:8s:1080p-ref", 75],
+      ["seedance-2:12s:1080p-ref", 113],
+      ["seedance-2:15s:1080p-ref", 141],
+      ["seedance-2-fast:4s:1080p", 50],
+      ["seedance-2-fast:8s:1080p", 99],
+      ["seedance-2-fast:12s:1080p", 149],
+      ["seedance-2-fast:15s:1080p", 186],
+      ["seedance-2-fast:4s:1080p-ref", 30],
+      ["seedance-2-fast:8s:1080p-ref", 60],
+      ["seedance-2-fast:12s:1080p-ref", 90],
+      ["seedance-2-fast:15s:1080p-ref", 113],
+    ])('STATIC_CREDIT_COSTS["%s"] is %i', (identifier, credits) => {
+      expect(STATIC_CREDIT_COSTS[identifier]).toBe(credits)
+    })
+
+    // Sanity — 1080p must always be more expensive than 720p at the same
+    // duration / ref state. If a future re-price inverts this it almost
+    // certainly indicates a typo.
+    it.each([
+      ["seedance-2", "4s", false],
+      ["seedance-2", "8s", false],
+      ["seedance-2", "12s", false],
+      ["seedance-2", "15s", false],
+      ["seedance-2", "8s", true],
+      ["seedance-2-fast", "4s", false],
+      ["seedance-2-fast", "8s", false],
+      ["seedance-2-fast", "8s", true],
+    ])("%s:%s%s — 1080p > 720p > 480p", (provider, duration, withRef) => {
+      const suffix = withRef ? "-ref" : ""
+      const k480 = STATIC_CREDIT_COSTS[`${provider}:${duration}:480p${suffix}`]
+      const k720 = STATIC_CREDIT_COSTS[`${provider}:${duration}:720p${suffix}`]
+      const k1080 = STATIC_CREDIT_COSTS[`${provider}:${duration}:1080p${suffix}`]
+      expect(k480).toBeDefined()
+      expect(k720).toBeDefined()
+      expect(k1080).toBeDefined()
+      expect(k720!).toBeGreaterThan(k480!)
+      expect(k1080!).toBeGreaterThan(k720!)
     })
   })
 

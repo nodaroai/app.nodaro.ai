@@ -24,6 +24,7 @@ The Image to Video node animates a still image into a video clip using state-of-
 | grok-i2v | Resolution (480p/720p), Mode (normal/fun/spicy) |
 | sora2, sora2-pro | Quality (standard/high), Remove Watermark (+4 CR) |
 | seedance | Resolution, Aspect Ratio (16:9/9:16/1:1/21:9), Camera Fixed, Generate Audio |
+| seedance-2, seedance-2-fast | Resolution (480p/720p/1080p), Aspect Ratio, Duration (4–15s), Generate Audio, Web Search, NSFW Filter, multimodal references (image/video/audio) |
 | veo3 | Generate Audio toggle |
 | wan-i2v, wan-turbo | Resolution |
 | hailuo | Resolution (512P/768P/1080P) |
@@ -50,12 +51,14 @@ These providers support both start and end frame images: minimax, veo3, veo3.1, 
 
 ## Supported Providers
 
-23 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, wan-2.7-i2v, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway, happyhorse-i2v, happyhorse-ref2v.
+25 providers: minimax, veo3, veo3.1, kling, kling-turbo, kling-3.0, kling-master, seedance, seedance-2, seedance-2-fast, hailuo-2.3-pro, hailuo-2.3, hailuo-standard, sora2-pro, sora2, wan-i2v, wan-turbo, wan-2.7-i2v, bytedance-lite, bytedance-pro, bytedance-pro-fast, grok-i2v, runway, happyhorse-i2v, happyhorse-ref2v.
 
 Provider notes:
 - **Wan 2.7 I2V** (`wan-2.7-i2v`) — 2–15s, 720p or 1080p, supports start+end frame input
 - **HappyHorse I2V** (`happyhorse-i2v`) — 3–15s, 720p or 1080p, single start frame
 - **HappyHorse Ref2V** (`happyhorse-ref2v`) — 3–15s, 720p or 1080p, 1–9 reference images
+- **Seedance 2** (`seedance-2`) — ByteDance premium, 4–15s, 480p / 720p / 1080p, native audio, end frame + multimodal references (image/video/audio). Per-second pricing × resolution × reference-state. 8s @ 720p ≈ 82 cr (no ref) / 50 cr (with ref); 1080p ≈ 123 cr / 75 cr.
+- **Seedance 2 Fast** (`seedance-2-fast`) — cheaper / quicker tier of seedance-2. Same matrix, lower per-second rate. 8s @ 720p ≈ 66 cr (no ref) / 40 cr (with ref); 1080p ≈ 99 cr / 60 cr.
 
 ## Best Practices
 

@@ -851,13 +851,13 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "OR video_url / video_asset_id (an existing clip whose mouth gets " +
         "re-driven) — and ONE audio source: audio_url / audio_asset_id.\n\n" +
         "**Picking a model** (sorted by quality, with cost as tiebreaker):\n" +
-        "  • **`seedance-2`** (~50 cr @ 720p / 82 cr @ 1080p) — ByteDance " +
+        "  • **`seedance-2`** (~50 cr @ 720p / 75 cr @ 1080p, 8s w/audio ref) — ByteDance " +
         "multimodal video model with **native phoneme-level lip sync in " +
         "8+ languages**. Cinematic full-body output (not just talking " +
         "heads), strong identity preservation, premium quality. Pick this " +
         "for hero scenes, multi-language dubs, or when the user wants the " +
         "absolute best quality.\n" +
-        "  • **`seedance-2-fast`** (~40 cr @ 720p / 66 cr @ 1080p) — same " +
+        "  • **`seedance-2-fast`** (~40 cr @ 720p / 60 cr @ 1080p, 8s w/audio ref) — same " +
         "Seedance 2 phoneme lip sync, cheaper / faster tier. Pick when the " +
         "user wants Seedance quality on a budget.\n" +
         "  • **`kling-avatar`** (default, 28 cr) — KIE talking head, 720p, " +
@@ -906,8 +906,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional()
           .describe(
             "Lip-sync model. Default kling-avatar. All 9 options: " +
-            "seedance-2 (~50/82 cr, image, native phoneme lip-sync 8+ languages, premium), " +
-            "seedance-2-fast (~40/66 cr, image, same lip-sync cheaper), " +
+            "seedance-2 (~50/75 cr, image, native phoneme lip-sync 8+ languages, premium), " +
+            "seedance-2-fast (~40/60 cr, image, same lip-sync cheaper), " +
             "kling-avatar (28 cr, image, 720p), kling-avatar-pro (56 cr, image, 1080p), " +
             "infinitalk (11/42 cr, image, 480p|720p), latentsync (5 cr, video, singing), " +
             "wav2lip (1 cr, image|video, fastest+cheapest), video-retalking " +
