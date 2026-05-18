@@ -64,7 +64,12 @@ vi.mock("@/lib/config.js", () => ({
 // Import module under test (after mocks are registered)
 // ---------------------------------------------------------------------------
 
-import { CreditsService, invalidateModelPricingCache } from "../credits.js"
+import {
+  CreditsService,
+  invalidateModelPricingCache,
+  PriceNotConfiguredError,
+  STATIC_CREDIT_COSTS,
+} from "../credits.js"
 import type { CreditProfile, StorageProfile } from "../credits.js"
 
 // ---------------------------------------------------------------------------
@@ -674,12 +679,15 @@ describe("CreditsService", () => {
       expect(result.allowed).toBe(true)
     })
 
-    it("defaults to 1 credit for unknown model with no DB or static cost", async () => {
+    it("throws PriceNotConfiguredError for unknown model with no DB or static cost (hard-fail policy)", async () => {
       mockTable("model_pricing", null, { code: "PGRST116" })
       mockTable("tier_config", { daily_credit_limit: null, monthly_credits: 530, features: {} })
-      const result = await CreditsService.checkCreditsWithProfile(userId, paidProfile, "totally-unknown-model-xyz")
-      expect(result.allowed).toBe(true)
-      expect(result.required).toBe(1)
+      // Per the 2026-05 hard-fail policy, a missing-price model must reject
+      // immediately — no silent fallback to 1 credit (the historic bug that
+      // leaked revenue on identifiers like "seedance-2:8s:1080p-ref").
+      await expect(
+        CreditsService.checkCreditsWithProfile(userId, paidProfile, "totally-unknown-model-xyz"),
+      ).rejects.toThrowError(PriceNotConfiguredError)
     })
   })
 
@@ -898,6 +906,64 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
+  // STATIC_CREDIT_COSTS — Seedance 2 1080p coverage (no DB dependency)
+  // ════════════════════════════════════════════════════════════════════════
+  // `estimateWorkflowCredits` doesn't thread `resolution`/`hasVideoRef`
+  // into buildVideoCreditModelIdentifier (uses defaults), so the 1080p
+  // composites are exercised in production via the route handler path
+  // (`generate-video.ts` / `text-to-video.ts` / `lip-sync.ts`) which
+  // calls `buildVideoCreditModelIdentifier` with the full param set.
+  // These assertions cover the lookup table directly so missing entries
+  // — which would silently fall back to `creditCost: 1` per
+  // `getModelCreditBaseCost` — fail CI.
+  describe("STATIC_CREDIT_COSTS — seedance-2 family 1080p tier", () => {
+    it.each([
+      ["seedance-2:4s:1080p", 62],
+      ["seedance-2:8s:1080p", 123],
+      ["seedance-2:12s:1080p", 185],
+      ["seedance-2:15s:1080p", 231],
+      ["seedance-2:4s:1080p-ref", 38],
+      ["seedance-2:8s:1080p-ref", 75],
+      ["seedance-2:12s:1080p-ref", 113],
+      ["seedance-2:15s:1080p-ref", 141],
+      ["seedance-2-fast:4s:1080p", 50],
+      ["seedance-2-fast:8s:1080p", 99],
+      ["seedance-2-fast:12s:1080p", 149],
+      ["seedance-2-fast:15s:1080p", 186],
+      ["seedance-2-fast:4s:1080p-ref", 30],
+      ["seedance-2-fast:8s:1080p-ref", 60],
+      ["seedance-2-fast:12s:1080p-ref", 90],
+      ["seedance-2-fast:15s:1080p-ref", 113],
+    ])('STATIC_CREDIT_COSTS["%s"] is %i', (identifier, credits) => {
+      expect(STATIC_CREDIT_COSTS[identifier]).toBe(credits)
+    })
+
+    // Sanity — 1080p must always be more expensive than 720p at the same
+    // duration / ref state. If a future re-price inverts this it almost
+    // certainly indicates a typo.
+    it.each([
+      ["seedance-2", "4s", false],
+      ["seedance-2", "8s", false],
+      ["seedance-2", "12s", false],
+      ["seedance-2", "15s", false],
+      ["seedance-2", "8s", true],
+      ["seedance-2-fast", "4s", false],
+      ["seedance-2-fast", "8s", false],
+      ["seedance-2-fast", "8s", true],
+    ])("%s:%s%s — 1080p > 720p > 480p", (provider, duration, withRef) => {
+      const suffix = withRef ? "-ref" : ""
+      const k480 = STATIC_CREDIT_COSTS[`${provider}:${duration}:480p${suffix}`]
+      const k720 = STATIC_CREDIT_COSTS[`${provider}:${duration}:720p${suffix}`]
+      const k1080 = STATIC_CREDIT_COSTS[`${provider}:${duration}:1080p${suffix}`]
+      expect(k480).toBeDefined()
+      expect(k720).toBeDefined()
+      expect(k1080).toBeDefined()
+      expect(k720!).toBeGreaterThan(k480!)
+      expect(k1080!).toBeGreaterThan(k720!)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
   // model pricing cache (TtlCache behavior)
   // ════════════════════════════════════════════════════════════════════════
 
@@ -919,6 +985,61 @@ describe("CreditsService", () => {
       mockTable("model_pricing", { credit_cost: 10, is_enabled: true, tier_restriction: null })
       const cost2 = await CreditsService.getModelCreditCost("invalidate-test")
       expect(cost2).toBe(10)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PriceNotConfiguredError — hard-fail policy for missing prices
+  // ════════════════════════════════════════════════════════════════════════
+  //
+  // History: prior to 2026-05, a credit identifier with neither a
+  // model_pricing DB row NOR a STATIC_CREDIT_COSTS entry silently fell back
+  // to 1 credit. This leaked revenue when callers constructed composite
+  // identifiers (e.g. "seedance-2:8s:1080p-ref") that nobody had registered.
+  // The policy now is "be explicit or fail" — getModelCreditBaseCost throws
+  // PriceNotConfiguredError, which credit-guard-impl translates into 503.
+
+  describe("PriceNotConfiguredError (hard-fail policy)", () => {
+    it("throws when getModelCreditCost is called with an unknown identifier", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      await expect(
+        CreditsService.getModelCreditCost("totally-unknown-identifier-zzz"),
+      ).rejects.toThrowError(PriceNotConfiguredError)
+    })
+
+    it("PriceNotConfiguredError carries the offending identifier", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      try {
+        await CreditsService.getModelCreditCost("seedance-2:8s:1080p-ref-zzz")
+        throw new Error("expected PriceNotConfiguredError but none was thrown")
+      } catch (err) {
+        expect(err).toBeInstanceOf(PriceNotConfiguredError)
+        expect((err as PriceNotConfiguredError).modelIdentifier).toBe("seedance-2:8s:1080p-ref-zzz")
+        expect((err as Error).message).toContain("seedance-2:8s:1080p-ref-zzz")
+      }
+    })
+
+    it("does NOT throw when STATIC_CREDIT_COSTS has an entry (DB miss but static hit)", async () => {
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      // "flux" has a STATIC_CREDIT_COSTS entry of 2 — should NOT throw
+      const cost = await CreditsService.getModelCreditCost("flux")
+      expect(cost).toBe(2)
+    })
+
+    it("does NOT throw when model_pricing has a row (DB hit)", async () => {
+      mockTable("model_pricing", { credit_cost: 42, is_enabled: true, tier_restriction: null })
+      const cost = await CreditsService.getModelCreditCost("unknown-but-in-db")
+      expect(cost).toBe(42)
+    })
+
+    it("propagates from reserveCredits when identifier is unknown (commit/refund path unreachable)", async () => {
+      // The reservation path also calls getModelCreditCostFromDB and must
+      // surface the error to the caller — credit-guard-impl catches it and
+      // deletes the orphan job row.
+      mockTable("model_pricing", null, { code: "PGRST116" })
+      await expect(
+        CreditsService.reserveCredits("user-1", "job-1", "totally-unknown-zzz", 0, 0),
+      ).rejects.toThrowError(PriceNotConfiguredError)
     })
   })
 })

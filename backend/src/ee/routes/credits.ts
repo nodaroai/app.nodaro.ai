@@ -3,6 +3,7 @@ import { z } from "zod"
 import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
+import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
 
 const modelCostsBody = z.object({
   models: z.array(z.string().min(1)).min(1).max(50),
@@ -128,6 +129,7 @@ export async function creditsRoutes(app: FastifyInstance) {
         },
       }
     } catch (error) {
+      if (handlePriceNotConfigured(error, reply, "GET /v1/credits/check")) return
       console.error("[credits] Failed to check credits:", error)
       return reply.status(500).send({
         error: { code: "internal_error", message: "Failed to check credits" },
@@ -155,6 +157,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       reply.header("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
       return reply.send({ data: { model, creditCost } })
     } catch (error) {
+      if (handlePriceNotConfigured(error, reply, "GET /v1/credits/model-cost")) return
       console.error("[credits] Failed to get model cost:", error)
       return reply.status(500).send({
         error: { code: "internal_error", message: "Failed to get model cost" },
@@ -184,6 +187,7 @@ export async function creditsRoutes(app: FastifyInstance) {
       )
       return { data: costs }
     } catch (error) {
+      if (handlePriceNotConfigured(error, reply, "POST /v1/credits/model-costs")) return
       console.error("[credits] Failed to get model costs:", error)
       return reply.status(500).send({
         error: { code: "internal_error", message: "Failed to get model costs" },

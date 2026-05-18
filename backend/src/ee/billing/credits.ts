@@ -75,6 +75,21 @@ export interface StorageProfile {
 }
 
 // ============================================================
+// Errors
+// ============================================================
+
+// See backend/CLAUDE.md "Hard-Fail Policy for Missing Prices" for the policy
+// rationale. Translated to HTTP 503 `price_not_configured` by credit-guard-impl.
+export class PriceNotConfiguredError extends Error {
+  readonly modelIdentifier: string
+  constructor(modelIdentifier: string) {
+    super(`Pricing is not configured for "${modelIdentifier}".`)
+    this.name = "PriceNotConfiguredError"
+    this.modelIdentifier = modelIdentifier
+  }
+}
+
+// ============================================================
 // Fallback Static Credit Costs (used when model_pricing table doesn't exist)
 // ============================================================
 
@@ -209,6 +224,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  // 1080p no video ref (61.5 KIE cr/s — extrapolated 1.5× of 720p rate;
+  // KIE pricing page isn't fetchable from the dev env, and the 1.5×
+  // 720p→1080p factor matches the established convention used by
+  // Kling 2.6 (6→9 cr/s) and Kling 3.0 (12→20 cr/s) families.)
+  "seedance-2:4s:1080p": 62,     // 246 KIE cr, $1.23
+  "seedance-2:8s:1080p": 123,    // 492 KIE cr, $2.46
+  "seedance-2:12s:1080p": 185,   // 738 KIE cr, $3.69
+  "seedance-2:15s:1080p": 231,   // 922.5 KIE cr, $4.6125
+  // 1080p with video ref (37.5 KIE cr/s — 1.5× of 720p ref rate)
+  "seedance-2:4s:1080p-ref": 38, // 150 KIE cr, $0.75
+  "seedance-2:8s:1080p-ref": 75, // 300 KIE cr, $1.50
+  "seedance-2:12s:1080p-ref": 113, // 450 KIE cr, $2.25
+  "seedance-2:15s:1080p-ref": 141, // 562.5 KIE cr, $2.8125
   // ── Seedance 2.0 Fast — same matrix, lower rates ──
   "seedance-2-fast": 31,
   ***REDACTED-OSS-SCRUB***
@@ -231,6 +259,16 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
+  // 1080p no video ref (49.5 KIE cr/s — 1.5× of 720p rate)
+  "seedance-2-fast:4s:1080p": 50,      // 198 KIE cr, $0.99
+  "seedance-2-fast:8s:1080p": 99,      // 396 KIE cr, $1.98
+  "seedance-2-fast:12s:1080p": 149,    // 594 KIE cr, $2.97
+  "seedance-2-fast:15s:1080p": 186,    // 742.5 KIE cr, $3.7125
+  // 1080p with video ref (30 KIE cr/s — 1.5× of 720p ref rate)
+  "seedance-2-fast:4s:1080p-ref": 30,  // 120 KIE cr, $0.60
+  "seedance-2-fast:8s:1080p-ref": 60,  // 240 KIE cr, $1.20
+  "seedance-2-fast:12s:1080p-ref": 90, // 360 KIE cr, $1.80
+  "seedance-2-fast:15s:1080p-ref": 113, // 450 KIE cr, $2.25
   "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   ***REDACTED-OSS-SCRUB***
@@ -640,10 +678,17 @@ export function invalidateModelPricingCache(): void {
 
 /**
  * Returns the PRE-MARKUP base cost for a model (cached 60s).
+ *
  * Use this when the caller will apply markup separately (e.g. routes
  * composing dbCost + addon via the creditGuard computeCredits hook).
  * For most callers, prefer getModelCreditCostFromDB which returns
  * post-markup values matching what the user is charged.
+ *
+ * **Throws `PriceNotConfiguredError`** if the identifier has no row in the
+ * `model_pricing` table AND no entry in `STATIC_CREDIT_COSTS`. Per the
+ * 2026-05 hard-fail policy, pricing misconfig must fail loudly — we no
+ * longer silently default to 1 credit (which leaked revenue on missing
+ * entries like `seedance-2:8s:1080p-ref`).
  */
 export async function getModelCreditBaseCost(modelIdentifier: string): Promise<ModelPricing> {
   const cached = modelPricingCache.get(modelIdentifier)
@@ -659,9 +704,14 @@ export async function getModelCreditBaseCost(modelIdentifier: string): Promise<M
   if (error || !data) {
     const staticCost = STATIC_CREDIT_COSTS[modelIdentifier]
     if (staticCost === undefined) {
-      console.warn(`[credits] Unknown model identifier "${modelIdentifier}" — no DB or static cost, defaulting to 1`)
+      console.error(
+        `[credits] PriceNotConfiguredError: unknown model identifier "${modelIdentifier}" — ` +
+          `no row in model_pricing AND no STATIC_CREDIT_COSTS entry. ` +
+          `This is a misconfiguration — see CLAUDE.md "Provider Enum Sync" steps 7 + 9.`,
+      )
+      throw new PriceNotConfiguredError(modelIdentifier)
     }
-    base = { creditCost: staticCost ?? 1, isEnabled: true, tierRestriction: null }
+    base = { creditCost: staticCost, isEnabled: true, tierRestriction: null }
   } else {
     base = { creditCost: data.credit_cost, isEnabled: data.is_enabled, tierRestriction: data.tier_restriction }
   }

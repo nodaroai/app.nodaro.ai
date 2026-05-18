@@ -36,11 +36,13 @@ The Text to Video node creates video from a text prompt without requiring a sour
 
 ## Supported Providers
 
-minimax, veo3, kling, kling-turbo, kling-3.0, grok, sora2, sora2-pro, seedance, wan, wan-turbo, hailuo-standard, bytedance-lite, bytedance-pro, wan-2.7-t2v, happyhorse.
+minimax, veo3, kling, kling-turbo, kling-3.0, grok, sora2, sora2-pro, seedance, seedance-2, seedance-2-fast, wan, wan-turbo, hailuo-standard, bytedance-lite, bytedance-pro, wan-2.7-t2v, happyhorse.
 
 Provider notes:
 - **Wan 2.7** (`wan-2.7-t2v`) — 2–15s, 720p or 1080p
 - **HappyHorse** (`happyhorse`) — 3–15s, 720p or 1080p
+- **Seedance 2** (`seedance-2`) — ByteDance premium, 4–15s, 480p / 720p / 1080p. Per-second pricing scales with resolution. 8s @ 720p ≈ 82 cr; 1080p ≈ 123 cr (no reference). With multimodal references (image/video/audio): 720p ≈ 50 cr, 1080p ≈ 75 cr.
+- **Seedance 2 Fast** (`seedance-2-fast`) — cheaper / quicker tier. 8s @ 720p ≈ 66 cr; 1080p ≈ 99 cr (no ref). With references: 720p ≈ 40 cr, 1080p ≈ 60 cr.
 
 ## Best Practices
 

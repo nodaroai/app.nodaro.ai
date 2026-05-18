@@ -128,9 +128,11 @@ export function buildVideoCreditModelIdentifier(
     identifier += ":high"
   }
 
-  // Seedance 2.0 family: per-second billing with resolution + video-ref dimensions
+  // Seedance 2.0 family: per-second billing with resolution + video-ref dimensions.
+  // KIE accepts 480p / 720p / 1080p natively; per-second rates rise non-linearly
+  // so each tier gets its own composite identifier.
   if (RESOLUTION_VIDEO_REF_PRICING.has(effectiveProvider)) {
-    const res = resolution === "720p" ? "720p" : "480p"
+    const res = resolution === "1080p" ? "1080p" : resolution === "720p" ? "720p" : "480p"
     identifier += `:${res}`
     if (hasVideoRef) identifier += "-ref"
   }
