@@ -7,6 +7,7 @@ import {
   sendStorageWarnings,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
+import { reconcileOrphanedTrainings } from "../../lib/character-lora-reconciliation.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -116,5 +117,23 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (6 schedules)")
+  // Character LoRA training reconciliation — every 10 minutes. Sweeps
+  // characters stuck in queued/training >30 min, polls Replicate, and
+  // applies the terminal-state updates the webhook would have. Catches
+  // webhook delivery failures, backend downtime, etc.
+  cron.schedule("*/10 * * * *", async () => {
+    const start = Date.now()
+    try {
+      const result = await reconcileOrphanedTrainings()
+      if (result.scanned > 0) {
+        console.log(
+          `[cron] LoRA reconciliation: scanned=${result.scanned} reconciled=${result.reconciled} stillInFlight=${result.stillInFlight} fetchFailures=${result.fetchFailures} (${Date.now() - start}ms)`,
+        )
+      }
+    } catch (err) {
+      console.error("[cron] LoRA reconciliation failed:", err)
+    }
+  })
+
+  console.log("[cron] Billing cleanup cron jobs started (7 schedules)")
 }
