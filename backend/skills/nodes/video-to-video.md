@@ -1,7 +1,7 @@
 ---
 node_type: video-to-video
-generated_at: 2026-05-18T13:23:37.351Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.602Z
+generated_from: af4193bd
 ---
 
 # Video to Video
@@ -41,6 +41,7 @@ generated_from: cb1e786d
 - `connectedImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `extraRefs?: readonly ExtraRef[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`

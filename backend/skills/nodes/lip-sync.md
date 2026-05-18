@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-05-18T13:23:37.665Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.934Z
+generated_from: af4193bd
 ---
 
 # Lip Sync
@@ -45,6 +45,7 @@ generated_from: cb1e786d
 - `expressionScale?: number`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
 

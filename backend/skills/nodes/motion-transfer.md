@@ -1,7 +1,7 @@
 ---
 node_type: motion-transfer
-generated_at: 2026-05-18T13:23:37.676Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.946Z
+generated_from: af4193bd
 ---
 
 # Motion Transfer
@@ -33,6 +33,7 @@ generated_from: cb1e786d
 - `currentJobProgress?: number`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `videoPlayState?: "loop" | "paused" | "stopped"`
 - `pausedAtTime?: number`
 

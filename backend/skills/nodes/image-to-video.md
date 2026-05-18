@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-05-18T13:23:37.346Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:51:28.596Z
+generated_from: af4193bd
 ---
 
 # image-to-video
@@ -58,6 +58,7 @@ generated_from: cb1e786d
 - `connectedRefImageOrder?: readonly string[]`
 - `referenceOrder?: readonly string[]`
 - `suppressedCanonicalCharacterIds?: readonly string[]`
+- `suppressedCanonicalLocationIds?: readonly string[]`
 - `veoMode?: "frame-to-frame" | "reference"`
 - `seedance2InputMode?: "frames" | "references"`
 - `extraRefs?: readonly ExtraRef[]`
