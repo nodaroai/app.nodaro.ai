@@ -1,7 +1,7 @@
 ---
 node_type: suno-generate
-generated_at: 2026-05-18T13:23:37.389Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:01:15.992Z
+generated_from: 866224d8
 ---
 
 # Suno Generate
@@ -31,6 +31,8 @@ generated_from: cb1e786d
 - `audioWeight?: number`
 - `customMode?: boolean`
 - `instrumental?: boolean`
+- `personaId?: string`
+- `personaModel?: SunoPersonaModel`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

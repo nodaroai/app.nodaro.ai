@@ -1,7 +1,7 @@
 ---
 node_type: suno-cover
-generated_at: 2026-05-18T13:23:37.394Z
-generated_from: cb1e786d
+generated_at: 2026-05-18T20:01:15.997Z
+generated_from: 866224d8
 ---
 
 # Suno Cover
@@ -29,6 +29,8 @@ generated_from: cb1e786d
 - `vocalGender?: "male" | "female"`
 - `customMode?: boolean`
 - `instrumental?: boolean`
+- `personaId?: string`
+- `personaModel?: SunoPersonaModel`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

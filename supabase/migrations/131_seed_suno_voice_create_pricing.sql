@@ -12,7 +12,7 @@ VALUES
   (
     'suno-voice-create',
     20,
-    'One-time per-persona charge for /api/v1/voice/validate + /api/v1/voice/generate (KIE custom Suno voice). Charged on POST /v1/suno/voice/generate; committed when /record-info returns status="success" and refunded on status="fail". KIE does not publish pricing for this flow — value is a conservative default to be tuned post-launch.'
+    'One-time per-persona charge for /api/v1/voice/validate + /api/v1/voice/generate (KIE custom Suno voice). Charged on POST /v1/suno/voice/generate, committed when /record-info returns status="success" and refunded on status="fail". KIE does not publish pricing for this flow — value is a conservative default to be tuned post-launch.'
   )
 ON CONFLICT (model_identifier) DO NOTHING;
 
