@@ -19,9 +19,11 @@ import {
 
 /**
  * Compute composite model identifier for variable credit pricing.
- * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "ideogram:TURBO"
+ * Examples: "gpt-image:high", "flux:2K", "nano-banana-pro:4K", "ideogram:TURBO",
+ *           "flux-2-max:3ref" (Flux 2 Max — billed per reference image).
  *
- * For image models, uses quality/resolution/renderingSpeed.
+ * For image models, uses quality/resolution/renderingSpeed and (Flux 2 Max only)
+ * the number of reference images attached at request time.
  * For video models, uses duration/sound params when the model has variable pricing.
  */
 export function buildCreditModelIdentifier(
@@ -30,6 +32,7 @@ export function buildCreditModelIdentifier(
   resolution?: string,
   renderingSpeed?: string,
   targetResolution?: string,
+  referenceImageCount?: number,
 ): string {
   if (HIGH_QUALITY_PROVIDERS.has(provider) && quality === "high") {
     return `${provider}:high`
@@ -50,6 +53,13 @@ export function buildCreditModelIdentifier(
   if (IDEOGRAM_PROVIDERS.has(provider)) {
     if (renderingSpeed === "TURBO") return `${provider}:TURBO`
     if (renderingSpeed === "QUALITY") return `${provider}:QUALITY`
+  }
+  // Flux 2 Max: BFL bills $0.04 base + $0.03 per reference image up to 8.
+  // We encode the ref count in the identifier so the standard model_pricing
+  // lookup returns the right credit total — see migration 129 for the rows.
+  if (provider === "flux-2-max" && referenceImageCount && referenceImageCount > 0) {
+    const n = Math.min(referenceImageCount, 8)
+    return `${provider}:${n}ref`
   }
   return provider
 }

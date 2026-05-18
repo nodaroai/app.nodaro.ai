@@ -157,6 +157,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "wan-2.7":     "Wan 2.7 T2I — 1K/2K/4K, up to 9 ref images",
     "wan-2.7-pro": "Wan 2.7 Pro T2I — higher quality, 1K/2K/4K",
     "flux-2-klein": "Open Flux 2 9B via Replicate — fast, no safety filter",
+    "flux-2-pro": "BFL Flux 2 Pro via Replicate — flagship quality, safety_tolerance=5 (max for Pro)",
+    "flux-2-max": "BFL Flux 2 Max via Replicate — even larger than Pro, safety_tolerance=5, up to 8 refs (variable pricing)",
   },
   "image-to-image": {
     "nano-banana": "Fast style transfer and transformation",
@@ -176,6 +178,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
     "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs, no safety filter",
+    "flux-2-pro": "BFL Flux 2 Pro via Replicate — flagship quality with reference images, safety_tolerance=5",
+    "flux-2-max": "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs, safety_tolerance=5 (variable pricing)",
   },
   "modify-image": {
     "nano-banana": "Fast style transfer and transformation",
@@ -196,6 +200,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "flux-kontext": "Character-consistent edits with reference awareness",
     "flux-kontext-max": "Premium character-consistent editing",
     "kontext-multi": "Multi-image Kontext via Replicate — up to 4 refs, no safety filter",
+    "flux-2-pro": "BFL Flux 2 Pro via Replicate — flagship quality with reference images, safety_tolerance=5",
+    "flux-2-max": "BFL Flux 2 Max via Replicate — even larger sibling, up to 8 refs, safety_tolerance=5 (variable pricing)",
   },
   "generate-mask": {
     "grounded-sam": "Text-prompted segmentation — isolates the subject you describe in words (Grounding DINO + Segment Anything)",

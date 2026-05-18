@@ -86,6 +86,13 @@ export const EXECUTION_DATA_KEYS = new Set([
   "routeOutputs",
   "_upstreamRefresh",
   "zoom",
+  // Character LoRA training status fields — written every 8s while training
+  // by the polling tick in character-page-modal + on-mount backfill in
+  // character-node. Treating them as execution-only keeps the undo system
+  // and isDirty flag from firing on every poll.
+  "loraReplicateVersion",
+  "loraTriggerWord",
+  "loraTrainingStatus",
 ])
 
 /** Detect loop column type from upstream node's output handle. */

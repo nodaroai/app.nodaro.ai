@@ -674,6 +674,16 @@ export interface BuildImagePromptConfig {
    * via the × button. Mention URLs for the same character still attach.
    */
   suppressedCanonicalCharacterIds?: readonly string[]
+  /**
+   * When true, skip the entire mention-resolution block (character identity
+   * directives, `Image N (Kira)` bullets, additional ref URLs from
+   * `connectedReferences`) AND strip raw `@slug[:V[:variant]]` tokens from
+   * the prompt. Used by the LoRA inference path
+   * (`flux-lora-character`) — the trigger word + LoRA carries identity, so
+   * the directive bullets are redundant and the wired-character refs
+   * shouldn't be injected as `Image N`.
+   */
+  skipCharacterMentions?: boolean
 }
 
 export interface BuildImagePromptResult {
@@ -708,6 +718,23 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   const suppressedCanonicalCharacterIds = new Set(
     config.suppressedCanonicalCharacterIds ?? [],
   )
+
+  // Character LoRA inference path: trigger word + LoRA model carry identity,
+  // so we strip raw `@slug[:V[:variant]]` tokens from the prompt AND drop the
+  // connected-reference machinery entirely (no Image N bullets, no
+  // ref URLs). The LoRA model gets a clean prompt + the trigger word
+  // injected by the Replicate buildInput (see providers/replicate/image.ts).
+  if (config.skipCharacterMentions) {
+    config = {
+      ...config,
+      prompt: config.prompt.replace(
+        /@[a-z0-9_-]+(?::\d+(?::[a-z0-9_-]+)?)?\s?/gi,
+        "",
+      ).trim(),
+    }
+    connectedReferences = undefined
+    referenceImageUrls = []
+  }
 
   // Apply canonical suppression UP FRONT so `buildCanonicalFallback` never
   // sees the suppressed slugs. This is the only way to drop both the URL

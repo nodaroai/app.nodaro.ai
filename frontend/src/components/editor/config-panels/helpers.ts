@@ -295,11 +295,17 @@ export function getModelIdentifier(node: WorkflowNode): string {
  * Extracts quality/resolution/renderingSpeed from data and delegates to the shared function.
  */
 export function buildCreditModelIdentifier(provider: string, data: Record<string, unknown>): string {
+  // flux-2-max bills per reference image — the UI cost preview pulls the
+  // ref count from `data.referenceImageUrls` (panel-local mirror of the wired
+  // refs) so the displayed credit number matches what the route will charge.
+  const refs = data.referenceImageUrls as string[] | undefined
+  const refCount = refs?.length ?? 0
   return sharedBuildCreditModelIdentifier(
     provider,
     data.quality as string | undefined,
     data.resolution as string | undefined,
     data.renderingSpeed as string | undefined,
     data.targetResolution as string | undefined,
+    refCount,
   )
 }

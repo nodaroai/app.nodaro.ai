@@ -2894,6 +2894,14 @@ export type CharacterNodeData = {
   // canonical description + an identity-preserve suffix to the prompt.
   // Defaults to false (must explicitly opt in per Character node).
   readonly injectIdentityInPrompts?: boolean
+  // ── Character LoRA training (Cloud edition only) ───────────────────────────
+  // Read from the DB by character-node.tsx (on-mount backfill) and the modal
+  // (post-status-poll). The orchestrator's expandWiredCharacterRefs reads
+  // these off CharacterNodeData and stamps them on each ConnectedReference;
+  // selectLoraRoutingForMentions then decides whether the LoRA path applies.
+  readonly loraReplicateVersion?: string | null
+  readonly loraTriggerWord?: string | null
+  readonly loraTrainingStatus?: "queued" | "training" | "succeeded" | "failed" | "cancelled" | null
   // Per-CANVAS-NODE default asset selected from the Character Studio's grid
   // (expression / pose / angle / lighting / motion). Drives the canvas
   // thumbnail when set (falls back to `sourceImageUrl`). NOT a property of
@@ -4434,6 +4442,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "seedream-5-lite", label: "Seedream 5 Lite" },
           { value: "z-image", label: "Z-Image" },
           { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
+          { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },
+          { value: "flux-2-max", label: "Flux 2 Max (Safety Tolerance)" },
         ],
       },
       {

@@ -192,3 +192,31 @@ describe("hard-fail policy: every runtime-emitted credit identifier is in STATIC
     ).toBe(0)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Directly-emitted credit identifiers
+//
+// Some identifiers don't come out of any composite builder — they're written
+// directly by route/handler/webhook code (e.g. `character-lora-training` is
+// only ever emitted by `routes/character-training.ts`'s creditGuard resolver;
+// `flux-lora-character` is only ever set by `payload-builder.ts`'s LoRA swap).
+//
+// The walker above doesn't enumerate these, so this describe block is the
+// regression net: if anyone removes either row from STATIC_CREDIT_COSTS, the
+// runtime will 503 with `price_not_configured` and this test will catch it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("directly-emitted credit identifiers (not via buildCreditModelIdentifier)", () => {
+  const DIRECTLY_EMITTED_IDS = [
+    "flux-lora-character",
+    "character-lora-training",
+  ] as const
+
+  it.each(DIRECTLY_EMITTED_IDS)(
+    "%s is present in STATIC_CREDIT_COSTS",
+    (id) => {
+      expect(STATIC_CREDIT_COSTS[id]).toBeDefined()
+      expect(STATIC_CREDIT_COSTS[id]).toBeGreaterThan(0)
+    },
+  )
+})

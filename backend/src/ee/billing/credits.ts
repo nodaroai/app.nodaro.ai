@@ -129,6 +129,21 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Replicate "Open" (uncensored) — run direct via Replicate, not KIE ──
   "flux-2-klein": 2,             // ~$0.025, BFL Flux 2 9B Klein via Replicate
   "kontext-multi": 4,            // ~$0.05, multi-image-kontext-pro via Replicate
+  "flux-2-pro": 4,               // ~$0.06, BFL Flux 2 Pro via Replicate, safety_tolerance=5 (max for Pro)
+  // BFL Flux 2 Max via Replicate — $0.04 base + $0.03/ref. safety_tolerance=5.
+  // Composite identifiers `:Nref` (N=1..8) cover ref-aware pricing. The bare
+  // identifier (no suffix) is the 0-ref / pure-t2i case.
+  "flux-2-max": 3,               // $0.04 × 1.25 / $0.02 ≈ 2.5 → ceil = 3 cr
+  "flux-2-max:1ref": 5,          // $0.04 + 1×$0.03 = $0.07 → ceil(4.375) = 5 cr
+  "flux-2-max:2ref": 7,          // $0.10 → 7
+  "flux-2-max:3ref": 9,          // $0.13 → 9
+  "flux-2-max:4ref": 10,         // $0.16 → 10
+  "flux-2-max:5ref": 12,         // $0.19 → 12
+  "flux-2-max:6ref": 14,         // $0.22 → 14
+  "flux-2-max:7ref": 16,         // $0.25 → 16
+  "flux-2-max:8ref": 18,         // $0.28 → 18
+  "flux-lora-character": 3,      // ~$0.04, flux-dev-lora inference via Replicate. Internal-only id selected by payload-builder when a single trained @character is mentioned.
+  ***REDACTED-OSS-SCRUB***
   // ── Image Editing ──
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***

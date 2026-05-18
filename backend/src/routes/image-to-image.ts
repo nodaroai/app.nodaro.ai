@@ -76,7 +76,13 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
+    // flux-2-max bills per reference image. In image-to-image the primary
+    // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
+    // refCount = 1 + extras (worker concatenates them into `allImages` before
+    // dispatching to the provider).
+    const extraRefs = (body?.referenceImageUrls as string[] | undefined)?.length ?? 0
+    const refCount = 1 + extraRefs
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed, undefined, refCount)
   }) }, async (req, reply) => {
     const parsed = imageToImageBody.safeParse(req.body)
     if (!parsed.success) {

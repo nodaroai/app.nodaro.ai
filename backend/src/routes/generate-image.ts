@@ -7,7 +7,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -44,7 +44,24 @@ export const generateImageBody = z.object({
   userPrompt: z.string().max(8000).optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(14).optional(),
   characterDescriptions: z.array(z.string().max(500)).max(10).optional(),
-  provider: z.enum(IMAGE_GEN_PROVIDERS).optional(),
+  // `flux-lora-character` is an internal-only provider id selected when a
+  // single trained @character is mentioned. It does NOT appear in
+  // `IMAGE_GEN_PROVIDERS` (which drives user-facing dropdowns) — instead we
+  // accept it via a union and require the paired `_internalLora` hint below.
+  provider: z.union([
+    z.enum(IMAGE_GEN_PROVIDERS),
+    z.literal(FLUX_LORA_CHARACTER_MODEL_ID),
+  ]).optional(),
+  /**
+   * Internal-only hint set by the frontend's single-node Run path (see
+   * `execute-node.ts`) when the user runs a generate-image node that
+   * references a trained character. NEVER set by SDK/public clients.
+   * Required when `provider === FLUX_LORA_CHARACTER_MODEL_ID`.
+   */
+  _internalLora: z.object({
+    version: z.string().min(1),
+    trigger: z.string().min(1),
+  }).optional(),
   // "auto" is gpt-image-2 specific (KIE constrains it to 1K) — keeping the
   // enum permissive here and letting the per-provider config / fail-safe in
   // model-options.ts gate it on the correct providers.
@@ -76,6 +93,13 @@ const IDENTITY_PRESERVE_SUFFIX =
 export async function generateImageRoutes(app: FastifyInstance) {
   app.post("/v1/generate-image", { preHandler: creditGuard((req) => {
     const body = req.body as Record<string, unknown>
+    // Character LoRA single-node Run hint — runs BEFORE Zod, so credits
+    // reserve as flux-lora-character (3cr) instead of the default nano-banana
+    // (2cr). Without this short-circuit, the preHandler would silently
+    // under-bill by 1cr per LoRA inference.
+    if (body && typeof body === "object" && "_internalLora" in body) {
+      return FLUX_LORA_CHARACTER_MODEL_ID
+    }
     const rawProvider = (body?.provider as string) ?? "nano-banana"
     const prompt = (body?.prompt as string) ?? ""
     const refs = body?.referenceImageUrls as string[] | undefined
@@ -85,7 +109,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
     const quality = body?.quality as string | undefined
     const resolution = body?.resolution as string | undefined
     const renderingSpeed = body?.renderingSpeed as string | undefined
-    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed)
+    // flux-2-max bills per reference image — pass the count so the identifier
+    // becomes `flux-2-max:Nref` and the right model_pricing row is hit.
+    const refCount = refs?.length ?? 0
+    return buildCreditModelIdentifier(provider, quality, resolution, renderingSpeed, undefined, refCount)
   }) }, async (req, reply) => {
     const parsed = generateImageBody.safeParse(req.body)
     if (!parsed.success) {
@@ -95,11 +122,24 @@ export async function generateImageRoutes(app: FastifyInstance) {
     }
 
     const { prompt: rawPrompt, referenceImageUrls, characterDescriptions, provider, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt } = parsed.data
+    const internalLora = parsed.data._internalLora
     const userId = req.userId
 
     if (!userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    // Internal-only provider gate: flux-lora-character requires the paired
+    // _internalLora hint. If a client somehow submits the provider literal
+    // without the hint, reject — this is internal-orchestrator-only.
+    if (provider === FLUX_LORA_CHARACTER_MODEL_ID && !internalLora) {
+      return reply.status(400).send({
+        error: {
+          code: "internal_only_provider",
+          message: "flux-lora-character requires _internalLora hint",
+        },
       })
     }
 
@@ -138,14 +178,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
       }
     }
 
-    // Auto-route T2I providers to their i2i sibling when the user actually
-    // addresses reference images in the prompt. Without this, T2I models
-    // silently ignore attached refs because their KIE endpoints don't accept
-    // input image params.
-    const effectiveProvider = resolveEffectiveProvider(provider, prompt, referenceImageUrls)
+    // LoRA inference path bypasses provider auto-routing — the synthetic
+    // flux-lora-character provider always lands on Replicate with the trained
+    // version. Otherwise, auto-route T2I providers to their i2i sibling when
+    // the user actually addresses reference images in the prompt.
+    const effectiveProvider = internalLora
+      ? FLUX_LORA_CHARACTER_MODEL_ID
+      : resolveEffectiveProvider(provider, prompt, referenceImageUrls)
 
-    // Determine model identifier for credit reservation (composite for variable pricing)
-    const modelIdentifier = buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
+    // Determine model identifier for credit reservation (composite for variable pricing).
+    const modelIdentifier = internalLora
+      ? FLUX_LORA_CHARACTER_MODEL_ID
+      : buildCreditModelIdentifier(effectiveProvider ?? "nano-banana", quality, resolution, renderingSpeed)
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await supabase
@@ -175,8 +219,11 @@ export async function generateImageRoutes(app: FastifyInstance) {
     await videoQueue.add("generate-image", {
       jobId: job.id,
       prompt,
-      referenceImageUrls,
+      // LoRA path: trained model + trigger word carry identity — emit zero refs.
+      referenceImageUrls: internalLora ? [] : referenceImageUrls,
       provider: effectiveProvider,
+      // Hand the synthetic flux-lora-character model id to the Replicate provider.
+      model: internalLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
       aspectRatio,
       resolution,
       quality,
@@ -185,6 +232,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
       renderingSpeed,
       styleType,
       expandPrompt,
+      // Pass lora_version + lora_trigger through to ReplicateImageProvider.buildInput.
+      extraParams: internalLora
+        ? { lora_version: internalLora.version, lora_trigger: internalLora.trigger }
+        : undefined,
       usageLogId,
     })
 

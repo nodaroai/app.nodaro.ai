@@ -108,6 +108,20 @@ const ALLOWED_PATHS = [
   // + canonical_description atomically with the candidate read.
   /^src\/routes\/character-portrait-approval\.ts$/,
 
+  // Character LoRA training: every supabase call scopes by req.userId
+  // in-handler (.eq("id", id).eq("user_id", req.userId) on characters + jobs;
+  // audited 2026-05-18 + tenant-scope lint enforces). Service-role required
+  // for the atomic CAS slot claim — UPDATE-with-RETURNING under RLS would
+  // require either a SECURITY DEFINER RPC (heavier) or accept the race.
+  /^src\/routes\/character-training\.ts$/,
+
+  // Replicate training webhook: public route (no user JWT context). Signature-
+  // verified via Standard Webhooks `validateWebhook` (Replicate SDK).
+  // Service-role required because the webhook looks up rows by
+  // `lora_training_replicate_id` (globally unique) then writes scoped by
+  // `character.user_id`.
+  /^src\/routes\/replicate-training-webhook\.ts$/,
+
   // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
   // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
   // child tables; cross-user rows return 404 to avoid existence leak — audited

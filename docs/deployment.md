@@ -63,6 +63,11 @@ REPLICATE_API_TOKEN=
 ANTHROPIC_API_KEY=
 ELEVENLABS_API_KEY=
 
+# Required in Cloud edition for character LoRA training callbacks.
+# Get from `replicate.webhooks.default.secret` or the Replicate dashboard.
+# When unset, the webhook fast-fails 503 webhook_not_configured.
+REPLICATE_WEBHOOK_SECRET=
+
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=

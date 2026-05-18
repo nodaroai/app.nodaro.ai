@@ -3,6 +3,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { WorkflowExport } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
 export const API_BASE_URL = ''
@@ -186,6 +187,13 @@ export async function generateImage(
     /** Character row id (uuid). Looked up by the backend scoped to the caller. */
     attachToCharacterId?: string
   },
+  /**
+   * Internal-only hint for single-node Run of a generate-image node whose
+   * single wired character has a successful LoRA. The backend swaps to
+   * `flux-lora-character` (3cr) when this is set; the public SDK never sets
+   * it. Pair with `provider = "flux-lora-character"`.
+   */
+  internalLora?: { readonly version: string; readonly trigger: string },
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -229,6 +237,10 @@ export async function generateImage(
   }
   if (identity?.attachToCharacterId) {
     body.attachToCharacterId = identity.attachToCharacterId
+  }
+  if (internalLora) {
+    body._internalLora = internalLora
+    body.provider = FLUX_LORA_CHARACTER_MODEL_ID
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
@@ -732,6 +744,82 @@ export async function llmCaptionPortrait(
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to caption portrait")
+  }
+  return res.json()
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Character LoRA training (Cloud edition only)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TrainingStatus {
+  readonly status: "untrained" | "queued" | "training" | "succeeded" | "failed" | "cancelled"
+  readonly trainingId: string | null
+  readonly error: string | null
+  readonly trainedAt: string | null
+  readonly version: string | null
+  readonly triggerWord: string | null
+  readonly imageCount: number | null
+}
+
+/**
+ * Submit a training. Reserves 150cr; webhook refunds on failure/cancel.
+ * Returns 202 with `{ jobId, trainingId, triggerWord }` on success.
+ * 409 `already_training_or_not_found` if a training is already in flight.
+ * 400 `insufficient_training_images` if < 4 photos.
+ */
+export async function startCharacterTraining(
+  characterId: string,
+): Promise<{ readonly jobId: string; readonly trainingId: string; readonly triggerWord: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/train`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+      body: JSON.stringify({}),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start character training")
+  }
+  return res.json()
+}
+
+export async function getCharacterTraining(
+  characterId: string,
+): Promise<TrainingStatus> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/training`,
+    {
+      method: "GET",
+      headers: await getAuthHeaders(),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch training status")
+  }
+  return res.json()
+}
+
+/**
+ * Tear down the trained LoRA: cancels in-flight training, refunds reserved
+ * credits, deletes the Replicate model, nulls out the LoRA columns.
+ */
+export async function deleteCharacterLora(
+  characterId: string,
+): Promise<{ readonly ok: true }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}/lora`,
+    {
+      method: "DELETE",
+      headers: await getAuthHeaders(),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to remove trained model")
   }
   return res.json()
 }
