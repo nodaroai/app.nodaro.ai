@@ -2329,6 +2329,8 @@ export async function sunoGenerateApi(params: {
   audioWeight?: number
   customMode?: boolean
   instrumental?: boolean
+  personaId?: string
+  personaModel?: "voice_persona" | "style_persona"
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt: params.prompt }
@@ -2343,6 +2345,10 @@ export async function sunoGenerateApi(params: {
   if (params.audioWeight != null) body.audioWeight = params.audioWeight
   body.customMode = params.customMode ?? false
   body.instrumental = params.instrumental ?? false
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/generate`, {
     method: "POST",
@@ -2367,6 +2373,8 @@ export async function sunoCoverApi(params: {
   vocalGender?: string
   customMode?: boolean
   instrumental?: boolean
+  personaId?: string
+  personaModel?: "voice_persona" | "style_persona"
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt: params.prompt, uploadUrl: params.uploadUrl }
@@ -2378,6 +2386,10 @@ export async function sunoCoverApi(params: {
   if (params.vocalGender) body.vocalGender = params.vocalGender
   body.customMode = params.customMode ?? false
   body.instrumental = params.instrumental ?? false
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/cover`, {
     method: "POST",
@@ -2404,6 +2416,8 @@ export async function sunoExtendApi(params: {
   styleWeight?: number
   weirdnessConstraint?: number
   audioWeight?: number
+  personaId?: string
+  personaModel?: "voice_persona" | "style_persona"
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = {
@@ -2420,6 +2434,10 @@ export async function sunoExtendApi(params: {
   if (params.styleWeight != null) body.styleWeight = params.styleWeight
   if (params.weirdnessConstraint != null) body.weirdnessConstraint = params.weirdnessConstraint
   if (params.audioWeight != null) body.audioWeight = params.audioWeight
+  if (params.personaId) {
+    body.personaId = params.personaId
+    body.personaModel = params.personaModel ?? "voice_persona"
+  }
   if (params.userId) body.userId = params.userId
   const res = await fetch(`${API_BASE_URL}/v1/suno/extend`, {
     method: "POST",
@@ -2657,6 +2675,111 @@ export async function sunoUploadExtendApi(params: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start Suno upload extend")
+  }
+  return res.json()
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Suno Voice Persona — 2-stage human-in-the-loop API
+// ───────────────────────────────────────────────────────────────────────────
+
+export type SunoVoiceValidateStatus =
+  | "wait_processing"
+  | "processing_validate"
+  | "processing_validate_fail"
+  | "wait_validating"
+  | "success"
+  | "fail"
+
+export type SunoVoiceRecordStatus = SunoVoiceValidateStatus
+
+export interface SunoVoiceValidateInfo {
+  taskId: string
+  validateInfo: string | null
+  status: SunoVoiceValidateStatus
+  errorCode: number | null
+  errorMessage: string
+}
+
+export interface SunoVoiceRecordInfo {
+  taskId: string
+  voiceId: string | null
+  status: SunoVoiceRecordStatus
+  errorCode: number | null
+  errorMessage: string
+}
+
+export async function sunoVoiceValidateApi(params: {
+  voiceUrl: string
+  vocalStartS: number
+  vocalEndS: number
+  language?: "en"|"zh"|"es"|"fr"|"pt"|"de"|"ja"|"ko"|"hi"|"ru"
+}): Promise<{ taskId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/suno/voice/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice validation")
+  }
+  return res.json()
+}
+
+export async function sunoVoiceValidateInfoApi(taskId: string): Promise<SunoVoiceValidateInfo> {
+  const res = await fetch(`${API_BASE_URL}/v1/suno/voice/validate-info?taskId=${encodeURIComponent(taskId)}`, {
+    method: "GET",
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch validation info")
+  }
+  return res.json()
+}
+
+export async function sunoVoiceRegenerateApi(taskId: string): Promise<{ taskId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/suno/voice/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify({ taskId }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to regenerate validation phrase")
+  }
+  return res.json()
+}
+
+export async function sunoVoiceGenerateApi(params: {
+  taskId: string                       // validate taskId from stage 1
+  verifyUrl: string                    // user's reading of the validation phrase
+  voiceName?: string
+  description?: string
+  style?: string
+  singerSkillLevel?: "beginner"|"intermediate"|"advanced"|"professional"
+}): Promise<{ jobId: string; kieTaskId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/suno/voice/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start voice generation")
+  }
+  return res.json()
+}
+
+export async function sunoVoiceRecordInfoApi(taskId: string): Promise<SunoVoiceRecordInfo> {
+  const res = await fetch(`${API_BASE_URL}/v1/suno/voice/record-info?taskId=${encodeURIComponent(taskId)}`, {
+    method: "GET",
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to fetch voice record info")
   }
   return res.json()
 }

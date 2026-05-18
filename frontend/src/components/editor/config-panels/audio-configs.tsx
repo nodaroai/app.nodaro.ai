@@ -26,6 +26,7 @@ import type {
   TextToSpeechData,
   TextToAudioData,
   AudioIsolationData,
+  SunoVoiceData,
   SunoGenerateData,
   SunoCoverData,
   SunoExtendData,
@@ -266,6 +267,51 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// Voice Persona node has no traditional fields — all setup happens in the
+// node's setup modal. The config panel just summarizes what was configured
+// and links back to the modal via the node card.
+export function SunoVoiceConfig({ data }: ConfigProps<SunoVoiceData>) {
+  const ready = Boolean(data.voiceId) && data.status === "success"
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-md border bg-muted/30 p-3 text-sm">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">
+          Voice Persona
+        </div>
+        <div className="font-semibold">
+          {data.voiceName?.trim() || (ready ? "Untitled voice" : "Not configured")}
+        </div>
+        {data.style && (
+          <div className="text-[11px] text-muted-foreground mt-0.5">{data.style}</div>
+        )}
+        {data.description && (
+          <div className="text-[11px] text-muted-foreground mt-0.5">{data.description}</div>
+        )}
+        {data.voiceId && (
+          <div className="text-[10px] font-mono text-muted-foreground/80 mt-2 break-all">
+            ID: {data.voiceId}
+          </div>
+        )}
+        {!ready && (
+          <div className="text-[11px] text-muted-foreground mt-2">
+            Click <span className="font-medium">Configure Voice</span> on the
+            node to walk through the 3-step setup. Costs 20 credits.
+          </div>
+        )}
+      </div>
+      {data.errorMessage && (
+        <div className="rounded-md border border-red-500/30 bg-red-500/5 p-2 text-[11px] text-red-500">
+          {data.errorMessage}
+        </div>
+      )}
+      <div className="text-[11px] text-muted-foreground">
+        Wire this node's output into the <span className="font-medium">in</span> handle
+        of Suno Generate / Cover / Extend to apply the persona to the generated track.
+      </div>
     </div>
   )
 }

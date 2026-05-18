@@ -721,6 +721,21 @@ function simpleResult(
   }
 }
 
+/**
+ * Resolve `personaId` + `personaModel` for a Suno music node. Upstream wiring
+ * (from a `suno-voice` node) wins over manual `data` fields. Returns an empty
+ * object when no persona is set so spreading into a payload is a no-op.
+ */
+function resolvePersona(
+  resolvedInputs: { personaId?: string; personaModel?: string },
+  data: Record<string, unknown>,
+): { personaId?: string; personaModel?: string } {
+  const personaId = resolvedInputs.personaId ?? (data.personaId as string | undefined)
+  if (!personaId) return {}
+  const personaModel = resolvedInputs.personaModel ?? (data.personaModel as string | undefined)
+  return { personaId, personaModel: personaModel ?? "voice_persona" }
+}
+
 // ---------------------------------------------------------------------------
 // List-like node helpers for buildNodeRefMap edge-aware output extraction
 // ---------------------------------------------------------------------------
@@ -2348,6 +2363,7 @@ export function buildPayload(
         audioWeight: data.audioWeight,
         customMode: effectiveCustomMode,
         instrumental: data.instrumental ?? false,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }
@@ -2367,6 +2383,7 @@ export function buildPayload(
         vocalGender: data.vocalGender,
         customMode: data.customMode ?? hasCoverCustomFields,
         instrumental: data.instrumental ?? false,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }
@@ -2387,6 +2404,7 @@ export function buildPayload(
         styleWeight: data.styleWeight,
         weirdnessConstraint: data.weirdnessConstraint,
         audioWeight: data.audioWeight,
+        ...resolvePersona(resolvedInputs, data),
         usageLogId,
       })
     }

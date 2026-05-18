@@ -127,6 +127,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.url as string | undefined)?.trim()
     );
   }
+  if (type === "suno-voice") {
+    // Primary output is the KIE voice persona id; downstream Suno music nodes
+    // read this as `personaId`. Returns undefined when the user hasn't completed
+    // setup, which downstream consumers should treat as "no persona".
+    return (data.voiceId as string | undefined)?.trim() || undefined
+  }
   if (type === "webhook-trigger") {
     // Return param value by sourceHandle, or first param value, or legacy prompt
     const params = data.params as Array<{ id: string; name: string; type: string }> | undefined;

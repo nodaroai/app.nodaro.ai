@@ -429,6 +429,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-add-vocals": 4,          // 12 KIE cr
   ***REDACTED-OSS-SCRUB***
   "suno-upload-extend": 4,       // 12 KIE cr
+  "suno-voice-create": 20,       // One-time persona creation (validate + generate); KIE does not publish pricing — flat conservative default
   // Replicate disabled
   // "musicgen": 7,                 // Replicate Meta MusicGen
   // "lyria": 7,                    // Replicate Google Lyria 2

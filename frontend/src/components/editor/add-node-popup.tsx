@@ -737,6 +737,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   // AI — Suno Music
   {
+    type: "suno-voice",
+    label: "Suno Voice",
+    icon: <Mic className="h-4 w-4" />,
+    category: "AI",
+    group: "Suno Music",
+  },
+  {
     type: "suno-generate",
     label: "Suno Generate",
     icon: <Music className="h-4 w-4" />,

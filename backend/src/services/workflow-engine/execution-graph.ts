@@ -162,6 +162,10 @@ const SOURCE_NODE_TYPES = new Set([
   "schedule-trigger",
   "telegram-trigger",
   "sub-workflow-input",
+  // suno-voice — configured once via setup modal; emits stored voiceId at
+  // workflow runtime without any execution. Without this, the orchestrator
+  // tries to enqueue a job and payload-builder throws "Unknown node type".
+  "suno-voice",
 ])
 
 export function isSourceNode(nodeType: string): boolean {

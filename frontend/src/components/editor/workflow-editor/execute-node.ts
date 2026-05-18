@@ -291,6 +291,19 @@ function resolveSunoIds(
   return { taskId, audioId };
 }
 
+/** Resolve persona fields for a Suno music API call. Upstream wiring wins over
+ *  manual fields. Returns `{}` when no persona is set so spreading is a no-op. */
+function resolvePersona(
+  inputs: FrontendResolvedInputs,
+  d: Record<string, unknown>,
+): { personaId?: string; personaModel?: "voice_persona" | "style_persona" } {
+  const personaId = (inputs.personaId ?? (d.personaId as string | undefined)) || undefined;
+  if (!personaId) return {};
+  const personaModel = (inputs.personaModel ?? (d.personaModel as string | undefined)) as
+    | "voice_persona" | "style_persona" | undefined;
+  return { personaId, personaModel: personaModel ?? "voice_persona" };
+}
+
 function runProcessingNode(
   nodeId: string,
   apiCall: () => Promise<{ jobId: string }>,
@@ -2791,6 +2804,7 @@ export function executeNode(
           audioWeight: d.audioWeight,
           customMode: effectiveCustomMode,
           instrumental: d.instrumental ?? false,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
@@ -2829,6 +2843,7 @@ export function executeNode(
           vocalGender: d.vocalGender || undefined,
           customMode: d.customMode ?? hasCoverCustomFields,
           instrumental: d.instrumental ?? false,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
@@ -2864,6 +2879,7 @@ export function executeNode(
           styleWeight: d.styleWeight,
           weirdnessConstraint: d.weirdnessConstraint,
           audioWeight: d.audioWeight,
+          ...resolvePersona(inputs, d),
           userId: ctx.userId,
         }),
       "generatedAudioUrl",
