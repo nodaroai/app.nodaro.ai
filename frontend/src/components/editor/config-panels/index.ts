@@ -29,3 +29,4 @@ export {
   VoiceCharacterConfig,
   VoiceDeliveryConfig,
 } from "./sound-configs"
+export { GenerativePipelineConfig } from "./generative-configs"

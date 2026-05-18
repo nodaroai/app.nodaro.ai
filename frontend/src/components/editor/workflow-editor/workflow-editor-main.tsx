@@ -15,6 +15,7 @@ import {
 import { WorkflowCanvas } from "../workflow-canvas";
 import { NodeToolbar } from "../node-toolbar";
 import { ConfigPanel } from "../config-panel";
+import { PipelinePanel } from "../pipeline-panel/pipeline-panel";
 import { EditorToolbar } from "../editor-toolbar";
 import { EditorErrorBoundary } from "../editor-error-boundary";
 import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
@@ -97,6 +98,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const isMobile = useIsMobile();
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId);
+  const selectedPipelineId = useWorkflowStore((s) => {
+    if (!s.selectedNodeId) return undefined;
+    const node = s.nodes.find((n) => n.id === s.selectedNodeId);
+    if (!node || node.type !== "generative-pipeline") return undefined;
+    const data = node.data as { pipeline_id?: string } | undefined;
+    return data?.pipeline_id;
+  });
   const configPanelFullscreen = useWorkflowStore((s) => s.configPanelFullscreen);
   const pendingNavRef = useRef<string | null>(null);
   const pollIntervalsRef = useRef<Set<ReturnType<typeof setInterval>>>(
@@ -1065,6 +1073,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
               <EditorErrorBoundary label="Config panel">
                 <ConfigPanel />
               </EditorErrorBoundary>
+              {selectedPipelineId && (
+                <EditorErrorBoundary label="Pipeline panel">
+                  <PipelinePanel
+                    pipelineId={selectedPipelineId}
+                    onClose={() => useWorkflowStore.setState({ selectedNodeId: null })}
+                  />
+                </EditorErrorBoundary>
+              )}
             </ReactFlowProvider>
             <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-2rem)]${isMobile && selectedNodeId ? " hidden" : ""}${configPanelFullscreen ? " hidden" : ""}`}>
               {isRunning && activeExecutionId ? (

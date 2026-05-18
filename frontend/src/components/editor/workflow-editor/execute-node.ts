@@ -6072,5 +6072,15 @@ export function executeNode(
     )
   }
 
+  // Generative Pipeline — runs via the pipeline orchestrator, not the DAG.
+  // The config panel's "Run" button triggers POST /v1/pipelines. From the DAG
+  // perspective the node is a leaf that produces a final_video asset only
+  // once the pipeline completes. For Phase 1A the DAG treats it as a no-op
+  // success, surfacing the existing pipeline_id (if any) without making API
+  // calls of its own.
+  if (node.type === "generative-pipeline") {
+    return Promise.resolve("")
+  }
+
   return Promise.resolve("");
 }

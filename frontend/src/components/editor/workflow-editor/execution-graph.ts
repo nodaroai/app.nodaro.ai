@@ -605,6 +605,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (!sourceHandle) return (data.result as string | undefined)
     return (data.routeOutputs as Record<string, string | undefined> | undefined)?.[sourceHandle]
   }
+  // Generative pipeline — leaf node in Phase 1A. Surfaces the final video URL
+  // once the pipeline completes, falling back to the pipeline_id for
+  // intermediate states. The actual orchestration runs out-of-band via
+  // POST /v1/pipelines (see GenerativePipelineConfig).
+  if (type === "generative-pipeline") {
+    const finalVideoUrl = (data.final_video_url as string | undefined)?.trim()
+    if (finalVideoUrl) return finalVideoUrl
+    return (data.pipeline_id as string | undefined)?.trim() || undefined
+  }
   // Parameter nodes (framing, camera-motion, person, mood, pose, styling,
   // tone, etc.) carry values directly in data — no execution, no state.
   // Return the FULL prompt hint so consumers feeding the value into a text

@@ -229,6 +229,10 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 ---
 
+<<<<<<< HEAD
+*Last updated: 2026-05-18 (Story-to-Video Phase 1A: Foundation. New tables pipelines/pipeline_stages/pipeline_stage_attempts/pipeline_entities/pipeline_entity_variants/pipeline_entity_nodes/llm_calls/llm_prompt_versions (migration 121) + pipelines.reservation_usage_log_id (migration 122) + model_pricing seed rows for `pipeline-orchestration` and `pipeline-orchestration:stage_1_only` (migration 123). New `pipeline-orchestration` BullMQ queue + dedicated worker process (`backend/src/pipeline-worker.ts`). New node `generative-pipeline` (Cloud-only, 18-step registered) — DAG executor short-circuits it as a no-op leaf since the pipeline runs via its own queue/REST routes, not the DAG. REST routes `/v1/pipelines/*` + 3 new scopes `pipelines:{read,execute,approve}`. Stage 1 (Script) end-to-end Manual mode: Detection (Haiku) → Showrunner (Opus) → Script Critic + Cast Coverage Critic (Sonnet, always-on). Approval gate via SSE + 3s polling. Frontend PipelinePanel + StageRow + `usePipelineStream` hook. Public docs at `docs/nodes/generative/generative-pipeline.md`. Phase 1B will add Stages 2-5 (Characters, Objects, Locations, Shot List, Scene Director + SceneNode).)*
+*Version: 2.16.0*
+=======
 *Last updated: 2026-05-17 (character motion prefers full-body source frame: `POST /v1/generate-character-motion` selects the i2v source frame in this priority — caller-provided `sourceImageUrl` > `characters.body_angles.front` (full-body framing produces much better motion than a head-and-shoulders portrait crop) > any other body angle > the anchor portrait (`source_image_url`). Studio path: when the Motions tab is asked to generate and the row has NO body angles yet, the frontend auto-chains a `front` body angle gen FIRST via `generateCharacterAsset({assetType:"bodyAngles", variant:"front", attachToColumn:"body_angles", attachName:"front"})` and waits for it before kicking off motion gen — one click, two sequential jobs, one motion clip. New `ensureBodyAngleForMotion` helper + `trackAndWait(jobId, assetType, name) -> Promise<string>` on `useCharacterStudioJobs` ride the existing 2s poll loop. Exported `resolveFrontBodyAngleUrl` helper handles the JSONB → URL pick. Portrait-required gate unchanged.)*
 *Version: 2.15.3*
 
@@ -236,11 +240,15 @@ Permanent delete requires the run to be archived first (returns 400 `not_archive
 
 *Previous: 2026-05-17 (MCP character-asset gap fix — extended `generate_character` verb with `bodyAngles` + `attach_to_*` params; consolidated duplicate `generate_character_asset` tool. Closes the gap reported as "i cannot generate expressions and head/body angles shots via mcp." New shared constants `CHARACTER_ASSET_TYPES` and `CHARACTER_ATTACH_COLUMNS` in `@nodaro/shared/entity-prompts` are the single source of truth — consumed by route Zod schema and MCP input enum. Final `asset_type` enum: `expressions, poses, lighting, angles, headAngles, bodyAngles, custom`. Also tightened `generate_character_motion`'s `provider` to `z.enum(CHARACTER_MOTION_PROVIDERS)`.)*
 *Previous: 2026-05-17 (MCP character-asset gap fix — version 2.15.2)*
+>>>>>>> origin/dev
 
 ---
 
 *Previous: 2026-05-17 (Replicate "Open" image models: re-enabled the Replicate provider behind a narrow scope of uncensored models that don't pass through KIE's safety filter. Two new models — `flux-2-klein` (BFL Flux 2 9B Klein via `black-forest-labs/flux-2-klein-9b`, generate-image, 2 cr) and `kontext-multi` (multi-image Flux Kontext Pro via `flux-kontext-apps/multi-image-kontext-pro`, image-to-image / modify-image, up to 4 input images, 4 cr). Both display in dropdowns with an "(Open)" suffix. Routing: `buildRoutingDecision` adds Replicate to the chain for `image-generation` + `image-editing` so KIE wins for every id it declares and the new ids fall through. Replicate provider's `supportedModels` arrays now only list the new ids (no overlap with KIE). Migration 120 seeds `model_pricing` for both. Files: `backend/src/providers/{index,config,replicate/image,replicate/index}.ts`, `packages/shared/src/{model-constants,model-catalog,prompt-wizard-categories}.ts`, `frontend/src/components/editor/config-panels/model-options.ts`, `frontend/src/types/nodes.ts`, `frontend/src/ee/app/(admin)/admin/pricing/pricing-data.ts`, `backend/src/ee/billing/credits.ts`, `supabase/migrations/120_add_replicate_open_image_models.sql`, `docs/nodes/ai-image/{generate-image,image-to-image}.md`.)*
+<<<<<<< HEAD
+=======
 *Previous: 2026-05-17 (Replicate "Open" image models — version 2.15.1)*
+>>>>>>> origin/dev
 
 ---
 

@@ -242,6 +242,7 @@ export const EXECUTABLE_TYPES = new Set([
   "teleport-send",
   "teleport-receive",
   "component",
+  "generative-pipeline",
 ]);
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;

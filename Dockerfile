@@ -257,6 +257,11 @@ node dist/render-worker.js &
 # Start BullMQ orchestrator worker (workflow execution)
 node dist/orchestrator.js &
 
+# Start BullMQ pipeline worker (Story-to-Video orchestration).
+# Cloud-only — exits cleanly on non-cloud editions so the same image runs
+# for self-hosted Community/Business builds.
+node dist/pipeline-worker.js &
+
 # Wait for backend to be ready before accepting traffic
 echo "Waiting for backend on port 9000..."
 for i in $(seq 1 30); do

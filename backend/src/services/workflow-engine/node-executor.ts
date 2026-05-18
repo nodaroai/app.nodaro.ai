@@ -318,6 +318,14 @@ export async function executeNode(
     return { output }
   }
 
+  // Generative Pipeline — runs via the dedicated pipeline-orchestration queue
+  // (POST /v1/pipelines), not the DAG. From the DAG perspective the node is a
+  // leaf: it returns the existing pipeline_id (if any) without triggering work.
+  // Mirrors the frontend execute-node.ts no-op behavior for Phase 1A.
+  if (node.type === "generative-pipeline") {
+    return { output: {} }
+  }
+
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
     return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)

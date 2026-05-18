@@ -622,6 +622,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video",
   },
   {
+    type: "generative-pipeline",
+    label: "Story → Video",
+    icon: <Film className="h-4 w-4" />,
+    category: "AI",
+    group: "Pipeline",
+    keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"],
+  },
+  {
     type: "lip-sync",
     label: "Lip Sync",
     icon: <Users className="h-4 w-4" />,

@@ -7,6 +7,9 @@ export const ALL_SCOPES = [
   "assets:write",
   "credits:read",
   "apps:read",
+  "pipelines:read",
+  "pipelines:execute",
+  "pipelines:approve",
 ] as const
 
 export type Scope = typeof ALL_SCOPES[number]

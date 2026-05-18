@@ -223,6 +223,25 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "object", label: "Object", category: "entity", description: "Reusable object reference.", outputType: "data" },
   { type: "location", label: "Location", category: "entity", description: "Reusable location reference.", outputType: "data" },
 
+  {
+    type: "generative-pipeline",
+    label: "Story → Video",
+    category: "composition",
+    description: "Conversational pipeline: prompt + duration + format → editable film graph. Runs in the pipeline orchestrator, not the workflow DAG.",
+    outputType: "video",
+    creditCost: 30,
+    inputSchema: {
+      fields: [
+        { key: "story_prompt", type: "text", required: true },
+        { key: "target_duration_seconds", type: "number", required: true },
+        { key: "format", type: "select", required: true, options: ["trailer", "short_film", "music_video", "reel", "commercial"] },
+        { key: "output_resolution", type: "select", options: ["720p", "1080p", "4K"] },
+        { key: "mode", type: "select", options: ["manual", "auto"] },
+      ],
+    },
+    capabilities: ["runs-in-pipeline-engine", "requires-edition-cloud"],
+  },
+
   { type: "music-genre",     label: "Music Genre",     category: "parameter", description: "Pick a music genre (single or up to 3 for fusion) with optional subgenre and era. Emits a prompt-hint for Suno/MiniMax/Text-to-Audio.", outputType: "text" },
   { type: "music-mood",      label: "Music Mood",      category: "parameter", description: "Pick energy + emotion + vibe for music generation.", outputType: "text" },
   { type: "instrumentation", label: "Instrumentation", category: "parameter", description: "Pick instruments (up to 5) + production style + vocal presence (up to 3) + singing style (up to 3). 'instrumental' vocal-presence flips MiniMax instrumental flag.", outputType: "text" },
