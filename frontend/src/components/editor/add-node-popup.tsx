@@ -1054,11 +1054,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Smile className="h-4 w-4" />,
     category: "Assets",
   },
+  // Scene (Phase 1B.2 pipeline-managed SceneNode — replaces legacy scene)
   {
     type: "scene",
     label: "Scene",
     icon: <Clapperboard className="h-4 w-4" />,
-    category: "Assets",
+    category: "AI",
+    group: "Pipeline",
+    keywords: ["scene", "shot list", "storyboard", "camera", "pipeline"],
   },
   // Output
   {

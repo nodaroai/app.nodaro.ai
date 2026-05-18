@@ -68,3 +68,11 @@ export type PipelineEvent =
       variantKey: string
       assetUrl: string
     }
+  | {
+      type: "scene:status"
+      pipelineId: string
+      sceneEntityId: string
+      sceneIndex: number
+      status: EntityStatus
+      shotCount?: number
+    }

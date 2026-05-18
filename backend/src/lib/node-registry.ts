@@ -242,6 +242,17 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     capabilities: ["runs-in-pipeline-engine", "requires-edition-cloud"],
   },
 
+  {
+    type: "scene",
+    label: "Scene",
+    category: "composition",
+    description: "Structured scene container with shot list, camera, motion. Pipeline-managed — populated by the Scene Director LLM and animated by the pipeline orchestrator (Phase 1C). Outputs: composite_video / last_frame / audio_track. Not directly user-editable in 1B.2; users approve/reject scenes via the pipeline panel.",
+    outputType: "video",
+    creditCost: 0,
+    inputSchema: { fields: [] },
+    capabilities: ["runs-in-pipeline-engine", "requires-edition-cloud"],
+  },
+
   { type: "music-genre",     label: "Music Genre",     category: "parameter", description: "Pick a music genre (single or up to 3 for fusion) with optional subgenre and era. Emits a prompt-hint for Suno/MiniMax/Text-to-Audio.", outputType: "text" },
   { type: "music-mood",      label: "Music Mood",      category: "parameter", description: "Pick energy + emotion + vibe for music generation.", outputType: "text" },
   { type: "instrumentation", label: "Instrumentation", category: "parameter", description: "Pick instruments (up to 5) + production style + vocal presence (up to 3) + singing style (up to 3). 'instrumental' vocal-presence flips MiniMax instrumental flag.", outputType: "text" },

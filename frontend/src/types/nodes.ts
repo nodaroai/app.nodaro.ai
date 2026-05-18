@@ -10,6 +10,7 @@ import type {
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { PipelineFormat, PipelineMode } from "@nodaro/shared"
+import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
 import {
   MUSIC_GENRE_DEFAULT_DATA,
@@ -3583,6 +3584,31 @@ export interface GenerativePipelineNodeData {
   current_stage?: string | null
 }
 
+/**
+ * Phase 1B.2 SceneNode data shape — extends the shared `SceneNodeData`
+ * schema from `@nodaro/shared` (which is what the Scene Director emits and
+ * what the orchestrator persists on `pipeline_entities.metadata`) with the
+ * React Flow-specific fields the canvas needs.
+ *
+ * This is the data shape for the pipeline-managed scene node, registered
+ * under the canonical React Flow node type `"scene"`. It REPLACES the
+ * legacy `SceneNodeDataType` (above), which is kept in the union as
+ * harmless dead code until the legacy `scene-node.tsx` +
+ * `scene-editor-modal.tsx` callers are removed in a follow-up cleanup.
+ *
+ * Imported from `@nodaro/shared` with an alias because the local
+ * `SceneNodeData` union (below) shadows the same name.
+ */
+export type SceneNodeFrontendData = SharedSceneNodeData & {
+  [key: string]: unknown
+  label?: string
+  pipeline_entity_id?: string
+  pipeline_owned?: boolean
+  pipeline_state?: "pipeline_owned_running" | "pipeline_owned_awaiting_approval" | "pipeline_owned_approved" | "pipeline_orphaned"
+  /** Per-node view-mode override (defaults to "storyboard" in 1B.2; user can flip). */
+  view_mode?: "default" | "storyboard" | "video" | "scripting"
+}
+
 // --- Union Types ---
 
 export type SceneNodeData =
@@ -3734,6 +3760,7 @@ export type SceneNodeData =
   | VoiceCharacterData
   | VoiceDeliveryData
   | GenerativePipelineNodeData
+  | SceneNodeFrontendData
 
 export type SceneNodeType =
   | "text-prompt"
@@ -5552,59 +5579,39 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       customVariations: [],
     } as LocationNodeData,
   },
-  // Scene
+  // Scene (Phase 1B.2 pipeline — REPLACES legacy SceneNodeDataType shape.
+  // Legacy `SceneNodeDataType` is kept in the SceneNodeData union as harmless
+  // dead code until the legacy `scene-node.tsx` + `scene-editor-modal.tsx`
+  // callers are removed in a follow-up cleanup.)
   {
     type: "scene",
     label: "Scene",
     category: "scene",
     creditCost: 0,
-    inputs: ["in", "audio1", "audio2", "audio3", "audio4", "audio5"],
-    outputs: ["prompt", "imageRefs", "narration", "dialogue", "duration"],
+    inputs: ["characters", "location", "objects", "prev_last_frame"],
+    outputs: ["video", "last_frame", "audio_track"],
     defaultData: {
       label: "Scene",
-      sceneName: "",
-      sceneNumber: 1,
-      duration: 5,
-      summary: "",
-      characters: [],
-      dialogue: [],
-      locations: [],
-      timeOfDay: "noon",
-      weather: "clear",
-      lighting: "natural",
-      objects: [],
-      aspectRatio: "16:9",
-      shotType: "medium",
-      cameraAngle: "eye-level",
-      cameraMovement: "static",
-      depthOfField: "medium",
-      lensType: "normal",
-      mood: [],
-      colorPalette: [],
-      visualStyle: "cinematic",
-      narration: "",
-      musicMood: "",
-      soundEffects: [],
-      transitionIn: "cut",
-      transitionOut: "cut",
-      directorNotes: "",
-      referenceUrls: [],
-      generatedPrompt: "",
-      executionStatus: "idle",
-      generatedResults: [],
-      activeResultIndex: 0,
-      generatedImageUrl: "",
-      fieldMappings: {},
-      sourceScriptNodeId: "",
-      sourceSceneIndex: -1,
-      autoSyncWithScript: false,
-      audioAssignments: [],
-      videoProvider: "minimax",
-      generatedVideoResults: [],
-      activeVideoResultIndex: 0,
-      generatedVideoUrl: "",
-      videoExecutionStatus: "idle",
-    } as SceneNodeDataType,
+      scene_index: 1,
+      description: "",
+      emotional_beat: "setup",
+      duration_seconds: 0,
+      shot_input_mode: "first_frame",
+      cast_keys: [],
+      location_key: "",
+      object_keys: [],
+      continuity_from_prev: "hard_cut",
+      image_model: "nano-banana-2",
+      video_model: "kling",
+      shots: [],
+      scene_anchor_keyframe: null,
+      generated_keyframes: [],
+      generated_clips: [],
+      composite_video: null,
+      last_frame: null,
+      scene_audio_track: null,
+      view_mode: "storyboard",
+    } satisfies SceneNodeFrontendData,
   },
   // LLM Chat
   {

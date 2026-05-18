@@ -96,4 +96,52 @@ describe("PipelinePanel", () => {
     await waitFor(() => expect(screen.getByText("Hero")).toBeInTheDocument())
     expect(screen.getByText("Approve")).toBeInTheDocument()
   })
+
+  it("renders SceneGrid when current_stage is shot_list", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "shot_list",
+      spent_credits: 80,
+      reserved_credits: 200,
+      upfront_credit_estimate: 200,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved",
+      output: {},
+      critic_feedback: {},
+    })
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "scene-1",
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "awaiting_approval",
+          main_asset_id: null,
+          main_asset_url: null,
+          metadata: {
+            entity_type: "scene",
+            scene_node_data: {
+              scene_index: 1,
+              description: "Hero on the runway",
+              emotional_beat: "setup",
+              duration_seconds: 30,
+              shots: [
+                { shot_id: "shot_01", duration_seconds: 10, camera: { shot_type: "wide" } },
+              ],
+              video_model: "kling",
+              shot_input_mode: "first_frame",
+            },
+          },
+          variants: [],
+        },
+      ],
+    } as never)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+    await waitFor(() => expect(screen.getByText("Hero on the runway")).toBeInTheDocument())
+    expect(screen.getByText("Approve")).toBeInTheDocument()
+  })
 })

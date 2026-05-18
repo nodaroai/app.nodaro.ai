@@ -5,6 +5,7 @@ import { pipelinesApi } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { StageRow } from "./stage-row"
 import { EntityGrid } from "./entity-grid"
+import { SceneGrid } from "./scene-grid"
 import { Button } from "@/components/ui/button"
 
 interface Props {
@@ -94,6 +95,9 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
         )}
         {pipeline?.current_stage === "locations" && (
           <EntityGrid pipelineId={pipelineId} entityType="location" title="4. Locations" />
+        )}
+        {pipeline?.current_stage === "shot_list" && (
+          <SceneGrid pipelineId={pipelineId} title="5. Shot List" />
         )}
       </div>
 

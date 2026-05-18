@@ -5333,83 +5333,15 @@ export function executeNode(
     return runLocationGeneration(node.id, augmentedData, ctx);
   }
 
+  // Phase 1B.2: SceneNode is the pipeline-managed scene container. Its
+  // internal pipeline (keyframe gen → animate → speech → lip_sync → combine)
+  // is driven by the pipeline orchestrator (POST /v1/pipelines), NOT the
+  // workflow DAG worker. For Phase 1B.2 the DAG treats it as a no-op success
+  // leaf — the composite_video / last_frame / audio_track outputs are
+  // populated by the pipeline orchestrator in Phase 1C and extracted by
+  // execution-graph.ts. Mirrors the generative-pipeline pattern below.
   if (node.type === "scene") {
-    const sceneData = node.data as unknown as SceneNodeDataType;
-    const {
-      nodes: allNodes,
-      edges: allEdges,
-      characterDefinitions,
-    } = useWorkflowStore.getState();
-
-    const sceneInputs = resolveNodeInputs(node, allNodes, allEdges);
-    const connectedPrompt = sceneInputs.prompt ?? "";
-
-    const sceneStylePrompt = buildScenePrompt(
-      sceneData,
-      characterDefinitions,
-    );
-
-    let combinedPrompt = connectedPrompt
-      ? `${connectedPrompt}. ${sceneStylePrompt}`
-      : sceneStylePrompt;
-
-    if (!combinedPrompt.trim()) {
-      toast.error(
-        `Scene "${sceneData.sceneName || sceneData.label}": no scene data to generate prompt`,
-      );
-      return Promise.reject(new Error("Empty scene prompt"));
-    }
-
-    const allAssetIds = [
-      ...sceneData.characters.map((c) => c.assetId),
-      ...(sceneData.locations ?? []).map((l) => l.assetId),
-      ...sceneData.objects.map((o) => o.assetId),
-    ];
-    const refUrls: string[] = [...(sceneInputs.referenceImageUrls ?? [])];
-    const charDescs: string[] = [];
-    const sceneUserTemplates =
-      useWorkflowStore.getState().userPromptTemplates;
-    const sceneFlowTemplates =
-      useWorkflowStore.getState().flowPromptTemplates;
-    for (const assetId of allAssetIds) {
-      const asset = characterDefinitions.find((a) => a.id === assetId);
-      if (asset?.referenceImageUrl) refUrls.push(asset.referenceImageUrl);
-      if (asset?.type === "description" && asset.description) {
-        const templateKey =
-          asset.category === "face"
-            ? "face-description"
-            : asset.category === "location"
-              ? "location-description"
-              : asset.category === "object"
-                ? "object-description"
-                : "character-description";
-        const template = resolveTemplate(
-          templateKey,
-          sceneUserTemplates,
-          sceneFlowTemplates,
-        );
-        charDescs.push(
-          applyTemplate(template, {
-            name: asset.name,
-            description: asset.description,
-          }),
-        );
-      }
-    }
-    const finalPrompt =
-      charDescs.length > 0
-        ? `${combinedPrompt}\n${charDescs.join(" ")}`
-        : combinedPrompt;
-    const sceneAspectRatio = (sceneData as Record<string, unknown>)
-      .aspectRatio as string | undefined;
-    return runImageGeneration(
-      node.id,
-      finalPrompt,
-      ctx,
-      refUrls.length > 0 ? refUrls : undefined,
-      undefined,
-      sceneAspectRatio,
-    );
+    return Promise.resolve("");
   }
 
   if (node.type === "teleport-send" || node.type === "teleport-receive") {

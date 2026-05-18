@@ -30,3 +30,4 @@ export {
   VoiceDeliveryConfig,
 } from "./sound-configs"
 export { GenerativePipelineConfig } from "./generative-configs"
+export { SceneConfig } from "./scene-configs"

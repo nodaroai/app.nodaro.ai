@@ -123,6 +123,8 @@ describe("NODE_OPTIONS", () => {
     expect(aiTypes).toContain("text-to-speech")
     expect(aiTypes).toContain("ai-writer")
     expect(aiTypes).toContain("generate-music")
+    // Phase 1B.2 — Scene moved from Assets to AI (Pipeline group), pipeline-managed
+    expect(aiTypes).toContain("scene")
   })
 
   it("contains expected Processing nodes", () => {
@@ -153,7 +155,8 @@ describe("NODE_OPTIONS", () => {
     expect(assetTypes).toContain("object")
     expect(assetTypes).toContain("location")
     expect(assetTypes).toContain("face")
-    expect(assetTypes).toContain("scene")
+    // Phase 1B.2 — Scene moved from Assets to AI (Pipeline group), pipeline-managed
+    expect(assetTypes).not.toContain("scene")
   })
 
   it("contains expected Sound nodes", () => {

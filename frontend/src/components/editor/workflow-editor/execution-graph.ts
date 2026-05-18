@@ -1,5 +1,4 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { buildScenePrompt } from "@/lib/prompt-builder";
 import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared";
 import { isExpandedClone } from "@nodaro/shared";
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
@@ -10,7 +9,6 @@ import type {
   GeneratedResult,
   GeneratedScript,
   GeneratedScriptResult,
-  SceneNodeDataType,
   LoopNodeData,
   WebScrapeNodeData,
 } from "@/types/nodes";
@@ -436,16 +434,20 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     );
   }
   if (type === "scene") {
-    const results =
-      (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    const imageUrl =
-      results[activeIndex]?.url ??
-      (data.generatedImageUrl as string | undefined);
-    if (imageUrl) return imageUrl;
-    const sceneData = data as unknown as SceneNodeDataType;
-    const { characterDefinitions } = useWorkflowStore.getState();
-    return buildScenePrompt(sceneData, characterDefinitions);
+    // Phase 1B.2 pipeline-managed SceneNode — outputs are populated by the
+    // pipeline orchestrator in Phase 1C, not the workflow worker. Source
+    // handles: `video` (composite_video.url), `last_frame` (last_frame.url),
+    // `audio_track` (scene_audio_track.url). Defaults to `video` when no
+    // handle is specified. Returns undefined when the pipeline hasn't yet
+    // produced output (1B.2 ships with all fields null).
+    const asAssetRef = (v: unknown): string | undefined => {
+      if (!v || typeof v !== "object") return undefined;
+      const url = (v as { url?: unknown }).url;
+      return typeof url === "string" ? url : undefined;
+    };
+    if (sourceHandle === "last_frame") return asAssetRef(data.last_frame);
+    if (sourceHandle === "audio_track") return asAssetRef(data.scene_audio_track);
+    return asAssetRef(data.composite_video);
   }
   if (type === "forced-alignment") {
     const alignment = data.alignmentResults as Array<{ word: string; start: number; end: number }> | undefined;
