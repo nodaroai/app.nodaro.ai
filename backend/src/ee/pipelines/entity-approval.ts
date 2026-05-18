@@ -1,5 +1,76 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { pipelineEvents } from "./events.js"
+import { transitionEntityNodeAndEmit } from "./depends-on.js"
+
+/**
+ * Phase 1B.4 (C1): after a `pipeline_entities.main_asset_id` update succeeds,
+ * surface the downstream cascade.
+ *
+ * Migration 132 installs a recursive-CTE trigger that walks `depends_on` and
+ * flips `is_stale = true` on every transitive dependent within the pipeline.
+ * The trigger doesn't talk to the in-process event broker, so we re-query
+ * here and publish one `entity:stale` SSE event per dependent.
+ *
+ * Query strategy — PostgREST `.contains("depends_on", [<id>])` filters to
+ * rows that list the changed entity in their depends_on array. This catches
+ * the immediate (first-hop) dependents. PostgREST has no recursive-CTE
+ * syntax, so transitive dependents (n-hops away) are intentionally left to
+ * a future iteration — for v1, Phase 1B.4 pipelines are shallow (scenes
+ * depend on characters/locations/objects, no deeper chain), and the
+ * frontend's cascade re-render on each direct `entity:stale` event covers
+ * most cases. The DB row's `is_stale` flag stays authoritative either way.
+ *
+ * The pre-update `is_stale` value isn't directly knowable without an extra
+ * query — per the Phase 1B.4 plan, we accept that already-stale entities
+ * may receive duplicate events. The frontend handles them idempotently
+ * (overlay toggle is keyed by entityId).
+ *
+ * `.contains()` lowers to the Postgres `@>` operator
+ * (`depends_on @> ARRAY['<id>']::uuid[]`). Confirmed against
+ * `@supabase/supabase-js@^2.49.1` + identical usage in
+ * `backend/src/routes/workflow-templates.ts` (`.contains("listed_in", [...])`)
+ * and `backend/src/routes/published-apps.ts`.
+ *
+ * Hardened: this helper is invoked from the engine's hot path immediately
+ * after a main_asset_id update. The underlying DB write already succeeded;
+ * dropping a `entity:stale` event is a UX gap, not a correctness issue, so
+ * we swallow every failure mode rather than risk unwinding the calling
+ * stage. The DB trigger is the source of truth for `is_stale` — this query
+ * only drives the live-canvas hint.
+ */
+export async function emitDependentStaleEvents(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  changedEntityId: string,
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from("pipeline_entities")
+      .select("id, is_stale")
+      .eq("pipeline_id", pipelineId)
+      .contains("depends_on", [changedEntityId])
+    if (error) {
+      console.error(
+        `[pipelines/entity-approval] Failed to load dependents for ${changedEntityId}: ${error.message}`,
+      )
+      return
+    }
+    for (const row of data ?? []) {
+      if (row.is_stale !== true) continue
+      pipelineEvents.publish({
+        type: "entity:stale",
+        pipelineId,
+        pipelineEntityId: row.id as string,
+        reason: "upstream_changed",
+      })
+    }
+  } catch (err) {
+    console.error(
+      `[pipelines/entity-approval] emitDependentStaleEvents threw for ${changedEntityId}:`,
+      err,
+    )
+  }
+}
 
 /**
  * Approves a single pipeline_entity row, optimistic-concurrency-guarded against
@@ -35,6 +106,20 @@ export async function approveEntity(
     entityKey: row.entity_key,
     status: "approved",
   })
+
+  // Phase 1B.4 (D1): flip the canvas node's pipeline_state to `approved`.
+  // No-op when the entity has no `pipeline_entity_nodes` row yet (the canvas
+  // materializer runs immediately after this update in `materializeForApprovedEntity`
+  // below, and the materializer's INSERT path writes the same state directly —
+  // the explicit transition here covers the case where the row already exists
+  // from a prior approve / earlier Phase 1B.4 materialize-on-running pass).
+  await transitionEntityNodeAndEmit(
+    supabase,
+    pipelineId,
+    entityId,
+    "pipeline_owned_approved",
+    "pipelines/entity-approval",
+  )
 
   // Materialize the approved entity as a canvas node (Phase 1B.1: static
   // create, no animations). Idempotent and a no-op when the pipeline has no
@@ -201,5 +286,15 @@ export async function rejectEntity(
     entityKey: current.entity_key,
     status: "generating",
   })
+
+  // Phase 1B.4 (D1): drop the canvas node back to `running` while the engine
+  // re-generates. Idempotent + no-ops when no canvas node exists.
+  await transitionEntityNodeAndEmit(
+    supabase,
+    pipelineId,
+    entityId,
+    "pipeline_owned_running",
+    "pipelines/entity-approval",
+  )
   return { ok: true }
 }

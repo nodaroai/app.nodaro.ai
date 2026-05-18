@@ -5,6 +5,11 @@ import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"
 import { runShotListCritic, type ShotListCriticVerdict } from "../llms/shot-list-critic.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+import {
+  resolveEntityKeysToIds,
+  setEntityDepends,
+  transitionEntityNodeAndEmit,
+} from "../depends-on.js"
 
 export interface RunShotListStageArgs {
   supabase: SupabaseClient
@@ -244,6 +249,18 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
     return
   }
 
+  // Resolve scene's character/location/object refs into pipeline_entities.ids
+  // and record the dependency tree BEFORE flipping to awaiting_approval. Stage
+  // 6+ cascade-staleness logic walks this tree, so it must be in place by the
+  // time the user can interact with the scene.
+  const depKeys: string[] = [
+    ...sceneNodeData.cast_keys,
+    sceneNodeData.location_key,
+    ...sceneNodeData.object_keys,
+  ].filter((k): k is string => Boolean(k))
+  const depIds = await resolveEntityKeysToIds(supabase, pipelineId, depKeys)
+  await setEntityDepends(supabase, entity.id, depIds)
+
   // Persist scene_node_data + transition to awaiting_approval.
   await supabase
     .from("pipeline_entities")
@@ -257,6 +274,16 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
       },
     })
     .eq("id", entity.id)
+
+  // Phase 1B.4 (D1): SceneNode → awaiting_approval. No-op when no canvas node
+  // exists yet (Phase 1B.1: SceneNodes materialize on user approve).
+  await transitionEntityNodeAndEmit(
+    supabase,
+    pipelineId,
+    entity.id,
+    "pipeline_owned_awaiting_approval",
+    "shot-list",
+  )
 
   pipelineEvents.publish({
     type: "scene:status",

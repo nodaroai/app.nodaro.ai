@@ -3,6 +3,7 @@ import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
 import { refundPipelineCredits } from "./credits.js"
 import { incrementCriticRetry } from "./stage-utils.js"
+import { validateCanvasAgainstPlan, getStageExpectedEntityIds } from "./drift.js"
 
 export interface DriveArgs {
   supabase: SupabaseClient
@@ -76,6 +77,51 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       return
     }
     stageToRun = STAGE_ORDER[lastIdx + 1]!
+  }
+
+  // Phase 1B.4 drift detection — only meaningful Stage 2 onwards, since
+  // Stage 1 is the script generator and there are no prior entities to
+  // diverge from. When drift is detected, pause the stage at
+  // awaiting_approval with `awaiting_reason='canvas_drift'`; the panel
+  // renders the DriftBanner and the user picks resolution
+  // (regenerate / fork / abandon).
+  if (stageToRun !== "script") {
+    const expectedIds = await getStageExpectedEntityIds(supabase, pipelineId)
+    const drift = await validateCanvasAgainstPlan(
+      supabase,
+      pipelineId,
+      expectedIds,
+      stageToRun,
+    )
+    if (!drift.ok) {
+      // Find the pipeline_stages row for this stage (may not exist yet — only
+      // pause if it does; the engine inserts the row at stage-start otherwise).
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", pipelineId)
+        .eq("stage_name", stageToRun)
+        .maybeSingle()
+      if (stageRow?.id) {
+        await supabase
+          .from("pipeline_stages")
+          .update({
+            status: "awaiting_approval",
+            awaiting_reason: "canvas_drift",
+          })
+          .eq("id", stageRow.id)
+      }
+      await supabase
+        .from("pipelines")
+        .update({ status: "awaiting_approval" })
+        .eq("id", pipelineId)
+      pipelineEvents.publish({
+        type: "pipeline:status",
+        pipelineId,
+        status: "awaiting_approval",
+      })
+      return
+    }
   }
 
   // Dispatch.

@@ -191,9 +191,19 @@ function makeSupabase(
             }
             return Promise.resolve({ data: null, error: null })
           },
+          // select() supports three chains:
+          //   .eq().eq().order()           -> entities list (initial)
+          //   .eq().eq() awaited directly  -> refreshed status fetch
+          //   .eq().in()                   -> resolveEntityKeysToIds lookup
+          //   .eq().contains()             -> emitDependentStaleEvents
           select: () => ({
             eq: () => ({
               eq: () => makeEntityEqEqThenable(),
+              // depends-on resolveEntityKeysToIds path
+              in: async () => ({ data: Array.from(entities.values()), error: null }),
+              // C1 emitDependentStaleEvents path — no rows are flagged stale in
+              // these tests so an empty array is the right answer.
+              contains: async () => ({ data: [], error: null }),
             }),
           }),
           update: (patch: Record<string, unknown>) => ({
@@ -202,6 +212,17 @@ function makeSupabase(
               if (row) entities.set(val, { ...row, ...patch })
               return { data: null, error: null }
             },
+          }),
+        }
+      }
+      // pipeline_entity_nodes — markEntityNodeState target. No rows exist in
+      // these tests (canvas materializer runs at approve time), so the UPDATE
+      // is a no-op.
+      if (table === "pipeline_entity_nodes") {
+        return {
+          update: () => ({
+            eq: async () => ({ data: null, error: null }),
+            in: async () => ({ data: null, error: null }),
           }),
         }
       }

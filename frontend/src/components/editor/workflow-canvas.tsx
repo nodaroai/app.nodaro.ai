@@ -15,7 +15,6 @@ import {
   type IsValidConnection,
   type FinalConnectionState,
 } from "@xyflow/react"
-import ELK from "elkjs/lib/elk.bundled.js"
 import { useSearchParams, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import "@xyflow/react/dist/style.css"
@@ -32,6 +31,8 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
+import { useElkLayout, elk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
+import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
@@ -540,11 +541,43 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     return () => clearTimeout(timer)
   }, [isMobile, nodes, selectNode])
 
+  // ── Phase 1B.4: live-build auto-layout + auto-pan ───────────────────────
+  // Active while the pipeline orchestrator is making canvas changes. The two
+  // hooks below were intentionally written generic so they're easy to detach
+  // from pipelines later if we want to reuse them for Film Director or other
+  // background writers.
+  const activePipelineStatus = useWorkflowStore((s) => s.activePipelineStatus)
+  const lastAddedPipelineNodeId = useWorkflowStore(
+    (s) => s.lastAddedPipelineNodeId,
+  )
+  const isPipelineActive =
+    activePipelineStatus === "running" ||
+    activePipelineStatus === "awaiting_approval"
+
   // Camera auto-pan: when new nodes are added to the canvas (e.g. by the
   // Film Director skill's per-stage update_workflow_json calls), pan the
   // viewport toward them — but yield to the user for 2s after any manual
   // pan/zoom so the camera doesn't fight the user. See use-camera-auto-pan.ts.
-  const cameraAutoPan = useCameraAutoPan(nodes)
+  //
+  // Disabled while a pipeline is active: `useAutoPanWhenIdle` below owns the
+  // camera in that mode and we don't want the two hooks fighting over each
+  // frame the orchestrator adds.
+  const cameraAutoPan = useCameraAutoPan(nodes, !isPipelineActive)
+  // Re-run ELK each time the node count changes while a pipeline is live, so
+  // newly-materialized entity/scene nodes get auto-arranged without manual
+  // intervention. Stop running ELK once the pipeline reaches a terminal
+  // status so the user's manual positioning sticks.
+  useElkLayout({
+    enabled: isPipelineActive,
+    triggerKey: `${nodes.length}:${lastAddedPipelineNodeId ?? ""}`,
+  })
+  // Auto-pan to the freshest pipeline-owned node after 5s of idle. The
+  // "Follow build →" button below resets idle to "now" so the user can
+  // re-arm without waiting on the natural debounce.
+  const { isIdle: livebuildIdle, followBuild } = useAutoPanWhenIdle({
+    enabled: isPipelineActive,
+    focusNodeId: lastAddedPipelineNodeId,
+  })
 
   // Realtime live-canvas sync: external writers (MCP / Film Director skill
   // via update_workflow_json) mutate the workflows row directly in the DB.
@@ -930,8 +963,6 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   const handleTidyUp = useCallback(async () => {
-    const elk = new ELK()
-
     // If nodes are selected, only tidy those; otherwise tidy all
     const selectedNodes = nodes.filter((n) => n.selected && n.type !== "sticky-note")
     const isSelectionMode = selectedNodes.length >= 2
@@ -944,19 +975,12 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
     const targetIds = new Set(targetNodes.map((n) => n.id))
 
-    // Build ELK graph using actual measured node dimensions
+    // Build ELK graph using actual measured node dimensions. Uses the same
+    // shared ELK instance + options as the live-build auto-layout so Tidy Up
+    // is visually continuous with what was running during a pipeline.
     const elkGraph = {
       id: "root",
-      layoutOptions: {
-        "elk.algorithm": "layered",
-        "elk.direction": "RIGHT",
-        "elk.spacing.nodeNode": "40",
-        "elk.layered.spacing.nodeNodeBetweenLayers": "60",
-        "elk.edgeRouting": "ORTHOGONAL",
-        "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-        "elk.separateConnectedComponents": "true",
-        "elk.spacing.componentComponent": "80",
-      },
+      layoutOptions: { ...ELK_LAYOUT_OPTIONS },
       children: targetNodes.map((node) => ({
         id: node.id,
         width: node.measured?.width ?? 200,
@@ -1689,6 +1713,22 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           />
           {guideLines.length > 0 && <AlignmentGuideLines guides={guideLines} />}
         </ReactFlow>
+        {/* Phase 1B.4 — Follow build button. Surfaces when a pipeline is
+            actively building and the user has moved/scrolled within the
+            last 5s. Clicking re-arms idle so the canvas immediately pans
+            to the freshest pipeline-owned node. Hidden on mobile because
+            the canvas already supports gesture-driven navigation there. */}
+        {!isMobile && isPipelineActive && !livebuildIdle && lastAddedPipelineNodeId && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={followBuild}
+            className="absolute top-3 right-3 z-30 shadow-sm bg-background"
+            data-testid="follow-build-button"
+          >
+            Follow build →
+          </Button>
+        )}
       </div>
       </CanvasZoomContext.Provider>
       </MobileCanvasContext.Provider>

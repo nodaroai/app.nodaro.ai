@@ -600,6 +600,73 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     },
   )
 
+  // ── POST /v1/pipelines/:id/fork ──────────────────────────────────────────
+  // Phase 1B.4 — user takes over creative control. Caller becomes the owner
+  // of every materialized canvas node; pipeline status flips to `forked`,
+  // every entity is flagged `is_forked=true`, every node is orphaned, and
+  // the unspent reservation is refunded. Idempotent — second call returns
+  // the existing `forked_at`. Terminal pipelines return 409.
+  app.post<{ Params: { id: string } }>(
+    "/v1/pipelines/:id/fork",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:execute")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id, status")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!pipeline) return reply.status(404).send({ error: { code: "not_found" } })
+      // Existence-leak prevention — cross-user lookups return 404, not 403.
+      if (pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Terminal statuses other than `forked` reject — there's nothing left
+      // to fork. `forked` falls through to `forkPipeline` which is idempotent.
+      if (
+        pipeline.status === "completed" ||
+        pipeline.status === "failed" ||
+        pipeline.status === "cancelled"
+      ) {
+        return reply
+          .status(409)
+          .send({ error: { code: "pipeline_terminal", status: pipeline.status } })
+      }
+
+      const { forkPipeline } = await import("../ee/pipelines/fork.js")
+      const result = await forkPipeline(supabase, req.params.id)
+
+      // Best-effort: drop any queued BullMQ jobs for this pipeline. In-flight
+      // active jobs are left alone — letting them finish keeps the credit
+      // accounting clean (refund of unused credits has already run). Errors
+      // here are non-fatal; the fork has already committed.
+      try {
+        const { pipelineOrchestrationQueue } = await import("../ee/pipelines/queue.js")
+        const queued = await pipelineOrchestrationQueue.getJobs(
+          ["waiting", "delayed"],
+          0,
+          -1,
+          false,
+        )
+        const matching = queued.filter(
+          (job) => (job.data as { pipelineId?: string }).pipelineId === req.params.id,
+        )
+        await Promise.all(matching.map((j) => j.remove()))
+      } catch (err) {
+        console.error(
+          "[pipelines/fork] queue cleanup failed:",
+          err instanceof Error ? err.message : err,
+        )
+      }
+
+      return reply.send(result)
+    },
+  )
+
   // ── GET /v1/pipelines/:id/events  (SSE) ──────────────────────────────────
   app.get<{ Params: { id: string } }>(
     "/v1/pipelines/:id/events",

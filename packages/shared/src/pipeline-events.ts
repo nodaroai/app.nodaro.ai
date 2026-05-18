@@ -1,5 +1,11 @@
 import { z } from "zod"
 import type { EntityStatus, EntityType } from "./entity-approval-types.js"
+import type {
+  EntityStateChangeEvent,
+  EntityStaleEvent,
+  PipelineForkedEvent,
+  PipelineDriftSummary,
+} from "./pipeline-state-types.js"
 
 export const PipelineStageNameSchema = z.enum([
   "script",
@@ -76,3 +82,10 @@ export type PipelineEvent =
       status: EntityStatus
       shotCount?: number
     }
+  // Phase 1B.4 lifecycle events — see pipeline-state-types.ts for full JSDoc
+  // on when each fires. SSE forwarders in routes/pipelines.ts are
+  // event-type-agnostic and pass all of these through unchanged.
+  | EntityStateChangeEvent
+  | EntityStaleEvent
+  | PipelineForkedEvent
+  | PipelineDriftSummary

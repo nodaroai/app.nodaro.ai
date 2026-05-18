@@ -4,6 +4,11 @@ import { MAX_LOCATION_VARIANTS } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { ensureStageRow, failStage } from "../stage-utils.js"
+import {
+  transitionEntityNodeAndEmit,
+  transitionStageEntityNodesAndEmit,
+} from "../depends-on.js"
+import { emitDependentStaleEvents } from "../entity-approval.js"
 
 export interface RunLocationsStageArgs {
   supabase: SupabaseClient
@@ -110,6 +115,17 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
       .from("pipeline_stages")
       .update({ status: "awaiting_approval", output: { phase: "variant_batch_approval" } })
       .eq("id", stageId)
+    // Phase 1B.4 (D1): batch-flip every materialized location canvas node to
+    // `awaiting_approval` in a single UPDATE (cheaper than N per-entity calls).
+    // Then emit one state_change event per touched entity so the UI can animate
+    // each card. Entities with no materialized node yet are skipped gracefully.
+    await transitionStageEntityNodesAndEmit(
+      supabase,
+      pipelineId,
+      stageId,
+      "pipeline_owned_awaiting_approval",
+      "locations",
+    )
     pipelineEvents.publish({
       type: "stage:status",
       pipelineId,
@@ -170,6 +186,16 @@ async function generateLocationMain(
       .from("pipeline_entities")
       .update({ main_asset_id: assetId, status: "awaiting_approval" })
       .eq("id", entity.id)
+    // Phase 1B.4 (C1): cascade-staleness trigger fires on main_asset_id change.
+    await emitDependentStaleEvents(supabase, pipelineId, entity.id)
+    // Phase 1B.4 (D1): canvas node → awaiting_approval (no-op when no row yet).
+    await transitionEntityNodeAndEmit(
+      supabase,
+      pipelineId,
+      entity.id,
+      "pipeline_owned_awaiting_approval",
+      "locations",
+    )
     pipelineEvents.publish({
       type: "entity:status",
       pipelineId,

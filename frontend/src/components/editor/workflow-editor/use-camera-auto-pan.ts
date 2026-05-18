@@ -89,7 +89,20 @@ function getNodeCenter(node: Node): NodeCenter {
   }
 }
 
-export function useCameraAutoPan(nodes: readonly Node[]): CameraAutoPanControl {
+/**
+ * @param nodes    Current React Flow nodes — the hook diffs against its
+ *                 per-instance seen-set on every render.
+ * @param enabled  When false, the hook is dormant: it does not mark new
+ *                 nodes as seen, does not pan, and does not update its
+ *                 timers. Use this to disable Film-Director-style auto-pan
+ *                 during pipeline runs (where `useAutoPanWhenIdle` owns the
+ *                 camera). Defaults to `true` so existing call sites stay
+ *                 unchanged.
+ */
+export function useCameraAutoPan(
+  nodes: readonly Node[],
+  enabled: boolean = true,
+): CameraAutoPanControl {
   const { setCenter, getViewport } = useReactFlow()
 
   // Per-instance seen-set (NOT module-level). Resets when the hook
@@ -114,6 +127,12 @@ export function useCameraAutoPan(nodes: readonly Node[]): CameraAutoPanControl {
   nodesRef.current = nodes
 
   useEffect(() => {
+    // Gate: when disabled (e.g. a pipeline run is active and
+    // `useAutoPanWhenIdle` owns the camera), do nothing — including NOT
+    // marking nodes as seen. When the gate re-opens, the hook resumes
+    // observing additions naturally.
+    if (!enabled) return
+
     const seen = seenRef.current
     const newNodes: Node[] = []
 
@@ -176,7 +195,7 @@ export function useCameraAutoPan(nodes: readonly Node[]): CameraAutoPanControl {
       duration: AUTO_PAN_DURATION_MS,
       zoom,
     })
-  }, [nodes, setCenter, getViewport])
+  }, [nodes, enabled, setCenter, getViewport])
 
   // Stable onMove callback — never changes identity, so wiring it into
   // <ReactFlow onMoveStart={onMove}> does not cause ReactFlow prop churn.

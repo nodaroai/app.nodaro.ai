@@ -8,6 +8,11 @@ import { pipelineEvents } from "../events.js"
 import { runVoiceMatcher } from "../llms/voice-matcher.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { ensureStageRow, failStage } from "../stage-utils.js"
+import {
+  transitionEntityNodeAndEmit,
+  transitionStageEntityNodesAndEmit,
+} from "../depends-on.js"
+import { emitDependentStaleEvents } from "../entity-approval.js"
 
 export interface RunCharactersStageArgs {
   supabase: SupabaseClient
@@ -111,6 +116,16 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
       .from("pipeline_stages")
       .update({ status: "awaiting_approval", output: { phase: "variant_batch_approval" } })
       .eq("id", stageId)
+    // Phase 1B.4 (D1): batch-flip every materialized character canvas node to
+    // `awaiting_approval` in a single UPDATE. Per-entity state_change events
+    // follow so the UI animates each card individually.
+    await transitionStageEntityNodesAndEmit(
+      supabase,
+      pipelineId,
+      stageId,
+      "pipeline_owned_awaiting_approval",
+      "characters",
+    )
     pipelineEvents.publish({
       type: "stage:status",
       pipelineId,
@@ -233,6 +248,16 @@ async function generateCharacterMain(
         },
       })
       .eq("id", entity.id)
+    // Phase 1B.4 (C1): cascade-staleness trigger fires on main_asset_id change.
+    await emitDependentStaleEvents(supabase, pipelineId, entity.id)
+    // Phase 1B.4 (D1): canvas node → awaiting_approval (no-op when no row yet).
+    await transitionEntityNodeAndEmit(
+      supabase,
+      pipelineId,
+      entity.id,
+      "pipeline_owned_awaiting_approval",
+      "characters",
+    )
     pipelineEvents.publish({
       type: "entity:status",
       pipelineId,

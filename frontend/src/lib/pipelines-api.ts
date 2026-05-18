@@ -106,6 +106,20 @@ export const pipelinesApi = {
     ),
   eventsUrl: (id: string) => `${API_BASE}/v1/pipelines/${id}/events`,
   /**
+   * Phase 1B.4 — fork a running pipeline. Backend response matches
+   * `ForkResult` in `backend/src/ee/pipelines/fork.ts`. Idempotent: a second
+   * call against an already-forked pipeline returns the original `forkedAt`.
+   */
+  forkPipeline: (
+    id: string,
+  ): Promise<{
+    ok: true
+    pipelineId: string
+    forkedAt: string
+    forkedStatus: string
+    forkReason: string
+  }> => postJson(`/v1/pipelines/${id}/fork`, {}),
+  /**
    * Run a §6.11 scene-context helper. The generic ties the helper name to its
    * expected body shape (compile-time error if the wrong body is passed) and
    * its returned result shape.
