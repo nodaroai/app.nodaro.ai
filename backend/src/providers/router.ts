@@ -42,6 +42,10 @@ import {
 
 export interface RouteResult {
   url: string
+  /** Additional result URLs the provider returned alongside the primary. See
+   *  ProviderResult.extraUrls — workers upload these to R2 and frontends list
+   *  them as alternates. */
+  extraUrls?: readonly string[]
   cost: number | null
   displayCost: number | null
   providerUsed: ProviderUsed
@@ -113,6 +117,7 @@ async function routeAndExecute(
 
     return {
       url: result.url,
+      ...(result.extraUrls?.length ? { extraUrls: result.extraUrls } : {}),
       cost: result.cost,
       displayCost,
       providerUsed,

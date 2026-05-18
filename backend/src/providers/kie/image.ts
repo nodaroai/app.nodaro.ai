@@ -238,16 +238,18 @@ export class KieImageProvider
       ? await runFluxKontextTask(modelConfig.model, input)
       : await runKieTask(modelConfig.model, input)
 
-    const imageUrl = result.resultJson.resultUrls?.[0]
+    const allUrls = result.resultJson.resultUrls ?? []
+    const imageUrl = allUrls[0]
     if (!imageUrl) {
       throw createSanitizedError(
         "image task succeeded but no URL in resultUrls",
         "Image generation"
       )
     }
+    const extraUrls = allUrls.slice(1)
 
     console.log(
-      `[KIE.ai] Image completed: ${imageUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Image completed: ${imageUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
     // Log credit audit entry (fire-and-forget)
@@ -264,7 +266,12 @@ export class KieImageProvider
     const providerMs = ("providerMs" in result && typeof result.providerMs === "number")
       ? result.providerMs
       : undefined
-    return { url: imageUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    return {
+      url: imageUrl,
+      ...(extraUrls.length ? { extraUrls } : {}),
+      cost: modelConfig.cost,
+      ...(providerMs !== undefined && { providerMs }),
+    }
   }
 
   async editImage(
@@ -333,18 +340,25 @@ export class KieImageProvider
 
     const { resultJson, providerMs } = await runKieTask(modelConfig.model, input)
 
-    const outputUrl = resultJson.resultUrls?.[0]
+    const allUrls = resultJson.resultUrls ?? []
+    const outputUrl = allUrls[0]
     if (!outputUrl) {
       throw createSanitizedError(
         "edit image task succeeded but no URL in resultUrls",
         "Image editing"
       )
     }
+    const extraUrls = allUrls.slice(1)
 
     console.log(
-      `[KIE.ai] Edit image completed: ${outputUrl} (cost: $${modelConfig.cost.toFixed(4)})`
+      `[KIE.ai] Edit image completed: ${outputUrl}${extraUrls.length ? ` (+${extraUrls.length} variants)` : ""} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
-    return { url: outputUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
+    return {
+      url: outputUrl,
+      ...(extraUrls.length ? { extraUrls } : {}),
+      cost: modelConfig.cost,
+      ...(providerMs !== undefined && { providerMs }),
+    }
   }
 }

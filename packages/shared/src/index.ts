@@ -207,6 +207,10 @@ export { getRouteReachableNodeIds, type MinimalNode, type MinimalEdge } from "./
 
 export { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 
+export { variantJobId } from "./variant-job-id.js"
+
+export { normalizePinterestUrl } from "./pinterest-url.js"
+
 export { evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonEvalResult, type JsonFilter, type FilterOperator } from "./json-evaluator.js"
 
 export {

@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatus, getExecutionEstimate } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
+import { buildVariantResults } from "./variant-results";
 import {
   WorkflowStaleError,
   MAX_CONSECUTIVE_POLL_FAILURES,
@@ -31,6 +32,15 @@ const OUTPUT_URL_KEY: Record<OutputKey, string> = {
   generatedVideoUrl: "videoUrl",
   generatedImageUrl: "imageUrl",
   generatedAudioUrl: "audioUrl",
+};
+
+/** Map store output key → backend output_data array field (multi-variant).
+ *  Video providers are single-result today; the key is `undefined` so the
+ *  fan-out branch falls through to the single-URL path. */
+const OUTPUT_URLS_KEY: Record<OutputKey, string | undefined> = {
+  generatedVideoUrl: undefined,
+  generatedImageUrl: "imageUrls",
+  generatedAudioUrl: "audioUrls",
 };
 
 export function pollJobToCompletion(
@@ -117,18 +127,21 @@ function handleJobCompleted(
       ? extraOutputFields(job.output_data as Record<string, unknown>)
       : {};
 
-  const newResult: GeneratedResult = {
-    url: url as string,
-    thumbnailUrl,
-    timestamp: new Date().toISOString(),
-    jobId,
-    ...extraFields,
-  };
+  const urlsKey = OUTPUT_URLS_KEY[outputKey];
+  const allUrlsRaw = urlsKey ? job.output_data?.[urlsKey] : undefined;
+  const variantUrls = Array.isArray(allUrlsRaw)
+    ? (allUrlsRaw.filter((u) => typeof u === "string" && u.length > 0) as string[])
+    : [];
+
+  const newResults: GeneratedResult[] =
+    variantUrls.length > 1
+      ? buildVariantResults(variantUrls, jobId, { thumbnailUrl, extraFields })
+      : [{ url: url as string, thumbnailUrl, timestamp: new Date().toISOString(), jobId, ...extraFields }];
 
   updateNodeData(nodeId, {
     executionStatus: "completed",
     [outputKey]: url,
-    generatedResults: [newResult, ...existingResults],
+    generatedResults: [...newResults, ...existingResults],
     activeResultIndex: 0,
     currentJobId: undefined,
     currentJobProgress: undefined,

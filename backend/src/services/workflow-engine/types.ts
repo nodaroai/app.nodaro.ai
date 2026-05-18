@@ -13,6 +13,10 @@ export interface NodeOutput {
   imageUrl?: string
   videoUrl?: string
   audioUrl?: string
+  /** Multi-variant URLs from a single job. Primary at index 0. Singular
+   *  `imageUrl`/`audioUrl` stays populated for downstream chaining. */
+  imageUrls?: readonly string[]
+  audioUrls?: readonly string[]
   text?: string
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown

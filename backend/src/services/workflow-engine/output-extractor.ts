@@ -38,6 +38,8 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "imageUrl",
   "videoUrl",
   "audioUrl",
+  "imageUrls",
+  "audioUrls",
   "text",
   "json",
   "extractedText",

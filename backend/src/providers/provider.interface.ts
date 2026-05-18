@@ -1,6 +1,11 @@
 // Result types
 export interface ProviderResult {
   url: string
+  /** Additional result URLs from the same job — variants Grok / Suno / Imagen
+   *  etc. return alongside the primary. Workers upload all to R2; frontends
+   *  surface them as alternates in the version pill. Empty/undefined when the
+   *  provider returns a single result. */
+  extraUrls?: readonly string[]
   cost: number | null // null if cost unknown
   kieTaskId?: string  // KIE task ID for extend/upscale operations (VEO, Runway)
   /** Provider-reported seed VEO actually used. Captured even when no seed
