@@ -1453,3 +1453,138 @@ describe("buildImagePrompt — location canonical-description injection", () => 
   })
 })
 
+// ---------------------------------------------------------------------------
+// Phase 2 #2 (slice 2b): @location:1:variant mention syntax resolution. The
+// resolver matches tokens against pre-expanded canonical + per-variant
+// `wired-location` ConnectedReferences, emits a "Use these locations:" header
+// + per-location bullet, and replaces the @-token inline.
+// ---------------------------------------------------------------------------
+
+describe("buildImagePrompt — @location mention resolution", () => {
+  const CANONICAL_REF = {
+    id: "loc_1",
+    defaultName: "Old Library",
+    source: "wired-location" as const,
+    url: "https://r2/old-library.png",
+    locationCanonicalDescription: "A dimly-lit Victorian library with leather-bound books",
+    locationSlug: "old-library",
+  }
+  const RAIN_VARIANT_REF = {
+    id: "loc_1_weather_rain",
+    defaultName: "Old Library / Rain",
+    source: "wired-location" as const,
+    url: "https://r2/old-library-rain.png",
+    locationCanonicalDescription: "A dimly-lit Victorian library with leather-bound books",
+    locationSlug: "old-library",
+    locationVariantBucket: "weather",
+    locationVariantSlug: "rain",
+    locationVariantDisplayName: "rain",
+  }
+  const NEON_LIGHTING_REF = {
+    id: "loc_1_lighting_neon",
+    defaultName: "Old Library / Neon",
+    source: "wired-location" as const,
+    url: "https://r2/old-library-neon.png",
+    locationSlug: "old-library",
+    locationVariantBucket: "lighting",
+    locationVariantSlug: "neon",
+    locationVariantDisplayName: "neon",
+  }
+
+  it("resolves @old-library:1 canonical mention with identical-mode bullet", () => {
+    const result = buildImagePrompt({
+      prompt: "Hero stands in @old-library:1.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF],
+    })
+    expect(result.prompt).toContain("Use these locations:")
+    expect(result.prompt).toContain(
+      "Image 1 (Old Library) — A dimly-lit Victorian library with leather-bound books",
+    )
+    expect(result.prompt).toContain("Hero stands in Old Library.")
+    expect(result.referenceImageUrls).toContain("https://r2/old-library.png")
+  })
+
+  it("resolves @old-library:1:weather/rain to the variant URL", () => {
+    const result = buildImagePrompt({
+      prompt: "Hero stands in @old-library:1:weather/rain.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF, RAIN_VARIANT_REF],
+    })
+    expect(result.referenceImageUrls).toContain("https://r2/old-library-rain.png")
+    expect(result.referenceImageUrls).not.toContain("https://r2/old-library.png")
+    expect(result.prompt).toContain("(in this image: rain)")
+  })
+
+  it("style mode emits the style directive, no canonical description", () => {
+    const result = buildImagePrompt({
+      prompt: "Set in @old-library:1:style.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF],
+    })
+    expect(result.prompt).toContain(
+      "Image 1 (Old Library). use as a style / mood reference — borrow color, lighting, and atmosphere.",
+    )
+    // No canonical desc in style mode.
+    expect(result.prompt).not.toContain("Victorian library")
+  })
+
+  it("layout mode emits the layout directive", () => {
+    const result = buildImagePrompt({
+      prompt: "Compose like @old-library:1:layout.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF],
+    })
+    expect(result.prompt).toContain(
+      "use as a compositional layout / camera framing reference.",
+    )
+  })
+
+  it("none mode attaches the URL but emits NO bullet and substitutes 'Image N'", () => {
+    const result = buildImagePrompt({
+      prompt: "Hero stands in @old-library:1:none.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF],
+    })
+    expect(result.referenceImageUrls).toContain("https://r2/old-library.png")
+    // No bullet was emitted → no "Use these locations:" header.
+    expect(result.prompt).not.toContain("Use these locations:")
+    expect(result.prompt).toContain("Hero stands in Image 1.")
+  })
+
+  it("multiple mentions of the same location emit ONE bullet", () => {
+    const result = buildImagePrompt({
+      prompt: "Set in @old-library:1, then @old-library:1:lighting/neon.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF, NEON_LIGHTING_REF],
+    })
+    const headerCount = (result.prompt.match(/^- Image \d \(Old Library/gm) ?? []).length
+    expect(headerCount).toBe(1)
+    // Both URLs still attach.
+    expect(result.referenceImageUrls).toContain("https://r2/old-library.png")
+    expect(result.referenceImageUrls).toContain("https://r2/old-library-neon.png")
+  })
+
+  it("falls through to literal text for unknown variant slug (no match)", () => {
+    const result = buildImagePrompt({
+      prompt: "Set in @old-library:1:weather/blizzard.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF, RAIN_VARIANT_REF],
+    })
+    // No bullet, token stays as typed.
+    expect(result.prompt).not.toContain("Use these locations:")
+    expect(result.prompt).toContain("@old-library:1:weather/blizzard")
+  })
+
+  it("does NOT trip on @-mentions whose slug isn't a known location", () => {
+    const result = buildImagePrompt({
+      prompt: "Hero @kira:1 stands in @somewhere:2.",
+      provider: "nano-banana",
+      connectedReferences: [CANONICAL_REF],
+    })
+    // Neither @kira nor @somewhere maps to old-library; no location resolution
+    // fires for them.
+    expect(result.prompt).not.toContain("Use these locations:")
+  })
+})
+
