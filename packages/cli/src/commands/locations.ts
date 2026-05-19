@@ -1,5 +1,9 @@
 import { Command } from "commander"
-import { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/client"
+import {
+  LOCATION_ASSET_TYPES,
+  LOCATION_ATTACH_COLUMNS,
+  type CharacterAspectRatio,
+} from "@nodaro/client"
 import { buildClient, handleError } from "../client.js"
 import { emit, success, table, dim, type OutputOpts } from "../output.js"
 import { watchUntilTerminal } from "../util.js"
@@ -383,6 +387,97 @@ export function locationsCommand(): Command {
             return
           }
           success(`generation started — job ${result.jobId}`)
+          if (!opts.watch) {
+            dim(`follow: nodaro jobs get ${result.jobId}`)
+            return
+          }
+          await watchUntilTerminal({
+            fetch: () => client.jobs.get(result.jobId),
+            label: result.jobId,
+            ...opts,
+          })
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("generate-motion")
+    .description(
+      "animate the location's establishing shot into an atmospheric motion clip",
+    )
+    .requiredOption("--name <name>", "the location's display name (used in the prompt)")
+    .requiredOption("--motion-prompt <prompt>", "describe WHAT moves and HOW (drift, sway, fall)")
+    .requiredOption(
+      "--source-image-url <url>",
+      "URL of the establishing shot to animate",
+    )
+    .option(
+      "--provider <provider>",
+      "i2v provider — one of kling | kling-turbo | kling-3.0 | wan-i2v | wan-2.7-i2v | seedance-2",
+      "kling",
+    )
+    .option("--style <style>", "realistic | anime | 3d-pixar | illustration", "realistic")
+    .option("--canonical-description <desc>", "LLM caption to anchor the prompt with")
+    .option(
+      "--attach-to-location-id <id>",
+      "auto-attach result to this location's atmosphere_motions bucket",
+    )
+    .option(
+      "--attach-name <name>",
+      "display name for the atmosphere_motions entry (paired with --attach-to-location-id)",
+    )
+    .option("--aspect-ratio <ratio>", "override default 16:9 — one of 1:1 | 3:4 | 16:9 | 9:16")
+    .option("--profile <name>")
+    .option("--json")
+    .option("--watch", "poll the motion job until completion")
+    .action(
+      async (
+        opts: {
+          name: string
+          motionPrompt: string
+          sourceImageUrl: string
+          provider: string
+          style: string
+          canonicalDescription?: string
+          attachToLocationId?: string
+          attachName?: string
+          aspectRatio?: string
+          watch?: boolean
+        } & GlobalOpts,
+      ) => {
+        try {
+          const client = buildClient(opts.profile)
+          const result = await client.locations.generateMotion({
+            name: opts.name,
+            motionPrompt: opts.motionPrompt,
+            sourceImageUrl: opts.sourceImageUrl,
+            provider: opts.provider,
+            // Commander hands us a raw string; the SDK's union is the
+            // canonical 4-value style set. We narrow here so a typo (e.g.
+            // `--style anim`) doesn't silently send a value the route's Zod
+            // would reject — surface a clear CLI error instead.
+            style: opts.style as
+              | "realistic"
+              | "anime"
+              | "3d-pixar"
+              | "illustration",
+            canonicalDescription: opts.canonicalDescription,
+            attachToLocationId: opts.attachToLocationId,
+            attachName: opts.attachName,
+            // `aspectRatio` is a 4-value union (1:1 / 3:4 / 16:9 / 9:16). We
+            // pass commander's raw string through with a narrowing cast; the
+            // route's `z.enum(CHARACTER_ASPECT_OPTIONS)` is the source of
+            // truth on rejection — keeping the CLI thin avoids drift if we
+            // ever extend the option set.
+            aspectRatio: opts.aspectRatio as CharacterAspectRatio | undefined,
+          })
+          if (opts.json && !opts.watch) {
+            emit(result, opts)
+            return
+          }
+          success(`motion generation started — job ${result.jobId}`)
           if (!opts.watch) {
             dim(`follow: nodaro jobs get ${result.jobId}`)
             return

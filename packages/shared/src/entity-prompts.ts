@@ -217,3 +217,32 @@ export function buildMotionPrompt(input: CharacterMotionPromptInput): string {
   const charPart = charDesc ? `${charDesc}${outfitDesc}, ` : ""
   return `${charPart}${input.motionPrompt}. ${styleDesc} style.`
 }
+
+/**
+ * Input shape for buildLocationMotionPrompt.
+ *
+ * Mirrors CharacterMotionPromptInput's role. `canonicalDescription` is preferred
+ * (LLM-authored from the approved main image) but the helper falls back to
+ * category+name if not yet set, and to a generic placeholder if both are absent.
+ */
+export interface LocationMotionPromptInput {
+  name: string
+  category?: string
+  style?: EntityStyle | string
+  motionPrompt: string
+  canonicalDescription?: string
+}
+
+/**
+ * Build the prompt sent to the i2v provider for a location atmosphere clip.
+ *
+ * Note: character's analog is named `buildMotionPrompt` (historical); location
+ * uses the more specific `buildLocationMotionPrompt`.
+ */
+export function buildLocationMotionPrompt(input: LocationMotionPromptInput): string {
+  const sceneDesc =
+    input.canonicalDescription?.trim() ||
+    [input.category, input.name].filter(Boolean).join(", ").trim() ||
+    "A generic location"
+  return `${sceneDesc}. Camera move: ${input.motionPrompt}. ${input.style ?? "realistic"} style. Slow, ambient, cinematic.`
+}

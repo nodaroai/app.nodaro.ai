@@ -418,4 +418,68 @@ describe("LocationNode", () => {
     renderLocationNode()
     expect(screen.getByText("Forest")).toBeInTheDocument()
   })
+
+  it("shows all 6 asset badges with correct counts (TOD/Weather/Seasons/Angles/Lighting/Motion)", () => {
+    renderLocationNode({
+      data: {
+        label: "Location",
+        style: "realistic",
+        locationName: "Forest",
+        timeOfDay: [{ name: "dawn", url: "x" }, { name: "noon", url: "y" }],
+        weather: [{ name: "rain", url: "z" }],
+        seasons: [{ name: "fall", url: "a" }, { name: "winter", url: "b" }, { name: "spring", url: "c" }],
+        angles: [{ name: "wide", url: "d" }],
+        lighting: [{ name: "warm", url: "e" }, { name: "cool", url: "f" }],
+        atmosphereMotions: [{ name: "rainfall", url: "v1" }, { name: "fog", url: "v2" }, { name: "wind", url: "v3" }, { name: "snow", url: "v4" }],
+      },
+    })
+    expect(screen.getByText("TOD 2")).toBeInTheDocument()
+    expect(screen.getByText("Weather 1")).toBeInTheDocument()
+    expect(screen.getByText("Seasons 3")).toBeInTheDocument()
+    expect(screen.getByText("Angles 1")).toBeInTheDocument()
+    expect(screen.getByText("Lighting 2")).toBeInTheDocument()
+    expect(screen.getByText("Motion 4")).toBeInTheDocument()
+  })
+
+  it("Motion badge uses amber tint (video variant) when populated", () => {
+    renderLocationNode({
+      data: {
+        label: "Location",
+        style: "realistic",
+        locationName: "Forest",
+        atmosphereMotions: [{ name: "rainfall", url: "v1" }],
+      },
+    })
+    const motionBadge = screen.getByText("Motion 1").parentElement as HTMLElement
+    expect(motionBadge).toBeTruthy()
+    expect(motionBadge.className).toMatch(/bg-amber/)
+    expect(motionBadge.className).toMatch(/text-amber/)
+  })
+
+  it("image badges use cyan tint (default image variant) when populated", () => {
+    renderLocationNode({
+      data: {
+        label: "Location",
+        style: "realistic",
+        locationName: "Forest",
+        timeOfDay: [{ name: "dawn", url: "x" }],
+      },
+    })
+    const todBadge = screen.getByText("TOD 1").parentElement as HTMLElement
+    expect(todBadge).toBeTruthy()
+    expect(todBadge.className).toMatch(/bg-cyan/)
+    expect(todBadge.className).toMatch(/text-cyan/)
+  })
+
+  it("shows spinner when atmosphereStatus is running (asset-level)", () => {
+    renderLocationNode({
+      data: {
+        label: "Location",
+        style: "realistic",
+        locationName: "Forest",
+        atmosphereStatus: "running",
+      },
+    })
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-is-running", "true")
+  })
 })

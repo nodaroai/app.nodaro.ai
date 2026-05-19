@@ -308,6 +308,103 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
+/**
+ * Worker handler for `POST /v1/generate-location-motion` (image-to-video for
+ * location atmosphere clips). Mirrors `handleGenerateCharacterMotion` minus
+ * character-specific fields (motionDescription / realLifeRefs /
+ * attachAssetToCharacter); locations have a single attach column
+ * (`atmosphere_motions`) which the route sets so the worker doesn't need to
+ * narrow it.
+ *
+ * Belt-and-braces ownership re-verification on the `locations` row before the
+ * RPC fires: even though the route already verified ownership, the worker
+ * re-checks `(id, user_id, deleted_at IS NULL)` so a forged BullMQ payload
+ * can't trick a stale worker into attaching to another user's row OR a
+ * location that was soft-deleted between route accept and worker pickup.
+ *
+ * Error policy: RPC failures are swallowed by `attachAssetToLocation` (the
+ * job result is already on `jobs.output_data` and credits are committed —
+ * throwing would orphan the generation). Ownership-check failure (no row)
+ * silently skips attach but still completes the job + commits credits.
+ */
+const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLocationMotion(job, ctx) {
+  const {
+    prompt,
+    sourceImageUrl,
+    provider,
+    aspectRatio,
+    attachToLocationId,
+    attachToColumn,
+    attachName,
+  } = job.data as {
+    jobId: string
+    prompt: string
+    sourceImageUrl: string
+    provider?: string
+    aspectRatio?: string
+    attachToLocationId?: string
+    attachToColumn?: string
+    attachName?: string
+  }
+  const resolvedProvider = provider ?? "kling"
+  console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
+
+  const result = await imageToVideo(
+    sourceImageUrl,
+    resolvedProvider,
+    prompt,
+    undefined,
+    undefined,
+    aspectRatio ? { aspectRatio } : undefined,
+  )
+  await setJobProgress(job, ctx.jobId, 50)
+
+  const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
+  await setJobProgress(job, ctx.jobId, 100)
+
+  if (!await shouldSaveJobResult(ctx.jobId)) return
+
+  const ok = await markJobCompleted(ctx.jobId, {
+    output_data: { videoUrl: r2Url },
+    provider: result.providerUsed,
+    provider_cost: result.cost,
+    display_cost: result.displayCost,
+  })
+  if (!ok) return
+
+  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
+
+  // Best-effort attach to locations.atmosphere_motions (or whichever motion
+  // column the route specified). Belt-and-braces ownership re-query before
+  // the RPC: a forged BullMQ payload can't get past the (id, user_id,
+  // deleted_at IS NULL) gate even though the route already verified
+  // ownership. Mirrors the location-asset path in `makeEntityImageHandler`.
+  if (
+    attachToLocationId
+    && attachToColumn
+    && attachName
+    && ctx.jobUserId
+    && LOCATION_ATTACH_COLUMN_SET.has(attachToColumn)
+  ) {
+    const { data: row } = await supabase
+      .from("locations")
+      .select("id")
+      .eq("id", attachToLocationId)
+      .eq("user_id", ctx.jobUserId)
+      .is("deleted_at", null)
+      .single()
+    if (row) {
+      await attachAssetToLocation(
+        attachToLocationId,
+        attachToColumn as LocationAttachColumn,
+        { name: attachName, url: r2Url },
+      )
+    }
+  }
+
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+}
+
 export const entityHandlers: Record<string, HandlerFn> = {
   "generate-character": makeEntityImageHandler("generate-character"),
   "generate-face": makeEntityImageHandler("generate-face", { aspectRatio: "1:1" }),
@@ -318,4 +415,5 @@ export const entityHandlers: Record<string, HandlerFn> = {
   "generate-location-asset": makeEntityImageHandler("generate-location-asset", { includeAssetType: true }),
   "generate-script": handleGenerateScript,
   "generate-character-motion": handleGenerateCharacterMotion,
+  "generate-location-motion": handleGenerateLocationMotion,
 }

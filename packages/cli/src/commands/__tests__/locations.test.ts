@@ -21,6 +21,7 @@ const mocks = {
   restore: vi.fn(),
   generate: vi.fn(),
   generateAsset: vi.fn(),
+  generateMotion: vi.fn(),
   approveMainImage: vi.fn(),
   recaption: vi.fn(),
   jobsGet: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../../client.js", () => ({
       restore: mocks.restore,
       generate: mocks.generate,
       generateAsset: mocks.generateAsset,
+      generateMotion: mocks.generateMotion,
       approveMainImage: mocks.approveMainImage,
       recaption: mocks.recaption,
     },
@@ -247,5 +249,93 @@ describe("locations command", () => {
       ),
     ).rejects.toThrow(/--column is required/)
     expect(mocks.generateAsset).not.toHaveBeenCalled()
+  })
+
+  it("'nodaro locations generate-motion' invokes SDK.generateMotion", async () => {
+    // Mirrors the character generate-motion CLI surface: required
+    // --name / --motion-prompt / --source-image-url, optional provider /
+    // attach / aspect ratio. Spec: Location Studio PR-2 Task 8.
+    mocks.generateMotion.mockResolvedValueOnce({ jobId: "motion-job-1" })
+    await runCmd(
+      "locations",
+      "generate-motion",
+      "--name",
+      "Mystic Forest",
+      "--motion-prompt",
+      "slow pan with drifting fog",
+      "--source-image-url",
+      "https://r2.example/forest.png",
+      "--json",
+    )
+    expect(mocks.generateMotion).toHaveBeenCalledTimes(1)
+    const arg = mocks.generateMotion.mock.calls[0][0] as Record<string, unknown>
+    expect(arg.name).toBe("Mystic Forest")
+    expect(arg.motionPrompt).toBe("slow pan with drifting fog")
+    expect(arg.sourceImageUrl).toBe("https://r2.example/forest.png")
+    // Defaults applied by commander: provider=kling, style=realistic.
+    expect(arg.provider).toBe("kling")
+    expect(arg.style).toBe("realistic")
+    // Optional fields the user didn't supply must not silently appear on the
+    // payload — they round-trip undefined so the route's Zod treats them as
+    // omitted rather than empty strings.
+    expect(arg.canonicalDescription).toBeUndefined()
+    expect(arg.attachToLocationId).toBeUndefined()
+    expect(arg.attachName).toBeUndefined()
+    expect(arg.aspectRatio).toBeUndefined()
+  })
+
+  it("generate-motion forwards optional attach + aspect-ratio fields", async () => {
+    mocks.generateMotion.mockResolvedValueOnce({ jobId: "motion-job-2" })
+    await runCmd(
+      "locations",
+      "generate-motion",
+      "--name",
+      "Beach",
+      "--motion-prompt",
+      "rolling waves",
+      "--source-image-url",
+      "https://r2.example/beach.png",
+      "--provider",
+      "seedance-2",
+      "--style",
+      "anime",
+      "--canonical-description",
+      "wide sandy beach at golden hour",
+      "--attach-to-location-id",
+      "loc-77",
+      "--attach-name",
+      "rolling-waves",
+      "--aspect-ratio",
+      "9:16",
+      "--json",
+    )
+    expect(mocks.generateMotion).toHaveBeenCalledWith({
+      name: "Beach",
+      motionPrompt: "rolling waves",
+      sourceImageUrl: "https://r2.example/beach.png",
+      provider: "seedance-2",
+      style: "anime",
+      canonicalDescription: "wide sandy beach at golden hour",
+      attachToLocationId: "loc-77",
+      attachName: "rolling-waves",
+      aspectRatio: "9:16",
+    })
+  })
+
+  it("generate-motion errors when --motion-prompt is missing", async () => {
+    // Commander rejects missing required options BEFORE our action runs; we
+    // assert the SDK was never called and exitOverride surfaces the error.
+    await expect(
+      runCmd(
+        "locations",
+        "generate-motion",
+        "--name",
+        "Forest",
+        "--source-image-url",
+        "https://r2.example/forest.png",
+        "--json",
+      ),
+    ).rejects.toThrow()
+    expect(mocks.generateMotion).not.toHaveBeenCalled()
   })
 })

@@ -131,6 +131,7 @@ export const I18N_CATALOGS = [
   "instrumentation",
   "lens",
   "lighting",
+  "location-variants",
   "loop-subject",
   "materials",
   "mood",

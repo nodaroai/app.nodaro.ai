@@ -1,14 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { CHARACTER_STYLES, LOCATION_ATMOSPHERE_PROVIDERS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
-import { errorResult } from "./_verb-helpers.js"
+import {
+  parseJobId,
+  errorResult,
+  parseFailure,
+  jobResultWithWidget,
+} from "./_verb-helpers.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
+const executeGate: ToolGate = { required: ["workflows:execute"] }
 
 /**
  * Location platform tools.
@@ -16,10 +23,14 @@ const writeGate: ToolGate = { required: ["assets:write"] }
  * Two read-only discovery tools (`list_locations` / `get_location`) plus
  * the creative + reversible-write subset of the REST surface:
  * `create_location` / `update_location` / `approve_main_image` /
- * `recaption_location`. Location candidate + variant-asset generation
- * already lives as a verb tool in `verbs-clo.ts::generate_location` —
- * we do NOT duplicate it here. Mirrors the `characters.ts` registration
- * pattern exactly.
+ * `recaption_location` / `generate_location_motion`. Location candidate +
+ * variant-asset generation already lives as a verb tool in
+ * `verbs-clo.ts::generate_location` — we do NOT duplicate it here.
+ * `generate_location_motion` stays in this file because it dispatches to
+ * a distinct route (`/v1/generate-location-motion`) with its own
+ * motion-specific input shape (`motion_prompt`, source frame, atmosphere
+ * provider) and a different i2v credit profile — mirrors the
+ * `generate_character_motion` placement in `characters.ts`.
  *
  * INTENTIONAL OMISSIONS: `delete_location` and `restore_location` are
  * NOT exposed via MCP. Destructive (or destructive-adjacent) operations
@@ -36,11 +47,13 @@ const writeGate: ToolGate = { required: ["assets:write"] }
  *   - `assets:read` — list_locations, get_location
  *   - `assets:write` — create_location, update_location, approve_main_image,
  *     recaption_location
+ *   - `workflows:execute` — generate_location_motion (it produces an i2v
+ *     job that consumes credits, same gate as `generate_character_motion`)
  *
  * All tools are scoped to `session.userId`. Read tools query Supabase
  * service-role with a manual `user_id` filter; mutation tools that fire
- * approval/caption side-effects go through `fastify.inject()` with the
- * internal-orchestrator-secret so the auth middleware accepts `userId`
+ * approval/caption/motion side-effects go through `fastify.inject()` with
+ * the internal-orchestrator-secret so the auth middleware accepts `userId`
  * from the request body.
  */
 
@@ -193,6 +206,7 @@ export interface RegisterLocationToolsOpts {
 export function registerLocationTools(opts: RegisterLocationToolsOpts): void {
   registerReadTools(opts)
   registerWriteTools(opts)
+  registerGenerationTools(opts)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -580,6 +594,136 @@ function registerWriteTools(opts: RegisterLocationToolsOpts): void {
           canonicalDescription: parsed?.canonicalDescription ?? "",
         },
       )
+    },
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GENERATION tools — generate_location_motion only
+// (workflows:execute)
+//
+// Location candidate + variant-asset generation lives in
+// `verbs-clo.ts::generate_location` (kind="main" / kind="asset"). Motion
+// clips stay here because they dispatch to a distinct route
+// (`/v1/generate-location-motion`) with a different input shape and i2v
+// credit profile — mirrors `generate_character_motion` in `characters.ts`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
+  const { server, session, fastify } = opts
+  if (!passesGate(session, executeGate)) return
+  if (!fastify) return
+
+  server.registerTool(
+    "generate_location_motion",
+    {
+      title: "Generate Location Motion Clip",
+      description:
+        "Animate a location into an ambient camera-move clip via " +
+        "image-to-video. The motion_prompt describes the camera move and " +
+        "any subtle world motion (e.g. 'slow dolly-in, leaves drift across " +
+        "frame', 'drone fly-over, neon signs flicker'). Pass " +
+        "`attach_to_location_id` to auto-append the result to the " +
+        "location's `atmosphere_motions[]` bucket on completion. " +
+        "`source_image_url` is REQUIRED — typically the location's " +
+        "approved main image. Returns the i2v job id — poll via `get_job` " +
+        "until completion. Credit cost depends on the provider.",
+      inputSchema: {
+        motion_prompt: z
+          .string()
+          .min(1)
+          .max(2000)
+          .describe(
+            "Camera-move + ambient-motion description (e.g. 'slow dolly-in', 'drone fly-over').",
+          ),
+        source_image_url: z
+          .string()
+          .url()
+          .describe(
+            "Source frame — typically the location's approved main image URL.",
+          ),
+        provider: z
+          .enum(LOCATION_ATMOSPHERE_PROVIDERS)
+          .optional()
+          .default("kling")
+          .describe("i2v provider. Defaults to 'kling'."),
+        name: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe(
+            "Display name for the location (used in the generated prompt context).",
+          ),
+        category: z.string().max(100).optional(),
+        style: z.enum(CHARACTER_STYLES).optional(),
+        canonical_description: z
+          .string()
+          .max(4000)
+          .optional()
+          .describe(
+            "Canonical scene description (preferred prompt context; falls back to category + name).",
+          ),
+        attach_to_location_id: z
+          .string()
+          .uuid()
+          .optional()
+          .describe(
+            "When set, append the result to this location's atmosphere_motions[] bucket.",
+          ),
+        attach_name: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("Display name for the atmosphere-motion entry (defaults to motion description)."),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (args) => {
+      const payload: Record<string, unknown> = {
+        motionPrompt: args.motion_prompt,
+        sourceImageUrl: args.source_image_url,
+        provider: args.provider,
+        name: args.name,
+        userId: session.userId,
+        mcp_client: session.clientName,
+      }
+      if (args.category) payload.category = args.category
+      if (args.style) payload.style = args.style
+      if (args.canonical_description) {
+        payload.canonicalDescription = args.canonical_description
+      }
+      if (args.attach_to_location_id) {
+        payload.attachToLocationId = args.attach_to_location_id
+      }
+      if (args.attach_name) payload.attachName = args.attach_name
+
+      const res = await fastify.inject({
+        method: "POST",
+        url: "/v1/generate-location-motion",
+        headers: {
+          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        },
+        payload,
+      })
+      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+      const jobId = parseJobId(res.body)
+      if (!jobId) return parseFailure(res.body)
+      // Video widget — the iframe polls `get_asset` for the rendered clip.
+      return jobResultWithWidget({
+        jobId,
+        label: "location motion",
+        session,
+        widgetKind: "video",
+        widgetData: {
+          prompt: args.motion_prompt,
+          model: args.provider ?? "kling",
+        },
+      })
     },
   )
 }

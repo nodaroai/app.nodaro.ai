@@ -66,6 +66,25 @@ export function useLocations(projectId?: string, userId?: string) {
   })
 }
 
+/**
+ * Archived ("soft-deleted") locations for the library's Archive tab. Mirrors
+ * `useArchivedCharacters` — keyed separately from `useLocations` so the active
+ * list cache isn't polluted. On archive/restore/permanent-delete, invalidate
+ * both via `useInvalidateLocation` (active) + this hook's key (archived).
+ */
+export function useArchivedLocations(projectId?: string, userId?: string) {
+  return useQuery({
+    queryKey: [...queryKeys.assets.locations(projectId, userId), "archived"],
+    queryFn: async () => {
+      const { listArchivedLocations } = await import("@/lib/api")
+      return listArchivedLocations(projectId)
+    },
+    enabled: !!userId,
+    staleTime: 60_000,
+    select: (data) => data.locations,
+  })
+}
+
 // --- Faces ---
 export function useFaces(projectId?: string, userId?: string) {
   return useQuery({

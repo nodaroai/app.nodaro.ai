@@ -62,13 +62,15 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
     seasons: (nodeData.seasons ?? []).length,
     angles: (nodeData.angles ?? []).length,
     lighting: (nodeData.lighting ?? []).length,
+    atmosphereMotions: (nodeData.atmosphereMotions ?? []).length,
   }
   const anyAssetRunning =
     nodeData.timeOfDayStatus === "running" ||
     nodeData.weatherStatus === "running" ||
     nodeData.seasonsStatus === "running" ||
     nodeData.anglesStatus === "running" ||
-    nodeData.lightingStatus === "running"
+    nodeData.lightingStatus === "running" ||
+    nodeData.atmosphereStatus === "running"
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete))
@@ -267,13 +269,14 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Compact 5-bucket asset grid (atmosphere badge defers to PR-2) */}
-        <div className="grid grid-cols-5 gap-1 text-[9px]">
+        {/* Compact 6-bucket asset grid (5 image buckets + 1 video bucket for atmosphere motions) */}
+        <div className="grid grid-cols-6 gap-1 text-[9px]">
           <AssetBadge icon="🌅" label="TOD" count={counts.timeOfDay} status={nodeData.timeOfDayStatus ?? "idle"} />
           <AssetBadge icon="🌧" label="Weather" count={counts.weather} status={nodeData.weatherStatus ?? "idle"} />
           <AssetBadge icon="🍁" label="Seasons" count={counts.seasons} status={nodeData.seasonsStatus ?? "idle"} />
           <AssetBadge icon="📐" label="Angles" count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
           <AssetBadge icon="💡" label="Lighting" count={counts.lighting} status={nodeData.lightingStatus ?? "idle"} />
+          <AssetBadge icon="🎬" label="Motion" count={counts.atmosphereMotions} status={nodeData.atmosphereStatus ?? "idle"} variant="video" />
         </div>
 
         {/* Open Studio button */}
@@ -329,7 +332,19 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-function AssetBadge({ icon, label, count, status }: { readonly icon: string; readonly label: string; readonly count: number; readonly status: string }) {
+function AssetBadge({
+  icon,
+  label,
+  count,
+  status,
+  variant = "image",
+}: {
+  readonly icon: string
+  readonly label: string
+  readonly count: number
+  readonly status: string
+  readonly variant?: "image" | "video"
+}) {
   if (status === "running") {
     return (
       <span
@@ -342,11 +357,14 @@ function AssetBadge({ icon, label, count, status }: { readonly icon: string; rea
     )
   }
   const hasItems = count > 0
+  // Image buckets use cyan (matching the location node accent); video buckets
+  // use amber to visually distinguish motion clips from still images.
+  const filledClass = variant === "video" ? "bg-amber-500/10 text-amber-600" : "bg-cyan-500/10 text-cyan-600"
   return (
     <span
       title={`${label}${hasItems ? ` — ${count}` : ""}`}
       className={`flex flex-col items-center gap-0 px-0.5 py-0.5 rounded ${
-        hasItems ? "bg-cyan-500/10 text-cyan-600" : "bg-muted/30 text-muted-foreground/40"
+        hasItems ? filledClass : "bg-muted/30 text-muted-foreground/40"
       }`}
     >
       <span className="leading-none">{icon}</span>

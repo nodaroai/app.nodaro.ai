@@ -458,6 +458,7 @@ generation routes:
 
 ## See also
 
+- [Location Platform](./location-platform.md) — the same surfaces, for locations
 - [API Integration](./api-integration.md) — direct REST patterns
 - [SDK Quickstart](./sdk-quickstart.md) — typed client walkthrough
 - [SDK Reference](./sdk-reference.md) — every `client.characters.*` method

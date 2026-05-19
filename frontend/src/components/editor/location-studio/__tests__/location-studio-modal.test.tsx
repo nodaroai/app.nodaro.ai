@@ -47,9 +47,29 @@ vi.mock("../use-location-studio", () => ({
   useLocationStudio: () => mockStudioState,
 }))
 
-// Stub appearance tab so the test doesn't depend on its internals.
+// Stub the 7 tab modules so the test doesn't depend on their internals.
+// Each renders a uniquely-id'd marker we can assert on to confirm body
+// switching.
 vi.mock("../appearance-tab", () => ({
   AppearanceTab: () => <div data-testid="appearance-tab-mounted">appearance-tab</div>,
+}))
+vi.mock("../time-of-day-tab", () => ({
+  TimeOfDayTab: () => <div data-testid="time-of-day-tab-mounted">time-of-day-tab</div>,
+}))
+vi.mock("../weather-tab", () => ({
+  WeatherTab: () => <div data-testid="weather-tab-mounted">weather-tab</div>,
+}))
+vi.mock("../seasons-tab", () => ({
+  SeasonsTab: () => <div data-testid="seasons-tab-mounted">seasons-tab</div>,
+}))
+vi.mock("../angles-tab", () => ({
+  AnglesTab: () => <div data-testid="angles-tab-mounted">angles-tab</div>,
+}))
+vi.mock("../lighting-tab", () => ({
+  LightingTab: () => <div data-testid="lighting-tab-mounted">lighting-tab</div>,
+}))
+vi.mock("../motion-tab", () => ({
+  MotionTab: () => <div data-testid="motion-tab-mounted">motion-tab</div>,
 }))
 
 import { LocationStudioModal } from "../location-studio-modal"
@@ -153,5 +173,103 @@ describe("LocationStudioModal", () => {
     const toggle = screen.getByRole("checkbox", { name: /style lock/i })
     fireEvent.click(toggle)
     expect(mockStudioState.patch).toHaveBeenCalledWith({ styleLock: true })
+  })
+
+  it("renders all 7 sidebar tab buttons (Appearance, Time of Day, Weather, Seasons, Angles, Lighting, Motion)", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    expect(screen.getByRole("button", { name: /appearance/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /time of day/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /weather/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /seasons/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /angles/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /lighting/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /motion/i })).toBeInTheDocument()
+  })
+
+  it("renders all 4 sidebar section headers (Identity / Environment / Composition / Atmosphere)", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    expect(screen.getByText(/^identity$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^environment$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^composition$/i)).toBeInTheDocument()
+    expect(screen.getByText(/^atmosphere$/i)).toBeInTheDocument()
+  })
+
+  it("no longer shows the PR-1 'More tabs in PR-2' placeholder", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    expect(screen.queryByText(/more tabs in pr-2/i)).not.toBeInTheDocument()
+  })
+
+  it("defaults to the Appearance tab body", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    expect(screen.getByTestId("appearance-tab-mounted")).toBeInTheDocument()
+    expect(screen.queryByTestId("time-of-day-tab-mounted")).not.toBeInTheDocument()
+  })
+
+  it("clicking Time of Day swaps the body to the Time of Day tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /time of day/i }))
+    expect(screen.getByTestId("time-of-day-tab-mounted")).toBeInTheDocument()
+    expect(screen.queryByTestId("appearance-tab-mounted")).not.toBeInTheDocument()
+  })
+
+  it("clicking Weather swaps the body to the Weather tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /weather/i }))
+    expect(screen.getByTestId("weather-tab-mounted")).toBeInTheDocument()
+  })
+
+  it("clicking Seasons swaps the body to the Seasons tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /seasons/i }))
+    expect(screen.getByTestId("seasons-tab-mounted")).toBeInTheDocument()
+  })
+
+  it("clicking Angles swaps the body to the Angles tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /angles/i }))
+    expect(screen.getByTestId("angles-tab-mounted")).toBeInTheDocument()
+  })
+
+  it("clicking Lighting swaps the body to the Lighting tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /lighting/i }))
+    expect(screen.getByTestId("lighting-tab-mounted")).toBeInTheDocument()
+  })
+
+  it("clicking Motion swaps the body to the Motion tab", () => {
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+    fireEvent.click(screen.getByRole("button", { name: /motion/i }))
+    expect(screen.getByTestId("motion-tab-mounted")).toBeInTheDocument()
+  })
+
+  it("shows count badges next to tabs when the corresponding bucket has assets", () => {
+    const data = mockStudioState.stagedData as Record<string, unknown>
+    data.timeOfDay = [
+      { id: "t1", url: "https://r2/t1.png", variant: "dawn" },
+      { id: "t2", url: "https://r2/t2.png", variant: "dusk" },
+    ]
+    data.weather = [{ id: "w1", url: "https://r2/w1.png", variant: "rain" }]
+    data.seasons = []
+    data.angles = [
+      { id: "a1", url: "https://r2/a1.png", variant: "wide" },
+      { id: "a2", url: "https://r2/a2.png", variant: "close" },
+      { id: "a3", url: "https://r2/a3.png", variant: "aerial" },
+    ]
+    data.lighting = []
+    data.atmosphereMotions = [{ id: "m1", url: "https://r2/m1.mp4", variant: "wind" }]
+
+    render(<LocationStudioModal nodeId="loc-1" onClose={() => {}} />)
+
+    // Counts render in-line with the tab label.
+    expect(screen.getByRole("button", { name: /time of day.*\(2\)/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /weather.*\(1\)/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /angles.*\(3\)/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /motion.*\(1\)/i })).toBeInTheDocument()
+
+    // Zero-count tabs omit the parenthetical entirely.
+    expect(screen.getByRole("button", { name: /seasons/i }).textContent).not.toMatch(/\(/)
+    expect(screen.getByRole("button", { name: /lighting/i }).textContent).not.toMatch(/\(/)
+    // Appearance never shows a count (it's the identity tab, not a list bucket).
+    expect(screen.getByRole("button", { name: /appearance/i }).textContent).not.toMatch(/\(/)
   })
 })
