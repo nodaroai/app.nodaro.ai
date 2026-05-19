@@ -50,6 +50,35 @@ export function isLocationUsageMode(s: string): s is LocationUsageMode {
 }
 
 /**
+ * Human-readable label for the location usage-mode dropdown / badge UI.
+ * Mirrors `usageModeLabel` for character modes but with location-specific
+ * phrasing — locations don't have face/pose semantics, so the labels speak
+ * about the scene as a whole (framing, layout, mood) instead of subject
+ * features. Used by the location pill's mode menu (slice 4) and the
+ * hierarchical drill in the `@`-autocomplete.
+ *
+ * Phrasing decisions:
+ *   - "Match exactly" — strongest possible directive; the scene should
+ *     reproduce the reference verbatim. Equivalent in role to character
+ *     "Identical".
+ *   - "Style / mood only" — atmospheric transfer (lighting, color grade,
+ *     mood) without locking the framing. Maps to character "Style only".
+ *   - "Layout / framing only" — keep the spatial composition (where things
+ *     are, where the camera sits) without copying the textures or palette.
+ *     No character-side equivalent.
+ *   - "No textual bias" — visual reference only, no top-level header
+ *     mention. Maps to character "None".
+ */
+export function locationUsageModeLabel(mode: LocationUsageMode): string {
+  switch (mode) {
+    case "identical": return "Match exactly"
+    case "style": return "Style / mood only"
+    case "layout": return "Layout / framing only"
+    case "none": return "No textual bias"
+  }
+}
+
+/**
  * Slugify a location name for use in @-mention tokens. Same algorithm as
  * `characterMentionSlug` — lowercase, strip non-alphanumeric, collapse runs.
  * Kept as a separate export to make the call site's intent explicit and to

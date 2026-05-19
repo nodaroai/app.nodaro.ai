@@ -341,10 +341,27 @@ export function PromptEditor({
               const nextIdx = computeNextMentionIndex()
               const bucket = item.locationVariantBucket ?? null
               const variant = item.locationVariantSlug ?? null
-              // Slice 3 MVP: no mode-picker drill yet (slice 4 work), so we
-              // always insert without a usage mode override. The runtime
-              // path falls back to the location node's default mode (or the
-              // global "identical") when resolving the slug.
+              // Mode resolution (slice 4): if the user explicitly picked a
+              // location mode via the 3rd-level drill, ALWAYS emit it as
+              // the trailing slug segment (4th segment for bucketed
+              // variants — `@oldlibrary:1:weather/rain:style`; 3rd segment
+              // for canonical — `@oldlibrary:1:style`) so the user's
+              // explicit choice round-trips through `getText` and survives
+              // a `valueToDoc` re-parse. When no mode was picked
+              // (`locationUsageMode` undefined), we stash `null` and the
+              // extension's `renderText` emits a clean 2-or-3-part slug —
+              // the runtime path then falls back to the location node's
+              // default mode (or the global `DEFAULT_LOCATION_USAGE_MODE`
+              // "identical") when resolving the slug.
+              //
+              // Mirrors the character path's mode-priority logic but
+              // simpler: locations don't yet thread a per-source
+              // `defaultUsageMode` through `RefImageItem`, so the only
+              // emission trigger is an explicit pick.
+              const explicitLocMode = item.locationUsageMode
+              const locModeForNode = explicitLocMode != null
+                ? explicitLocMode
+                : null
               ed
                 .chain()
                 .focus()
@@ -357,7 +374,7 @@ export function PromptEditor({
                       imageIndex: nextIdx,
                       bucket,
                       variant,
-                      usageMode: null,
+                      usageMode: locModeForNode,
                     },
                   },
                   // Trailing space — matches the character path so the

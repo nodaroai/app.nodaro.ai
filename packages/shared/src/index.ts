@@ -896,6 +896,7 @@ export {
   DEFAULT_LOCATION_USAGE_MODE,
   isLocationUsageMode,
   locationMentionSlug,
+  locationUsageModeLabel,
   parseLocationMentionToken,
   findLocationMentionTokens,
 } from "./location-mention-slug.js"

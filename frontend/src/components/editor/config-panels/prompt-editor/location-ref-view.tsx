@@ -1,7 +1,13 @@
 "use client"
 
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
+import {
+  LOCATION_USAGE_MODES,
+  locationUsageModeLabel,
+  type LocationUsageMode,
+} from "@nodaro/shared"
 import type { LocationRefAttrs } from "./location-ref-extension"
 
 /**
@@ -61,6 +67,8 @@ function resolveRef(list: readonly RefEntry[], attrs: LocationRefAttrs): RefEntr
   return undefined
 }
 
+const LOCATION_MODE_PRESETS_LIVE: readonly LocationUsageMode[] = LOCATION_USAGE_MODES
+
 export function LocationRefView(props: NodeViewProps) {
   const attrs = props.node.attrs as LocationRefAttrs
 
@@ -72,6 +80,36 @@ export function LocationRefView(props: NodeViewProps) {
   const ref = useMemo(() => resolveRef(list, attrs), [list, attrs])
   const isBroken = !ref?.url
 
+  const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  // Clean up any stuck preview / menu on unmount (e.g. when the pill is deleted).
+  useEffect(() => () => {
+    setHoverAnchor(null)
+    setMenuAnchor(null)
+  }, [])
+
+  // Close menu on outside click or Escape — mirrors character-ref-view.tsx.
+  useEffect(() => {
+    if (!menuAnchor) return
+    function onDown(e: PointerEvent) {
+      if (menuRef.current?.contains(e.target as Node)) return
+      setMenuAnchor(null)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuAnchor(null)
+    }
+    // Capture-phase pointerdown intercepts before any inner stopPropagation
+    // (e.g. ProseMirror's own mousedown handlers) hides the click from us.
+    window.addEventListener("pointerdown", onDown, { capture: true })
+    document.addEventListener("keydown", onKey)
+    return () => {
+      window.removeEventListener("pointerdown", onDown, { capture: true })
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [menuAnchor])
+
   const handleRemove = useCallback(() => {
     if (typeof props.getPos !== "function") return
     const pos = props.getPos()
@@ -81,6 +119,11 @@ export function LocationRefView(props: NodeViewProps) {
       .focus()
       .deleteRange({ from: pos, to: pos + props.node.nodeSize })
       .run()
+  }, [props])
+
+  const setUsageMode = useCallback((mode: LocationUsageMode | null) => {
+    props.updateAttributes({ usageMode: mode })
+    setMenuAnchor(null)
   }, [props])
 
   const locationDisplay = ref?.label ?? attrs.locationSlug
@@ -119,20 +162,33 @@ export function LocationRefView(props: NodeViewProps) {
           alt=""
           className="location-ref-pill__thumb"
           draggable={false}
+          onMouseEnter={(e) => setHoverAnchor(e.currentTarget.getBoundingClientRect())}
+          onMouseLeave={() => setHoverAnchor(null)}
         />
       ) : (
         <span className="location-ref-pill__thumb-broken" aria-hidden>?</span>
       )}
-      <span className="location-ref-pill__label" contentEditable={false}>
+      <button
+        type="button"
+        className="location-ref-pill__label"
+        contentEditable={false}
+        onMouseDown={(e) => {
+          // Stop ProseMirror from selecting the node so the menu wins the click.
+          e.preventDefault()
+          e.stopPropagation()
+          setMenuAnchor(e.currentTarget.getBoundingClientRect())
+        }}
+        title="Click to change usage mode"
+      >
         <span className="location-ref-pill__name">@{locationDisplay}</span>
         <span className="location-ref-pill__index">:{attrs.imageIndex}</span>
         {variantDisplay && (
           <span className="location-ref-pill__variant">/{variantDisplay}</span>
         )}
         {attrs.usageMode && (
-          <span className="location-ref-pill__mode-badge">{attrs.usageMode}</span>
+          <span className="location-ref-pill__mode-badge">{locationUsageModeLabel(attrs.usageMode)}</span>
         )}
-      </span>
+      </button>
       <button
         type="button"
         aria-label="Remove location reference"
@@ -144,6 +200,110 @@ export function LocationRefView(props: NodeViewProps) {
       >
         ×
       </button>
+      {ref?.url && hoverAnchor && createPortal(
+        (() => {
+          const PREVIEW_MAX = 220
+          const MARGIN = 8
+          const vh = window.innerHeight
+          const vw = window.innerWidth
+          const spaceBelow = vh - hoverAnchor.bottom - MARGIN
+          const spaceAbove = hoverAnchor.top - MARGIN
+          const placeBelow = spaceBelow >= PREVIEW_MAX || spaceBelow >= spaceAbove
+          const top = placeBelow
+            ? hoverAnchor.bottom + MARGIN
+            : Math.max(MARGIN, hoverAnchor.top - PREVIEW_MAX - MARGIN)
+          const left = Math.min(Math.max(MARGIN, hoverAnchor.left), vw - PREVIEW_MAX - MARGIN)
+          return (
+            <div
+              style={{ position: "fixed", top, left }}
+              className="z-[10000] pointer-events-none rounded-md shadow-xl bg-popover border border-border p-1"
+              aria-hidden
+            >
+              <img
+                src={ref.url}
+                alt=""
+                className="block rounded object-contain"
+                style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
+              />
+            </div>
+          )
+        })(),
+        document.body,
+      )}
+      {menuAnchor && createPortal(
+        (() => {
+          const MENU_W = 220
+          const MENU_H_ESTIMATE = (LOCATION_MODE_PRESETS_LIVE.length + 2) * 32 + 16
+          const MARGIN = 4
+          const vh = window.innerHeight
+          const vw = window.innerWidth
+          const spaceBelow = vh - menuAnchor.bottom - MARGIN
+          const spaceAbove = menuAnchor.top - MARGIN
+          const placeBelow = spaceBelow >= MENU_H_ESTIMATE || spaceBelow >= spaceAbove
+          const maxHeight = Math.max(120, placeBelow ? spaceBelow : spaceAbove)
+          const top = placeBelow
+            ? menuAnchor.bottom + MARGIN
+            : Math.max(MARGIN, menuAnchor.top - Math.min(MENU_H_ESTIMATE, spaceAbove) - MARGIN)
+          const left = Math.min(Math.max(MARGIN, menuAnchor.left), vw - MENU_W - MARGIN)
+          return (
+            <div
+              ref={menuRef}
+              style={{ position: "fixed", top, left, width: MENU_W, maxHeight, overflowY: "auto" }}
+              className="z-[10000] rounded-lg border border-border bg-popover shadow-lg py-1"
+              role="menu"
+              data-testid="location-ref-mode-menu"
+              // Stop the document-level outside-click listener from seeing
+              // clicks inside the menu (containment-checks can race with
+              // re-renders during state updates).
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* "Default" row — clears the mode override so the pill falls
+                  back to the location node's defaultUsageMode at execution
+                  time. Mirrors the autocomplete's no-mode insertion path. */}
+              <button
+                key="__default__"
+                type="button"
+                role="menuitem"
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                  attrs.usageMode == null
+                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setUsageMode(null)
+                }}
+              >
+                <span>Default (from location)</span>
+                {attrs.usageMode == null && <span aria-hidden>✓</span>}
+              </button>
+              <div className="my-1 border-t border-border/60" />
+              {LOCATION_MODE_PRESETS_LIVE.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="menuitem"
+                  data-mode={m}
+                  className={`w-full text-left px-2.5 py-1.5 text-[11px] flex items-center justify-between transition-colors ${
+                    attrs.usageMode === m
+                      ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                      : "hover:bg-muted text-foreground"
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setUsageMode(m)
+                  }}
+                >
+                  <span>{locationUsageModeLabel(m)}</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">:{m}</span>
+                </button>
+              ))}
+            </div>
+          )
+        })(),
+        document.body,
+      )}
     </NodeViewWrapper>
   )
 }

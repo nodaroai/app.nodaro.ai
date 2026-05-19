@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   locationMentionSlug,
+  locationUsageModeLabel,
   parseLocationMentionToken,
   findLocationMentionTokens,
   isLocationUsageMode,
@@ -17,6 +18,29 @@ describe("LOCATION_USAGE_MODES", () => {
     expect(isLocationUsageMode("layout")).toBe(true)
     expect(isLocationUsageMode("face")).toBe(false) // character-only mode
     expect(isLocationUsageMode("bogus")).toBe(false)
+  })
+})
+
+describe("locationUsageModeLabel", () => {
+  it("returns a human-readable label per mode", () => {
+    expect(locationUsageModeLabel("identical")).toBe("Match exactly")
+    expect(locationUsageModeLabel("style")).toBe("Style / mood only")
+    expect(locationUsageModeLabel("layout")).toBe("Layout / framing only")
+    expect(locationUsageModeLabel("none")).toBe("No textual bias")
+  })
+
+  it("returns a distinct label per mode (no accidental aliasing)", () => {
+    const labels = LOCATION_USAGE_MODES.map(locationUsageModeLabel)
+    const unique = new Set(labels)
+    expect(unique.size).toBe(LOCATION_USAGE_MODES.length)
+  })
+
+  it("covers every entry in LOCATION_USAGE_MODES (exhaustive switch)", () => {
+    for (const m of LOCATION_USAGE_MODES) {
+      const label = locationUsageModeLabel(m)
+      expect(typeof label).toBe("string")
+      expect(label.length).toBeGreaterThan(0)
+    }
   })
 })
 

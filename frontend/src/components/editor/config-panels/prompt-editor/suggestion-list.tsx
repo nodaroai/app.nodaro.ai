@@ -1,19 +1,39 @@
 "use client"
 
 import { forwardRef, useImperativeHandle, useState, useEffect, useMemo, useCallback } from "react"
-import { USAGE_MODES, usageModeLabel, type UsageMode } from "@nodaro/shared"
+import {
+  USAGE_MODES,
+  usageModeLabel,
+  LOCATION_USAGE_MODES,
+  locationUsageModeLabel,
+  type UsageMode,
+  type LocationUsageMode,
+} from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
  * `usageMode` chosen at insertion time via the mode-picker drill (3rd level
- * of the hierarchical autocomplete). When present, the parent appends the
- * mode as the 4th slug segment (`@kira:1:smile:face`) regardless of the
- * character node's default. When absent, the parent falls back to the
- * character's `defaultUsageMode` and the legacy 2/3-part insertion rules.
+ * of the hierarchical autocomplete).
+ *
+ * Two mode flavors travel together because the same payload type is used for
+ * both character refs (8 modes) and location refs (a strict 4-mode subset).
+ * The parent's `command` handler in `prompt-editor/index.tsx` discriminates
+ * on `item.source` (`"character"` vs `"location"`) when deciding which slug
+ * shape to insert.
+ *
+ * When present, the parent appends the mode as the trailing slug segment
+ * regardless of the source node's default. When absent, the parent falls
+ * back to the source node's `defaultUsageMode` and the legacy 2/3-part
+ * insertion rules.
  */
-export type SuggestionCommandPayload = RefImageItem & { usageMode?: UsageMode }
+export type SuggestionCommandPayload = RefImageItem & {
+  /** Character usage-mode override (only meaningful when `source === "character"`). */
+  usageMode?: UsageMode
+  /** Location usage-mode override (only meaningful when `source === "location"`). */
+  locationUsageMode?: LocationUsageMode
+}
 
 export interface SuggestionListHandle {
   onKeyDown: (event: KeyboardEvent) => boolean
@@ -35,23 +55,34 @@ interface SuggestionListProps {
 }
 
 /**
- * Display row discriminator. The dropdown is a hybrid picker:
+ * Display row discriminator. The dropdown is a hybrid picker — three drill
+ * levels for both characters and locations:
  *
- *   - "back":            top row inside drill-in view, pops back one level
- *   - "character-root":  one row per character at root view; clicking drills in
- *   - "variant":         leaf variant — inside drill-in view OR a flat-search
- *                        result. `flatSearch=true` opts the row into the
- *                        "Kira / smile" full-path label. In the character-drill
- *                        view, an additional small chip on the row drills one
- *                        more level into the mode picker.
- *   - "mode":            one row per usage mode in the 3rd-level drill view.
- *                        Selecting inserts the slug with that mode appended.
- *   - "image-ref":       non-character ref (uploaded / wired-image), inserted directly
- *   - "location":        a location entry (canonical OR per-variant). For MVP
- *                        slice 3 we render locations as a SIMPLE FLAT LIST
- *                        (no hierarchical drill — drill is slice 4). Each row
- *                        inserts a `@<locSlug>:N(:bucket/variant)?` pill via
- *                        the TipTap `locationRef` atomic node.
+ *   - "back":              top row inside any drill-in view, pops back one level
+ *   - "character-root":    one row per character at root view; clicking drills in
+ *   - "variant":           leaf variant — inside drill-in view OR a flat-search
+ *                          result. `flatSearch=true` opts the row into the
+ *                          "Kira / smile" full-path label. In the character-drill
+ *                          view, an additional small chip on the row drills one
+ *                          more level into the mode picker.
+ *   - "mode":              one row per character usage mode in the 3rd-level
+ *                          drill view. Selecting inserts the slug with that
+ *                          mode appended.
+ *   - "image-ref":         non-character ref (uploaded / wired-image), inserted directly
+ *   - "location-root":     one row per location at root view; clicking drills in
+ *                          to the location's variant list (level 2). Trailing
+ *                          chip shows the variant count.
+ *   - "location-variant":  leaf variant within a location's drill view OR a
+ *                          flat-search result. `flatSearch=true` opts the row
+ *                          into the "Old Library / weather / rain" full-path
+ *                          label. `kind === "canonical"` denotes the
+ *                          location's canonical (no bucket/variant) entry.
+ *                          In the location-drill view, a trailing chip
+ *                          drills into the mode picker (level 3).
+ *   - "location-mode":     one row per location usage mode in the 3rd-level
+ *                          location drill view. Selecting inserts the slug
+ *                          with the location mode appended (4th slug segment
+ *                          for variant entries, 3rd for canonical).
  */
 type DisplayRow =
   | { kind: "back"; label: string }
@@ -59,9 +90,23 @@ type DisplayRow =
   | { kind: "variant"; item: RefImageItem; flatSearch?: boolean; characterLabel?: string }
   | { kind: "mode"; mode: UsageMode }
   | { kind: "image-ref"; item: RefImageItem }
-  | { kind: "location"; item: RefImageItem }
+  | {
+      kind: "location-root"
+      item: RefImageItem
+      variantCount: number
+      locationSlug: string
+    }
+  | {
+      kind: "location-variant"
+      item: RefImageItem
+      /** "canonical" for the bucketless main entry, "variant" for bucketed entries. */
+      variantKind: "canonical" | "variant"
+      flatSearch?: boolean
+      locationLabel?: string
+    }
+  | { kind: "location-mode"; mode: LocationUsageMode }
 
-/** Active drill-in target for the mode picker (3rd level). */
+/** Active drill-in target for the character mode picker (3rd level). */
 interface DrillVariant {
   characterSlug: string
   variantSlug: string | null
@@ -70,75 +115,120 @@ interface DrillVariant {
   item: RefImageItem
 }
 
+/** Active drill-in target for the location mode picker (3rd level). */
+interface DrillLocationVariant {
+  locationSlug: string
+  bucket: string | null
+  variant: string | null
+  locationName: string
+  /** Display label for the row (e.g. "rain" or "canonical"). */
+  variantDisplayName: string | null
+  item: RefImageItem
+}
+
 /**
- * Dropdown shown when the user types `@`. Hybrid picker with three drill levels:
+ * Dropdown shown when the user types `@`. Hybrid picker with three drill
+ * levels each for characters and locations:
  *
  *   Empty query (just `@` typed): HIERARCHICAL root view — 1 entry per
- *              character (canonical thumbnail + name) + non-character refs
- *              (uploaded / wired-image) inline at the bottom. Selecting a
- *              character drills in instead of inserting.
+ *              character (canonical thumbnail + name) + 1 entry per
+ *              location (canonical thumbnail + name) + non-character refs
+ *              (uploaded / wired-image) inline at the top. Selecting a
+ *              character OR location drills in instead of inserting.
  *
- *   Drill-in (level 2 — variants): "← back (Name)" row + that character's
- *              variants. Selecting a variant body (Enter / click row) fires
+ *   Character drill (level 2 — variants): "← back (Name)" row + that
+ *              character's variants. Selecting a variant body fires
  *              `command(item)` and inserts `@kira:1:smile` using the
  *              character's default mode (legacy behavior preserved).
- *              Right-arrow OR clicking the trailing chip on the variant row
- *              drills one more level into the mode picker.
+ *              Right-arrow / trailing chip drills into the character mode
+ *              picker (level 3).
  *
- *   Drill-in (level 3 — mode picker, NEW): "← back (variant)" row + the six
- *              usage modes. Selecting a mode fires `command({ ...item, usageMode })`
- *              and inserts `@kira:1:smile:face`. Typing filters the modes
- *              (e.g. "f" → "Face only" / "Face + Pose").
+ *   Character mode picker (level 3): "← back (variant)" row + the 8 usage
+ *              modes. Selecting fires `command({ ...item, usageMode })` and
+ *              inserts `@kira:1:smile:face`.
+ *
+ *   Location drill (level 2 — variants): "← back (Location)" row + a
+ *              canonical row + one row per bucketed variant. Selecting the
+ *              canonical row inserts `@oldlibrary:N`; selecting a variant
+ *              inserts `@oldlibrary:N:weather/rain`. Right-arrow / trailing
+ *              chip drills into the location mode picker (level 3).
+ *
+ *   Location mode picker (level 3, NEW IN SLICE 4): "← back (variant)" row
+ *              + the 4 location modes. Selecting a mode fires
+ *              `command({ ...item, locationUsageMode })` and inserts the
+ *              slug with `:<mode>` appended — as the 4th segment for
+ *              bucketed variants (`@oldlibrary:N:weather/rain:style`) or
+ *              the 3rd segment for the canonical entry
+ *              (`@oldlibrary:N:style`).
  *
  *   Non-empty query (user typed something after `@`): FLAT search — every
- *              character ref (canonical + variants) plus matching
- *              non-character refs, filtered by character name, variant name,
- *              character slug, or variant slug. Each row shows the full path
- *              ("Kira / smile") so users distinguish identically-named
- *              variants across characters. Drill-in is bypassed; selecting a
- *              result inserts directly with the character's default mode.
+ *              character ref + every location ref (canonical + variants) +
+ *              matching non-character refs, filtered by name, slug,
+ *              variant, or bucket. Each location row shows the full path
+ *              ("Old Library / weather / rain") so users can distinguish
+ *              identically-named variants across locations. Drill-in is
+ *              bypassed; selecting a result inserts directly with the
+ *              source node's default mode.
  *
- * Non-character refs (`source !== "character"`) always use the legacy
- * `{image:N:role}` TipTap node insertion in both modes.
- *
- * Mirrors `TagTextarea`'s hybrid UX so generate-image / image-to-image /
- * modify-image have identical @-mention semantics to image-to-video.
+ * Non-character/non-location refs (`source !== "character" && source !==
+ * "location"`) always use the legacy `{image:N:role}` TipTap node insertion.
  */
 export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListProps>(
   function SuggestionList({ items, query, command, onDrillChange }, ref) {
     const [selectedIndex, setSelectedIndex] = useState(0)
-    // Drill-in state — two levels:
-    //   `drillCharacterSlug` selects a character (level 2: variant list).
-    //   `drillVariant` selects a variant within that character (level 3: mode picker).
-    // Both reset when the dropdown closes (`onExit` unmounts this component).
+    // Drill-in state — three independent levels split across two trees:
+    //   `drillCharacterSlug` (character level 2: variant list).
+    //   `drillVariant` (character level 3: mode picker).
+    //   `drillLocationSlug` (location level 2: bucketed variant list).
+    //   `drillLocationVariant` (location level 3: location mode picker).
+    // All reset when the dropdown closes (`onExit` unmounts this component).
     const [drillCharacterSlug, setDrillCharacterSlug] = useState<string | null>(null)
     const [drillVariant, setDrillVariant] = useState<DrillVariant | null>(null)
+    const [drillLocationSlug, setDrillLocationSlug] = useState<string | null>(null)
+    const [drillLocationVariant, setDrillLocationVariant] = useState<DrillLocationVariant | null>(null)
 
-    // Group character items by characterSlug; pull location items into their
-    // own flat list (no drill in MVP slice 3); keep all other refs flat.
-    const { characterGroups, locationItems, nonCharacterItems } = useMemo(() => {
-      const groups = new Map<string, RefImageItem[]>()
-      const locs: RefImageItem[] = []
+    // Group character items by characterSlug; group location items by
+    // locationSlug; keep all other refs flat.
+    const { characterGroups, locationGroups, nonCharacterItems } = useMemo(() => {
+      const charGroups = new Map<string, RefImageItem[]>()
+      const locGroups = new Map<string, RefImageItem[]>()
       const others: RefImageItem[] = []
       for (const item of items) {
         if (item.source === "character" && item.characterSlug) {
-          const g = groups.get(item.characterSlug) ?? []
+          const g = charGroups.get(item.characterSlug) ?? []
           g.push(item)
-          groups.set(item.characterSlug, g)
+          charGroups.set(item.characterSlug, g)
         } else if (item.source === "location" && item.locationSlug) {
-          locs.push(item)
+          const g = locGroups.get(item.locationSlug) ?? []
+          g.push(item)
+          locGroups.set(item.locationSlug, g)
         } else {
           others.push(item)
         }
       }
-      return { characterGroups: groups, locationItems: locs, nonCharacterItems: others }
+      return { characterGroups: charGroups, locationGroups: locGroups, nonCharacterItems: others }
     }, [items])
 
     // Compute the rows to display based on drill state + query.
     const displayRows = useMemo<DisplayRow[]>(() => {
       const q = query.trim().toLowerCase()
 
-      // MODE PICKER (3rd-level drill). Filter by usage-mode label.
+      // LOCATION MODE PICKER (3rd-level drill, NEW). Filter by mode label.
+      if (drillLocationVariant) {
+        const backLabel = `back (${drillLocationVariant.variantDisplayName ?? drillLocationVariant.locationName})`
+        const modes = q.length > 0
+          ? LOCATION_USAGE_MODES.filter((m) =>
+              locationUsageModeLabel(m).toLowerCase().includes(q) || m.toLowerCase().includes(q),
+            )
+          : LOCATION_USAGE_MODES
+        const rows: DisplayRow[] = [{ kind: "back", label: backLabel }]
+        for (const m of modes) {
+          rows.push({ kind: "location-mode", mode: m })
+        }
+        return rows
+      }
+
+      // CHARACTER MODE PICKER (3rd-level drill). Filter by usage-mode label.
       if (drillVariant) {
         const backLabel = `back (${drillVariant.variantDisplayName ?? drillVariant.characterName})`
         const modes = q.length > 0
@@ -154,10 +244,9 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       }
 
       // FLAT SEARCH MODE — when the user has typed something after `@`,
-      // surface every character ref (canonical + variants) so typing `@smile`
-      // finds Kira's smile expression directly. Filter matches character
-      // name, variant name, character slug, or variant slug. Drill-in is
-      // bypassed; each row shows the full path ("Kira / smile").
+      // surface every character ref + location ref + image ref. Drill-in is
+      // bypassed; each row shows the full path ("Kira / smile" or
+      // "Old Library / weather / rain").
       if (q.length > 0) {
         const rows: DisplayRow[] = []
         for (const [slug, group] of characterGroups) {
@@ -183,23 +272,36 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             }
           }
         }
-        // Location refs filtered by label, location slug, bucket, or variant.
-        // MVP slice 3 — flat search across canonical + every per-variant
-        // entry, mirroring the character flat-search shape (no drill).
-        for (const l of locationItems) {
-          const labelLc = l.label.toLowerCase()
-          const slugLc = (l.locationSlug ?? "").toLowerCase()
-          const variantLc = (l.locationVariantSlug ?? "").toLowerCase()
-          const bucketLc = (l.locationVariantBucket ?? "").toLowerCase()
-          const variantDisplayLc = (l.locationVariantDisplayName ?? "").toLowerCase()
-          if (
-            labelLc.includes(q)
-            || slugLc.includes(q)
-            || variantLc.includes(q)
-            || bucketLc.includes(q)
-            || variantDisplayLc.includes(q)
-          ) {
-            rows.push({ kind: "location", item: l })
+        // Location refs filtered by location label, slug, bucket, or variant
+        // name. Flat-search across canonical + every per-variant entry,
+        // mirroring the character flat-search shape (no drill).
+        for (const [slug, group] of locationGroups) {
+          const canonical = group.find((i) => !i.locationVariantBucket) ?? group[0]
+          const locLabel = canonical.label || slug
+          for (const l of group) {
+            const labelLc = locLabel.toLowerCase()
+            const slugLc = slug.toLowerCase()
+            const variantLc = (l.locationVariantSlug ?? "").toLowerCase()
+            const bucketLc = (l.locationVariantBucket ?? "").toLowerCase()
+            const variantDisplayLc = (l.locationVariantDisplayName ?? "").toLowerCase()
+            if (
+              labelLc.includes(q)
+              || slugLc.includes(q)
+              || variantLc.includes(q)
+              || bucketLc.includes(q)
+              || variantDisplayLc.includes(q)
+            ) {
+              const variantKind: "canonical" | "variant" = l.locationVariantBucket && l.locationVariantSlug
+                ? "variant"
+                : "canonical"
+              rows.push({
+                kind: "location-variant",
+                item: l,
+                variantKind,
+                flatSearch: true,
+                locationLabel: locLabel,
+              })
+            }
           }
         }
         // Non-character/non-location refs filtered by label, index, or default-label.
@@ -215,7 +317,25 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         return rows
       }
 
-      // Drill-in (level 2): back row + this character's variants.
+      // LOCATION drill-in (level 2): back row + canonical row + that
+      // location's bucketed variants.
+      if (drillLocationSlug) {
+        const variants = locationGroups.get(drillLocationSlug) ?? []
+        const canonical = variants.find((v) => !v.locationVariantBucket)
+        const locationName = canonical?.label ?? drillLocationSlug
+        const rows: DisplayRow[] = [{ kind: "back", label: `back (${locationName})` }]
+        // Emit canonical first when present, then bucketed variants.
+        if (canonical) {
+          rows.push({ kind: "location-variant", item: canonical, variantKind: "canonical" })
+        }
+        for (const v of variants) {
+          if (v === canonical) continue
+          rows.push({ kind: "location-variant", item: v, variantKind: "variant" })
+        }
+        return rows
+      }
+
+      // CHARACTER drill-in (level 2): back row + this character's variants.
       if (drillCharacterSlug) {
         const variants = characterGroups.get(drillCharacterSlug) ?? []
         const canonical = variants.find((v) => !v.variantSlug)
@@ -229,7 +349,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       }
 
       // Root (empty query): non-character refs + one row per character +
-      // one row per location entry (MVP slice 3 — flat list, no drill).
+      // one row per location.
       const rows: DisplayRow[] = []
       for (const r of nonCharacterItems) {
         rows.push({ kind: "image-ref", item: r })
@@ -238,11 +358,21 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
         rows.push({ kind: "character-root", item: canonical, variantCount: group.length, characterSlug: slug })
       }
-      for (const l of locationItems) {
-        rows.push({ kind: "location", item: l })
+      for (const [slug, group] of locationGroups) {
+        const canonical = group.find((i) => !i.locationVariantBucket) ?? group[0]
+        rows.push({ kind: "location-root", item: canonical, variantCount: group.length, locationSlug: slug })
       }
       return rows
-    }, [characterGroups, locationItems, nonCharacterItems, drillCharacterSlug, drillVariant, query])
+    }, [
+      characterGroups,
+      locationGroups,
+      nonCharacterItems,
+      drillCharacterSlug,
+      drillVariant,
+      drillLocationSlug,
+      drillLocationVariant,
+      query,
+    ])
 
     // Reset selection whenever the rendered rows change.
     useEffect(() => {
@@ -253,17 +383,17 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     }, [displayRows])
 
     // Hybrid mode orthogonality: when the user types a non-empty filter while
-    // drilled into a character (but NOT in mode-picker view — there typing
-    // filters the modes themselves), reset the character drill so the
-    // flat-search results aren't masked. Clearing the filter back to empty
-    // resumes the hierarchical root view automatically.
+    // drilled into a character/location (but NOT in a mode-picker view —
+    // there typing filters the modes themselves), reset the drill state so
+    // the flat-search results aren't masked. Clearing the filter back to
+    // empty resumes the hierarchical root view automatically.
     useEffect(() => {
-      if (query.trim().length > 0 && drillCharacterSlug && !drillVariant) {
-        setDrillCharacterSlug(null)
-      }
-    }, [query, drillCharacterSlug, drillVariant])
+      if (query.trim().length === 0) return
+      if (drillCharacterSlug && !drillVariant) setDrillCharacterSlug(null)
+      if (drillLocationSlug && !drillLocationVariant) setDrillLocationSlug(null)
+    }, [query, drillCharacterSlug, drillVariant, drillLocationSlug, drillLocationVariant])
 
-    // Drill into the mode picker for a given variant row.
+    // Drill into the character mode picker for a given variant row.
     const drillIntoMode = useCallback((item: RefImageItem) => {
       if (item.source !== "character" || !item.characterSlug) return
       // Resolve the character's display name from the canonical entry in the
@@ -285,13 +415,43 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       onDrillChange?.()
     }, [characterGroups, onDrillChange])
 
+    // Drill into the location mode picker for a given location variant row.
+    // Works for both canonical entries (no bucket/variant) and bucketed
+    // variants — the mode applies to whichever slug shape the row represents.
+    const drillIntoLocationMode = useCallback((item: RefImageItem) => {
+      if (item.source !== "location" || !item.locationSlug) return
+      const group = locationGroups.get(item.locationSlug) ?? []
+      const canonical = group.find((v) => !v.locationVariantBucket) ?? group[0]
+      const locationName = canonical?.label ?? item.locationSlug
+      const bucket = item.locationVariantBucket ?? null
+      const variant = item.locationVariantSlug ?? null
+      const variantDisplayName = bucket && variant
+        ? (item.locationVariantDisplayName && item.locationVariantDisplayName !== "canonical"
+            ? item.locationVariantDisplayName
+            : variant)
+        : null
+      setDrillLocationVariant({
+        locationSlug: item.locationSlug,
+        bucket,
+        variant,
+        locationName,
+        variantDisplayName,
+        item,
+      })
+      onDrillChange?.()
+    }, [locationGroups, onDrillChange])
+
     const handleSelect = useCallback((row: DisplayRow) => {
       if (row.kind === "back") {
-        // Pop one level: mode → variant; variant → root.
+        // Pop one level. Order matters: check the deepest drill state first.
         if (drillVariant) {
           setDrillVariant(null)
-        } else {
+        } else if (drillLocationVariant) {
+          setDrillLocationVariant(null)
+        } else if (drillCharacterSlug) {
           setDrillCharacterSlug(null)
+        } else if (drillLocationSlug) {
+          setDrillLocationSlug(null)
         }
         onDrillChange?.()
         return
@@ -301,17 +461,28 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         onDrillChange?.()
         return
       }
+      if (row.kind === "location-root") {
+        setDrillLocationSlug(row.locationSlug)
+        onDrillChange?.()
+        return
+      }
       if (row.kind === "mode") {
         if (drillVariant) {
           command({ ...drillVariant.item, usageMode: row.mode })
         }
         return
       }
-      // "variant", "image-ref", or "location" — fire the parent's command
-      // to insert. Location rows currently flat-insert via the locationRef
-      // pill (slice 3 MVP — drill comes in slice 4).
+      if (row.kind === "location-mode") {
+        if (drillLocationVariant) {
+          command({ ...drillLocationVariant.item, locationUsageMode: row.mode })
+        }
+        return
+      }
+      // "variant", "image-ref", or "location-variant" — fire the parent's
+      // command to insert. The location-variant rows insert via the
+      // locationRef pill with the location's default mode (no mode override).
       command(row.item)
-    }, [command, onDrillChange, drillVariant])
+    }, [command, onDrillChange, drillVariant, drillLocationVariant, drillCharacterSlug, drillLocationSlug])
 
     useImperativeHandle(ref, () => ({
       onKeyDown(event: KeyboardEvent) {
@@ -326,8 +497,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         }
         if (event.key === "ArrowRight") {
           // In the character-drill view (level 2), Right on a variant row
-          // drills into the mode picker. Anywhere else, it falls through
-          // (lets the cursor move in the underlying textarea).
+          // drills into the character mode picker. In the location-drill
+          // view (level 2), Right on a location-variant row drills into the
+          // location mode picker. Anywhere else, it falls through (lets the
+          // cursor move in the underlying textarea).
           if (drillCharacterSlug && !drillVariant) {
             const row = displayRows[selectedIndex]
             if (row?.kind === "variant" && row.item.source === "character") {
@@ -335,12 +508,24 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               return true
             }
           }
+          if (drillLocationSlug && !drillLocationVariant) {
+            const row = displayRows[selectedIndex]
+            if (row?.kind === "location-variant" && row.item.source === "location") {
+              drillIntoLocationMode(row.item)
+              return true
+            }
+          }
           return false
         }
         if (event.key === "ArrowLeft") {
-          // In the mode picker (level 3), Left pops back to the variant view.
+          // In any mode picker (level 3), Left pops back to the variant view.
           if (drillVariant) {
             setDrillVariant(null)
+            onDrillChange?.()
+            return true
+          }
+          if (drillLocationVariant) {
+            setDrillLocationVariant(null)
             onDrillChange?.()
             return true
           }
@@ -360,15 +545,37 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             onDrillChange?.()
             return true
           }
+          if (drillLocationVariant) {
+            setDrillLocationVariant(null)
+            onDrillChange?.()
+            return true
+          }
           if (drillCharacterSlug) {
             setDrillCharacterSlug(null)
+            onDrillChange?.()
+            return true
+          }
+          if (drillLocationSlug) {
+            setDrillLocationSlug(null)
             onDrillChange?.()
             return true
           }
         }
         return false
       },
-    }), [displayRows, selectedIndex, handleSelect, drillCharacterSlug, drillVariant, query, onDrillChange, drillIntoMode])
+    }), [
+      displayRows,
+      selectedIndex,
+      handleSelect,
+      drillCharacterSlug,
+      drillVariant,
+      drillLocationSlug,
+      drillLocationVariant,
+      query,
+      onDrillChange,
+      drillIntoMode,
+      drillIntoLocationMode,
+    ])
 
     if (displayRows.length === 0) {
       return (
@@ -385,7 +592,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
       // screens (e.g. a small laptop with multiple panels open). The mount's
       // `top` is set by `positionMount` in `prompt-editor/index.tsx`, which
       // also flips above the cursor when there isn't enough room below.
-      <div className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[240px]">
+      <div
+        className="z-[9999] overflow-y-auto rounded-lg border border-border bg-popover shadow-lg py-1 max-h-[min(300px,calc(100vh-80px))] min-w-[240px]"
+        data-testid="suggestion-list"
+      >
         {displayRows.map((row, idx) => {
           const isSelected = idx === selectedIndex
           if (row.kind === "back") {
@@ -394,6 +604,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 key="back"
                 type="button"
                 data-index={idx}
+                data-row-kind="back"
                 className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 border-b border-border/50 ${
                   isSelected
                     ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
@@ -415,6 +626,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 key={`mode-${row.mode}`}
                 type="button"
                 data-index={idx}
+                data-row-kind="mode"
+                data-mode={row.mode}
                 className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                   isSelected
                     ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
@@ -439,6 +652,38 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               </button>
             )
           }
+          if (row.kind === "location-mode") {
+            return (
+              <button
+                key={`loc-mode-${row.mode}`}
+                type="button"
+                data-index={idx}
+                data-row-kind="location-mode"
+                data-mode={row.mode}
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleSelect(row)
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                <span className="truncate flex-1 min-w-0">{locationUsageModeLabel(row.mode)}</span>
+                <span
+                  className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                    isSelected
+                      ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-700 dark:text-cyan-200"
+                      : "border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
+                  }`}
+                >
+                  :{row.mode}
+                </span>
+              </button>
+            )
+          }
           if (row.kind === "character-root") {
             const { item, variantCount } = row
             return (
@@ -446,6 +691,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 key={`char-${row.characterSlug}`}
                 type="button"
                 data-index={idx}
+                data-row-kind="character-root"
                 className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                   isSelected
                     ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
@@ -475,19 +721,14 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               </button>
             )
           }
-          // "location" — flat-list location row with cyan slug pill chip.
-          // MVP slice 3 — no drill, just a leaf row that inserts the location
-          // pill on select. Drill into bucket → variant comes in slice 4.
-          if (row.kind === "location") {
-            const { item } = row
-            const locTag = item.locationVariantBucket && item.locationVariantSlug
-              ? `@${item.locationSlug}:N:${item.locationVariantBucket}/${item.locationVariantSlug}`
-              : `@${item.locationSlug}:N`
+          if (row.kind === "location-root") {
+            const { item, variantCount } = row
             return (
               <button
-                key={`loc-${item.locationSlug}-${item.locationVariantBucket ?? "canonical"}-${item.locationVariantSlug ?? ""}-${item.index}`}
+                key={`loc-${row.locationSlug}`}
                 type="button"
                 data-index={idx}
+                data-row-kind="location-root"
                 className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                   isSelected
                     ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
@@ -506,9 +747,73 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 />
                 <span className="truncate flex-1 min-w-0">
                   {item.label}
-                  {item.locationVariantDisplayName && item.locationVariantDisplayName !== "canonical" && (
-                    <span className="text-slate-500 ml-1">/ {item.locationVariantDisplayName}</span>
+                  {variantCount > 1 && (
+                    <span className="text-slate-500 ml-1">/ {variantCount} variants</span>
                   )}
+                </span>
+                <span className="text-slate-500 text-[12px] leading-4 shrink-0" aria-hidden>
+                  &rsaquo;
+                </span>
+              </button>
+            )
+          }
+          if (row.kind === "location-variant") {
+            const { item, variantKind } = row
+            const tagPreview = variantKind === "variant"
+                && item.locationVariantBucket
+                && item.locationVariantSlug
+              ? `@${item.locationSlug}:N:${item.locationVariantBucket}/${item.locationVariantSlug}`
+              : `@${item.locationSlug}:N`
+            // In the location-drill view (level 2), every variant row gets a
+            // small "mode" chip that drills into the location mode picker.
+            // Flat-search rows skip the chip (mirrors the character behavior).
+            const showModeChip = !row.flatSearch
+            const useFullPath = row.flatSearch === true
+            return (
+              <button
+                key={`loc-var-${item.locationSlug}-${item.locationVariantBucket ?? "canonical"}-${item.locationVariantSlug ?? ""}-${item.index}`}
+                type="button"
+                data-index={idx}
+                data-row-kind="location-variant"
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleSelect(row)
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                <img
+                  src={item.url}
+                  alt=""
+                  className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                />
+                <span className="truncate flex-1 min-w-0">
+                  {useFullPath
+                    ? <>
+                        {row.locationLabel ?? item.label}
+                        {variantKind === "variant" && item.locationVariantBucket && (
+                          <span className="text-slate-500 ml-1">
+                            / {item.locationVariantBucket}
+                            {item.locationVariantSlug && ` / ${item.locationVariantDisplayName && item.locationVariantDisplayName !== "canonical" ? item.locationVariantDisplayName : item.locationVariantSlug}`}
+                          </span>
+                        )}
+                        {variantKind === "canonical" && (
+                          <span className="text-slate-500 ml-1">/ canonical</span>
+                        )}
+                      </>
+                    : <>
+                        {variantKind === "canonical" ? "canonical" : (
+                          <>
+                            {item.locationVariantBucket}
+                            <span className="text-slate-500"> / {item.locationVariantDisplayName && item.locationVariantDisplayName !== "canonical" ? item.locationVariantDisplayName : item.locationVariantSlug}</span>
+                          </>
+                        )}
+                      </>
+                  }
                 </span>
                 <span
                   className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
@@ -517,8 +822,28 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                       : "border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
                   }`}
                 >
-                  {locTag}
+                  {tagPreview}
                 </span>
+                {showModeChip && (
+                  <span
+                    role="button"
+                    aria-label="Pick usage mode"
+                    title="Pick usage mode (or press Right arrow)"
+                    data-testid="location-variant-mode-chip"
+                    className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-medium leading-4 shrink-0 cursor-pointer transition-colors ${
+                      isSelected
+                        ? "border-cyan-400/60 bg-cyan-500/10 text-cyan-700 dark:text-cyan-200 hover:bg-cyan-500/25"
+                        : "border-border bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      drillIntoLocationMode(item)
+                    }}
+                  >
+                    mode &rsaquo;
+                  </span>
+                )}
               </button>
             )
           }
@@ -548,6 +873,7 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               key={`${row.kind}-${item.index}-${item.variantSlug ?? "canonical"}`}
               type="button"
               data-index={idx}
+              data-row-kind={row.kind}
               className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
                 isSelected
                   ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"

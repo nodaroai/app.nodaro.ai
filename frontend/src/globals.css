@@ -813,8 +813,14 @@ html, body {
   height: 1.1em;
   border-radius: 3px;
   object-fit: cover;
+  cursor: zoom-in;
+  pointer-events: auto;
   border: 1px solid color-mix(in srgb, #22d3ee 40%, transparent);
   flex-shrink: 0;
+}
+.location-ref-pill__thumb:hover {
+  outline: 2px solid #22d3ee;
+  outline-offset: 1px;
 }
 .location-ref-pill__thumb-broken {
   display: inline-flex;
@@ -837,7 +843,17 @@ html, body {
   font-weight: 500;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: -0.02em;
+  background: transparent;
+  border: none;
   color: inherit;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.location-ref-pill__label:hover .location-ref-pill__name {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 .location-ref-pill__name {
   font-weight: 600;
