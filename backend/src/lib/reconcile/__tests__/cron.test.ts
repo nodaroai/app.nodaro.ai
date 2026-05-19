@@ -24,8 +24,23 @@ vi.mock("../sync-sweep.js", () => ({
   sweepStaleSyncJob: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock("../kie.js", () => ({
+  reconcileKieJob: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("../replicate.js", () => ({
+  reconcileReplicateJob: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("../elevenlabs.js", () => ({
+  reconcileElevenLabsJob: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { reconcileInflightJobs } from "../cron.js"
 import { sweepStaleSyncJob } from "../sync-sweep.js"
+import { reconcileKieJob } from "../kie.js"
+import { reconcileReplicateJob } from "../replicate.js"
+import { reconcileElevenLabsJob } from "../elevenlabs.js"
 
 describe("reconcileInflightJobs", () => {
   beforeEach(() => {
@@ -64,7 +79,7 @@ describe("reconcileInflightJobs", () => {
     expect(sweepStaleSyncJob).toHaveBeenCalled()
   })
 
-  it("leaves async kinds (kie-standard, replicate-prediction) ALONE in Phase 2", async () => {
+  it("dispatches async kinds (kie-standard) to per-provider handler in Phase 3", async () => {
     const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
     mocks.rows.push({
       id: "j-kie",
@@ -75,8 +90,11 @@ describe("reconcileInflightJobs", () => {
       reconcile_attempts: 0,
     })
     const result = await reconcileInflightJobs()
+    // sweepStaleSyncJob is NOT called — async kind goes to the kie handler instead.
     expect(sweepStaleSyncJob).not.toHaveBeenCalled()
-    expect(result.skippedAsync).toBe(1)
+    // Async kinds increment `recovered`, not `skippedAsync`.
+    expect(result.recovered).toBe(1)
+    expect(result.skippedAsync).toBe(0)
   })
 
   it("skips rows within their kind's stale threshold", async () => {

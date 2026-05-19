@@ -1,10 +1,5 @@
 import { generateImage, editImage } from "../../providers/index.js"
 import {
-  commitJobCredits,
-  shouldSaveJobResult,
-  markJobCompleted,
-  buildImageOutputData,
-  uploadImageVariantsMaybeWatermark,
   setJobProgress,
   startProgressRamp,
   type HandlerFn,
@@ -12,6 +7,8 @@ import {
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
+import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
+import { supabase } from "../../lib/supabase.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras } = job.data as {
@@ -73,23 +70,14 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   }
   await setJobProgress(job, ctx.jobId, 85)
 
-  const r2Urls = await uploadImageVariantsMaybeWatermark(
-    [result.url, ...(result.extraUrls ?? [])], ctx.jobId, ctx.jobUserId, ctx.shouldWatermark,
-  )
-  await setJobProgress(job, ctx.jobId, 100)
-
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: buildImageOutputData(result, r2Urls),
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "generate-image",
+    result,
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Urls[0]!}${r2Urls.length > 1 ? ` (+${r2Urls.length - 1} variants)` : ""} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  await setJobProgress(job, ctx.jobId, 100)
+  console.log(`[worker] Job ${ctx.jobId} completed (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
@@ -149,23 +137,14 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
   }
   await setJobProgress(job, ctx.jobId, 60)
 
-  const r2Urls = await uploadImageVariantsMaybeWatermark(
-    [result.url, ...(result.extraUrls ?? [])], ctx.jobId, ctx.jobUserId, ctx.shouldWatermark,
-  )
-  await setJobProgress(job, ctx.jobId, 100)
-
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: buildImageOutputData(result, r2Urls),
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "edit-image",
+    result,
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Urls[0]!}${r2Urls.length > 1 ? ` (+${r2Urls.length - 1} variants)` : ""} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  await setJobProgress(job, ctx.jobId, 100)
+  console.log(`[worker] Job ${ctx.jobId} completed (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx) {
@@ -235,42 +214,43 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   }
   await setJobProgress(job, ctx.jobId, 60)
 
-  const r2Urls = await uploadImageVariantsMaybeWatermark(
-    [result.url, ...(result.extraUrls ?? [])], ctx.jobId, ctx.jobUserId, ctx.shouldWatermark,
-  )
-  const r2Url = r2Urls[0]!
-  await setJobProgress(job, ctx.jobId, 100)
-
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: buildImageOutputData(result, r2Urls),
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "image-to-image",
+    result,
   })
   if (!ok) return
+  await setJobProgress(job, ctx.jobId, 100)
 
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
-
+  // Character Studio auto-attach. Read the persisted r2 URL back from the
+  // job row (finalize wrote it into output_data.imageUrl) — finalize doesn't
+  // return the upload URLs, so this is the canonical lookup.
   if (attachToCharacterId && attachToColumn && attachName && ctx.jobUserId) {
     const column = resolveAssetColumn(attachToColumn)
     if (column) {
-      await attachAssetToCharacter({
-        characterId: attachToCharacterId,
-        userId: ctx.jobUserId,
-        column,
-        item: {
-          name: attachName,
-          url: r2Url,
-          description,
-          realLifeRefs,
-        },
-      })
+      const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("output_data")
+        .eq("id", ctx.jobId)
+        .single()
+      const r2Url = (jobRow?.output_data as { imageUrl?: string } | null)?.imageUrl
+      if (r2Url) {
+        await attachAssetToCharacter({
+          characterId: attachToCharacterId,
+          userId: ctx.jobUserId,
+          column,
+          item: {
+            name: attachName,
+            url: r2Url,
+            description,
+            realLifeRefs,
+          },
+        })
+      }
     }
   }
 
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
+  console.log(`[worker] Job ${ctx.jobId} completed (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
 export const imageAIHandlers: Record<string, HandlerFn> = {

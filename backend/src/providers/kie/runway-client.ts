@@ -119,7 +119,21 @@ export async function runRunwayTask(
  * Shared Runway record-detail polling loop.
  * Polls GET /api/v1/runway/record-detail?taskId= until state=success or fail.
  * Returns videoUrl on success; throws on failure or timeout.
+ *
+ * Exported so reconciliation handlers can resume polling a stuck task. The
+ * `label` param distinguishes log lines between "Runway" and "Runway Extend";
+ * defaults to "Runway". `apiKey` defaults to `config.KIE_API_KEY`.
  */
+export async function pollRunwayTask(
+  taskId: string,
+  label: string = "Runway",
+  apiKey?: string,
+): Promise<string> {
+  const resolvedKey = apiKey ?? config.KIE_API_KEY
+  if (!resolvedKey) throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
+  return pollRunwayRecordDetail(taskId, label, resolvedKey)
+}
+
 async function pollRunwayRecordDetail(
   taskId: string,
   label: string,
@@ -245,7 +259,19 @@ export async function runAlephTask(
 /**
  * Poll GET /api/v1/aleph/record-info?taskId= until successFlag=1.
  * Returns resultVideoUrl on success; throws on failure or timeout.
+ *
+ * Exported wrapper for reconciliation handlers. `apiKey` defaults to
+ * `config.KIE_API_KEY`.
  */
+export async function pollAlephTask(
+  taskId: string,
+  apiKey?: string,
+): Promise<string> {
+  const resolvedKey = apiKey ?? config.KIE_API_KEY
+  if (!resolvedKey) throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
+  return pollAlephRecordInfo(taskId, resolvedKey)
+}
+
 async function pollAlephRecordInfo(
   taskId: string,
   apiKey: string,

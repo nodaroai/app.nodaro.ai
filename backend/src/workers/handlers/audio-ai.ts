@@ -21,6 +21,7 @@ import {
   withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
+import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForTtsModel } from "../../lib/reconcile/provider-kind.js"
 
@@ -58,15 +59,13 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
     await setJobProgress(job, ctx.jobId, 100)
 
-    if (!await shouldSaveJobResult(ctx.jobId)) return
-
-    const ok = await markJobCompleted(ctx.jobId, {
-      output_data: { audioUrl: r2Url },
-      provider: "elevenlabs-direct",
+    const { ok } = await finalizeJobWithMedia({
+      jobId: ctx.jobId,
+      jobType: "text-to-speech",
+      result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+      mediaUrl: r2Url,
     })
     if (!ok) return
-
-    await commitJobCredits(ctx.usageLogId, ctx.jobId)
     console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: elevenlabs-direct)`)
     return
   }
@@ -87,17 +86,14 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "text-to-speech",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -113,10 +109,13 @@ const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, c
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(replicateUrl, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "generate-music",
+    result: { url: r2Url, cost: null, providerUsed: provider ?? "musicgen" },
+    mediaUrl: r2Url,
+  })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -151,10 +150,13 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(audioUrl, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, { output_data: { audioUrl: r2Url } })
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "text-to-audio",
+    result: { url: r2Url, cost: null, providerUsed: provider ?? "tangoflux" },
+    mediaUrl: r2Url,
+  })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -223,13 +225,14 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
-    provider_cost: result.cost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "audio-isolation",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -255,13 +258,14 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url, ...buildProviderMeta(result) },
-    provider_cost: result.cost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "generate-dialogue",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: buildProviderMeta(result),
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -280,13 +284,13 @@ const handleVoiceChanger: HandlerFn = async function handleVoiceChanger(job, ctx
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
-    provider: "elevenlabs-direct",
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "voice-clone",
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    mediaUrl: r2Url,
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -314,13 +318,13 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
   await setJobProgress(job, ctx.jobId, 85)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
-    provider: "elevenlabs-direct",
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "text-to-audio",
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    mediaUrl: r2Url,
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -336,13 +340,13 @@ const handleVoiceRemix: HandlerFn = async function handleVoiceRemix(job, ctx) {
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url },
-    provider: "elevenlabs-direct",
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "voice-clone",
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    mediaUrl: r2Url,
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -362,13 +366,14 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadBufferToR2(result.audioBuffer, `audio/${ctx.jobId}.mp3`, "audio/mpeg", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { audioUrl: r2Url, generatedVoiceId: result.generatedVoiceId },
-    provider: "elevenlabs-direct",
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "voice-clone",
+    result: { url: r2Url, cost: null, providerUsed: "elevenlabs-direct" },
+    mediaUrl: r2Url,
+    extraOutputData: { generatedVoiceId: result.generatedVoiceId },
   })
   if (!ok) return
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (voiceId: ${result.generatedVoiceId})`)
 }
 

@@ -255,8 +255,13 @@ export interface OrchestratorContext {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Max time for a single node to process after the worker picks it up (ms) */
-export const NODE_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+/** Max time for a single node to process after the worker picks it up (ms).
+ *  Sized to cover the longest legitimate KIE poll budget (`kie-lip-sync` is
+ *  ~60min at MAX_POLL_ATTEMPTS_LIP_SYNC_LONG=360 × 10s cap) plus 30-min
+ *  headroom. Without this, lip-sync nodes time out the orchestrator before
+ *  the upstream completes, and the workflow_execution row stays `failed`
+ *  even when reconcile later recovers the underlying job. */
+export const NODE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max time for an entire workflow execution (ms) */
 export const WORKFLOW_TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
@@ -266,7 +271,7 @@ export const JOB_POLL_INTERVAL_MS = 3_000 // 3 seconds
 
 /** Absolute max time a single poll loop can run, including queue wait (ms).
  *  Safety net — even if the job stays "pending" forever (worker down), we bail out. */
-export const POLL_ABSOLUTE_TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+export const POLL_ABSOLUTE_TIMEOUT_MS = 90 * 60 * 1000 // 90 minutes
 
 /** Max depth for sub-workflow nesting */
 export const MAX_SUB_WORKFLOW_DEPTH = 5

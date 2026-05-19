@@ -52,10 +52,9 @@ async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<str
 }
 
 import {
-  commitJobCredits,
-  shouldSaveJobResult,
-  markJobCompleted,
   buildProviderMeta,
+  commitJobCredits,
+  markJobCompleted,
   uploadVideoMaybeWatermark,
   watermarkLocalVideoAndUpload,
   generateAndUploadThumbnail,
@@ -65,6 +64,7 @@ import {
   refundLoopTrimAddon,
   type HandlerFn,
 } from "../shared.js"
+import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import {
   providerKindForVideoModel,
@@ -222,21 +222,17 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
 
   const thumbUrl = await generateAndUploadThumbnail(finalVideoUrl, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: {
-      videoUrl: finalVideoUrl,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "image-to-video",
+    result,
+    mediaUrl: finalVideoUrl,
+    extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
     },
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${finalVideoUrl} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -294,17 +290,14 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "video-to-video",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -379,21 +372,14 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: {
-      videoUrl: r2Url,
-      thumbnailUrl: thumbUrl,
-      ...buildProviderMeta(result),
-    },
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "text-to-video",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -533,17 +519,19 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta) },
-    provider: resultProviderUsed,
-    provider_cost: resultCost,
-    display_cost: resultDisplayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "lip-sync",
+    result: {
+      url: resultUrl,
+      cost: resultCost,
+      displayCost: resultDisplayCost,
+      providerUsed: resultProviderUsed,
+    },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(resultMeta) },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, resultCost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${resultProviderUsed}, cost: $${resultCost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -588,16 +576,17 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
-    provider: "kie",
-    provider_cost: result.cost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "image-to-video",
+    // speech-to-video routes through KIE; result has no providerUsed/displayCost
+    // but finalize merges undefined cleanly. Hardcode provider="kie" via extraOutputData
+    // if the schema needs it (it doesn't — markJobCompleted accepts null/undefined).
+    result: { ...result, providerUsed: "kie" },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: kie, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -647,17 +636,14 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
-    provider: result.providerUsed,
-    provider_cost: result.cost,
-    display_cost: result.displayCost,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "motion-transfer",
+    result,
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl, ...buildProviderMeta(result) },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId, result.cost)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${result.providerUsed}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`)
 }
 
@@ -710,16 +696,14 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-    provider: upscaleProvider,
-    provider_cost: null,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "video-upscale",
+    result: { url: outputUrl, cost: null, providerUsed: upscaleProvider },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${upscaleProvider})`)
 }
 
@@ -766,20 +750,17 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: {
-      videoUrl: r2Url,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "extend-video",
+    result: { url: videoUrl, cost: null, providerUsed: provider },
+    mediaUrl: r2Url,
+    extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...(newTaskId && { kieTaskId: newTaskId }),
     },
-    provider,
-    provider_cost: null,
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
@@ -803,16 +784,14 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
 
   const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
-  const ok = await markJobCompleted(ctx.jobId, {
-    output_data: { videoUrl: r2Url, thumbnailUrl: thumbUrl },
-    provider: "roop",
-    provider_cost: null,
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "video-to-video",
+    result: { url: outputUrl, cost: null, providerUsed: "roop" },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl },
   })
   if (!ok) return
-
-  await commitJobCredits(ctx.usageLogId, ctx.jobId)
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
 }
 
@@ -839,12 +818,10 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
   const maskUrl = await uploadToR2(maskOutputUrl, ctx.jobId, "image", ctx.jobUserId)
   await setJobProgress(job, ctx.jobId, 100)
 
-  if (!await shouldSaveJobResult(ctx.jobId)) return
-
+  // generate-mask outputs a {imageUrl, maskUrl} pair, not the standard single
+  // imageUrl. Use markJobCompleted directly here rather than finalize — the
+  // dispatch by jobType in finalize would mis-shape the output_data for masks.
   const ok = await markJobCompleted(ctx.jobId, {
-    // Store BOTH the original image (passthrough — unchanged from input) and
-    // the generated mask so a downstream Mask Painter / inpainting node can
-    // consume them together.
     output_data: { imageUrl, maskUrl },
     provider: "grounded-sam",
     provider_cost: null,
