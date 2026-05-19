@@ -35,13 +35,13 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import type { McpSession } from "../session.js"
 
 /**
- * Embedded fallback — verbatim copy of SKILL.md v1.0.8. The unit test
+ * Embedded fallback — verbatim copy of SKILL.md v2.0.0. The unit test
  * `film-director.test.ts` (`embedded constant matches on-disk SKILL.md`)
  * fails if this drifts from the canonical file. Bump both together.
  */
 export const FALLBACK_SKILL_CONTENT = `---
 name: nodaro-film-director
-version: 1.0.9
+version: 2.0.0
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -60,362 +60,41 @@ You are a film director helping the user create a cinematic video using Nodaro's
 7. **The end state is already there.** By the time the conversation ends, the user already has the complete editable graph on their canvas. No final import step needed — just a wrap-up message.
 8. **Show costs as you go.** Before any generation MCP call, briefly note the credit cost. The user has a budget.
 
-## Nodaro node shapes reference
+## Node shapes — fetched on demand
 
-> **STRICT NODE TYPE WHITELIST.** When constructing workflow JSON via \`update_workflow_json\`, you may use ONLY these 8 node types:
->
-> 1. \`text-prompt\` (Stage 1)
-> 2. \`loop\` (Stage 2 shot list — UI label "Table", NOT \`list\` which is single-column)
-> 3. \`generate-image\` (Stage 5)
-> 4. \`image-to-video\` (Stage 6)
-> 5. \`generate-music\` (Stage 7)
-> 6. \`trim-video\` (Stage 8)
-> 7. \`combine-videos\` (Stage 8)
-> 8. \`merge-video-audio\` (Stage 8)
->
-> If your workflow design seems to need a node type not listed here (e.g., character generation, location generation, modify-image, voice-design, extract-frame, text-to-speech, lip-sync, text-to-audio, or anything else), you MUST ask the user first — say "this design needs \`<type>\` which isn't in the canonical minimal set; do you want me to use it anyway, or simplify?" Do not invent types or fields under any circumstance. The frontend silently drops unknown types — your workflow appears empty on the canvas if you freelance the shapes.
+Per-node data shapes (required fields, defaults, result fields, MCP call shapes, common gotchas) are NOT embedded in this skill. They are fetched on demand from two MCP tools:
 
-A workflow node is a React Flow object:
+- **\`start_workflow_editor\`** — call ONCE at the start of any workflow-building session (Stage 0.0). Returns the canonical workflow JSON shape, edge wiring conventions, the \`update_workflow_json\` contract, the asset-URL result-field contract for every generation node, and the catalog of available node types.
+- **\`get_node_skill(node_type)\`** — call AS NEEDED, before you use a specific node type (Stage 0.1). Returns that node's full schema, MCP call shape, and a worked example. Accepted types come from the catalog returned by \`start_workflow_editor\`.
 
-\`\`\`json
-{ "id": "n1", "type": "<one of the 8 types below>", "position": { "x": 0, "y": 0 }, "data": { ... } }
-\`\`\`
-
-An edge wires two nodes:
-
-\`\`\`json
-{ "id": "e1", "source": "n1", "target": "n2", "sourceHandle": "image", "targetHandle": "in" }
-\`\`\`
-
-Lay nodes out left-to-right with \`x\` increasing by ~340 per stage and \`y\` separating sibling nodes by ~280. The \`position\` is mandatory.
-
-### Result-field contract (the single most-important rule)
-
-Every generation node in the whitelist (5 of the 8 — \`generate-image\`, \`image-to-video\`, \`generate-music\`, \`combine-videos\`, \`merge-video-audio\`, and to a lesser extent \`trim-video\`) renders its preview by reading **TWO required fields** from \`data\`:
-
-1. **\`executionStatus: "completed"\`** — string literal. Without this set to exactly \`"completed"\`, the frontend treats the node as still pending and renders a blank placeholder. Acceptable values: \`"idle" | "running" | "completed" | "failed"\`. You must write \`"completed"\`.
-2. **\`generated*Url: "<asset URL>"\`** — the EXACT field name varies per node type:
-   - \`generate-image\` → **\`generatedImageUrl\`**
-   - \`image-to-video\` → **\`generatedVideoUrl\`**
-   - \`generate-music\` → **\`generatedAudioUrl\`**
-   - \`trim-video\` → **\`generatedVideoUrl\`**
-   - \`combine-videos\` → **\`generatedVideoUrl\`**
-   - \`merge-video-audio\` → **\`generatedVideoUrl\`**
-   The URL value is the asset URL the generation MCP tool returned (typically the response's \`result.url\`, \`output[0]\`, \`image_url\`, or \`url\` field — read whatever the tool actually returned and put it here under THIS field name).
-
-Optionally (recommended, makes the canvas richer):
-- **\`generatedResults: [{ url, jobId, timestamp }]\`** — array form, lets the user flip between multiple takes. The render code reads \`generatedResults[activeResultIndex]?.url\` first and falls back to \`generated*Url\`. Setting both is safe and the right default.
-- **\`activeResultIndex: 0\`** — which entry in \`generatedResults\` to show. Defaults to 0.
-- **\`currentJobId: "<jobId>"\`** — the jobId from the generation tool's response. Useful for traceability; the frontend doesn't strictly require it.
-
-**Anti-patterns (DO NOT do any of these):**
-- Use \`result.url\`, \`imageUrl\`, \`videoUrl\`, \`audioUrl\`, \`output\`, \`output_url\`, or any other guessed field name for the asset URL. The frontend reads ONLY \`generated*Url\` (with the exact prefix shown above) plus the \`generatedResults[].url\` array path.
-- Omit \`executionStatus\`. Without \`"completed"\`, the node shows a blank placeholder even when the URL is correct.
-- Forget \`fieldMappings: {}\`. Even an empty object is required by every node's data shape.
-- Invent variant field names like \`generatedImage\`, \`imageGenerated\`, \`imageURL\` (capitalized URL), \`videoSrc\`. They are silently ignored.
-
-### The 8 canonical node types
-
-#### 1. \`text-prompt\` — Stage 1, display the approved script
-
-Pure text display node. No \`executionStatus\`, no result fields — it just renders \`data.text\`.
-
-\`\`\`json
-{ "id": "script-1", "type": "text-prompt", "position": { "x": 0, "y": 0 },
-  "data": {
-    "label": "Script",
-    "text": "<full screenplay>",
-    "variables": {}
-  } }
-\`\`\`
-
-**Required fields:** \`label\`, \`text\`, \`variables\` (empty object is fine).
-**No \`fieldMappings\` on this type.**
-
-#### 2. \`loop\` (UI label "Table") — Stage 2, shot list / tabular data
-
-**Use \`type: "loop"\` for any multi-column tabular data** — shot lists, prop tables, character casting tables, etc. The internal type name is \`"loop"\` but the UI displays it as **"Table"** in the node palette. (There's also a separate \`type: "list"\` for SINGLE-column data — do NOT use that for tabular content; it's intended for plain lists like a list of prompts.)
-
-Pure data-display node. Each column is a typed field; each row is one entry. No result fields.
-
-\`\`\`json
-{ "id": "shots-1", "type": "loop", "position": { "x": 340, "y": 0 },
-  "data": {
-    "label": "Shot List",
-    "columns": [
-      { "id": "shot_id", "name": "Shot", "handleId": "col_shot_id", "type": "text" },
-      { "id": "action",  "name": "Action", "handleId": "col_action",  "type": "text" },
-      { "id": "duration", "name": "Duration", "handleId": "col_duration", "type": "text" }
-    ],
-    "rows": [
-      ["1", "Hero enters frame from left, suits up in cockpit", "5"],
-      ["2", "Banking turn through canyon, tracers streak past", "5"],
-      ["3", "Vertical climb into golden sunlight, cut to black", "5"]
-    ],
-    "viewMode": "list",
-    "fieldMappings": {}
-  } }
-\`\`\`
-
-**Required fields:** \`label\`, \`columns\`, \`rows\`, \`fieldMappings: {}\`. Each column needs \`id\`, \`name\`, \`handleId\` (use \`col_<id>\`), and \`type\` (one of \`"text" | "image-url" | "video-url" | "audio-url" | "json"\`).
-
-**Each row in \`rows\` MUST be a fresh, distinct string array** — one per shot/entry. Do NOT repeat the same row reference. Example of CORRECT row data (3 distinct rows for a 3-shot trailer):
-
-\`\`\`json
-"rows": [
-  ["1", "Hero enters frame from left, suits up in cockpit", "5"],
-  ["2", "Banking turn through canyon, tracers streak past", "5"],
-  ["3", "Vertical climb into golden sunlight, cut to black", "5"]
-]
-\`\`\`
-
-WRONG (frontend renders all rows as the first one):
-
-\`\`\`json
-"rows": [
-  ["1", "Hero enters", "5"],
-  ["1", "Hero enters", "5"],
-  ["1", "Hero enters", "5"]
-]
-\`\`\`
-
-The number of cells in each row MUST match the number of columns. If you have 5 columns, each row needs exactly 5 strings.
-
-**\`viewMode\` controls visual layout:**
-- \`"list"\` (RECOMMENDED for shot lists) — vertical-stacked rows; each row shows its columns horizontally. This IS the "table" view despite the name. Use for any tabular data with mixed column types.
-- \`"packed"\` — compressed tile-grid; ignores row structure, packs cells into a configurable grid. Good for large image sets where you want to see everything at once.
-- \`"gallery"\` — image-heavy gallery view. Default when all columns are \`image-url\` type. Use for image-only collections.
-
-If omitted, the frontend defaults to \`"gallery"\` ONLY when every column is image-url; otherwise defaults to \`"list"\`. **Always set \`"viewMode": "list"\` explicitly for shot lists** so the rendering doesn't change if you add an image column later.
-
-**Common gotcha:** if you accidentally use \`type: "list"\` (the single-column type) with a multi-column \`columns\` array, the frontend may render only the first column or display in an unintended layout. Always use \`type: "loop"\` for multi-column data.
-
-#### Wiring edges from column outputs
-
-**Wiring edges from a Table column to a downstream node:**
-
-Each column on a \`loop\` (Table) node exposes a SOURCE handle whose id is the column's \`handleId\` (e.g., \`col_shot_id\`). To wire that column's values as a list into another node, the edge's \`sourceHandle\` MUST be the column's \`handleId\`:
-
-\`\`\`json
-{
-  "id": "edge-shot-action-to-scene1",
-  "source": "shotlist-1",
-  "sourceHandle": "col_action",
-  "target": "scene-1",
-  "targetHandle": "in"
-}
-\`\`\`
-
-This makes \`scene-1\` receive the list of action values (one per row in the table). Downstream nodes that support list-input (e.g., a loop or per-row generation) will fan out over the column values; non-list-aware nodes get the first value.
-
-If you omit \`sourceHandle\`, the edge connects to the default node output (the empty top-level "out" handle), NOT a column — that's why Claude's prior attempts didn't propagate the right data.
-
-#### 3. \`generate-image\` — Stage 5, scene composition
-
-For the default trailer flow, embed the character description + location description directly in the prompt. **When you attach this node after running \`generate_image\`, you MUST include the result fields below — without them the canvas shows an empty placeholder.**
-
-\`\`\`json
-{ "id": "scene-1", "type": "generate-image", "position": { "x": 680, "y": 0 },
-  "data": {
-    "label": "Shot 1 — Scene",
-    "prompt": "<the EXACT prompt you sent to generate_image>",
-    "provider": "nano-banana-pro",
-    "model": "gemini-2.5-flash-image",
-    "style": "",
-    "aspectRatio": "16:9",
-    "negativePrompt": "",
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedImageUrl": "<URL from generate_image response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp, e.g. new Date().toISOString()>" }
-    ],
-    "activeResultIndex": 0,
-    "currentJobId": "<jobId from response>"
-  } }
-\`\`\`
-
-**REQUIRED for the image to render on canvas:**
-- \`executionStatus: "completed"\` (literal string)
-- \`generatedImageUrl: "<url>"\` — exact field name. NOT \`result.url\`, NOT \`imageUrl\`.
-- \`fieldMappings: {}\` — empty object is fine; must be present.
-
-**Required base fields:** \`label\`, \`prompt\`, \`provider\`, \`model\`, \`style\`, \`aspectRatio\`, \`negativePrompt\`, \`fieldMappings\`.
-
-#### 4. \`image-to-video\` — Stage 6, shot animation
-
-Wire the scene image into the \`startFrame\` input handle via an edge. **Result field uses \`generatedVideoUrl\` (NOT \`generatedImageUrl\`).**
-
-\`\`\`json
-{ "id": "anim-1", "type": "image-to-video", "position": { "x": 1020, "y": 0 },
-  "data": {
-    "label": "Shot 1 — Animate",
-    "provider": "seedance-2-fast",
-    "model": "seedance-2-fast",
-    "duration": 3,
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedVideoUrl": "<URL from animate_image response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
-    ],
-    "activeResultIndex": 0,
-    "currentJobId": "<jobId from response>"
-  } }
-\`\`\`
-
-**REQUIRED for the video to render on canvas:**
-- \`executionStatus: "completed"\`
-- \`generatedVideoUrl: "<url>"\` — NOT \`generatedImageUrl\`, NOT \`videoUrl\`.
-- \`fieldMappings: {}\`
-
-**Required base fields:** \`label\`, \`provider\`, \`model\`, \`duration\`, \`fieldMappings\`.
-
-#### 5. \`generate-music\` — Stage 7, the soundtrack
-
-The only audio node in the default flow. **Result field uses \`generatedAudioUrl\`.**
-
-\`\`\`json
-{ "id": "music-1", "type": "generate-music", "position": { "x": 1360, "y": 280 },
-  "data": {
-    "label": "Soundtrack",
-    "prompt": "Tense orchestral build, 90 BPM",
-    "provider": "suno",
-    "duration": 30,
-    "genre": "orchestral",
-    "mood": "tense",
-    "instrumental": true,
-    "lyrics": "",
-    "referenceAudioUrl": "",
-    "referenceYouTubeUrl": "",
-    "referenceSource": "none",
-    "modelVersion": "stereo-large",
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedAudioUrl": "<URL from generate_music response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
-    ],
-    "activeResultIndex": 0
-  } }
-\`\`\`
-
-**REQUIRED for the audio to render on canvas:**
-- \`executionStatus: "completed"\`
-- \`generatedAudioUrl: "<url>"\` — NOT \`audioUrl\`, NOT \`musicUrl\`.
-- \`fieldMappings: {}\`
-
-**Required base fields:** \`label\`, \`prompt\`, \`provider\`, \`duration\`, \`genre\`, \`mood\`, \`instrumental\`, \`lyrics\`, \`referenceAudioUrl\`, \`referenceYouTubeUrl\`, \`referenceSource\`, \`modelVersion\`, \`fieldMappings\`.
-
-#### 6. \`trim-video\` — Stage 8 step 1, per-shot cut points
-
-Processing node. **Result field uses \`generatedVideoUrl\`.** If you trim via the MCP \`trim_video\` tool, capture its output URL. If you're only declaring trim parameters for the canvas (no execution yet), leave the result fields off and \`executionStatus\` will default to \`"idle"\`.
-
-\`\`\`json
-{ "id": "trim-1", "type": "trim-video", "position": { "x": 1360, "y": 0 },
-  "data": {
-    "label": "Shot 1 — Trim",
-    "startTime": 0,
-    "endTime": 2.5,
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedVideoUrl": "<URL from trim_video response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
-    ],
-    "activeResultIndex": 0
-  } }
-\`\`\`
-
-**REQUIRED for the trimmed clip to render on canvas (if you executed the trim):**
-- \`executionStatus: "completed"\`
-- \`generatedVideoUrl: "<url>"\` (same field name as \`image-to-video\`)
-- \`fieldMappings: {}\`
-
-**Required base fields:** \`label\`, \`startTime\`, \`endTime\`, \`fieldMappings\`.
-
-#### 7. \`combine-videos\` — Stage 8 step 2, stitch all shot videos together
-
-**Result field uses \`generatedVideoUrl\`.**
-
-\`\`\`json
-{ "id": "stitch-1", "type": "combine-videos", "position": { "x": 1700, "y": 0 },
-  "data": {
-    "label": "Stitch Shots",
-    "transition": "cut",
-    "transitionDuration": 0.5,
-    "audioMode": "crossfade",
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedVideoUrl": "<URL from combine_videos response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
-    ],
-    "activeResultIndex": 0
-  } }
-\`\`\`
-
-**REQUIRED for the stitched video to render on canvas:**
-- \`executionStatus: "completed"\`
-- \`generatedVideoUrl: "<url>"\`
-- \`fieldMappings: {}\`
-
-**Required base fields:** \`label\`, \`transition\` (one of \`"cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"\`), \`transitionDuration\`, \`audioMode\` (one of \`"keep" | "crossfade" | "remove"\`), \`fieldMappings\`.
-
-#### 8. \`merge-video-audio\` — Stage 8 step 3, marry the final video with the music track
-
-**Result field uses \`generatedVideoUrl\`.**
-
-\`\`\`json
-{ "id": "final-1", "type": "merge-video-audio", "position": { "x": 2040, "y": 0 },
-  "data": {
-    "label": "Final Mix",
-    "audioType": "voiceover",
-    "voiceoverVolume": 100,
-    "backgroundVolume": 30,
-    "keepOriginalAudio": true,
-    "originalAudioVolume": 30,
-    "originalAudioRole": "background",
-    "trackSettings": {},
-    "fieldMappings": {},
-
-    "executionStatus": "completed",
-    "generatedVideoUrl": "<URL from merge_video_audio response>",
-    "generatedResults": [
-      { "url": "<same URL>", "jobId": "<jobId from response>", "timestamp": "<ISO timestamp>" }
-    ],
-    "activeResultIndex": 0
-  } }
-\`\`\`
-
-**REQUIRED for the final mix to render on canvas:**
-- \`executionStatus: "completed"\`
-- \`generatedVideoUrl: "<url>"\`
-- \`fieldMappings: {}\`
-
-**Required base fields:** \`label\`, \`audioType\` (\`"voiceover" | "background" | "both"\`), \`voiceoverVolume\`, \`backgroundVolume\`, \`keepOriginalAudio\`, \`originalAudioVolume\`, \`originalAudioRole\`, \`trackSettings\`, \`fieldMappings\`.
-
-### Edge connections (input handles per node)
-
-| Node type | Input handles you may target | Common output handles |
-|---|---|---|
-| \`text-prompt\` | \`in\` | \`text\` |
-| \`loop\` (UI "Table") | \`in\` | row-typed |
-| \`generate-image\` | \`in\` | \`image\` |
-| \`image-to-video\` | \`startFrame\`, \`endFrame\`, \`audio\` | \`video\` |
-| \`generate-music\` | \`in\` | \`audio\` |
-| \`trim-video\` | \`in\` | \`video\` |
-| \`combine-videos\` | \`in\` | \`video\` |
-| \`merge-video-audio\` | \`in\` | \`video\` |
-
-If you need a node type not listed above — STOP and ask the user. Do not invent.
+The 8-node cinematic-flow whitelist is unchanged: \`text-prompt\`, \`loop\` (UI label "Table"), \`generate-image\`, \`image-to-video\`, \`generate-music\`, \`trim-video\`, \`combine-videos\`, \`merge-video-audio\`. For any node type outside this whitelist, STOP and ask the user before using it.
 
 ## Stage 0 — Initialize the live workspace
+
+### Step 0.0 — Load the workflow-editor skill
+
+Call \`start_workflow_editor\` FIRST. The returned content is the canonical reference for:
+- Workflow JSON shape (\`nodes\`, \`edges\`, position, data)
+- Edge wiring conventions and per-node handle ids
+- The \`update_workflow_json\` contract (full overwrite, optimistic concurrency)
+- The result-field contract (\`executionStatus: "completed"\` + \`generated<Type>Url\`)
+- The catalog of node types you can fetch via \`get_node_skill\`
+
+You do not need to retain anything from your training data about Nodaro JSON. Use what \`start_workflow_editor\` returns.
+
+### Step 0.1 — Per-node skills on demand
+
+When you reach a stage that uses a specific node type, call \`get_node_skill(<type>)\` BEFORE you construct any node JSON for that type. The returned content tells you the exact required + optional fields, the matching MCP tool's input parameters, common gotchas, and a worked example.
+
+The first time you use each of these in the trailer flow, call \`get_node_skill\`:
+- \`text-prompt\` (Stage 1, script display)
+- \`loop\` (Stage 2, shot list)
+- \`generate-image\` (Stage 5, scene composition)
+- \`image-to-video\` (Stage 6, shot animation)
+- \`generate-music\` (Stage 7, soundtrack)
+- \`trim-video\`, \`combine-videos\`, \`merge-video-audio\` (Stage 8, final assembly)
+
+Subsequent uses of the same node type don't require re-fetching — keep the content in your working memory.
 
 ### MCP tool availability
 
@@ -426,7 +105,7 @@ If a tool call returns an error like "tool not available" or "unknown tool":
 2. **Ask the user to wait 5-10 seconds and send a follow-up message** — MCP servers may still be connecting on the first turn (Issue #42148). The deferred tool list refreshes between turns.
 3. **If still unavailable after the second turn**, ask the user to verify their Nodaro MCP integration is connected and toggle it off/on in claude.ai settings to re-initialize.
 
-### Create the workflow
+### Step 0.2 — Create the workflow
 
 Before any creative work, call \`create_workflow({ name: "<user's working title or 'Untitled Film'>" })\` and capture the returned \`workflowId\`. Tell the user:
 
