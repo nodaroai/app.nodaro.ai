@@ -9,6 +9,7 @@ import {
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
 import { reconcileOrphanedTrainings } from "../../lib/character-lora-reconciliation.js"
+import { reconcileInflightJobs } from "../../lib/reconcile/cron.js"
 
 /**
  * Start all billing cleanup cron jobs.
@@ -19,6 +20,7 @@ import { reconcileOrphanedTrainings } from "../../lib/character-lora-reconciliat
  * - sweepStaleVoiceJobs:        every hour at :45 (refund abandoned suno-voice-create)
  * - recordKieCreditSnapshot:    every hour at :15
  * - reconcileOrphanedTrainings: every 10 minutes
+ * - reconcileInflightJobs:      every 5 minutes (sync-sweep stuck/legacy rows)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sendStorageWarnings:        daily at 09:00 UTC
@@ -156,5 +158,20 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
+  // External-call reconciliation sweep — every 5 minutes.
+  cron.schedule("*/5 * * * *", async () => {
+    const start = Date.now()
+    try {
+      const result = await reconcileInflightJobs()
+      if (result.scanned > 0 || result.errors > 0) {
+        console.log(
+          `[cron] reconcile: scanned=${result.scanned} swept=${result.swept} skippedAsync=${result.skippedAsync} notStale=${result.notStale} errors=${result.errors} (${Date.now() - start}ms)`,
+        )
+      }
+    } catch (err) {
+      console.error("[cron] reconcile failed:", err)
+    }
+  })
+
+  console.log("[cron] Billing cleanup cron jobs started (9 schedules)")
 }

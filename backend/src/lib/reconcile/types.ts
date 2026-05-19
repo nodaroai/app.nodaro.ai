@@ -47,9 +47,9 @@ export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
- *  and the fallback threshold for unknown / null `provider_kind` rows.
- *  Derived rather than hardcoded so a future threshold tightening propagates
- *  automatically. */
+ *  in `cron.ts` and the fallback threshold for unknown / null `provider_kind`
+ *  rows. Derived rather than hardcoded so a future threshold tightening
+ *  propagates automatically. */
 export const MIN_STALE_THRESHOLD_MS = Math.min(
   ...Object.values(STALE_THRESHOLD_MS),
 )
