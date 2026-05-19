@@ -35,6 +35,7 @@ The `docs/` directory is published as the public reference (GitHub Pages). It mu
 - `frontend/CLAUDE.md` — Frontend patterns (API proxy, SSE client, UI styling)
 - `backend/CLAUDE.md` — Backend patterns (providers, credits, billing, worker)
 - `backend/src/providers/kie/CLAUDE.md` — KIE.ai API docs, model key → doc map, param gotchas
+- `backend/src/providers/replicate/CLAUDE.md` — Replicate provider patterns, Flux 2 routing, Character LoRA training
 
 # Nodaro.ai — Claude Code Reference
 
@@ -201,6 +202,7 @@ Most subsystem rules live in subdirectory CLAUDE.md files — Claude Code auto-l
 - **`backend/CLAUDE.md`** — Credit pricing, LLM routing, Workflow orchestrator, Sub-workflow hierarchy, Tier parallelism, Single-node execution history, Watermark, Webhook triggers, TTS v3 vs v2, Auth + OAuth, Dynamic CORS, Developer apps, MCP server, Image-to-video Loop Trim, Combine-videos resolution, Default project per user, Internal-only models, Suno Voice Persona, Character LoRA training, App Run Archive (soft-delete), `packages/shared/` build invariants.
 - **`frontend/CLAUDE.md`** — Image generation params (per-provider param routing), UI styling, API proxy, SSE client.
 - **`backend/src/providers/kie/CLAUDE.md`** — KIE i2v image input (size cap + Hailuo JPEG re-encode), KIE API patterns, model key → doc map.
+- **`backend/src/providers/replicate/CLAUDE.md`** — Replicate provider patterns, Character LoRA training (Cloud-only, webhook + CAS slot claim), Flux 2 Klein/Pro/Max routing with pinned `safety_tolerance: 5`.
 
 ---
 
