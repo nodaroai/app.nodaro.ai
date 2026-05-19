@@ -72,6 +72,16 @@ export interface ConnectedReference {
   readonly variantSlug?: string
   /** Character's canonical_description. Set on every entry from the same character (used for dedup). */
   readonly characterCanonicalDescription?: string | null
+  /**
+   * Location's canonical_description. Set on every entry derived from a wired
+   * Location node (canonical image + future per-variant entries from Phase 2 #2
+   * @location:1:variant mention syntax). Mirrors `characterCanonicalDescription`
+   * — the directive builder appends this to the `wired-location` ref's subject
+   * line when the location's slug isn't in `suppressedCanonicalLocationIds`.
+   */
+  readonly locationCanonicalDescription?: string | null
+  /** Slug of the source location (e.g. "old-library") when this entry came from a location node. Used by `suppressedCanonicalLocationIds` filtering. */
+  readonly locationSlug?: string
   /** The asset's own description (per-variant). null for canonical entries. */
   readonly variantDescription?: string | null
   /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */
