@@ -1554,6 +1554,11 @@ export interface DbLocation {
   deletedAt?: string | null
   createdAt: string
   updatedAt: string
+  // Only populated by `getLocationById` (the GET single-row route); the list
+  // route omits this. In-flight generation jobs targeting this location so the
+  // Studio can re-attach spinners on reopen + the canvas can clear stale
+  // running-status badges when no jobs remain.
+  pendingJobs?: { jobId: string; assetType: string; name: string; status: string }[]
 }
 
 export async function getLocations(projectId?: string, userId?: string): Promise<{ locations: DbLocation[] }> {
