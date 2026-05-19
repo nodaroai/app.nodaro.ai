@@ -127,6 +127,17 @@ jobs:
       - name: Check admin-client imports
         run: node backend/scripts/check-admin-client-import.mjs
 
+  check-locale-completeness:
+    name: Check Locale Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check locale sidecar completeness
+        run: node scripts/check-locale-completeness.mjs
+
   check-ee-imports:
     name: Check EE Imports
     runs-on: ubuntu-latest
@@ -143,7 +154,7 @@ jobs:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-ee-imports]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports]
     steps:
       - uses: actions/checkout@v5
       - uses: supabase/setup-cli@v1

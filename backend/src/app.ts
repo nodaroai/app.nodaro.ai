@@ -58,6 +58,7 @@ import { locationMainImageApprovalRoutes } from "./routes/location-main-image-ap
 import { locationLlmCaptionRoutes } from "./routes/location-llm-caption.js"
 import { generateLocationRoutes } from "./routes/generate-location.js"
 import { generateLocationAssetRoutes } from "./routes/generate-location-asset.js"
+import { generateLocationMotionRoutes } from "./routes/generate-location-motion.js"
 import { adminSettingsRoutes } from "./ee/routes/admin-settings.js"
 import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
@@ -274,6 +275,7 @@ export async function buildApp() {
   await app.register(locationLlmCaptionRoutes)
   await app.register(generateLocationRoutes)
   await app.register(generateLocationAssetRoutes)
+  await app.register(generateLocationMotionRoutes)
   if (hasAdmin()) await app.register(adminSettingsRoutes)
   await app.register(motionTransferRoutes)
   await app.register(videoUpscaleRoutes)

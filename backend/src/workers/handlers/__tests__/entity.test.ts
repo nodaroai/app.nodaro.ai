@@ -451,6 +451,204 @@ describe("generate-character-motion handler", () => {
   })
 })
 
+describe("generate-location-motion handler", () => {
+  const handler = entityHandlers["generate-location-motion"]
+  const TEST_LOCATION_ID = "00000000-0000-0000-0000-000000000bbb"
+
+  it("registers in entityHandlers map", () => {
+    expect(handler).toBeDefined()
+    expect(typeof handler).toBe("function")
+  })
+
+  it("calls imageToVideo with (sourceImageUrl, provider, prompt, undefined, undefined, options) and stores videoUrl", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "Neon-lit alley with rain reflections, cinematic.",
+      sourceImageUrl: "https://x/loc.png",
+      provider: "kling",
+      aspectRatio: "16:9",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/loc.png",
+      "kling",
+      "Neon-lit alley with rain reflections, cinematic.",
+      undefined,
+      undefined,
+      { aspectRatio: "16:9" },
+    )
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false,
+    )
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
+      provider: VIDEO_PROVIDER_RESULT.providerUsed,
+      provider_cost: VIDEO_PROVIDER_RESULT.cost,
+      display_cost: VIDEO_PROVIDER_RESULT.displayCost,
+    }))
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith(
+      "usage-1", "job-1", VIDEO_PROVIDER_RESULT.cost,
+    )
+  })
+
+  it("defaults provider to kling when omitted, omits options when aspectRatio missing", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "Misty mountain pass at dawn",
+      sourceImageUrl: "https://x/loc2.png",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/loc2.png",
+      "kling",
+      "Misty mountain pass at dawn",
+      undefined,
+      undefined,
+      undefined,
+    )
+  })
+
+  it("passes watermark flag through to upload", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "Stormy seas",
+      sourceImageUrl: "https://x/loc3.png",
+      provider: "minimax",
+      aspectRatio: "16:9",
+    })
+    await handler(job as never, makeCtx({ shouldWatermark: true }))
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", true,
+    )
+  })
+
+  it("auto-attaches to locations.atmosphere_motions via append_location_asset RPC after ownership re-verify", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "Flickering streetlight",
+      sourceImageUrl: "https://x/loc4.png",
+      provider: "kling",
+      aspectRatio: "16:9",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "atmosphere_motions",
+      attachName: "streetlight-flicker",
+    })
+    await handler(job as never, makeCtx())
+
+    // Belt-and-braces ownership re-query against locations row.
+    expect(mocks.mockFrom).toHaveBeenCalledWith("locations")
+    expect(mocks.mockLocationSelect).toHaveBeenCalledWith("id")
+    expect(mocks.mockLocationEq1).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
+    expect(mocks.mockLocationEq2).toHaveBeenCalledWith("user_id", "user-1")
+    expect(mocks.mockLocationIs).toHaveBeenCalledWith("deleted_at", null)
+
+    // Then RPC fires with the uploaded video URL.
+    expect(mocks.mockRpc).toHaveBeenCalledWith("append_location_asset", {
+      p_location_id: TEST_LOCATION_ID,
+      p_column: "atmosphere_motions",
+      p_value: {
+        name: "streetlight-flicker",
+        url: "https://r2.example.com/videos/job-1.mp4",
+      },
+    })
+  })
+
+  it("backward compat: old-shape jobs without attachToLocationId complete without crash and skip RPC", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "old payload — no attach fields",
+      sourceImageUrl: "https://x/loc5.png",
+      provider: "kling",
+      // No attachToLocationId / attachToColumn / attachName.
+    })
+    await expect(handler(job as never, makeCtx())).resolves.toBeUndefined()
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    expect(mocks.mockFrom).not.toHaveBeenCalledWith("locations")
+    // Video upload + job completion + credit commit still happen.
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledTimes(1)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("skips attach when ownership re-query returns no row (soft-deleted/forged) but still completes job + commits credits", async () => {
+    // Belt-and-braces: location was soft-deleted between route accept and
+    // worker pickup. Attach must be skipped, but video upload + completion
+    // + credit commit must still proceed.
+    mocks.mockLocationSingle.mockResolvedValueOnce({ data: null, error: null })
+
+    const job = makeJob("generate-location-motion", {
+      prompt: "stale location",
+      sourceImageUrl: "https://x/loc6.png",
+      provider: "kling",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "atmosphere_motions",
+      attachName: "stale",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    // But everything else completed.
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledTimes(1)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("skips attach when jobUserId is missing (no user context, can't verify ownership)", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "no user",
+      sourceImageUrl: "https://x/loc7.png",
+      provider: "kling",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "atmosphere_motions",
+      attachName: "no-user",
+    })
+    await handler(job as never, makeCtx({ jobUserId: undefined }))
+
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+    expect(mocks.mockFrom).not.toHaveBeenCalledWith("locations")
+  })
+
+  it("retry guard: shouldSaveJobResult=false (post-upload) short-circuits before markJobCompleted (mirrors character-motion precedent)", async () => {
+    // Mirrors `handleGenerateCharacterMotion` which has a single
+    // `shouldSaveJobResult` check before `markJobCompleted`. Provider call
+    // and upload are unavoidable side effects when retrying a job; the
+    // guard prevents double-completion + double-charge.
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    const job = makeJob("generate-location-motion", {
+      prompt: "cancelled-mid-flight",
+      sourceImageUrl: "https://x/locD.png",
+      provider: "kling",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "atmosphere_motions",
+      attachName: "mid",
+    })
+    await handler(job as never, makeCtx())
+
+    // Provider ran, upload ran — those are the side effects we can't undo.
+    expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledTimes(1)
+    // But job completion + credit commit + attach are all suppressed.
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+  })
+
+  it("retry guard: markJobCompleted=false also suppresses credit commit + attach (CAS contention)", async () => {
+    // Mirrors the `if (!ok) return` line in character-motion. If another
+    // worker beat us to flipping status, we must not double-commit credits
+    // or double-attach.
+    mocks.mockMarkJobCompleted.mockResolvedValueOnce(false)
+    const job = makeJob("generate-location-motion", {
+      prompt: "CAS contention",
+      sourceImageUrl: "https://x/locE.png",
+      provider: "kling",
+      attachToLocationId: TEST_LOCATION_ID,
+      attachToColumn: "atmosphere_motions",
+      attachName: "cas",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockRpc).not.toHaveBeenCalled()
+  })
+})
+
 describe("shared entity handler behavior", () => {
   it("returns early when cancelled", async () => {
     mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)

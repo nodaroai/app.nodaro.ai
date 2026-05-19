@@ -1,4 +1,8 @@
-import type { LocationAssetType, LocationAttachColumn } from "@nodaro/shared"
+import type {
+  CharacterAspectRatio,
+  LocationAssetType,
+  LocationAttachColumn,
+} from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
 /**
@@ -6,9 +10,14 @@ import type { NodaroClient } from "../client.js"
  * their runtime tuples so SDK consumers don't have to add `@nodaro/shared` as a
  * second dependency just to typecheck the `assetType` / `attachToColumn`
  * fields. Single source of truth lives in `@nodaro/shared/entity-prompts`.
+ *
+ * `CharacterAspectRatio` is re-exported alongside them — `generateMotion`'s
+ * `aspectRatio` field reuses the same 4-value enum (1:1 / 3:4 / 16:9 / 9:16)
+ * as characters; the route enforces this with `z.enum(CHARACTER_ASPECT_OPTIONS)`.
  */
 export type { LocationAssetType, LocationAttachColumn } from "@nodaro/shared"
 export { LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+export type { CharacterAspectRatio } from "@nodaro/shared"
 
 /**
  * Reference-photo kind discriminator — the mood-board roles a user can attach
@@ -196,6 +205,45 @@ export interface GenerateLocationAssetInput {
   attachName?: string
 }
 
+/**
+ * Input for `client.locations.generateMotion()` — fires the
+ * `POST /v1/generate-location-motion` route. Produces a single atmospheric
+ * motion clip (drifting fog, snowfall, rolling waves, etc.) animated FROM a
+ * static establishing-shot image.
+ *
+ * Mirrors `client.characters.generateMotion()` minus the character-specific
+ * fields (gender / baseOutfit / realLifeRefs). The route hardcodes the attach
+ * column to `atmosphere_motions` — callers supply `attachToLocationId` +
+ * `attachName` only.
+ *
+ * `sourceImageUrl` is REQUIRED — image-to-video needs a source frame and the
+ * route has no fallback (no `source_image_url` column to pull from on the
+ * locations row; the studio path supplies the canonical establishing-shot URL
+ * explicitly).
+ *
+ * When the studio path is set (`attachToLocationId` + `attachName`), the
+ * worker appends `{ name: attachName, url: <result> }` to the location row's
+ * `atmosphere_motions` JSONB column on completion.
+ */
+export interface GenerateLocationMotionInput {
+  motionPrompt: string
+  sourceImageUrl: string
+  provider?: string
+  name: string
+  category?: string
+  style?: "realistic" | "anime" | "3d-pixar" | "illustration"
+  canonicalDescription?: string
+  attachToLocationId?: string
+  attachName?: string
+  /**
+   * Optional aspect ratio override. Defaults to 16:9 server-side via
+   * `resolveLocationAspectRatio` (locations are cinematic establishing shots).
+   * One of the 4-value `CharacterAspectRatio` union — locations reuse the
+   * character aspect enum since the supported ratios are identical.
+   */
+  aspectRatio?: CharacterAspectRatio
+}
+
 export interface ApproveMainImageResult {
   sourceImageUrl: string
   /**
@@ -299,6 +347,20 @@ export class LocationsResource {
    */
   generateAsset(data: GenerateLocationAssetInput): Promise<{ jobId: string }> {
     return this.client.request("POST", "/v1/generate-location-asset", { body: data })
+  }
+
+  /**
+   * Fire `POST /v1/generate-location-motion` to animate the location's
+   * establishing shot into an atmospheric motion clip. Image-to-video, single
+   * clip per call; the attach column is hardcoded to `atmosphere_motions`
+   * server-side (locations have a single motion bucket so the caller doesn't
+   * supply `attachToColumn`). When the studio path is set
+   * (`attachToLocationId` + `attachName`), the worker appends
+   * `{ name: attachName, url: <result> }` to the row's `atmosphere_motions`
+   * column on completion.
+   */
+  generateMotion(data: GenerateLocationMotionInput): Promise<{ jobId: string }> {
+    return this.client.request("POST", "/v1/generate-location-motion", { body: data })
   }
 
   /**

@@ -74,6 +74,14 @@ function writeSession() {
   })
 }
 
+function executeSession() {
+  return newSession({
+    userId: "u1",
+    scopes: ["assets:read", "assets:write", "workflows:execute"] as Scope[],
+    clientName: "Claude",
+  })
+}
+
 // ── list_locations ──────────────────────────────────────────────────────────
 
 describe("list_locations tool", () => {
@@ -447,6 +455,102 @@ describe("recaption_location tool", () => {
   })
 })
 
+// ── generate_location_motion ────────────────────────────────────────────────
+
+describe("generate_location_motion tool", () => {
+  const MOTION_SOURCE_URL = "https://r2/locations/alley-main.png"
+
+  it("proxies to /v1/generate-location-motion with motion + provider + attach fields", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/generate-location-motion", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { jobId: "job-loc-motion-1" }
+    })
+
+    const server = buildServer()
+    registerLocationTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_location_motion", {
+      motion_prompt: "slow dolly-in",
+      source_image_url: MOTION_SOURCE_URL,
+      provider: "kling",
+      name: "Rainy Tokyo Alley",
+      category: "exterior",
+      style: "realistic",
+      canonical_description: "moody cinematic urban exterior",
+      attach_to_location_id: ALLEY_ID,
+      attach_name: "dolly-in",
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(result.structuredContent?.jobId).toBe("job-loc-motion-1")
+    expect(received?.motionPrompt).toBe("slow dolly-in")
+    expect(received?.sourceImageUrl).toBe(MOTION_SOURCE_URL)
+    expect(received?.provider).toBe("kling")
+    expect(received?.name).toBe("Rainy Tokyo Alley")
+    expect(received?.category).toBe("exterior")
+    expect(received?.style).toBe("realistic")
+    expect(received?.canonicalDescription).toBe("moody cinematic urban exterior")
+    expect(received?.attachToLocationId).toBe(ALLEY_ID)
+    expect(received?.attachName).toBe("dolly-in")
+    expect(received?.userId).toBe("u1")
+  })
+
+  it("forwards the default provider when none supplied (Zod default fires on route side)", async () => {
+    const fastify = Fastify()
+    let received: Record<string, unknown> | undefined
+    fastify.post("/v1/generate-location-motion", async (req) => {
+      received = req.body as Record<string, unknown>
+      return { jobId: "job-loc-motion-2" }
+    })
+
+    const server = buildServer()
+    registerLocationTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_location_motion", {
+      motion_prompt: "drone fly-over",
+      source_image_url: MOTION_SOURCE_URL,
+      name: "Rooftop",
+    })
+
+    expect(result.isError).toBeUndefined()
+    // Zod schema defaults `provider` to "kling" — tool surface passes the
+    // explicit default through to the route so logs reflect the actual model.
+    expect(received?.provider).toBe("kling")
+  })
+
+  it("rejects an invalid provider at the Zod boundary", async () => {
+    const server = buildServer()
+    registerLocationTools({ server, session: executeSession(), fastify: Fastify() })
+    const result = await callTool(server, "generate_location_motion", {
+      motion_prompt: "slow dolly-in",
+      source_image_url: MOTION_SOURCE_URL,
+      provider: "not-a-real-provider",
+      name: "Rainy Tokyo Alley",
+    })
+    expect(result.isError).toBe(true)
+  })
+
+  it("surfaces 502 / backend errors via errorResult", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/generate-location-motion", async (_req, reply) => {
+      return reply
+        .status(502)
+        .send({ error: { code: "provider_error", message: "kling fail" } })
+    })
+
+    const server = buildServer()
+    registerLocationTools({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_location_motion", {
+      motion_prompt: "slow dolly-in",
+      source_image_url: MOTION_SOURCE_URL,
+      provider: "kling",
+      name: "Rainy Tokyo Alley",
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("provider_error")
+  })
+})
+
 // ── scope-gating cross-check ────────────────────────────────────────────────
 
 describe("scope gating", () => {
@@ -461,9 +565,10 @@ describe("scope gating", () => {
     expect(names.has("update_location")).toBe(false)
     expect(names.has("approve_main_image")).toBe(false)
     expect(names.has("recaption_location")).toBe(false)
+    expect(names.has("generate_location_motion")).toBe(false)
   })
 
-  it("write session adds CRUD + studio tools", async () => {
+  it("write session adds CRUD + studio tools but NOT generate_location_motion", async () => {
     const server = buildServer()
     registerLocationTools({ server, session: writeSession(), fastify: Fastify() })
     const tools = await listTools(server)
@@ -474,12 +579,22 @@ describe("scope gating", () => {
     expect(names.has("update_location")).toBe(true)
     expect(names.has("approve_main_image")).toBe(true)
     expect(names.has("recaption_location")).toBe(true)
+    // workflows:execute is required for motion gen, NOT assets:write.
+    expect(names.has("generate_location_motion")).toBe(false)
+  })
+
+  it("execute session adds generate_location_motion on top of CRUD + studio tools", async () => {
+    const server = buildServer()
+    registerLocationTools({ server, session: executeSession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    const names = new Set(tools.map((t) => t.name))
+    expect(names.has("generate_location_motion")).toBe(true)
   })
 
   // Destructive-tool safety net — `delete_location` and `restore_location`
   // must NEVER appear in the MCP surface, regardless of session scopes.
   it("destructive tools (delete_location / restore_location) are absent under EVERY session", async () => {
-    for (const session of [readSession(), writeSession()]) {
+    for (const session of [readSession(), writeSession(), executeSession()]) {
       const server = buildServer()
       registerLocationTools({ server, session, fastify: Fastify() })
       const tools = await listTools(server)

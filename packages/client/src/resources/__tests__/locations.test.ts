@@ -227,6 +227,63 @@ describe("locations resource", () => {
     expect(body.attachToColumn).toBe("time_of_day")
   })
 
+  it("generateMotion POSTs /v1/generate-location-motion with the body", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-1" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    const result = await c.locations.generateMotion({
+      motionPrompt: "slow pan-left",
+      sourceImageUrl: "https://example.com/main.jpg",
+      name: "Test Location",
+    })
+    expect(result.jobId).toBe("j-1")
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://api.example.com/v1/generate-location-motion",
+    )
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body).toEqual({
+      motionPrompt: "slow pan-left",
+      sourceImageUrl: "https://example.com/main.jpg",
+      name: "Test Location",
+    })
+  })
+
+  it("generateMotion threads attach + aspectRatio fields when set", async () => {
+    // Studio auto-attach path: when all three (attachToLocationId +
+    // attachName) are set alongside aspectRatio, the worker appends
+    // `{ name: attachName, url: <result> }` to the row's atmosphere_motions
+    // column. The SDK passes everything through unchanged.
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-2" }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.locations.generateMotion({
+      motionPrompt: "drifting fog rolls across the meadow",
+      sourceImageUrl: "https://r2/main.png",
+      provider: "kling",
+      name: "Mystic Forest",
+      category: "nature",
+      style: "realistic",
+      canonicalDescription: "An old-growth forest at dawn...",
+      attachToLocationId: "uuid-1",
+      attachName: "fog-drift",
+      aspectRatio: "16:9",
+    })
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.provider).toBe("kling")
+    expect(body.attachToLocationId).toBe("uuid-1")
+    expect(body.attachName).toBe("fog-drift")
+    expect(body.aspectRatio).toBe("16:9")
+    expect(body.style).toBe("realistic")
+    expect(body.canonicalDescription).toBe("An old-growth forest at dawn...")
+  })
+
   it("approveMainImage POSTs /v1/locations/:id/approve-main-image", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockOk({

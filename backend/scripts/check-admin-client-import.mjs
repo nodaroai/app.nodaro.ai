@@ -134,6 +134,11 @@ const ALLOWED_PATHS = [
   // scoped by `.eq("user_id", userId)` in-handler.
   /^src\/routes\/location-restore\.ts$/,
 
+  // Generate location motion: service-role for job insert + ownership
+  // re-check on `attachToLocationId`. Every query is scoped by
+  // `.eq("user_id", userId)` in-handler (verified ~lines 80-95).
+  /^src\/routes\/generate-location-motion\.ts$/,
+
   // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
   // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
   // child tables; cross-user rows return 404 to avoid existence leak — audited

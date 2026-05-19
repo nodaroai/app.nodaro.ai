@@ -1266,15 +1266,23 @@ export async function generateLocation(data: {
 }
 
 export async function generateLocationAsset(data: {
-  assetType: "timeOfDay" | "weather" | "angles" | "custom"
+  assetType: "timeOfDay" | "weather" | "seasons" | "angles" | "lighting" | "custom"
   variant: string
   name: string
   description?: string
+  userPrompt?: string
   category?: string
   style?: string
-  sourceImageUrl: string
+  sourceImageUrl?: string
   provider?: string
   userId?: string
+  // Location Studio auto-attach (PR-2): when all three are set, the worker
+  // appends `{name: attachName, url: <result>}` to the named JSONB array column
+  // on the user's location row after generation. `attachToColumn` is required
+  // when `assetType === "custom"` (the worker can't infer the bucket).
+  attachToLocationId?: string
+  attachToColumn?: "time_of_day" | "weather" | "seasons" | "angles" | "lighting" | "atmosphere_motions"
+  attachName?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-location-asset`, {
     method: "POST",
@@ -1284,6 +1292,43 @@ export async function generateLocationAsset(data: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start location asset generation")
+  }
+  return res.json()
+}
+
+/**
+ * Kicks off the Location Studio atmosphere-motion (image-to-video) generation.
+ * Mirrors `generateLocationAsset` but for the video tab — `sourceImageUrl` is
+ * REQUIRED (motion needs a source frame) and the worker writes back to the
+ * fixed `atmosphere_motions` JSONB column on the locations row when the auto-
+ * attach trio is set.
+ *
+ * Backend route: `POST /v1/generate-location-motion` — Zod schema in
+ * `backend/src/routes/generate-location-motion.ts`. `provider` defaults to
+ * `"kling"` server-side when omitted.
+ */
+export async function generateLocationMotion(data: {
+  motionPrompt: string
+  sourceImageUrl: string
+  provider?: string
+  name: string
+  category?: string
+  style?: string
+  canonicalDescription?: string
+  userId?: string
+  attachToLocationId?: string
+  attachToColumn?: "atmosphere_motions"
+  attachName?: string
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-location-motion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(data)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start location motion generation")
   }
   return res.json()
 }
@@ -1435,6 +1480,53 @@ export async function deleteLocation(locationId: string): Promise<{ success: boo
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to archive location")
+  }
+  return res.json()
+}
+
+/**
+ * Permanent (hard) delete a soft-deleted location row. UI-only — the backend
+ * route (`DELETE /v1/locations/:id?permanent=true`) is wired by Task 15 of the
+ * Location Studio PR-2 plan and removes the DB row + R2-hosted assets.
+ *
+ * Intentionally NOT mirrored on the SDK surface (`@nodaro/client`) — the SDK's
+ * `delete()` always soft-deletes so programmatic callers cannot accidentally
+ * destroy data. Permanent-delete is reachable only from the `/library/locations`
+ * archive view.
+ */
+export async function permanentDeleteLocation(
+  locationId: string,
+): Promise<{ success: boolean; permanent: boolean }> {
+  const authHeaders = await getAuthHeaders()
+  const res = await fetch(
+    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}?permanent=true`,
+    {
+      method: "DELETE",
+      headers: authHeaders,
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to permanently delete location")
+  }
+  return res.json()
+}
+
+/**
+ * List of archived (soft-deleted) locations for the library's "Archived" tab.
+ * Backed by `GET /v1/locations?archived=true` (extended in PR-1).
+ */
+export async function listArchivedLocations(
+  projectId?: string,
+): Promise<{ locations: DbLocation[] }> {
+  const qs = new URLSearchParams({ archived: "true" })
+  if (projectId) qs.set("projectId", projectId)
+  const res = await fetch(`${API_BASE_URL}/v1/locations?${qs.toString()}`, {
+    headers: { ...await getAuthHeaders() },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to load archived locations")
   }
   return res.json()
 }

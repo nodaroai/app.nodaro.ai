@@ -772,6 +772,27 @@ export const CHARACTER_MOTION_PROVIDERS = [
 ] as const
 export type CharacterMotionProvider = typeof CHARACTER_MOTION_PROVIDERS[number]
 
+/**
+ * Atmospheric video providers available to the Location Studio's motion tab.
+ *
+ * Tuned for ambient camera moves (dolly, pan, drift, parallax) rather than
+ * character-driven motion. Subset of registered i2v providers; `seedance-2`
+ * added as the cinematic option for establishing shots.
+ *
+ * Mirrors `CHARACTER_MOTION_PROVIDERS` shape — see entity-prompts.ts for the
+ * naming convention.
+ */
+export const LOCATION_ATMOSPHERE_PROVIDERS = [
+  "kling",
+  "kling-turbo",
+  "kling-3.0",
+  "wan-i2v",
+  "wan-2.7-i2v",
+  "seedance-2",
+] as const
+export type LocationAtmosphereProvider =
+  (typeof LOCATION_ATMOSPHERE_PROVIDERS)[number]
+
 // =====================================================================
 // Scene Input Modes + Video Model Capability Registry (v4.0 + v4.1 spec §6.10)
 // =====================================================================

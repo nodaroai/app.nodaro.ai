@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
+import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { supabase } from "../lib/supabase.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { batchDeleteFromR2 } from "../lib/storage.js"
+import { config } from "../lib/config.js"
 
 // Reference-photo kinds — mirrors the migration 124 schema. Single source of
 // truth: `LOCATION_REFERENCE_PHOTO_KINDS` from `@nodaro/shared/entity-prompts`.
@@ -47,6 +49,59 @@ const upsertLocationBody = z.object({
 const deleteLocationParams = z.object({
   id: z.string().min(1),
 })
+
+// `?permanent=true` flips the DELETE handler from soft-archive into hard-delete
+// (DB row + R2 assets). Defaults to soft-archive when absent or "false".
+const deleteLocationQuery = z.object({
+  permanent: z.enum(["true", "false"]).optional(),
+})
+
+// Extract the R2 key from a public-CDN URL. Returns null for non-R2 URLs (e.g.
+// external CDNs a user pasted into source_image_url or reference_photos), which
+// the caller filters out — we deliberately don't try to delete external blobs.
+//
+// Local copy of `r2KeyFromUrl` from `ee/billing/cleanup-service.ts` so this
+// core route doesn't statically import from `ee/`. The shared helper is slated
+// to move into a core facade in Phase 3.5 (see `tools/check-ee-imports.mjs`
+// allowlist comment on `lib/collect-app-r2-keys.ts`).
+function r2KeyFromPublicUrl(url: string): string | null {
+  if (!config.R2_PUBLIC_URL || !url.startsWith(config.R2_PUBLIC_URL)) {
+    return null
+  }
+  return url.replace(config.R2_PUBLIC_URL + "/", "")
+}
+
+// Collect every R2 key referenced by a single location row. Used by the
+// permanent-delete path to feed `batchDeleteFromR2`. Operates on an already-
+// fetched row to avoid a second round-trip (the caller has the row from the
+// ownership + archive-status SELECT).
+function collectLocationR2Keys(row: Record<string, unknown>): string[] {
+  const keys: string[] = []
+  if (typeof row.source_image_url === "string") {
+    const key = r2KeyFromPublicUrl(row.source_image_url)
+    if (key) keys.push(key)
+  }
+  for (const col of LOCATION_ATTACH_COLUMNS) {
+    const items = row[col]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      const url = (item as { url?: unknown } | null)?.url
+      if (typeof url !== "string") continue
+      const key = r2KeyFromPublicUrl(url)
+      if (key) keys.push(key)
+    }
+  }
+  const refPhotos = row.reference_photos
+  if (Array.isArray(refPhotos)) {
+    for (const photo of refPhotos) {
+      const url = (photo as { url?: unknown } | null)?.url
+      if (typeof url !== "string") continue
+      const key = r2KeyFromPublicUrl(url)
+      if (key) keys.push(key)
+    }
+  }
+  return keys
+}
 
 const listLocationsQuery = z.object({
   projectId: z.string().uuid().optional(),
@@ -386,7 +441,23 @@ export async function locationRoutes(app: FastifyInstance) {
   })
 
   // ---------------------------------------------------------------------------
-  // Soft-delete location (sets deleted_at, leaves row intact for restore)
+  // Delete location
+  //
+  //   default          → soft-delete (sets deleted_at, leaves row intact for
+  //                      restore via POST /v1/locations/:id/restore).
+  //   ?permanent=true  → hard-delete the row AND batch-delete all referenced
+  //                      R2 keys (main image, the 6 asset buckets, reference
+  //                      photos). Row MUST already be archived — active rows
+  //                      return 400 `not_archived` to guard against curl/SDK
+  //                      callers bypassing the UI archive-first flow. The UI
+  //                      only surfaces permanent-delete from the Archived
+  //                      tab in `/library/locations` so this branch is
+  //                      reachable only after the row has gone through DELETE
+  //                      (no-query) → restore (optional) → DELETE
+  //                      ?permanent=true.
+  //
+  // Permanent-delete is intentionally NOT mirrored on the SDK (`@nodaro/client`)
+  // — programmatic callers can only soft-delete.
   // ---------------------------------------------------------------------------
   app.delete("/v1/locations/:id", async (req, reply) => {
     const userId = req.userId
@@ -396,18 +467,103 @@ export async function locationRoutes(app: FastifyInstance) {
       })
     }
 
-    const parsed = deleteLocationParams.safeParse(req.params)
-    if (!parsed.success) {
+    const parsedParams = deleteLocationParams.safeParse(req.params)
+    if (!parsedParams.success) {
       return reply.status(400).send({
         error: {
           code: "validation_error",
-          message: parsed.error.issues[0]?.message ?? "Invalid location ID",
+          message: parsedParams.error.issues[0]?.message ?? "Invalid location ID",
         },
       })
     }
 
-    const { id } = parsed.data
+    const parsedQuery = deleteLocationQuery.safeParse(req.query)
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: {
+          code: "validation_error",
+          message: parsedQuery.error.issues[0]?.message ?? "Invalid query parameters",
+        },
+      })
+    }
 
+    const { id } = parsedParams.data
+    const isPermanent = parsedQuery.data.permanent === "true"
+
+    if (isPermanent) {
+      // Step 1: Fetch ownership + archive-status + every asset URL in one round-trip.
+      // Archive-first policy mirrors the app_runs permanent-delete pattern in
+      // CLAUDE.md (avoids a single-step destroy footgun).
+      const { data: row, error: fetchErr } = await supabase
+        .from("locations")
+        .select(
+          "id, deleted_at, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
+        )
+        .eq("id", id)
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (fetchErr) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: fetchErr.message },
+        })
+      }
+      if (!row) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Location not found" },
+        })
+      }
+      if (!row.deleted_at) {
+        return reply.status(400).send({
+          error: {
+            code: "not_archived",
+            message:
+              "Location must be archived before permanent deletion. Call DELETE first.",
+          },
+        })
+      }
+
+      // Step 2: Collect R2 keys from JSONB asset columns + reference photos.
+      // External URLs (non-R2 CDN) are filtered out by r2KeyFromPublicUrl.
+      const keys = collectLocationR2Keys(row as Record<string, unknown>)
+
+      // Step 3: Best-effort batch-delete from R2. `batchDeleteFromR2` already
+      // swallows per-key errors and returns counts; we never block DB delete
+      // on R2 deletion (orphaned R2 blobs are reaped by the cleanup-cron).
+      if (keys.length > 0) {
+        try {
+          await batchDeleteFromR2(keys)
+        } catch (err) {
+          // Should not happen — batchDeleteFromR2 catches its own errors —
+          // but log defensively so a partial-failure doesn't silently swallow
+          // a totally broken S3 client.
+          console.error(
+            `[locations] R2 batch delete failed for location ${id} (continuing to DB delete):`,
+            err,
+          )
+        }
+      }
+
+      // Step 4: Hard-delete the DB row. Scoped by user_id again as defense in
+      // depth — even if the ownership check above is somehow bypassed, the
+      // DELETE itself cannot affect another user's row.
+      const { error: deleteErr } = await supabase
+        .from("locations")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId)
+
+      if (deleteErr) {
+        return reply.status(500).send({
+          error: { code: "delete_failed", message: deleteErr.message },
+        })
+      }
+
+      return { success: true, permanent: true }
+    }
+
+    // Default path: soft-delete (sets deleted_at). Idempotent — the
+    // `.is("deleted_at", null)` predicate makes a repeat call a no-op.
     const { error } = await supabase
       .from("locations")
       .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })

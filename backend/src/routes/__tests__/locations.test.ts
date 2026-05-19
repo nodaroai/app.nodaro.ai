@@ -25,12 +25,23 @@ vi.mock("@/lib/config.js", () => ({
     EDITION: "cloud",
     SUPABASE_URL: "https://test.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "test",
+    // Used by the permanent-delete path's inline `r2KeyFromPublicUrl` helper
+    // to distinguish R2-hosted URLs (extracted as keys for batchDeleteFromR2)
+    // from external CDN URLs (passed through to DB delete only).
+    R2_PUBLIC_URL: "https://r2.example.com",
+    R2_BUCKET_NAME: "test-bucket",
   },
   isCloud: () => true,
   hasCredits: () => true,
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+}))
+
+// Stub the storage helpers so the permanent-delete tests don't try to talk to
+// S3. `batchDeleteFromR2` returns the empty-success shape callers expect.
+vi.mock("@/lib/storage.js", () => ({
+  batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 0, errors: 0 }),
 }))
 
 vi.mock("@/lib/admin-check.js", () => ({
@@ -49,6 +60,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 
 import { locationRoutes } from "../locations.js"
 import { supabase } from "../../lib/supabase.js"
+import { batchDeleteFromR2 } from "../../lib/storage.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -444,5 +456,232 @@ describe("DELETE /v1/locations/:id (soft-delete)", () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("delete_failed")
+  })
+
+  // ?permanent=false (or any non-"true" value) falls through to the soft-delete
+  // branch — guards against a future Zod tightening accidentally toggling the
+  // default behavior.
+  it("?permanent=false routes through the soft-delete branch", async () => {
+    const { mockUpdate, chain } = softDeleteChain({ error: null })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=false`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, archived: true })
+    // The .is("deleted_at", null) predicate is the soft-delete fingerprint —
+    // the permanent path does NOT call .is(), it calls .delete().
+    expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(batchDeleteFromR2).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DELETE /v1/locations/:id?permanent=true (hard-delete + R2 cleanup)
+// ---------------------------------------------------------------------------
+
+describe("DELETE /v1/locations/:id?permanent=true", () => {
+  // Chain builder for the permanent-delete handler's call sequence:
+  //   1. SELECT(id, deleted_at, <asset cols>) → maybeSingle() — ownership + archive check + R2 keys
+  //   2. DELETE                               → eq().eq() (terminal await) — hard-delete the row
+  function ownershipChain(result: { data: unknown; error: unknown }) {
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue(result),
+    }
+    const mockSelect = vi.fn().mockReturnValue(chain)
+    return { mockSelect, chain }
+  }
+  function hardDeleteChain(result: { error: unknown }) {
+    const chain: Record<string, unknown> = {
+      eq: vi.fn().mockReturnThis(),
+      then: (resolve: (value: { error: unknown }) => unknown) =>
+        Promise.resolve(result).then(resolve),
+    }
+    const mockDelete = vi.fn().mockReturnValue(chain)
+    return { mockDelete, chain }
+  }
+
+  it("returns 401 when unauthenticated", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+    })
+    expect(res.statusCode).toBe(401)
+    expect(res.json().error.code).toBe("unauthorized")
+  })
+
+  it("returns 404 when the row doesn't exist or is owned by another user", async () => {
+    // The ownership SELECT returns no row — the handler short-circuits before
+    // any R2 collection or DB delete fires.
+    const { mockSelect: ownerSelect } = ownershipChain({ data: null, error: null })
+    vi.mocked(supabase.from).mockReturnValueOnce({ select: ownerSelect } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(batchDeleteFromR2).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 not_archived when the row is still active (archive-first policy)", async () => {
+    // Row exists + owned but `deleted_at` is null → must archive first.
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: { id: TEST_LOCATION_ID, deleted_at: null },
+      error: null,
+    })
+    vi.mocked(supabase.from).mockReturnValueOnce({ select: ownerSelect } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("not_archived")
+    expect(batchDeleteFromR2).not.toHaveBeenCalled()
+  })
+
+  it("hard-deletes an archived row + batch-deletes only R2-hosted asset keys", async () => {
+    // Archived row + a mix of R2-hosted and external CDN URLs across every
+    // JSONB column we scan. The handler must extract keys for the R2 URLs
+    // and skip the external ones (no spurious R2 deletes).
+    const ASSET_ROW = {
+      source_image_url: "https://r2.example.com/locations/forest/main.png",
+      time_of_day: [{ name: "noon", url: "https://r2.example.com/locations/forest/noon.png" }],
+      weather: [{ name: "rain", url: "https://cdn.external.com/rain.png" }], // external — skipped
+      seasons: [{ name: "winter", url: "https://r2.example.com/locations/forest/winter.png" }],
+      angles: null, // empty bucket — must not crash
+      lighting: [],
+      atmosphere_motions: [
+        { name: "fog", url: "https://r2.example.com/locations/forest/fog.mp4" },
+      ],
+      reference_photos: [
+        { kind: "wide", url: "https://r2.example.com/locations/forest/ref1.jpg" },
+        { kind: "detail", url: "https://cdn.external.com/ref2.jpg" }, // external — skipped
+      ],
+    }
+
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: { id: TEST_LOCATION_ID, deleted_at: "2026-05-01T00:00:00Z", ...ASSET_ROW },
+      error: null,
+    })
+    const { mockDelete, chain: deleteChain } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
+      .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, permanent: true })
+
+    // 5 R2-hosted URLs across source_image_url + time_of_day + seasons +
+    // atmosphere_motions + reference_photos. The 2 external URLs are skipped.
+    expect(batchDeleteFromR2).toHaveBeenCalledTimes(1)
+    const keysArg = vi.mocked(batchDeleteFromR2).mock.calls[0]?.[0] ?? []
+    expect(keysArg).toEqual([
+      "locations/forest/main.png",
+      "locations/forest/noon.png",
+      "locations/forest/winter.png",
+      "locations/forest/fog.mp4",
+      "locations/forest/ref1.jpg",
+    ])
+
+    // Hard-delete must be scoped by both id AND user_id — defense in depth
+    // against the ownership check above being somehow bypassed.
+    expect(mockDelete).toHaveBeenCalled()
+    expect(deleteChain.eq).toHaveBeenCalledWith("id", TEST_LOCATION_ID)
+    expect(deleteChain.eq).toHaveBeenCalledWith("user_id", TEST_USER_ID)
+  })
+
+  it("skips batch-delete when the row has no R2-hosted assets", async () => {
+    // All-empty asset row → no keys collected → batchDeleteFromR2 not called.
+    // Guards against an extra round trip for archived rows with no assets.
+    const EMPTY_ASSETS = {
+      source_image_url: null,
+      time_of_day: [],
+      weather: [],
+      seasons: [],
+      angles: [],
+      lighting: [],
+      atmosphere_motions: [],
+      reference_photos: [],
+    }
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: { id: TEST_LOCATION_ID, deleted_at: "2026-05-01T00:00:00Z", ...EMPTY_ASSETS },
+      error: null,
+    })
+    const { mockDelete } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never)
+      .mockReturnValueOnce({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ success: true, permanent: true })
+    expect(batchDeleteFromR2).not.toHaveBeenCalled()
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
+  it("returns 500 delete_failed when the hard-delete DB call errors", async () => {
+    const EMPTY_ASSETS = {
+      source_image_url: null,
+      time_of_day: [],
+      weather: [],
+      seasons: [],
+      angles: [],
+      lighting: [],
+      atmosphere_motions: [],
+      reference_photos: [],
+    }
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: { id: TEST_LOCATION_ID, deleted_at: "2026-05-01T00:00:00Z", ...EMPTY_ASSETS },
+      error: null,
+    })
+    const { mockDelete } = hardDeleteChain({ error: { message: "FK violation" } })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never)
+      .mockReturnValueOnce({ delete: mockDelete } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("delete_failed")
+  })
+
+  it("returns 400 validation_error on bogus query value", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=banana`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 })
