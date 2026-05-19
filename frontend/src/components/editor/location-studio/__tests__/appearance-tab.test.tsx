@@ -184,10 +184,10 @@ describe("AppearanceTab", () => {
 
     // Allow the polling interval to tick once. We can't await the actual
     // timer in jsdom; use vi.useFakeTimers + advance.
+    // POLL_MS is 10s (Phase 2 #12 throttled the fallback now that realtime
+    // is the primary signal), plus up to 200ms of jitter on top.
     await act(async () => {
-      // The polling interval needs to fire — wait briefly and re-render to
-      // pick up state changes.
-      await new Promise((r) => setTimeout(r, 2400))
+      await new Promise((r) => setTimeout(r, 10500))
     })
 
     rerender(<AppearanceTab studio={studio} />)
@@ -206,7 +206,7 @@ describe("AppearanceTab", () => {
       sourceImageUrl: "https://example.com/approved.png",
       canonicalDescription: "A warm cafe interior with golden afternoon light.",
     })
-  }, 10000)
+  }, 20000)
 
   it("renders canonical description when present", () => {
     const studio = makeStudio({

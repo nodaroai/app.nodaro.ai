@@ -45,6 +45,11 @@ import {
   type DbObject,
   type DbLocation,
 } from "@/lib/api"
+import {
+  buildSaveCharacterPayloadFromExport,
+  buildSaveObjectPayloadFromExport,
+  buildSaveLocationPayloadFromExport,
+} from "./editor-toolbar-inject-helpers"
 import { createClient } from "@/lib/supabase"
 import type { WorkflowExport } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge, CharacterNodeData, ObjectNodeData, LocationNodeData } from "@/types/nodes"
@@ -237,42 +242,28 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
 
         for (const char of characters || []) {
           try {
-            const result = await saveCharacter({
-              nodeId: char.nodeId, projectId,
-              name: char.name, description: char.description ?? undefined,
-              gender: char.gender ?? undefined, style: char.style ?? undefined,
-              baseOutfit: char.baseOutfit ?? undefined, sourceImageUrl: char.sourceImageUrl ?? undefined,
-              expressions: char.expressions ?? [], poses: char.poses ?? [],
-              lightingVariations: char.lightingVariations ?? [],
-            })
+            const result = await saveCharacter(buildSaveCharacterPayloadFromExport(char, projectId))
             assetIdMap[char.id] = result.id
           } catch { /* skip — inject continues with remaining assets */ }
         }
 
         for (const obj of objects || []) {
           try {
-            const result = await saveObject({
-              nodeId: obj.nodeId, projectId,
-              name: obj.name, description: obj.description ?? undefined,
-              category: obj.category ?? undefined, style: obj.style ?? undefined,
-              sourceImageUrl: obj.sourceImageUrl ?? undefined,
-              angles: obj.angles ?? [], materials: obj.materials ?? [],
-              variations: obj.variations ?? [],
-            })
+            const result = await saveObject(buildSaveObjectPayloadFromExport(obj, projectId))
             assetIdMap[obj.id] = result.id
           } catch { /* skip */ }
         }
 
         for (const loc of locations || []) {
           try {
-            const result = await saveLocation({
-              nodeId: loc.nodeId, projectId,
-              name: loc.name, description: loc.description ?? undefined,
-              category: loc.category ?? undefined, style: loc.style ?? undefined,
-              sourceImageUrl: loc.sourceImageUrl ?? undefined,
-              timeOfDay: loc.timeOfDay ?? [], weather: loc.weather ?? [],
-              angles: loc.angles ?? [],
-            })
+            // BUG FIX (Phase 2 #6): payload helper forwards Location Studio
+            // Phase 1 fields (lighting, seasons, atmosphereMotions,
+            // referencePhotos, canonicalDescription, styleLock) that the old
+            // inline call silently dropped. Without these, opening Location
+            // Studio on the re-imported node showed empty lighting / atmosphere
+            // / mood-board, then any subsequent save would null out
+            // canonical_description and reset style_lock.
+            const result = await saveLocation(buildSaveLocationPayloadFromExport(loc, projectId))
             assetIdMap[loc.id] = result.id
           } catch { /* skip */ }
         }

@@ -121,6 +121,7 @@ export const I18N_CATALOGS = [
   "backdrop",
   "camera-format",
   "camera-motions",
+  "character-fx",
   "color-look",
   "composition-effects",
   "era",

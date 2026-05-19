@@ -67,6 +67,7 @@ import {
   VOICE_ARCHETYPES,
 } from "../index.js"
 import { TRANSITIONS } from "../transitions.js"
+import { CHARACTER_FX } from "../character-fx.js"
 
 // ---------------------------------------------------------------------------
 // Lookup helper — pick an id from a catalog or return a placeholder. Empty
@@ -141,7 +142,10 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   "action-fx": { actionFx: firstId(ACTION_FX) },
   // TRANSITIONS[0] is "auto" with an intentionally empty promptHint — use a
   // real transition id so the sync test exercises the hint dispatch.
-  "transition": { transition: "cross-dissolve" },
+  "transition":   { transition:   "cross-dissolve" },
+  // CHARACTER_FX[0] is "auto" with an intentionally empty promptHint — use a
+  // real effect id so the sync test exercises the hint dispatch.
+  "character-fx": { characterFx:  "werewolf" },
   "loop-subject": { loopSubject: firstId(LOOP_SUBJECTS) },
   "scene-count": { count: 5 },
   "duration": { seconds: 8 },

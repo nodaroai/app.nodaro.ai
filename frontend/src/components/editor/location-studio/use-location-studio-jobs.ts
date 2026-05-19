@@ -1,21 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { getJobStatusBatch } from "@/lib/api"
+import { getCachedUserId } from "@/hooks/use-auth"
+import { useJobsRealtimeSync, type JobRealtimeRow } from "./use-jobs-realtime-sync"
 
 /**
- * Location Studio job-polling hook.
+ * Location Studio job-status hook.
  *
- * Studio-side analog of useCharacterStudioJobs, but uses the batch
- * `getJobStatusBatch` (GET /v1/jobs/status) endpoint instead of N parallel
- * `getJobStatus` calls — the studio commonly tracks 1/2/4 candidates at once
- * so the batch shape pays for itself even at low N. Polls every ~2s with a
- * small ±200ms jitter to spread load when multiple studios are open in
- * different tabs.
+ * Studio-side analog of useCharacterStudioJobs. Phase 2 #12: Supabase
+ * Realtime is now the PRIMARY signal — `useJobsRealtimeSync` subscribes
+ * to UPDATE events on the `jobs` table filtered by user_id and fires
+ * the same `onResolved` / `onFailed` callbacks the polling tick fires.
+ * The existing batch-polling stays as a FALLBACK (for clients where
+ * realtime drops, RLS edge cases occur, or the websocket is offline)
+ * but is throttled from 2s → 10s now that realtime carries the latency
+ * budget. Uses the batch `getJobStatusBatch` (GET /v1/jobs/status)
+ * endpoint instead of N parallel `getJobStatus` calls — the studio
+ * commonly tracks 1/2/4 candidates at once so the batch shape pays
+ * for itself even at low N. Adds a small ±200ms jitter to spread load
+ * when multiple studios are open in different tabs.
  *
  * Lifecycle:
  *  - Mount with optional `initial` jobs (from the row's `pendingJobs` rehydrate).
  *  - `trackJob({ jobId, assetType, name })` appends; dedupes by jobId.
- *  - The polling effect re-runs only when the tracked list changes shape
- *    (length / jobIds) — not on every progress update.
+ *  - Realtime fires on every UPDATE; tick fires every 10s as fallback.
  *  - On `status === "completed"` with a usable URL, fires `onResolved` and
  *    drops the job from tracked.
  *  - On `status === "failed"`, fires `onFailed(jobId)` and drops.
@@ -24,7 +31,7 @@ import { getJobStatusBatch } from "@/lib/api"
  * Callbacks are wired through `onResolved(cb)` / `onFailed(cb)` setters so
  * the parent can swap them without forcing the polling effect to restart.
  */
-const POLL_MS = 2000
+const POLL_MS = 10000
 
 export type TrackedJob = {
   readonly jobId: string
@@ -65,6 +72,61 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
     onFailedRef.current = cb
   }, [])
 
+  /**
+   * Shared resolution logic used by BOTH the realtime handler and the
+   * polling tick. Given a job id + status + output_data, fires the
+   * appropriate callback and drops the job from `tracked`. Returns true
+   * if the job was terminal (resolved or failed), false otherwise — the
+   * polling tick uses this to short-circuit further status processing
+   * for the same job in the same tick.
+   */
+  const handleJobStatus = useCallback(
+    (id: string, status: string, outputData: unknown): boolean => {
+      const meta = trackedRef.current.find((t) => t.jobId === id)
+      if (!meta) return false
+      if (status === "completed") {
+        const out = outputData as { imageUrl?: string; videoUrl?: string } | undefined
+        const url = out?.imageUrl ?? out?.videoUrl
+        if (url) {
+          onResolvedRef.current({ jobId: meta.jobId, assetType: meta.assetType, name: meta.name, url })
+          setTracked((prev) => prev.filter((t) => t.jobId !== id))
+          return true
+        }
+        return false
+      }
+      if (status === "failed") {
+        onFailedRef.current(id)
+        setTracked((prev) => prev.filter((t) => t.jobId !== id))
+        return true
+      }
+      return false
+    },
+    [],
+  )
+
+  // ---------------------------------------------------------------------
+  // Realtime — primary signal (Phase 2 #12).
+  // ---------------------------------------------------------------------
+  // The per-user channel is opened once for the studio's lifetime. The
+  // tracked-set ref filters events down to the jobs we care about; new
+  // tracks become visible to the next event without re-opening the channel.
+  const userId = getCachedUserId()
+  const trackedIdsSet = useMemo(() => new Set(tracked.map((t) => t.jobId)), [tracked])
+  const handleRealtimeUpdate = useCallback(
+    (job: JobRealtimeRow) => {
+      handleJobStatus(job.id, job.status, job.output_data)
+    },
+    [handleJobStatus],
+  )
+  useJobsRealtimeSync(userId ?? null, trackedIdsSet, handleRealtimeUpdate)
+
+  // ---------------------------------------------------------------------
+  // Polling — fallback (Phase 2 #12).
+  // ---------------------------------------------------------------------
+  // Throttled to POLL_MS = 10s now that realtime carries the latency
+  // budget. The tick stays as the authoritative recovery path for clients
+  // where realtime drops, RLS edge cases occur, or the websocket is offline.
+  //
   // Stable dependency: only restart the polling interval when the set of
   // jobIds changes — not when other state in the component re-renders.
   const jobIdsKey = tracked.map((t) => t.jobId).join(",")
@@ -79,20 +141,7 @@ export function useLocationStudioJobs(initial: ReadonlyArray<TrackedJob> = []): 
         if (ids.length === 0) return
         const { jobs } = await getJobStatusBatch(ids)
         for (const j of jobs) {
-          const meta = trackedRef.current.find((t) => t.jobId === j.id)
-          if (!meta) continue
-          if (j.status === "completed") {
-            const out = j.output_data as { imageUrl?: string; videoUrl?: string } | undefined
-            const url = out?.imageUrl ?? out?.videoUrl
-            if (url) {
-              onResolvedRef.current({ jobId: meta.jobId, assetType: meta.assetType, name: meta.name, url })
-              setTracked((prev) => prev.filter((t) => t.jobId !== j.id))
-            }
-          } else if (j.status === "failed") {
-            onFailedRef.current(j.id)
-            setTracked((prev) => prev.filter((t) => t.jobId !== j.id))
-          }
-          // pending/running → keep tracking; no state change required.
+          handleJobStatus(j.id, j.status, j.output_data)
         }
       } catch {
         // Transient — retry on next tick.

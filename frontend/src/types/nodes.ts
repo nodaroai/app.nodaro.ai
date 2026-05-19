@@ -25,6 +25,7 @@ import type { ExposableField, ExposableOutput } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { IdentityMeta } from "@nodaro/shared"
 import type { TransitionPosition, TransitionDuration, TransitionIntensity } from "@nodaro/shared"
+import type { CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
@@ -1036,6 +1037,7 @@ export interface PostProcessEffectsData {
 }
 
 export type { TransitionPosition, TransitionDuration, TransitionIntensity }
+export type { CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity }
 
 export interface TransitionData {
   label: string
@@ -1045,6 +1047,17 @@ export interface TransitionData {
   intensity?: TransitionIntensity
   preText?: string
   postText?: string
+  [key: string]: unknown
+}
+
+export interface CharacterFxData {
+  label: string
+  characterFx: string | string[]
+  position?:  CharacterFxPosition
+  duration?:  CharacterFxDuration
+  intensity?: CharacterFxIntensity
+  preText?:   string
+  postText?:  string
   [key: string]: unknown
 }
 
@@ -3782,6 +3795,7 @@ export type SceneNodeData =
   | MotionData
   | CameraMotionData
   | TransitionData
+  | CharacterFxData
   | FramingData
   | LensData
   | CameraFormatData
@@ -3938,6 +3952,7 @@ export type SceneNodeType =
   | "motion"
   | "camera-motion"
   | "transition"
+  | "character-fx"
   | "framing"
   | "lens"
   | "camera-format"
@@ -4288,6 +4303,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Transition",
       transition: "auto",
+      position: "auto",
+      duration: "auto",
+      intensity: "auto",
+    },
+  },
+  {
+    type: "character-fx",
+    label: "Character FX",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Character FX",
+      characterFx: "auto",
       position: "auto",
       duration: "auto",
       intensity: "auto",

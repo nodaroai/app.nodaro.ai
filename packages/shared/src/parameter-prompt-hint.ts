@@ -40,6 +40,13 @@ import {
   type TransitionPosition,
   type TransitionTiming,
 } from "./transitions.js"
+import {
+  composeCharacterFxHintFromConnections,
+  type CharacterFxDuration,
+  type CharacterFxIntensity,
+  type CharacterFxPosition,
+  type CharacterFxTiming,
+} from "./character-fx.js"
 import { buildMaterialHints } from "./materials.js"
 import { getAnimal } from "./animals.js"
 import { getVehicle } from "./vehicles.js"
@@ -80,6 +87,16 @@ export interface HintGraphContext {
 
 function asStr(v: unknown): string {
   return typeof v === "string" ? v : ""
+}
+
+/** Extract the display name from a character / face / object / location ref node. */
+function extractCharacterRefName(node: HintNodeLike): string | undefined {
+  const d = (node.data ?? {}) as Record<string, unknown>
+  const candidates = [d.characterName, d.faceName, d.objectName, d.locationName]
+  for (const v of candidates) {
+    if (typeof v === "string" && v.trim().length > 0) return v.trim()
+  }
+  return undefined
 }
 
 /** Compose `[preText, mainHint, postText]` into a comma-joined string,
@@ -155,6 +172,32 @@ export function getParameterPromptHint(
       else if (edge.targetHandle === "endState")   endHints.push(hint)
     }
     return composeTransitionHintFromConnections(transitionId, startHints, endHints, timing)
+  }
+
+  if (node.type === "character-fx") {
+    const raw = data.characterFx
+    const effectId: string | string[] | undefined =
+      Array.isArray(raw)
+        ? raw.filter((s): s is string => typeof s === "string" && s.length > 0)
+        : (asStr(raw) || undefined)
+    const timing: CharacterFxTiming = {
+      position:  asStr(data.position)  as CharacterFxPosition  | undefined,
+      duration:  asStr(data.duration)  as CharacterFxDuration  | undefined,
+      intensity: asStr(data.intensity) as CharacterFxIntensity | undefined,
+    }
+    if (!ctx) {
+      return composeCharacterFxHintFromConnections(effectId, [], timing)
+    }
+    const targetNames: string[] = []
+    for (const edge of ctx.edges) {
+      if (edge.target !== node.id) continue
+      if (edge.targetHandle !== "target") continue
+      const src = ctx.nodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const name = extractCharacterRefName(src)
+      if (name) targetNames.push(name)
+    }
+    return composeCharacterFxHintFromConnections(effectId, targetNames, timing)
   }
 
   switch (node.type) {

@@ -206,4 +206,4 @@ Most subsystem rules live in subdirectory CLAUDE.md files — Claude Code auto-l
 
 ---
 
-*Version: 2.25.1 — Last updated 2026-05-19. For change history, see `git log CLAUDE.md` and PR descriptions.*
+*Version: 2.25.2 — Last updated 2026-05-19. For change history, see `git log CLAUDE.md` and PR descriptions.*

@@ -74,8 +74,8 @@ describe("useLocationStudioJobs", () => {
     })
 
     await act(async () => {
-      // Advance past POLL_MS + max jitter (200ms padding to be safe).
-      vi.advanceTimersByTime(2300)
+      // Advance past POLL_MS (10s) + max jitter (300ms padding to be safe).
+      vi.advanceTimersByTime(10300)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()
@@ -104,7 +104,7 @@ describe("useLocationStudioJobs", () => {
     })
 
     await act(async () => {
-      vi.advanceTimersByTime(2300)
+      vi.advanceTimersByTime(10300)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()
@@ -127,7 +127,7 @@ describe("useLocationStudioJobs", () => {
     })
 
     await act(async () => {
-      vi.advanceTimersByTime(2300)
+      vi.advanceTimersByTime(10300)
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -155,7 +155,7 @@ describe("useLocationStudioJobs", () => {
     })
 
     await act(async () => {
-      vi.advanceTimersByTime(2300)
+      vi.advanceTimersByTime(10300)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()

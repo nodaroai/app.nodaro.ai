@@ -1,7 +1,8 @@
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
 import { composeTransitionHintFromConnections, type TransitionTiming } from "@nodaro/shared"
-import type { WorkflowNode, WorkflowEdge, TransitionData } from "@/types/nodes"
+import { composeCharacterFxHintFromConnections, type CharacterFxTiming } from "@nodaro/shared"
+import type { WorkflowNode, WorkflowEdge, TransitionData, CharacterFxData } from "@/types/nodes"
 
 /**
  * Dispatch by parameter-node type to that node's prompt-hint string. Used by
@@ -82,11 +83,30 @@ export function composeTransitionHintForNode(
   return composeTransitionHintFromConnections(data.transition, startHints, endHints, timing)
 }
 
+/**
+ * Compose the full structured character-fx prompt for a given character-fx
+ * node by forwarding the effect id(s) along with timing options and any
+ * target hints from connected nodes.
+ *
+ * Returns the bare character-fx hint when no target context exists.
+ */
+export function composeCharacterFxHintForNode(
+  data: CharacterFxData,
+  targetHints: ReadonlyArray<string> = [],
+): string {
+  const timing: CharacterFxTiming = {
+    position:  data.position,
+    duration:  data.duration,
+    intensity: data.intensity,
+  }
+  return composeCharacterFxHintFromConnections(data.characterFx, targetHints, timing)
+}
+
 /** Video-only cinematography dims. Still-image consumers (generate-image,
  *  edit-image, image-to-image, Location entity reference-image gen) pass
  *  these via `options.excludeTypes` to `collectCinematographyHints` so a
  *  stray Motion/Temporal connection doesn't inject incoherent hints. */
-export const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal", "transition"])
+export const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal", "transition", "character-fx"])
 
 export function collectCinematographyHints(
   consumerNodeId: string,

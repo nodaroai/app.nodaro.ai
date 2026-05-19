@@ -345,6 +345,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"],
   },
   {
+    type: "character-fx",
+    label: "Character FX",
+    icon: <Sparkles className="h-4 w-4" />,
+    category: "Look",
+    keywords: ["character", "fx", "effect", "expression", "emotion", "gesture", "blink", "wink", "laugh", "cry", "smile", "frown", "shiver", "tremble", "gasp", "reaction"],
+  },
+  {
     type: "style",
     label: "Style",
     icon: <Brush className="h-4 w-4" />,

@@ -16,6 +16,7 @@ import { AspectRatioNode } from "./aspect-ratio-node";
 import { MotionNode } from "./motion-node";
 import { CameraMotionNode } from "./camera-motion-node"
 import { TransitionNode } from "./transition-node";
+import { CharacterFxNode } from "./character-fx-node";
 import { FramingNode } from "./framing-node";
 import { LensNode } from "./lens-node";
 import { CameraFormatNode } from "./camera-format-node";
@@ -172,6 +173,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   motion: MotionNode,
   "camera-motion": CameraMotionNode,
   "transition": TransitionNode,
+  "character-fx": CharacterFxNode,
   "framing": FramingNode,
   "lens": LensNode,
   "camera-format": CameraFormatNode,

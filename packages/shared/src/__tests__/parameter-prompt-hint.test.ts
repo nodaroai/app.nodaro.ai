@@ -129,3 +129,79 @@ describe("getParameterPromptHint — transition", () => {
     expect(r).toMatch(/ending at .+night/)
   })
 })
+
+describe("getParameterPromptHint — character-fx", () => {
+  it("returns bare hint with no target / no timing / no ctx", () => {
+    const r = getParameterPromptHint({
+      id: "n1",
+      type: "character-fx",
+      data: { characterFx: "werewolf" },
+    } as any)
+    expect(r).toContain("the subject")
+    expect(r).toContain("werewolf")
+  })
+
+  it("substitutes target name from upstream character ref via 'target' handle", () => {
+    const ctx = {
+      nodes: [
+        { id: "n1", type: "character-fx", data: { characterFx: "werewolf" } },
+        { id: "n2", type: "character",   data: { characterName: "Aria Voss" } },
+      ],
+      edges: [
+        { source: "n2", target: "n1", targetHandle: "target", sourceHandle: "characterRef" },
+      ],
+    }
+    const r = getParameterPromptHint(ctx.nodes[0] as any, ctx as any)
+    expect(r).toContain("Aria Voss")
+    expect(r).not.toContain("the subject")
+  })
+
+  it("multi-pick array works with target substitution", () => {
+    const ctx = {
+      nodes: [
+        { id: "n1", type: "character-fx", data: { characterFx: ["werewolf", "fire-breathe"] } },
+        { id: "n2", type: "character",   data: { characterName: "Aria" } },
+      ],
+      edges: [
+        { source: "n2", target: "n1", targetHandle: "target", sourceHandle: "characterRef" },
+      ],
+    }
+    const r = getParameterPromptHint(ctx.nodes[0] as any, ctx as any)
+    expect(r).toContain("Aria")
+    expect(r).toContain(", and ")
+    expect(r).not.toContain("the subject")
+  })
+
+  it("ignores edges not on 'target' handle", () => {
+    const ctx = {
+      nodes: [
+        { id: "n1", type: "character-fx", data: { characterFx: "werewolf" } },
+        { id: "n2", type: "character",   data: { characterName: "Ignored" } },
+      ],
+      edges: [
+        { source: "n2", target: "n1", targetHandle: "startState", sourceHandle: "characterRef" },
+      ],
+    }
+    const r = getParameterPromptHint(ctx.nodes[0] as any, ctx as any)
+    expect(r).not.toContain("Ignored")
+    expect(r).toContain("the subject")  // un-substituted
+  })
+
+  it("falls through field candidates (faceName, objectName, locationName)", () => {
+    for (const [field, name] of [
+      ["faceName",     "Some Face"],
+      ["objectName",   "An Object"],
+      ["locationName", "Some Place"],
+    ] as const) {
+      const ctx = {
+        nodes: [
+          { id: "n1", type: "character-fx", data: { characterFx: "werewolf" } },
+          { id: "n2", type: "face",        data: { [field]: name } },
+        ],
+        edges: [{ source: "n2", target: "n1", targetHandle: "target", sourceHandle: "out" }],
+      }
+      const r = getParameterPromptHint(ctx.nodes[0] as any, ctx as any)
+      expect(r).toContain(name)
+    }
+  })
+})
