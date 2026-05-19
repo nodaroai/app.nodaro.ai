@@ -836,6 +836,15 @@ export interface VideoModelCapabilities {
   maxInterpolationKeyframes?: number // v4.1 Method 8
   maxDurationSeconds: number
   prompting_style: ModelPromptingStyle
+  /**
+   * Maximum number of reference IMAGES the model accepts in one call,
+   * including the start frame. Drives `allocateReferenceSlots` in
+   * `backend/src/ee/pipelines/continuity.ts` (Phase 1C.1 §5.13.3) — when
+   * the budget is 1, multi-shot/character/object refs are silently
+   * dropped and the slot allocator emits a `pipeline:warning` event.
+   * Defaults to 1 when omitted.
+   */
+  maxReferenceImages?: number
 }
 
 /**
@@ -852,49 +861,64 @@ export const VIDEO_MODEL_CAPS: Record<string, VideoModelCapabilities> = {
     inputModes: ["first_frame", "first_last_frame", "text"],
     maxDurationSeconds: 10,
     prompting_style: "natural_language",
+    maxReferenceImages: 1,
   },
   "kling-3-omni": {
     inputModes: ["ref_images", "multi_shot"],
     maxShotsPerCall: 5,
     maxDurationSeconds: 15,
     prompting_style: "natural_language",
+    // Kling Omni accepts a strong multi-ref budget (start frame + up to
+    // ~6 character/scene refs). Drives `allocateReferenceSlots` in
+    // continuity.ts to surface all of them.
+    maxReferenceImages: 7,
   },
   "veo3.1": {
     inputModes: ["first_frame", "text", "video_continuation"],
     supportsVideoExtension: true,
     maxDurationSeconds: 8,
     prompting_style: "cinematic_tag_heavy",
+    maxReferenceImages: 1,
   },
   "seedance-2": {
     inputModes: ["first_frame", "first_last_frame", "ref_images", "video_continuation"],
     supportsVideoExtension: true,
     maxDurationSeconds: 10,
     prompting_style: "natural_language",
+    // SEEDANCE_2_REF_LIMITS.images is the hard upper bound (9). 1C.1
+    // caps to a more conservative 5 to leave headroom for primary
+    // character + location + 3 secondary refs.
+    maxReferenceImages: 5,
   },
   "hailuo-2.3-pro": {
     inputModes: ["first_frame", "text"],
     maxDurationSeconds: 10,
     prompting_style: "compact",
+    maxReferenceImages: 1,
   },
   "hailuo-standard": {
     inputModes: ["first_frame", "first_last_frame"],
     maxDurationSeconds: 6,
     prompting_style: "compact",
+    maxReferenceImages: 1,
   },
   "minimax": {
     inputModes: ["first_frame", "first_last_frame"],
     maxDurationSeconds: 6,
     prompting_style: "compact",
+    maxReferenceImages: 1,
   },
   "kling-turbo": {
     inputModes: ["first_frame", "first_last_frame"],
     maxDurationSeconds: 10,
     prompting_style: "natural_language",
+    maxReferenceImages: 1,
   },
   "bytedance-lite": {
     inputModes: ["first_frame", "first_last_frame"],
     maxDurationSeconds: 10,
     prompting_style: "compact",
+    maxReferenceImages: 1,
   },
 }
 

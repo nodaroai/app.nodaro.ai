@@ -695,6 +695,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         })
         if (
           event.type === "pipeline:done" ||
+          event.type === "pipeline:completed" ||
           (event.type === "pipeline:status" &&
             (event.status === "completed" ||
               event.status === "failed" ||

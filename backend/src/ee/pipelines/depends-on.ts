@@ -67,29 +67,43 @@ export async function markEntityNodeState(
 }
 
 /**
- * Batch transition: mark every pipeline_entity_nodes row that belongs to a
- * given pipeline_stages.id into a new pipeline_state via a single UPDATE.
- * Used at stage emit time (entire batch goes to awaiting_approval at once)
- * and when an in-flight stage is failed/cancelled.
+ * Batch transition: mark every pipeline_entity_nodes row tied to the
+ * (pipeline_id, entity_type) pair into a new pipeline_state via a single
+ * UPDATE. Used at stage emit time (entire batch goes to awaiting_approval at
+ * once) and when an in-flight stage is failed/cancelled.
  *
- * PostgREST has no first-class subquery, so we fan out: load entity IDs for
- * the stage, then update `pipeline_entity_nodes` via `.in("entity_id", ...)`.
- * No-op when the stage has no entities or none of them have been materialized
- * to canvas yet — both UPDATEs return 0 rows affected, which is fine.
+ * **Why filter by `entity_type` (not `stage_id`):** `pipeline_entities.stage_id`
+ * is set ONCE at creation time and never rebound. Scenes, for example, are
+ * created during the shot-list stage and keep that stage_id through Stage 6
+ * (scene_images) and Stage 7 (animate_audio_edit). Filtering by stage_id from
+ * the later stages returned 0 rows and silently no-op'd the transition.
+ * Filtering by entity_type works for the creator stages too — each stage owns
+ * exactly one entity_type — so the semantics are preserved.
+ *
+ * Also filters out `is_forked = true` entities so user-detached canvas nodes
+ * aren't yanked back into pipeline-owned state.
+ *
+ * PostgREST has no first-class subquery, so we fan out: load entity IDs, then
+ * update `pipeline_entity_nodes` via `.in("entity_id", ...)`. No-op when no
+ * entities match or none have been materialized to canvas yet — both UPDATEs
+ * return 0 rows affected, which is fine.
  */
 export async function markStageEntityNodesState(
   supabase: SupabaseClient,
-  stageId: string,
+  pipelineId: string,
+  entityType: "character" | "object" | "location" | "scene",
   newState: PipelineState,
 ): Promise<string[]> {
   const entitiesRes = await supabase
     .from("pipeline_entities")
     .select("id")
-    .eq("stage_id", stageId)
+    .eq("pipeline_id", pipelineId)
+    .eq("entity_type", entityType)
+    .eq("is_forked", false)
 
   if (entitiesRes.error) {
     throw new Error(
-      `markStageEntityNodesState ${stageId}: failed to load entity ids: ${entitiesRes.error.message}`,
+      `markStageEntityNodesState ${pipelineId}/${entityType}: failed to load entity ids: ${entitiesRes.error.message}`,
     )
   }
 
@@ -103,7 +117,11 @@ export async function markStageEntityNodesState(
       last_state_change_at: new Date().toISOString(),
     })
     .in("entity_id", entityIds)
-  if (error) throw new Error(`markStageEntityNodesState ${stageId}: ${error.message}`)
+  if (error) {
+    throw new Error(
+      `markStageEntityNodesState ${pipelineId}/${entityType}: ${error.message}`,
+    )
+  }
   return entityIds
 }
 
@@ -189,12 +207,17 @@ export async function transitionEntityNodeAndEmit(
 export async function transitionStageEntityNodesAndEmit(
   supabase: SupabaseClient,
   pipelineId: string,
-  stageId: string,
+  entityType: "character" | "object" | "location" | "scene",
   newState: PipelineState,
   logTag: string,
 ): Promise<void> {
   try {
-    const touched = await markStageEntityNodesState(supabase, stageId, newState)
+    const touched = await markStageEntityNodesState(
+      supabase,
+      pipelineId,
+      entityType,
+      newState,
+    )
     for (const entityId of touched) {
       pipelineEvents.publish({
         type: "entity:state_change",

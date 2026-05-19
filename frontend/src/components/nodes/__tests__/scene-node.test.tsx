@@ -91,7 +91,11 @@ describe("SceneNode (Phase 1B.2 pipeline)", () => {
   it("renders the video view when view_mode='video'", () => {
     const data = makeData({ view_mode: "video" })
     renderNode(data)
-    expect(screen.getByText(/No composite yet/i)).toBeInTheDocument()
+    // Phase 1C.1: empty state copy updated to reflect that Stage 7 (not 1B.2)
+    // is what fills the composite_video field.
+    expect(
+      screen.getByText(/Stage 7 will populate this view/i),
+    ).toBeInTheDocument()
   })
 
   it("renders the default view when view_mode='default'", () => {

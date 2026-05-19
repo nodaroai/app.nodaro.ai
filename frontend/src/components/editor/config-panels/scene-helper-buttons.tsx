@@ -2,19 +2,19 @@ import type { SceneNodeFrontendData } from "@/types/nodes"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  HELPERS_SHIPPED_IN_1B3,
+  ACTIVE_SCENE_HELPERS,
   SCENE_HELPER_NAMES,
   type SceneHelperName,
 } from "@nodaro/shared"
 
 /**
  * §6.11 Scene-Context helper buttons — one row of 10 actions on the SceneNode
- * config panel. The 7 active helpers ship in Phase 1B.3; the 3 vision-keyframe
- * helpers (audit_images / fix_continuity / validate_match_cut) are rendered
- * disabled with a "Pending Phase 1C" tooltip until Stage 6 keyframes exist.
+ * config panel. Phase 1C.1 activated the 3 vision-keyframe helpers
+ * (audit_images / fix_continuity / validate_match_cut), so all 10 helpers
+ * are now first-class active actions.
  *
  * The canonical helper-name catalog lives in `@nodaro/shared`
- * (`SCENE_HELPER_NAMES` + `HELPERS_SHIPPED_IN_1B3`), so this component is
+ * (`SCENE_HELPER_NAMES` + `ACTIVE_SCENE_HELPERS`), so this component is
  * automatically in lockstep with the backend Zod schema and the type-checked
  * registry in `backend/src/routes/scene-helpers.ts`. Adding a new helper to
  * the shared list will trigger a TS error here (missing `HELPER_LABELS`
@@ -23,13 +23,10 @@ import {
  * A button is enabled when:
  *  - The host scene is bound to a pipeline_id + pipeline_entity_id
  *  - The scene has at least one shot (Scene Director has populated data.shots)
- *  - The helper is one of the 7 active helpers
+ *  - The helper is in `ACTIVE_SCENE_HELPERS` (currently all 10)
  *  - No helper is currently in-flight (`isLoading=false`) — prevents the
  *    double-click race that would fire two LLM calls and reserve credits
  *    twice (caller passes `state.status === "loading"` from useSceneHelper).
- *
- * The 3 deferred helpers are always disabled regardless of pipeline state so
- * the user knows they exist but can't fire empty backend calls.
  */
 interface Props {
   pipelineId: string | undefined
@@ -81,17 +78,19 @@ const HELPER_LABELS: Record<
   audit_images: {
     icon: "🔍",
     label: "Audit Images",
-    tooltip: "Pending Phase 1C — requires Stage 6 keyframes.",
+    tooltip: "Run the Image Critic on every keyframe in this scene.",
   },
   fix_continuity: {
     icon: "🔗",
     label: "Fix Continuity",
-    tooltip: "Pending Phase 1C — requires Stage 6 keyframes.",
+    tooltip:
+      "Check a shot's keyframe against the prior shot's last frame; regenerate if continuity breaks.",
   },
   validate_match_cut: {
     icon: "🎯",
     label: "Validate Match Cut",
-    tooltip: "Pending Phase 1C — requires Stage 6 keyframes.",
+    tooltip:
+      "Evaluate the match-cut quality between a shot and the next (requires shot_intent.is_match_cut).",
   },
 }
 
@@ -108,7 +107,7 @@ export function SceneHelperButtons({
       <div className="flex flex-wrap gap-1">
         {SCENE_HELPER_NAMES.map((name) => {
           const meta = HELPER_LABELS[name]
-          const active = HELPERS_SHIPPED_IN_1B3.has(name)
+          const active = ACTIVE_SCENE_HELPERS.has(name)
           const enabled = ready && active && !isLoading
           return (
             <Tooltip key={name}>

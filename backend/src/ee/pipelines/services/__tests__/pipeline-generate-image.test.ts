@@ -212,7 +212,7 @@ describe("pipelineGenerateImage", () => {
       () => undefined,
       () => undefined,
     ))
-    await expect(promise).rejects.toThrow(/Image generation failed: provider error/)
+    await expect(promise).rejects.toThrow(/Job failed: provider error/)
   })
 
   it("throws when completed job has no imageUrl", async () => {

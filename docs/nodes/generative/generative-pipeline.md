@@ -114,9 +114,49 @@ Three vision-keyframe helpers need Stage 6 keyframes which don't exist until Pha
 - 🔗 **Fix Continuity** — vision check across the scene boundary
 - 🎯 **Validate Match Cut** — MatchCutCritic for shot pairs
 
+**Active in Phase 1C.1:** The 3 above helpers ship in Phase 1C.1 with the Image Critic LLM:
+
+| Helper | Model | Credits | Purpose |
+|--------|-------|---------|---------|
+| 🔍 Audit Images | Sonnet vision | 3 | Run Image Critic over every keyframe in the scene; aggregate per-shot issues |
+| 🔗 Fix Continuity | Sonnet vision + i2i | 4 | Critic on target shot vs prior shot's last frame; if `continuity_break`, regenerate the keyframe via image-to-image with the last frame as a strong reference |
+| 🎯 Validate Match Cut | Sonnet vision | 3 | Side-by-side critic on two consecutive shots flagged `is_match_cut`; returns match-strength score + suggested adjustments |
+
 ### Endpoints
 
-`POST /v1/pipelines/:id/entities/:sceneId/helpers/:name` (scope `pipelines:approve`, Cloud edition only) where `:name` is one of `audit_prompt`, `improve_prompt`, `generate_motion`, `optimize_for_model`, `add_broll`, `bridge_to_next_scene`, `anchor_scene_style`. Every successful invocation writes a `pipeline_stage_attempts` row with `trigger='scene_helper:<name>'` for audit + future undo (Phase 1B.4).
+`POST /v1/pipelines/:id/entities/:sceneId/helpers/:name` (scope `pipelines:approve`, Cloud edition only) where `:name` is one of `audit_prompt`, `improve_prompt`, `generate_motion`, `optimize_for_model`, `add_broll`, `bridge_to_next_scene`, `anchor_scene_style`, `audit_images`, `fix_continuity`, `validate_match_cut`. Every successful invocation writes a `pipeline_stage_attempts` row with `trigger='scene_helper:<name>'` for audit + future undo (Phase 1B.4).
+
+## Stages 6/7/8 — Scene Images, Animate/Audio/Edit, Post-merge (Phase 1C.1)
+
+After Stage 5 plans every scene's shot list, the orchestrator runs three new stages:
+
+### Stage 6 — `scene_images`
+
+For every approved scene, generate a keyframe per shot via `pipelineGenerateImage`. Each shot's `keyframe_url` is persisted back to `scene_node_data.shots[N]`. Concurrency: 5 scenes in parallel; shots within a scene are sequential. Cost: 1 image-gen credit per shot × N shots × M scenes.
+
+### Stage 7 — `animate_audio_edit`
+
+Drives the SceneNode's built-in 5-step internal pipeline per scene (§6.9.3): animate each shot via `pipelineAnimateShot` → extract last_frame post-animate → dialogue audio per shot (if `dialogue_line` set) → lip-sync (if `config.lipsync_enabled`) → `combine_videos` produces the scene's composite. Returns `composite_video_url` exposed on the SceneNode's `video` view.
+
+**Mode-aware behavior** (read from `pipelines.config.shot_generation_mode`):
+- **`"sequential"` (default for continuity-aware scenes)** — scenes processed 1-at-a-time; shots within a scene flow last_frame → start_frame across consecutive shots (Continuity Method 1); Image Critic runs the Stage 7b-pre `continuity_break` gate before each animate (§5.13.4).
+- **`"parallel"` (auto/fast mode)** — scenes processed 3-at-a-time; shots within a scene fan out via `settledWithLimit`; no last_frame chain, no Stage 7b-pre.
+
+**Continuity Methods 1 + 4 (shipped in 1C.1):**
+- **Method 1** — `pipeline_entities.last_frame_asset_id` written after each animate; `start_frame_url = sceneN.last_frame_asset_id` for shot N+1 in sequential mode.
+- **Method 4** — Multi-shot reference slot allocation per §5.13.3 H3 v3.9: continuity anchor (slot 1) wins over secondary refs. Capped to `VIDEO_MODEL_CAPS[shot.video_model].maxReferenceImages`. 1-ref providers (Hailuo) silently degrade — `needs_multishot_reference` is dropped but continuity anchor stays.
+
+**Methods 3 + 8 + 10 ship in Phase 1C.3** (video extension via VEO/Seedance 2, frame interpolation via RIFE/Topaz Apollo, camera-path via Stable Video 3D).
+
+### Stage 8 — `post_merge`
+
+Concatenates every scene's `composite_video_url` via the existing `combine_videos` route (FFmpeg). Writes `pipelines.final_output_asset_id` + flips `status='completed'`. Single-scene pipelines skip the combine call and copy the lone composite directly.
+
+Emits the new `pipeline:completed` SSE event with `finalOutputUrl`. The pipeline panel closes the stream on this event.
+
+### Image Critic LLM (Phase 1C.1)
+
+`backend/src/ee/pipelines/llms/image-critic.ts` — Sonnet vision call with 6 issue types: `continuity_break`, `identity_mismatch`, `composition_break`, `wardrobe_inconsistency`, `style_drift`, `prompt_mismatch`. Each verdict is persisted to the new `image_critic_verdicts` table (migration 134) with the `invoked_via` discriminator (`stage_7b_pre` / `helper:audit_images` / `helper:fix_continuity` / `helper:validate_match_cut`).
 
 ## Mid-flight canvas edits (Phase 1B.4)
 

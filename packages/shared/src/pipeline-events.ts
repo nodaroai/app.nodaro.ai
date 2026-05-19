@@ -5,9 +5,16 @@ import type {
   EntityStaleEvent,
   PipelineForkedEvent,
   PipelineDriftSummary,
+  PipelineCompletedEvent,
 } from "./pipeline-state-types.js"
 
-export const PipelineStageNameSchema = z.enum([
+/**
+ * Canonical pipeline stage order — Phase 1A→1C topology. The engine's
+ * `runPipeline` walks this list in sequence; tests, the SSE event router,
+ * and the admin-side stage timeline all consume this same tuple as the
+ * source of truth for "which stages exist + in what order".
+ */
+export const PIPELINE_STAGE_NAMES = [
   "script",
   "characters",
   "objects",
@@ -16,8 +23,9 @@ export const PipelineStageNameSchema = z.enum([
   "scene_images",
   "animate_audio_edit",
   "post_merge",
-])
-export type PipelineStageName = z.infer<typeof PipelineStageNameSchema>
+] as const
+export const PipelineStageNameSchema = z.enum(PIPELINE_STAGE_NAMES)
+export type PipelineStageName = (typeof PIPELINE_STAGE_NAMES)[number]
 
 export const PipelineStatusSchema = z.enum([
   "queued",
@@ -89,3 +97,5 @@ export type PipelineEvent =
   | EntityStaleEvent
   | PipelineForkedEvent
   | PipelineDriftSummary
+  // Phase 1C.1 — final-MP4 ready event carries the merged asset id + URL.
+  | PipelineCompletedEvent

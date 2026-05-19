@@ -1,15 +1,27 @@
+import { type ReactNode } from "react"
 import type {
   AddBRollResult,
   AnchorSceneStyleResult,
+  AuditImagesResult,
   AuditPromptResult,
   BridgeToNextSceneResult,
+  FixContinuityResult,
   GenerateMotionResult,
+  ImageCriticIssue,
   ImprovePromptResult,
   OptimizeForModelResult,
   SceneHelperName,
   ShotSpec,
+  ValidateMatchCutResult,
 } from "@nodaro/shared"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -102,12 +114,9 @@ function SceneHelperResultBody(props: {
   onReject: () => void
 }) {
   const { state, data, onAccept, onReject } = props
-  // Exhaustive switch over the active 7 helpers — TS narrows `state.result`
-  // to the matching SceneHelperResult[N] inside each branch, so no casts are
-  // needed. The 3 Phase-1C helpers (audit_images / fix_continuity /
-  // validate_match_cut) are disabled at the button level (`scene-helper-buttons.tsx`)
-  // so we'll never receive them here; the `default` branch returns null
-  // defensively.
+  // Exhaustive switch over all 10 active helpers (Phase 1B.3 + Phase 1C.1).
+  // TS narrows `state.result` to the matching SceneHelperResult[N] inside each
+  // branch, so no casts are needed.
   switch (state.name) {
     case "audit_prompt":
       return <AuditPromptBody result={state.result} onReject={onReject} />
@@ -132,6 +141,21 @@ function SceneHelperResultBody(props: {
       )
     case "anchor_scene_style":
       return <AnchorBody result={state.result} onAccept={onAccept} onReject={onReject} />
+    case "audit_images":
+      return <AuditImagesBody result={state.result} data={data} onReject={onReject} />
+    case "fix_continuity":
+      return (
+        <FixContinuityBody
+          result={state.result}
+          data={data}
+          onAccept={onAccept}
+          onReject={onReject}
+        />
+      )
+    case "validate_match_cut":
+      return (
+        <ValidateMatchCutBody result={state.result} data={data} onReject={onReject} />
+      )
     default:
       return null
   }
@@ -343,6 +367,332 @@ function AnchorBody(props: {
           Reject
         </Button>
         <Button onClick={applyPatch}>Use this anchor</Button>
+      </DialogFooter>
+    </div>
+  )
+}
+
+// ─── Helpers shared by Phase 1C.1 bodies ────────────────────────────────────
+
+/**
+ * Severity → Badge variant mapping. `blocking` issues are surfaced as
+ * destructive (red), `warning` as default (brand), `info` as outline (neutral).
+ */
+function severityBadgeVariant(
+  severity: ImageCriticIssue["severity"],
+): "destructive" | "default" | "outline" {
+  switch (severity) {
+    case "blocking":
+      return "destructive"
+    case "warning":
+      return "default"
+    case "info":
+      return "outline"
+  }
+}
+
+/** Renders a single ImageCriticIssue as a compact chip + message line. */
+function ImageCriticIssueLine({ issue }: { issue: ImageCriticIssue }) {
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <Badge variant={severityBadgeVariant(issue.severity)} className="shrink-0">
+        {issue.severity}
+      </Badge>
+      <div className="flex flex-col gap-0.5">
+        <span className="font-medium">{issue.type.replace(/_/g, " ")}</span>
+        <span className="text-zinc-600">{issue.message}</span>
+        {issue.suggested_fix && (
+          <span className="text-zinc-500 italic">Fix: {issue.suggested_fix}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Compact keyframe thumbnail Card — title in the header, aspect-video image
+ * (or a "no keyframe" placeholder) in the body. Used by AuditImagesBody,
+ * FixContinuityBody, and ValidateMatchCutBody to render every shot / prior-
+ * frame / target-frame tile. The title prop is rendered as part of the
+ * header content (ReactNode so callers can include a badge or shot_id suffix);
+ * `children` is rendered after the image inside the card body for callers
+ * that want to nest verdict text alongside the thumbnail (audit-images).
+ */
+function KeyframeThumbnail({
+  title,
+  url,
+  emptyLabel = "no keyframe",
+  children,
+}: {
+  title: ReactNode
+  url?: string | null
+  emptyLabel?: string
+  children?: ReactNode
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {url ? (
+          <div className="aspect-video bg-zinc-100 rounded overflow-hidden">
+            <img
+              src={url}
+              alt={typeof title === "string" ? title : "keyframe"}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="aspect-video bg-zinc-100 rounded flex items-center justify-center text-xs text-zinc-400">
+            {emptyLabel}
+          </div>
+        )}
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Renders a critic-verdict block: a `Critic verdict` title + either the
+ * notes-as-text empty state (when the verdict has zero issues) or the
+ * ImageCriticIssueLine list + an optional notes footer. Used by
+ * FixContinuityBody and ValidateMatchCutBody to surface the wrapped
+ * `critic_verdict` payload that comes back from the helper.
+ */
+function CriticVerdictBlock({
+  issues,
+  notes,
+  emptyFallback,
+}: {
+  issues: ReadonlyArray<ImageCriticIssue>
+  notes?: string
+  emptyFallback: string
+}) {
+  return (
+    <div className="rounded border border-zinc-200 p-2 space-y-1.5">
+      <p className="text-xs font-medium">Critic verdict</p>
+      {issues.length === 0 ? (
+        <p className="text-xs text-zinc-500 italic">{notes || emptyFallback}</p>
+      ) : (
+        <>
+          {issues.map((issue, idx) => (
+            <ImageCriticIssueLine key={idx} issue={issue} />
+          ))}
+          {notes && (
+            <p className="text-xs text-zinc-500 italic mt-1">{notes}</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── 6.11.12 Audit Images — per-shot vision verdict grid ─────────────────────
+function AuditImagesBody(props: {
+  result: AuditImagesResult
+  data: SceneNodeFrontendData
+  onReject: () => void
+}) {
+  const { result, data, onReject } = props
+  // Cross-reference each entry to its shot for the keyframe thumbnail. Map
+  // lookup is O(n*m) here but the scene is bounded to ≤8 shots.
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Badge variant={result.ok ? "outline" : "destructive"}>
+          {result.ok ? "All keyframes pass" : "Issues found"}
+        </Badge>
+        <p className="text-xs text-zinc-500">{result.summary}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {result.shot_issues.map((entry) => {
+          const shot = data.shots.find((s) => s.shot_id === entry.shot_id)
+          const title = (
+            <span className="flex items-center justify-between gap-2">
+              <span>{entry.shot_id}</span>
+              {entry.skipped ? (
+                <Badge variant="outline">no keyframe</Badge>
+              ) : (
+                <Badge variant={entry.ok ? "outline" : "destructive"}>
+                  {entry.ok ? "pass" : "fail"}
+                </Badge>
+              )}
+            </span>
+          )
+          return (
+            <KeyframeThumbnail key={entry.shot_id} title={title} url={shot?.keyframe_url}>
+              {entry.skipped ? (
+                <p className="text-xs text-zinc-500 italic">
+                  Skipped — generate a keyframe for this shot first.
+                </p>
+              ) : entry.verdict ? (
+                <div className="space-y-1.5">
+                  {entry.verdict.issues.length === 0 ? (
+                    <p className="text-xs text-zinc-500 italic">
+                      {entry.verdict.notes || "No issues."}
+                    </p>
+                  ) : (
+                    entry.verdict.issues.map((issue, idx) => (
+                      <ImageCriticIssueLine key={idx} issue={issue} />
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </KeyframeThumbnail>
+          )
+        })}
+      </div>
+      <DialogFooter className="mt-4">
+        <Button variant="outline" onClick={onReject}>
+          Close
+        </Button>
+      </DialogFooter>
+    </div>
+  )
+}
+
+// ─── 6.11.13 Fix Continuity — side-by-side comparison + optional accept ─────
+function FixContinuityBody(props: {
+  result: FixContinuityResult
+  data: SceneNodeFrontendData
+  onAccept: (patch: Partial<SceneNodeFrontendData>) => void
+  onReject: () => void
+}) {
+  const { result, data, onAccept, onReject } = props
+  const targetIdx = data.shots.findIndex((s) => s.shot_id === result.target_shot_id)
+  const targetShot = targetIdx >= 0 ? data.shots[targetIdx] : null
+  const priorShot = targetIdx > 0 ? data.shots[targetIdx - 1] : null
+  const regenerated = result.action === "regenerated" && !!result.new_keyframe_url
+
+  const applyPatch = () => {
+    if (!regenerated || !targetShot) return
+    const nextShots: ShotSpec[] = data.shots.map((s) =>
+      s.shot_id === result.target_shot_id
+        ? {
+            ...s,
+            keyframe_url: result.new_keyframe_url ?? s.keyframe_url,
+            keyframe_asset_id: result.new_keyframe_asset_id ?? s.keyframe_asset_id,
+          }
+        : s,
+    )
+    onAccept({ shots: nextShots })
+  }
+
+  // The "right side" (target keyframe) shows the regenerated frame when one
+  // was produced; otherwise the original keyframe (no regen needed).
+  const targetSideUrl = regenerated
+    ? result.new_keyframe_url
+    : targetShot?.keyframe_url
+
+  return (
+    <div className="space-y-3">
+      <Badge variant={regenerated ? "default" : "outline"}>
+        {regenerated ? "Regenerated keyframe" : "No action needed"}
+      </Badge>
+      <div className="grid grid-cols-2 gap-2">
+        <KeyframeThumbnail
+          title={
+            <>
+              Prior last frame
+              {priorShot && <span className="ml-1 text-zinc-500">({priorShot.shot_id})</span>}
+            </>
+          }
+          url={priorShot?.last_frame_url}
+          emptyLabel="no last_frame"
+        />
+        <KeyframeThumbnail
+          title={
+            <>
+              {regenerated ? "Regenerated keyframe" : "Target keyframe"}
+              {targetShot && (
+                <span className="ml-1 text-zinc-500">({targetShot.shot_id})</span>
+              )}
+            </>
+          }
+          url={targetSideUrl}
+        />
+      </div>
+      <CriticVerdictBlock
+        issues={result.critic_verdict.issues}
+        notes={result.critic_verdict.notes}
+        emptyFallback="No issues — continuity is fine."
+      />
+      <DialogFooter className="mt-4">
+        <Button variant="outline" onClick={onReject}>
+          {regenerated ? "Reject" : "Close"}
+        </Button>
+        {regenerated && (
+          <Button onClick={applyPatch}>Apply regenerated keyframe</Button>
+        )}
+      </DialogFooter>
+    </div>
+  )
+}
+
+// ─── 6.11.14 Validate Match Cut — strength gauge + side-by-side ─────────────
+const MATCH_STRENGTH_BADGE: Record<
+  ValidateMatchCutResult["match_strength"],
+  { variant: "outline" | "default" | "destructive"; className: string; label: string }
+> = {
+  strong: {
+    variant: "default",
+    className: "bg-green-500 hover:bg-green-500 text-white",
+    label: "Strong match",
+  },
+  moderate: {
+    variant: "default",
+    className: "bg-yellow-500 hover:bg-yellow-500 text-white",
+    label: "Moderate match",
+  },
+  weak: {
+    variant: "default",
+    className: "bg-orange-500 hover:bg-orange-500 text-white",
+    label: "Weak match",
+  },
+  break: { variant: "destructive", className: "", label: "No match (break)" },
+}
+
+function ValidateMatchCutBody(props: {
+  result: ValidateMatchCutResult
+  data: SceneNodeFrontendData
+  onReject: () => void
+}) {
+  const { result, data, onReject } = props
+  const [shotAId, shotBId] = result.shot_pair
+  const shotA = data.shots.find((s) => s.shot_id === shotAId)
+  const shotB = data.shots.find((s) => s.shot_id === shotBId)
+  const badge = MATCH_STRENGTH_BADGE[result.match_strength]
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <Badge variant={badge.variant} className={badge.className}>
+          {badge.label}
+        </Badge>
+        <p className="text-xs text-zinc-500">
+          {shotAId} → {shotBId}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <KeyframeThumbnail title="Shot A — out" url={shotA?.keyframe_url} />
+        <KeyframeThumbnail title="Shot B — in" url={shotB?.keyframe_url} />
+      </div>
+      <CriticVerdictBlock
+        issues={result.critic_verdict.issues}
+        notes={result.critic_verdict.notes}
+        emptyFallback="No issues."
+      />
+      {result.suggested_adjustments && (
+        <div className="rounded border border-zinc-200 p-2">
+          <p className="text-xs font-medium">Suggested adjustments</p>
+          <p className="text-xs text-zinc-700 mt-1">{result.suggested_adjustments}</p>
+        </div>
+      )}
+      <DialogFooter className="mt-4">
+        <Button variant="outline" onClick={onReject}>
+          Close
+        </Button>
       </DialogFooter>
     </div>
   )
