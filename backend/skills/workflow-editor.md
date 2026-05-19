@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-18T20:01:15.535Z
-generated_from: 866224d8
+generated_at: 2026-05-19T15:10:01.721Z
+generated_from: 8190f6ba
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -196,6 +196,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `tone` — Tone
 - `transcode-video` — Transcode Video
 - `transcribe` — Transcribe
+- `transition` — Transition
 - `trim-audio` — Trim Audio
 - `trim-video` — Trim Video
 - `upload-audio` — Upload Audio

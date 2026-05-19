@@ -19,6 +19,19 @@ vi.mock("@/hooks/queries/use-invalidate-location", () => ({
   useInvalidateLocation: () => vi.fn(),
 }))
 
+// Stub the supabase client so the realtime subscription mounted by
+// `useLocationStudio` doesn't try to read VITE_SUPABASE_URL at runtime
+// (the CI test env doesn't set it). Subscription side effects aren't
+// what these tests exercise — only the open/save/dirty/409 flows are.
+vi.mock("@/lib/supabase", () => ({
+  createClient: () => ({
+    channel: () => ({
+      on: () => ({ subscribe: () => ({}) }),
+    }),
+    removeChannel: () => {},
+  }),
+}))
+
 // Lightweight store stub — the real Zustand store is overkill for hook tests.
 const mockNode: { id: string; type: string; data: Record<string, unknown> } = {
   id: "loc-1",
