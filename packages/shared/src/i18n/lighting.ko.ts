@@ -79,6 +79,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "쇼트 라이팅", description: "카메라 반대쪽이 밝아 얼굴이 슬림해 보입니다" },
   "hatchet": { label: "해칫 라이팅", description: "위에서 스쳐 비춰 반대쪽에 짙은 그림자가 드리웁니다" },
   "clamshell": { label: "클램셸 라이팅", description: "위 + 아래 리플렉터로 샌드위치된 뷰티 라이팅입니다" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "새벽", description: "일출 전 창백한 빛" },
+  "morning": { label: "아침", description: "신선하고 밝은 아침 빛" },
+  "afternoon": { label: "오후", description: "따뜻한 늦은 오후의 빛" },
+  "dusk": { label: "황혼", description: "일몰 후 사라지는 빛" },
+  "midnight": { label: "자정", description: "가장 깊은 밤, 거의 검은 하늘" },
 }
 
 export default map

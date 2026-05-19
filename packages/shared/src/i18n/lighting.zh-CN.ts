@@ -81,6 +81,12 @@ const map: LocaleCatalogMap = {
   "temp-5600k": { description: "日光平衡的正午阳光" },
   "temp-6500k": { description: "略冷的蓝色调" },
   "temp-9000k": { description: "明显偏冷的蓝色阴影色温" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "黎明", description: "日出前的苍白光辉" },
+  "morning": { label: "早晨", description: "清新明亮的早晨光线" },
+  "afternoon": { label: "下午", description: "温暖的傍晚光辉" },
+  "dusk": { label: "黄昏", description: "日落后渐弱的光线" },
+  "midnight": { label: "午夜", description: "最深的夜晚，近乎漆黑的天空" },
 }
 
 export default map

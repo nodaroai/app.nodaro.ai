@@ -79,6 +79,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "ショート照明", description: "カメラの反対側を照らし、顔を細く見せる" },
   "hatchet": { label: "ハチェット照明", description: "頭上から斜めに当たる光、反対側に深い影" },
   "clamshell": { label: "クラムシェル照明", description: "上からの光と下からのレフ板で挟むビューティ照明" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "夜明け", description: "日の出前の淡い光" },
+  "morning": { label: "朝", description: "新鮮で明るい朝の光" },
+  "afternoon": { label: "午後", description: "暖かい午後の光" },
+  "dusk": { label: "夕暮れ", description: "日没後の薄れゆく光" },
+  "midnight": { label: "真夜中", description: "最も深い夜、ほぼ真っ黒な空" },
 }
 
 export default map

@@ -38,6 +38,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "肌に当たる雨粒", description: "肌の上に玉のように広がる目に見える水滴" },
   "bioluminescent-cloud": { label: "生物発光の粒子雲", description: "漂う青緑色の輝く粒子" },
   "motion-streaks": { label: "モーションストリーク", description: "スピードラインのモーションブラー筋" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "曇り", description: "部分的な雲覆い、混合した光" },
+  "storm": { label: "嵐", description: "雨と稲妻を伴う激しい雷雨" },
+  "blizzard": { label: "ブリザード", description: "激しい吹雪、ほぼホワイトアウト" },
+  "fog": { label: "霧", description: "視界の低い濃霧" },
+  "mist": { label: "薄霧", description: "薄く拡散する霧" },
 }
 
 export default map

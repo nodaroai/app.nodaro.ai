@@ -75,6 +75,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "إضاءة Short", description: "الجانب المضاء بعيدا عن الكاميرا، تنحيف" },
   "hatchet": { label: "إضاءة Hatchet", description: "كشط علوي وظل عميق على الجهة المقابلة" },
   "clamshell": { label: "إضاءة Clamshell", description: "فوق + عاكس تحت، جمال مضغوط" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "الفجر", description: "توهج باهت قبل شروق الشمس" },
+  "morning": { label: "الصباح", description: "ضوء الصباح المنعش الساطع" },
+  "afternoon": { label: "بعد الظهر", description: "توهج دافئ في فترة بعد الظهر المتأخرة" },
+  "dusk": { label: "الغسق", description: "ضوء يتلاشى بعد غروب الشمس" },
+  "midnight": { label: "منتصف الليل", description: "أعمق ليل، سماء سوداء تقريبًا" },
 }
 
 export default map

@@ -91,6 +91,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "매치 컷 줌", description: "컷에 맞춘 비트 타이밍 줌입니다" },
   "screen-tap": { label: "스크린 탭", description: "화면 위 손가락 탭 트랜지션입니다" },
   "phone-flip": { label: "폰 플립", description: "전면/후면 카메라 플립입니다" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "완만한 드리프트", description: "느린 환경적 떠다니는 움직임" },
+  "parallax": { label: "패럴랙스", description: "전경과 배경의 깊이 분리가 있는 측면 움직임" },
 }
 
 export default map

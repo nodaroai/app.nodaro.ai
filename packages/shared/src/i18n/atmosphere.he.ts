@@ -36,6 +36,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "טיפות גשם על העור", description: "טיפות מים גלויות מתאספות על העור" },
   "bioluminescent-cloud": { label: "ענן חלקיקים ביו-לומינסנטיים", description: "חלקיקים זוהרים בכחול-ירוק נסחפים" },
   "motion-streaks": { label: "פסי תנועה", description: "פסי טשטוש תנועה של קווי מהירות" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "מעונן", description: "כיסוי עננים חלקי, אור מעורב" },
+  "storm": { label: "סופה", description: "סערה אלימה עם גשם וברקים" },
+  "blizzard": { label: "סופת שלגים", description: "סופת שלגים אלימה, כמעט וייטאאוט" },
+  "fog": { label: "ערפל סמיך", description: "ערפל סמיך עם ראות נמוכה" },
+  "mist": { label: "אובך", description: "אובך דק ומתפזר" },
 }
 
 export default map

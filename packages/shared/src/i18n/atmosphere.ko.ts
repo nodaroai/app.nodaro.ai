@@ -38,6 +38,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "피부 위의 빗방울", description: "피부에 맺힌 보이는 물방울입니다" },
   "bioluminescent-cloud": { label: "생체발광 입자 구름", description: "푸른빛-녹색으로 빛나며 떠다니는 입자입니다" },
   "motion-streaks": { label: "모션 스트릭", description: "스피드 라인 모션 블러 스트릭입니다" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "흐림", description: "부분적인 구름 덮개, 혼합된 빛" },
+  "storm": { label: "폭풍", description: "비와 번개를 동반한 격렬한 뇌우" },
+  "blizzard": { label: "눈보라", description: "격렬한 눈보라, 거의 화이트아웃" },
+  "fog": { label: "안개", description: "시야가 낮은 짙은 안개" },
+  "mist": { label: "엷은 안개", description: "얇게 확산되는 안개" },
 }
 
 export default map
