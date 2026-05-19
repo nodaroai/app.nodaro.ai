@@ -15,7 +15,11 @@ vi.mock("../services/pipeline-extract-frame.js", () => ({
   pipelineExtractFrame: vi.fn(),
 }))
 
-import { allocateReferenceSlots, extractLastFrame } from "../continuity.js"
+import {
+  allocateReferenceSlots,
+  extractLastFrame,
+  prepareSceneRefContext,
+} from "../continuity.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineExtractFrame } from "../services/pipeline-extract-frame.js"
 
@@ -217,6 +221,46 @@ describe("allocateReferenceSlots", () => {
       priorLastFrame: null,
     })
     expect(slots).toEqual([])
+  })
+
+  it("J2a cached path: sceneContext skips DB queries — supabase.from never called", async () => {
+    // Build the context manually (simulates prepareSceneRefContext output).
+    const prebuiltContext = {
+      entitiesByTypeKey: new Map([
+        [
+          "character:hero",
+          { id: "char-hero", main_asset_url: "https://r2/hero.png" },
+        ],
+        [
+          "location:hallway",
+          { id: "loc-hall", main_asset_url: "https://r2/hall.png" },
+        ],
+      ]),
+    }
+    // Supabase stub that throws if any DB call is made.
+    const neverCalledSupabase = {
+      from: vi.fn(() => {
+        throw new Error("DB should not be queried when sceneContext is provided")
+      }),
+    } as unknown as Parameters<typeof allocateReferenceSlots>[0]["supabase"]
+
+    const slots = await allocateReferenceSlots({
+      supabase: neverCalledSupabase,
+      pipelineId: "p1",
+      scene: { id: "scene-1" },
+      shot: makeShot(),
+      sceneNodeData: makeScene({ video_model: "kling-3-omni", cast_keys: ["hero"], object_keys: [] }),
+      priorLastFrame: { assetId: "asset-prior", url: "https://r2/prior.png" },
+      sceneContext: prebuiltContext,
+    })
+
+    // supabase.from must not have been called — the cached map was used.
+    expect(neverCalledSupabase.from).not.toHaveBeenCalled()
+    // Slots should reflect anchor + hero + hallway.
+    expect(slots.length).toBe(3)
+    expect(slots[0]).toMatchObject({ kind: "continuity_anchor" })
+    expect(slots[1]).toMatchObject({ kind: "primary_character", url: "https://r2/hero.png" })
+    expect(slots[2]).toMatchObject({ kind: "location_main", url: "https://r2/hall.png" })
   })
 })
 

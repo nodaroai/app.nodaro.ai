@@ -19,7 +19,6 @@ function makeSupabaseStub() {
 function makePlan(narrationScript?: {
   text: string
   voice_id?: string
-  delivery_style?: "calm" | "epic" | "intimate" | "documentary"
 }): ShowrunnerPlan {
   // Minimal plan shape — fields not exercised by narration-audio are left
   // with token defaults. The whole point of this sub-step is to check
@@ -149,7 +148,6 @@ describe("runNarrationAudio (Phase 1C.2.1 §G3 — sub-step 7c)", () => {
     const plan = makePlan({
       text: "In a world where the night never ends, one hero stood between us and the abyss.",
       voice_id: "ElevenLabs-Adam",
-      delivery_style: "epic",
     })
     const config: Partial<PipelineConfig> = { narration_enabled: true }
 

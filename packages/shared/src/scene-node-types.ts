@@ -72,24 +72,24 @@ export const ShotSpecSchema = z.object({
   interpolation_keyframes: z
     .array(
       z.object({
-        time_seconds: z.number().min(0),
-        prompt: z.string().min(1).max(1000),
+        timestamp_sec: z.number().nonnegative(),
+        prompt: z.string().min(10).max(1000),
       }),
     )
     .max(16)
     .optional(),
 
+  // Phase 1C.3 Method 8 — generated R2 URLs of the sub-keyframes, one per
+  // `interpolation_keyframes[N].prompt`. Stage 6 writes these BEFORE Stage 7
+  // runs so the animate step can pass them to the interpolation provider.
+  // Length MUST equal `interpolation_keyframes.length` when populated.
+  interpolation_keyframe_urls: z.array(z.string().url()).max(16).optional(),
+
   // v4.1 Method 10 — parametric 3D camera path
   camera_path_directive: z
     .object({
-      type: z.enum([
-        "orbit", "dolly_in", "dolly_out", "crane_up", "crane_down",
-        "arc_left", "arc_right", "reveal",
-      ]),
-      start_angle: z.number().optional(),
-      end_angle: z.number().optional(),
-      intensity: z.number().min(0).max(1).optional(),
-      pivot: z.enum(["subject", "origin"]).optional(),
+      path_kind: z.enum(["orbit", "dolly", "crane", "arc", "reveal"]),
+      parameters: z.record(z.unknown()).optional(),
     })
     .optional(),
 

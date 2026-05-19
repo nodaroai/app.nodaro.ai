@@ -107,3 +107,48 @@ describe("ReplicateVideoProvider.textToVideo", () => {
     expect(result.cost).toBe(0.10)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 1C.3 — Method 8: Frame interpolation (stubbed pending hosted provider)
+// ---------------------------------------------------------------------------
+
+import { replicateInterpolateFrames } from "../video.js"
+
+describe("replicateInterpolateFrames (Method 8 stub)", () => {
+  it("rife always throws provider_not_available", async () => {
+    await expect(
+      replicateInterpolateFrames({
+        keyframeUrls: ["https://kf1.png", "https://kf2.png"],
+        timeline: [0, 1],
+        model: "rife",
+      }),
+    ).rejects.toThrow(/provider_not_available:rife/)
+  })
+
+  it("topaz-apollo always throws provider_not_available", async () => {
+    await expect(
+      replicateInterpolateFrames({
+        keyframeUrls: ["https://kf1.png", "https://kf2.png"],
+        timeline: [0, 1],
+        model: "topaz-apollo",
+      }),
+    ).rejects.toThrow(/provider_not_available:topaz-apollo/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 1C.3 — Method 10: Stable Video 3D camera path (stubbed; no Replicate host)
+// ---------------------------------------------------------------------------
+
+import { replicateSV3D } from "../video.js"
+
+describe("replicateSV3D (Method 10 stub)", () => {
+  it("always throws provider_not_available:stable-video-3d", async () => {
+    await expect(
+      replicateSV3D({
+        imageUrl: "https://seed.png",
+        cameraPath: { path_kind: "orbit", parameters: { degrees: 360 } },
+      }),
+    ).rejects.toThrow(/provider_not_available:stable-video-3d/)
+  })
+})

@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { TransitionType } from "@nodaro/shared"
-import { uploadBufferToR2 } from "../../lib/storage.js"
-import { randomUUID } from "node:crypto"
+import {
+  DEFAULT_FADE_OUT_SEC,
+  persistExportAsset,
+  reduceTimeline,
+  round3,
+  type TimelineSceneInput,
+  type TimelineShotInput,
+} from "./_freecut-timeline.js"
 
 /**
  * Phase 1C.2 sub-step 7j (alternative path) — FreeCut export.
@@ -26,24 +32,13 @@ import { randomUUID } from "node:crypto"
  * is inserted with `type = 'document'` + `mime_type = 'application/json'`.
  * The returned asset id is written to `pipelines.final_output_asset_id`
  * (caller's responsibility, mirroring the `pipelineFinalMerge` flow).
+ *
+ * Phase 1C.3 §J1b — the per-scene clip reduction + asset persistence are
+ * shared with `generateFcpxmlExport` via `_freecut-timeline.ts`.
  */
 
-export interface FreecutShotInput {
-  shot_id: string
-  duration_seconds: number
-  cut_decision?: {
-    in_offset_sec: number
-    out_offset_sec: number
-    transition_to_next: TransitionType
-    transition_duration_sec?: number
-  }
-}
-
-export interface FreecutSceneInput {
-  sceneEntityId: string
-  compositeUrl: string
-  shots: ReadonlyArray<FreecutShotInput>
-}
+export type FreecutShotInput = TimelineShotInput
+export type FreecutSceneInput = TimelineSceneInput
 
 export interface FreecutExportArgs {
   supabase: SupabaseClient
@@ -108,9 +103,6 @@ export interface FreecutExportResult {
   exportAssetUrl: string
 }
 
-const DEFAULT_FADE_OUT_SEC = 0.8
-const TRANSITION_DEFAULT_DURATION_SEC = 0.5
-const OVERLAP_DEFAULT_DURATION_SEC = 1.0
 const FORMAT_NOTE =
   "Format is Nodaro-flat-timeline-v1; FreeCut compatibility is a follow-up — most NLE software can ingest via XML/EDL converters."
 
@@ -137,85 +129,35 @@ export async function generateFreecutExport(
     throw new Error("generateFreecutExport requires at least 1 scene")
   }
 
-  // 1. Build the flat per-clip timeline. Each scene becomes one video clip;
-  //    cut_decision drives the head/tail trim window + transitions between
-  //    adjacent scenes. Scene-internal transitions are already baked into
-  //    each scene composite by Stage 7's per-scene combine (same simplification
-  //    pipelineFinalMerge documents).
-  const videoClips: FreecutVideoClip[] = []
-  let runningTimelinePos = 0
-
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i]!
-    const firstShot = scene.shots[0]
-    const lastShot = scene.shots[scene.shots.length - 1]
-    const inOffset = firstShot?.cut_decision?.in_offset_sec ?? 0
-    const outOffset = lastShot?.cut_decision?.out_offset_sec ?? 0
-
-    // Full composite duration = sum of per-shot duration_seconds. Per-shot
-    // trims within the scene are NOT applied to the composite (Stage 7
-    // already merged the shots). The scene-boundary trim window is:
-    //   start_in_clip = inOffset  (head trim)
-    //   end_in_clip   = compositeFullDur - outOffset  (tail trim)
-    const compositeFullDur = scene.shots.reduce(
-      (acc, s) => acc + (s.duration_seconds ?? 0),
-      0,
-    )
-    const startInClip = Math.max(0, inOffset)
-    const endInClip = Math.max(startInClip, compositeFullDur - outOffset)
-    const clipDur = Math.max(0, endInClip - startInClip)
-
-    // Transition INTO this clip is the previous scene's transition_to_next.
-    const prevScene = i > 0 ? scenes[i - 1]! : null
-    const prevLastShot =
-      prevScene?.shots[prevScene.shots.length - 1] ?? null
-    const transitionIn =
-      prevLastShot?.cut_decision != null
-        ? buildTransition(prevLastShot.cut_decision)
-        : null
-
-    // Transition OUT of this clip is this scene's last shot's transition.
-    const transitionOut =
-      i < scenes.length - 1 && lastShot?.cut_decision != null
-        ? buildTransition(lastShot.cut_decision)
-        : null
-
-    videoClips.push({
-      asset_url: scene.compositeUrl,
-      start_in_clip_sec: round3(startInClip),
-      end_in_clip_sec: round3(endInClip),
-      timeline_position_sec: round3(runningTimelinePos),
-      transition_in: transitionIn,
-      transition_out: transitionOut,
-    })
-
-    // Advance the timeline cursor. Adjacent clips with a transition overlap
-    // by transition.duration_sec (xfade-style); hard_cut transitions don't
-    // overlap (timeline advances by the full clip duration).
-    const overlapWithNext =
-      transitionOut && (transitionOut.type === "dissolve" || transitionOut.type === "overlap")
-        ? transitionOut.duration_sec
-        : 0
-    runningTimelinePos += clipDur - overlapWithNext
-  }
+  // 1. Build the flat per-clip timeline via the shared reducer. Each scene
+  //    becomes one video clip; cut_decision drives the head/tail trim window
+  //    + transitions between adjacent scenes. Scene-internal transitions are
+  //    already baked into each scene composite by Stage 7's per-scene combine
+  //    (same simplification pipelineFinalMerge documents).
+  const reduced = reduceTimeline(scenes)
+  const videoClips: FreecutVideoClip[] = reduced.clips.map((c) => ({
+    asset_url: c.compositeUrl,
+    start_in_clip_sec: round3(c.startInClipSec),
+    end_in_clip_sec: round3(c.endInClipSec),
+    timeline_position_sec: round3(c.timelinePositionSec),
+    transition_in: c.transitionIn
+      ? { type: c.transitionIn.type, duration_sec: c.transitionIn.durationSec }
+      : null,
+    transition_out: c.transitionOut
+      ? { type: c.transitionOut.type, duration_sec: c.transitionOut.durationSec }
+      : null,
+  }))
 
   // 2. Build the audio track (single music clip across the whole timeline).
-  const totalDurationSec = videoClips.reduce(
-    (acc, c) => acc + (c.end_in_clip_sec - c.start_in_clip_sec),
-    0,
-  )
-  // The timeline length is `runningTimelinePos + last clip's residual`; the
-  // running cursor already accounts for transition overlaps so it's the
-  // authoritative final position UNLESS the last clip has no transition_out
-  // (typical) — in which case totalDurationSec == runningTimelinePos.
-  const timelineDuration = round3(runningTimelinePos + 0)
+  //    `reduced.timelineDurationSec` already accounts for transition overlaps.
+  const timelineDuration = round3(reduced.timelineDurationSec)
   const musicClips: FreecutAudioClip[] =
     musicAssetUrl.length > 0
       ? [
           {
             asset_url: musicAssetUrl,
             start_in_clip_sec: 0,
-            end_in_clip_sec: round3(timelineDuration),
+            end_in_clip_sec: timelineDuration,
             timeline_position_sec: 0,
             fade_out_sec: round3(fadeOutDurationSec),
           },
@@ -231,7 +173,7 @@ export async function generateFreecutExport(
           {
             asset_url: narrationAssetUrl,
             start_in_clip_sec: 0,
-            end_in_clip_sec: round3(timelineDuration),
+            end_in_clip_sec: timelineDuration,
             timeline_position_sec: 0,
             fade_out_sec: 0,
           },
@@ -251,7 +193,7 @@ export async function generateFreecutExport(
   const timeline: FreecutTimeline = {
     version: "1.0",
     format: "freecut-v1",
-    duration_seconds: round3(timelineDuration),
+    duration_seconds: timelineDuration,
     tracks,
     metadata: {
       pipeline_id: pipelineId,
@@ -260,63 +202,21 @@ export async function generateFreecutExport(
     },
   }
 
-  // 3. Serialize + upload to R2 under a deterministic-ish key.
-  const json = JSON.stringify(timeline, null, 2)
-  const buffer = Buffer.from(json, "utf-8")
-  const filename = `freecut-${randomUUID()}.json`
-  const r2Key = `pipelines/${pipelineId}/exports/${filename}`
-  const r2Url = await uploadBufferToR2(
-    buffer,
-    r2Key,
-    "application/json",
+  // 3. Serialize + upload + persist via shared helper.
+  const persisted = await persistExportAsset({
+    supabase,
+    pipelineId,
     userId,
-  )
-
-  // 4. Insert the assets row. The CHECK constraint on `assets.type`
-  //    accepts ('image', 'video', 'audio', 'document') per migration 001;
-  //    JSON timelines map to 'document'.
-  const { data: inserted, error } = await supabase
-    .from("assets")
-    .insert({
-      user_id: userId,
-      type: "document",
-      filename,
-      mime_type: "application/json",
-      size_bytes: buffer.length,
-      r2_key: r2Key,
-      r2_url: r2Url,
-      pipeline_id: pipelineId,
-      metadata: { source: "pipeline-freecut-export", format: "freecut-v1" },
-    })
-    .select("id")
-    .single()
-  if (error) {
-    console.error("[pipeline-freecut-export] assets insert failed:", error.message)
-  }
+    filenameStem: "freecut",
+    fileExtension: "json",
+    mimeType: "application/json",
+    formatTag: "freecut-v1",
+    content: JSON.stringify(timeline, null, 2),
+    logTag: "pipeline-freecut-export",
+  })
 
   return {
-    exportAssetId: (inserted?.id as string | undefined) ?? null,
-    exportAssetUrl: r2Url,
+    exportAssetId: persisted.assetId,
+    exportAssetUrl: persisted.assetUrl,
   }
-}
-
-function buildTransition(decision: {
-  transition_to_next: TransitionType
-  transition_duration_sec?: number
-}): FreecutClipTransition {
-  const fallback =
-    decision.transition_to_next === "overlap"
-      ? OVERLAP_DEFAULT_DURATION_SEC
-      : decision.transition_to_next === "hard_cut" ||
-          decision.transition_to_next === "match_cut"
-        ? 0
-        : TRANSITION_DEFAULT_DURATION_SEC
-  return {
-    type: decision.transition_to_next,
-    duration_sec: round3(decision.transition_duration_sec ?? fallback),
-  }
-}
-
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000
 }

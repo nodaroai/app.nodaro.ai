@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getVideoDuration } from "../../../providers/video/ffmpeg-utils.js"
+import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 /**
@@ -77,10 +77,6 @@ export async function pipelineGenerateNarration(
       provider,
       voiceType: "premade",
       type: "text-to-speech",
-      // Tag the job so admin/billing/cleanup can distinguish narration runs
-      // from per-shot dialogue runs. Keys live inside input_data so the
-      // existing TTS worker doesn't need to know about it.
-      _pipeline_role: "narration",
     },
     queueName: "videoQueue",
     jobName: "text-to-speech",
@@ -104,21 +100,10 @@ export async function pipelineGenerateNarration(
   // `audioUrl` to output_data; the duration is captured here so the
   // final-merge step can validate the narration fits inside the video.
   // Failure is non-fatal (matches pipelineGenerateSpeech).
-  const audioDurationSec = await probeAudioDuration(base.assetUrl)
+  const audioDurationSec = await probeAudioDuration(
+    base.assetUrl,
+    "pipeline-generate-narration",
+  )
 
   return { ...base, audioDurationSec }
-}
-
-async function probeAudioDuration(audioUrl: string): Promise<number | null> {
-  try {
-    const duration = await getVideoDuration(audioUrl)
-    if (!Number.isFinite(duration) || duration <= 0) return null
-    return duration
-  } catch (err) {
-    console.warn(
-      `[pipeline-generate-narration] ffprobe failed for ${audioUrl}:`,
-      err instanceof Error ? err.message : err,
-    )
-    return null
-  }
 }

@@ -792,6 +792,132 @@ export async function sweepStaleVoiceJobs(): Promise<VoiceJobSweepResult> {
 }
 
 // ============================================================
+// Soft-delete R2 quarantine sweep (Phase 2 #8)
+// ============================================================
+
+interface LocationR2SweepResult {
+  rowsScanned: number
+  rowsPurged: number
+  r2KeysDeleted: number
+  errors: number
+}
+
+/**
+ * Phase 2 #8 — quarantine R2 assets attached to soft-deleted locations.
+ *
+ * Soft-deleted rows (`deleted_at IS NOT NULL`) preserve the DB row + asset
+ * URLs so the user can restore for 30 days. After the grace period elapses,
+ * the location is no longer recoverable from a UX standpoint — but the R2
+ * objects remained publicly accessible via direct CDN URL. This sweep
+ * hard-deletes the R2 keys once the grace period has expired so cached /
+ * exported URLs return 404 from R2 even though the DB row stays around
+ * (now with broken URLs — restore would emit a placeholder image).
+ *
+ * Tracking: `locations.r2_assets_purged_at` flips from NULL → now() when
+ * this sweep processes a row, ensuring the sweep is idempotent and we
+ * don't re-attempt R2 deletes that already succeeded.
+ *
+ * Cron cadence: same as other cleanup sweeps (daily 3AM UTC).
+ *
+ * Grace period: 30 days from `deleted_at`. Configurable via env
+ * `LOCATION_R2_QUARANTINE_GRACE_DAYS` (defaults to 30).
+ */
+export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepResult> {
+  const result: LocationR2SweepResult = {
+    rowsScanned: 0,
+    rowsPurged: 0,
+    r2KeysDeleted: 0,
+    errors: 0,
+  }
+
+  const graceDays = (() => {
+    const raw = process.env.LOCATION_R2_QUARANTINE_GRACE_DAYS
+    const n = raw ? parseInt(raw, 10) : NaN
+    return Number.isInteger(n) && n > 0 ? n : 30
+  })()
+  const cutoff = new Date(Date.now() - graceDays * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: rows, error: queryErr } = await supabase
+    .from("locations")
+    .select(
+      "id, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
+    )
+    .not("deleted_at", "is", null)
+    .is("r2_assets_purged_at", null)
+    .lt("deleted_at", cutoff)
+    .limit(BATCH_SIZE)
+
+  if (queryErr) {
+    console.error("[cleanup] sweep soft-deleted locations query failed:", queryErr.message)
+    result.errors++
+    return result
+  }
+
+  result.rowsScanned = rows?.length ?? 0
+  if (!rows || rows.length === 0) return result
+
+  const JSONB_COLUMNS = [
+    "time_of_day",
+    "weather",
+    "seasons",
+    "angles",
+    "lighting",
+    "atmosphere_motions",
+  ] as const
+
+  for (const row of rows as Array<Record<string, unknown>>) {
+    const keys: string[] = []
+    if (typeof row.source_image_url === "string") {
+      const key = r2KeyFromUrl(row.source_image_url)
+      if (key) keys.push(key)
+    }
+    for (const col of JSONB_COLUMNS) {
+      const items = row[col]
+      if (!Array.isArray(items)) continue
+      for (const item of items) {
+        const url = (item as { url?: unknown } | null)?.url
+        if (typeof url !== "string") continue
+        const key = r2KeyFromUrl(url)
+        if (key) keys.push(key)
+      }
+    }
+    const refPhotos = row.reference_photos
+    if (Array.isArray(refPhotos)) {
+      for (const photo of refPhotos) {
+        const url = (photo as { url?: unknown } | null)?.url
+        if (typeof url !== "string") continue
+        const key = r2KeyFromUrl(url)
+        if (key) keys.push(key)
+      }
+    }
+
+    if (keys.length > 0) {
+      try {
+        await batchDeleteFromR2(keys)
+        result.r2KeysDeleted += keys.length
+      } catch (err) {
+        console.error(`[cleanup] R2 batch-delete failed for location ${row.id}:`, err)
+        result.errors++
+        continue
+      }
+    }
+
+    const { error: markErr } = await supabase
+      .from("locations")
+      .update({ r2_assets_purged_at: new Date().toISOString() })
+      .eq("id", row.id as string)
+    if (markErr) {
+      console.error(`[cleanup] mark r2_assets_purged_at failed for location ${row.id}:`, markErr.message)
+      result.errors++
+      continue
+    }
+    result.rowsPurged++
+  }
+
+  return result
+}
+
+// ============================================================
 // Formatting helper
 // ============================================================
 
