@@ -2,6 +2,10 @@
 !.claude/skills/nodaro-film-director/
 .superpowers/
 CLAUDE.md
+!/CLAUDE.md
+!frontend/CLAUDE.md
+!backend/CLAUDE.md
+!backend/src/providers/kie/CLAUDE.md
 /ARCHITECTURE.md
 architecture-graph.html
 node_modules/
