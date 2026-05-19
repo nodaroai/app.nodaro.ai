@@ -72,6 +72,7 @@ import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { transcribeRoutes } from "./routes/transcribe.js"
 import { adminCreditsRoutes } from "./ee/routes/admin-credits.js"
+import { adminLocationRoutes } from "./ee/routes/admin-locations.js"
 import { workflowCostRoutes } from "./routes/workflow-costs.js"
 import { sunoRoutes } from "./routes/suno.js"
 import { stripeWebhookRoutes } from "./ee/routes/stripe-webhook.js"
@@ -287,6 +288,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(creditsRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
   if (hasAdmin()) await app.register(adminRoutes)
+  if (hasAdmin()) await app.register(adminLocationRoutes)
   await app.register(libraryRoutes)
   await app.register(transcribeRoutes)
   if (hasCredits()) await app.register(adminCreditsRoutes)  // CreditsService + TIER_CREDITS
