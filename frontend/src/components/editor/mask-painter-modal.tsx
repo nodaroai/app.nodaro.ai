@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useCallback, useState, useRef } from "react"
+import { useEffect, useLayoutEffect, useCallback, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   X, Paintbrush, Eraser, Triangle, RotateCcw, ArrowRightLeft,
@@ -28,6 +28,10 @@ export function MaskPainterModal({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgElRef = useRef<HTMLImageElement>(null)
   const activeStrokeRef = useRef<MaskStroke | null>(null)
+  const rafIdRef = useRef<number | null>(null)
+  const redrawRef = useRef<() => void>(() => {})
+  const scaleRef = useRef({ scaleX: 1, scaleY: 1 })
+  const maskBaseCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null)
   const imageLoaded = imgSize !== null
@@ -42,6 +46,21 @@ export function MaskPainterModal({
   const [saving, setSaving] = useState(false)
 
   useBackToClose(isOpen, onClose)
+
+  const scheduleRedraw = useCallback(() => {
+    if (rafIdRef.current !== null) return
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null
+      redrawRef.current()
+    })
+  }, [])
+
+  useEffect(() => () => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+  }, [])
 
   // Reset on open
   useEffect(() => {
@@ -125,17 +144,15 @@ export function MaskPainterModal({
     canvas.height = height
     canvas.style.width = `${width}px`
     canvas.style.height = `${height}px`
-    redrawOverlay()
+    scaleRef.current = {
+      scaleX: img.naturalWidth / width,
+      scaleY: img.naturalHeight / height,
+    }
+    scheduleRedraw()
   }
 
   function getScale() {
-    const img = imgElRef.current
-    const canvas = canvasRef.current
-    if (!img || !canvas) return { scaleX: 1, scaleY: 1 }
-    return {
-      scaleX: img.naturalWidth / canvas.width,
-      scaleY: img.naturalHeight / canvas.height,
-    }
+    return scaleRef.current
   }
 
   function drawLassoOutline(ctx: CanvasRenderingContext2D, color: string, scaleX: number, scaleY: number) {
@@ -161,41 +178,56 @@ export function MaskPainterModal({
 
     if (viewMode === "source") return
 
-    const allStrokes = [...strokes, ...(activeStrokeRef.current ? [activeStrokeRef.current] : [])]
+    const active = activeStrokeRef.current
 
     if (viewMode === "mask") {
       ctx.fillStyle = "#000000"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
-      if (baseImageData && imgSize) {
-        const offscreen = document.createElement("canvas")
-        offscreen.width = imgSize.w
-        offscreen.height = imgSize.h
-        const offCtx = offscreen.getContext("2d")!
-        offCtx.putImageData(baseImageData, 0, 0)
-        ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height)
+      if (maskBaseCanvasRef.current) {
+        ctx.drawImage(maskBaseCanvasRef.current, 0, 0, canvas.width, canvas.height)
       }
       ctx.globalCompositeOperation = "source-over"
-      for (const stroke of allStrokes) {
-        ctx.fillStyle = stroke.isEraser ? "#000000" : "#ffffff"
-        paintStrokeOnCtx(ctx, stroke, scaleX, scaleY)
+      const paintMask = (s: MaskStroke) => {
+        ctx.fillStyle = s.isEraser ? "#000000" : "#ffffff"
+        paintStrokeOnCtx(ctx, s, scaleX, scaleY)
       }
+      for (const s of strokes) paintMask(s)
+      if (active) paintMask(active)
       drawLassoOutline(ctx, "#ffffff", scaleX, scaleY)
       return
     }
 
-    for (const stroke of allStrokes) {
-      ctx.fillStyle = `rgba(239, 68, 68, ${0.4 * (stroke.opacity ?? 1)})`
-      ctx.globalCompositeOperation = stroke.isEraser ? "destination-out" : "source-over"
-      paintStrokeOnCtx(ctx, stroke, scaleX, scaleY)
+    const paintOverlay = (s: MaskStroke) => {
+      ctx.fillStyle = `rgba(239, 68, 68, ${0.4 * (s.opacity ?? 1)})`
+      ctx.globalCompositeOperation = s.isEraser ? "destination-out" : "source-over"
+      paintStrokeOnCtx(ctx, s, scaleX, scaleY)
     }
+    for (const s of strokes) paintOverlay(s)
+    if (active) paintOverlay(active)
     drawLassoOutline(ctx, "rgba(239, 68, 68, 0.9)", scaleX, scaleY)
     ctx.globalCompositeOperation = "source-over"
   }
 
+  useLayoutEffect(() => {
+    redrawRef.current = redrawOverlay
+  })
+
   useEffect(() => {
-    if (imageLoaded) redrawOverlay()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strokes, imageLoaded, viewMode, lassoPoints, baseImageData])
+    if (!baseImageData || !imgSize) {
+      maskBaseCanvasRef.current = null
+      return
+    }
+    const offscreen = document.createElement("canvas")
+    offscreen.width = imgSize.w
+    offscreen.height = imgSize.h
+    const offCtx = offscreen.getContext("2d")!
+    offCtx.putImageData(baseImageData, 0, 0)
+    maskBaseCanvasRef.current = offscreen
+  }, [baseImageData, imgSize])
+
+  useEffect(() => {
+    if (imageLoaded) scheduleRedraw()
+  }, [strokes, imageLoaded, viewMode, lassoPoints, baseImageData, scheduleRedraw])
 
   function getCanvasPoint(e: React.MouseEvent) {
     const canvas = canvasRef.current
@@ -249,7 +281,7 @@ export function MaskPainterModal({
       isEraser: tool === "eraser",
       opacity: opacity / 100,
     }
-    redrawOverlay()
+    scheduleRedraw()
   }
 
   function handlePointerMove(e: React.MouseEvent) {
@@ -257,7 +289,7 @@ export function MaskPainterModal({
     const pt = getCanvasPoint(e)
     if (!pt) return
     activeStrokeRef.current.points.push(pt)
-    redrawOverlay()
+    scheduleRedraw()
   }
 
   function handlePointerUp() {
