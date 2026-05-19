@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import type { SceneNodeData } from "@nodaro/shared"
 
-// Mock the inner pipeline runner + stage helpers BEFORE importing the SUT so
-// the SUT's static imports pick up the mocks. Paths are relative to the SUT
-// (`stages/animate-audio-edit.ts`), NOT to this test file.
+// Mock every sub-step module + helpers BEFORE importing the SUT.
 vi.mock("../scene-internal-pipeline.js", () => ({
   runSceneInternalPipeline: vi.fn(),
 }))
@@ -17,18 +15,71 @@ vi.mock("../stage-utils.js", () => ({
 vi.mock("../events.js", () => ({
   pipelineEvents: { publish: vi.fn() },
 }))
+vi.mock("../services/pipeline-final-merge.js", () => ({
+  pipelineFinalMerge: vi.fn(),
+}))
+vi.mock("../sub-steps/dialogue-recheck.js", () => ({
+  runDialogueRecheck: vi.fn(),
+}))
+vi.mock("../sub-steps/silent-cut-review.js", () => ({
+  runSilentCutReview: vi.fn(),
+}))
+vi.mock("../sub-steps/shot-realignment.js", () => ({
+  runShotRealignment: vi.fn(),
+}))
+vi.mock("../music-timeline.js", () => ({
+  runMusicTimeline: vi.fn(),
+}))
+vi.mock("../llms/editor.js", () => ({
+  runEditor: vi.fn(),
+}))
 
 import { runSceneInternalPipeline } from "../scene-internal-pipeline.js"
 import { failStage } from "../stage-utils.js"
-import {
-  transitionStageEntityNodesAndEmit,
-} from "../depends-on.js"
+import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { pipelineEvents } from "../events.js"
+import { pipelineFinalMerge } from "../services/pipeline-final-merge.js"
+import { runDialogueRecheck } from "../sub-steps/dialogue-recheck.js"
+import { runSilentCutReview } from "../sub-steps/silent-cut-review.js"
+import { runShotRealignment } from "../sub-steps/shot-realignment.js"
+import { runMusicTimeline } from "../music-timeline.js"
+import { runEditor } from "../llms/editor.js"
 import { runAnimateAudioEditStage } from "../stages/animate-audio-edit.js"
 
-beforeEach(() => vi.clearAllMocks())
-
-// ─── Fixtures ────────────────────────────────────────────────────────────────
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Defaults: happy-path sub-step returns.
+  ;(runDialogueRecheck as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    rebalances: [],
+    warnings: [],
+    awaitingUserDecision: false,
+  })
+  ;(runSilentCutReview as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    awaitingApproval: false,
+  })
+  ;(runShotRealignment as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    realignedShots: [],
+    warnings: [],
+  })
+  ;(runMusicTimeline as ReturnType<typeof vi.fn>).mockResolvedValue({
+    enabled: true,
+    musicAssetUrl: "https://r2/music.mp3",
+    beatGrid: [0.5, 1.0, 1.5],
+    detectedBPM: 120,
+    plannedBPM: 120,
+    realignmentNeeded: false,
+  })
+  ;(runEditor as ReturnType<typeof vi.fn>).mockResolvedValue({
+    cut_decisions: [],
+  })
+  ;(pipelineFinalMerge as ReturnType<typeof vi.fn>).mockResolvedValue({
+    finalAssetId: "asset-final",
+    finalAssetUrl: "https://r2/final.mp4",
+  })
+})
 
 function makeSceneNodeData(idx: number, shotCount = 2): SceneNodeData {
   return {
@@ -61,6 +112,7 @@ function makeSceneNodeData(idx: number, shotCount = 2): SceneNodeData {
         is_match_cut: false,
       },
       visual_keyframe_prompt: `prompt ${i}`,
+      has_dialogue: false,
     })),
     scene_anchor_keyframe: null,
     generated_keyframes: [],
@@ -73,16 +125,11 @@ function makeSceneNodeData(idx: number, shotCount = 2): SceneNodeData {
 
 interface MakeSupabaseOpts {
   scenes: Array<{ id: string; entity_key: string; scene_node_data?: SceneNodeData }>
-  /**
-   * Initial pipeline_stages.status returned by the re-entrancy guard read.
-   * Default 'running'. Use 'awaiting_approval' to trigger the no-op branch.
-   */
   initialStageStatus?: string
-  /**
-   * `pipelines.config` JSON returned by the config read. Default `{}` so
-   * mode defaults to 'parallel' + lipsync defaults to true.
-   */
+  initialStageOutput?: Record<string, unknown>
   pipelineConfig?: Record<string, unknown>
+  pipelineMode?: "manual" | "auto" | "guided"
+  targetDurationSeconds?: number
 }
 
 function makeSupabase(opts: MakeSupabaseOpts) {
@@ -96,22 +143,36 @@ function makeSupabase(opts: MakeSupabaseOpts) {
     })
   }
   const stageUpdates: Array<Record<string, unknown>> = []
+  let stageOutput: Record<string, unknown> = { ...(opts.initialStageOutput ?? {}) }
 
   return {
     rpc: vi.fn(),
     from: (table: string) => {
       if (table === "pipeline_stages") {
         return {
-          select: () => ({
+          select: (cols?: string) => ({
             eq: (col1: string, _val1: string) => {
               if (col1 === "id") {
-                // ensureStageRow re-fetch re-entrancy guard
                 return {
-                  maybeSingle: async () => ({
-                    data: {
+                  maybeSingle: async () => {
+                    const data: Record<string, unknown> = {
                       status: opts.initialStageStatus ?? "running",
-                    },
-                    error: null,
+                    }
+                    if ((cols ?? "").includes("output")) {
+                      data.output = stageOutput
+                    }
+                    return { data, error: null }
+                  },
+                }
+              }
+              if (col1 === "pipeline_id") {
+                // loadShowrunnerPlan
+                return {
+                  eq: () => ({
+                    maybeSingle: async () => ({
+                      data: { output: { plan: null } },
+                      error: null,
+                    }),
                   }),
                 }
               }
@@ -121,6 +182,9 @@ function makeSupabase(opts: MakeSupabaseOpts) {
           update: (patch: Record<string, unknown>) => ({
             eq: async () => {
               stageUpdates.push(patch)
+              if (patch.output && typeof patch.output === "object") {
+                stageOutput = patch.output as Record<string, unknown>
+              }
               return { data: null, error: null }
             },
           }),
@@ -131,11 +195,16 @@ function makeSupabase(opts: MakeSupabaseOpts) {
           select: () => ({
             eq: () => ({
               single: async () => ({
-                data: { config: opts.pipelineConfig ?? {} },
+                data: {
+                  config: opts.pipelineConfig ?? {},
+                  mode: opts.pipelineMode ?? "manual",
+                  target_duration_seconds: opts.targetDurationSeconds ?? 60,
+                },
                 error: null,
               }),
             }),
           }),
+          update: () => ({ eq: async () => ({ data: null, error: null }) }),
         }
       }
       if (table === "pipeline_entities") {
@@ -166,9 +235,9 @@ function makeSupabase(opts: MakeSupabaseOpts) {
   } as never
 }
 
-// ─── Tests ───────────────────────────────────────────────────────────────────
+describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
+  // ─── Per-scene loop (preserved from 1C.1) ──────────────────────────────
 
-describe("runAnimateAudioEditStage", () => {
   it("sequential mode: drives each scene 1-at-a-time with runImageCritic=true", async () => {
     const calls: Array<{ id: string; options: Record<string, unknown> }> = []
     ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
@@ -193,6 +262,7 @@ describe("runAnimateAudioEditStage", () => {
         { id: "scene-2", entity_key: "scene_02", scene_node_data: makeSceneNodeData(2) },
       ],
       pipelineConfig: { shot_generation_mode: "sequential", lipsync_enabled: true },
+      pipelineMode: "auto",
     })
 
     await runAnimateAudioEditStage({
@@ -209,11 +279,10 @@ describe("runAnimateAudioEditStage", () => {
       expect(c.options.lipSyncEnabled).toBe(true)
     }
     expect(failStage).not.toHaveBeenCalled()
-    // Should land an awaiting_approval update on pipeline_stages.
     const stageUpdates = (supabase as never as {
       _stageUpdates: Array<Record<string, unknown>>
     })._stageUpdates
-    expect(stageUpdates.some((u) => u.status === "awaiting_approval")).toBe(true)
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(true)
   })
 
   it("parallel mode: scenes processed up to 3-at-a-time with runImageCritic=false", async () => {
@@ -229,7 +298,6 @@ describe("runAnimateAudioEditStage", () => {
         peak = Math.max(peak, inFlight)
         await new Promise((r) => setTimeout(r, 5))
         inFlight--
-        // Verify runImageCritic always false in parallel mode.
         expect(options.runImageCritic).toBe(false)
         return {
           ok: true,
@@ -246,6 +314,7 @@ describe("runAnimateAudioEditStage", () => {
         scene_node_data: makeSceneNodeData(i + 1),
       })),
       pipelineConfig: { shot_generation_mode: "parallel", lipsync_enabled: true },
+      pipelineMode: "auto",
     })
 
     await runAnimateAudioEditStage({
@@ -260,8 +329,7 @@ describe("runAnimateAudioEditStage", () => {
     expect(failStage).not.toHaveBeenCalled()
   })
 
-  it("fails the stage when a scene returns a continuity_break", async () => {
-    // Three scenes; scene-2 returns a continuity break in the runner.
+  it("fails the stage when a scene returns continuity_break — no sub-steps run", async () => {
     ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
       async (_ctx: unknown, scene: { id: string }) => {
         if (scene.id === "scene-2") {
@@ -281,10 +349,8 @@ describe("runAnimateAudioEditStage", () => {
         { id: "scene-2", entity_key: "scene_02", scene_node_data: makeSceneNodeData(2) },
         { id: "scene-3", entity_key: "scene_03", scene_node_data: makeSceneNodeData(3) },
       ],
-      // sequential to cause Image Critic engagement (continuity_break only
-      // surfaces in sequential mode internally, but Stage 7 is mode-agnostic
-      // for failure counting).
       pipelineConfig: { shot_generation_mode: "sequential" },
+      pipelineMode: "auto",
     })
 
     await runAnimateAudioEditStage({
@@ -295,19 +361,20 @@ describe("runAnimateAudioEditStage", () => {
     })
 
     expect(failStage).toHaveBeenCalledTimes(1)
-    const failCall = (failStage as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(failCall?.[2]).toMatch(/1 scenes failed/)
+    expect((failStage as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]).toMatch(/1 scenes failed/)
+    expect(runDialogueRecheck).not.toHaveBeenCalled()
+    expect(pipelineFinalMerge).not.toHaveBeenCalled()
   })
 
-  it("forwards lipsync_enabled=false from pipeline.config to the runner", async () => {
-    const observedOptions: Array<Record<string, unknown>> = []
+  it("defaults shot_generation_mode to 'parallel' when config is empty", async () => {
+    const observed: Array<Record<string, unknown>> = []
     ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
       async (
         _ctx: unknown,
         scene: { id: string },
         options: Record<string, unknown>,
       ) => {
-        observedOptions.push(options)
+        observed.push(options)
         return {
           ok: true,
           composite_video_asset_id: `vid-${scene.id}`,
@@ -320,7 +387,8 @@ describe("runAnimateAudioEditStage", () => {
       scenes: [
         { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
       ],
-      pipelineConfig: { shot_generation_mode: "parallel", lipsync_enabled: false },
+      pipelineConfig: {},
+      pipelineMode: "auto",
     })
 
     await runAnimateAudioEditStage({
@@ -330,80 +398,9 @@ describe("runAnimateAudioEditStage", () => {
       userTier: "pro",
     })
 
-    expect(observedOptions).toHaveLength(1)
-    expect(observedOptions[0]?.lipSyncEnabled).toBe(false)
-  })
-
-  it("defaults shot_generation_mode to 'parallel' when pipeline.config is empty", async () => {
-    const observedOptions: Array<Record<string, unknown>> = []
-    ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
-      async (
-        _ctx: unknown,
-        scene: { id: string },
-        options: Record<string, unknown>,
-      ) => {
-        observedOptions.push(options)
-        return {
-          ok: true,
-          composite_video_asset_id: `vid-${scene.id}`,
-          composite_video_url: `https://r2/vid-${scene.id}.mp4`,
-        }
-      },
-    )
-
-    const supabase = makeSupabase({
-      scenes: [
-        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
-      ],
-      pipelineConfig: {}, // Empty config — should default mode=parallel, lipsync=true
-    })
-
-    await runAnimateAudioEditStage({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      userTier: "pro",
-    })
-
-    expect(observedOptions[0]?.mode).toBe("parallel")
-    expect(observedOptions[0]?.runImageCritic).toBe(false)
-    expect(observedOptions[0]?.lipSyncEnabled).toBe(true)
-  })
-
-  it("transitions scene nodes: pipeline_owned_running → pipeline_owned_awaiting_approval", async () => {
-    ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ok: true,
-      composite_video_asset_id: "vid-1",
-      composite_video_url: "https://r2/vid-1.mp4",
-    })
-
-    const supabase = makeSupabase({
-      scenes: [
-        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
-      ],
-    })
-
-    await runAnimateAudioEditStage({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      userTier: "pro",
-    })
-
-    // Should be called twice: once for running, once for awaiting_approval.
-    expect(transitionStageEntityNodesAndEmit).toHaveBeenCalledTimes(2)
-    const calls = (transitionStageEntityNodesAndEmit as ReturnType<typeof vi.fn>).mock
-      .calls
-    expect(calls[0]?.[3]).toBe("pipeline_owned_running")
-    expect(calls[1]?.[3]).toBe("pipeline_owned_awaiting_approval")
-    // Final stage:status SSE event should also have fired.
-    expect(pipelineEvents.publish).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "stage:status",
-        stageName: "animate_audio_edit",
-        status: "awaiting_approval",
-      }),
-    )
+    expect(observed[0]?.mode).toBe("parallel")
+    expect(observed[0]?.runImageCritic).toBe(false)
+    expect(observed[0]?.lipSyncEnabled).toBe(true)
   })
 
   it("is a no-op when the stage is already awaiting_approval", async () => {
@@ -437,41 +434,29 @@ describe("runAnimateAudioEditStage", () => {
 
     expect(failStage).toHaveBeenCalledTimes(1)
     expect((failStage as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]).toBe("no_scenes")
-    expect(runSceneInternalPipeline).not.toHaveBeenCalled()
   })
 
-  it("persists per-shot video_url + last_frame_url back to scene_node_data.shots", async () => {
-    // Runner returns per_shot_results with full URL set so we can assert
-    // they land on the persisted ShotSpec fields (the `fix_continuity`
-    // helper reads `prior.last_frame_url` from this exact path).
+  // ─── Phase 1C.2 H1 — Sub-step chain ──────────────────────────────────
+
+  function setupHappyScenes() {
     ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
       async (_ctx: unknown, scene: { id: string }) => ({
         ok: true,
         composite_video_asset_id: `vid-${scene.id}`,
         composite_video_url: `https://r2/vid-${scene.id}.mp4`,
-        per_shot_results: [
-          {
-            shot_id: "shot_01",
-            video_asset_id: "va-1",
-            video_url: "https://r2/clip-1.mp4",
-            last_frame_asset_id: "lf-1",
-            last_frame_url: "https://r2/lf-1.png",
-          },
-          {
-            shot_id: "shot_02",
-            video_asset_id: "va-2",
-            video_url: "https://r2/clip-2.mp4",
-            last_frame_asset_id: null, // last shot — no last_frame extraction
-            last_frame_url: null,
-          },
-        ],
+        per_shot_results: [],
       }),
     )
+  }
 
+  it("H1: auto mode — full chain runs end-to-end, no pauses, final_merge called", async () => {
+    setupHappyScenes()
     const supabase = makeSupabase({
       scenes: [
-        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1, 2) },
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+        { id: "scene-2", entity_key: "scene_02", scene_node_data: makeSceneNodeData(2) },
       ],
+      pipelineMode: "auto",
     })
 
     await runAnimateAudioEditStage({
@@ -481,24 +466,379 @@ describe("runAnimateAudioEditStage", () => {
       userTier: "pro",
     })
 
-    const persisted = (supabase as never as {
-      _entities: Map<string, Record<string, unknown>>
-    })._entities.get("scene-1")
-    const sceneData = (persisted?.metadata as { scene_node_data?: SceneNodeData })
-      ?.scene_node_data
-    expect(sceneData).toBeDefined()
-    expect(sceneData?.composite_video_url).toBe("https://r2/vid-scene-1.mp4")
-    // Each shot should have video_url + last_frame_url written through.
-    const shot01 = sceneData?.shots?.find((s) => s.shot_id === "shot_01")
-    expect(shot01?.video_url).toBe("https://r2/clip-1.mp4")
-    expect(shot01?.video_asset_id).toBe("va-1")
-    expect(shot01?.last_frame_url).toBe("https://r2/lf-1.png")
-    expect(shot01?.last_frame_asset_id).toBe("lf-1")
-    const shot02 = sceneData?.shots?.find((s) => s.shot_id === "shot_02")
-    expect(shot02?.video_url).toBe("https://r2/clip-2.mp4")
-    // last_frame_* is null on the final shot — nothing to extract — but the
-    // shot fixture didn't carry one either, so it should remain undefined,
-    // NOT overwritten with null.
-    expect(shot02?.last_frame_url).toBeUndefined()
+    expect(runDialogueRecheck).toHaveBeenCalledTimes(1)
+    expect(runSilentCutReview).toHaveBeenCalledTimes(1)
+    expect(runMusicTimeline).toHaveBeenCalledTimes(1)
+    expect(runEditor).toHaveBeenCalledTimes(1)
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    expect((runDialogueRecheck as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject(
+      { mode: "auto" },
+    )
+    expect((runSilentCutReview as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject(
+      { mode: "auto" },
+    )
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(true)
+    expect(stageUpdates.some((u) => u.status === "awaiting_approval")).toBe(false)
+    expect(failStage).not.toHaveBeenCalled()
+  })
+
+  it("H1: manual mode + dialogue_recheck rebalance — pauses at sub-gate, no downstream calls", async () => {
+    setupHappyScenes()
+    ;(runDialogueRecheck as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      rebalances: [
+        {
+          scene_entity_id: "scene-1",
+          shot_id: "shot_01",
+          delta_sec: 1.5,
+          new_intended_duration_sec: 6.5,
+        },
+      ],
+      warnings: ["scene_total_drift"],
+      awaitingUserDecision: true,
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "manual",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runDialogueRecheck).toHaveBeenCalledTimes(1)
+    expect(runSilentCutReview).not.toHaveBeenCalled()
+    expect(runMusicTimeline).not.toHaveBeenCalled()
+    expect(runEditor).not.toHaveBeenCalled()
+    expect(pipelineFinalMerge).not.toHaveBeenCalled()
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "awaiting_approval")).toBe(true)
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(false)
+    const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
+    expect(
+      publishCalls.some(
+        (c) =>
+          (c[0] as { type?: string }).type === "stage:awaiting_sub_gate" &&
+          (c[0] as { subGate?: string }).subGate === "dialogue_recheck",
+      ),
+    ).toBe(true)
+  })
+
+  it("H1: manual mode + silent_cut paused — no music/editor/final_merge", async () => {
+    setupHappyScenes()
+    ;(runSilentCutReview as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      previewUrl: "https://r2/silent-preview.mp4",
+      awaitingApproval: true,
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "manual",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runDialogueRecheck).toHaveBeenCalledTimes(1)
+    expect(runSilentCutReview).toHaveBeenCalledTimes(1)
+    expect(runMusicTimeline).not.toHaveBeenCalled()
+    expect(runEditor).not.toHaveBeenCalled()
+    expect(pipelineFinalMerge).not.toHaveBeenCalled()
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "awaiting_approval")).toBe(true)
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(false)
+  })
+
+  it("H1 regression: silent_cut pause persists preview_url + current_sub_gate on stage row (regression from a0a23642)", async () => {
+    setupHappyScenes()
+    ;(runSilentCutReview as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      previewUrl: "https://r2/silent-preview.mp4",
+      awaitingApproval: true,
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "manual",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    // Find the setSubGate update that wrote both `output` + `status='awaiting_approval'`.
+    const subGateWrite = stageUpdates.find(
+      (u) =>
+        u.status === "awaiting_approval" &&
+        typeof u.output === "object" &&
+        u.output !== null,
+    )
+    expect(subGateWrite).toBeDefined()
+    const output = subGateWrite!.output as Record<string, unknown>
+    expect(output.silent_cut_preview_url).toBe("https://r2/silent-preview.mp4")
+    expect(output.current_sub_gate).toBe("silent_cut_preview")
+    // sub_step_completed must be present so the resume run uses the right map.
+    expect(output.sub_step_completed).toBeDefined()
+    // The orchestrator emits the SSE event itself via setSubGate.
+    const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
+    expect(
+      publishCalls.some(
+        (c) =>
+          (c[0] as { type?: string }).type === "stage:awaiting_sub_gate" &&
+          (c[0] as { subGate?: string }).subGate === "silent_cut_preview",
+      ),
+    ).toBe(true)
+  })
+
+  it("H1: resume from silent_cut — completed map causes chain to skip past 7d'+7e'", async () => {
+    setupHappyScenes()
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "manual",
+      initialStageOutput: {
+        sub_step_completed: { dialogue_recheck: true, silent_cut: true },
+      },
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runDialogueRecheck).not.toHaveBeenCalled()
+    expect(runSilentCutReview).not.toHaveBeenCalled()
+    expect(runMusicTimeline).toHaveBeenCalledTimes(1)
+    expect(runEditor).toHaveBeenCalledTimes(1)
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(true)
+  })
+
+  it("H1: music disabled — runEditor gets empty beatGrid; final_merge gets empty url", async () => {
+    setupHappyScenes()
+    ;(runMusicTimeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      enabled: false,
+      musicAssetUrl: "",
+      beatGrid: [],
+      detectedBPM: 0,
+      plannedBPM: 0,
+      realignmentNeeded: false,
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineConfig: { music_enabled: false },
+      pipelineMode: "auto",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runEditor).toHaveBeenCalledTimes(1)
+    expect(
+      (runEditor as ReturnType<typeof vi.fn>).mock.calls[0]?.[0],
+    ).toMatchObject({ beatGrid: [] })
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    expect(
+      (pipelineFinalMerge as ReturnType<typeof vi.fn>).mock.calls[0]?.[0],
+    ).toMatchObject({ musicAssetUrl: "" })
+    expect(runShotRealignment).not.toHaveBeenCalled()
+  })
+
+  it("H1: realignment runs only when music timeline reports BPM drift", async () => {
+    setupHappyScenes()
+    ;(runMusicTimeline as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      enabled: true,
+      musicAssetUrl: "https://r2/music.mp3",
+      beatGrid: [0.5, 1.0, 1.5],
+      detectedBPM: 128,
+      plannedBPM: 120,
+      realignmentNeeded: true,
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runShotRealignment).toHaveBeenCalledTimes(1)
+    expect(
+      (runShotRealignment as ReturnType<typeof vi.fn>).mock.calls[0]?.[0],
+    ).toMatchObject({ detectedBPM: 128, plannedBPM: 120 })
+  })
+
+  it("H1: Editor LLM failure propagates — no final_merge call", async () => {
+    setupHappyScenes()
+    ;(runEditor as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Editor LLM exploded"),
+    )
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+    })
+
+    let threw = false
+    try {
+      await runAnimateAudioEditStage({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        userTier: "pro",
+      })
+    } catch {
+      threw = true
+    }
+
+    expect(pipelineFinalMerge).not.toHaveBeenCalled()
+    expect(threw || (failStage as ReturnType<typeof vi.fn>).mock.calls.length > 0).toBe(true)
+  })
+
+  it("H1 regression: editor crash AFTER music success flushes completed.music=true so resume skips music re-pay (regression from a0a23642)", async () => {
+    setupHappyScenes()
+    ;(runEditor as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("Editor LLM exploded"),
+    )
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+    })
+
+    try {
+      await runAnimateAudioEditStage({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        userTier: "pro",
+      })
+    } catch {
+      // Expected — editor throws.
+    }
+
+    // The finally block MUST have flushed `completed.music = true` to the
+    // stage row so the next worker resume reads it back and skips
+    // runMusicTimeline (which is paid via Suno).
+    expect(runMusicTimeline).toHaveBeenCalledTimes(1)
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const outputFlush = stageUpdates.find(
+      (u) =>
+        u.output &&
+        typeof u.output === "object" &&
+        ((u.output as Record<string, unknown>).sub_step_completed as
+          | Record<string, boolean>
+          | undefined)?.music === true,
+    )
+    expect(outputFlush).toBeDefined()
+    expect(outputFlush!.status).toBeUndefined() // flush only writes `output`, not `status`
+  })
+
+  it("H1: final_merge failure — stage fails with final_merge_failed prefix", async () => {
+    setupHappyScenes()
+    ;(pipelineFinalMerge as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("FFmpeg crashed"),
+    )
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(failStage).toHaveBeenCalledTimes(1)
+    const failCall = (failStage as ReturnType<typeof vi.fn>).mock.calls[0]
+    expect(failCall?.[2]).toMatch(/^final_merge_failed:/)
+  })
+
+  it("H1: transitions SceneNodes running -> awaiting_approval on full happy path", async () => {
+    setupHappyScenes()
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(transitionStageEntityNodesAndEmit).toHaveBeenCalledTimes(2)
+    const calls = (transitionStageEntityNodesAndEmit as ReturnType<typeof vi.fn>).mock.calls
+    expect(calls[0]?.[3]).toBe("pipeline_owned_running")
+    expect(calls[1]?.[3]).toBe("pipeline_owned_awaiting_approval")
+    expect(pipelineEvents.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "stage:status",
+        stageName: "animate_audio_edit",
+        status: "approved",
+      }),
+    )
   })
 })

@@ -606,6 +606,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "scene-helper:audit_images": 3,
   "scene-helper:fix_continuity": 4,
   "scene-helper:validate_match_cut": 3,
+  // Phase 1C.2 Stage 7 sub-steps — DB rows in migration 135.
+  // Editor LLM: one Sonnet vision call per pipeline (3cr). Beat-grid extract:
+  // pure FFmpeg/aubio post-process, no LLM/provider cost (0cr). Music timeline:
+  // 4cr covers the Suno gen wrapper overhead (the Suno cost is reserved
+  // separately via the Suno worker). Final merge: 3cr for the FFmpeg combine
+  // pass with cut decisions + music overlay. FreeCut export: pure JSON
+  // generation, no provider cost (0cr).
+  "pipeline-editor-llm": 3,
+  "pipeline-beat-grid-extract": 0,
+  "pipeline-music-timeline": 4,
+  "pipeline-final-merge": 3,
+  "pipeline-freecut-export": 0,
 }
 
 // Tier order for restriction checks

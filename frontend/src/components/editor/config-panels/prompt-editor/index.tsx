@@ -10,6 +10,7 @@ import { Placeholder, UndoRedo } from "@tiptap/extensions"
 import { createRoot, type Root } from "react-dom/client"
 import { ImageRefExtension } from "./image-ref-extension"
 import { CharacterRefExtension, parseCharacterRefMatch } from "./character-ref-extension"
+import { LocationRefExtension, parseLocationRefMatch } from "./location-ref-extension"
 import { SuggestionList, type SuggestionListHandle, type SuggestionCommandPayload } from "./suggestion-list"
 import { VariableSuggestionExtension } from "./variable-suggestion-extension"
 import { VariableSuggestionList, type VariableSuggestionListHandle } from "./variable-suggestion-list"
@@ -31,6 +32,27 @@ const IMAGE_TOKEN_RE = /\{image:(\d+)(?::([a-zA-Z0-9_-]+))?\}/gi
  */
 const CHARACTER_TOKEN_RE_GLOBAL = /(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*):(\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?/g
 
+/**
+ * Location token shape — wider than character because the 3rd/4th segment
+ * can be either a bare slug (mode keyword) or a `bucket/variant` pair
+ * (slash-separated). Captured as ONE group (after the boundary) so
+ * `parseLocationRefMatch` can do disambiguation in one pass.
+ *
+ * Capture groups:
+ *   1 = boundary char (or empty when at line start, dropped before reinjection)
+ *   2 = the FULL token starting with `@` (passed to `parseLocationRefMatch`)
+ *
+ * Mirrors the shape in `packages/shared/src/location-mention-slug.ts`
+ * (`findLocationMentionTokens`) so the visual pill is a pure presentation
+ * layer and downstream prompt-builder code sees the exact same text it
+ * would have seen for a hand-typed slug.
+ */
+const LOCATION_TOKEN_SEGMENT = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
+const LOCATION_TOKEN_RE_GLOBAL = new RegExp(
+  `(^|[^a-zA-Z0-9])(@[a-z][a-z0-9-]*:\\d+(?::${LOCATION_TOKEN_SEGMENT})?(?::${LOCATION_TOKEN_SEGMENT})?)`,
+  "g",
+)
+
 interface PromptEditorProps {
   readonly value: string
   readonly onChange: (value: string) => void
@@ -42,32 +64,50 @@ interface PromptEditorProps {
   readonly nodeRefs?: readonly NodeRefItem[]
 }
 
-interface JsonNode {
+export interface JsonNode {
   type: string
   attrs?: Record<string, unknown>
   content?: JsonNode[]
   text?: string
 }
 
-interface TokenMatch {
+export interface TokenMatch {
   start: number
   end: number
   node: JsonNode
 }
 
+export interface KnownSlugSets {
+  /** Character slugs known to this editor (from upstream wired characters). */
+  characters: ReadonlySet<string>
+  /** Location slugs known to this editor (from upstream wired locations). */
+  locations: ReadonlySet<string>
+}
+
 /**
- * Scan a single line for both `{image:N:label}` and `@<slug>:N(:variant)(:mode)`
- * tokens, returning the resolved JSON nodes ordered by their start offset.
+ * Scan a single line for `{image:N:label}`, `@<charSlug>:N(:variant)(:mode)`,
+ * and `@<locSlug>:N(:bucket/variant)(:mode)` tokens, returning the resolved
+ * JSON nodes ordered by their start offset.
  *
- * Character matches that fail `parseCharacterRefMatch` (e.g. a 3-part token
- * whose third segment is neither a usage mode nor a valid variant slug, or a
- * 4-part token with an unknown mode) are dropped from the token list and
- * left as text by the caller — same fallback the input/paste rules use.
+ * Dispatch is gated by `known.characters` / `known.locations`. A typed slug
+ * is promoted to a pill only when it matches a slug wired into the consumer
+ * node — otherwise it stays as plain text. This is the same gating the
+ * input/paste rules apply (via editor storage), kept in lockstep here so the
+ * `valueToDoc → setContent` path doesn't auto-promote a stale or unknown
+ * slug that the rule would have left alone.
+ *
+ * Both regexes can match the same 2-part `@slug:N` shape. Disambiguation:
+ * the LOCATION regex is checked first against `known.locations`; if found,
+ * a `locationRef` node is emitted. Otherwise, the CHARACTER regex is
+ * checked against `known.characters`; if found, a `characterRef` node is
+ * emitted. Tokens that match neither known set fall through to text. The
+ * dedup-by-offset step at the end guarantees we never emit two nodes for
+ * the same span.
  *
  * Returns matches in document order; the caller stitches in plain-text
  * fragments between them.
  */
-function collectTokens(line: string): TokenMatch[] {
+export function collectTokens(line: string, known: KnownSlugSets): TokenMatch[] {
   const tokens: TokenMatch[] = []
 
   for (const match of line.matchAll(IMAGE_TOKEN_RE)) {
@@ -80,6 +120,35 @@ function collectTokens(line: string): TokenMatch[] {
         attrs: {
           imageIndex: parseInt(match[1], 10),
           label: match[2] ?? "",
+        },
+      },
+    })
+  }
+
+  // Location matches first — the location regex is a strict superset of the
+  // character regex shape (it permits the `bucket/variant` slash form). We
+  // gate on `known.locations` so a typed `@kira:1` doesn't accidentally
+  // promote to a location pill when "kira" is a character.
+  for (const match of line.matchAll(LOCATION_TOKEN_RE_GLOBAL)) {
+    const matchStart = match.index ?? 0
+    const boundary = match[1] ?? ""
+    const slugStart = matchStart + boundary.length
+    const slugEnd = matchStart + match[0].length
+    const token = match[2]
+    const attrs = parseLocationRefMatch(token)
+    if (!attrs) continue
+    if (!known.locations.has(attrs.locationSlug)) continue
+    tokens.push({
+      start: slugStart,
+      end: slugEnd,
+      node: {
+        type: "locationRef",
+        attrs: {
+          locationSlug: attrs.locationSlug,
+          imageIndex: attrs.imageIndex,
+          bucket: attrs.bucket,
+          variant: attrs.variant,
+          usageMode: attrs.usageMode,
         },
       },
     })
@@ -98,6 +167,7 @@ function collectTokens(line: string): TokenMatch[] {
     const fourth = match[5]
     const attrs = parseCharacterRefMatch(characterWithAt, indexStr, third, fourth)
     if (!attrs) continue
+    if (!known.characters.has(attrs.characterSlug)) continue
     tokens.push({
       start: slugStart,
       end: slugEnd,
@@ -113,11 +183,10 @@ function collectTokens(line: string): TokenMatch[] {
     })
   }
 
-  // Sort by start offset. Token regions can't legitimately overlap since
-  // `{image:…}` lives between braces and `@…` starts with `@`, but in the
-  // event of weird user input (e.g. a literal `@kira:1` inside an image
-  // token's label like `{image:1:@kira}`) we drop later overlapping tokens
-  // to keep the doc well-formed.
+  // Sort by start offset, then drop overlapping tokens (location regex and
+  // character regex can match the same 2-part `@slug:N` shape; the dedup
+  // here keeps whichever appeared first in the token list, which by
+  // matchAll-ordering above is the location match).
   tokens.sort((a, b) => a.start - b.start)
   const deduped: TokenMatch[] = []
   let cursor = 0
@@ -132,13 +201,18 @@ function collectTokens(line: string): TokenMatch[] {
 /**
  * Convert the canonical value string into a ProseMirror JSON doc. Splits on
  * "\n" for paragraphs and replaces every `{image:N:label}` and every
- * `@<slug>:N(:variant)(:mode)` match with the appropriate atomic node.
- * Empty paragraphs are preserved so blank lines round-trip cleanly.
+ * `@<slug>:N(...)` match with the appropriate atomic node. Empty paragraphs
+ * are preserved so blank lines round-trip cleanly.
+ *
+ * `known` controls which slugs get promoted to pills. Slugs not present in
+ * either set stay as literal text — same fallback as the live input/paste
+ * rules so the value-sync path doesn't auto-promote slugs the user hasn't
+ * wired in.
  */
-function valueToDoc(value: string): JsonNode {
+function valueToDoc(value: string, known: KnownSlugSets): JsonNode {
   const lines = value.split("\n")
   const paragraphs: JsonNode[] = lines.map((line) => {
-    const tokens = collectTokens(line)
+    const tokens = collectTokens(line, known)
     if (tokens.length === 0) {
       return {
         type: "paragraph",
@@ -162,6 +236,22 @@ function valueToDoc(value: string): JsonNode {
   return { type: "doc", content: paragraphs }
 }
 
+/**
+ * Build the live known-slug sets from the current reference list. Used by
+ * `valueToDoc` (initial content + external sync) and the character/location
+ * extensions (via storage) to decide which typed slugs get promoted to
+ * pills.
+ */
+function buildKnownSlugSets(refs: readonly RefImageItem[]): KnownSlugSets {
+  const characters = new Set<string>()
+  const locations = new Set<string>()
+  for (const r of refs) {
+    if (r.source === "character" && r.characterSlug) characters.add(r.characterSlug)
+    else if (r.source === "location" && r.locationSlug) locations.add(r.locationSlug)
+  }
+  return { characters, locations }
+}
+
 export function PromptEditor({
   value,
   onChange,
@@ -177,6 +267,13 @@ export function PromptEditor({
   refsRef.current = referenceImages ?? []
   const nodeRefsRef = useRef<readonly NodeRefItem[]>(nodeRefs ?? [])
   nodeRefsRef.current = nodeRefs ?? []
+  // Known-slug sets derived from the current reference list. Recomputed when
+  // the list changes; the suggestion-plugin's `items()` closure stays stable.
+  const knownSlugsRef = useRef<KnownSlugSets>(buildKnownSlugSets(referenceImages ?? []))
+  knownSlugsRef.current = useMemo(
+    () => buildKnownSlugSets(referenceImages ?? []),
+    [referenceImages],
+  )
 
   // Hold the latest onChange so we can call it without recreating the editor.
   const onChangeRef = useRef(onChange)
@@ -194,6 +291,7 @@ export function PromptEditor({
       UndoRedo,
       Placeholder.configure({ placeholder: placeholder ?? "" }),
       CharacterRefExtension,
+      LocationRefExtension,
       ImageRefExtension.configure({
         suggestion: {
           char: "@",
@@ -205,6 +303,87 @@ export function PromptEditor({
           items: () => Array.from(refsRef.current),
           command: ({ editor: ed, range, props }) => {
             const item = props as unknown as SuggestionCommandPayload
+            // Compute the next mention index by scanning the editor's
+            // current plain-text content for ANY existing `@<slug>:N` token —
+            // characters AND locations share a unified positional counter
+            // so `@kira:1` and `@oldlibrary:2` coexist in one prompt without
+            // collision. `editor.getText` round-trips every existing pill
+            // back through its `renderText` so raw-text and pill mentions
+            // are counted together.
+            //
+            // The shape on the right matches the LOCATION grammar (a strict
+            // superset of the CHARACTER grammar — each optional segment can
+            // be either a plain slug OR a `bucket/variant` pair).
+            const computeNextMentionIndex = (): number => {
+              const currentText = ed.getText({ blockSeparator: "\n" })
+              const seg = "(?:[a-z][a-z0-9-]*\\/[a-z][a-z0-9-]*|[a-z][a-z0-9-]*)"
+              const regex = new RegExp(
+                `(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\\d+)(?::${seg})?(?::${seg})?`,
+                "g",
+              )
+              let maxIdx = 0
+              for (const match of currentText.matchAll(regex)) {
+                const n = parseInt(match[1], 10)
+                if (Number.isInteger(n) && n > maxIdx) maxIdx = n
+              }
+              return maxIdx + 1
+            }
+
+            // Location refs: insert as an atomic `locationRef` TipTap node
+            // (rendered as a cyan pill with thumbnail). The pill's
+            // `renderText` serializes back to the literal
+            // `@<slug>:N(:<bucket>/<variant>)?(:<mode>)?` format that
+            // `findLocationMentionTokens` (shared) recognizes — so the
+            // visual pill is a pure presentation layer and the downstream
+            // prompt-builder sees the exact same text it would have seen
+            // for a hand-typed slug.
+            if (item.source === "location" && item.locationSlug) {
+              const nextIdx = computeNextMentionIndex()
+              const bucket = item.locationVariantBucket ?? null
+              const variant = item.locationVariantSlug ?? null
+              // Mode resolution (slice 4): if the user explicitly picked a
+              // location mode via the 3rd-level drill, ALWAYS emit it as
+              // the trailing slug segment (4th segment for bucketed
+              // variants — `@oldlibrary:1:weather/rain:style`; 3rd segment
+              // for canonical — `@oldlibrary:1:style`) so the user's
+              // explicit choice round-trips through `getText` and survives
+              // a `valueToDoc` re-parse. When no mode was picked
+              // (`locationUsageMode` undefined), we stash `null` and the
+              // extension's `renderText` emits a clean 2-or-3-part slug —
+              // the runtime path then falls back to the location node's
+              // default mode (or the global `DEFAULT_LOCATION_USAGE_MODE`
+              // "identical") when resolving the slug.
+              //
+              // Mirrors the character path's mode-priority logic but
+              // simpler: locations don't yet thread a per-source
+              // `defaultUsageMode` through `RefImageItem`, so the only
+              // emission trigger is an explicit pick.
+              const explicitLocMode = item.locationUsageMode
+              const locModeForNode = explicitLocMode != null
+                ? explicitLocMode
+                : null
+              ed
+                .chain()
+                .focus()
+                .deleteRange(range)
+                .insertContent([
+                  {
+                    type: "locationRef",
+                    attrs: {
+                      locationSlug: item.locationSlug,
+                      imageIndex: nextIdx,
+                      bucket,
+                      variant,
+                      usageMode: locModeForNode,
+                    },
+                  },
+                  // Trailing space — matches the character path so the
+                  // cursor lands ready for the user to keep typing.
+                  { type: "text", text: " " },
+                ])
+                .run()
+              return
+            }
             // Character refs: insert as an atomic `characterRef` TipTap node
             // (rendered as a violet pill with thumbnail). The pill's
             // `renderText` serializes back to the literal
@@ -214,33 +393,11 @@ export function PromptEditor({
             // prompt-builder sees the exact same text it would have seen for
             // a hand-typed slug.
             //
-            // The numeric index N is computed at insertion time by scanning the
-            // editor's current text (which includes round-tripped pills) for
-            // existing `@<char>:<N>` patterns and using max-N + 1. This keeps
-            // the user-typed slug and the final identity-directive block
-            // (`Image N (Name) — match exactly…`) in lock-step.
-            //
             // Non-character refs continue to use the existing TipTap `imageRef`
             // atomic node so the visual pill + `{image:N:label}` round-trip
             // behavior is preserved.
             if (item.source === "character" && item.characterSlug) {
-              // Scan editor's plain-text content for existing
-              // `@<char>:<N>(:<variant|mode>)?(:<mode>)?` tokens (2–4 part form).
-              // Use max + 1 as the next index. Mirrors `computeNextMentionIndex`
-              // in `tag-textarea.tsx` and the regex shape in `character-mention-slug.ts`.
-              //
-              // `editor.getText` invokes our extension's `renderText` for every
-              // characterRef pill, so existing pills round-trip back to their
-              // literal slug here and are counted alongside any raw-text
-              // mentions the user may have pasted.
-              const currentText = ed.getText({ blockSeparator: "\n" })
-              const regex = /(?:^|[^a-zA-Z0-9])@[a-z][a-z0-9-]*:(\d+)(?::[a-z][a-z0-9-]*)?(?::[a-z][a-z0-9-]*)?/g
-              let maxIdx = 0
-              for (const match of currentText.matchAll(regex)) {
-                const n = parseInt(match[1], 10)
-                if (Number.isInteger(n) && n > maxIdx) maxIdx = n
-              }
-              const nextIdx = maxIdx + 1
+              const nextIdx = computeNextMentionIndex()
               // Mode resolution priority:
               //   1. `item.usageMode` — set by the 3rd-level mode-picker drill;
               //      ALWAYS emitted as the 4th slug segment (even when equal to
@@ -283,7 +440,8 @@ export function PromptEditor({
                 .run()
               return
             }
-            // Non-character ref: keep the existing atomic `imageRef` node.
+            // Non-character/non-location ref: keep the existing atomic
+            // `imageRef` node.
             ed
               .chain()
               .focus()
@@ -482,7 +640,7 @@ export function PromptEditor({
         },
       }),
     ], []), // intentionally created once — dynamic data flows via storage + refs
-    content: valueToDoc(value),
+    content: valueToDoc(value, knownSlugsRef.current),
     onUpdate: ({ editor: ed }) => {
       if (applyingExternalRef.current) return
       const text = ed.getText({ blockSeparator: "\n" })
@@ -494,9 +652,17 @@ export function PromptEditor({
   // views can resolve their attribute keys → URL without prop drilling.
   //
   // The `imageRef` storage indexes by `imageIndex` (1-based slot the user
-  // typed in the `@image:N` token), the `characterRef` storage indexes by
-  // `characterSlug + variantSlug` (so a pill can find its thumbnail even
-  // when the slot order shifts on edge insertion / removal).
+  // typed in the `@image:N` token); the `characterRef` storage indexes by
+  // `characterSlug + variantSlug`; the `locationRef` storage indexes by
+  // `locationSlug + locationVariantBucket + locationVariantSlug`. Each
+  // extension reads its own storage and filters to its own ref kind — the
+  // single source list flows into all three.
+  //
+  // Storage is also what the character/location extensions' input-rule
+  // `getAttributes` calls read to decide which `@<slug>:N` shapes should
+  // auto-promote to pills. Without this, any typed `@<slug>:N` would race
+  // both rules; with this, character-only slugs auto-promote to violet
+  // pills and location-only slugs auto-promote to cyan pills.
   useEffect(() => {
     if (!editor) return
     const storage = editor.storage as unknown as Record<string, {
@@ -513,6 +679,13 @@ export function PromptEditor({
     storage.characterRef = storage.characterRef ?? {}
     storage.characterRef.referenceImages = referenceImages ?? []
     storage.characterRef.revision = (storage.characterRef.revision ?? 0) + 1
+    // Same mirror for the locationRef extension. LocationRefView filters
+    // the shared list to entries with `source === "location"` when
+    // resolving thumbnails; the extension's `getAttributes` filters to
+    // known location slugs when deciding whether to auto-promote.
+    storage.locationRef = storage.locationRef ?? {}
+    storage.locationRef.referenceImages = referenceImages ?? []
+    storage.locationRef.revision = (storage.locationRef.revision ?? 0) + 1
     // Force node views to re-read storage by dispatching a no-op transaction.
     editor.view.dispatch(editor.state.tr.setMeta("refs-changed", true))
   }, [editor, referenceImages])
@@ -526,7 +699,7 @@ export function PromptEditor({
     if (current === value) return
     applyingExternalRef.current = true
     try {
-      editor.commands.setContent(valueToDoc(value), { emitUpdate: false })
+      editor.commands.setContent(valueToDoc(value, knownSlugsRef.current), { emitUpdate: false })
     } finally {
       applyingExternalRef.current = false
     }

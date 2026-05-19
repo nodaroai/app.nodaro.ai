@@ -6,6 +6,9 @@ import type {
   PipelineForkedEvent,
   PipelineDriftSummary,
   PipelineCompletedEvent,
+  StageAwaitingSubGateEvent,
+  PipelineMusicReadyEvent,
+  PipelineEditorDecisionsReadyEvent,
 } from "./pipeline-state-types.js"
 
 /**
@@ -99,3 +102,7 @@ export type PipelineEvent =
   | PipelineDriftSummary
   // Phase 1C.1 — final-MP4 ready event carries the merged asset id + URL.
   | PipelineCompletedEvent
+  // Phase 1C.2 — Stage 7 sub-gate pause, music ready, editor decisions ready.
+  | StageAwaitingSubGateEvent
+  | PipelineMusicReadyEvent
+  | PipelineEditorDecisionsReadyEvent

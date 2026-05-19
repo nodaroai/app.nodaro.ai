@@ -292,6 +292,7 @@ describe("runSceneInternalPipeline", () => {
       assetId: "audio-asset",
       assetUrl: "https://r2/audio.mp3",
       creditsSpent: 4,
+      audioDurationSec: 3.7,
     })
 
     const result = await runSceneInternalPipeline(
@@ -319,6 +320,7 @@ describe("runSceneInternalPipeline", () => {
       assetId: "audio-asset",
       assetUrl: "https://r2/audio.mp3",
       creditsSpent: 4,
+      audioDurationSec: 3.7,
     })
     ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "c",
@@ -435,6 +437,7 @@ describe("runSceneInternalPipeline", () => {
       assetId: "audio-asset",
       assetUrl: "https://r2/audio.mp3",
       creditsSpent: 4,
+      audioDurationSec: 4.2,
     })
     ;(pipelineLipSync as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "ls",
@@ -485,6 +488,7 @@ describe("runSceneInternalPipeline", () => {
       assetId: "audio-asset",
       assetUrl: "https://r2/audio.mp3",
       creditsSpent: 4,
+      audioDurationSec: 3.7,
     })
     ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "c",
@@ -534,6 +538,142 @@ describe("runSceneInternalPipeline", () => {
     expect(args?.text).toBe("I will not yield.")
   })
 
+  it("dialogue: forwards actual audio duration to lip-sync and onto per-shot results (bug_003 fix)", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf",
+      url: "https://r2/lf.png",
+    })
+    // Speech returns real probed duration (2.3s); shot's planning duration is 5s.
+    // Pre-bug_003, lip-sync received 5s; post-fix it must receive 2.3s.
+    ;(pipelineGenerateSpeech as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "speech-1",
+      assetId: "audio-asset",
+      assetUrl: "https://r2/audio.mp3",
+      creditsSpent: 4,
+      audioDurationSec: 2.3,
+    })
+    ;(pipelineLipSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "ls",
+      assetId: "ls-asset",
+      assetUrl: "https://r2/ls.mp4",
+      creditsSpent: 8,
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+
+    const sceneData = makeSceneNodeData(1, {
+      shots: [makeShot("shot_01", { dialogue_line: "Hello there." })],
+    })
+
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "sequential", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // bug_003: lip-sync must receive the real audio duration (2.3s), not the
+    // shot's planning duration (5s).
+    expect(pipelineLipSync).toHaveBeenCalledTimes(1)
+    const lsArgs = (pipelineLipSync as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+    expect(lsArgs?.audioDurationSec).toBe(2.3)
+    // Per-shot result carries has_dialogue + actual_audio_duration_sec so
+    // Stage 7 can persist them onto ShotSpec for the Editor LLM.
+    const shot0 = result.per_shot_results?.[0]
+    expect(shot0?.has_dialogue).toBe(true)
+    expect(shot0?.actual_audio_duration_sec).toBe(2.3)
+  })
+
+  it("dialogue: shot without dialogue_line yields shotResult without has_dialogue flag", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf",
+      url: "https://r2/lf.png",
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+
+    const sceneData = makeSceneNodeData(1, {
+      shots: [makeShot("shot_01", { dialogue_line: null })],
+    })
+
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "sequential", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(pipelineGenerateSpeech).not.toHaveBeenCalled()
+    const shot0 = result.per_shot_results?.[0]
+    // Neither field should be set — the animate path doesn't touch them, and
+    // the dialogue loop skips this shot entirely.
+    expect(shot0?.has_dialogue).toBeUndefined()
+    expect(shot0?.actual_audio_duration_sec).toBeUndefined()
+  })
+
+  it("dialogue: forwards audioDurationSec=null when ffprobe fails — lip-sync falls through", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf",
+      url: "https://r2/lf.png",
+    })
+    // Probe failed inside pipelineGenerateSpeech — duration is null.
+    ;(pipelineGenerateSpeech as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "speech-1",
+      assetId: "audio-asset",
+      assetUrl: "https://r2/audio.mp3",
+      creditsSpent: 4,
+      audioDurationSec: null,
+    })
+    ;(pipelineLipSync as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "ls",
+      assetId: "ls-asset",
+      assetUrl: "https://r2/ls.mp4",
+      creditsSpent: 8,
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+
+    const sceneData = makeSceneNodeData(1, {
+      shots: [makeShot("shot_01", { dialogue_line: "Hello." })],
+    })
+
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "sequential", lipSyncEnabled: true, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // Lip-sync receives undefined (NOT null, NOT shot duration) — the wrapper's
+    // bucket lookup falls back to worst-case 5-min pricing per spec.
+    const lsArgs = (pipelineLipSync as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+    expect(lsArgs?.audioDurationSec).toBeUndefined()
+    const shot0 = result.per_shot_results?.[0]
+    expect(shot0?.has_dialogue).toBe(true)
+    expect(shot0?.actual_audio_duration_sec).toBeNull()
+  })
+
   it("dialogue: omits voice when cast has no voice_match (falls through to worker default)", async () => {
     ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
       async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
@@ -547,6 +687,7 @@ describe("runSceneInternalPipeline", () => {
       assetId: "a",
       assetUrl: "https://r2/a.mp3",
       creditsSpent: 4,
+      audioDurationSec: null,
     })
     ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "c",

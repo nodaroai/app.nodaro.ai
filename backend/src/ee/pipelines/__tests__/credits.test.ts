@@ -9,7 +9,9 @@ import {
 beforeEach(() => vi.clearAllMocks())
 
 describe("estimateUpfrontCredits", () => {
-  it("returns 30 credits for Phase 1A Stage 1-only run", () => {
+  it("includes Stage 1 baseline (30) + music (4) + editor (3) + final-merge (3) when music is enabled", () => {
+    // Phase 1C.2: pipeline-level Stage 7 sub-steps add to the Stage 1 baseline.
+    //   30 (Stage 1) + 4 (music) + 3 (editor) + 3 (final merge) = 40
     expect(
       estimateUpfrontCredits({
         targetDurationSeconds: 60,
@@ -19,7 +21,34 @@ describe("estimateUpfrontCredits", () => {
         narrationEnabled: true,
         lipsyncEnabled: true,
       }),
-    ).toBe(30)
+    ).toBe(40)
+  })
+
+  it("excludes the 4 cr music allocation when music is disabled", () => {
+    // 30 (Stage 1) + 0 (music disabled) + 3 (editor) + 3 (final merge) = 36
+    expect(
+      estimateUpfrontCredits({
+        targetDurationSeconds: 60,
+        format: "short_film",
+        mode: "manual",
+        musicEnabled: false,
+        narrationEnabled: true,
+        lipsyncEnabled: true,
+      }),
+    ).toBe(36)
+  })
+
+  it("auto mode currently costs the same as manual (no premium yet)", () => {
+    expect(
+      estimateUpfrontCredits({
+        targetDurationSeconds: 60,
+        format: "short_film",
+        mode: "auto",
+        musicEnabled: true,
+        narrationEnabled: true,
+        lipsyncEnabled: true,
+      }),
+    ).toBe(40)
   })
 })
 

@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
-import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
 
 export interface RunPostMergeStageArgs {
   supabase: SupabaseClient
@@ -11,43 +10,42 @@ export interface RunPostMergeStageArgs {
 }
 
 /**
- * Stage 8 (`post_merge`). Final stage of the pipeline — concatenates every
- * approved scene's composite video into a single final MP4 and persists the
- * resulting asset id on `pipelines.final_output_asset_id` (added in
- * migration 134).
+ * Stage 8 (`post_merge`). PURE APPROVAL GATE — Phase 1C.2 J1.
  *
- * Flow:
- *   1. Load every scene entity in canvas order.
- *   2. Extract `composite_video_url` (+ `composite_video_asset_id`) from
- *      each scene's `metadata.scene_node_data` (Stage 7 wrote these).
- *   3. Single-scene short-circuit: when the pipeline has exactly one scene,
- *      copy its composite url + asset id directly to the pipeline row —
- *      `pipelineCombineVideos` requires ≥2 inputs (route Zod check) so a
- *      single combine call would throw. Option (a) from the plan.
- *   4. Multi-scene path: call `pipelineCombineVideos` with the ordered URL
- *      list. The wrapper handles credit reservation, job creation, polling,
- *      and asset upload.
- *   5. Flip `pipelines.status='completed'` + write the asset id, mark the
- *      stage row completed (the `pipeline_stages` row DOES have `completed_at`;
- *      the `pipelines` row does NOT — see migration 121), emit
- *      `pipeline:completed`.
+ * The concat work moved to Stage 7 (animate_audio_edit) in I2 — Stage 7 now
+ * calls `pipelineFinalMerge` at the end of its per-scene loop and writes
+ * `pipelines.final_output_asset_id`. Stage 8 reads that field and decides:
  *
- * On any failure: `failStage` with a structured reason. The pipeline row is
- * NOT marked completed; the engine driver leaves the pipeline at `running`
- * so the user can retry from the panel.
+ *   - `pipelines.mode = 'auto'`  → flip status=completed immediately +
+ *                                   emit `pipeline:completed`.
+ *   - `pipelines.mode = 'manual' | 'guided'` → set the stage row to
+ *                                   `awaiting_approval` with the asset URL
+ *                                   in `output.final_output_url`. The
+ *                                   existing `POST /v1/pipelines/:id/stages/
+ *                                   post_merge/approve` endpoint (from 1A)
+ *                                   flips `pipelines.status='completed'`
+ *                                   on user approval.
+ *
+ * Failure modes:
+ *   - Stage 7 didn't write `final_output_asset_id` → fail with
+ *     `final_output_missing`. This indicates the per-scene loop completed
+ *     but `pipelineFinalMerge` was either skipped or its result wasn't
+ *     persisted on the pipeline row. The user can retry from the panel.
+ *
+ * `pipelines.mode` is a top-level column on the pipelines table (CHECK
+ * constraint in migration 121 line 17: `mode IN ('manual', 'auto',
+ * 'guided')`). Reading from the column is preferred over `config.mode`.
  */
 export async function runPostMergeStage(
   args: RunPostMergeStageArgs,
 ): Promise<void> {
-  const { supabase, pipelineId, userId } = args
+  const { supabase, pipelineId } = args
 
   const stageId = await ensureStageRow(supabase, pipelineId, "post_merge", 8)
 
-  // Re-entrancy guard — if the stage is already terminal, return early.
-  // Mirrors Stage 6 / Stage 7's defensive pattern. `pipeline_stages.status`
-  // doesn't have a 'completed' enum value (DB CHECK in migration 121); the
-  // terminal success state for stages is 'approved'. The pipeline ROW
-  // separately flips to 'completed'.
+  // Re-entrancy guard — once the stage is terminal (approved → user
+  // approved; failed → user retry). Mirrors the pattern in every other
+  // stage runner.
   const { data: existingStage } = await supabase
     .from("pipeline_stages")
     .select("status")
@@ -56,114 +54,112 @@ export async function runPostMergeStage(
   if (existingStage?.status === "approved") {
     return
   }
-
-  // 1. Load scene composites in canvas order.
-  const { data: scenes, error: scenesErr } = await supabase
-    .from("pipeline_entities")
-    .select("metadata, entity_key")
-    .eq("pipeline_id", pipelineId)
-    .eq("entity_type", "scene")
-    .order("entity_key", { ascending: true })
-  if (scenesErr) {
-    await failStage(supabase, stageId, `load_scenes: ${scenesErr.message}`)
+  // If we're already awaiting_approval, idempotency: re-emit nothing, the
+  // existing approve route will drive completion.
+  if (existingStage?.status === "awaiting_approval") {
     return
   }
 
-  // 2. Extract composite_video_url + composite_video_asset_id from each scene.
-  //    Drop scenes missing a composite (Stage 7 should have populated every
-  //    scene; a missing one means Stage 7 was skipped or never wrote back).
-  //    TODO: duration-aware combine credit reservation. The previous
-  //    `upstreamDurations` plumbing here was dead code — the per-clip
-  //    durations never reached `CreditsService.reserveCredits` because
-  //    `runPipelineWorkerJob` reserves a fixed cost from the model
-  //    identifier. Re-add once the credit path supports a per-call override.
-  const sceneVideoUrls: string[] = []
-  const sceneAssetIds: Array<string | null> = []
-  for (const scene of scenes ?? []) {
-    const sceneNodeData = (scene.metadata as Record<string, unknown> | null)
-      ?.scene_node_data as
-      | {
-          composite_video_url?: string
-          composite_video_asset_id?: string
-        }
-      | undefined
-    const url = sceneNodeData?.composite_video_url
-    if (!url) continue
-    sceneVideoUrls.push(url)
-    sceneAssetIds.push(sceneNodeData?.composite_video_asset_id ?? null)
-  }
-  if (sceneVideoUrls.length === 0) {
-    await failStage(supabase, stageId, "no_scene_videos")
-    return
-  }
-
-  // 3. Compute the final asset id + url.
-  //
-  // Single-scene short-circuit (option a from the plan): pipelineCombineVideos
-  // requires ≥2 inputs (the route Zod schema enforces this), so a 1-scene
-  // pipeline can't be sent through combine — instead we copy the lone scene's
-  // composite url + asset id straight to pipelines.final_output_asset_id.
-  // This keeps single-scene pipelines completable without an extra FFmpeg
-  // round-trip.
-  let finalAssetId: string | null
-  let finalAssetUrl: string
-  if (sceneVideoUrls.length === 1) {
-    finalAssetId = sceneAssetIds[0] ?? null
-    finalAssetUrl = sceneVideoUrls[0]!
-  } else {
-    try {
-      const result = await pipelineCombineVideos({
-        supabase,
-        pipelineId,
-        // No pipelineEntityId — Stage 8's output is the pipeline-level final
-        // asset, not tied to any individual SceneNode entity. The wrapper
-        // skips the assets.pipeline_entity_id update when this is undefined.
-        userId,
-        videoUrls: sceneVideoUrls,
-      })
-      finalAssetId = result.assetId
-      finalAssetUrl = result.assetUrl
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(`[post-merge] combine_videos failed for pipeline ${pipelineId}:`, msg)
-      await failStage(supabase, stageId, `combine_failed: ${msg}`)
-      return
-    }
-  }
-
-  // 4. Persist final asset on the pipeline row + flip status to completed.
-  //    Note: the `pipelines` table does NOT have a `completed_at` column
-  //    (migration 121). Only `pipeline_stages` does. PostgREST silently 400s
-  //    the entire UPDATE if we include an unknown column — we explicitly
-  //    check the error result below so future schema mismatches surface as a
-  //    stage failure rather than silent data loss.
-  const completedAt = new Date().toISOString()
-  const { error: pipelineUpdateErr } = await supabase
+  // 1. Read final_output_asset_id + mode off the pipelines row.
+  const { data: pipeline, error: pipelineErr } = await supabase
     .from("pipelines")
-    .update({
-      final_output_asset_id: finalAssetId,
-      status: "completed",
-    })
+    .select("final_output_asset_id, mode")
     .eq("id", pipelineId)
-  if (pipelineUpdateErr) {
-    console.error(
-      `[stage:post_merge] pipelines update failed for ${pipelineId}:`,
-      pipelineUpdateErr.message,
-    )
-    return failStage(
+    .single()
+  if (pipelineErr || !pipeline) {
+    await failStage(
       supabase,
       stageId,
-      `pipelines_update_failed: ${pipelineUpdateErr.message}`,
+      `pipeline_load_failed: ${pipelineErr?.message ?? "no row"}`,
     )
+    return
   }
 
-  // 5. Mark the stage approved (terminal success state per the DB CHECK —
-  //    pipeline_stages has no 'completed' enum value; only pipeline ROW does).
+  const finalAssetId = (pipeline as { final_output_asset_id: string | null })
+    .final_output_asset_id
+  if (!finalAssetId) {
+    await failStage(supabase, stageId, "final_output_missing")
+    return
+  }
+
+  // Resolve the asset URL so we can include it in either the awaiting_approval
+  // output OR the pipeline:completed event payload.
+  const { data: asset, error: assetErr } = await supabase
+    .from("assets")
+    .select("r2_url")
+    .eq("id", finalAssetId)
+    .single()
+  if (assetErr || !asset) {
+    await failStage(
+      supabase,
+      stageId,
+      `asset_load_failed: ${assetErr?.message ?? "no row"}`,
+    )
+    return
+  }
+  const finalAssetUrl = (asset as { r2_url: string }).r2_url
+
+  const mode = ((pipeline as { mode?: string }).mode ?? "manual") as
+    | "manual"
+    | "auto"
+    | "guided"
+  const completedAt = new Date().toISOString()
+
+  if (mode === "auto") {
+    // Auto-advance — no user approval needed. Flip status=completed +
+    // emit completion event.
+    const { error: pipelineUpdateErr } = await supabase
+      .from("pipelines")
+      .update({ status: "completed" })
+      .eq("id", pipelineId)
+    if (pipelineUpdateErr) {
+      await failStage(
+        supabase,
+        stageId,
+        `pipelines_update_failed: ${pipelineUpdateErr.message}`,
+      )
+      return
+    }
+    await supabase
+      .from("pipeline_stages")
+      .update({
+        status: "approved",
+        completed_at: completedAt,
+        output: {
+          final_output_url: finalAssetUrl,
+          final_output_asset_id: finalAssetId,
+        },
+      })
+      .eq("id", stageId)
+
+    pipelineEvents.publish({
+      type: "stage:status",
+      pipelineId,
+      stageName: "post_merge",
+      status: "approved",
+    })
+    pipelineEvents.publish({
+      type: "pipeline:status",
+      pipelineId,
+      status: "completed",
+    })
+    pipelineEvents.publish({
+      type: "pipeline:completed",
+      pipelineId,
+      finalOutputAssetId: finalAssetId,
+      finalOutputUrl: finalAssetUrl,
+    })
+    return
+  }
+
+  // Manual + Guided — pause at awaiting_approval. The user clicks Approve
+  // in the panel; the existing `/v1/pipelines/:id/stages/post_merge/approve`
+  // endpoint flips `pipelines.status='completed'` + emits the completion
+  // event.
   await supabase
     .from("pipeline_stages")
     .update({
-      status: "approved",
-      completed_at: completedAt,
+      status: "awaiting_approval",
       output: {
         final_output_url: finalAssetUrl,
         final_output_asset_id: finalAssetId,
@@ -171,26 +167,10 @@ export async function runPostMergeStage(
     })
     .eq("id", stageId)
 
-  // 6. Emit the pipeline:completed lifecycle event. The companion
-  //    pipeline:status='completed' event would normally fire from the engine
-  //    driver's fallback branch on next drive; emit it here too so consumers
-  //    closing on either signal see a clean shutdown without an extra
-  //    drivePipeline round-trip.
   pipelineEvents.publish({
     type: "stage:status",
     pipelineId,
     stageName: "post_merge",
-    status: "approved",
-  })
-  pipelineEvents.publish({
-    type: "pipeline:status",
-    pipelineId,
-    status: "completed",
-  })
-  pipelineEvents.publish({
-    type: "pipeline:completed",
-    pipelineId,
-    finalOutputAssetId: finalAssetId,
-    finalOutputUrl: finalAssetUrl,
+    status: "awaiting_approval",
   })
 }

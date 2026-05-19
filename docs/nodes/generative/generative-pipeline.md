@@ -158,6 +158,39 @@ Emits the new `pipeline:completed` SSE event with `finalOutputUrl`. The pipeline
 
 `backend/src/ee/pipelines/llms/image-critic.ts` — Sonnet vision call with 6 issue types: `continuity_break`, `identity_mismatch`, `composition_break`, `wardrobe_inconsistency`, `style_drift`, `prompt_mismatch`. Each verdict is persisted to the new `image_critic_verdicts` table (migration 134) with the `invoked_via` discriminator (`stage_7b_pre` / `helper:audit_images` / `helper:fix_continuity` / `helper:validate_match_cut`).
 
+## Stage 7 sub-steps 7d'–7j (Phase 1C.2)
+
+After every scene's `composite_video_url` is populated (sub-step 7e from 1C.1), Stage 7 runs an additional 6-step chain that turns the raw scene composites into a cut-and-scored final video. Sub-step completion is tracked in `pipeline_stages.output.sub_step_completed` so the stage is re-entrant after sub-gate approvals.
+
+- **7d' Dialogue duration recheck** (manual + guided only) — verifies actual ElevenLabs audio durations against the shot-list estimate. Rebalances scene timing to keep within ±10% of the target. If rebalance fails for any scene, the stage pauses with `current_sub_gate='dialogue_recheck'` and the panel surfaces a rebalance approval banner. Auto mode logs warnings and proceeds.
+- **7e' Silent-cut review** (manual + guided only) — assembles a preview merge using current cut decisions but **no music** and surfaces it for user approval before the music spend. Pauses with `current_sub_gate='silent_cut_preview'`. Auto mode skips.
+- **7f Music** — Suno generates a track at `target_duration_seconds + 5s` using the Showrunner's music plan. New service wrapper `pipeline-generate-music.ts`.
+- **7g Music post-processing** — trim to exact target duration with 0.8s fade-out, extract beat grid via FFmpeg silencedetect onset detection (aubio swap is a follow-up). New helper `pipeline-extract-beat-grid.ts`.
+- **7g' Shot duration realignment** — when actual BPM deviates >2 BPM from planned, shift shot durations by ≤±1 beat to land cleanly. Bounded so total scene duration stays within ±0.3s of target.
+- **7h Editor LLM** (Sonnet vision) — per-shot cut decisions across 4 transition types (`hard_cut` / `dissolve` / `match_cut` / `overlap`) honoring `dialogue_no_cut_zone` and beat-snap heuristics. Verdicts persisted to the new `editor_decisions` table (migration 135).
+- **7j Final merge** — FFmpeg merge using Editor cut decisions + music overlay + 0.8s fade-out. Per-shot cut decisions within a scene are honored at scene boundaries (full per-shot in-scene trim is a follow-up). Persists `pipelines.final_output_asset_id`.
+
+**FreeCut export option**: when `pipelines.config.freecut_export_enabled === true && mode === 'manual'`, sub-step 7j skips the FFmpeg auto-merge and instead generates a Nodaro-flat-timeline-v1 JSON file (uploaded to R2) referencing every scene composite, per-shot trim points, transition metadata, and the music URL. FCPXML serialization over the same in-memory timeline is a planned follow-up — most NLE software can ingest via XML/EDL converters.
+
+## Stage 8 — Post-merge approval gate (Phase 1C.2)
+
+Stage 8 is now a pure approval gate. Auto mode flips `pipelines.status='completed'` immediately. Manual + Guided modes set `awaiting_approval` with `final_output_url` populated; the user reviews and approves via `POST /v1/pipelines/:id/stages/post_merge/approve`. The 1C.1 implementation that did the final concat in Stage 8 was an interim shortcut — that work has moved to Stage 7 sub-step 7j.
+
+## Sub-gate approval endpoints (Phase 1C.2)
+
+| Method | Path | Scope |
+|--------|------|-------|
+| `POST` | `/v1/pipelines/:id/sub-gates/silent_cut_preview/approve` | `pipelines:approve` |
+| `POST` | `/v1/pipelines/:id/sub-gates/silent_cut_preview/reject` | `pipelines:approve` |
+| `POST` | `/v1/pipelines/:id/sub-gates/dialogue_recheck/approve` | `pipelines:approve` |
+| `POST` | `/v1/pipelines/:id/sub-gates/dialogue_recheck/reject` | `pipelines:approve` |
+
+Approve clears `pipeline_stages.output.current_sub_gate`, flips stage status back to `running`, and re-enqueues `drivePipeline`. Reject marks the stage failed with `failure_reason='sub_gate_rejected:<gate>'`, cascades the pipeline to `failed`, and refunds unspent credits. Proper branch-from-stage integration on reject lands in Phase 1D.
+
+## Canvas-wide Scene View Modes (Phase 1C.2)
+
+A new toolbar toggle in the canvas (`<ViewModeToggle>`) switches ALL SceneNodes between `default` / `storyboard` / `video` / `scripting` view modes simultaneously. Per-node toggle still works; the canvas-wide override wins when set (clicking the active button again clears the override and returns to per-node selection).
+
 ## Mid-flight canvas edits (Phase 1B.4)
 
 While a pipeline is running, the engine writes nodes to the canvas. Each node carries an ownership flag (`pipeline_state`) that controls what the user can do:

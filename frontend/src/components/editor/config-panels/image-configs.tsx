@@ -47,7 +47,7 @@ import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
 import { ReferenceSupportWarning } from "./reference-support-warning"
 import type { ConnectedReference, ReferenceSource } from "@nodaro/shared"
-import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, expandExtraRefsToConnectedReferences } from "@nodaro/shared"
+import { DEFAULT_LABEL_BY_SOURCE, characterMentionSlug, locationMentionSlug, expandExtraRefsToConnectedReferences } from "@nodaro/shared"
 import { ConnectedMediaList } from "./connected-media-list"
 import { FinalPromptPreview } from "./final-prompt-preview"
 import { ConnectedCinematographySources } from "./connected-cinematography-sources"
@@ -59,6 +59,79 @@ const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m
 const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))
 
 const IMAGE_SOURCE_TYPES = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"])
+
+/** Location variant buckets — kept in lockstep with backend
+ *  `LOCATION_VARIANT_BUCKETS` in payload-builder.ts and the runtime path in
+ *  `execute-node.ts`. Used here to expand a wired Location upstream into one
+ *  `ConnectedReference` entry per (bucket, variant) pair so the
+ *  `@`-autocomplete surfaces every variant for selection. */
+const IMAGE_LOCATION_VARIANT_BUCKETS = [
+  "timeOfDay",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "atmosphereMotions",
+] as const
+
+/**
+ * Expand a wired Location upstream into canonical + per-variant
+ * `ConnectedReference` entries. The canonical entry holds the location's
+ * main image; each variant entry holds one (bucket, name, url) triple from
+ * the location node's per-bucket asset arrays. Mirrors
+ * `expandLocationNodeIntoRefs` in execute-node.ts (runtime path) for
+ * slice 3 of Location Studio Phase 2 #2.
+ *
+ * Returns null when the location has no source image (caller falls back to
+ * the generic single-entry handling).
+ */
+function expandLocationSourceForAutocomplete(
+  sourceId: string,
+  nd: Record<string, unknown>,
+  fallbackLabel: string,
+): Array<ConnectedReference> | null {
+  const locName = (nd.locationName as string) || fallbackLabel || "Location"
+  const locSlug = locationMentionSlug(locName)
+  const sourceUrl = nd.sourceImageUrl as string | undefined
+  if (!sourceUrl || !locSlug) return null
+  const description = (nd.description as string | undefined) ?? undefined
+  const canonicalDescription = (nd.canonicalDescription as string | null | undefined) ?? null
+  const entries: ConnectedReference[] = []
+  entries.push({
+    id: sourceId,
+    defaultName: locName,
+    source: "wired-location",
+    description,
+    url: sourceUrl,
+    locationSlug: locSlug,
+    locationCanonicalDescription: canonicalDescription,
+    locationVariantDisplayName: "canonical",
+  })
+  for (const bucket of IMAGE_LOCATION_VARIANT_BUCKETS) {
+    const items = nd[bucket]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      const variantName = (item as { name?: string }).name
+      const variantUrl = (item as { url?: string }).url
+      if (!variantName || !variantUrl) continue
+      const variantSlug = locationMentionSlug(variantName)
+      if (!variantSlug) continue
+      entries.push({
+        id: `${sourceId}_${bucket}_${variantSlug}`,
+        defaultName: `${locName} / ${variantName}`,
+        source: "wired-location",
+        description,
+        url: variantUrl,
+        locationSlug: locSlug,
+        locationCanonicalDescription: canonicalDescription,
+        locationVariantBucket: bucket,
+        locationVariantSlug: variantSlug,
+        locationVariantDisplayName: variantName,
+      })
+    }
+  }
+  return entries
+}
 
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
@@ -346,6 +419,17 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
         }
         // Unnamed character — fall through to generic upstream handling.
       }
+      // Location upstream: expand into canonical + per-variant entries so
+      // `@<location>:1` and `@<location>:1:bucket/variant` both surface in
+      // the autocomplete (slice 3 of Location Studio Phase 2 #2).
+      if (s.type === "location") {
+        const expanded = expandLocationSourceForAutocomplete(s.id, nd as Record<string, unknown>, s.label)
+        if (expanded) {
+          for (const e of expanded) map.set(e.id, e)
+          continue
+        }
+        // No source image yet — fall through to generic handling.
+      }
       const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
       map.set(s.id, {
@@ -480,15 +564,25 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
     return connectedReferences.map((ref, i) => ({
       url: ref.url,
       label: ref.defaultName,
+      // Map `wired-location` → "location" so the PromptEditor's autocomplete
+      // groups it under the cyan location section and `selectSuggestion`
+      // inserts a `locationRef` pill (slice 3 of Location Studio Phase 2 #2).
+      // Face / object / other `wired-*` sources still fall through to
+      // "character" — they reuse the violet pill rendering for now.
       source:
         ref.source === "manual" ? "uploaded"
         : ref.source === "wired-image" ? "wired"
+        : ref.source === "wired-location" ? "location"
         : "character",
       index: i + 1,
       defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
+      locationSlug: ref.locationSlug,
+      locationVariantBucket: ref.locationVariantBucket,
+      locationVariantSlug: ref.locationVariantSlug,
+      locationVariantDisplayName: ref.locationVariantDisplayName,
       defaultUsageMode: ref.defaultUsageMode,
       loraTrainingStatus: ref.loraTrainingStatus,
     }))
@@ -1082,6 +1176,14 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
         }
         // Unnamed character — fall through to generic upstream handling.
       }
+      // Location upstream — same expansion as in GenerateImageConfig.
+      if (s.type === "location") {
+        const expanded = expandLocationSourceForAutocomplete(s.id, nd as Record<string, unknown>, s.label)
+        if (expanded) {
+          for (const e of expanded) map.set(e.id, e)
+          continue
+        }
+      }
       const url = (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || ""
       if (!url) continue
       map.set(s.id, {
@@ -1198,15 +1300,22 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
     return connectedReferences.map((ref, i) => ({
       url: ref.url,
       label: ref.defaultName,
+      // Map `wired-location` → "location" so the autocomplete renders cyan
+      // location pills (slice 3 of Location Studio Phase 2 #2).
       source:
         ref.source === "manual" ? "uploaded"
         : ref.source === "wired-image" ? "wired"
+        : ref.source === "wired-location" ? "location"
         : "character",
       index: i + 1,
       defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
       characterSlug: ref.characterSlug,
       variantSlug: ref.variantSlug,
       variantDisplayName: ref.variantDisplayName,
+      locationSlug: ref.locationSlug,
+      locationVariantBucket: ref.locationVariantBucket,
+      locationVariantSlug: ref.locationVariantSlug,
+      locationVariantDisplayName: ref.locationVariantDisplayName,
       defaultUsageMode: ref.defaultUsageMode,
       loraTrainingStatus: ref.loraTrainingStatus,
     }))

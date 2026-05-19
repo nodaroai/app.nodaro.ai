@@ -9,6 +9,12 @@ import { NATIVE_NEGATIVE_PROMPT_MODELS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } fr
 import { getStylePromptHint } from "./style.js"
 import { findCharacterMentionTokens, type CharacterMentionTokenInfo } from "./character-mention-slug.js"
 import { usageModeDirective, DEFAULT_USAGE_MODE, type UsageMode } from "./character-usage-mode.js"
+import {
+  findLocationMentionTokens,
+  DEFAULT_LOCATION_USAGE_MODE,
+  type LocationMentionTokenInfo,
+  type LocationUsageMode,
+} from "./location-mention-slug.js"
 import type {
   CharacterDef,
   ConnectedReference,
@@ -176,6 +182,169 @@ export function resolveCharacterMentions(
   }
 
   return { prompt: resolvedPrompt, additionalUrls, mentionedCharacterSlugs }
+}
+
+export interface ResolveLocationMentionsResult {
+  /** Prompt with `@location:N` tokens replaced by display names + a
+   *  "Use these locations:" directive prepended when at least one bullet
+   *  fires. */
+  prompt: string
+  /** Resolved URLs from matched mention tokens, in mention order. Caller
+   *  is responsible for deduping against the existing URL list (the same
+   *  contract as `resolveCharacterMentions.additionalUrls`). */
+  additionalUrls: string[]
+  /** Set of location slugs that had at least one resolved mention. Callers
+   *  use this to gate "no mention → canonical fallback" behavior (mirrors
+   *  the character flow — Phase 2 #1 attached the canonical URL via
+   *  `expandWiredLocationRefs` directly, but a future fallback path may
+   *  use this set to suppress the canonical URL once the user has explicitly
+   *  pinned a variant via @-mention). */
+  mentionedLocationSlugs: Set<string>
+}
+
+/**
+ * Per-mode directive text for a location bullet. Mirrors `usageModeDirective`
+ * for characters but with the 4-mode location enum:
+ *   - identical: lock the scene to this exact image (used as background)
+ *   - style:     borrow the look/mood/color palette
+ *   - layout:    borrow the compositional layout / camera framing
+ *   - none:      no bullet emitted (caller handles)
+ */
+function locationModeDirective(mode: LocationUsageMode): string | null {
+  switch (mode) {
+    case "identical":
+      return "use as the background/setting — match the location exactly."
+    case "style":
+      return "use as a style / mood reference — borrow color, lighting, and atmosphere."
+    case "layout":
+      return "use as a compositional layout / camera framing reference."
+    case "none":
+      return null
+  }
+}
+
+/**
+ * Resolve `@oldlibrary:1:weather/rain` mentions in the prompt against the
+ * pre-expanded `wired-location` ConnectedReferences (from
+ * `expandWiredLocationRefs` / `expandLocationNodeIntoRefs`). Mirrors
+ * `resolveCharacterMentions` shape:
+ *
+ *   1. Look up the matching ref by `(locationSlug, bucket, variantSlug)`.
+ *   2. Append its URL to `additionalUrls`.
+ *   3. Substitute the inline token with the location's display name (or
+ *      `Image N` for "none" mode — image attached without textual bias).
+ *   4. Emit a directive bullet under "Use these locations:" header, with
+ *      mode-specific verb. "none" mode suppresses the bullet (just like
+ *      character "none").
+ *
+ * Per-location single-bullet rule: each location emits AT MOST ONE bullet
+ * (the first non-none mention "claims" the slot). Subsequent mentions of the
+ * same location still produce inline substitution + URL but no additional
+ * bullet, mirroring `resolveCharacterMentions.firstBulletEmittedFor`.
+ *
+ * Returns `additionalUrls` deduplication is the caller's responsibility,
+ * matching the character contract.
+ */
+export function resolveLocationMentions(
+  prompt: string,
+  tokens: readonly LocationMentionTokenInfo[],
+  refs: readonly ConnectedReference[],
+): ResolveLocationMentionsResult {
+  // Build lookup maps: canonical (no variant) and per-(bucket/variant).
+  const bySlug = new Map<string, ConnectedReference>()
+  const byVariant = new Map<string, ConnectedReference>()
+  for (const r of refs) {
+    if (!r.locationSlug) continue
+    if (!r.locationVariantBucket || !r.locationVariantSlug) {
+      bySlug.set(r.locationSlug, r)
+    } else {
+      byVariant.set(
+        `${r.locationSlug}:${r.locationVariantBucket}/${r.locationVariantSlug}`,
+        r,
+      )
+    }
+  }
+
+  const additionalUrls: string[] = []
+  const mentionedLocationSlugs = new Set<string>()
+  const firstBulletEmittedFor = new Set<string>()
+  const directiveLines: string[] = []
+  const replacements: Array<{ token: string; offset: number; replacement: string }> = []
+
+  for (const t of tokens) {
+    const match = t.bucket && t.variant
+      ? byVariant.get(`${t.locationSlug}:${t.bucket}/${t.variant}`)
+      : bySlug.get(t.locationSlug)
+    if (!match) continue
+
+    additionalUrls.push(match.url)
+    mentionedLocationSlugs.add(t.locationSlug)
+
+    // Per-mention effective mode. Resolution order: per-mention slug override
+    // → location node default (not yet plumbed; reserved for future) → global
+    // DEFAULT_LOCATION_USAGE_MODE.
+    const effectiveMode: LocationUsageMode =
+      t.usageMode ?? DEFAULT_LOCATION_USAGE_MODE
+
+    // Inline replacement of `@oldlibrary:1:weather/rain` in the user's
+    // prompt. For "none" we substitute the bare positional reference so the
+    // user's sentence reads "set in Image 1" — the image is attached, the
+    // model sees the position label, but no name biases the textual prompt.
+    // Every other mode keeps the location display name for natural prose.
+    const displayName = bySlug.get(t.locationSlug)?.defaultName ?? t.locationSlug
+    const replacement = effectiveMode === "none" ? `Image ${t.imageIndex}` : displayName
+    replacements.push({ token: t.token, offset: t.offset, replacement })
+
+    // Bullet emission. "none" skips entirely; other modes emit one bullet
+    // per location on the first non-none mention.
+    if (effectiveMode === "none") {
+      continue
+    }
+    const isFirstBullet = !firstBulletEmittedFor.has(t.locationSlug)
+    if (!isFirstBullet) continue
+    firstBulletEmittedFor.add(t.locationSlug)
+
+    const directive = locationModeDirective(effectiveMode)
+    const subject = `Image ${t.imageIndex} (${displayName})`
+    // Canonical-description injection. Mirrors the Phase 2 #1 behavior in
+    // `buildIdentityDirective` — only emit for the "identical" mode where
+    // the description (env, materials, mood) is on-task; "style" / "layout"
+    // modes are about the look/composition and don't need the full
+    // description noise.
+    const includeCanonicalDesc = effectiveMode === "identical"
+    const canonicalDesc = match.locationCanonicalDescription?.trim()
+    const descPart = includeCanonicalDesc && canonicalDesc
+      ? `${subject} — ${canonicalDesc}`
+      : subject
+    directiveLines.push(`- ${descPart}.${directive ? ` ${directive}` : ""}`)
+
+    // Variant display-name sub-line: only when the user pinned a specific
+    // variant. Distinct from `description` (the user-typed text on the
+    // location node) — locationVariantDisplayName is the raw bucket name
+    // like "rain" or "neon".
+    if (
+      t.bucket
+      && t.variant
+      && match.locationVariantDisplayName
+      && match.locationVariantDisplayName !== "canonical"
+    ) {
+      directiveLines.push(`  (in this image: ${match.locationVariantDisplayName})`)
+    }
+  }
+
+  // Apply replacements right-to-left so offsets stay valid.
+  let resolvedPrompt = prompt
+  for (const r of [...replacements].sort((a, b) => b.offset - a.offset)) {
+    resolvedPrompt = resolvedPrompt.slice(0, r.offset)
+      + r.replacement
+      + resolvedPrompt.slice(r.offset + r.token.length)
+  }
+
+  if (directiveLines.length > 0) {
+    resolvedPrompt = `Use these locations:\n${directiveLines.join("\n")}\n\n${resolvedPrompt}`
+  }
+
+  return { prompt: resolvedPrompt, additionalUrls, mentionedLocationSlugs }
 }
 
 /**
@@ -799,13 +968,52 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     //     (manual uploads with descriptions, or character-variant extras).
     // The empty-extras-empty-characters case falls through to the standard
     // non-character ref path unchanged.
-    if (knownCharacterSlugs.length > 0 || hasExtraRefs) {
+    // Known location slugs (Phase 2 #2) — separate from character slugs.
+    // Each location row contributes a canonical entry + per-variant entries,
+    // all sharing the same `locationSlug`; we want the unique set for finder.
+    const knownLocationSlugs = Array.from(
+      new Set(
+        connectedReferences
+          .map((r) => r.locationSlug)
+          .filter((s): s is string => typeof s === "string" && s.length > 0)
+      )
+    )
+    if (knownCharacterSlugs.length > 0 || hasExtraRefs || knownLocationSlugs.length > 0) {
       const mentionTokens = knownCharacterSlugs.length > 0
         ? findCharacterMentionTokens(config.prompt, knownCharacterSlugs)
         : []
       const resolved = mentionTokens.length > 0
         ? resolveCharacterMentions(config.prompt, mentionTokens, connectedReferences)
         : { prompt: config.prompt, additionalUrls: [], mentionedCharacterSlugs: new Set<string>() }
+
+      // Phase 2 #2: resolve `@oldlibrary:1:weather/rain` location mentions on
+      // the post-character-resolution prompt. Character resolution may have
+      // already swapped its own @-tokens for display names; location tokens
+      // (different slug namespace) remain intact for this pass.
+      const locationTokens = knownLocationSlugs.length > 0
+        ? findLocationMentionTokens(resolved.prompt, knownLocationSlugs)
+        : []
+      const locationResolved = locationTokens.length > 0
+        ? resolveLocationMentions(resolved.prompt, locationTokens, connectedReferences)
+        : { prompt: resolved.prompt, additionalUrls: [] as string[], mentionedLocationSlugs: new Set<string>() }
+      // Merge location's resolved prompt + URLs back into `resolved` so the
+      // rest of the pipeline (fallback, extras, urlsByOrder) doesn't need
+      // separate plumbing.
+      resolved.prompt = locationResolved.prompt
+      resolved.additionalUrls = [...resolved.additionalUrls, ...locationResolved.additionalUrls]
+      // Per-variant location refs are mention-only — they were already
+      // attached via `additionalUrls` when matched, and should NEVER
+      // auto-attach via the non-character ref path below (line 1112).
+      // Canonical refs whose slug was mentioned are also handled by the
+      // resolver — drop to avoid double-attaching the canonical URL when the
+      // user explicitly pinned a variant via `@-mention`.
+      const mentionedLocationSlugs = locationResolved.mentionedLocationSlugs
+      connectedReferences = connectedReferences.filter((r) => {
+        if (r.source !== "wired-location") return true
+        if (!r.locationSlug) return true
+        if (r.locationVariantBucket) return false
+        return !mentionedLocationSlugs.has(r.locationSlug)
+      })
       // Default-fallback canonical URLs + directives for any wired character
       // that has zero mentions in the prompt. Mirrors the legacy behavior the
       // mention feature replaced — wire a character with no typing required.

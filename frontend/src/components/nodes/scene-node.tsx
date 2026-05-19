@@ -2,7 +2,10 @@ import { memo } from "react"
 import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { SceneNodeFrontendData } from "@/types/nodes"
 import { cn } from "@/lib/utils"
-import { getSceneView, type SceneViewMode } from "./scene-views/view-mode-registry"
+import {
+  getSceneView,
+  useActiveSceneViewMode,
+} from "./scene-views/view-mode-registry"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
 // Side-effect imports register the views with the registry.
 import "./scene-views/default-view"
@@ -12,7 +15,11 @@ import "./scene-views/video-view"
 
 function SceneNodeImpl(props: NodeProps) {
   const data = props.data as SceneNodeFrontendData
-  const mode: SceneViewMode = data.view_mode ?? "storyboard"
+  // Phase 1C.2 — `useActiveSceneViewMode` consults the canvas-wide override
+  // store first and falls back to the per-node `view_mode` (default
+  // `"storyboard"`). Per-node toggle is still honored when the toolbar
+  // override is `null`.
+  const mode = useActiveSceneViewMode(data.view_mode ?? "storyboard")
   const ViewComponent = getSceneView(mode) ?? getSceneView("default")!
   return (
     <div className="relative animate-fade-in-scale">

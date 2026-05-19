@@ -26,6 +26,31 @@ export interface CharacterRefAttrs {
 const CHAR_REF_PATTERN_CORE = "(@[a-z][a-z0-9-]*):(\\d+)(?::([a-z][a-z0-9-]*))?(?::([a-z][a-z0-9-]*))?"
 
 /**
+ * Read the live character slug set from editor storage. Used by the
+ * input/paste rules to only promote `@<slug>:N` to a pill when `<slug>` is
+ * a known character wired into the consumer node. Without this storage
+ * check, any `@kira:1`-shaped token would race the location extension's
+ * rule (which uses the same shape for its 2-part canonical form) — with
+ * this check, the character extension only matches known character slugs
+ * and the location extension only matches known location slugs.
+ *
+ * The check is also the reason `@unknown:1` no longer eagerly promotes to
+ * a broken character pill — slugs we don't recognize stay as literal text,
+ * which is the correct fallback for the downstream resolver.
+ */
+function knownCharacterSlugs(extension: { editor: unknown }): Set<string> {
+  const ed = extension.editor as
+    | { storage?: Record<string, { referenceImages?: ReadonlyArray<{ characterSlug?: string }> }> }
+    | undefined
+  const list = ed?.storage?.characterRef?.referenceImages ?? []
+  const out = new Set<string>()
+  for (const r of list) {
+    if (r.characterSlug) out.add(r.characterSlug)
+  }
+  return out
+}
+
+/**
  * Parse the four pattern groups (character with leading "@", indexStr, third, fourth)
  * into a complete attribute set. Disambiguates the 3rd/4th segment in the
  * 4-part form: third can be variant OR mode, fourth is always mode. Mirrors
@@ -169,8 +194,18 @@ export const CharacterRefExtension = Node.create({
    * The match's first regex group anchors the boundary (`(?:^|\s|[^a-zA-Z0-9])`),
    * and `nodeInputRule` uses `match[1]` to compute the actual slice that
    * becomes the node — so the boundary char is preserved.
+   *
+   * Conflict avoidance — the location extension's input rule (introduced
+   * in slice 3 of Location Studio Phase 2 #2) matches the same 2-part
+   * `@<slug>:N` shape. We gate this rule on the editor's known-character
+   * slug set so character pills only auto-create for slugs that are
+   * actually wired into the consumer node. The location rule applies the
+   * mirrored gate against its own storage. Unknown slugs fall through to
+   * literal text, matching the downstream resolver's literal-text
+   * fallback.
    */
   addInputRules() {
+    const self = this
     return [
       nodeInputRule({
         // Lowercase-only — uppercase slugs would not round-trip through the
@@ -191,7 +226,13 @@ export const CharacterRefExtension = Node.create({
           // Returning false tells `nodeInputRule` to skip the rule — leaves
           // the typed text alone (e.g. a 3-part token whose 3rd segment is
           // neither a known usage mode nor a valid variant slug shape).
-          return attrs ?? false
+          if (!attrs) return false
+          // Only auto-promote when the slug is known to the editor's
+          // character storage. This is the surgical fix that lets the
+          // location extension coexist on the same `@<slug>:N` shape.
+          const known = knownCharacterSlugs(self)
+          if (!known.has(attrs.characterSlug)) return false
+          return attrs
         },
       }),
     ]
@@ -200,9 +241,11 @@ export const CharacterRefExtension = Node.create({
   /**
    * Convert pasted text containing one or more slug literals into pills in
    * a single transaction. Pasting "see @kira:1:smile in pose @kira:2" should
-   * land two pills with the surrounding text intact.
+   * land two pills with the surrounding text intact. Same known-slug gating
+   * as `addInputRules` — see the comment there for why.
    */
   addPasteRules() {
+    const self = this
     return [
       nodePasteRule({
         // See addInputRules — lowercase-only to keep the pill ↔ shared parser
@@ -215,7 +258,10 @@ export const CharacterRefExtension = Node.create({
           const third = match[3]
           const fourth = match[4]
           const attrs = parseMatchAttrs(characterWithAt, indexStr, third, fourth)
-          return attrs ?? false
+          if (!attrs) return false
+          const known = knownCharacterSlugs(self)
+          if (!known.has(attrs.characterSlug)) return false
+          return attrs
         },
       }),
     ]

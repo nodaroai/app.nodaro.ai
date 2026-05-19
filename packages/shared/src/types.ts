@@ -82,6 +82,27 @@ export interface ConnectedReference {
   readonly locationCanonicalDescription?: string | null
   /** Slug of the source location (e.g. "old-library") when this entry came from a location node. Used by `suppressedCanonicalLocationIds` filtering. */
   readonly locationSlug?: string
+  /**
+   * Variant bucket for per-variant location entries (Phase 2 #2). One of the
+   * 6 location asset buckets — "timeOfDay" / "weather" / "seasons" / "angles"
+   * / "lighting" / "atmosphereMotions". `undefined` for the canonical
+   * main-image entry.
+   *
+   * Used by `resolveLocationMentions` to find the entry matching a
+   * `@oldlibrary:1:weather/rain` mention token (lookup key is
+   * `${locationSlug}:${locationVariantBucket}/${locationVariantSlug}`).
+   */
+  readonly locationVariantBucket?: string
+  /**
+   * Variant slug for per-variant location entries (e.g. "rain", "neon"). The
+   * raw variant `name` from the location node's bucket array, slugified via
+   * `locationMentionSlug` so the resolver match is case-insensitive and
+   * whitespace-tolerant (`"light rain"` ↔ `"light-rain"`). `undefined` for
+   * the canonical main-image entry.
+   */
+  readonly locationVariantSlug?: string
+  /** Display name for the variant in autocomplete UI (e.g. "rain", "canonical"). */
+  readonly locationVariantDisplayName?: string
   /** The asset's own description (per-variant). null for canonical entries. */
   readonly variantDescription?: string | null
   /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */

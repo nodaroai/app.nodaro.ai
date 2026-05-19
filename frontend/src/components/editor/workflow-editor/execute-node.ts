@@ -511,38 +511,82 @@ function expandCharacterNodeIntoRefs(
   return out;
 }
 
+/** Location variant buckets — kept in lockstep with backend
+ *  `LOCATION_VARIANT_BUCKETS` in payload-builder.ts. */
+const LOCATION_VARIANT_BUCKETS = [
+  "timeOfDay",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "atmosphereMotions",
+] as const
+
 /**
- * Build a single `ConnectedReference` from a wired Location upstream — picking
- * up the location's main image URL, description, and canonical description so
- * the directive builder can emit "Image N (location — A dimly-lit Victorian
- * library)" without the user having to type the description into the prompt.
+ * Build `ConnectedReference` entries from a wired Location upstream — one
+ * canonical entry (main image URL) plus one per variant across the 6 buckets
+ * (timeOfDay / weather / seasons / angles / lighting / atmosphereMotions).
  *
- * Mirrors `expandCharacterNodeIntoRefs` shape but locations have a single
- * canonical entry (no per-variant fan-out yet — Phase 2 #2 will add
- * @location:1:variant for that).
+ * Phase 2 #1 introduced the canonical entry with location canonical-description
+ * injection; Phase 2 #2 adds the per-variant entries so
+ * `resolveLocationMentions` can find a match for tokens like
+ * `@oldlibrary:1:weather/rain`.
  *
- * Returns null when the location has no source image; the consumer falls back
- * to a plain `wired-image` ref (existing behavior).
+ * Returns an empty array when the location has no source image; the consumer
+ * falls back to a plain `wired-image` ref (existing behavior).
  */
-function expandLocationNodeIntoRef(
+function expandLocationNodeIntoRefs(
   locationNode: WorkflowNode,
-): [string, Omit<ConnectedReference, "id">] | null {
+): Array<[string, Omit<ConnectedReference, "id">]> {
   const locData = locationNode.data as LocationNodeData
   const sourceUrl = locData.sourceImageUrl
-  if (!sourceUrl) return null
+  if (!sourceUrl) return []
   const locName = locData.locationName || (locData.label as string | undefined) || "Location"
-  const locationSlug = characterMentionSlug(locName) // reused slug helper — same shape
-  return [
+  const locationSlug = characterMentionSlug(locName) || undefined
+  const description = locData.description ?? undefined
+  const canonicalDescription = locData.canonicalDescription ?? null
+
+  const out: Array<[string, Omit<ConnectedReference, "id">]> = []
+  // Canonical entry — the main image URL.
+  out.push([
     locationNode.id,
     {
       defaultName: locName,
       source: "wired-location",
-      description: locData.description ?? undefined,
+      description,
       url: sourceUrl,
-      locationCanonicalDescription: locData.canonicalDescription ?? null,
-      locationSlug: locationSlug || undefined,
+      locationCanonicalDescription: canonicalDescription,
+      locationSlug,
     },
-  ]
+  ])
+
+  // Per-variant entries.
+  for (const bucket of LOCATION_VARIANT_BUCKETS) {
+    const items = (locData as unknown as Record<string, unknown>)[bucket]
+    if (!Array.isArray(items)) continue
+    for (const item of items) {
+      const variantName = (item as { name?: string }).name
+      const variantUrl = (item as { url?: string }).url
+      if (!variantName || !variantUrl) continue
+      const variantSlug = characterMentionSlug(variantName)
+      if (!variantSlug) continue
+      out.push([
+        `${locationNode.id}_${bucket}_${variantSlug}`,
+        {
+          defaultName: `${locName} / ${variantName}`,
+          source: "wired-location",
+          description,
+          url: variantUrl,
+          locationCanonicalDescription: canonicalDescription,
+          locationSlug,
+          locationVariantBucket: bucket,
+          locationVariantSlug: variantSlug,
+          locationVariantDisplayName: variantName,
+        },
+      ])
+    }
+  }
+  return out
 }
 
 /**
@@ -666,11 +710,14 @@ function buildConnectedRefsForI2I(
   // it. Phase 2 #1 of the Location Studio design.
   const locationUpstreams = wiredSourceNodes.filter((n) => n.type === "location");
   for (const upstream of locationUpstreams) {
-    const expansion = expandLocationNodeIntoRef(upstream);
-    if (!expansion) continue;
-    const [id, meta] = expansion;
-    refMetaMap.set(id, meta);
-    if (meta.url) characterUrlsCovered.add(meta.url);
+    // Phase 2 #2 (slice 2a): expand into canonical + per-variant entries so
+    // `resolveLocationMentions` (lands in slice 2b) can match
+    // `@oldlibrary:1:weather/rain` tokens against the bucket entries.
+    const expansion = expandLocationNodeIntoRefs(upstream);
+    for (const [id, meta] of expansion) {
+      refMetaMap.set(id, meta);
+      if (meta.url) characterUrlsCovered.add(meta.url);
+    }
   }
 
   // Step 2: add non-character upstream URLs (from `chainRefs`, the upstream

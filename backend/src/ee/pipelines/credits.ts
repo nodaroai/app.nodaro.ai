@@ -11,15 +11,38 @@ export interface EstimateUpfrontArgs {
 }
 
 /**
- * Phase 1A: only Stage 1 (Script) runs end-to-end. Estimate covers Detection +
- * Showrunner + Script Critic + Cast Coverage Critic LLM calls. Stages 2-8 are
- * stubbed and add zero cost.
+ * Pipeline-level upfront credit estimate.
  *
- * 1 credit = $0.02. Detection ~$0.01 + Showrunner ~$0.15 + Critics ~$0.10
- * + budget for retries ≈ $0.40 → 20 credits. Round up to 30 for headroom.
+ * Phase 1A baseline: 30 credits covers the Stage 1 LLM chain (Detection +
+ * Showrunner + Script Critic + Cast Coverage Critic) with retry headroom.
+ *
+ * Phase 1C.2 adds the Stage 7 sub-step costs that run once per pipeline
+ * (NOT per scene) and are reserved against pipeline-level identifiers in
+ * `model_pricing` (migration 135):
+ *
+ *   - 7f music timeline   (`pipeline-music-timeline`)      4 credits
+ *   - 7g beat-grid extract (`pipeline-beat-grid-extract`)  0 credits
+ *   - 7h Editor LLM        (`pipeline-editor-llm`)          3 credits
+ *   - 7j final merge       (`pipeline-final-merge`)         3 credits
+ *
+ * FreeCut export (`pipeline-freecut-export`) is 0 credits so the estimate
+ * doesn't change when `freecut_export_enabled = true` — we always include
+ * the 3 cr final-merge cost as the worst-case estimate so the user
+ * reserves enough upfront, and the actual consumed identifier depends on
+ * the runtime branch (mp4 vs freecut).
+ *
+ * Music can be disabled via `config.music_enabled = false`, in which case
+ * the 4 cr music allocation is skipped. The estimate intentionally
+ * doesn't model narration/lipsync at the pipeline level — those are
+ * per-shot costs reserved separately by the worker jobs they invoke.
+ *
+ * 1 credit = $0.02.
  */
 export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
-  let credits = 30
+  let credits = 30 // Stage 1 baseline (Phase 1A)
+  if (args.musicEnabled) credits += 4 // 7f music timeline
+  credits += 3 // 7h Editor LLM
+  credits += 3 // 7j final merge (or FreeCut export — 0 cr, but reserve for worst case)
   if (args.mode !== "manual") credits += 0 // future: auto/guided pass premiums
   return credits
 }
