@@ -61,19 +61,10 @@ const NODE_TYPE_INFO: Record<
   "upload-video": { fieldKey: "url", type: "video" },
   "upload-audio": { fieldKey: "url", type: "audio" },
   list: { fieldKey: "items", type: "list" },
-  // Phase 2 #4 — locations are app-input-parameterized via a `selectedVariant`
-  // string in the form `"<bucket>/<variant>"` (e.g. `"weather/rain"`,
-  // `"timeOfDay/night"`, `"lighting/neon"`). The orchestrator's override-
-  // application step looks up the variant in the location's asset buckets
-  // and replaces `sourceImageUrl` with the matching URL so all downstream
-  // consumers (both legacy sourceImageUrl readers and the Phase 2 #2
-  // ConnectedReference flow) see the variant as canonical.
-  //
-  // The field is typed as plain text rather than `select` because the
-  // valid variants depend on which assets the publisher has generated for
-  // that location — and that set may differ per app version. App callers
-  // can introspect via `get_app_inputs` (the description hints at the
-  // expected shape) and pick a variant they know exists.
+  // Locations parameterize as `"<bucket>/<variant>"` (e.g. `"weather/rain"`).
+  // The orchestrator looks up the variant and patches `sourceImageUrl`.
+  // Typed as text because the valid variants depend on the publisher's
+  // assets — not enumerable at schema time.
   location: { fieldKey: "selectedVariant", type: "text" },
 }
 
