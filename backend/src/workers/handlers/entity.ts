@@ -1,5 +1,5 @@
 import type { Job } from "bullmq"
-import { generateImage, imageToVideo } from "../../providers/index.js"
+import { generateImage, imageToVideo, videoToVideo } from "../../providers/index.js"
 import { generateScript, type ScriptProvider } from "../../providers/script/script-generator.js"
 import {
   commitJobCredits,
@@ -293,6 +293,7 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
   const {
     prompt,
     sourceImageUrl,
+    refineFromVideoUrl,
     provider,
     aspectRatio,
     attachToLocationId,
@@ -302,6 +303,9 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     jobId: string
     prompt: string
     sourceImageUrl: string
+    /** Phase 2 #2 — when set, the worker refines this existing clip via
+     *  video-to-video instead of running image-to-video from sourceImageUrl. */
+    refineFromVideoUrl?: string
     provider?: string
     aspectRatio?: string
     attachToLocationId?: string
@@ -309,21 +313,34 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     attachName?: string
   }
   const resolvedProvider = provider ?? "kling"
-  console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
+  const mode = refineFromVideoUrl ? "vid2vid-refine" : "img2vid"
+  console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}, mode: ${mode}): "${prompt}"`)
 
   const onTaskCreated = makeOnTaskCreated(
     ctx.jobId,
     providerKindForVideoModel(resolvedProvider),
   )
-  const result = await imageToVideo(
-    sourceImageUrl,
-    resolvedProvider,
-    prompt,
-    undefined,
-    undefined,
-    aspectRatio ? { aspectRatio } : undefined,
-    { onTaskCreated },
-  )
+
+  // Phase 2 #2 — Atmosphere motion refinement path. When `refineFromVideoUrl`
+  // is set we route to `videoToVideo` with the existing clip as input;
+  // otherwise the legacy image-to-video path from the source frame.
+  const result = refineFromVideoUrl
+    ? await videoToVideo(
+        refineFromVideoUrl,
+        resolvedProvider,
+        prompt,
+        aspectRatio ? { aspectRatio } : undefined,
+        { onTaskCreated },
+      )
+    : await imageToVideo(
+        sourceImageUrl,
+        resolvedProvider,
+        prompt,
+        undefined,
+        undefined,
+        aspectRatio ? { aspectRatio } : undefined,
+        { onTaskCreated },
+      )
   await setJobProgress(job, ctx.jobId, 50)
 
   const r2Url = await uploadVideoMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
