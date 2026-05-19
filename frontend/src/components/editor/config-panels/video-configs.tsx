@@ -32,7 +32,7 @@ import type {
   CharacterNodeData,
 } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions } from "./model-options"
-import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE } from "@nodaro/shared"
+import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -83,6 +83,18 @@ const VIDEO_REF_SOURCE_BY_TYPE: Record<string, ReferenceSource> = {
   "location": "wired-location",
 }
 
+/** Location variant buckets — kept in lockstep with backend
+ *  `LOCATION_VARIANT_BUCKETS` in payload-builder.ts and the runtime path in
+ *  `execute-node.ts`. */
+const VIDEO_LOCATION_VARIANT_BUCKETS = [
+  "timeOfDay",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "atmosphereMotions",
+] as const
+
 interface VideoRefAutocompleteEntry {
   readonly id: string
   readonly url: string
@@ -91,6 +103,17 @@ interface VideoRefAutocompleteEntry {
   readonly characterSlug?: string
   readonly variantSlug?: string
   readonly variantDisplayName?: string
+  /**
+   * Location fields, populated for `source === "wired-location"` entries.
+   * Mirror the analogous character fields. The canonical entry has only
+   * `locationSlug` set; per-variant entries set bucket + slug + displayName
+   * as well. Slice 3 of Location Studio Phase 2 #2 surfaces these in the
+   * `@`-autocomplete.
+   */
+  readonly locationSlug?: string
+  readonly locationVariantBucket?: string
+  readonly locationVariantSlug?: string
+  readonly locationVariantDisplayName?: string
   readonly defaultUsageMode?: import("@nodaro/shared").UsageMode
   /** Character LoRA training status — drives `<TrainedPill>` in autocomplete. */
   readonly loraTrainingStatus?: string | null
@@ -164,6 +187,50 @@ function buildVideoRefAutocomplete(
       // Unnamed character — fall through to generic upstream handling.
     }
 
+    // Location upstream: expand into canonical + per-bucket-variant entries
+    // so `@oldlibrary:1` and `@oldlibrary:1:weather/rain` both surface in
+    // the autocomplete. Mirrors `expandLocationNodeIntoRefs` in
+    // execute-node.ts (runtime path) for slice 3 of Location Studio Phase 2 #2.
+    if (s.type === "location") {
+      const locName = (nd.locationName as string) || s.label || "Location"
+      const locSlug = locationMentionSlug(locName) || undefined
+      const sourceUrl = nd.sourceImageUrl as string | undefined
+      if (sourceUrl && locSlug) {
+        out.push({
+          id: s.id,
+          url: sourceUrl,
+          defaultName: locName,
+          source: "wired-location",
+          locationSlug: locSlug,
+          locationVariantDisplayName: "canonical",
+        })
+        for (const bucket of VIDEO_LOCATION_VARIANT_BUCKETS) {
+          const items = nd[bucket]
+          if (!Array.isArray(items)) continue
+          for (const item of items) {
+            const variantName = (item as { name?: string }).name
+            const variantUrl = (item as { url?: string }).url
+            if (!variantName || !variantUrl) continue
+            const variantSlug = locationMentionSlug(variantName)
+            if (!variantSlug) continue
+            out.push({
+              id: `${s.id}_${bucket}_${variantSlug}`,
+              url: variantUrl,
+              defaultName: `${locName} / ${variantName}`,
+              source: "wired-location",
+              locationSlug: locSlug,
+              locationVariantBucket: bucket,
+              locationVariantSlug: variantSlug,
+              locationVariantDisplayName: variantName,
+            })
+          }
+        }
+        continue
+      }
+      // Fall through to generic upstream handling when the location has no
+      // source image yet (still-rendering or empty node).
+    }
+
     const url =
       (nd.generatedImageUrl as string) ||
       (nd.url as string) ||
@@ -195,6 +262,10 @@ function toConnectedReferences(entries: ReadonlyArray<VideoRefAutocompleteEntry>
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,
+    locationSlug: ref.locationSlug,
+    locationVariantBucket: ref.locationVariantBucket,
+    locationVariantSlug: ref.locationVariantSlug,
+    locationVariantDisplayName: ref.locationVariantDisplayName,
     defaultUsageMode: ref.defaultUsageMode,
   }))
 }
@@ -203,14 +274,23 @@ function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): Ref
   return entries.map((ref, i) => ({
     url: ref.url,
     label: ref.defaultName,
+    // Map `wired-location` → "location" so the autocomplete renders cyan
+    // location pills (slice 3 of Location Studio Phase 2 #2). Other
+    // `wired-*` sources keep the existing "character" routing — they
+    // share the violet pill until their own pill types ship.
     source:
       ref.source === "wired-image" ? "wired"
+      : ref.source === "wired-location" ? "location"
       : "character",
     index: i + 1,
     defaultLabel: DEFAULT_LABEL_BY_SOURCE[ref.source],
     characterSlug: ref.characterSlug,
     variantSlug: ref.variantSlug,
     variantDisplayName: ref.variantDisplayName,
+    locationSlug: ref.locationSlug,
+    locationVariantBucket: ref.locationVariantBucket,
+    locationVariantSlug: ref.locationVariantSlug,
+    locationVariantDisplayName: ref.locationVariantDisplayName,
     defaultUsageMode: ref.defaultUsageMode,
     loraTrainingStatus: ref.loraTrainingStatus,
   }))

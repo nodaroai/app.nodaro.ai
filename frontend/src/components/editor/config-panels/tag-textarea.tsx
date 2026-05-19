@@ -58,9 +58,26 @@ export interface SuggestionItem {
    *  - "back": back row at the top of drill-in view. `tag` is unused.
    *  - undefined / "leaf": ordinary leaf (insert + close).
    */
-  kind?: "character-root" | "variant" | "back" | "leaf" | "mode"
+  kind?: "character-root" | "variant" | "back" | "leaf" | "mode" | "location-root" | "location-variant"
   /** Slug of the character this root row represents — used to drill in. */
   characterSlug?: string
+  /**
+   * Slug of the location this row represents (for `kind: "location-root"` and
+   * `kind: "location-variant"`). Mirrors `characterSlug` — the autocomplete's
+   * selectSuggestion path inserts `@<locationSlug>:N(:<bucket>/<variant>)?`
+   * pills via the TipTap `locationRef` atomic node.
+   */
+  locationSlug?: string
+  /**
+   * Location variant bucket (e.g. "weather", "lighting") for
+   * `kind: "location-variant"` rows. Combined with `locationVariantSlug`
+   * to form the `:bucket/variant` slug segment.
+   */
+  locationVariantBucket?: string
+  /** Location variant slug (e.g. "rain", "neon") for `kind: "location-variant"` rows. */
+  locationVariantSlug?: string
+  /** Display name of the location variant (e.g. "rain", "canonical") for UI rendering. */
+  locationVariantDisplayName?: string
   /** When `kind === "mode"`, the usage mode chosen by this row. */
   mode?: UsageMode
   /**
@@ -76,7 +93,14 @@ export interface SuggestionItem {
 export interface RefImageItem {
   readonly url: string
   readonly label: string
-  readonly source: "uploaded" | "wired" | "character"
+  /**
+   * Discriminator for how the autocomplete renders this row and what kind of
+   * pill `selectSuggestion` inserts:
+   *   - "uploaded" / "wired": legacy `{image:N:label}` ref (TipTap `imageRef` node)
+   *   - "character": violet `@<charSlug>:N(:variant)(:mode)` pill (TipTap `characterRef` node)
+   *   - "location":  cyan   `@<locSlug>:N(:bucket/variant)(:mode)`  pill (TipTap `locationRef` node)
+   */
+  readonly source: "uploaded" | "wired" | "character" | "location"
   /** 1-based position matching {image:N} in the prompt. */
   readonly index: number
   /** Default role label inserted by the "@" trigger (e.g. "object", "person"). */
@@ -87,6 +111,39 @@ export interface RefImageItem {
   readonly variantSlug?: string
   /** Variant display name for the autocomplete (e.g. "smile", "canonical"). */
   readonly variantDisplayName?: string
+  /**
+   * When `source === "location"`, the slug for the location (e.g. "old-library").
+   * Mirrors `characterSlug` — used by the location-aware autocomplete to group
+   * entries by location and by `LocationRefView` to resolve thumbnails.
+   */
+  readonly locationSlug?: string
+  /**
+   * When `source === "location"` and this entry represents a per-variant asset,
+   * the bucket the variant came from — one of "timeOfDay" / "weather" /
+   * "seasons" / "angles" / "lighting" / "atmosphereMotions". `undefined` for
+   * the canonical main-image entry of a location.
+   *
+   * The bucket is the disambiguator between the two location slug forms:
+   *   - canonical:  `@oldlibrary:1`
+   *   - per-variant: `@oldlibrary:1:weather/rain`
+   * Two variants from different buckets may share a name (`weather/sunset`
+   * vs `lighting/sunset`); the bucket prefix forces the resolver to pull
+   * from the right array.
+   */
+  readonly locationVariantBucket?: string
+  /**
+   * When `source === "location"` and this entry represents a per-variant asset,
+   * the variant slug (e.g. "rain", "neon"). Mirrors `variantSlug` on the
+   * character side. Combined with `locationVariantBucket` to form the
+   * `:bucket/variant` slug segment.
+   */
+  readonly locationVariantSlug?: string
+  /**
+   * When `source === "location"`, display name for the variant in the
+   * autocomplete UI (e.g. "rain", "canonical"). Mirrors `variantDisplayName`
+   * on the character side.
+   */
+  readonly locationVariantDisplayName?: string
   /**
    * Character node's `defaultUsageMode`. Mirrors the field on the underlying
    * `ConnectedReference` (see `packages/shared/src/types.ts`) so the
@@ -113,6 +170,7 @@ const REF_IMAGE_SOURCE_LABEL: Record<RefImageItem["source"], string> = {
   uploaded: "Uploaded",
   wired: "Wired",
   character: "Character",
+  location: "Location",
 }
 
 function getAllSuggestions(): SuggestionItem[] {

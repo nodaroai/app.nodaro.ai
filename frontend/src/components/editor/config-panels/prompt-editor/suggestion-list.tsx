@@ -47,6 +47,11 @@ interface SuggestionListProps {
  *   - "mode":            one row per usage mode in the 3rd-level drill view.
  *                        Selecting inserts the slug with that mode appended.
  *   - "image-ref":       non-character ref (uploaded / wired-image), inserted directly
+ *   - "location":        a location entry (canonical OR per-variant). For MVP
+ *                        slice 3 we render locations as a SIMPLE FLAT LIST
+ *                        (no hierarchical drill — drill is slice 4). Each row
+ *                        inserts a `@<locSlug>:N(:bucket/variant)?` pill via
+ *                        the TipTap `locationRef` atomic node.
  */
 type DisplayRow =
   | { kind: "back"; label: string }
@@ -54,6 +59,7 @@ type DisplayRow =
   | { kind: "variant"; item: RefImageItem; flatSearch?: boolean; characterLabel?: string }
   | { kind: "mode"; mode: UsageMode }
   | { kind: "image-ref"; item: RefImageItem }
+  | { kind: "location"; item: RefImageItem }
 
 /** Active drill-in target for the mode picker (3rd level). */
 interface DrillVariant {
@@ -108,20 +114,24 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
     const [drillCharacterSlug, setDrillCharacterSlug] = useState<string | null>(null)
     const [drillVariant, setDrillVariant] = useState<DrillVariant | null>(null)
 
-    // Group character items by characterSlug; keep non-character refs flat.
-    const { characterGroups, nonCharacterItems } = useMemo(() => {
+    // Group character items by characterSlug; pull location items into their
+    // own flat list (no drill in MVP slice 3); keep all other refs flat.
+    const { characterGroups, locationItems, nonCharacterItems } = useMemo(() => {
       const groups = new Map<string, RefImageItem[]>()
+      const locs: RefImageItem[] = []
       const others: RefImageItem[] = []
       for (const item of items) {
         if (item.source === "character" && item.characterSlug) {
           const g = groups.get(item.characterSlug) ?? []
           g.push(item)
           groups.set(item.characterSlug, g)
+        } else if (item.source === "location" && item.locationSlug) {
+          locs.push(item)
         } else {
           others.push(item)
         }
       }
-      return { characterGroups: groups, nonCharacterItems: others }
+      return { characterGroups: groups, locationItems: locs, nonCharacterItems: others }
     }, [items])
 
     // Compute the rows to display based on drill state + query.
@@ -173,7 +183,26 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
             }
           }
         }
-        // Non-character refs filtered by label, index, or default-label.
+        // Location refs filtered by label, location slug, bucket, or variant.
+        // MVP slice 3 — flat search across canonical + every per-variant
+        // entry, mirroring the character flat-search shape (no drill).
+        for (const l of locationItems) {
+          const labelLc = l.label.toLowerCase()
+          const slugLc = (l.locationSlug ?? "").toLowerCase()
+          const variantLc = (l.locationVariantSlug ?? "").toLowerCase()
+          const bucketLc = (l.locationVariantBucket ?? "").toLowerCase()
+          const variantDisplayLc = (l.locationVariantDisplayName ?? "").toLowerCase()
+          if (
+            labelLc.includes(q)
+            || slugLc.includes(q)
+            || variantLc.includes(q)
+            || bucketLc.includes(q)
+            || variantDisplayLc.includes(q)
+          ) {
+            rows.push({ kind: "location", item: l })
+          }
+        }
+        // Non-character/non-location refs filtered by label, index, or default-label.
         for (const r of nonCharacterItems) {
           if (
             r.label.toLowerCase().includes(q)
@@ -199,7 +228,8 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         return rows
       }
 
-      // Root (empty query): non-character refs + one row per character.
+      // Root (empty query): non-character refs + one row per character +
+      // one row per location entry (MVP slice 3 — flat list, no drill).
       const rows: DisplayRow[] = []
       for (const r of nonCharacterItems) {
         rows.push({ kind: "image-ref", item: r })
@@ -208,8 +238,11 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         const canonical = group.find((i) => !i.variantSlug) ?? group[0]
         rows.push({ kind: "character-root", item: canonical, variantCount: group.length, characterSlug: slug })
       }
+      for (const l of locationItems) {
+        rows.push({ kind: "location", item: l })
+      }
       return rows
-    }, [characterGroups, nonCharacterItems, drillCharacterSlug, drillVariant, query])
+    }, [characterGroups, locationItems, nonCharacterItems, drillCharacterSlug, drillVariant, query])
 
     // Reset selection whenever the rendered rows change.
     useEffect(() => {
@@ -274,8 +307,9 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
         }
         return
       }
-      // "variant" or "image-ref" — fire the parent's command to insert with
-      // the character's default mode (legacy behavior, preserved).
+      // "variant", "image-ref", or "location" — fire the parent's command
+      // to insert. Location rows currently flat-insert via the locationRef
+      // pill (slice 3 MVP — drill comes in slice 4).
       command(row.item)
     }, [command, onDrillChange, drillVariant])
 
@@ -437,6 +471,53 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 {item.loraTrainingStatus === "succeeded" && <TrainedPill size="xs" />}
                 <span className="text-slate-500 text-[12px] leading-4 shrink-0" aria-hidden>
                   &rsaquo;
+                </span>
+              </button>
+            )
+          }
+          // "location" — flat-list location row with cyan slug pill chip.
+          // MVP slice 3 — no drill, just a leaf row that inserts the location
+          // pill on select. Drill into bucket → variant comes in slice 4.
+          if (row.kind === "location") {
+            const { item } = row
+            const locTag = item.locationVariantBucket && item.locationVariantSlug
+              ? `@${item.locationSlug}:N:${item.locationVariantBucket}/${item.locationVariantSlug}`
+              : `@${item.locationSlug}:N`
+            return (
+              <button
+                key={`loc-${item.locationSlug}-${item.locationVariantBucket ?? "canonical"}-${item.locationVariantSlug ?? ""}-${item.index}`}
+                type="button"
+                data-index={idx}
+                className={`w-full text-left px-2.5 py-1.5 text-[11px] cursor-pointer transition-colors flex items-center gap-2 ${
+                  isSelected
+                    ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300"
+                    : "hover:bg-muted text-foreground"
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  handleSelect(row)
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+              >
+                <img
+                  src={item.url}
+                  alt=""
+                  className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                />
+                <span className="truncate flex-1 min-w-0">
+                  {item.label}
+                  {item.locationVariantDisplayName && item.locationVariantDisplayName !== "canonical" && (
+                    <span className="text-slate-500 ml-1">/ {item.locationVariantDisplayName}</span>
+                  )}
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-md border px-1.5 py-0 text-[10px] font-mono font-medium leading-4 shrink-0 ${
+                    isSelected
+                      ? "border-cyan-400/60 bg-cyan-500/20 text-cyan-700 dark:text-cyan-200"
+                      : "border-cyan-400/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300"
+                  }`}
+                >
+                  {locTag}
                 </span>
               </button>
             )

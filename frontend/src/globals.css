@@ -776,6 +776,125 @@ html, body {
   opacity: 1;
 }
 
+/* ── Location-ref pill ──────────────────────────────────────────────
+   Cyan theme to match the Location node card color (#22D3EE) used on
+   the canvas (see frontend/CLAUDE.md MiniMap palette). Visually distinct
+   from the violet character pill so users can tell at a glance whether a
+   slug refers to a scene or a subject. Structure mirrors
+   .character-ref-pill — selector names are parallel for easy diff. */
+.location-ref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px 1px 2px;
+  margin: 0 -2px;
+  border-radius: 4px;
+  background: color-mix(in srgb, #22d3ee 14%, transparent);
+  color: #0891b2;
+  vertical-align: middle;
+  line-height: 1;
+}
+.dark .location-ref-pill {
+  background: color-mix(in srgb, #22d3ee 24%, transparent);
+  color: #67e8f9;
+}
+.location-ref-pill--broken {
+  background: color-mix(in srgb, #f43f5e 12%, transparent);
+  color: #e11d48;
+  outline: 1px dashed color-mix(in srgb, #f43f5e 55%, transparent);
+  outline-offset: 0;
+}
+.dark .location-ref-pill--broken {
+  background: color-mix(in srgb, #f43f5e 22%, transparent);
+  color: #fda4af;
+}
+.location-ref-pill__thumb {
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 3px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, #22d3ee 40%, transparent);
+  flex-shrink: 0;
+}
+.location-ref-pill__thumb-broken {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  border-radius: 3px;
+  background: color-mix(in srgb, #f43f5e 20%, transparent);
+  color: #e11d48;
+  font-size: 0.8em;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.location-ref-pill__label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 0.85em;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+.location-ref-pill__name {
+  font-weight: 600;
+}
+.location-ref-pill__index {
+  opacity: 0.7;
+}
+.location-ref-pill__variant {
+  opacity: 0.85;
+  margin-left: 1px;
+}
+.location-ref-pill__mode-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 0 4px;
+  height: 1.1em;
+  border-radius: 3px;
+  background: color-mix(in srgb, #22d3ee 35%, transparent);
+  color: #fff;
+  font-size: 0.72em;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.dark .location-ref-pill__mode-badge {
+  background: color-mix(in srgb, #22d3ee 55%, transparent);
+}
+.location-ref-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 1px;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95em;
+  line-height: 1;
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease, background-color 0.1s ease;
+  border: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+.location-ref-pill:hover .location-ref-pill__remove {
+  opacity: 0.85;
+}
+.location-ref-pill__remove:hover {
+  background: color-mix(in srgb, #22d3ee 35%, transparent);
+  opacity: 1;
+}
+
 /* ── Tiptap-based PromptEditor ─────────────────────────────────────── */
 .prompt-editor {
   cursor: text;
