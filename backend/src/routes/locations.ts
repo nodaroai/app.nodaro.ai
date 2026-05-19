@@ -40,6 +40,12 @@ const upsertLocationBody = z.object({
   referencePhotos: z.array(referencePhoto).max(20).optional(),
   canonicalDescription: z.string().max(4000).optional(),
   styleLock: z.boolean().optional(),
+  // PII consent timestamp (Phase 2 #7). When the user first adds a reference
+  // photo, the studio sends now() so the backend records the consent moment.
+  // Once set, the studio's checkbox stays hidden and the user can add more
+  // photos freely. The string is ISO-8601 (also accepted by Postgres as a
+  // TIMESTAMPTZ literal).
+  piiConsentAt: z.string().datetime().optional(),
   // Optimistic-concurrency token: when present, UPDATE only succeeds if the
   // row's `updated_at` still matches. On mismatch we return 409 so the Studio
   // can re-fetch + merge instead of silently overwriting a worker write.
@@ -113,7 +119,7 @@ const listLocationsQuery = z.object({
 
 // Single source of truth for the GET column list — keeps single + list in lock-step.
 const SELECT_COLUMNS =
-  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, deleted_at, created_at, updated_at"
+  "id, user_id, node_id, project_id, name, description, category, style, source_image_url, time_of_day, weather, angles, lighting, seasons, atmosphere_motions, reference_photos, canonical_description, style_lock, pii_consent_at, deleted_at, created_at, updated_at"
 
 type LocationRow = {
   id: string
@@ -134,6 +140,7 @@ type LocationRow = {
   reference_photos: { kind: string; url: string }[] | null
   canonical_description: string | null
   style_lock: boolean | null
+  pii_consent_at: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -161,6 +168,7 @@ function toCamel(loc: LocationRow) {
     referencePhotos: loc.reference_photos ?? [],
     canonicalDescription: loc.canonical_description ?? "",
     styleLock: loc.style_lock ?? true,
+    piiConsentAt: loc.pii_consent_at,
     deletedAt: loc.deleted_at,
     createdAt: loc.created_at,
     updatedAt: loc.updated_at,
@@ -329,6 +337,7 @@ export async function locationRoutes(app: FastifyInstance) {
       referencePhotos,
       canonicalDescription,
       styleLock,
+      piiConsentAt,
       expectedUpdatedAt,
     } = parsed.data
     const userId = req.userId
@@ -361,6 +370,7 @@ export async function locationRoutes(app: FastifyInstance) {
       if (referencePhotos !== undefined) updateRow.reference_photos = referencePhotos
       if (canonicalDescription !== undefined) updateRow.canonical_description = canonicalDescription
       if (styleLock !== undefined) updateRow.style_lock = styleLock
+      if (piiConsentAt !== undefined) updateRow.pii_consent_at = piiConsentAt
 
       let query = supabase
         .from("locations")
@@ -422,6 +432,7 @@ export async function locationRoutes(app: FastifyInstance) {
       reference_photos: referencePhotos ?? [],
       canonical_description: canonicalDescription ?? null,
       style_lock: styleLock ?? true,
+      pii_consent_at: piiConsentAt ?? null,
       updated_at: new Date().toISOString(),
     }
 

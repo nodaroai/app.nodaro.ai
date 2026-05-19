@@ -1354,6 +1354,13 @@ export async function saveLocation(data: {
   canonicalDescription?: string
   styleLock?: boolean
   /**
+   * PII consent timestamp (Phase 2 #7). The studio sends `new Date().toISOString()`
+   * when the user adds the first reference photo with the consent checkbox
+   * ticked. The backend writes it to `locations.pii_consent_at`; subsequent
+   * reads return it so the studio knows when consent was given.
+   */
+  piiConsentAt?: string
+  /**
    * Optimistic-concurrency token. When present, the backend only UPDATEs the
    * row if `updated_at` still matches. On mismatch the API returns 409 and
    * this client throws `ConcurrentModificationError` so the caller can
@@ -1560,6 +1567,10 @@ export interface DbLocation {
   referencePhotos: { kind: string; url: string }[]
   canonicalDescription: string
   styleLock: boolean
+  /** Phase 2 #7 — timestamp the user consented that reference photos don't
+   *  include PII without rights. NULL = no consent recorded yet (UI shows
+   *  the consent checkbox); non-NULL = consent given (UI hides checkbox). */
+  piiConsentAt?: string | null
   deletedAt?: string | null
   createdAt: string
   updatedAt: string

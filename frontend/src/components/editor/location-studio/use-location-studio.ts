@@ -140,6 +140,7 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
           (fresh.referencePhotos as LocationNodeData["referencePhotos"]) ?? current.referencePhotos,
         canonicalDescription: fresh.canonicalDescription ?? "",
         styleLock: fresh.styleLock ?? current.styleLock,
+        piiConsentAt: fresh.piiConsentAt ?? current.piiConsentAt,
       }
       merged.updatedAt = fresh.updatedAt
       setStagedData(merged)
@@ -176,6 +177,11 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         referencePhotos: current.referencePhotos,
         canonicalDescription: current.canonicalDescription,
         styleLock: current.styleLock,
+        // Phase 2 #7 — PII consent timestamp. Only set when the user has
+        // ticked the consent checkbox on the reference-photos section; the
+        // node's `piiConsentAt` flips from undefined → ISO timestamp at that
+        // moment and stays set forever (consent doesn't time out).
+        piiConsentAt: current.piiConsentAt,
         expectedUpdatedAt: current.updatedAt,
       })
       // Sync to canvas AFTER saveLocation succeeds so the canvas never holds

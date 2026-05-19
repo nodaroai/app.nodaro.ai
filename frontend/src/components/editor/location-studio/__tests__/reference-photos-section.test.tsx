@@ -40,10 +40,15 @@ describe("ReferencePhotosSection", () => {
     expect(screen.getAllByText("wide").length).toBeGreaterThanOrEqual(2)
   })
 
+  // Phase 2 #7: pass a `piiConsentAt` so the consent gate is dismissed for
+  // tests that exercise the add/dedup flow — the gate is covered by its own
+  // describe block below.
+  const PRECONSENT = "2026-01-01T00:00:00.000Z"
+
   it("calls onChange with the new photo when Add is clicked", async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
-    render(<ReferencePhotosSection photos={[]} onChange={onChange} />)
+    render(<ReferencePhotosSection photos={[]} onChange={onChange} piiConsentAt={PRECONSENT} />)
     await user.type(screen.getByPlaceholderText(/https:/), "https://example.com/new.png")
     await user.click(screen.getByRole("button", { name: /^add$/i }))
     expect(onChange).toHaveBeenCalledWith([{ kind: "moodBoard", url: "https://example.com/new.png" }])
@@ -53,7 +58,7 @@ describe("ReferencePhotosSection", () => {
     const onChange = vi.fn()
     const user = userEvent.setup()
     const photos: LocationReferencePhoto[] = [{ kind: "wide", url: "https://example.com/dup.png" }]
-    render(<ReferencePhotosSection photos={photos} onChange={onChange} />)
+    render(<ReferencePhotosSection photos={photos} onChange={onChange} piiConsentAt={PRECONSENT} />)
     await user.type(screen.getByPlaceholderText(/https:/), "https://example.com/dup.png")
     await user.click(screen.getByRole("button", { name: /^add$/i }))
     expect(toastInfo).toHaveBeenCalledWith("Photo already added")
@@ -85,9 +90,87 @@ describe("ReferencePhotosSection", () => {
       { kind: "wide", url: "https://example.com/a.png" },
       { kind: "interior", url: "https://example.com/b.png" },
     ]
-    render(<ReferencePhotosSection photos={photos} onChange={onChange} />)
+    render(<ReferencePhotosSection photos={photos} onChange={onChange} piiConsentAt={PRECONSENT} />)
     await user.click(screen.getByRole("button", { name: /remove wide/i }))
     expect(onChange).toHaveBeenCalledWith([{ kind: "interior", url: "https://example.com/b.png" }])
+  })
+})
+
+// Phase 2 #7 — PII consent gate. When `piiConsentAt` is undefined the section
+// shows a consent checkbox and disables Add until the box is ticked. On the
+// first add after consent, `onConsent` fires with a fresh timestamp so the
+// parent can persist it; subsequent renders hide the checkbox.
+describe("ReferencePhotosSection — PII consent gate", () => {
+  beforeEach(() => {
+    toastInfo.mockClear()
+    toastError.mockClear()
+  })
+
+  it("renders consent checkbox when piiConsentAt is undefined", () => {
+    render(<ReferencePhotosSection photos={[]} onChange={() => {}} />)
+    expect(screen.getByLabelText(/rights and consent/i)).toBeInTheDocument()
+  })
+
+  it("hides consent checkbox when piiConsentAt is set", () => {
+    render(
+      <ReferencePhotosSection
+        photos={[]}
+        onChange={() => {}}
+        piiConsentAt="2026-01-01T00:00:00.000Z"
+      />,
+    )
+    expect(screen.queryByLabelText(/rights and consent/i)).toBeNull()
+    expect(screen.getByText(/Consent recorded/i)).toBeInTheDocument()
+  })
+
+  it("disables Add until consent is ticked", () => {
+    render(<ReferencePhotosSection photos={[]} onChange={() => {}} />)
+    const input = screen.getByPlaceholderText(/https:/) as HTMLInputElement
+    fireEvent.change(input, { target: { value: "https://example.com/new.png" } })
+    const addBtn = screen.getByRole("button", { name: /^add$/i })
+    expect(addBtn).toBeDisabled()
+    fireEvent.click(screen.getByLabelText(/rights and consent/i))
+    expect(addBtn).not.toBeDisabled()
+  })
+
+  it("fires onConsent with a fresh ISO timestamp on first add after consent", async () => {
+    const onChange = vi.fn()
+    const onConsent = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <ReferencePhotosSection
+        photos={[]}
+        onChange={onChange}
+        onConsent={onConsent}
+      />,
+    )
+    await user.click(screen.getByLabelText(/rights and consent/i))
+    await user.type(screen.getByPlaceholderText(/https:/), "https://example.com/new.png")
+    await user.click(screen.getByRole("button", { name: /^add$/i }))
+    expect(onChange).toHaveBeenCalledOnce()
+    expect(onConsent).toHaveBeenCalledOnce()
+    const ts = onConsent.mock.calls[0]?.[0] as string
+    expect(typeof ts).toBe("string")
+    // ISO-8601 looks like 2026-05-19T19:30:00.000Z
+    expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+  })
+
+  it("does not fire onConsent when the gate is already dismissed", async () => {
+    const onChange = vi.fn()
+    const onConsent = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <ReferencePhotosSection
+        photos={[]}
+        onChange={onChange}
+        onConsent={onConsent}
+        piiConsentAt="2026-01-01T00:00:00.000Z"
+      />,
+    )
+    await user.type(screen.getByPlaceholderText(/https:/), "https://example.com/new.png")
+    await user.click(screen.getByRole("button", { name: /^add$/i }))
+    expect(onChange).toHaveBeenCalledOnce()
+    expect(onConsent).not.toHaveBeenCalled()
   })
 })
 

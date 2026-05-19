@@ -274,6 +274,8 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
         <ReferencePhotosSection
           photos={data.referencePhotos ?? []}
           onChange={(photos: LocationReferencePhoto[]) => studio.patch({ referencePhotos: photos })}
+          piiConsentAt={data.piiConsentAt}
+          onConsent={(timestamp: string) => studio.patch({ piiConsentAt: timestamp })}
         />
       </section>
     </div>
