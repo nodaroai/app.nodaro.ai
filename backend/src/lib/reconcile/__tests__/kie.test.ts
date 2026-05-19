@@ -246,17 +246,22 @@ describe("reconcileKieJob", () => {
     expect(mocks.jobsUpdateMock).toHaveBeenCalled()
   })
 
-  it("kie-suno → bumps attempts (Suno reconcile deferred)", async () => {
+  it("kie-suno with unrecoverable variant (job_type=suno-lyrics) → bumps attempts", async () => {
     const row: KieJobRow = {
-      id: "j-suno",
+      id: "j-suno-lyrics",
       provider_kind: "kie-suno",
       provider_task_id: "t-suno",
       reconcile_attempts: 0,
-      job_type: "generate-music",
+      job_type: "suno-lyrics",
     }
     await reconcileKieJob(row)
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
     expect(mocks.refundMock).not.toHaveBeenCalled()
     expect(mocks.jobsUpdateMock).toHaveBeenCalled()
   })
+
+  // The kie-suno music path is covered by integration testing via the cron.
+  // Mocking pollSunoTask + uploadToR2 + supabase chains in isolation is
+  // boilerplate-heavy; the cron+handler integration in dev is the cleaner
+  // verification surface.
 })
