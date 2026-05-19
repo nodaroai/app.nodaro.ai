@@ -4,6 +4,7 @@
  */
 
 import type { UsageMode } from "./character-usage-mode.js"
+import type { LocationReferencePhotoKind } from "./entity-prompts.js"
 
 export interface GenericNode {
   id: string
@@ -103,6 +104,21 @@ export interface ConnectedReference {
   readonly locationVariantSlug?: string
   /** Display name for the variant in autocomplete UI (e.g. "rain", "canonical"). */
   readonly locationVariantDisplayName?: string
+  /**
+   * For user-uploaded reference photos on wired locations, the photo's
+   * `kind` — one of the 6 `LocationReferencePhotoKind` values. Drives the
+   * prompt-builder's subject-line annotation so the model knows the role
+   * (wide-angle establishing shot vs. interior detail vs. mood-board
+   * context). Mirrors `locationVariantBucket` but for user-uploaded refs
+   * instead of generated per-variant assets.
+   *
+   * Reference-photo entries have THIS field set but `locationVariantBucket`
+   * unset — that's how the connectedReferences filter at
+   * `prompt-builder.ts` lines ~1011-1016 distinguishes them from
+   * mention-only variant entries. Reference photos AUTO-ATTACH (they're
+   * not gated by `@-mention`), so the filter must NOT drop them.
+   */
+  readonly locationReferencePhotoKind?: LocationReferencePhotoKind
   /** The asset's own description (per-variant). null for canonical entries. */
   readonly variantDescription?: string | null
   /** Display name for the variant in autocomplete UI (e.g. "smile", "canonical"). */

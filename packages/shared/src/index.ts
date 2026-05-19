@@ -266,6 +266,8 @@ export {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
   LOCATION_REFERENCE_PHOTO_KINDS,
+  LOCATION_REFERENCE_PHOTO_KIND_LABELS,
+  locationReferencePhotoKindLabel,
   type LocationAssetType,
   type LocationAttachColumn,
   type LocationReferencePhotoKind,
