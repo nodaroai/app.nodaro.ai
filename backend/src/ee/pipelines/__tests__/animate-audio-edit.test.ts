@@ -21,6 +21,9 @@ vi.mock("../services/pipeline-final-merge.js", () => ({
 vi.mock("../sub-steps/dialogue-recheck.js", () => ({
   runDialogueRecheck: vi.fn(),
 }))
+vi.mock("../sub-steps/narration-audio.js", () => ({
+  runNarrationAudio: vi.fn(),
+}))
 vi.mock("../sub-steps/silent-cut-review.js", () => ({
   runSilentCutReview: vi.fn(),
 }))
@@ -40,6 +43,7 @@ import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineFinalMerge } from "../services/pipeline-final-merge.js"
 import { runDialogueRecheck } from "../sub-steps/dialogue-recheck.js"
+import { runNarrationAudio } from "../sub-steps/narration-audio.js"
 import { runSilentCutReview } from "../sub-steps/silent-cut-review.js"
 import { runShotRealignment } from "../sub-steps/shot-realignment.js"
 import { runMusicTimeline } from "../music-timeline.js"
@@ -54,6 +58,13 @@ beforeEach(() => {
     rebalances: [],
     warnings: [],
     awaitingUserDecision: false,
+  })
+  // Default: no narration script in the Showrunner plan → sub-step skips.
+  // Tests that exercise the happy narration path override per-call below.
+  ;(runNarrationAudio as ReturnType<typeof vi.fn>).mockResolvedValue({
+    ok: true,
+    skipped: true,
+    reason: "no_script",
   })
   ;(runSilentCutReview as ReturnType<typeof vi.fn>).mockResolvedValue({
     ok: true,
@@ -80,6 +91,26 @@ beforeEach(() => {
     finalAssetUrl: "https://r2/final.mp4",
   })
 })
+
+/**
+ * Builds the post-runSceneInternalPipeline `updated_metadata` shape that
+ * Stage 7 reassigns into `scenes[i]`. Real production code computes this
+ * inside `runSceneInternalPipeline`; tests mock the helper so we re-create
+ * a faithful version here that mirrors the immutable-return convention.
+ */
+function buildUpdatedMetadata(
+  sceneNodeData: SceneNodeData,
+  compositeUrl: string,
+  compositeAssetId?: string,
+): Record<string, unknown> {
+  return {
+    scene_node_data: {
+      ...sceneNodeData,
+      composite_video_url: compositeUrl,
+      ...(compositeAssetId ? { composite_video_asset_id: compositeAssetId } : {}),
+    },
+  }
+}
 
 function makeSceneNodeData(idx: number, shotCount = 2): SceneNodeData {
   return {
@@ -130,6 +161,11 @@ interface MakeSupabaseOpts {
   pipelineConfig?: Record<string, unknown>
   pipelineMode?: "manual" | "auto" | "guided"
   targetDurationSeconds?: number
+  /** Optional ShowrunnerPlan stub returned by loadShowrunnerPlan. Defaults to
+   *  a minimal valid stub so the G4 narration sub-step gets called; pre-G4
+   *  tests pass null implicitly because Stage 7's loadShowrunnerPlan ?? is
+   *  consumed by helpers downstream. */
+  showrunnerPlan?: unknown
 }
 
 function makeSupabase(opts: MakeSupabaseOpts) {
@@ -170,7 +206,7 @@ function makeSupabase(opts: MakeSupabaseOpts) {
                 return {
                   eq: () => ({
                     maybeSingle: async () => ({
-                      data: { output: { plan: null } },
+                      data: { output: { plan: opts.showrunnerPlan ?? null } },
                       error: null,
                     }),
                   }),
@@ -252,6 +288,11 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
           composite_video_asset_id: `vid-${scene.id}`,
           composite_video_url: `https://r2/vid-${scene.id}.mp4`,
           per_shot_results: [],
+          updated_metadata: buildUpdatedMetadata(
+            makeSceneNodeData(1),
+            `https://r2/vid-${scene.id}.mp4`,
+            `vid-${scene.id}`,
+          ),
         }
       },
     )
@@ -303,6 +344,11 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
           ok: true,
           composite_video_asset_id: `vid-${scene.id}`,
           composite_video_url: `https://r2/vid-${scene.id}.mp4`,
+          updated_metadata: buildUpdatedMetadata(
+            makeSceneNodeData(1),
+            `https://r2/vid-${scene.id}.mp4`,
+            `vid-${scene.id}`,
+          ),
         }
       },
     )
@@ -339,6 +385,11 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
           ok: true,
           composite_video_asset_id: `vid-${scene.id}`,
           composite_video_url: `https://r2/vid-${scene.id}.mp4`,
+          updated_metadata: buildUpdatedMetadata(
+            makeSceneNodeData(1),
+            `https://r2/vid-${scene.id}.mp4`,
+            `vid-${scene.id}`,
+          ),
         }
       },
     )
@@ -379,6 +430,11 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
           ok: true,
           composite_video_asset_id: `vid-${scene.id}`,
           composite_video_url: `https://r2/vid-${scene.id}.mp4`,
+          updated_metadata: buildUpdatedMetadata(
+            makeSceneNodeData(1),
+            `https://r2/vid-${scene.id}.mp4`,
+            `vid-${scene.id}`,
+          ),
         }
       },
     )
@@ -445,6 +501,11 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
         composite_video_asset_id: `vid-${scene.id}`,
         composite_video_url: `https://r2/vid-${scene.id}.mp4`,
         per_shot_results: [],
+        updated_metadata: buildUpdatedMetadata(
+          makeSceneNodeData(1),
+          `https://r2/vid-${scene.id}.mp4`,
+          `vid-${scene.id}`,
+        ),
       }),
     )
   }
@@ -840,5 +901,207 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
         status: "approved",
       }),
     )
+  })
+
+  // ─── Phase 1C.2.1 G4 — Narration audio sub-step (7c) ───────────────────
+
+  /** Minimal ShowrunnerPlan stub for tests that exercise the narration path —
+   *  enough fields that `loadShowrunnerPlan` returns truthy. The Stage 7
+   *  handler hands this off to runNarrationAudio, which is mocked, so field
+   *  fidelity doesn't matter. */
+  const PLAN_STUB = { has_narrator: true, music_plan: {} }
+
+  it("G4: narration sub-step runs BEFORE dialogue_recheck and BEFORE final_merge", async () => {
+    setupHappyScenes()
+    // Track call order to assert 7c happens before 7d' (dialogue_recheck)
+    // and before 7j (final_merge).
+    const callOrder: string[] = []
+    ;(runNarrationAudio as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      callOrder.push("narration")
+      return {
+        ok: true,
+        skipped: false,
+        narrationUrl: "https://r2/narration.mp3",
+        narrationDurationSec: 47.2,
+        narrationAssetId: "asset-narr-1",
+      }
+    })
+    ;(runDialogueRecheck as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      callOrder.push("dialogue_recheck")
+      return {
+        ok: true,
+        rebalances: [],
+        warnings: [],
+        awaitingUserDecision: false,
+      }
+    })
+    ;(pipelineFinalMerge as ReturnType<typeof vi.fn>).mockImplementationOnce(async () => {
+      callOrder.push("final_merge")
+      return { finalAssetId: "asset-final", finalAssetUrl: "https://r2/final.mp4" }
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+      showrunnerPlan: PLAN_STUB,
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runNarrationAudio).toHaveBeenCalledTimes(1)
+    expect(callOrder).toEqual(["narration", "dialogue_recheck", "final_merge"])
+  })
+
+  it("G4: narration skipped (no_script) — chain still proceeds, no narration_audio_url on stage output", async () => {
+    setupHappyScenes()
+    // Default mock returns skipped:true with reason "no_script" — keep it.
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+      showrunnerPlan: PLAN_STUB,
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runNarrationAudio).toHaveBeenCalledTimes(1)
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    // The final-merge args should NOT carry a narrationAssetUrl since the
+    // sub-step skipped. (G5 wires narrationAssetUrl into the final-merge
+    // call; this test pins the no-narration path.)
+    const finalMergeArgs = (
+      pipelineFinalMerge as ReturnType<typeof vi.fn>
+    ).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(finalMergeArgs.narrationAssetUrl ?? "").toBe("")
+    // Stage-row updates should NOT contain narration_audio_url when skipped.
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const flushWithNarration = stageUpdates.find(
+      (u) =>
+        u.output &&
+        typeof u.output === "object" &&
+        (u.output as Record<string, unknown>).narration_audio_url !== undefined,
+    )
+    expect(flushWithNarration).toBeUndefined()
+  })
+
+  it("G4: resume after 7c success — completed.narration=true causes chain to skip narration", async () => {
+    setupHappyScenes()
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+      initialStageOutput: {
+        sub_step_completed: { narration: true },
+        narration_audio_url: "https://r2/narration.mp3",
+        narration_audio_duration_sec: 47.2,
+      },
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(runNarrationAudio).not.toHaveBeenCalled()
+    // Downstream sub-steps still run.
+    expect(runDialogueRecheck).toHaveBeenCalledTimes(1)
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+  })
+
+  it("G5: narration URL plumbed through to pipelineFinalMerge.narrationAssetUrl", async () => {
+    setupHappyScenes()
+    ;(runNarrationAudio as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      skipped: false,
+      narrationUrl: "https://r2/narration.mp3",
+      narrationDurationSec: 47.2,
+      narrationAssetId: "asset-narr-1",
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+      showrunnerPlan: PLAN_STUB,
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    const finalMergeArgs = (
+      pipelineFinalMerge as ReturnType<typeof vi.fn>
+    ).mock.calls[0]?.[0] as Record<string, unknown>
+    expect(finalMergeArgs.narrationAssetUrl).toBe("https://r2/narration.mp3")
+  })
+
+  it("G4: narration happy path — stageOutputAcc gets URL + duration + asset id", async () => {
+    setupHappyScenes()
+    ;(runNarrationAudio as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      skipped: false,
+      narrationUrl: "https://r2/narration.mp3",
+      narrationDurationSec: 47.2,
+      narrationAssetId: "asset-narr-1",
+    })
+
+    const supabase = makeSupabase({
+      scenes: [
+        { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1) },
+      ],
+      pipelineMode: "auto",
+      showrunnerPlan: PLAN_STUB,
+    })
+
+    await runAnimateAudioEditStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const narrationFlush = stageUpdates.find(
+      (u) =>
+        u.output &&
+        typeof u.output === "object" &&
+        (u.output as Record<string, unknown>).narration_audio_url ===
+          "https://r2/narration.mp3",
+    )
+    expect(narrationFlush).toBeDefined()
+    const output = narrationFlush!.output as Record<string, unknown>
+    expect(output.narration_audio_url).toBe("https://r2/narration.mp3")
+    expect(output.narration_audio_duration_sec).toBe(47.2)
+    expect(output.narration_audio_asset_id).toBe("asset-narr-1")
+    // completed.narration must be flushed too so resume doesn't re-pay.
+    const completed = output.sub_step_completed as
+      | Record<string, boolean>
+      | undefined
+    expect(completed?.narration).toBe(true)
   })
 })

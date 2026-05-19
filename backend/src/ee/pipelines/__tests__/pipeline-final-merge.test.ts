@@ -317,6 +317,203 @@ describe("pipelineFinalMerge", () => {
     expect(jobUpdates.some((u) => u.status === "failed")).toBe(true)
   })
 
+  // ─── Phase 1C.2.1 §G5 — narration audio overlay ──────────────────────────
+
+  it("G5: narration + music → amix with music ducked to 0.6 volume", async () => {
+    const supabase = makeSupabase()
+    await pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "https://r2/music.mp3",
+      narrationAssetUrl: "https://r2/narration.mp3",
+    })
+
+    // Both music + narration should be downloaded.
+    const downloads = (downloadFile as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    )
+    expect(downloads).toContain("https://r2/music.mp3")
+    expect(downloads).toContain("https://r2/narration.mp3")
+
+    // The final ffmpeg call should reference all three inputs (video, music,
+    // narration) and the amix filter with music ducked to 0.6.
+    const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
+    const mixCall = ffmpegCalls.find((call) => {
+      const args = call[0] as string[]
+      return args.some((a) => /amix=inputs=2/.test(a))
+    })
+    expect(mixCall).toBeDefined()
+    const args = mixCall![0] as string[]
+    // Music input precedes narration input.
+    const musicIdx = args.indexOf("https://r2/music.mp3") // not in args (downloadFile copies to tmp)
+    expect(musicIdx).toBe(-1) // downloaded to /tmp/.../music.mp3
+    // The filter_complex string carries the amix + ducked-volume pieces.
+    const filterArg = args.find((a) => /amix=inputs=2/.test(a))
+    expect(filterArg).toBeDefined()
+    expect(filterArg!).toMatch(/\[1:a\]volume=0\.6/)
+    expect(filterArg!).toMatch(/amix=inputs=2:duration=longest/)
+    // Verify the input ordering: -i concat -i music -i narration.
+    const iIndices = args
+      .map((a, idx) => (a === "-i" ? idx : -1))
+      .filter((i) => i >= 0)
+    expect(iIndices.length).toBe(3)
+    // The narration input should be 3rd (last).
+    expect(args[iIndices[2]! + 1]).toMatch(/narration\.mp3$/)
+  })
+
+  it("G5: narration only (no music) → narration is sole audio track", async () => {
+    const supabase = makeSupabase()
+    await pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "",
+      narrationAssetUrl: "https://r2/narration.mp3",
+    })
+
+    const downloads = (downloadFile as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    )
+    expect(downloads).toContain("https://r2/narration.mp3")
+    expect(downloads.every((url) => !/music/.test(url))).toBe(true)
+
+    // The final ffmpeg call should reference 2 inputs (video + narration)
+    // and apply afade on [1:a] (the narration track).
+    const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
+    const narrationOnlyCall = ffmpegCalls.find((call) => {
+      const args = call[0] as string[]
+      const iCount = args.filter((a) => a === "-i").length
+      return iCount === 2 && args.some((a) => /\[1:a\]afade/.test(a))
+    })
+    expect(narrationOnlyCall).toBeDefined()
+    // Importantly: NO amix filter (only narration → no mix).
+    expect(
+      ffmpegCalls.some((call) => {
+        const args = call[0] as string[]
+        return args.some((a) => /amix=inputs=2/.test(a))
+      }),
+    ).toBe(false)
+  })
+
+  it("G5: music only (no narration) → existing behavior preserved (no amix)", async () => {
+    const supabase = makeSupabase()
+    await pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "https://r2/music.mp3",
+      // narrationAssetUrl omitted (undefined).
+    })
+
+    const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
+    // No amix call — music-only path is the existing 1C.2 single-music-track
+    // behavior.
+    expect(
+      ffmpegCalls.some((call) => {
+        const args = call[0] as string[]
+        return args.some((a) => /amix=inputs=2/.test(a))
+      }),
+    ).toBe(false)
+    // Music overlay filter is still present.
+    expect(
+      ffmpegCalls.some((call) => {
+        const args = call[0] as string[]
+        return args.some((a) => /\[1:a\]afade=t=out/.test(a))
+      }),
+    ).toBe(true)
+  })
+
+  it("G5: neither narration nor music → existing video-only fade behavior", async () => {
+    const supabase = makeSupabase()
+    await pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "",
+      // narrationAssetUrl omitted.
+    })
+
+    // No music download, no narration download.
+    const downloads = (downloadFile as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as string,
+    )
+    expect(downloads.every((url) => !/music/.test(url) && !/narration/.test(url))).toBe(true)
+
+    // No amix call.
+    const ffmpegCalls = (runFfmpeg as ReturnType<typeof vi.fn>).mock.calls
+    expect(
+      ffmpegCalls.some((call) => {
+        const args = call[0] as string[]
+        return args.some((a) => /amix=inputs=2/.test(a))
+      }),
+    ).toBe(false)
+  })
+
+  it("G5: amix failure falls back to fade-only output (pipeline still ships)", async () => {
+    // Fail ONLY the amix ffmpeg call; everything else (normalize, concat,
+    // fallback fade) succeeds. The downstream fade-only call is at the end
+    // of the catch path, so we let it succeed with the default mock.
+    const ffmpeg = runFfmpeg as ReturnType<typeof vi.fn>
+    ffmpeg.mockImplementation((args: string[]) => {
+      if (args.some((a) => /amix=inputs=2/.test(a))) {
+        return Promise.reject(new Error("ffmpeg: amix filter exploded"))
+      }
+      return Promise.resolve("")
+    })
+
+    const supabase = makeSupabase()
+    const result = await pipelineFinalMerge({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "https://r2/music.mp3",
+      narrationAssetUrl: "https://r2/narration.mp3",
+    })
+
+    // The merge still produced a final asset URL (fallback worked).
+    expect(result.finalAssetUrl).toBe("https://r2/final.mp4")
+    // Credits committed (the dispatch did NOT throw — only the inner mix
+    // failed, which is caught and degraded to fade-only).
+    expect(commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
   it("6. per-scene head trim applied via -ss + -t when cut_decision.in_offset_sec > 0", async () => {
     ;(getVideoDuration as ReturnType<typeof vi.fn>).mockResolvedValue(5.0)
     const supabase = makeSupabase()

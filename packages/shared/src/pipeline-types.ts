@@ -23,6 +23,11 @@ export const PipelineConfigSchema = z.object({
   narration_enabled: z.boolean().default(true),
   lipsync_enabled: z.boolean().default(true),
   freecut_export_enabled: z.boolean().default(false),
+  // Phase 1C.2.1 §H — when freecut_export_enabled, choose the serialization
+  // format. JSON is the original Nodaro-flat-timeline-v1 shape; FCPXML emits
+  // an FCPXML 1.10 timeline that Final Cut Pro / DaVinci Resolve / Premiere
+  // can ingest directly. Both reuse the same in-memory timeline reduction.
+  freecut_export_format: z.enum(["json", "fcpxml"]).default("json"),
   shot_generation_mode: z.enum(["parallel", "sequential"]).default("parallel"),
   silent_cut_review: z.boolean().default(true),
   image_model: z.string().optional(),
@@ -230,6 +235,23 @@ export const ShowrunnerPlanSchema = z.object({
   ),
   has_narrator: z.boolean(),
   narrator_profile: z.string().nullable(),
+  /**
+   * Phase 1C.2.1 §G — optional narration_script for omniscient narrator-style
+   * formats (trailers, documentaries, retro storytelling). When present, Stage
+   * 7 sub-step 7c synthesizes a single narration audio track that spans the
+   * full pipeline duration and gets mixed over the music in the final merge
+   * (music ducks to 60% volume per spec §G5). Leave undefined for dialogue-
+   * driven scenes that don't benefit from narration.
+   */
+  narration_script: z
+    .object({
+      text: z.string().min(20).max(4000),
+      voice_id: z.string().optional(),
+      delivery_style: z
+        .enum(["calm", "epic", "intimate", "documentary"])
+        .optional(),
+    })
+    .optional(),
   music_plan: z.object({
     mood: z.string(),
     bpm_target: z.number(),

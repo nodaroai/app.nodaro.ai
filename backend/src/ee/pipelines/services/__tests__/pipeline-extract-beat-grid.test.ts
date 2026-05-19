@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+// `execFile` is bound on the module-level `execFileAsync = promisify(execFile)`,
+// so the mock must replace the binding BEFORE the module under test is imported.
+// `vi.hoisted` lifts the mock vi.fn() to the same top-level slot as the
+// `vi.mock` factory so the factory can reference it without "cannot access
+// before initialization" hoisting errors.
+const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+vi.mock("node:child_process", () => ({
+  execFile: execFileMock,
+}))
 vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: vi.fn().mockResolvedValue(undefined),
   createWorkDir: vi.fn().mockResolvedValue("/tmp/work-1"),
@@ -17,12 +26,32 @@ vi.mock("node:fs", () => ({
 
 import { runFfmpegCapture } from "../../../../providers/video/ffmpeg-utils.js"
 import {
+  _resetAubioDetectionForTests,
   estimateBPM,
   parseSilenceDetectMarkers,
   pipelineExtractBeatGrid,
 } from "../pipeline-extract-beat-grid.js"
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  _resetAubioDetectionForTests()
+})
+
+// `promisify(execFile)` calls the original with a node-style callback as the
+// trailing arg. We translate that into the mock-returned shape (or reject)
+// so tests can express `execFileMock.mockImplementation(...)` in promise-style.
+function asNodeCallback(
+  result: { stdout?: string; stderr?: string } | Error,
+): (...args: unknown[]) => unknown {
+  return (...args: unknown[]) => {
+    const cb = args[args.length - 1] as
+      | ((err: Error | null, value?: { stdout: string; stderr: string }) => void)
+      | undefined
+    if (typeof cb !== "function") return
+    if (result instanceof Error) cb(result)
+    else cb(null, { stdout: result.stdout ?? "", stderr: result.stderr ?? "" })
+  }
+}
 
 describe("parseSilenceDetectMarkers", () => {
   it("parses silence_start markers from stderr", () => {
@@ -60,7 +89,14 @@ describe("estimateBPM", () => {
   })
 })
 
-describe("pipelineExtractBeatGrid", () => {
+describe("pipelineExtractBeatGrid (silencedetect fallback path)", () => {
+  // These tests pin the behaviour when aubio is NOT available — every
+  // `aubio --version` probe rejects, so the cached detect promise resolves
+  // false and the silencedetect parse runs.
+  beforeEach(() => {
+    execFileMock.mockImplementation(asNodeCallback(new Error("ENOENT: aubio")))
+  })
+
   it("returns trimmed URL + beat grid on happy path", async () => {
     ;(runFfmpegCapture as ReturnType<typeof vi.fn>).mockResolvedValue({
       stdout: "",
@@ -116,5 +152,92 @@ describe("pipelineExtractBeatGrid", () => {
 
     expect(result.beatGridSeconds).toEqual([1.0, 2.0])
     expect(result.detectedBPM).toBe(60)
+  })
+})
+
+describe("pipelineExtractBeatGrid (aubio path)", () => {
+  // When aubio is on PATH the detector returns onset markers from stdout
+  // (one float per line). The silencedetect output on stderr is unused.
+  it("uses aubio onset when available; ignores silencedetect markers", async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const [, argv] = args as [string, string[]]
+      if (argv[0] === "--version") {
+        return asNodeCallback({ stdout: "aubio 0.4.9\n" })(...args)
+      }
+      if (argv[0] === "onset") {
+        return asNodeCallback({
+          stdout: "0.123\n0.456\n0.789\n1.012\n",
+        })(...args)
+      }
+      return asNodeCallback(new Error("unexpected argv"))(...args)
+    })
+    ;(runFfmpegCapture as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stdout: "",
+      // Silencedetect markers should be ignored when aubio succeeds.
+      stderr: "[silencedetect @ 0x1] silence_start: 99.9\n",
+    })
+
+    const result = await pipelineExtractBeatGrid({
+      musicUrl: "https://r2/music.mp3",
+      targetDurationSec: 60,
+    })
+
+    expect(result.beatGridSeconds).toEqual([0.123, 0.456, 0.789, 1.012])
+    // intervals ≈ 0.333, 0.333, 0.223 → median 0.333 → ~180 BPM
+    expect(result.detectedBPM).toBe(180)
+  })
+
+  it("falls back to silencedetect when aubio probe succeeds but onset fails at run-time", async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const [, argv] = args as [string, string[]]
+      if (argv[0] === "--version") {
+        return asNodeCallback({ stdout: "aubio 0.4.9\n" })(...args)
+      }
+      if (argv[0] === "onset") {
+        return asNodeCallback(new Error("aubio: unsupported codec"))(...args)
+      }
+      return asNodeCallback(new Error("unexpected argv"))(...args)
+    })
+    ;(runFfmpegCapture as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stdout: "",
+      stderr:
+        "[silencedetect @ 0x1] silence_start: 2.0\n" +
+        "[silencedetect @ 0x1] silence_start: 3.0\n",
+    })
+
+    const result = await pipelineExtractBeatGrid({
+      musicUrl: "https://r2/music.mp3",
+      targetDurationSec: 60,
+    })
+
+    expect(result.beatGridSeconds).toEqual([2.0, 3.0])
+    expect(result.detectedBPM).toBe(60)
+  })
+
+  it("aubio onset parses empty + malformed lines", async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const [, argv] = args as [string, string[]]
+      if (argv[0] === "--version") {
+        return asNodeCallback({ stdout: "aubio 0.4.9\n" })(...args)
+      }
+      if (argv[0] === "onset") {
+        // Mixed: blank lines, NaN, valid floats, trailing whitespace.
+        return asNodeCallback({
+          stdout: "\n0.5\n\nfoo\n   1.0   \n2.0\n",
+        })(...args)
+      }
+      return asNodeCallback(new Error("unexpected argv"))(...args)
+    })
+    ;(runFfmpegCapture as ReturnType<typeof vi.fn>).mockResolvedValue({
+      stdout: "",
+      stderr: "",
+    })
+
+    const result = await pipelineExtractBeatGrid({
+      musicUrl: "https://r2/music.mp3",
+      targetDurationSec: 60,
+    })
+
+    expect(result.beatGridSeconds).toEqual([0.5, 1.0, 2.0])
   })
 })

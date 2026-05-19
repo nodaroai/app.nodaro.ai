@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
-import { extractLastFrame } from "./continuity.js"
+import { allocateReferenceSlots, extractLastFrame } from "./continuity.js"
 import { pipelineAnimateShot } from "./services/pipeline-animate-shot.js"
 import { pipelineGenerateSpeech } from "./services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "./services/pipeline-lip-sync.js"
@@ -83,6 +83,21 @@ export interface SceneInternalPipelineResult {
   composite_video_asset_id?: string
   composite_video_url?: string
   per_shot_results?: SceneInternalPipelineShotResult[]
+  /**
+   * Updated scene metadata reflecting the just-produced per-shot videos,
+   * lipsync replacements, and composite_video. The caller (`animate-audio-edit.ts`
+   * per-scene loop) is expected to reassign `scenes[i] = { ...scenes[i], metadata: updatedMetadata }`
+   * so downstream helpers (`collectAllShotsFromScenes`,
+   * `loadScenesWithCutDecisions`) see the fresh values without a DB re-read.
+   *
+   * Only present on success (`ok === true`). Absent on failure paths so the
+   * caller can fall through to the existing error-handling flush.
+   *
+   * Mirrors the return-fresh-array convention established by
+   * `persistCutDecisions` — `runSceneInternalPipeline` does NOT mutate
+   * `sceneEntity.metadata` in place.
+   */
+  updated_metadata?: Record<string, unknown>
 }
 
 const SHOT_PARALLEL_CONCURRENCY = 4
@@ -323,11 +338,44 @@ export async function runSceneInternalPipeline(
     }
   }
 
+  // Compute the next-state scene metadata without mutating the input. Stage 7
+  // (animate-audio-edit per-scene loop) reassigns `scenes[i].metadata` from
+  // this — keeps the in-memory view canonical for the downstream
+  // `collectAllShotsFromScenes` / `loadScenesWithCutDecisions` calls without
+  // a DB re-read, and keeps the immutable-return-array convention that
+  // `persistCutDecisions` already follows.
+  const nextShots = sceneData.shots.map((s) => {
+    const r = shotResults.find((x) => x.shot_id === s.shot_id)
+    if (!r) return s
+    return {
+      ...s,
+      video_asset_id: r.video_asset_id ?? s.video_asset_id,
+      video_url: r.video_url ?? s.video_url,
+      last_frame_asset_id: r.last_frame_asset_id ?? s.last_frame_asset_id,
+      last_frame_url: r.last_frame_url ?? s.last_frame_url,
+      ...(r.has_dialogue ? { has_dialogue: true } : {}),
+      ...(r.actual_audio_duration_sec != null
+        ? { actual_audio_duration_sec: r.actual_audio_duration_sec }
+        : {}),
+    }
+  })
+  const nextSceneNodeData = {
+    ...sceneData,
+    shots: nextShots,
+    composite_video_asset_id: composite.assetId ?? undefined,
+    composite_video_url: composite.assetUrl,
+  }
+  const updatedMetadata = {
+    ...(sceneEntity.metadata ?? {}),
+    scene_node_data: nextSceneNodeData,
+  }
+
   return {
     ok: true,
     composite_video_asset_id: composite.assetId ?? undefined,
     composite_video_url: composite.assetUrl,
     per_shot_results: shotResults,
+    updated_metadata: updatedMetadata,
   }
 }
 
@@ -358,6 +406,7 @@ async function animateSequential(
   const shotResults: SceneInternalPipelineShotResult[] = []
   const shotVideoUrls: Record<string, string> = {}
   let priorLastFrameUrl: string | null = null
+  let priorLastFrameAssetId: string | null = null
 
   for (let i = 0; i < sceneData.shots.length; i++) {
     const shot = sceneData.shots[i]! as ShotSpec
@@ -414,6 +463,17 @@ async function animateSequential(
     // keyframe is used.
     const startFrameUrl = priorLastFrameUrl ?? shot.keyframe_url ?? null
 
+    // F1 — allocate ordered reference slots per §5.13.3. The continuity
+    // anchor (prior shot's last_frame) wins slot 1 in sequential mode; the
+    // remaining slots fan out across cast / location / objects, capped to
+    // the provider's `maxReferenceImages` budget. Multi-ref-capable
+    // providers (Kling Omni=7, Seedance 2=5) get richer context; 1-ref
+    // providers degrade with a logged warning.
+    const referenceUrls = await safelyAllocateRefs(ctx, sceneEntity, sceneData, shot, {
+      priorLastFrameUrl,
+      priorLastFrameAssetId,
+    })
+
     let animateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
     try {
       animateResult = await pipelineAnimateShot({
@@ -424,6 +484,7 @@ async function animateSequential(
         shot,
         sceneNodeData: sceneData,
         startFrameUrl,
+        referenceUrls,
       })
     } catch (err) {
       console.error(
@@ -453,6 +514,7 @@ async function animateSequential(
           durationSec: shot.duration_seconds,
         })
         priorLastFrameUrl = extracted.url
+        priorLastFrameAssetId = extracted.assetId
         lastFrameAssetId = extracted.assetId
         lastFrameUrl = extracted.url
       } catch (err) {
@@ -463,6 +525,7 @@ async function animateSequential(
           err instanceof Error ? err.message : err,
         )
         priorLastFrameUrl = null
+        priorLastFrameAssetId = null
       }
     }
 
@@ -503,6 +566,16 @@ async function animateParallel(
 ): Promise<AnimateBranchResult> {
   const tasks = sceneData.shots.map((shot) => async () => {
     const startFrameUrl = (shot as ShotSpec).keyframe_url ?? null
+    // F1 — parallel mode has no continuity chain across shots, so the
+    // continuity anchor slot is empty. Cast / location / object slots
+    // still fan out per §5.13.3.
+    const referenceUrls = await safelyAllocateRefs(
+      ctx,
+      sceneEntity,
+      sceneData,
+      shot as ShotSpec,
+      { priorLastFrameUrl: null, priorLastFrameAssetId: null },
+    )
     const animateResult = await pipelineAnimateShot({
       supabase: ctx.supabase,
       pipelineId: ctx.pipelineId,
@@ -511,6 +584,7 @@ async function animateParallel(
       shot: shot as ShotSpec,
       sceneNodeData: sceneData,
       startFrameUrl,
+      referenceUrls,
     })
     return { shot: shot as ShotSpec, animateResult }
   })
@@ -552,6 +626,49 @@ async function animateParallel(
   }
 
   return { ok: true, shotResults, shotVideoUrls }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reference-slot allocation helper
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Wraps `allocateReferenceSlots` with a per-shot try/catch so a transient
+ * DB error during allocation doesn't fail the entire animate step. On
+ * failure we proceed without refs — `pipelineAnimateShot` already handles
+ * the no-ref case (a `startFrameUrl` alone suffices for first_frame mode;
+ * text mode needs neither). Returns `undefined` (not an empty array) so
+ * `pipelineAnimateShot`'s `referenceUrls = []` fallback doesn't trip on
+ * a deliberately-empty array vs. an absent param.
+ */
+async function safelyAllocateRefs(
+  ctx: SceneInternalPipelineContext,
+  sceneEntity: { id: string },
+  sceneData: SceneNodeData,
+  shot: ShotSpec,
+  args: { priorLastFrameUrl: string | null; priorLastFrameAssetId: string | null },
+): Promise<ReadonlyArray<string> | undefined> {
+  try {
+    const slots = await allocateReferenceSlots({
+      supabase: ctx.supabase,
+      pipelineId: ctx.pipelineId,
+      scene: { id: sceneEntity.id },
+      shot,
+      sceneNodeData: sceneData,
+      priorLastFrame:
+        args.priorLastFrameUrl && args.priorLastFrameAssetId
+          ? { url: args.priorLastFrameUrl, assetId: args.priorLastFrameAssetId }
+          : null,
+    })
+    if (slots.length === 0) return undefined
+    return slots.map((s) => s.url)
+  } catch (err) {
+    console.warn(
+      `[scene-internal-pipeline] allocateReferenceSlots failed for scene=${sceneEntity.id} shot=${shot.shot_id}; falling through with no refs:`,
+      err instanceof Error ? err.message : err,
+    )
+    return undefined
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────────

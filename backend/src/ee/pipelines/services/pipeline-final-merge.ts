@@ -12,7 +12,7 @@ import {
 } from "../../../providers/video/ffmpeg-utils.js"
 import { pickTargetResolution } from "../../../providers/video/combine-videos.js"
 import { uploadFileToR2 } from "../../../lib/storage.js"
-import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+import { settledOrThrow } from "../../../lib/settled-or-throw.js"
 import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
@@ -21,32 +21,11 @@ import {
 const DOWNLOAD_CONCURRENCY = 5
 const FFPROBE_CONCURRENCY = 8
 
-/**
- * Helper: run tasks via `settledWithLimit` in fail-fast mode, then rethrow
- * the first rejection so the caller can fail the merge atomically.
- * `pickTargetResolution` (called between downloads and trim) still does its
- * own internal `Promise.all` of ffprobes — leaving it unchanged keeps the
- * 9 other callers of `pickTargetResolution` in `combine-videos.ts`
- * unaffected. The bounded-concurrency improvement here applies to the
- * downloads (step 1) and the explicit ffprobe pass (step 3).
- */
-async function settledOrThrow<T>(
-  tasks: (() => Promise<T>)[],
-  limit: number,
-): Promise<T[]> {
-  const cancelRef = { cancelled: false }
-  const results = await settledWithLimit(tasks, limit, cancelRef, true)
-  const firstRejected = results.find((r) => r.status === "rejected")
-  if (firstRejected && firstRejected.status === "rejected") {
-    throw firstRejected.reason instanceof Error
-      ? firstRejected.reason
-      : new Error(String(firstRejected.reason))
-  }
-  return results.map((r) => {
-    if (r.status !== "fulfilled") throw new Error("unreachable")
-    return r.value
-  })
-}
+// `pickTargetResolution` (called between downloads and trim) still does its
+// own internal `Promise.all` of ffprobes — leaving it unchanged keeps the
+// other callers of `pickTargetResolution` in `combine-videos.ts` unaffected.
+// The bounded-concurrency improvement here applies to the downloads (step 1)
+// and the explicit ffprobe pass (step 3).
 
 /**
  * Phase 1C.2 sub-step 7j — Final merge.
@@ -114,6 +93,16 @@ export interface PipelineFinalMergeArgs {
   scenes: ReadonlyArray<FinalMergeSceneInput>
   /** R2 URL of the merged music track. Empty when music is disabled. */
   musicAssetUrl: string
+  /**
+   * Phase 1C.2.1 §G5 — Optional R2 URL of the narration audio track produced
+   * by sub-step 7c (`pipelineGenerateNarration`). When present and music is
+   * also present, the FFmpeg amix filter blends both tracks with music
+   * ducked to 60% volume (constant duck — sidechain ducking is a follow-up).
+   * When narration is present but music is absent, narration becomes the
+   * sole audio track. When narration is absent, existing music-only / no-
+   * audio behavior is preserved.
+   */
+  narrationAssetUrl?: string
   /** Default 0.8s — matches the §6 sub-step 7g spec. */
   fadeOutDurationSec?: number
 }
@@ -135,6 +124,7 @@ export async function pipelineFinalMerge(
     userId,
     scenes,
     musicAssetUrl,
+    narrationAssetUrl,
     fadeOutDurationSec = DEFAULT_FADE_OUT_SEC,
   } = args
 
@@ -153,6 +143,7 @@ export async function pipelineFinalMerge(
         type: "pipeline-final-merge",
         sceneCount: scenes.length,
         musicEnabled: !!musicAssetUrl,
+        narrationEnabled: !!narrationAssetUrl,
       },
       pipeline_id: pipelineId,
     })
@@ -181,6 +172,7 @@ export async function pipelineFinalMerge(
       workDir,
       scenes,
       musicAssetUrl,
+      narrationAssetUrl: narrationAssetUrl ?? "",
       fadeOutDurationSec,
       outputPath,
     })
@@ -233,9 +225,13 @@ interface MergeArgs {
   workDir: string
   scenes: ReadonlyArray<FinalMergeSceneInput>
   musicAssetUrl: string
+  /** Phase 1C.2.1 §G5 — narration audio track (empty string when absent). */
+  narrationAssetUrl: string
   fadeOutDurationSec: number
   outputPath: string
 }
+
+const MUSIC_DUCK_VOLUME_WITH_NARRATION = 0.6
 
 /**
  * Core FFmpeg merge — downloads every scene composite, applies per-scene
@@ -246,7 +242,14 @@ interface MergeArgs {
  * result + emit it on the lifecycle event.
  */
 async function mergeScenesWithMusic(args: MergeArgs): Promise<number> {
-  const { workDir, scenes, musicAssetUrl, fadeOutDurationSec, outputPath } = args
+  const {
+    workDir,
+    scenes,
+    musicAssetUrl,
+    narrationAssetUrl,
+    fadeOutDurationSec,
+    outputPath,
+  } = args
 
   // 1. Download every scene composite via bounded concurrency. `Promise.all`
   //    would fan out N parallel R2 connections regardless of scene count.
@@ -327,52 +330,134 @@ async function mergeScenesWithMusic(args: MergeArgs): Promise<number> {
     }),
   })
 
-  // 5. Overlay music + tail fade-out, OR (no music) just apply the fade.
+  // 5. Mix audio onto the concatenated video. Four cases:
+  //
+  //   a. music + narration  → amix the two with music ducked to 60% (§G5).
+  //   b. narration only     → narration is the sole audio track.
+  //   c. music only         → existing behavior (1C.2): music with tail fade.
+  //   d. neither            → fade-only on whatever audio survived concat.
+  //
+  // Music overlay failure (case a/c) falls back to case d so the pipeline
+  // still ships a final MP4.
   const concatDur = await getVideoDuration(concatPath)
   const fadeStart = Math.max(0, concatDur - fadeOutDurationSec)
+  const fadeStartStr = fadeStart.toFixed(3)
 
+  // Download all required audio inputs up front via the same bounded-
+  // concurrency settledOrThrow used for scene downloads. The narration
+  // download is sequenced alongside music so the work can overlap.
+  const audioDownloads: Array<() => Promise<{ kind: "music" | "narration"; path: string }>> = []
+  let musicPath = ""
+  let narrationPath = ""
   if (musicAssetUrl) {
-    const musicPath = join(workDir, "music.mp3")
-    try {
+    musicPath = join(workDir, "music.mp3")
+    audioDownloads.push(async () => {
       await downloadFile(musicAssetUrl, musicPath)
-      await runFfmpeg([
-        "-y",
-        "-i", concatPath,
-        "-i", musicPath,
-        // Replace video audio with the music track. -shortest caps duration
-        // at the shorter of the two; the music track was already trimmed in
-        // 7g to match concatDur. afade applies the music fade-out.
-        "-filter_complex",
-        `[1:a]afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutDurationSec}[aout]`,
-        "-map", "0:v",
-        "-map", "[aout]",
-        "-c:v", "copy",
-        "-c:a", "aac",
-        "-shortest",
-        outputPath,
-      ])
+      return { kind: "music" as const, path: musicPath }
+    })
+  }
+  if (narrationAssetUrl) {
+    narrationPath = join(workDir, "narration.mp3")
+    audioDownloads.push(async () => {
+      await downloadFile(narrationAssetUrl, narrationPath)
+      return { kind: "narration" as const, path: narrationPath }
+    })
+  }
+  if (audioDownloads.length > 0) {
+    await settledOrThrow(audioDownloads, DOWNLOAD_CONCURRENCY)
+  }
+
+  const hasMusic = !!musicAssetUrl
+  const hasNarration = !!narrationAssetUrl
+
+  if (hasMusic || hasNarration) {
+    try {
+      if (hasMusic && hasNarration) {
+        // Case a: music + narration. amix both tracks with music ducked to
+        // 60% volume (constant — sidechain ducking is a follow-up). Music
+        // also gets its tail fade-out preserved from the 1C.2 path.
+        // Inputs: [0]=video, [1]=music, [2]=narration.
+        await runFfmpeg([
+          "-y",
+          "-i", concatPath,
+          "-i", musicPath,
+          "-i", narrationPath,
+          "-filter_complex",
+          [
+            `[1:a]volume=${MUSIC_DUCK_VOLUME_WITH_NARRATION},afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[music_ducked]`,
+            `[2:a]volume=1.0[narr]`,
+            `[music_ducked][narr]amix=inputs=2:duration=longest:dropout_transition=0[aout]`,
+          ].join(";"),
+          "-map", "0:v",
+          "-map", "[aout]",
+          "-c:v", "copy",
+          "-c:a", "aac",
+          "-shortest",
+          outputPath,
+        ])
+      } else if (hasNarration) {
+        // Case b: narration only. Narration replaces video audio entirely.
+        // Inputs: [0]=video, [1]=narration.
+        await runFfmpeg([
+          "-y",
+          "-i", concatPath,
+          "-i", narrationPath,
+          "-filter_complex",
+          `[1:a]afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[aout]`,
+          "-map", "0:v",
+          "-map", "[aout]",
+          "-c:v", "copy",
+          "-c:a", "aac",
+          "-shortest",
+          outputPath,
+        ])
+      } else {
+        // Case c: music only. Existing 1C.2 behavior — music with tail fade.
+        await runFfmpeg([
+          "-y",
+          "-i", concatPath,
+          "-i", musicPath,
+          // Replace video audio with the music track. -shortest caps duration
+          // at the shorter of the two; the music track was already trimmed in
+          // 7g to match concatDur. afade applies the music fade-out.
+          "-filter_complex",
+          `[1:a]afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}[aout]`,
+          "-map", "0:v",
+          "-map", "[aout]",
+          "-c:v", "copy",
+          "-c:a", "aac",
+          "-shortest",
+          outputPath,
+        ])
+      }
     } catch (err) {
-      // Music overlay failed — fall back to no-music output so the pipeline
-      // still ships a final MP4. Logged for visibility.
+      // Audio mix failed — fall back to fade-only output so the pipeline
+      // still ships a final MP4. Mirrors the original 1C.2 music-only
+      // fallback (which already lived inside `if (musicAssetUrl)`); the
+      // G5 narration paths inherit the same graceful-degrade behavior.
       console.warn(
-        "[pipeline-final-merge] music overlay failed, falling back to no-music output:",
+        "[pipeline-final-merge] audio mix failed, falling back to fade-only output:",
         err instanceof Error ? err.message : err,
       )
       await runFfmpeg([
         "-y",
         "-i", concatPath,
-        "-af", `afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutDurationSec}`,
+        "-af", `afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}`,
         "-c:v", "copy",
         "-c:a", "aac",
         outputPath,
       ])
     }
   } else {
-    // No music — apply a simple tail fade to the existing audio (if any).
+    // Case d: neither narration nor music. Existing pre-G5 behavior — a
+    // single ffmpeg call applies a tail fade on whatever audio survived
+    // concat. NOT wrapped in try/catch: a failure here is a real pipeline
+    // failure (no audio mix involved), and the outer pipelineFinalMerge
+    // catch handles the refund + status flip. Test #5 pins this behavior.
     await runFfmpeg([
       "-y",
       "-i", concatPath,
-      "-af", `afade=t=out:st=${fadeStart.toFixed(3)}:d=${fadeOutDurationSec}`,
+      "-af", `afade=t=out:st=${fadeStartStr}:d=${fadeOutDurationSec}`,
       "-c:v", "copy",
       "-c:a", "aac",
       outputPath,

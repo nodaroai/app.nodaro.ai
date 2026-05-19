@@ -191,6 +191,26 @@ Approve clears `pipeline_stages.output.current_sub_gate`, flips stage status bac
 
 A new toolbar toggle in the canvas (`<ViewModeToggle>`) switches ALL SceneNodes between `default` / `storyboard` / `video` / `scripting` view modes simultaneously. Per-node toggle still works; the canvas-wide override wins when set (clicking the active button again clears the override and returns to per-node selection).
 
+## Phase 1C.2.1 additions (cleanup + narration + FCPXML)
+
+### Auto-sequential mode
+
+Stage 5 auto-forces `pipeline.config.shot_generation_mode = 'sequential'` when any scene contains a shot with `continuity_with_previous` set, per spec §5.13.4 ("Sequential mode is the only mode that honors continuity"). Manual override still wins. Emits a `pipeline:warning` event with `code: "auto_forced_sequential_mode"` for visibility.
+
+### Sub-step 7c — Narration audio
+
+When `plan.narration_script` is set on the Showrunner output (optional — best for trailers, documentaries, omniscient-narrator formats), sub-step 7c generates a single narrator-voice audio track via ElevenLabs (default model: `elevenlabs-v3` for `[audio tags]` support). Runs ONCE per pipeline (not per-scene) before sub-step 7d'. Persists `narration_audio_url` + `narration_audio_duration_sec` to `pipeline_stages.output`. Sub-step 7j mixes it as a second audio track over the music with **60% music duck** (constant amix ducking; sidechain compression is a follow-up).
+
+`pipelines.config.narration_enabled` (default `true`) lets the user opt out.
+
+### FCPXML export format
+
+`pipelines.config.freecut_export_format` accepts `"json"` (default — Nodaro-flat-timeline-v1) or `"fcpxml"` (FCPXML 1.10 — Apple's open NLE timeline format ingested by Final Cut Pro, DaVinci Resolve, Premiere XML import). Both formats reuse the same in-memory timeline reduction logic (per-scene head/tail trim + per-pair transitions). Narration audio (when present) becomes a separate audio lane (no pre-mix) so downstream NLE re-mixing stays unconstrained.
+
+### Beat detection: aubio with FFmpeg silencedetect fallback
+
+Sub-step 7g prefers `aubio onset` (Debian `aubio-tools` package, baked into the Dockerfile) when available. Falls back to the original FFmpeg silencedetect heuristic when aubio is absent. aubio detection is cached at module init.
+
 ## Mid-flight canvas edits (Phase 1B.4)
 
 While a pipeline is running, the engine writes nodes to the canvas. Each node carries an ownership flag (`pipeline_state`) that controls what the user can do:

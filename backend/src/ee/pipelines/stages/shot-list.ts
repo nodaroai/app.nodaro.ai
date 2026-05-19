@@ -117,6 +117,15 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
     )
   }
 
+  // Auto-force `shot_generation_mode='sequential'` when ANY shot has
+  // `continuity_with_previous` set. Per spec §5.13.4, sequential mode is the
+  // only mode that honors continuity — parallel mode fans shots out without
+  // a chained last_frame, so a shot's `continuity_with_previous` directive
+  // would be silently ignored. Flip the pipeline config preemptively here
+  // (Stage 5 is the first point at which continuity is known) so Stage 7
+  // picks up the corrected mode without user intervention.
+  await maybeForceSequentialMode(supabase, pipelineId)
+
   // Check end-of-stage condition: all scenes reach awaiting_approval or approved.
   const { data: refreshed } = await supabase
     .from("pipeline_entities")
@@ -292,5 +301,61 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
     sceneIndex,
     status: "awaiting_approval",
     shotCount: sceneNodeData.shots.length,
+  })
+}
+
+/**
+ * Inspects every scene's `scene_node_data.shots[].continuity_with_previous`.
+ * When at least one shot opts into a continuity link AND the pipeline isn't
+ * already in `sequential` mode, flips `pipelines.config.shot_generation_mode`
+ * to `"sequential"` and emits a `pipeline:warning` event so the UI can surface
+ * the auto-correction. No-op when:
+ *
+ *   - No shot has continuity_with_previous set (parallel mode is fine), OR
+ *   - The pipeline is already in sequential mode.
+ *
+ * Per spec §5.13.4: "Sequential mode is the only mode that honors continuity."
+ */
+async function maybeForceSequentialMode(
+  supabase: SupabaseClient,
+  pipelineId: string,
+): Promise<void> {
+  const { data: scenes } = await supabase
+    .from("pipeline_entities")
+    .select("metadata")
+    .eq("pipeline_id", pipelineId)
+    .eq("entity_type", "scene")
+
+  const anyContinuity = (scenes ?? []).some((s) => {
+    const data = (s.metadata as Record<string, unknown> | null)
+      ?.scene_node_data as
+      | { shots?: ReadonlyArray<{ continuity_with_previous?: string | null }> }
+      | undefined
+    return data?.shots?.some((shot) => shot.continuity_with_previous != null) ?? false
+  })
+  if (!anyContinuity) return
+
+  const { data: pipeline } = await supabase
+    .from("pipelines")
+    .select("config")
+    .eq("id", pipelineId)
+    .single()
+  const currentConfig = (pipeline?.config as Record<string, unknown> | null) ?? {}
+  const currentMode = (currentConfig as { shot_generation_mode?: string })
+    .shot_generation_mode
+  if (currentMode === "sequential") return
+
+  await supabase
+    .from("pipelines")
+    .update({
+      config: { ...currentConfig, shot_generation_mode: "sequential" },
+    })
+    .eq("id", pipelineId)
+  pipelineEvents.publish({
+    type: "pipeline:warning",
+    pipelineId,
+    code: "auto_forced_sequential_mode",
+    message:
+      "Auto-forced shot_generation_mode='sequential' because continuity_with_previous is set on at least one shot. See spec §5.13.4.",
   })
 }

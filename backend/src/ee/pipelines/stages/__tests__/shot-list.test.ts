@@ -126,12 +126,16 @@ function makeSupabase(
   opts: {
     planOverride?: unknown
     initialEntities?: Array<Record<string, unknown>>
+    /** Pipeline config row returned for the auto-sequential check. */
+    pipelineConfig?: Record<string, unknown>
   } = {},
 ) {
   const entities = new Map<string, Record<string, unknown>>()
   for (const e of opts.initialEntities ?? []) entities.set(e.id as string, e)
   const stageUpdates: Array<Record<string, unknown>> = []
+  const pipelineUpdates: Array<Record<string, unknown>> = []
   const planForRead = opts.planOverride ?? fakePlan
+  const pipelineConfig = opts.pipelineConfig ?? {}
 
   // The pipeline_entities table receives:
   //   - `select("id, entity_key, status, metadata").eq().eq().order()` → array of entities
@@ -226,10 +230,29 @@ function makeSupabase(
           }),
         }
       }
+      if (table === "pipelines") {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: { config: pipelineConfig },
+                error: null,
+              }),
+            }),
+          }),
+          update: (patch: Record<string, unknown>) => ({
+            eq: async () => {
+              pipelineUpdates.push(patch)
+              return { data: null, error: null }
+            },
+          }),
+        }
+      }
       throw new Error(`Unmocked table: ${table}`)
     },
     _entities: entities,
     _stageUpdates: stageUpdates,
+    _pipelineUpdates: pipelineUpdates,
   } as never
 }
 
@@ -312,6 +335,155 @@ describe("runShotListStage", () => {
     // 1 initial + 1 retry = 2 Scene Director calls; 2 critic calls
     expect(runSceneDirector).toHaveBeenCalledTimes(2)
     expect(runShotListCritic).toHaveBeenCalledTimes(2)
+  })
+
+  describe("auto-force sequential mode", () => {
+    it("flips shot_generation_mode to 'sequential' when any shot has continuity_with_previous", async () => {
+      ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...fakeSceneNodeData(1),
+        shots: [
+          {
+            shot_id: "shot_01",
+            camera: { shot_type: "wide", angle: "eye_level", motion: "static" },
+            shot_intensity_kind: "establishing_shot",
+            action: "x",
+            dialogue_line: null,
+            duration_seconds: 10,
+            motion_prompt: "x",
+            start_state: "x",
+            end_state: "x",
+            // The opt-in continuity link that should trigger the auto-force.
+            continuity_with_previous: "Hero stays at door",
+            shot_intent: {
+              needs_multishot_reference: false,
+              is_loopable: false,
+              needs_music_suppression: true,
+              is_match_cut: false,
+            },
+            visual_keyframe_prompt: "x",
+          },
+        ],
+      })
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue({
+        verdict: "pass",
+        issues: [],
+        duration_analysis: {
+          target_seconds: 20,
+          actual_sum_seconds: 20,
+          deviation_percent: 0,
+          within_tolerance: true,
+        },
+      })
+
+      const planOneScene = { ...fakePlan, scenes: [fakePlan.scenes[0]] }
+      const supabase = makeSupabase({
+        planOverride: planOneScene,
+        pipelineConfig: { shot_generation_mode: "parallel" },
+      })
+
+      await runShotListStage({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        userTier: "pro",
+      })
+
+      const updates = (
+        supabase as never as { _pipelineUpdates: Array<Record<string, unknown>> }
+      )._pipelineUpdates
+      expect(updates).toHaveLength(1)
+      const cfg = updates[0]?.config as { shot_generation_mode?: string }
+      expect(cfg.shot_generation_mode).toBe("sequential")
+    })
+
+    it("no-op when no shot has continuity_with_previous", async () => {
+      // The default fakeSceneNodeData has continuity_with_previous=null on
+      // every shot, so the auto-force path should never even read pipelines.config.
+      ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue(fakeSceneNodeData(1))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue({
+        verdict: "pass",
+        issues: [],
+        duration_analysis: {
+          target_seconds: 20,
+          actual_sum_seconds: 20,
+          deviation_percent: 0,
+          within_tolerance: true,
+        },
+      })
+
+      const planOneScene = { ...fakePlan, scenes: [fakePlan.scenes[0]] }
+      const supabase = makeSupabase({
+        planOverride: planOneScene,
+        pipelineConfig: { shot_generation_mode: "parallel" },
+      })
+
+      await runShotListStage({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        userTier: "pro",
+      })
+
+      const updates = (
+        supabase as never as { _pipelineUpdates: Array<Record<string, unknown>> }
+      )._pipelineUpdates
+      expect(updates).toHaveLength(0)
+    })
+
+    it("no-op when pipeline is already in sequential mode", async () => {
+      ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...fakeSceneNodeData(1),
+        shots: [
+          {
+            shot_id: "shot_01",
+            camera: { shot_type: "wide", angle: "eye_level", motion: "static" },
+            shot_intensity_kind: "establishing_shot",
+            action: "x",
+            dialogue_line: null,
+            duration_seconds: 10,
+            motion_prompt: "x",
+            start_state: "x",
+            end_state: "x",
+            continuity_with_previous: "Hero stays at door",
+            shot_intent: {
+              needs_multishot_reference: false,
+              is_loopable: false,
+              needs_music_suppression: true,
+              is_match_cut: false,
+            },
+            visual_keyframe_prompt: "x",
+          },
+        ],
+      })
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue({
+        verdict: "pass",
+        issues: [],
+        duration_analysis: {
+          target_seconds: 20,
+          actual_sum_seconds: 20,
+          deviation_percent: 0,
+          within_tolerance: true,
+        },
+      })
+
+      const planOneScene = { ...fakePlan, scenes: [fakePlan.scenes[0]] }
+      const supabase = makeSupabase({
+        planOverride: planOneScene,
+        pipelineConfig: { shot_generation_mode: "sequential" },
+      })
+
+      await runShotListStage({
+        supabase,
+        pipelineId: "p1",
+        userId: "u1",
+        userTier: "pro",
+      })
+
+      const updates = (
+        supabase as never as { _pipelineUpdates: Array<Record<string, unknown>> }
+      )._pipelineUpdates
+      expect(updates).toHaveLength(0)
+    })
   })
 
   it("marks scene failed when Scene Director throws", async () => {
