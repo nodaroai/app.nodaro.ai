@@ -104,3 +104,20 @@ describe("getParameterValue — transition", () => {
     expect(PARAMETER_NODE_TYPES.has("transition")).toBe(true)
   })
 })
+
+describe("getParameterValue — character-fx", () => {
+  it("returns the id for a single string value", () => {
+    expect(getParameterValue({ characterFx: "werewolf" }, "character-fx")).toBe("werewolf")
+  })
+  it("returns first id for an array value (multi-pick)", () => {
+    expect(getParameterValue({ characterFx: ["werewolf", "fire-breathe"] }, "character-fx"))
+      .toBe("werewolf")
+  })
+  it("returns undefined for empty string / empty array", () => {
+    expect(getParameterValue({ characterFx: "" }, "character-fx")).toBeUndefined()
+    expect(getParameterValue({ characterFx: [] }, "character-fx")).toBeUndefined()
+  })
+  it("character-fx is in PARAMETER_NODE_TYPES set", () => {
+    expect(PARAMETER_NODE_TYPES.has("character-fx")).toBe(true)
+  })
+})

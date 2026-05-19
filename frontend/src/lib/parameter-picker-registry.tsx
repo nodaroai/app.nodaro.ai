@@ -41,6 +41,7 @@ import { POST_PROCESS_EFFECTS } from "@nodaro/shared"
 import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER } from "@nodaro/shared"
 import { LOOP_SUBJECTS, LOOP_SUBJECT_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_ORDER } from "@nodaro/shared"
 import { TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "@nodaro/shared"
+import { CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER } from "@nodaro/shared"
 import { FRAMINGS } from "@nodaro/shared"
 import { LIGHTINGS } from "@nodaro/shared"
 import { PEOPLE } from "@nodaro/shared"
@@ -352,6 +353,18 @@ const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     groupOrder: TRANSITION_CATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: TRANSITION_CATEGORY_LABELS,
     // renderIcon omitted — config-panel grid uses text-only tiles (action-fx parity).
+  },
+  {
+    kind: "single",
+    nodeType: "character-fx",
+    label: "Character FX",
+    valueField: "characterFx",
+    defaultValue: "auto",
+    catalogId: "character-fx",
+    entries: mapCat(CHARACTER_FX, "category"),
+    groupOrder: CHARACTER_FX_CATEGORY_ORDER as ReadonlyArray<string>,
+    groupLabels: CHARACTER_FX_CATEGORY_LABELS,
+    // renderIcon omitted — config-panel grid renders per-entry icons internally.
   },
 
   // -------- "Subject / Object" family --------

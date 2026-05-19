@@ -60,6 +60,7 @@ import type {
   TransitionPosition,
   TransitionDuration,
   TransitionIntensity,
+  CharacterFxData,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { FramingPicker } from "./framing-picker"
@@ -92,11 +93,12 @@ import { RenderQualityPicker } from "./render-quality-picker"
 import { CompositionEffectsPicker } from "./composition-effects-picker"
 import { PostProcessEffectsPicker } from "./post-process-effects-picker"
 import { TransitionPicker } from "./transition-picker"
+import { CharacterFxPicker } from "./character-fx-picker"
 import { PhotographerPicker } from "./photographer-picker"
 import { AestheticPicker } from "./aesthetic-picker"
 import { EraPicker } from "./era-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
-import { composeCameraMotionHintForNode, composeTransitionHintForNode } from "@/lib/cinematography-hints"
+import { composeCameraMotionHintForNode, composeTransitionHintForNode, composeCharacterFxHintForNode } from "@/lib/cinematography-hints"
 import { buildFramingHints } from "@nodaro/shared"
 import { getLensPromptHint } from "@nodaro/shared"
 import { getCameraFormatPromptHint } from "@nodaro/shared"
@@ -1313,6 +1315,51 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       <TransitionPicker
         value={data.transition}
         onValueChange={(v) => onUpdate({ transition: v as string | string[] | undefined })}
+        maxSelected={2}
+      />
+
+      <div className="grid grid-cols-3 gap-2">
+        {TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+          <div key={key} className="flex flex-col gap-1">
+            <Label className="text-[10px] uppercase">{labelText}</Label>
+            <Select
+              value={(data[key] as string) ?? "auto"}
+              onValueChange={(v) => onUpdate({ [key]: v })}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {options.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxData>) {
+  const dir = useLocaleDir()
+  const composed = composeCharacterFxHintForNode(data)
+
+  return (
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="character-fx"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. mid-transformation"
+        postPlaceholder="e.g. with smoke trailing behind"
+        onChange={onUpdate}
+      />
+      <Label>Character FX (pick up to 2)</Label>
+      <CharacterFxPicker
+        value={data.characterFx}
+        onValueChange={(v) => onUpdate({ characterFx: v as string | string[] | undefined })}
         maxSelected={2}
       />
 

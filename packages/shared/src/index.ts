@@ -735,6 +735,8 @@ export type {
   TransitionTiming,
 } from "./transitions.js"
 
+export * from "./character-fx.js"
+
 export {
   VEHICLES,
   VEHICLE_SUBCATEGORY_LABELS,
