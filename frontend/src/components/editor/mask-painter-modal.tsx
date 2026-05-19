@@ -315,10 +315,11 @@ export function MaskPainterModal({
   }
 
   function handlePointerUp() {
-    if (!activeStrokeRef.current) return
-    setStrokes((prev) => [...prev, activeStrokeRef.current!])
-    setRedoStack([])
+    const stroke = activeStrokeRef.current
+    if (!stroke) return
     activeStrokeRef.current = null
+    setStrokes((prev) => [...prev, stroke])
+    setRedoStack([])
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
