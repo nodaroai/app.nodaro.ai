@@ -3,6 +3,7 @@ import type {
   PipelineEvent,
   PipelineStatus,
   PipelineStageName,
+  SubGateName,
   AuditPromptResult,
   ImprovePromptResult,
   ImprovePromptInput,
@@ -132,6 +133,30 @@ export const pipelinesApi = {
     forkedStatus: string
     forkReason: string
   }> => postJson(`/v1/pipelines/${id}/fork`, {}),
+  /**
+   * Phase 1C.2 — Approve a Stage 7 sub-gate (`silent_cut_preview` or
+   * `dialogue_recheck`). Clears `current_sub_gate` server-side and resumes
+   * the orchestrator from the next sub-step.
+   */
+  approveSubGate: (
+    pipelineId: string,
+    gate: SubGateName,
+  ): Promise<{ ok: true; gate: SubGateName; resumed_at: string }> =>
+    postJson(`/v1/pipelines/${pipelineId}/sub-gates/${gate}/approve`, {}),
+  /**
+   * Phase 1C.2 — Reject a Stage 7 sub-gate. Fails the stage with
+   * `failure_reason='sub_gate_rejected:<gate>'`; unspent credits refund.
+   * Feedback is stashed on the stage output for the (1D) branch-from-stage
+   * resume path.
+   */
+  rejectSubGate: (
+    pipelineId: string,
+    gate: SubGateName,
+    feedback?: string,
+  ): Promise<{ ok: false; gate: SubGateName; reason: string }> =>
+    postJson(`/v1/pipelines/${pipelineId}/sub-gates/${gate}/reject`, {
+      feedback,
+    }),
   /**
    * Run a §6.11 scene-context helper. The generic ties the helper name to its
    * expected body shape (compile-time error if the wrong body is passed) and

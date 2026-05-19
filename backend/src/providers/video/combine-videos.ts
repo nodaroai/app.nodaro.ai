@@ -149,7 +149,7 @@ async function getVideoResolution(filePath: string): Promise<{ width: number; he
  * largest area — so the common case (all clips already match) is a no-op,
  * and a lone mismatched clip gets letterboxed to fit the majority.
  */
-async function pickTargetResolution(
+export async function pickTargetResolution(
   paths: readonly string[],
 ): Promise<{ width: number; height: number }> {
   const resolutions = await Promise.all(paths.map(getVideoResolution))

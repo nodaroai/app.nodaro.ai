@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-// Mock the combine-videos wrapper + stage helpers BEFORE importing the SUT
-// so the SUT's static imports pick up the mocks. Paths are relative to the
-// SUT (`stages/post-merge.ts`), NOT this test file.
-vi.mock("../services/pipeline-combine-videos.js", () => ({
-  pipelineCombineVideos: vi.fn(),
-}))
+// Mock stage helpers + events BEFORE importing the SUT. Paths are relative
+// to the SUT (`stages/post-merge.ts`), NOT to this test file.
 vi.mock("../stage-utils.js", () => ({
   ensureStageRow: vi.fn().mockResolvedValue("stage-8"),
   failStage: vi.fn(),
@@ -14,7 +10,6 @@ vi.mock("../events.js", () => ({
   pipelineEvents: { publish: vi.fn() },
 }))
 
-import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
 import { failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { runPostMergeStage } from "../stages/post-merge.js"
@@ -23,41 +18,29 @@ beforeEach(() => vi.clearAllMocks())
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-interface SceneFixture {
-  id: string
-  entity_key: string
-  composite_video_url?: string
-  composite_video_asset_id?: string
-}
-
 interface MakeSupabaseOpts {
-  scenes: SceneFixture[]
+  pipelineMode?: "manual" | "auto" | "guided"
+  finalOutputAssetId?: string | null
   initialStageStatus?: string
+  assetR2Url?: string
+  assetMissing?: boolean
 }
 
-function makeSupabase(opts: MakeSupabaseOpts) {
+function makeSupabase(opts: MakeSupabaseOpts = {}) {
   const stageUpdates: Array<Record<string, unknown>> = []
   const pipelineUpdates: Array<Record<string, unknown>> = []
 
   return {
-    rpc: vi.fn(),
     from: (table: string) => {
       if (table === "pipeline_stages") {
         return {
           select: () => ({
-            eq: (col1: string, _val1: string) => {
-              if (col1 === "id") {
-                return {
-                  maybeSingle: async () => ({
-                    data: {
-                      status: opts.initialStageStatus ?? "running",
-                    },
-                    error: null,
-                  }),
-                }
-              }
-              return { eq: () => ({ single: async () => ({ data: null, error: null }) }) }
-            },
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { status: opts.initialStageStatus ?? "running" },
+                error: null,
+              }),
+            }),
           }),
           update: (patch: Record<string, unknown>) => ({
             eq: async () => {
@@ -69,6 +52,20 @@ function makeSupabase(opts: MakeSupabaseOpts) {
       }
       if (table === "pipelines") {
         return {
+          select: () => ({
+            eq: () => ({
+              single: async () => ({
+                data: {
+                  mode: opts.pipelineMode ?? "manual",
+                  final_output_asset_id:
+                    opts.finalOutputAssetId === undefined
+                      ? "asset-final"
+                      : opts.finalOutputAssetId,
+                },
+                error: null,
+              }),
+            }),
+          }),
           update: (patch: Record<string, unknown>) => ({
             eq: async () => {
               pipelineUpdates.push(patch)
@@ -77,25 +74,19 @@ function makeSupabase(opts: MakeSupabaseOpts) {
           }),
         }
       }
-      if (table === "pipeline_entities") {
-        const rows = opts.scenes.map((s) => ({
-          metadata:
-            s.composite_video_url || s.composite_video_asset_id
-              ? {
-                  scene_node_data: {
-                    composite_video_url: s.composite_video_url,
-                    composite_video_asset_id: s.composite_video_asset_id,
-                  },
-                }
-              : {},
-          entity_key: s.entity_key,
-        }))
+      if (table === "assets") {
         return {
           select: () => ({
             eq: () => ({
-              eq: () => ({
-                order: async () => ({ data: rows, error: null }),
-              }),
+              single: async () => {
+                if (opts.assetMissing) {
+                  return { data: null, error: { message: "not_found" } }
+                }
+                return {
+                  data: { r2_url: opts.assetR2Url ?? "https://r2/final.mp4" },
+                  error: null,
+                }
+              },
             }),
           }),
         }
@@ -109,36 +100,12 @@ function makeSupabase(opts: MakeSupabaseOpts) {
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
-describe("runPostMergeStage", () => {
-  it("happy path: N scenes → combine_videos call → status=completed + pipeline:completed", async () => {
-    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
-      jobId: "j-final",
-      assetId: "final-asset-1",
-      assetUrl: "https://r2/final.mp4",
-      creditsSpent: 0,
-    })
-
+describe("runPostMergeStage (J1 — pure approval gate)", () => {
+  it("1. auto mode → flip pipelines.status=completed + emit pipeline:completed", async () => {
     const supabase = makeSupabase({
-      scenes: [
-        {
-          id: "scene-1",
-          entity_key: "scene_01",
-          composite_video_url: "https://r2/scene-1.mp4",
-          composite_video_asset_id: "vid-1",
-        },
-        {
-          id: "scene-2",
-          entity_key: "scene_02",
-          composite_video_url: "https://r2/scene-2.mp4",
-          composite_video_asset_id: "vid-2",
-        },
-        {
-          id: "scene-3",
-          entity_key: "scene_03",
-          composite_video_url: "https://r2/scene-3.mp4",
-          composite_video_asset_id: "vid-3",
-        },
-      ],
+      pipelineMode: "auto",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
     })
 
     await runPostMergeStage({
@@ -148,47 +115,103 @@ describe("runPostMergeStage", () => {
       userTier: "pro",
     })
 
-    expect(pipelineCombineVideos).toHaveBeenCalledTimes(1)
-    const combineCall = (pipelineCombineVideos as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(combineCall?.[0]?.videoUrls).toEqual([
-      "https://r2/scene-1.mp4",
-      "https://r2/scene-2.mp4",
-      "https://r2/scene-3.mp4",
-    ])
-    expect(combineCall?.[0]?.pipelineEntityId).toBeUndefined() // Stage 8 doesn't tie to an entity
-
-    expect(failStage).not.toHaveBeenCalled()
-
-    // Pipeline row flipped to completed with final_output_asset_id.
     const pipelineUpdates = (supabase as never as {
       _pipelineUpdates: Array<Record<string, unknown>>
     })._pipelineUpdates
     expect(pipelineUpdates.some((u) => u.status === "completed")).toBe(true)
-    expect(
-      pipelineUpdates.find((u) => u.final_output_asset_id !== undefined)
-        ?.final_output_asset_id,
-    ).toBe("final-asset-1")
 
-    // pipeline:completed event emitted with the asset id + URL.
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "approved")).toBe(true)
+
     const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
     const completedEvent = publishCalls.find(
-      (call) => call[0]?.type === "pipeline:completed",
+      (c) => c[0]?.type === "pipeline:completed",
     )
     expect(completedEvent).toBeTruthy()
     expect(completedEvent?.[0]).toMatchObject({
       type: "pipeline:completed",
       pipelineId: "p1",
-      finalOutputAssetId: "final-asset-1",
+      finalOutputAssetId: "asset-final",
       finalOutputUrl: "https://r2/final.mp4",
     })
+    expect(failStage).not.toHaveBeenCalled()
   })
 
-  it("fails the stage with 'no_scene_videos' when no scenes carry composite_video_url", async () => {
+  it("2. manual mode → stage_status=awaiting_approval + final_output_url in output", async () => {
     const supabase = makeSupabase({
-      scenes: [
-        // Scene without composite_video_url — Stage 7 didn't (or couldn't) write it back.
-        { id: "scene-1", entity_key: "scene_01" },
-      ],
+      pipelineMode: "manual",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    // Should NOT flip pipelines.status — that happens on user approval.
+    const pipelineUpdates = (supabase as never as {
+      _pipelineUpdates: Array<Record<string, unknown>>
+    })._pipelineUpdates
+    expect(pipelineUpdates.some((u) => u.status === "completed")).toBe(false)
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const awaitingUpdate = stageUpdates.find(
+      (u) => u.status === "awaiting_approval",
+    )
+    expect(awaitingUpdate).toBeTruthy()
+    expect(awaitingUpdate?.output).toMatchObject({
+      final_output_url: "https://r2/final.mp4",
+      final_output_asset_id: "asset-final",
+    })
+
+    // Should NOT emit pipeline:completed yet.
+    const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
+    expect(publishCalls.find((c) => c[0]?.type === "pipeline:completed")).toBeUndefined()
+
+    // Should emit stage:status=awaiting_approval.
+    const stageStatusEvent = publishCalls.find(
+      (c) => c[0]?.type === "stage:status" && c[0]?.status === "awaiting_approval",
+    )
+    expect(stageStatusEvent).toBeTruthy()
+    expect(failStage).not.toHaveBeenCalled()
+  })
+
+  it("3. guided mode → same awaiting_approval behavior as manual", async () => {
+    const supabase = makeSupabase({
+      pipelineMode: "guided",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const pipelineUpdates = (supabase as never as {
+      _pipelineUpdates: Array<Record<string, unknown>>
+    })._pipelineUpdates
+    expect(pipelineUpdates.some((u) => u.status === "completed")).toBe(false)
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.some((u) => u.status === "awaiting_approval")).toBe(true)
+  })
+
+  it("4. final_output_asset_id missing → fail with 'final_output_missing'", async () => {
+    const supabase = makeSupabase({
+      pipelineMode: "manual",
+      finalOutputAssetId: null,
     })
 
     await runPostMergeStage({
@@ -200,110 +223,18 @@ describe("runPostMergeStage", () => {
 
     expect(failStage).toHaveBeenCalledTimes(1)
     expect((failStage as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]).toBe(
-      "no_scene_videos",
+      "final_output_missing",
     )
-    expect(pipelineCombineVideos).not.toHaveBeenCalled()
-    // pipeline:completed should NOT have fired.
+
+    // No pipeline:completed emission.
     const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
-    expect(
-      publishCalls.find((c) => c[0]?.type === "pipeline:completed"),
-    ).toBeUndefined()
+    expect(publishCalls.find((c) => c[0]?.type === "pipeline:completed")).toBeUndefined()
   })
 
-  it("fails the stage with combine_failed when combine_videos throws", async () => {
-    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error("FFmpeg dispatch returned 500"),
-    )
-
+  it("5. is a no-op when the stage row is already approved", async () => {
     const supabase = makeSupabase({
-      scenes: [
-        {
-          id: "scene-1",
-          entity_key: "scene_01",
-          composite_video_url: "https://r2/scene-1.mp4",
-          composite_video_asset_id: "vid-1",
-        },
-        {
-          id: "scene-2",
-          entity_key: "scene_02",
-          composite_video_url: "https://r2/scene-2.mp4",
-          composite_video_asset_id: "vid-2",
-        },
-      ],
-    })
-
-    await runPostMergeStage({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      userTier: "pro",
-    })
-
-    expect(failStage).toHaveBeenCalledTimes(1)
-    const failCall = (failStage as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(failCall?.[2]).toMatch(/^combine_failed: /)
-    expect(failCall?.[2]).toMatch(/FFmpeg dispatch returned 500/)
-    // No pipeline row update should have flipped status=completed.
-    const pipelineUpdates = (supabase as never as {
-      _pipelineUpdates: Array<Record<string, unknown>>
-    })._pipelineUpdates
-    expect(pipelineUpdates.some((u) => u.status === "completed")).toBe(false)
-  })
-
-  it("single-scene pipeline: copies the lone composite URL to final_output (no combine call)", async () => {
-    const supabase = makeSupabase({
-      scenes: [
-        {
-          id: "scene-1",
-          entity_key: "scene_01",
-          composite_video_url: "https://r2/lone-scene.mp4",
-          composite_video_asset_id: "vid-lone",
-        },
-      ],
-    })
-
-    await runPostMergeStage({
-      supabase,
-      pipelineId: "p1",
-      userId: "u1",
-      userTier: "pro",
-    })
-
-    // Combine should NOT be called for a single-scene pipeline.
-    expect(pipelineCombineVideos).not.toHaveBeenCalled()
-    expect(failStage).not.toHaveBeenCalled()
-
-    // Pipeline row flipped to completed; final_output_asset_id is the lone scene's.
-    const pipelineUpdates = (supabase as never as {
-      _pipelineUpdates: Array<Record<string, unknown>>
-    })._pipelineUpdates
-    const completionUpdate = pipelineUpdates.find(
-      (u) => u.status === "completed",
-    )
-    expect(completionUpdate?.final_output_asset_id).toBe("vid-lone")
-
-    // pipeline:completed event carries the lone scene's URL + asset id.
-    const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
-    const completedEvent = publishCalls.find(
-      (c) => c[0]?.type === "pipeline:completed",
-    )
-    expect(completedEvent?.[0]).toMatchObject({
-      type: "pipeline:completed",
-      finalOutputAssetId: "vid-lone",
-      finalOutputUrl: "https://r2/lone-scene.mp4",
-    })
-  })
-
-  it("is a no-op when the stage row is already approved", async () => {
-    const supabase = makeSupabase({
-      scenes: [
-        {
-          id: "scene-1",
-          entity_key: "scene_01",
-          composite_video_url: "https://r2/scene-1.mp4",
-          composite_video_asset_id: "vid-1",
-        },
-      ],
+      pipelineMode: "auto",
+      finalOutputAssetId: "asset-final",
       initialStageStatus: "approved",
     })
 
@@ -314,12 +245,56 @@ describe("runPostMergeStage", () => {
       userTier: "pro",
     })
 
-    expect(pipelineCombineVideos).not.toHaveBeenCalled()
+    // Should NOT touch pipelines.status — already terminal.
+    const pipelineUpdates = (supabase as never as {
+      _pipelineUpdates: Array<Record<string, unknown>>
+    })._pipelineUpdates
+    expect(pipelineUpdates.length).toBe(0)
     expect(failStage).not.toHaveBeenCalled()
-    // No completion event should fire on re-entry.
+
+    // No new pipeline:completed event.
     const publishCalls = (pipelineEvents.publish as ReturnType<typeof vi.fn>).mock.calls
-    expect(
-      publishCalls.find((c) => c[0]?.type === "pipeline:completed"),
-    ).toBeUndefined()
+    expect(publishCalls.find((c) => c[0]?.type === "pipeline:completed")).toBeUndefined()
+  })
+
+  it("6. is a no-op when the stage row is already awaiting_approval", async () => {
+    const supabase = makeSupabase({
+      pipelineMode: "manual",
+      finalOutputAssetId: "asset-final",
+      initialStageStatus: "awaiting_approval",
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    // Should NOT re-emit awaiting_approval (idempotency).
+    expect(stageUpdates.length).toBe(0)
+    expect(failStage).not.toHaveBeenCalled()
+  })
+
+  it("7. asset load failure → fail with 'asset_load_failed'", async () => {
+    const supabase = makeSupabase({
+      pipelineMode: "manual",
+      finalOutputAssetId: "asset-final",
+      assetMissing: true,
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    expect(failStage).toHaveBeenCalledTimes(1)
+    const failReason = (failStage as ReturnType<typeof vi.fn>).mock.calls[0]?.[2]
+    expect(failReason).toMatch(/^asset_load_failed:/)
   })
 })

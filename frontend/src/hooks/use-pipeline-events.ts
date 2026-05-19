@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import type {
   PipelineEvent,
   PipelineDriftSummary,
+  SubGateName,
 } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -21,6 +22,18 @@ interface UsePipelineEventsResult {
    * or the SSE connection re-opens. `null` when no drift is active.
    */
   readonly drift: PipelineDriftSummary | null
+  /**
+   * Phase 1C.2 — name of the active Stage 7 sub-gate
+   * (`silent_cut_preview` | `dialogue_recheck`), or `null` when no sub-gate
+   * is active. Set on `stage:awaiting_sub_gate`; cleared on the next
+   * `stage:status` (which fires when the orchestrator resumes post-approval)
+   * or on a fresh SSE reconnect against a different pipeline.
+   *
+   * The full sub-gate payload (preview URL, rebalance result) lives on the
+   * stage's `output` JSONB — the panel reads that via `pipelinesApi.getStage`
+   * rather than mirroring every field into hook state.
+   */
+  readonly currentSubGate: SubGateName | null
 }
 
 /**
@@ -42,6 +55,7 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
   const [lastEvent, setLastEvent] = useState<PipelineEvent | null>(null)
   const [connected, setConnected] = useState(false)
   const [drift, setDrift] = useState<PipelineDriftSummary | null>(null)
+  const [currentSubGate, setCurrentSubGate] = useState<SubGateName | null>(null)
 
   // Zustand setters are referentially stable — read once per effect run and
   // call directly inside the SSE handler. No ref wrappers needed.
@@ -55,6 +69,7 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     // panel re-open against a different pipeline doesn't carry stale drift.
     setDrift(null)
     setLastEvent(null)
+    setCurrentSubGate(null)
     // Mirror into the workflow store so the canvas-side live-build hooks
     // (auto-pan + ELK) can react without re-subscribing to SSE.
     setStoreLastAddedNodeId(null)
@@ -101,6 +116,38 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
           // Mirror coarse status changes so the canvas can decide whether the
           // live-build hooks (ELK, auto-pan) are active.
           setStoreActiveStatus(evt.status)
+        } else if (evt.type === "stage:awaiting_sub_gate") {
+          // Phase 1C.2 — Stage 7 paused at a sub-gate (silent_cut_preview or
+          // dialogue_recheck). Surface the gate name so the panel mounts the
+          // matching review UI. The gate's payload (preview URL, rebalance
+          // result) is persisted on the stage output JSONB and read by the
+          // panel via getStage.
+          setCurrentSubGate(evt.subGate)
+        } else if (evt.type === "stage:status") {
+          // Phase 1C.2 — clear the sub-gate as soon as the animate stage moves
+          // out of awaiting_approval. The orchestrator publishes stage:status
+          // running after the sub-gate approve endpoint resumes work. We
+          // filter on `stageName` to avoid drift — earlier stages also emit
+          // `stage:status` events and clearing on those would erase a still-
+          // active animate sub-gate.
+          if (
+            evt.stageName === "animate_audio_edit" &&
+            evt.status !== "awaiting_approval"
+          ) {
+            setCurrentSubGate(null)
+          }
+        } else if (evt.type === "pipeline:music_ready") {
+          // Phase 1C.2 — informational only for now. Logging keeps the
+          // event traceable in dev tools; downstream UI (waveform/beat-grid
+          // visualization) lands in 1D.
+          // eslint-disable-next-line no-console
+          console.info("[pipeline] music_ready", evt.musicAssetUrl)
+        } else if (evt.type === "pipeline:editor_decisions_ready") {
+          // Phase 1C.2 — informational only for now. The decisions are
+          // persisted on each shot's `cut_decision` and shown via Stage 8
+          // approval gate when the final merge completes.
+          // eslint-disable-next-line no-console
+          console.info("[pipeline] editor_decisions_ready", evt.pipelineId)
         }
       } catch {
         // ignore malformed event
@@ -123,5 +170,5 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     }
   }, [pipelineId, updateNodeDataByEntityId, setStoreLastAddedNodeId, setStoreActiveStatus])
 
-  return { lastEvent, connected, drift }
+  return { lastEvent, connected, drift, currentSubGate }
 }

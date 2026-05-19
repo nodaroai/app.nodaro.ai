@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import type { PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineStageStatus, ShowrunnerPlan, SubGateName } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -9,6 +9,11 @@ import { EntityGrid } from "./entity-grid"
 import { SceneGrid } from "./scene-grid"
 import { DriftBanner } from "./drift-banner"
 import { ForkButton } from "./fork-button"
+import { SilentCutPreview } from "./silent-cut-preview"
+import {
+  DialogueRecheckBanner,
+  type DialogueRecheckResult,
+} from "./dialogue-recheck-banner"
 import { Button } from "@/components/ui/button"
 
 interface Props {
@@ -38,7 +43,27 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
     retry: false,
   })
 
-  const { lastEvent, drift } = usePipelineEvents(pipelineId)
+  const { lastEvent, drift, currentSubGate } = usePipelineEvents(pipelineId)
+
+  // Phase 1C.2 — Stage 7 sub-gate detection. We pull `animate_audio_edit`
+  // whenever the pipeline could plausibly be paused at one of its sub-gates:
+  //   - SSE has just fired `stage:awaiting_sub_gate`, OR
+  //   - the pipeline's `current_stage` is exactly `animate_audio_edit` (covers
+  //     re-opening the panel against a paused pipeline before any SSE event
+  //     arrives).
+  // The query stays idle for earlier stages — and for `post_merge`, which
+  // has its own dedicated query path in the panel — to avoid spurious 404s.
+  const animateStageReachable =
+    pipelineQuery.data?.current_stage === "animate_audio_edit"
+  const subGateActive = Boolean(currentSubGate)
+  const animateStageQuery = useQuery({
+    queryKey: ["pipeline-stage", pipelineId, "animate_audio_edit"],
+    queryFn: () => pipelinesApi.getStage(pipelineId, "animate_audio_edit"),
+    enabled: subGateActive || animateStageReachable,
+    refetchInterval: (q) =>
+      q.state.data?.status === "awaiting_approval" ? 3000 : false,
+    retry: false,
+  })
   const setActivePipelineStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
   // SSE `pipeline:forked` flips `activePipelineStatus` to "forked"; reading
   // from the store wins over the polled value so the ForkButton hides
@@ -66,6 +91,16 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
     ) {
       void pipelineQuery.refetch()
       void stageQuery.refetch()
+      // Phase 1C.2 — refetch the animate_audio_edit stage too so any
+      // sub-gate output (preview URL, rebalance result) lands in time for
+      // the matching sub-gate UI to render.
+      void animateStageQuery.refetch()
+    }
+    // Phase 1C.2 — sub-gate just opened; pull the latest stage output so
+    // the panel renders the gate-specific data without waiting for the
+    // 3s poll.
+    if (lastEvent.type === "stage:awaiting_sub_gate") {
+      void animateStageQuery.refetch()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastEvent?.type])
@@ -101,6 +136,22 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
   const stage = stageQuery.data
   const plan = (stage?.output as { plan?: ShowrunnerPlan } | undefined)?.plan ?? null
   const status = (stage?.status as PipelineStageStatus | undefined) ?? "queued"
+
+  // Phase 1C.2 — derive the active sub-gate. SSE-driven `currentSubGate`
+  // is the fast path (fires before any poll round-trips); the persisted
+  // `animate_audio_edit.output.current_sub_gate` is the safety net when
+  // the panel opens against a pipeline that's already paused at a gate.
+  const animateOutput = animateStageQuery.data?.output as
+    | {
+        current_sub_gate?: SubGateName
+        silent_cut_preview_url?: string
+        dialogue_recheck_result?: DialogueRecheckResult
+      }
+    | undefined
+  const persistedSubGate = animateOutput?.current_sub_gate ?? null
+  const effectiveSubGate = currentSubGate ?? persistedSubGate
+  const silentCutPreviewUrl = animateOutput?.silent_cut_preview_url ?? null
+  const dialogueRecheckResult = animateOutput?.dialogue_recheck_result ?? null
   // Status the ForkButton uses to decide visibility. SSE-driven
   // `activePipelineStatus` (set by `usePipelineEvents` on `pipeline:forked`)
   // wins over the polled pipelines.get value so the button hides immediately
@@ -164,6 +215,27 @@ export function PipelinePanel({ pipelineId, onClose }: Props) {
           <SceneGrid pipelineId={pipelineId} title="5. Shot List" />
         )}
       </div>
+
+      {/* Phase 1C.2 — Stage 7 sub-gate review UIs. The SSE `currentSubGate`
+          drives which gate (if any) is active; the matching payload is read
+          from the persisted `animate_audio_edit` stage output JSONB. The
+          gates are mutually exclusive — at most one renders at a time. */}
+      {effectiveSubGate === "silent_cut_preview" && silentCutPreviewUrl && (
+        <div className="mt-4">
+          <SilentCutPreview
+            pipelineId={pipelineId}
+            previewUrl={silentCutPreviewUrl}
+          />
+        </div>
+      )}
+      {effectiveSubGate === "dialogue_recheck" && dialogueRecheckResult && (
+        <div className="mt-4">
+          <DialogueRecheckBanner
+            pipelineId={pipelineId}
+            rebalanceResult={dialogueRecheckResult}
+          />
+        </div>
+      )}
 
       {rejectMode && (
         <div className="mt-4 p-3 rounded border border-zinc-200 bg-white">

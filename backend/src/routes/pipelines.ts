@@ -4,6 +4,7 @@ import {
   ENTITY_TYPES,
   EntityRejectInputSchema,
   PipelineInputSchema,
+  SubGateNameSchema,
   validateDurationForFormat,
   validateModeActivation,
   type PipelineStageName,
@@ -664,6 +665,212 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
 
       return reply.send(result)
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/sub-gates/:gate/approve ───────────────────────
+  // Phase 1C.2 task L1. The user approves a mid-Stage-7 sub-gate
+  // (dialogue_recheck / silent_cut_preview). Clears `current_sub_gate` from
+  // the stage output, flips stage status back to 'running', and re-enqueues
+  // the orchestrator so the chain resumes from where it paused. The
+  // `sub_step_completed` flag for that sub-step is already set by the SUT
+  // before the pause, so the resumed handler skips past it.
+  app.post<{
+    Params: { id: string; gate: string }
+  }>(
+    "/v1/pipelines/:id/sub-gates/:gate/approve",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const gateParsed = SubGateNameSchema.safeParse(req.params.gate)
+      if (!gateParsed.success) {
+        return reply.status(400).send({
+          error: { code: "invalid_sub_gate", issues: gateParsed.error.issues },
+        })
+      }
+      const gate = gateParsed.data
+
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id, status, output")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", "animate_audio_edit")
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(404).send({ error: { code: "stage_not_found" } })
+      }
+      if (stageRow.status !== "awaiting_approval") {
+        return reply.status(409).send({
+          error: { code: "stage_not_awaiting_approval", status: stageRow.status },
+        })
+      }
+      const output = (stageRow.output as Record<string, unknown> | null) ?? {}
+      if (output.current_sub_gate !== gate) {
+        // Existence-leak guard — wrong-gate mismatch returns 404 rather than
+        // 409 so we don't leak which gate is currently active.
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Strip current_sub_gate from output (delete the key).
+      const nextOutput: Record<string, unknown> = { ...output }
+      delete nextOutput.current_sub_gate
+      const resumedAt = new Date().toISOString()
+      const { error: updateErr } = await supabase
+        .from("pipeline_stages")
+        .update({ status: "running", output: nextOutput })
+        .eq("id", stageRow.id)
+      if (updateErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: updateErr.message } })
+      }
+
+      // Emit a stage:status SSE so subscribers see the running transition.
+      const { pipelineEvents } = await import("../ee/pipelines/events.js")
+      pipelineEvents.publish({
+        type: "stage:status",
+        pipelineId: req.params.id,
+        stageName: "animate_audio_edit",
+        status: "running",
+      })
+
+      // Re-enqueue the orchestrator. The animate-audio-edit handler will
+      // see the cleared sub_gate + updated sub_step_completed and resume.
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+
+      return reply.send({ ok: true, gate, resumed_at: resumedAt })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/sub-gates/:gate/reject ────────────────────────
+  // The user rejects the sub-gate; the stage fails with
+  // failure_reason='sub_gate_rejected:<gate>' and the pipeline cascades to
+  // failed. Unspent credits are refunded. TODO Phase 1D: integrate
+  // branch-from-stage on reject so the user can iterate without starting over.
+  app.post<{
+    Params: { id: string; gate: string }
+    Body: { feedback?: string }
+  }>(
+    "/v1/pipelines/:id/sub-gates/:gate/reject",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const gateParsed = SubGateNameSchema.safeParse(req.params.gate)
+      if (!gateParsed.success) {
+        return reply.status(400).send({
+          error: { code: "invalid_sub_gate", issues: gateParsed.error.issues },
+        })
+      }
+      const gate = gateParsed.data
+
+      const bodySchema = z.object({ feedback: z.string().max(2000).optional() })
+      const bodyParsed = bodySchema.safeParse(req.body ?? {})
+      if (!bodyParsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: bodyParsed.error.issues },
+        })
+      }
+      const feedback = bodyParsed.data.feedback
+
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id, status, output")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", "animate_audio_edit")
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(404).send({ error: { code: "stage_not_found" } })
+      }
+      if (stageRow.status !== "awaiting_approval") {
+        return reply.status(409).send({
+          error: { code: "stage_not_awaiting_approval", status: stageRow.status },
+        })
+      }
+      const output = (stageRow.output as Record<string, unknown> | null) ?? {}
+      if (output.current_sub_gate !== gate) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Mark stage failed with sub_gate_rejected reason + stash feedback.
+      const nextOutput: Record<string, unknown> = { ...output }
+      delete nextOutput.current_sub_gate
+      nextOutput.failure_reason = `sub_gate_rejected:${gate}`
+      if (feedback != null) nextOutput.reject_feedback = feedback
+      const completedAt = new Date().toISOString()
+      const { error: stageUpdateErr } = await supabase
+        .from("pipeline_stages")
+        .update({
+          status: "failed",
+          output: nextOutput,
+          completed_at: completedAt,
+        })
+        .eq("id", stageRow.id)
+      if (stageUpdateErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: stageUpdateErr.message } })
+      }
+
+      // Cascade to pipeline-level failure.
+      await supabase
+        .from("pipelines")
+        .update({ status: "failed" })
+        .eq("id", req.params.id)
+
+      // Refund unspent credits.
+      const { refundPipelineCredits } = await import("../ee/pipelines/credits.js")
+      await refundPipelineCredits({
+        supabase,
+        userId,
+        pipelineId: req.params.id,
+        reason: `sub_gate_rejected:${gate}`,
+      })
+
+      const { pipelineEvents } = await import("../ee/pipelines/events.js")
+      pipelineEvents.publish({
+        type: "stage:status",
+        pipelineId: req.params.id,
+        stageName: "animate_audio_edit",
+        status: "failed",
+      })
+      pipelineEvents.publish({
+        type: "pipeline:status",
+        pipelineId: req.params.id,
+        status: "failed",
+      })
+
+      // TODO Phase 1D: integrate branch-from-stage on reject so the user
+      // can iterate from the rejected sub-gate without abandoning the run.
+      return reply.send({ ok: false, gate, reason: "rejected" })
     },
   )
 

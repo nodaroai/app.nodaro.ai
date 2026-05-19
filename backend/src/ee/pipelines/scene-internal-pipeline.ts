@@ -57,6 +57,17 @@ export interface SceneInternalPipelineShotResult {
    *  read `prior.last_frame_url` from the persisted scene data — without
    *  it the helper would always 500 on a clean Stage 7 run. */
   last_frame_url?: string | null
+  /** Phase 1C.2 — true when this shot has a `dialogue_line` AND the speech
+   *  generator produced an audio track. Stage 7 persists this to
+   *  `ShotSpec.has_dialogue` so the Editor LLM (sub-step 7d') can gate
+   *  cut-in / cut-out into the dialogue_no_cut_zone. */
+  has_dialogue?: boolean
+  /** Phase 1C.2 — measured length of the per-shot speech audio in seconds,
+   *  as probed from the rendered R2 URL by `pipelineGenerateSpeech`. Null
+   *  when the shot has no dialogue OR ffprobe failed. Stage 7 persists this
+   *  to `ShotSpec.actual_audio_duration_sec` for the Editor LLM's
+   *  no-cut-zone computation. */
+  actual_audio_duration_sec?: number | null
 }
 
 export type SceneInternalPipelineFailure =
@@ -156,76 +167,113 @@ export async function runSceneInternalPipeline(
       ? voiceByEntityKey[(sceneData.cast_keys ?? [])[0]!]
       : undefined
 
-  for (const shot of sceneData.shots) {
-    if (!shot.dialogue_line) continue
-
-    let audioUrl: string | undefined
-    let audioDurationSec: number | undefined
-    try {
-      const speech = await pipelineGenerateSpeech({
-        supabase: ctx.supabase,
-        pipelineId: ctx.pipelineId,
-        pipelineEntityId: sceneEntity.id,
-        userId: ctx.userId,
-        text: shot.dialogue_line,
-        // Pass voice only when we resolved one — omitting falls through to
-        // the worker's default.
-        ...(sceneDefaultVoice ? { voice: sceneDefaultVoice } : {}),
-      })
-      audioUrl = speech.assetUrl
-      // TODO(bug_003): `audioDurationSec` should reflect the actual audio
-      // length rather than the shot's wall-clock duration. The lip-sync
-      // worker uses this to time the mouth movements. Requires
-      // `PipelineGenerateSpeechResult` to expose the synthesized audio's
-      // duration — separate PR.
-      audioDurationSec = shot.duration_seconds
-    } catch (err) {
-      // Step-4 failures are non-blocking — log + continue without audio.
-      console.warn(
-        `[scene-internal-pipeline] speech gen failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
-        err instanceof Error ? err.message : err,
-      )
-      continue
-    }
-
-    if (!options.lipSyncEnabled || !audioUrl) continue
-
-    try {
-      const animatedVideoUrl = shotVideoUrls[shot.shot_id]
-      if (!animatedVideoUrl) continue
-      const lipsync = await pipelineLipSync({
-        supabase: ctx.supabase,
-        pipelineId: ctx.pipelineId,
-        pipelineEntityId: sceneEntity.id,
-        userId: ctx.userId,
-        videoUrl: animatedVideoUrl,
-        audioUrl,
-        audioDurationSec,
-      })
-      // Replace this shot's video asset / URL with the lipsynced version
-      // so the combine step concatenates lipsynced clips. Also update the
-      // shotResults entry so the per-shot persistence in Stage 7 reflects
-      // the post-lipsync URL (the user-facing `video_url` on ShotSpec).
-      if (lipsync.assetId) {
-        shotVideoAssets[shot.shot_id] = lipsync.assetId
+  // Per-shot speech + lipsync are independent across shots — fan out via
+  // `settledWithLimit(3)`. Failure of either step is still non-blocking per
+  // shot. The shot-result map keyed by shot_id keeps writes order-independent.
+  interface DialogueUpdate {
+    shot_id: string
+    has_dialogue?: boolean
+    actual_audio_duration_sec?: number | null
+    lipsync_asset_id?: string | null
+    lipsync_asset_url?: string | null
+  }
+  const dialogueTasks = sceneData.shots
+    .filter((shot): shot is ShotSpec & { dialogue_line: string } => !!shot.dialogue_line)
+    .map((shot) => async (): Promise<DialogueUpdate | null> => {
+      let audioUrl: string | undefined
+      let audioDurationSec: number | null = null
+      try {
+        const speech = await pipelineGenerateSpeech({
+          supabase: ctx.supabase,
+          pipelineId: ctx.pipelineId,
+          pipelineEntityId: sceneEntity.id,
+          userId: ctx.userId,
+          text: shot.dialogue_line,
+          // Pass voice only when we resolved one — omitting falls through to
+          // the worker's default.
+          ...(sceneDefaultVoice ? { voice: sceneDefaultVoice } : {}),
+        })
+        audioUrl = speech.assetUrl
+        // Phase 1C.2 — real audio duration from the rendered R2 audio (probed
+        // by `pipelineGenerateSpeech` with ffprobe). Null when the probe
+        // failed; the lip-sync wrapper's `buildLipSyncCreditId` falls back to
+        // the worst-case 5-min bucket in that case, which the worker reconciles
+        // via `commitJobCredits` once KIE returns actual costTime.
+        audioDurationSec = speech.audioDurationSec
+      } catch (err) {
+        // Step-4 failures are non-blocking — log + continue without audio.
+        console.warn(
+          `[scene-internal-pipeline] speech gen failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
+          err instanceof Error ? err.message : err,
+        )
+        return null
       }
-      shotVideoUrls[shot.shot_id] = lipsync.assetUrl
-      const resultIdx = shotResults.findIndex((r) => r.shot_id === shot.shot_id)
-      if (resultIdx >= 0) {
-        const prev = shotResults[resultIdx]!
-        shotResults[resultIdx] = {
-          ...prev,
-          video_asset_id: lipsync.assetId ?? prev.video_asset_id,
-          video_url: lipsync.assetUrl,
-        }
+
+      const update: DialogueUpdate = {
+        shot_id: shot.shot_id,
+        has_dialogue: true,
+        actual_audio_duration_sec: audioDurationSec,
       }
-    } catch (err) {
-      // Lip-sync failure is also non-blocking — fall back to silent video.
-      console.warn(
-        `[scene-internal-pipeline] lipsync failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
-        err instanceof Error ? err.message : err,
-      )
+
+      if (!options.lipSyncEnabled || !audioUrl) return update
+
+      try {
+        const animatedVideoUrl = shotVideoUrls[shot.shot_id]
+        if (!animatedVideoUrl) return update
+        const lipsync = await pipelineLipSync({
+          supabase: ctx.supabase,
+          pipelineId: ctx.pipelineId,
+          pipelineEntityId: sceneEntity.id,
+          userId: ctx.userId,
+          videoUrl: animatedVideoUrl,
+          audioUrl,
+          audioDurationSec: audioDurationSec ?? undefined,
+        })
+        update.lipsync_asset_id = lipsync.assetId ?? null
+        update.lipsync_asset_url = lipsync.assetUrl
+      } catch (err) {
+        // Lip-sync failure is also non-blocking — fall back to silent video.
+        console.warn(
+          `[scene-internal-pipeline] lipsync failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
+          err instanceof Error ? err.message : err,
+        )
+      }
+      return update
+    })
+
+  const SHOT_DIALOGUE_CONCURRENCY = 3
+  const dialogueSettled = await settledWithLimit(
+    dialogueTasks,
+    SHOT_DIALOGUE_CONCURRENCY,
+    undefined,
+    false,
+  )
+
+  // Apply each per-shot update against the shotResults / shotVideoUrls /
+  // shotVideoAssets maps. The shot_id index map makes this O(N) on result count.
+  const indexByShotId = new Map<string, number>(
+    shotResults.map((r, i) => [r.shot_id, i] as const),
+  )
+  for (const r of dialogueSettled) {
+    if (r.status !== "fulfilled" || !r.value) continue
+    const update = r.value
+    const idx = indexByShotId.get(update.shot_id)
+    if (idx === undefined) continue
+    const prev = shotResults[idx]!
+    const next: SceneInternalPipelineShotResult = { ...prev }
+    if (update.has_dialogue !== undefined) {
+      next.has_dialogue = update.has_dialogue
+      next.actual_audio_duration_sec = update.actual_audio_duration_sec
     }
+    if (update.lipsync_asset_url) {
+      shotVideoUrls[update.shot_id] = update.lipsync_asset_url
+      next.video_url = update.lipsync_asset_url
+      if (update.lipsync_asset_id) {
+        shotVideoAssets[update.shot_id] = update.lipsync_asset_id
+        next.video_asset_id = update.lipsync_asset_id
+      }
+    }
+    shotResults[idx] = next
   }
 
   // ─── Step 6: combine ──────────────────────────────────────────────────────

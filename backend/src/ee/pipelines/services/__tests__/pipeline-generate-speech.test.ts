@@ -12,9 +12,16 @@ vi.mock("../../../billing/credits.js", () => ({
     }),
   },
 }))
+// ffprobe is mocked at the ffmpeg-utils boundary — the wrapper calls
+// `getVideoDuration(audioUrl)` after the worker job completes. Default mock
+// returns 3.2s; individual tests override for the failure path.
+vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
+  getVideoDuration: vi.fn().mockResolvedValue(3.2),
+}))
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
+import { getVideoDuration } from "../../../../providers/video/ffmpeg-utils.js"
 import { pipelineGenerateSpeech } from "../pipeline-generate-speech.js"
 
 beforeEach(() => {
@@ -108,6 +115,11 @@ describe("pipelineGenerateSpeech", () => {
 
     expect(result.assetUrl).toBe("https://r2/voice.mp3")
     expect(result.assetId).toBe("asset-audio-1")
+    // Phase 1C.2 — the wrapper probes the rendered audio with ffprobe and
+    // surfaces the real duration. The lip-sync sub-step + Editor LLM
+    // dialogue_no_cut_zone calc both read this.
+    expect(result.audioDurationSec).toBe(3.2)
+    expect(getVideoDuration).toHaveBeenCalledWith("https://r2/voice.mp3")
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
       "u1", "tts-job-1", "elevenlabs-turbo", 0, 0, { isAppRun: false },
     )
@@ -120,6 +132,33 @@ describe("pipelineGenerateSpeech", () => {
         provider: "elevenlabs-turbo",
       }),
     )
+  })
+
+  it("returns audioDurationSec=null when ffprobe fails — non-fatal fallback", async () => {
+    ;(getVideoDuration as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("ffprobe: 404"),
+    )
+    const supabase = makeSupabaseMock({
+      jobStates: [
+        {
+          status: "completed",
+          output_data: { audioUrl: "https://r2/voice.mp3" },
+          credits_actual: 4,
+        },
+      ],
+      assetRow: { id: "asset-audio-1" },
+    })
+
+    const promise = pipelineGenerateSpeech({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      text: "x",
+    })
+    const result = await runUntilSettled(promise)
+
+    expect(result.assetUrl).toBe("https://r2/voice.mp3")
+    expect(result.audioDurationSec).toBeNull()
   })
 
   it("throws when TTS job fails", async () => {

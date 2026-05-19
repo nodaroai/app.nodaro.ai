@@ -69,6 +69,42 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
   }
 }
 
+/**
+ * Same as runFfmpeg, but returns BOTH stdout and stderr — needed for filters
+ * like `silencedetect` that write their markers to stderr (FFmpeg filter info
+ * messages always land on stderr; stdout stays empty unless `-progress -` is
+ * set). The FIFO semaphore + timeout are shared with `runFfmpeg`.
+ */
+export async function runFfmpegCapture(
+  args: readonly string[],
+  timeoutMs?: number,
+): Promise<{ stdout: string; stderr: string }> {
+  const release = await acquireFfmpegSlot()
+  try {
+    return await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      execFile("ffmpeg", args as string[], {
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS,
+      }, (error, stdout, stderr) => {
+        if (error) {
+          // Some filters (e.g. `-f null -`) exit non-zero after writing useful
+          // stderr; let the caller decide whether to parse anyway.
+          reject(
+            Object.assign(new Error(`ffmpeg failed: ${stderr || error.message}`), {
+              stdout,
+              stderr,
+            }),
+          )
+        } else {
+          resolve({ stdout, stderr })
+        }
+      })
+    })
+  } finally {
+    release()
+  }
+}
+
 export function runFfprobe(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile("ffprobe", args as string[], { maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {

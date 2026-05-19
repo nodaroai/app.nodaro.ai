@@ -5,6 +5,22 @@ import { z } from "zod"
 import { SceneInputModeSchema } from "./model-constants.js"
 
 /**
+ * TransitionType — the set of allowed shot-to-shot transitions emitted by the
+ * Editor LLM stage. Single source of truth shared across:
+ *   - ShotSpec.cut_decision.transition_to_next (this file)
+ *   - backend/src/ee/pipelines/llms/editor.ts (LLM result schema)
+ *   - backend/src/ee/pipelines/services/pipeline-final-merge.ts
+ *   - backend/src/ee/pipelines/freecut-export.ts
+ */
+export const TransitionTypeSchema = z.enum([
+  "hard_cut",
+  "dissolve",
+  "match_cut",
+  "overlap",
+])
+export type TransitionType = z.infer<typeof TransitionTypeSchema>
+
+/**
  * ShotSpec — one shot inside a SceneNodeData.
  * Mirrors Architecture §6.9.1 + v4.1 Method-2/3/5/7/8/10 field additions.
  */
@@ -110,6 +126,42 @@ export const ShotSpecSchema = z.object({
   // Phase 1C.3 — bridged frame (Method 5). Defensive placeholder; never set
   // in 1C.1 (continuity.applyContinuityToStartFrame already reads this).
   bridged_frame_url: z.string().url().optional(),
+
+  // ─── Phase 1C.2 — dialogue + editor cut metadata ───────────────────────────
+  // All optional; planning-time ShotSpec carries none of these. Populated by
+  // the Editor LLM (Stage 7) and the silent-cut-preview sub-gate handler.
+
+  // True when `dialogue_line` is non-null AND the speech generator produced
+  // an audio track. The Editor LLM uses this to gate cut-in / cut-out into
+  // the dialogue_no_cut_zone (Method 5.13.1 — never trim a syllable).
+  has_dialogue: z.boolean().default(false),
+
+  // Measured length of the per-shot speech audio (Stage 7 step 4 writes this).
+  // Separate from `duration_seconds` (the planning intent) — the actual
+  // recording can run longer/shorter than the spec.
+  actual_audio_duration_sec: z.number().optional(),
+
+  // Inclusive [start, end] window (seconds, relative to the shot's video clip)
+  // during which the Editor LLM MUST NOT cut. Computed from
+  // `actual_audio_duration_sec` + small padding by the Editor LLM stage.
+  // null when has_dialogue=false (no zone to protect).
+  dialogue_no_cut_zone: z
+    .object({ start: z.number(), end: z.number() })
+    .nullable()
+    .optional(),
+
+  // Editor LLM output (Phase 1C.2). Populated by the Editor LLM stage; the
+  // silent-cut-preview sub-gate may patch it via user-applied overrides.
+  // Mirrors the editor_decisions audit row shape (migration 135).
+  cut_decision: z
+    .object({
+      in_offset_sec: z.number().min(0).max(2).default(0),
+      out_offset_sec: z.number().min(0).max(2).default(0),
+      transition_to_next: TransitionTypeSchema,
+      transition_duration_sec: z.number().min(0).max(2).optional(),
+      beat_snap_seconds: z.number().nullable().optional(),
+    })
+    .optional(),
 })
 export type ShotSpec = z.infer<typeof ShotSpecSchema>
 
