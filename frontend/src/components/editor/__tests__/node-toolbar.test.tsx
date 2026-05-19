@@ -217,13 +217,14 @@ describe("NODE_DEFINITIONS category distribution", () => {
     expect(Object.keys(byCategory).length).toBeGreaterThanOrEqual(5)
   })
 
-  it("AI category has the most nodes", () => {
+  it("AI category has a substantial number of nodes", () => {
+    // Originally asserted "AI has the most nodes", but the parameter category
+    // has overtaken AI as the cinematography picker family has grown (now 45+
+    // with transition + character-fx). The spirit of the test is "make sure
+    // no one accidentally strips AI nodes" — a lower-bound check captures
+    // that without false-positiving when parameter pickers are added.
     const aiCount = byCategory["ai"] ?? 0
-    for (const [cat, count] of Object.entries(byCategory)) {
-      if (cat !== "ai") {
-        expect(aiCount).toBeGreaterThanOrEqual(count)
-      }
-    }
+    expect(aiCount).toBeGreaterThanOrEqual(40)
   })
 
   it("credit costs are 0 for all input/parameter nodes", () => {

@@ -1,4 +1,7 @@
--- Migration 136 — One-time backfill of `provider_call_started_at` for pre-Phase-1 stuck rows
+-- Migration 139 — One-time backfill of `provider_call_started_at` for pre-Phase-1 stuck rows
+--
+-- (Renumbered from 136 → 139 alongside its dependency 138_reconcile_columns
+-- which moved from 135 → 138 to resolve a duplicate-version collision.)
 --
 -- The Phase 2 reconciliation cron (`backend/src/lib/reconcile/cron.ts`) only
 -- finds rows where `provider_call_started_at IS NOT NULL` (the inflight index
