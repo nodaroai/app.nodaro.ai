@@ -1378,17 +1378,26 @@ export async function saveLocation(data: {
  * source_image_url. Also fires the Claude Sonnet vision caption inline to
  * populate `canonical_description`. Returns 200 with `canonicalDescription:
  * ""` on caption sub-failure (frontend retries via `recaptionLocation`).
+ *
+ * `expectedUpdatedAt` is the studio's optimistic-concurrency token. When
+ * passed, the backend gates the UPDATE on the row's current `updated_at`
+ * and returns 409 on mismatch — surfaced here as `ConcurrentModificationError`
+ * so callers can refetch + re-stage (same shape as the 409 recovery on
+ * `saveLocation`).
  */
 export async function approveLocationMainImage(
   locationId: string,
   candidateJobId: string,
+  expectedUpdatedAt?: string,
 ): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
+  const body: Record<string, unknown> = { candidateJobId }
+  if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
   const res = await fetch(
     `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-      body: JSON.stringify({ candidateJobId }),
+      body: JSON.stringify(body),
     },
   )
   if (!res.ok) {

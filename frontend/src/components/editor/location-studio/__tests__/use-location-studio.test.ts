@@ -8,6 +8,7 @@ vi.mock("@/lib/api", async () => {
     ...actual,
     saveLocation: vi.fn(),
     getLocationById: vi.fn(),
+    approveLocationMainImage: vi.fn(),
   }
 })
 
@@ -69,7 +70,12 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 import { useLocationStudio } from "../use-location-studio"
-import { ConcurrentModificationError, getLocationById, saveLocation } from "@/lib/api"
+import {
+  approveLocationMainImage,
+  ConcurrentModificationError,
+  getLocationById,
+  saveLocation,
+} from "@/lib/api"
 
 describe("useLocationStudio", () => {
   beforeEach(() => {
@@ -211,5 +217,111 @@ describe("useLocationStudio", () => {
     expect(getLocationById).toHaveBeenCalledWith("existing-uuid")
     expect(result.current.stagedData?.locationName).toBe("Cafe Roma (server-updated)")
     expect(result.current.stagedData?.canonicalDescription).toBe("Auto-generated description")
+  })
+
+  // --------------------------------------------------------------------
+  // Phase 2 #9 — approveMainImage + concurrent-modification recovery
+  // --------------------------------------------------------------------
+
+  it("approveMainImage passes expectedUpdatedAt to the API on approve", async () => {
+    // Seed the canvas node with an existing DbId + updatedAt so the studio
+    // has a non-empty optimistic-concurrency token.
+    mockNode.data.locationDbId = "existing-uuid"
+    mockNode.data.updatedAt = "2026-05-18T10:00:00Z"
+    vi.mocked(approveLocationMainImage).mockResolvedValueOnce({
+      sourceImageUrl: "https://example.com/approved.png",
+      canonicalDescription: "Auto-generated caption text.",
+    })
+
+    const { result } = renderHook(() => useLocationStudio("loc-1"))
+    await waitFor(() => expect(result.current.stagedData).not.toBeNull())
+
+    await act(async () => {
+      await result.current.approveMainImage("candidate-uuid")
+    })
+
+    expect(approveLocationMainImage).toHaveBeenCalledWith(
+      "existing-uuid",
+      "candidate-uuid",
+      "2026-05-18T10:00:00Z",
+    )
+    // On success the staged data must reflect the new sourceImageUrl +
+    // canonicalDescription without a refetch.
+    expect(result.current.stagedData?.sourceImageUrl).toBe("https://example.com/approved.png")
+    expect(result.current.stagedData?.canonicalDescription).toBe("Auto-generated caption text.")
+  })
+
+  it("approveMainImage on 409 refetches via getLocationById and re-stages (mirror of saveStaged 409)", async () => {
+    mockNode.data.locationDbId = "existing-uuid"
+    mockNode.data.updatedAt = "2026-05-18T09:00:00Z" // stale token
+    vi.mocked(approveLocationMainImage).mockRejectedValueOnce(
+      new ConcurrentModificationError("Modified concurrently", "2026-05-18T13:00:00Z"),
+    )
+    vi.mocked(getLocationById).mockResolvedValueOnce({
+      id: "existing-uuid",
+      userId: "user-1",
+      nodeId: "loc-1",
+      projectId: "proj-1",
+      name: "Cafe Roma (winner)",
+      description: "Server-side description",
+      category: "indoor",
+      style: "realistic",
+      sourceImageUrl: "https://example.com/the-winner.png",
+      timeOfDay: [],
+      weather: [],
+      angles: [],
+      lighting: [],
+      seasons: [],
+      atmosphereMotions: [],
+      referencePhotos: [],
+      canonicalDescription: "Description from the winning approver.",
+      styleLock: false,
+      createdAt: "2026-05-18T10:00:00Z",
+      updatedAt: "2026-05-18T13:00:00Z",
+    })
+
+    const { result } = renderHook(() => useLocationStudio("loc-1"))
+    await waitFor(() => expect(result.current.stagedData).not.toBeNull())
+
+    await act(async () => {
+      try {
+        await result.current.approveMainImage("candidate-uuid")
+      } catch {
+        /* re-thrown ConcurrentModificationError is expected */
+      }
+    })
+
+    // 409 must trigger a refetch + re-stage — the staged data should now
+    // hold the canonical row's sourceImageUrl + canonicalDescription, NOT
+    // the values the caller tried to write.
+    expect(getLocationById).toHaveBeenCalledWith("existing-uuid")
+    expect(result.current.stagedData?.sourceImageUrl).toBe("https://example.com/the-winner.png")
+    expect(result.current.stagedData?.canonicalDescription).toBe(
+      "Description from the winning approver.",
+    )
+    expect(result.current.stagedData?.updatedAt).toBe("2026-05-18T13:00:00Z")
+  })
+
+  it("approveMainImage re-throws ConcurrentModificationError so the caller can react", async () => {
+    mockNode.data.locationDbId = "existing-uuid"
+    mockNode.data.updatedAt = "2026-05-18T09:00:00Z"
+    vi.mocked(approveLocationMainImage).mockRejectedValueOnce(
+      new ConcurrentModificationError("Modified concurrently", "2026-05-18T13:00:00Z"),
+    )
+    // The refetch is a no-op for this test — only the re-throw matters.
+    vi.mocked(getLocationById).mockResolvedValueOnce(null)
+
+    const { result } = renderHook(() => useLocationStudio("loc-1"))
+    await waitFor(() => expect(result.current.stagedData).not.toBeNull())
+
+    let captured: unknown
+    await act(async () => {
+      try {
+        await result.current.approveMainImage("candidate-uuid")
+      } catch (e) {
+        captured = e
+      }
+    })
+    expect(captured).toBeInstanceOf(ConcurrentModificationError)
   })
 })
