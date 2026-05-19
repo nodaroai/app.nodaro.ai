@@ -20,11 +20,16 @@ export interface Atmosphere {
 
 export const ATMOSPHERES: ReadonlyArray<Atmosphere> = [
   { id: "clear",           label: "Clear",           description: "Clean, no atmospheric effect",             promptHint: "clear atmosphere, clean visibility with no fog or particles" },
+  { id: "cloudy",          label: "Cloudy",          description: "Partial cloud cover, mixed light",         promptHint: "cloudy atmosphere, partial cloud cover with mixed direct and diffused light, soft contrast and intermittent shadows" },
   { id: "overcast",        label: "Overcast",        description: "Uniform gray cloud cover",                 promptHint: "overcast atmosphere, uniform gray cloud cover with diffused flat light" },
+  { id: "fog",             label: "Fog",             description: "Dense low-visibility fog",                 promptHint: "dense fog atmosphere, thick low-visibility moisture obscuring all but the nearest subject, muted desaturated tones" },
+  { id: "mist",            label: "Mist",            description: "Thin diffusing mist",                      promptHint: "light mist atmosphere, thin atmospheric haze gently diffusing distant elements while keeping the subject crisp" },
   { id: "fog-mist",        label: "Fog / Mist",      description: "Soft diffusing fog",                       promptHint: "foggy atmosphere, soft mist reducing visibility and diffusing distant elements" },
   { id: "light-rain",      label: "Light Rain",      description: "Soft falling rain",                        promptHint: "light rain falling softly, subtle droplets visible in the air with wet surfaces" },
   { id: "heavy-rain",      label: "Heavy Rain",      description: "Heavy storm with sheets of rain",          promptHint: "heavy rainstorm, dense sheets of rain with visible droplets and splashing surfaces" },
+  { id: "storm",           label: "Storm",           description: "Violent thunderstorm with rain + lightning", promptHint: "stormy atmosphere, violent thunderstorm with sheeting rain, dramatic dark clouds, flickering lightning illuminating the scene, and wind-driven debris" },
   { id: "snow",            label: "Snow",            description: "Falling snowflakes",                       promptHint: "falling snow, snowflakes drifting through the air and accumulating on surfaces" },
+  { id: "blizzard",        label: "Blizzard",        description: "Violent snowstorm, near whiteout",         promptHint: "blizzard atmosphere, violent snowstorm with horizontal wind-driven snow, near-whiteout visibility, deep accumulation on every surface" },
   { id: "dust",            label: "Dust",            description: "Dust particles in air",                    promptHint: "dusty atmosphere, visible airborne dust particles catching light and softening distant elements" },
   { id: "god-rays",        label: "God Rays",        description: "Sun shafts through haze",                  promptHint: "visible volumetric god rays, sun shafts cutting through hazy atmosphere" },
   { id: "smoke",           label: "Smoke",           description: "Drifting smoke",                           promptHint: "drifting smoke in the scene, hazy volumetric smoke partially obscuring the subject" },

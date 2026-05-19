@@ -270,15 +270,17 @@ describe("MotionTab (i18n)", () => {
   })
 
   it("renders localized motion preset chip labels", async () => {
+    // Catalog ids come from the LOCATION_PRESET_TO_CATALOG adapter, mapping
+    // each backend motion preset to the canonical `camera-motions` entry id.
     const TRANSLATIONS: Record<string, string> = {
-      "motion.slow dolly-in":      "Travelling avant lent",
-      "motion.slow pan-left":      "Pano gauche lent",
-      "motion.slow pan-right":     "Pano droite lent",
-      "motion.push up":            "Poussée vers le haut",
-      "motion.drone fly-over":     "Survol drone",
-      "motion.gentle drift":       "Dérive douce",
-      "motion.parallax":           "Parallaxe",
-      "motion.static atmospheric": "Atmosphère statique",
+      "dolly-in":     "Travelling avant lent",
+      "pan-left":     "Pano gauche lent",
+      "pan-right":    "Pano droite lent",
+      "pedestal-up":  "Poussée vers le haut",
+      "fly-over":     "Survol drone",
+      "gentle-drift": "Dérive douce",
+      "parallax":     "Parallaxe",
+      "static":       "Atmosphère statique",
     }
     vi.doMock("@/hooks/use-localized-entry", () => ({
       useLocalizedCatalog: () => ({
@@ -325,7 +327,7 @@ describe("MotionTab (i18n)", () => {
       useLocalizedCatalog: () => ({
         locale: "fr",
         resolveLabel: (id: string, englishLabel: string) =>
-          id === "motion.parallax" ? "Parallaxe" : englishLabel,
+          id === "parallax" ? "Parallaxe" : englishLabel,
         resolveDescription: (_id: string, englishDescription: string) =>
           englishDescription,
         matches: () => true,

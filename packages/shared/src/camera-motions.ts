@@ -510,6 +510,20 @@ export const CAMERA_MOTIONS: ReadonlyArray<CameraMotion> = [
     description: "Front/rear camera flip",
     promptHint: "camera-flip transition where the phone visibly rotates between the front and rear sensors, brief blur during the swap",
   },
+  {
+    id: "gentle-drift",
+    label: "Gentle Drift",
+    category: "default",
+    description: "Slow ambient floating motion",
+    promptHint: "gentle camera drift, a slow ambient floating motion with no specific direction, the camera barely moves but never sits perfectly still, evocative of contemplative atmospheric shots",
+  },
+  {
+    id: "parallax",
+    label: "Parallax",
+    category: "default",
+    description: "Lateral motion with foreground/background depth separation",
+    promptHint: "parallax camera motion, lateral movement that emphasizes the depth separation between foreground and background elements, foreground objects appearing to move faster than distant ones",
+  },
 ]
 
 export const CAMERA_MOTION_CATEGORY_ORDER: ReadonlyArray<CameraMotionCategory> = [
