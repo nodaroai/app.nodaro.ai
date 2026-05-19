@@ -79,19 +79,41 @@ function mockLocationPreFetch(result: { data: unknown; error: unknown }) {
 }
 
 // .from("locations").update(..).eq("id", ..).eq("user_id", ..).select(..).single()
+//   — OR with expectedUpdatedAt:
+// .from("locations").update(..).eq("id", ..).eq("user_id", ..).eq("updated_at", ..).select(..).single()
+// The route adds the third `.eq("updated_at", expectedUpdatedAt)` only when
+// the caller passed `expectedUpdatedAt`, so the chain mock supports both
+// shapes by making the second `.eq` chainable.
 function mockLocationUpdate(result: { data: unknown; error: unknown }) {
   const single = vi.fn().mockResolvedValue(result)
   const selectAfter = vi.fn().mockReturnValue({ single })
-  const eq2 = vi.fn().mockReturnValue({ select: selectAfter })
+  // eq2 returns an object that ALSO has `eq` for the optional third filter
+  // (updated_at). Both `eq2(...).select(...)` and `eq2(...).eq(...).select(...)`
+  // resolve to the same `select` mock.
+  const eq3 = vi.fn().mockReturnValue({ select: selectAfter })
+  const eq2 = vi.fn().mockReturnValue({ select: selectAfter, eq: eq3 })
   const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
   const update = vi.fn().mockReturnValue({ eq: eq1 })
-  return { update, eq1, eq2, selectAfter, single }
+  return { update, eq1, eq2, eq3, selectAfter, single }
+}
+
+// .from("locations").select("updated_at").eq("id", ..).eq("user_id", ..).single()
+//   — fresh-row lookup after a stale-token UPDATE returns zero rows.
+function mockLocationFreshLookup(result: { data: unknown; error: unknown }) {
+  const single = vi.fn().mockResolvedValue(result)
+  const eq2 = vi.fn().mockReturnValue({ single })
+  const eq1 = vi.fn().mockReturnValue({ eq: eq2 })
+  const select = vi.fn().mockReturnValue({ eq: eq1 })
+  return { select, eq1, eq2, single }
 }
 
 function wireSupabase(parts: {
   jobs?: ReturnType<typeof mockJobFetch>
   locationPreFetch?: ReturnType<typeof mockLocationPreFetch>
   locationUpdate?: ReturnType<typeof mockLocationUpdate>
+  /** Third locations call: fresh-row lookup after a stale-token UPDATE
+   *  returns zero rows. Only used by the 409 path. */
+  locationFreshLookup?: ReturnType<typeof mockLocationFreshLookup>
 }) {
   let locCall = 0
   vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -106,9 +128,14 @@ function wireSupabase(parts: {
         if (!parts.locationPreFetch) throw new Error("test forgot to set locationPreFetch")
         return { select: parts.locationPreFetch.select } as never
       }
-      // Second locations call = update
-      if (!parts.locationUpdate) throw new Error("test forgot to set locationUpdate")
-      return { update: parts.locationUpdate.update } as never
+      if (locCall === 2) {
+        // Second locations call = update
+        if (!parts.locationUpdate) throw new Error("test forgot to set locationUpdate")
+        return { update: parts.locationUpdate.update } as never
+      }
+      // Third locations call = fresh-row lookup (409 path only).
+      if (!parts.locationFreshLookup) throw new Error("test forgot to set locationFreshLookup")
+      return { select: parts.locationFreshLookup.select } as never
     }
     throw new Error(`unexpected table ${table}`)
   })
@@ -300,6 +327,113 @@ describe("POST /v1/locations/:id/approve-main-image", () => {
         canonical_description: null,
       }),
     )
+  })
+
+  // --------------------------------------------------------------------
+  // Phase 2 #9 — optimistic-concurrency (expectedUpdatedAt)
+  // --------------------------------------------------------------------
+
+  it("returns 200 when expectedUpdatedAt matches (token gates the UPDATE)", async () => {
+    const FRESH = "2026-05-18T10:00:00.000Z"
+    const jobs = mockJobFetch({
+      data: { id: TEST_JOB_ID, status: "completed", output_data: { imageUrl: IMAGE_URL } },
+      error: null,
+    })
+    const locationPreFetch = mockLocationPreFetch({ data: { id: TEST_LOCATION_ID }, error: null })
+    const locationUpdate = mockLocationUpdate({
+      data: { source_image_url: IMAGE_URL, canonical_description: SAMPLE_CAPTION },
+      error: null,
+    })
+    wireSupabase({ jobs, locationPreFetch, locationUpdate })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/approve-main-image`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { candidateJobId: TEST_JOB_ID, expectedUpdatedAt: FRESH },
+    })
+    expect(res.statusCode).toBe(200)
+    // The route must call the third `.eq("updated_at", FRESH)` filter on UPDATE.
+    expect(locationUpdate.eq3).toHaveBeenCalledWith("updated_at", FRESH)
+  })
+
+  it("returns 409 when expectedUpdatedAt is stale (concurrent modification)", async () => {
+    const STALE = "2026-05-18T09:00:00.000Z"
+    const FRESH = "2026-05-18T10:30:00.000Z"
+    const jobs = mockJobFetch({
+      data: { id: TEST_JOB_ID, status: "completed", output_data: { imageUrl: IMAGE_URL } },
+      error: null,
+    })
+    const locationPreFetch = mockLocationPreFetch({ data: { id: TEST_LOCATION_ID }, error: null })
+    // UPDATE filtered everything out (token mismatch → zero rows).
+    const locationUpdate = mockLocationUpdate({
+      data: null,
+      error: { code: "PGRST116", message: "no row" },
+    })
+    // Follow-up SELECT returns the row's current updated_at.
+    const locationFreshLookup = mockLocationFreshLookup({
+      data: { updated_at: FRESH },
+      error: null,
+    })
+    wireSupabase({ jobs, locationPreFetch, locationUpdate, locationFreshLookup })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/approve-main-image`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { candidateJobId: TEST_JOB_ID, expectedUpdatedAt: STALE },
+    })
+    expect(res.statusCode).toBe(409)
+    const body = res.json()
+    expect(body.error.code).toBe("concurrent_modification")
+    expect(body.error.updatedAt).toBe(FRESH)
+    expect(body.error.message).toBeTruthy()
+    // 409 body must be minimal — no row payload (matches save-route DD-5).
+    expect(body.error).not.toHaveProperty("sourceImageUrl")
+    expect(body.error).not.toHaveProperty("canonicalDescription")
+    // Verify the UPDATE was actually gated on updated_at.
+    expect(locationUpdate.eq3).toHaveBeenCalledWith("updated_at", STALE)
+  })
+
+  it("does NOT gate UPDATE on updated_at when expectedUpdatedAt is omitted (back-compat)", async () => {
+    // Without expectedUpdatedAt the route stays last-write-wins (current
+    // behaviour for callers that haven't upgraded). The third `.eq` for
+    // updated_at must NOT be invoked.
+    const jobs = mockJobFetch({
+      data: { id: TEST_JOB_ID, status: "completed", output_data: { imageUrl: IMAGE_URL } },
+      error: null,
+    })
+    const locationPreFetch = mockLocationPreFetch({ data: { id: TEST_LOCATION_ID }, error: null })
+    const locationUpdate = mockLocationUpdate({
+      data: { source_image_url: IMAGE_URL, canonical_description: SAMPLE_CAPTION },
+      error: null,
+    })
+    wireSupabase({ jobs, locationPreFetch, locationUpdate })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/approve-main-image`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { candidateJobId: TEST_JOB_ID },
+    })
+    expect(res.statusCode).toBe(200)
+    // Critical: without expectedUpdatedAt, the route MUST NOT add the
+    // updated_at filter (or it would silently 500 every time on UPDATE
+    // because the omitted filter would still pass the chain through eq3=undefined).
+    expect(locationUpdate.eq3).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 when expectedUpdatedAt is malformed (not ISO datetime)", async () => {
+    // Zod's `.datetime()` rejects non-ISO strings — the route must 400
+    // before reaching any DB call. Validates the schema is wired correctly.
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/locations/${TEST_LOCATION_ID}/approve-main-image`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { candidateJobId: TEST_JOB_ID, expectedUpdatedAt: "not-a-date" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
   })
 
   it("returns 500 when persist UPDATE fails", async () => {

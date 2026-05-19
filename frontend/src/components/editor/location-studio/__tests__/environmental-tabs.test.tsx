@@ -43,6 +43,10 @@ function makeStudio(): LocationStudioState {
     patch: vi.fn(),
     saveStaged: vi.fn().mockResolvedValue("loc-uuid-1"),
     ensureSavedBeforeGen: vi.fn().mockResolvedValue("loc-uuid-1"),
+    approveMainImage: vi.fn().mockResolvedValue({
+      sourceImageUrl: "https://example.com/approved.png",
+      canonicalDescription: "",
+    }),
   }
 }
 

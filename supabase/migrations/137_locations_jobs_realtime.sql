@@ -1,4 +1,4 @@
--- 136_locations_jobs_realtime.sql — Enable Supabase Realtime on locations + jobs
+-- 137_locations_jobs_realtime.sql — Enable Supabase Realtime on locations + jobs
 --
 -- Phase 2 #12: replaces the Location Studio's 2s polling on `jobs` and the
 -- save-only refetch on `locations` with first-class Realtime UPDATE events.

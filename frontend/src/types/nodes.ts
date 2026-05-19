@@ -3151,6 +3151,12 @@ export type LocationNodeData = {
   atmosphereMotions: LocationAssetItem[]
   atmosphereStatus: AssetStatus
   referencePhotos: LocationReferencePhoto[]
+  /** Phase 2 #7 — ISO-8601 timestamp when the user consented that uploaded
+   *  reference photos do not contain PII without rights. Set on the first
+   *  reference photo add when the consent checkbox is ticked; undefined
+   *  until then. The studio uses this to decide whether to show the consent
+   *  checkbox above the reference-photos grid. */
+  piiConsentAt?: string
   canonicalDescription: string
   styleLock: boolean
   // Asset generation status

@@ -78,6 +78,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `camera-format` — Camera / Film Stock
 - `camera-motion` — Camera Motion
 - `character` — Character
+- `character-fx` — Character FX
 - `color-look` — Color / Look
 - `combine-audio` — Combine Audio
 - `combine-text` — Combine Text

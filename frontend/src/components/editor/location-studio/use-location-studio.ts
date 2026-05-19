@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getCachedUserId } from "@/hooks/use-auth"
 import {
+  approveLocationMainImage,
   ConcurrentModificationError,
   getLocationById,
   saveLocation,
@@ -51,6 +52,14 @@ export interface LocationStudioState {
   saveStaged: () => Promise<string>
   /** Returns the row's DB id, saving first if absent. */
   ensureSavedBeforeGen: () => Promise<string>
+  /** Approve a candidate-generation job as the location's main image. Passes
+   *  the studio's `updatedAt` token for optimistic-concurrency; on 409 re-
+   *  fetches the canonical row + re-stages so the user can retry over fresh
+   *  state. Same recovery shape as `saveStaged`. */
+  approveMainImage: (candidateJobId: string) => Promise<{
+    readonly sourceImageUrl: string
+    readonly canonicalDescription: string
+  }>
 }
 
 export function useLocationStudio(nodeId: string): LocationStudioState {
@@ -95,6 +104,52 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
     setStagedData((prev) => (prev ? ({ ...prev, ...updates } as LocationNodeData) : prev))
   }, [])
 
+  /**
+   * Re-fetch the canonical row + re-stage it after a 409. Shared by both
+   * `saveStaged` and `approveMainImage` — same recovery shape so the user
+   * sees identical "modified in another tab — reloaded" UX regardless of
+   * which write tripped the version check.
+   *
+   * No-op when there's no `locationDbId` (can't 409 without a row id) or
+   * the fetch itself fails (the user can retry).
+   */
+  const refetchAndRestage = useCallback(async (): Promise<void> => {
+    const current = stagedRef.current
+    if (!current?.locationDbId) return
+    try {
+      const fresh = await getLocationById(current.locationDbId)
+      if (!fresh) return
+      // Merge into the canvas data shape so the studio keeps working
+      // against a LocationNodeData (DbLocation is the API shape, not
+      // the node-data shape — they overlap but aren't identical).
+      const merged: LocationNodeData = {
+        ...current,
+        locationDbId: fresh.id,
+        locationName: fresh.name,
+        description: fresh.description ?? "",
+        category: (fresh.category as LocationNodeData["category"]) ?? current.category,
+        style: (fresh.style as LocationNodeData["style"]) ?? current.style,
+        sourceImageUrl: fresh.sourceImageUrl ?? "",
+        timeOfDay: fresh.timeOfDay ?? current.timeOfDay,
+        weather: fresh.weather ?? current.weather,
+        angles: fresh.angles ?? current.angles,
+        lighting: fresh.lighting ?? current.lighting,
+        seasons: fresh.seasons ?? current.seasons,
+        atmosphereMotions: fresh.atmosphereMotions ?? current.atmosphereMotions,
+        referencePhotos:
+          (fresh.referencePhotos as LocationNodeData["referencePhotos"]) ?? current.referencePhotos,
+        canonicalDescription: fresh.canonicalDescription ?? "",
+        styleLock: fresh.styleLock ?? current.styleLock,
+        piiConsentAt: fresh.piiConsentAt ?? current.piiConsentAt,
+      }
+      merged.updatedAt = fresh.updatedAt
+      setStagedData(merged)
+      updateNodeData(nodeId, merged as Record<string, unknown>)
+    } catch {
+      // If even the re-fetch fails, leave staged as-is; the user can retry.
+    }
+  }, [nodeId, updateNodeData])
+
   const saveStaged = useCallback(async (): Promise<string> => {
     const current = stagedRef.current
     if (!current) throw new Error("Studio state not ready.")
@@ -122,6 +177,11 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         referencePhotos: current.referencePhotos,
         canonicalDescription: current.canonicalDescription,
         styleLock: current.styleLock,
+        // Phase 2 #7 — PII consent timestamp. Only set when the user has
+        // ticked the consent checkbox on the reference-photos section; the
+        // node's `piiConsentAt` flips from undefined → ISO timestamp at that
+        // moment and stays set forever (consent doesn't time out).
+        piiConsentAt: current.piiConsentAt,
         expectedUpdatedAt: current.updatedAt,
       })
       // Sync to canvas AFTER saveLocation succeeds so the canvas never holds
@@ -153,41 +213,7 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
         // 409 path: reload canonical state so the user can re-apply edits
         // over fresh data instead of clobbering the concurrent writer.
         toast.error("Location was modified in another tab — reloaded")
-        if (current.locationDbId) {
-          try {
-            const fresh = await getLocationById(current.locationDbId)
-            if (fresh) {
-              // Merge into the canvas data shape so the studio keeps working
-              // against a LocationNodeData (DbLocation is the API shape, not
-              // the node-data shape — they overlap but aren't identical).
-              const merged: LocationNodeData = {
-                ...current,
-                locationDbId: fresh.id,
-                locationName: fresh.name,
-                description: fresh.description ?? "",
-                category: (fresh.category as LocationNodeData["category"]) ?? current.category,
-                style: (fresh.style as LocationNodeData["style"]) ?? current.style,
-                sourceImageUrl: fresh.sourceImageUrl ?? "",
-                timeOfDay: fresh.timeOfDay ?? current.timeOfDay,
-                weather: fresh.weather ?? current.weather,
-                angles: fresh.angles ?? current.angles,
-                lighting: fresh.lighting ?? current.lighting,
-                seasons: fresh.seasons ?? current.seasons,
-                atmosphereMotions: fresh.atmosphereMotions ?? current.atmosphereMotions,
-                referencePhotos:
-                  (fresh.referencePhotos as LocationNodeData["referencePhotos"]) ?? current.referencePhotos,
-                canonicalDescription: fresh.canonicalDescription ?? "",
-                styleLock: fresh.styleLock ?? current.styleLock,
-              }
-              merged.updatedAt = fresh.updatedAt
-              setStagedData(merged)
-              updateNodeData(nodeId, merged as Record<string, unknown>)
-            }
-          } catch {
-            // If even the re-fetch fails, leave staged as-is; the user can
-            // retry Save and will hit the 409 path again.
-          }
-        }
+        await refetchAndRestage()
       } else {
         toast.error("Save failed")
       }
@@ -195,7 +221,59 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
     } finally {
       setIsSaving(false)
     }
-  }, [invalidate, nodeId, projectId, updateNodeData, userId])
+  }, [invalidate, nodeId, projectId, refetchAndRestage, updateNodeData, userId])
+
+  /**
+   * Approve a candidate-generation job as the location's main image.
+   *
+   * Mirrors `saveStaged`'s 409 handling: passes the studio's `updatedAt`
+   * token to `approveLocationMainImage`, and on 409 refetches the canonical
+   * row + re-stages it before re-throwing so the caller can keep its own
+   * "approve in progress" flag in sync. The caller still owns the
+   * `isApprovingMainImage` flag — the hook just owns the network +
+   * recovery logic so the 409 codepath is identical to save.
+   *
+   * On success patches `sourceImageUrl` + `canonicalDescription` into
+   * staged so the UI updates without waiting for a refetch.
+   */
+  const approveMainImage = useCallback(
+    async (
+      candidateJobId: string,
+    ): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> => {
+      const current = stagedRef.current
+      if (!current?.locationDbId) {
+        throw new Error("Studio state not ready.")
+      }
+      try {
+        const result = await approveLocationMainImage(
+          current.locationDbId,
+          candidateJobId,
+          current.updatedAt,
+        )
+        // Mirror result into staged so the UI updates immediately.
+        // We don't bump `updatedAt` here — the backend bumped it, but we
+        // don't get the new value back. The realtime sync (or the next
+        // explicit refetch) will pick it up.
+        setStagedData((prev) =>
+          prev
+            ? ({
+                ...prev,
+                sourceImageUrl: result.sourceImageUrl,
+                canonicalDescription: result.canonicalDescription,
+              } as LocationNodeData)
+            : prev,
+        )
+        return result
+      } catch (e) {
+        if (e instanceof ConcurrentModificationError) {
+          toast.error("Someone else just approved this — refreshed")
+          await refetchAndRestage()
+        }
+        throw e
+      }
+    },
+    [refetchAndRestage],
+  )
 
   const ensureSavedBeforeGen = useCallback(async (): Promise<string> => {
     const current = stagedRef.current
@@ -265,6 +343,7 @@ export function useLocationStudio(nodeId: string): LocationStudioState {
     patch,
     saveStaged,
     ensureSavedBeforeGen,
+    approveMainImage,
   }
 }
 

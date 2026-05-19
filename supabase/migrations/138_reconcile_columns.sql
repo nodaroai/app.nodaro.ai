@@ -1,4 +1,10 @@
--- Migration 135 — External-call reconciliation (jobs-table columns + inflight-index)
+-- Migration 138 — External-call reconciliation (jobs-table columns + inflight-index)
+--
+-- (Renumbered from 135 → 138 in fix/ci-hotfix to resolve a duplicate-version
+-- collision with 135_phase_1c2_schema.sql, which was authored in parallel.
+-- Prod's schema_migrations had 135 = phase_1c2 applied first via PR #2524;
+-- this reconcile content failed to apply under version 135 in PR #2532.
+-- Renumbering lets it apply cleanly as a fresh version on the next deploy.)
 --
 -- Five new columns track external provider tasks so a cron can find stuck rows
 -- and either recover them (async, with provider_task_id) or sweep them (sync,

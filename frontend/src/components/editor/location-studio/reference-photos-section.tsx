@@ -21,11 +21,26 @@ const MAX_PHOTOS = 20
 interface ReferencePhotosSectionProps {
   readonly photos: ReadonlyArray<LocationReferencePhoto>
   readonly onChange: (photos: LocationReferencePhoto[]) => void
+  /**
+   * Phase 2 #7 — ISO timestamp when the user previously consented. `undefined`
+   * = no consent on file, the section shows the consent checkbox above Add
+   * and disables Add until ticked. When non-`undefined`, the section hides
+   * the checkbox and lets the user add freely. The callback fires with the
+   * fresh timestamp on the first add after consent is ticked.
+   */
+  readonly piiConsentAt?: string
+  readonly onConsent?: (timestamp: string) => void
 }
 
-export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSectionProps) {
+export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConsent }: ReferencePhotosSectionProps) {
   const [pendingUrl, setPendingUrl] = useState("")
   const [pendingKind, setPendingKind] = useState<LocationReferencePhotoKind>("moodBoard")
+  // PII consent (Phase 2 #7). The checkbox shows only when the location has
+  // never received consent (piiConsentAt is undefined). Once the user ticks
+  // it AND adds the first photo, the parent persists piiConsentAt = now()
+  // and the checkbox disappears for good.
+  const [consentChecked, setConsentChecked] = useState(false)
+  const showConsentGate = !piiConsentAt
   // Phase 2 #11 — Search/filter. Reference photos have no `name` field, so we
   // match against the kind enum value (e.g. "wide"), the human label from
   // `LOCATION_REFERENCE_PHOTO_KIND_LABELS` (e.g. "wide-angle reference"), and
@@ -57,6 +72,17 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
     if (photos.length >= MAX_PHOTOS) {
       toast.error(`Max ${MAX_PHOTOS} reference photos`)
       return
+    }
+    // PII consent gate (Phase 2 #7). If the location has never received
+    // consent, require the checkbox to be ticked AND fire onConsent with
+    // a fresh timestamp so the parent can persist it. After this Add, the
+    // gate is gone for this location.
+    if (showConsentGate) {
+      if (!consentChecked) {
+        toast.error("Please confirm you have rights and consent")
+        return
+      }
+      onConsent?.(new Date().toISOString())
     }
     onChange([...photos, { kind: pendingKind, url: trimmed }])
     setPendingUrl("")
@@ -134,6 +160,26 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
           </button>
         </div>
       )}
+      {showConsentGate && (
+        <label className="flex items-start gap-2 mb-2 text-[10px] text-slate-400 leading-snug cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={consentChecked}
+            onChange={(e) => setConsentChecked(e.target.checked)}
+            aria-label="Confirm rights and consent for reference photos"
+            className="mt-[2px] accent-[#22d3ee] cursor-pointer"
+          />
+          <span>
+            I confirm I have the rights to upload these photos and that any people
+            depicted have consented to their use as AI generation references.
+          </span>
+        </label>
+      )}
+      {!showConsentGate && piiConsentAt && (
+        <p className="text-[9px] text-slate-500 mb-2">
+          Consent recorded {new Date(piiConsentAt).toLocaleDateString()}
+        </p>
+      )}
       <div className="flex gap-2 items-center">
         <select
           value={pendingKind}
@@ -157,7 +203,7 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
         <button
           type="button"
           onClick={add}
-          disabled={!pendingUrl.trim() || photos.length >= MAX_PHOTOS}
+          disabled={!pendingUrl.trim() || photos.length >= MAX_PHOTOS || (showConsentGate && !consentChecked)}
           className="text-[11px] px-3 py-1.5 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
         >
           Add

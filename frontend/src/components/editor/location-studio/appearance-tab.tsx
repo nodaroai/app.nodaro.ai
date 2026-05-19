@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import {
-  approveLocationMainImage,
-  generateLocation,
-} from "@/lib/api"
+import { ConcurrentModificationError, generateLocation } from "@/lib/api"
 import type { LocationReferencePhoto } from "@/types/nodes"
 import { ReferencePhotosSection } from "./reference-photos-section"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
@@ -100,15 +97,20 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
     }
     studio.setIsApprovingMainImage(true)
     try {
-      const result = await approveLocationMainImage(data.locationDbId, candidateJobId)
-      studio.patch({
-        sourceImageUrl: result.sourceImageUrl,
-        canonicalDescription: result.canonicalDescription,
-      })
+      // Studio hook owns the network + 409 recovery so the codepath
+      // mirrors save. On 409 the hook already toasted + re-staged; we
+      // just bail out of the success branch.
+      await studio.approveMainImage(candidateJobId)
       toast.success("Main image approved")
       setCandidates([])
-    } catch {
-      toast.error("Approval failed")
+    } catch (e) {
+      if (e instanceof ConcurrentModificationError) {
+        // Hook toasted + re-staged; just clear the candidates grid because
+        // the canonical state may already have a different main image.
+        setCandidates([])
+      } else {
+        toast.error("Approval failed")
+      }
     } finally {
       studio.setIsApprovingMainImage(false)
     }
@@ -117,6 +119,15 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
   function handleDiscard(candidateJobId: string) {
     setCandidates((prev) => prev.filter((c) => c.jobId !== candidateJobId))
   }
+
+  // Phase 2 #9: lock approval flow whenever a main-image generation job is in
+  // flight. This prevents the "approve candidate A while candidate B is still
+  // generating" race even within a single tab — the user can only approve
+  // once every main-image job has resolved or failed (jobs hook drops them
+  // from `tracked` on terminal status). Discard is gated by the same
+  // condition so the user can't drop a card under an in-flight gen either.
+  const mainImageGenPending = jobs.tracked.some((j) => j.assetType === "main")
+  const approveDiscardDisabled = studio.isApprovingMainImage || mainImageGenPending
 
   const generateDisabled =
     studio.isApprovingMainImage || studio.isSaving || !data.locationName.trim()
@@ -219,16 +230,26 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
                   <button
                     type="button"
                     onClick={() => handleApprove(c.jobId)}
-                    disabled={studio.isApprovingMainImage}
-                    className="flex-1 text-[11px] px-2 py-1 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 text-slate-900 font-medium"
+                    disabled={approveDiscardDisabled}
+                    title={
+                      mainImageGenPending
+                        ? "Wait for in-flight candidate generations to finish"
+                        : undefined
+                    }
+                    className="flex-1 text-[11px] px-2 py-1 rounded bg-[#22d3ee] hover:bg-[#22d3ee]/90 disabled:opacity-40 disabled:cursor-not-allowed text-slate-900 font-medium"
                   >
                     {studio.isApprovingMainImage ? "Approving…" : "Approve"}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDiscard(c.jobId)}
-                    disabled={studio.isApprovingMainImage}
-                    className="text-[11px] px-2 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] text-slate-400"
+                    disabled={approveDiscardDisabled}
+                    title={
+                      mainImageGenPending
+                        ? "Wait for in-flight candidate generations to finish"
+                        : undefined
+                    }
+                    className="text-[11px] px-2 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] disabled:opacity-40 disabled:cursor-not-allowed text-slate-400"
                   >
                     Discard
                   </button>
@@ -253,6 +274,8 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
         <ReferencePhotosSection
           photos={data.referencePhotos ?? []}
           onChange={(photos: LocationReferencePhoto[]) => studio.patch({ referencePhotos: photos })}
+          piiConsentAt={data.piiConsentAt}
+          onConsent={(timestamp: string) => studio.patch({ piiConsentAt: timestamp })}
         />
       </section>
     </div>

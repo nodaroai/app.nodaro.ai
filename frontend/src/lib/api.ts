@@ -1354,6 +1354,13 @@ export async function saveLocation(data: {
   canonicalDescription?: string
   styleLock?: boolean
   /**
+   * PII consent timestamp (Phase 2 #7). The studio sends `new Date().toISOString()`
+   * when the user adds the first reference photo with the consent checkbox
+   * ticked. The backend writes it to `locations.pii_consent_at`; subsequent
+   * reads return it so the studio knows when consent was given.
+   */
+  piiConsentAt?: string
+  /**
    * Optimistic-concurrency token. When present, the backend only UPDATEs the
    * row if `updated_at` still matches. On mismatch the API returns 409 and
    * this client throws `ConcurrentModificationError` so the caller can
@@ -1378,17 +1385,26 @@ export async function saveLocation(data: {
  * source_image_url. Also fires the Claude Sonnet vision caption inline to
  * populate `canonical_description`. Returns 200 with `canonicalDescription:
  * ""` on caption sub-failure (frontend retries via `recaptionLocation`).
+ *
+ * `expectedUpdatedAt` is the studio's optimistic-concurrency token. When
+ * passed, the backend gates the UPDATE on the row's current `updated_at`
+ * and returns 409 on mismatch — surfaced here as `ConcurrentModificationError`
+ * so callers can refetch + re-stage (same shape as the 409 recovery on
+ * `saveLocation`).
  */
 export async function approveLocationMainImage(
   locationId: string,
   candidateJobId: string,
+  expectedUpdatedAt?: string,
 ): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
+  const body: Record<string, unknown> = { candidateJobId }
+  if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
   const res = await fetch(
     `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-      body: JSON.stringify({ candidateJobId }),
+      body: JSON.stringify(body),
     },
   )
   if (!res.ok) {
@@ -1551,6 +1567,10 @@ export interface DbLocation {
   referencePhotos: { kind: string; url: string }[]
   canonicalDescription: string
   styleLock: boolean
+  /** Phase 2 #7 — timestamp the user consented that reference photos don't
+   *  include PII without rights. NULL = no consent recorded yet (UI shows
+   *  the consent checkbox); non-NULL = consent given (UI hides checkbox). */
+  piiConsentAt?: string | null
   deletedAt?: string | null
   createdAt: string
   updatedAt: string

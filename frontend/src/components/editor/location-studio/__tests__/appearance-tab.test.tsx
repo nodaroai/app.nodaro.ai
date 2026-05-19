@@ -64,6 +64,10 @@ function makeStudio(overrides: Partial<LocationStudioState> = {}): LocationStudi
     patch: vi.fn(),
     saveStaged: vi.fn().mockResolvedValue("loc-uuid-1"),
     ensureSavedBeforeGen: vi.fn().mockResolvedValue("loc-uuid-1"),
+    approveMainImage: vi.fn().mockResolvedValue({
+      sourceImageUrl: "https://example.com/approved.png",
+      canonicalDescription: "A warm cafe interior with golden afternoon light.",
+    }),
     ...overrides,
   }
 }
@@ -149,24 +153,13 @@ describe("AppearanceTab", () => {
     expect(screen.getByRole("button", { name: /^generate$/i })).toBeDisabled()
   })
 
-  it("Approve calls approveLocationMainImage and patches sourceImageUrl + canonicalDescription", async () => {
+  it("Approve calls studio.approveMainImage with the candidate id (hook owns API + 409 recovery)", async () => {
     const studio = makeStudio()
-    vi.mocked(approveLocationMainImage).mockResolvedValueOnce({
-      sourceImageUrl: "https://example.com/approved.png",
-      canonicalDescription: "A warm cafe interior with golden afternoon light.",
-    })
+    // The hook's approveMainImage now wraps the API call; the appearance
+    // tab no longer talks to approveLocationMainImage directly. The mock
+    // resolves so the success branch fires (toast + clearing candidates).
 
-    // Render with a candidate already in state by directly mounting then
-    // pushing one through the onResolved callback. The hook's onResolved
-    // setter is wired in useEffect, so we trigger via generateLocation +
-    // simulating the batch return.
     const { rerender } = render(<AppearanceTab studio={studio} />)
-
-    // Approval button only renders when there are candidates. To exercise
-    // approve path deterministically, switch the component to a state where
-    // a candidate exists. We do this by simulating handleGenerate + manually
-    // injecting via the hook. Simpler: drive the user click on Approve by
-    // first generating and then resolving the job through the mocked batch.
 
     vi.mocked(generateLocation).mockResolvedValueOnce({ jobId: "candidate-1" })
     const { getJobStatusBatch } = await import("@/lib/api")
@@ -199,13 +192,50 @@ describe("AppearanceTab", () => {
       await Promise.resolve()
     })
 
-    expect(approveLocationMainImage).toHaveBeenCalledWith("loc-uuid-1", "candidate-1")
+    // The appearance tab now delegates to the hook — the raw API mock is no
+    // longer called directly. The hook would call it (covered by the hook's
+    // own test); here we only assert the wiring.
+    expect(approveLocationMainImage).not.toHaveBeenCalled()
+    expect(studio.approveMainImage).toHaveBeenCalledWith("candidate-1")
     expect(studio.setIsApprovingMainImage).toHaveBeenCalledWith(true)
     expect(studio.setIsApprovingMainImage).toHaveBeenLastCalledWith(false)
-    expect(studio.patch).toHaveBeenCalledWith({
-      sourceImageUrl: "https://example.com/approved.png",
-      canonicalDescription: "A warm cafe interior with golden afternoon light.",
+  }, 20000)
+
+  it("Approve + Discard are disabled when a main-image generation job is in flight (Phase 2 #9)", async () => {
+    // Drive the appearance tab through a generate() so a tracked job exists
+    // for assetType="main". Then assert the Approve + Discard buttons on a
+    // sibling candidate card are disabled even before the job resolves.
+    vi.mocked(generateLocation).mockResolvedValueOnce({ jobIds: ["cand-a", "cand-b"] })
+    const { getJobStatusBatch } = await import("@/lib/api")
+    // First poll: cand-a is completed (so a card renders); cand-b stays
+    // pending (so a "main" job remains in tracked).
+    vi.mocked(getJobStatusBatch).mockResolvedValueOnce({
+      jobs: [
+        {
+          id: "cand-a",
+          status: "completed",
+          output_data: { imageUrl: "https://example.com/a.png" },
+        },
+        { id: "cand-b", status: "processing", output_data: null },
+      ],
     })
+
+    const studio = makeStudio()
+    render(<AppearanceTab studio={studio} />)
+
+    // count=2 so we kick off two tracked main jobs.
+    await userEvent.click(screen.getByRole("button", { name: "2" }))
+    await userEvent.click(screen.getByRole("button", { name: /^generate$/i }))
+
+    // Wait for the poll to tick + the completed candidate to land in the grid.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10500))
+    })
+
+    const approveBtn = await screen.findByRole("button", { name: /^approve$/i })
+    expect(approveBtn).toBeDisabled()
+    const discardBtn = screen.getByRole("button", { name: /^discard$/i })
+    expect(discardBtn).toBeDisabled()
   }, 20000)
 
   it("renders canonical description when present", () => {

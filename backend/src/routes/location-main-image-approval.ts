@@ -37,7 +37,18 @@ import { formatZodError } from "../lib/zod-error.js"
  */
 
 const paramsSchema = z.object({ id: z.string().uuid() })
-const bodySchema = z.object({ candidateJobId: z.string().uuid() })
+const bodySchema = z.object({
+  candidateJobId: z.string().uuid(),
+  /**
+   * Optimistic-concurrency token. When present, the UPDATE is gated by
+   * `.eq("updated_at", expectedUpdatedAt)` so a stale studio snapshot can't
+   * clobber a concurrent writer (worker auto-attach, another tab, etc.).
+   * On mismatch the route returns 409 `concurrent_modification` with the
+   * fresh `updated_at` so the caller can re-fetch + retry. Mirrors the
+   * pattern in POST /v1/locations.
+   */
+  expectedUpdatedAt: z.string().datetime().optional(),
+})
 
 export async function locationMainImageApprovalRoutes(app: FastifyInstance) {
   app.post(
@@ -82,7 +93,7 @@ export async function locationMainImageApprovalRoutes(app: FastifyInstance) {
       }
 
       const { id: locationId } = params.data
-      const { candidateJobId } = body.data
+      const { candidateJobId, expectedUpdatedAt } = body.data
 
       // ----- Parallel fetch: candidate job + location pre-fetch -----
       // Both must succeed before the paid LLM call. Both are scoped by
@@ -149,7 +160,14 @@ export async function locationMainImageApprovalRoutes(app: FastifyInstance) {
       // `canonical_description` (null on LLM failure — frontend coerces).
       // We deliberately bump `updated_at` so the Studio's optimistic-
       // concurrency token stays in lockstep with the row.
-      const { data: updated, error: updateErr } = await supabase
+      //
+      // Optimistic-concurrency: when the caller passes `expectedUpdatedAt`,
+      // gate the UPDATE on the row's current `updated_at`. A mismatch zero-
+      // rows the UPDATE, which we surface as 409 `concurrent_modification`
+      // with the fresh token. Without this gate, a stale studio could
+      // approve a candidate over a concurrent writer's work (worker auto-
+      // attach, another tab, etc.).
+      let updateQuery = supabase
         .from("locations")
         .update({
           source_image_url: imageUrl,
@@ -158,10 +176,36 @@ export async function locationMainImageApprovalRoutes(app: FastifyInstance) {
         })
         .eq("id", locationId)
         .eq("user_id", req.userId)
+      if (expectedUpdatedAt) {
+        updateQuery = updateQuery.eq("updated_at", expectedUpdatedAt)
+      }
+      const { data: updated, error: updateErr } = await updateQuery
         .select("source_image_url, canonical_description")
         .single()
 
       if (updateErr || !updated) {
+        // Distinguish "row was modified concurrently" (409 — caller passed a
+        // stale token) from "real update failure" (500). Only do the follow-
+        // up SELECT when the caller actually sent `expectedUpdatedAt` —
+        // otherwise this is a plain UPDATE failure path. Mirrors the
+        // pattern in `routes/locations.ts`.
+        if (expectedUpdatedAt) {
+          const { data: current } = await supabase
+            .from("locations")
+            .select("updated_at")
+            .eq("id", locationId)
+            .eq("user_id", req.userId)
+            .single()
+          if (current) {
+            return reply.status(409).send({
+              error: {
+                code: "concurrent_modification",
+                updatedAt: (current as { updated_at: string }).updated_at,
+                message: "Location was modified concurrently",
+              },
+            })
+          }
+        }
         return reply
           .status(500)
           .send({ error: { code: "update_failed", message: updateErr?.message ?? "Update failed" } })
