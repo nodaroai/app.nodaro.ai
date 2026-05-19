@@ -549,3 +549,55 @@ describe("EnvironmentalAssetTab (i18n)", () => {
     ).toBeInTheDocument()
   })
 })
+
+// Phase 2 #10 — Bulk asset operations. Selecting one card shows the bulk
+// action bar; deleting fires `studio.patch({ <bucket>: <remaining> })` with
+// the selected items removed.
+describe("EnvironmentalAssetTab — bulk select & delete", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function makeWithItems() {
+    const existingItems: LocationAssetItem[] = [
+      { name: "neon", url: "https://example.com/neon.png" },
+      { name: "candlelit", url: "https://example.com/candlelit.png" },
+      { name: "cinematic", url: "https://example.com/cinematic.png" },
+    ]
+    return makeStudio({
+      stagedData: makeStagedData({ lighting: existingItems }),
+    })
+  }
+
+  it("does NOT show the bulk action bar by default", () => {
+    renderTab(makeWithItems())
+    expect(screen.queryByRole("toolbar", { name: /bulk actions/i })).toBeNull()
+  })
+
+  it("shows the bulk action bar when at least one card is selected", async () => {
+    renderTab(makeWithItems())
+    await userEvent.click(screen.getByLabelText("Select neon"))
+    expect(screen.getByRole("toolbar", { name: /bulk actions/i })).toBeInTheDocument()
+    expect(screen.getByText("1 selected")).toBeInTheDocument()
+  })
+
+  it("Delete N removes the selected items via studio.patch", async () => {
+    const studio = makeWithItems()
+    renderTab(studio)
+    await userEvent.click(screen.getByLabelText("Select neon"))
+    await userEvent.click(screen.getByLabelText("Select cinematic"))
+    await userEvent.click(screen.getByRole("button", { name: "Delete 2" }))
+    expect(studio.patch).toHaveBeenCalledWith({
+      lighting: [{ name: "candlelit", url: "https://example.com/candlelit.png" }],
+    })
+  })
+
+  it("Cancel clears the selection without mutating items", async () => {
+    const studio = makeWithItems()
+    renderTab(studio)
+    await userEvent.click(screen.getByLabelText("Select neon"))
+    await userEvent.click(screen.getByRole("button", { name: /cancel/i }))
+    expect(screen.queryByRole("toolbar", { name: /bulk actions/i })).toBeNull()
+    expect(studio.patch).not.toHaveBeenCalled()
+  })
+})
