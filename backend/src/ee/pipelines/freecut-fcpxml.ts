@@ -1,7 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { TransitionType } from "@nodaro/shared"
-import { uploadBufferToR2 } from "../../lib/storage.js"
-import { randomUUID } from "node:crypto"
+import {
+  DEFAULT_FADE_OUT_SEC,
+  persistExportAsset,
+  reduceTimeline,
+  round3,
+  type ReducedClip,
+  type TimelineSceneInput,
+  type TimelineShotInput,
+} from "./_freecut-timeline.js"
 
 /**
  * Phase 1C.2.1 §H — FCPXML export format.
@@ -11,8 +17,9 @@ import { randomUUID } from "node:crypto"
  * `pipelines.config.freecut_export_format = "fcpxml"` (default `"json"`),
  * Stage 7's sub-step 7j alternative path calls this module instead of the
  * JSON serializer. The reduction logic (per-scene + per-shot cut decisions
- * → adjacent-scene transitions + head/tail trim) mirrors what JSON FreeCut
- * does — we only swap the output shape.
+ * → adjacent-scene transitions + head/tail trim) is now shared via
+ * `_freecut-timeline.ts::reduceTimeline` (Phase 1C.3 §J1b) — we only swap
+ * the output shape.
  *
  * **Why hand-rolled XML (no xmlbuilder2 dep):** FCPXML 1.10's surface here
  * is small (~60 lines of structured output). A string template is clearer
@@ -44,22 +51,8 @@ import { randomUUID } from "node:crypto"
  * `mime_type='application/xml'`, the assets row has `type='document'`.
  */
 
-export interface FcpxmlShotInput {
-  shot_id: string
-  duration_seconds: number
-  cut_decision?: {
-    in_offset_sec: number
-    out_offset_sec: number
-    transition_to_next: TransitionType
-    transition_duration_sec?: number
-  }
-}
-
-export interface FcpxmlSceneInput {
-  sceneEntityId: string
-  compositeUrl: string
-  shots: ReadonlyArray<FcpxmlShotInput>
-}
+export type FcpxmlShotInput = TimelineShotInput
+export type FcpxmlSceneInput = TimelineSceneInput
 
 export interface FcpxmlExportArgs {
   supabase: SupabaseClient
@@ -79,10 +72,6 @@ export interface FcpxmlExportResult {
   exportAssetUrl: string
   format: "fcpxml-v1.10"
 }
-
-const DEFAULT_FADE_OUT_SEC = 0.8
-const TRANSITION_DEFAULT_DURATION_SEC = 0.5
-const OVERLAP_DEFAULT_DURATION_SEC = 1.0
 
 /**
  * Build the FCPXML document + upload as XML + persist asset row.
@@ -126,38 +115,22 @@ export async function generateFcpxmlExport(
     musicAssetUrl,
     narrationAssetUrl: narrationAssetUrl ?? "",
   })
-  const buffer = Buffer.from(xml, "utf-8")
-  const filename = `freecut-${randomUUID()}.fcpxml`
-  const r2Key = `pipelines/${pipelineId}/exports/${filename}`
-  const r2Url = await uploadBufferToR2(
-    buffer,
-    r2Key,
-    "application/xml",
-    userId,
-  )
 
-  const { data: inserted, error } = await supabase
-    .from("assets")
-    .insert({
-      user_id: userId,
-      type: "document",
-      filename,
-      mime_type: "application/xml",
-      size_bytes: buffer.length,
-      r2_key: r2Key,
-      r2_url: r2Url,
-      pipeline_id: pipelineId,
-      metadata: { source: "pipeline-freecut-export", format: "fcpxml-v1.10" },
-    })
-    .select("id")
-    .single()
-  if (error) {
-    console.error("[pipeline-freecut-fcpxml] assets insert failed:", error.message)
-  }
+  const persisted = await persistExportAsset({
+    supabase,
+    pipelineId,
+    userId,
+    filenameStem: "freecut",
+    fileExtension: "fcpxml",
+    mimeType: "application/xml",
+    formatTag: "fcpxml-v1.10",
+    content: xml,
+    logTag: "pipeline-freecut-fcpxml",
+  })
 
   return {
-    exportAssetId: (inserted?.id as string | undefined) ?? null,
-    exportAssetUrl: r2Url,
+    exportAssetId: persisted.assetId,
+    exportAssetUrl: persisted.assetUrl,
     format: "fcpxml-v1.10",
   }
 }
@@ -170,76 +143,30 @@ interface BuildFcpxmlArgs {
 }
 
 /**
- * Pure XML builder — exported for snapshot tests. Walks the timeline reduction
- * once and emits the document as a string.
+ * Pure XML builder — exported for snapshot tests. Walks the shared timeline
+ * reduction once and emits the document as a string.
  */
 export function buildFcpxml(args: BuildFcpxmlArgs): string {
   const { pipelineId, scenes, musicAssetUrl, narrationAssetUrl } = args
 
-  // ─── Reduction pass: build per-scene clip data + the spine layout ────
-  type ClipPlan = {
-    assetId: string
-    sceneEntityId: string
-    sceneName: string
-    src: string
-    fullDurationSec: number
-    startInClipSec: number
-    clipDurationSec: number
-    transitionOut: { type: TransitionType; duration: number } | null
-  }
-  const plans: ClipPlan[] = []
-  let nextResourceIndex = 2 // r1 is reserved for format
+  // ─── Reduction (shared) ──────────────────────────────────────────────
+  const reduced = reduceTimeline(scenes)
 
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i]!
-    const firstShot = scene.shots[0]
-    const lastShot = scene.shots[scene.shots.length - 1]
-    const inOffset = firstShot?.cut_decision?.in_offset_sec ?? 0
-    const outOffset = lastShot?.cut_decision?.out_offset_sec ?? 0
-    const fullDur = scene.shots.reduce(
-      (acc, s) => acc + (s.duration_seconds ?? 0),
-      0,
-    )
-    const startInClip = Math.max(0, inOffset)
-    const endInClip = Math.max(startInClip, fullDur - outOffset)
-    const clipDur = Math.max(0, endInClip - startInClip)
-
-    const transitionOut =
-      i < scenes.length - 1 && lastShot?.cut_decision != null
-        ? buildTransition(lastShot.cut_decision)
-        : null
-
-    plans.push({
-      assetId: `r${nextResourceIndex++}`,
-      sceneEntityId: scene.sceneEntityId,
-      sceneName: `scene-${i + 1}`,
-      src: scene.compositeUrl,
-      fullDurationSec: fullDur,
-      startInClipSec: startInClip,
-      clipDurationSec: clipDur,
-      transitionOut,
-    })
-  }
-
+  // Allocate one FCPXML resource id per scene + (optionally) per audio lane.
+  // r1 is reserved for the video format element.
+  let nextResourceIndex = 2
+  type Plan = ReducedClip & { assetId: string; sceneName: string }
+  const plans: Plan[] = reduced.clips.map((clip, i) => ({
+    ...clip,
+    assetId: `r${nextResourceIndex++}`,
+    sceneName: `scene-${i + 1}`,
+  }))
   const musicResourceId = musicAssetUrl ? `r${nextResourceIndex++}` : null
   const narrationResourceId = narrationAssetUrl
     ? `r${nextResourceIndex++}`
     : null
 
-  // Total timeline length = sum of clip durations minus transition overlaps.
-  // For dissolve/overlap transitions the second clip starts BEFORE the first
-  // ends by `duration` seconds; for hard_cut / match_cut there's no overlap.
-  let timelineDuration = 0
-  for (let i = 0; i < plans.length; i++) {
-    timelineDuration += plans[i]!.clipDurationSec
-    if (i < plans.length - 1) {
-      const t = plans[i]!.transitionOut
-      if (t && (t.type === "dissolve" || t.type === "overlap")) {
-        timelineDuration -= t.duration
-      }
-    }
-  }
-  timelineDuration = Math.max(0, timelineDuration)
+  const timelineDuration = reduced.timelineDurationSec
 
   // ─── Resources block ─────────────────────────────────────────────────
   const resources: string[] = []
@@ -248,7 +175,7 @@ export function buildFcpxml(args: BuildFcpxmlArgs): string {
   )
   for (const plan of plans) {
     resources.push(
-      `    <asset id="${plan.assetId}" name="${escXml(plan.sceneName)}" src="${escXml(plan.src)}" duration="${formatDuration(plan.fullDurationSec)}" hasVideo="1" hasAudio="1" format="r1"/>`,
+      `    <asset id="${plan.assetId}" name="${escXml(plan.sceneName)}" src="${escXml(plan.compositeUrl)}" duration="${formatDuration(plan.fullDurationSec)}" hasVideo="1" hasAudio="1" format="r1"/>`,
     )
   }
   if (musicResourceId) {
@@ -273,11 +200,11 @@ export function buildFcpxml(args: BuildFcpxmlArgs): string {
     const next = plan.transitionOut
     if (i < plans.length - 1 && next && next.type !== "hard_cut" && next.type !== "match_cut") {
       const transitionName = "Cross Dissolve"
-      const transitionOffset = runningOffset + plan.clipDurationSec - next.duration
+      const transitionOffset = runningOffset + plan.clipDurationSec - next.durationSec
       spine.push(
-        `          <transition name="${escXml(transitionName)}" offset="${formatDuration(Math.max(0, transitionOffset))}" duration="${formatDuration(next.duration)}"/>`,
+        `          <transition name="${escXml(transitionName)}" offset="${formatDuration(Math.max(0, transitionOffset))}" duration="${formatDuration(next.durationSec)}"/>`,
       )
-      runningOffset += plan.clipDurationSec - next.duration
+      runningOffset += plan.clipDurationSec - next.durationSec
     } else {
       runningOffset += plan.clipDurationSec
     }
@@ -319,23 +246,6 @@ export function buildFcpxml(args: BuildFcpxmlArgs): string {
   ].join("\n")
 }
 
-function buildTransition(decision: {
-  transition_to_next: TransitionType
-  transition_duration_sec?: number
-}): { type: TransitionType; duration: number } {
-  const fallback =
-    decision.transition_to_next === "overlap"
-      ? OVERLAP_DEFAULT_DURATION_SEC
-      : decision.transition_to_next === "hard_cut" ||
-          decision.transition_to_next === "match_cut"
-        ? 0
-        : TRANSITION_DEFAULT_DURATION_SEC
-  return {
-    type: decision.transition_to_next,
-    duration: round3(decision.transition_duration_sec ?? fallback),
-  }
-}
-
 /** XML special-character escape — handles &, <, >, ", and ' for attributes. */
 function escXml(s: string): string {
   return s
@@ -348,8 +258,4 @@ function escXml(s: string): string {
 
 function formatDuration(sec: number): string {
   return `${round3(sec).toFixed(3)}s`
-}
-
-function round3(n: number): number {
-  return Math.round(n * 1000) / 1000
 }

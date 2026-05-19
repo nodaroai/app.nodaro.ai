@@ -95,54 +95,37 @@ export async function extractLastFrame(
   return { assetId: result.assetId, url: result.assetUrl }
 }
 
-export interface AllocateReferenceSlotsArgs {
-  supabase: SupabaseClient
-  pipelineId: string
-  scene: { id: string }
-  shot: ShotSpec
-  sceneNodeData: SceneNodeData
-  /** Prior shot's last_frame_asset_id when the run is in sequential mode AND
-   *  we're past shot 1. Null in parallel mode, on shot 1, or whenever the
-   *  prior shot has no last frame yet. */
-  priorLastFrame?: { assetId: string; url: string } | null
+/**
+ * Cached result of the two DB queries that `allocateReferenceSlots` used to
+ * run on every shot. Hoisting this to ONCE per scene (via
+ * `prepareSceneRefContext`) reduces DB calls from 2×N_shots → 2 for the
+ * whole scene.
+ *
+ * Phase 1C.3 §J2a: for an 8-shot scene the reduction is 16 → 2 queries.
+ * For a 5-scene × 8-shot pipeline it's 80 → 10.
+ */
+export interface SceneRefContext {
+  /**
+   * Map of `"<entity_type>:<entity_key>"` → entity metadata.
+   * Pre-built from `pipeline_entities` + `assets` once per scene.
+   */
+  entitiesByTypeKey: Map<string, { id: string; main_asset_url: string | null }>
 }
 
 /**
- * Allocates ordered reference slots for one shot per §5.13.3 v3.9.
- * Returns slots in this priority order, then truncates to the model's budget:
+ * Executes the two DB queries for `allocateReferenceSlots` ONCE per scene.
+ * Returns a `SceneRefContext` that can be passed into every
+ * `allocateReferenceSlots` call for shots within the same scene.
  *
- *   Slot 1: continuity anchor (priorLastFrame) — when present.
- *   Slot 2: primary character — the first cast_key whose entity has a
- *           main_asset_id (or its emotional-beat variant when the shot's
- *           emotional_beat tag matches a known expression variant).
- *   Slot 3: location — the entity matching sceneNodeData.location_key, with
- *           variant override when time_of_day metadata matches.
- *   Slots 4+: additional cast (cast_keys[1..]) + objects (object_keys[*]).
- *
- * The provider's `VIDEO_MODEL_CAPS[video_model].maxReferenceImages` (default 1)
- * is the hard ceiling. When the budget is 1, the continuity anchor wins
- * unconditionally and `needs_multishot_reference` is silently dropped — we
- * emit a `pipeline:warning` so the user knows the picks were degraded.
+ * Call this at the top of `animateSequential` / `animateParallel` (one call
+ * per scene runner invocation) and pass the result as `sceneContext` to
+ * `safelyAllocateRefs` / `allocateReferenceSlots`.
  */
-export async function allocateReferenceSlots(
-  args: AllocateReferenceSlotsArgs,
-): Promise<ReferenceSlot[]> {
-  const { supabase, pipelineId, shot, sceneNodeData, priorLastFrame } = args
-  const slots: ReferenceSlot[] = []
-
-  // Slot 1: continuity anchor
-  if (priorLastFrame) {
-    slots.push({
-      kind: "continuity_anchor",
-      url: priorLastFrame.url,
-      sourceId: priorLastFrame.assetId,
-      label: "Prior shot last frame",
-    })
-  }
-
-  // Resolve cast + location + object entities from pipeline_entities.
-  // Each cast/location/object row stores its main_asset_id; we coalesce that
-  // URL via a single bulk query keyed on (entity_type, entity_key).
+export async function prepareSceneRefContext(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  sceneNodeData: SceneNodeData,
+): Promise<SceneRefContext> {
   const wantedKeys: Array<{ type: string; key: string }> = []
   for (const k of sceneNodeData.cast_keys) wantedKeys.push({ type: "character", key: k })
   if (sceneNodeData.location_key) wantedKeys.push({ type: "location", key: sceneNodeData.location_key })
@@ -150,10 +133,6 @@ export async function allocateReferenceSlots(
 
   const entitiesByTypeKey = new Map<string, { id: string; main_asset_url: string | null }>()
   if (wantedKeys.length > 0) {
-    // Fetch entities first (no nested join — supabase-js returns nested rows
-    // as arrays which forces ugly destructuring), then resolve URLs from
-    // the assets table in a single follow-up query. The cardinality is
-    // small (a single scene rarely references >10 entities).
     const types = Array.from(new Set(wantedKeys.map((k) => k.type)))
     const { data: entityRows } = await supabase
       .from("pipeline_entities")
@@ -183,6 +162,119 @@ export async function allocateReferenceSlots(
         id: e.id,
         main_asset_url: url,
       })
+    }
+  }
+
+  return { entitiesByTypeKey }
+}
+
+export interface AllocateReferenceSlotsArgs {
+  supabase: SupabaseClient
+  pipelineId: string
+  scene: { id: string }
+  shot: ShotSpec
+  sceneNodeData: SceneNodeData
+  /** Prior shot's last_frame_asset_id when the run is in sequential mode AND
+   *  we're past shot 1. Null in parallel mode, on shot 1, or whenever the
+   *  prior shot has no last frame yet. */
+  priorLastFrame?: { assetId: string; url: string } | null
+  /**
+   * Pre-fetched scene-level entity context from `prepareSceneRefContext`.
+   * When provided the two DB round-trips (pipeline_entities + assets) are
+   * skipped — the cached map is used directly. Callers that process multiple
+   * shots from the same scene SHOULD supply this to avoid N×2 DB queries.
+   */
+  sceneContext?: SceneRefContext
+}
+
+/**
+ * Allocates ordered reference slots for one shot per §5.13.3 v3.9.
+ * Returns slots in this priority order, then truncates to the model's budget:
+ *
+ *   Slot 1: continuity anchor (priorLastFrame) — when present.
+ *   Slot 2: primary character — the first cast_key whose entity has a
+ *           main_asset_id (or its emotional-beat variant when the shot's
+ *           emotional_beat tag matches a known expression variant).
+ *   Slot 3: location — the entity matching sceneNodeData.location_key, with
+ *           variant override when time_of_day metadata matches.
+ *   Slots 4+: additional cast (cast_keys[1..]) + objects (object_keys[*]).
+ *
+ * The provider's `VIDEO_MODEL_CAPS[video_model].maxReferenceImages` (default 1)
+ * is the hard ceiling. When the budget is 1, the continuity anchor wins
+ * unconditionally and `needs_multishot_reference` is silently dropped — we
+ * emit a `pipeline:warning` so the user knows the picks were degraded.
+ *
+ * Pass `sceneContext` (from `prepareSceneRefContext`) when processing multiple
+ * shots in the same scene to skip the per-shot DB queries (J2a optimisation).
+ */
+export async function allocateReferenceSlots(
+  args: AllocateReferenceSlotsArgs,
+): Promise<ReferenceSlot[]> {
+  const { supabase, pipelineId, shot, sceneNodeData, priorLastFrame, sceneContext } = args
+  const slots: ReferenceSlot[] = []
+
+  // Slot 1: continuity anchor
+  if (priorLastFrame) {
+    slots.push({
+      kind: "continuity_anchor",
+      url: priorLastFrame.url,
+      sourceId: priorLastFrame.assetId,
+      label: "Prior shot last frame",
+    })
+  }
+
+  // Resolve cast + location + object entities from pipeline_entities.
+  // When a pre-fetched `sceneContext` is supplied, reuse its cached map
+  // (2 DB queries have already been paid once for the whole scene).
+  // Otherwise fall back to querying per-call.
+  let entitiesByTypeKey: Map<string, { id: string; main_asset_url: string | null }>
+
+  if (sceneContext) {
+    // Cached path — no DB round-trips.
+    entitiesByTypeKey = sceneContext.entitiesByTypeKey
+  } else {
+    // Legacy fallback path — 2 DB queries (same logic as before J2a).
+    const wantedKeys: Array<{ type: string; key: string }> = []
+    for (const k of sceneNodeData.cast_keys) wantedKeys.push({ type: "character", key: k })
+    if (sceneNodeData.location_key) wantedKeys.push({ type: "location", key: sceneNodeData.location_key })
+    for (const k of sceneNodeData.object_keys) wantedKeys.push({ type: "object", key: k })
+
+    entitiesByTypeKey = new Map<string, { id: string; main_asset_url: string | null }>()
+    if (wantedKeys.length > 0) {
+      // Fetch entities first (no nested join — supabase-js returns nested rows
+      // as arrays which forces ugly destructuring), then resolve URLs from
+      // the assets table in a single follow-up query. The cardinality is
+      // small (a single scene rarely references >10 entities).
+      const types = Array.from(new Set(wantedKeys.map((k) => k.type)))
+      const { data: entityRows } = await supabase
+        .from("pipeline_entities")
+        .select("id, entity_type, entity_key, main_asset_id")
+        .eq("pipeline_id", pipelineId)
+        .in("entity_type", types)
+      const entities = (entityRows ?? []) as Array<{
+        id: string
+        entity_type: string
+        entity_key: string
+        main_asset_id: string | null
+      }>
+      const assetIds = entities.map((e) => e.main_asset_id).filter((id): id is string => !!id)
+      const urlByAssetId = new Map<string, string>()
+      if (assetIds.length > 0) {
+        const { data: assetRows } = await supabase
+          .from("assets")
+          .select("id, r2_url")
+          .in("id", assetIds)
+        for (const a of (assetRows ?? []) as Array<{ id: string; r2_url: string | null }>) {
+          if (a.r2_url) urlByAssetId.set(a.id, a.r2_url)
+        }
+      }
+      for (const e of entities) {
+        const url = e.main_asset_id ? urlByAssetId.get(e.main_asset_id) ?? null : null
+        entitiesByTypeKey.set(`${e.entity_type}:${e.entity_key}`, {
+          id: e.id,
+          main_asset_url: url,
+        })
+      }
     }
   }
 

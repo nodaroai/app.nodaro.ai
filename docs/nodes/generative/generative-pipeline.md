@@ -146,13 +146,94 @@ Drives the SceneNode's built-in 5-step internal pipeline per scene (§6.9.3): an
 - **Method 1** — `pipeline_entities.last_frame_asset_id` written after each animate; `start_frame_url = sceneN.last_frame_asset_id` for shot N+1 in sequential mode.
 - **Method 4** — Multi-shot reference slot allocation per §5.13.3 H3 v3.9: continuity anchor (slot 1) wins over secondary refs. Capped to `VIDEO_MODEL_CAPS[shot.video_model].maxReferenceImages`. 1-ref providers (Hailuo) silently degrade — `needs_multishot_reference` is dropped but continuity anchor stays.
 
-**Methods 3 + 8 + 10 ship in Phase 1C.3** (video extension via VEO/Seedance 2, frame interpolation via RIFE/Topaz Apollo, camera-path via Stable Video 3D).
+**Continuity Methods 3, 8, and 10 are available from Phase 1C.3** — see below for details.
 
 ### Stage 8 — `post_merge`
 
 Concatenates every scene's `composite_video_url` via the existing `combine_videos` route (FFmpeg). Writes `pipelines.final_output_asset_id` + flips `status='completed'`. Single-scene pipelines skip the combine call and copy the lone composite directly.
 
 Emits the new `pipeline:completed` SSE event with `finalOutputUrl`. The pipeline panel closes the stream on this event.
+
+## Continuity Methods 3, 8, and 10 (Phase 1C.3)
+
+These three methods are configured per shot in `ShotSpec` and are selected by the Scene Director or set manually in the per-shot editor.
+
+### Method 3 — Video extension (`video_continuation`)
+
+Extends the previous shot's rendered video rather than generating a fresh clip from a keyframe. The shot's `extends_shot_id` must point to another shot in the same scene whose video model supports extension.
+
+**Supported providers:**
+
+| Model | How it works |
+|-------|-------------|
+| VEO 3.1, VEO 3 | Native — uses the prior clip's `kieTaskId` via the KIE `extend_video` endpoint. Frame-perfect continuation. |
+| Seedance 2, Seedance 2 Fast | Workaround — passes the prior clip as `reference_video_urls`, the prior shot's last frame as `first_frame_url`, and appends "continue seamlessly from the previous clip" to the prompt. Visually plausible but not frame-perfect. |
+
+**Eligibility:** The prior shot's `video_model` must have `supportsVideoExtension: true` in `VIDEO_MODEL_CAPS`. The Shot List Critic validates this before Stage 7 runs and will reject an invalid `extends_shot_id`.
+
+**ShotSpec field:** `extends_shot_id` (string, optional) — the `id` of the shot to extend.
+
+**Pricing:** No additional pricing row. Extension uses the same per-second credit cost as a normal generation with that model.
+
+---
+
+### Method 8 — Frame interpolation (`frame_interpolation`)
+
+Generates additional intermediate frames between the shot's start keyframe and one or more `interpolation_keyframes`, producing smoother motion or a distinct stylistic effect.
+
+**Provider status:** RIFE and Topaz Apollo are not yet available via a public provider endpoint. When configured, Stage 7 will return a `provider_not_available:<model>` error for those models and the scene falls back to `first_frame` mode automatically with a logged warning. Manual and guided mode configurations are preserved and will execute correctly once the providers are wired.
+
+**Stage 6 behavior:** When a shot uses Method 8, Stage 6 generates one sub-keyframe per entry in `interpolation_keyframes[N].prompt` in addition to the main start keyframe.
+
+**ShotSpec field:** `interpolation_keyframes` (array, optional) — each entry is `{ timestamp_sec: number, prompt: string }`.
+
+**Pricing:** No additional pricing row today. When interpolation providers ship, expect an add-on credit cost similar to the existing `loop_trim` model.
+
+---
+
+### Method 10 — Camera path (`camera_path`)
+
+Applies a parametric 3D camera movement to the shot by either driving a native 3D model or — for all other i2v models — injecting a descriptive prompt amendment.
+
+**Text-prompt fallback (works universally):** For any i2v model, the engine calls `cameraPathToPromptAmendment()` which maps the `path_kind` to a natural-language phrase appended to the shot prompt:
+
+| `path_kind` | Example prompt amendment |
+|-------------|--------------------------|
+| `orbit` | "camera orbits 360° around the subject" |
+| `dolly` | "slow dolly push toward the subject" |
+| `crane` | "camera cranes upward revealing the scene" |
+| `arc` | "camera arcs around the subject" |
+| `reveal` | "camera pulls back to reveal the wider scene" |
+
+Optional `parameters` (e.g., `{ degrees: 360 }` for orbit) are woven into the phrase.
+
+**Native 3D provider:** Stable Video 3D is not yet available via a public endpoint. When configured, Stage 7 returns `provider_not_available:stable-video-3d` and the engine falls back to the text-prompt path automatically.
+
+**ShotSpec field:** `camera_path_directive` (object, optional) — `{ path_kind: "orbit" | "dolly" | "crane" | "arc" | "reveal", parameters?: Record<string, number> }`.
+
+**Pricing:** No additional pricing row. Camera path uses the underlying video model's pricing.
+
+---
+
+### Scene Director auto-pick heuristic (updated in Phase 1C.3)
+
+The Scene Director now includes Methods 3, 8, and 10 in its auto-pick logic. Three new rows have been added to the internal heuristic table:
+
+| Scenario | Auto-suggested method |
+|----------|-----------------------|
+| Shot narrative explicitly continues action from the prior shot (same subject, same motion) | Method 3 — Video extension (if `supportsVideoExtension` is true for the chosen model; falls back to Method 1 otherwise) |
+| Shot requires a slow-motion or stylized motion effect | Method 8 — Frame interpolation (auto mode falls back to `first_frame` if providers unavailable) |
+| Shot narrative calls for a specific cinematic camera move | Method 10 — Camera path (text-prompt fallback always active) |
+
+### Shot List Critic eligibility validation (Phase 1C.3)
+
+The Shot List Critic runs BEFORE Stage 7 and rejects invalid Method 3/8/10 configurations so they fail fast at planning time rather than mid-animation:
+
+- **Method 3:** `extends_shot_id` must reference a prior shot in the same scene whose model has `supportsVideoExtension: true`.
+- **Method 8:** `interpolation_keyframes` must contain at least 2 entries.
+- **Method 10:** `camera_path_directive.path_kind` must be one of the 5 supported values.
+
+---
 
 ### Image Critic LLM (Phase 1C.1)
 

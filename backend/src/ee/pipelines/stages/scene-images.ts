@@ -207,7 +207,12 @@ async function generateKeyframesForScene(
   // prior shot's keyframe within the same scene).
   const shots = sceneNodeData.shots as ShotSpec[]
   type KeyframeOutcome =
-    | { ok: true; shotId: string; asset: { asset_id: string | null; url: string } }
+    | {
+        ok: true
+        shotId: string
+        asset: { asset_id: string | null; url: string }
+        interpolationKeyframeUrls?: string[]
+      }
     | { ok: false; shotId: string; reason: string }
 
   const shotTasks: Array<() => Promise<KeyframeOutcome>> = shots.map((shot) => async () => {
@@ -230,10 +235,44 @@ async function generateKeyframesForScene(
         modelIdentifier: sceneNodeData.image_model,
         referenceImageUrls,
       })
+
+      // Phase 1C.3 Method 8 — for frame_interpolation shots, additionally
+      // generate one keyframe per `interpolation_keyframes[N].prompt`. The
+      // primary `keyframe_url` (above) is still emitted so a Method-8 shot
+      // can degrade gracefully via the auto-mode fallback in
+      // `pipelineAnimateShot` (which recurses as first_frame using the
+      // primary keyframe). Sub-keyframe URLs land in
+      // `interpolation_keyframe_urls` for Stage 7 to consume.
+      let interpolationKeyframeUrls: string[] | undefined
+      if (
+        sceneNodeData.shot_input_mode === "frame_interpolation" &&
+        shot.interpolation_keyframes &&
+        shot.interpolation_keyframes.length >= 2
+      ) {
+        const subResults = await Promise.all(
+          shot.interpolation_keyframes.map(async (kf) => {
+            const subResult = await pipelineGenerateImage({
+              supabase,
+              pipelineId,
+              pipelineEntityId: scene.id,
+              userId,
+              prompt: kf.prompt,
+              modelIdentifier: sceneNodeData.image_model,
+              referenceImageUrls,
+            })
+            return subResult.assetUrl
+          }),
+        )
+        interpolationKeyframeUrls = subResults
+      }
+
       return {
         ok: true,
         shotId: shot.shot_id,
         asset: { asset_id: result.assetId, url: result.assetUrl },
+        ...(interpolationKeyframeUrls
+          ? { interpolationKeyframeUrls }
+          : {}),
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -250,7 +289,10 @@ async function generateKeyframesForScene(
   })
 
   const settled = await settledWithLimit(shotTasks, 3, undefined, false)
-  const keyframes: Record<string, { asset_id: string | null; url: string }> = {}
+  const keyframes: Record<
+    string,
+    { asset_id: string | null; url: string; interpolationKeyframeUrls?: string[] }
+  > = {}
   for (const r of settled) {
     if (r.status !== "fulfilled") {
       // settledWithLimit only rejects on a thrown error; our tasks resolve
@@ -260,12 +302,18 @@ async function generateKeyframesForScene(
     }
     const out = r.value
     if (!out.ok) return { ok: false, reason: out.reason }
-    keyframes[out.shotId] = out.asset
+    keyframes[out.shotId] = {
+      ...out.asset,
+      ...(out.interpolationKeyframeUrls
+        ? { interpolationKeyframeUrls: out.interpolationKeyframeUrls }
+        : {}),
+    }
   }
 
   // Persist keyframes back to scene_node_data.shots[N]. We write the whole
   // metadata object since each shot keeps its planning fields untouched and
-  // gains two new optional fields.
+  // gains two new optional fields (plus Method 8's interpolation_keyframe_urls
+  // when present).
   const nextShots = (sceneNodeData.shots as ShotSpec[]).map((s) => {
     const kf = keyframes[s.shot_id]
     if (!kf) return s
@@ -273,6 +321,9 @@ async function generateKeyframesForScene(
       ...s,
       keyframe_asset_id: kf.asset_id ?? undefined,
       keyframe_url: kf.url,
+      ...(kf.interpolationKeyframeUrls
+        ? { interpolation_keyframe_urls: kf.interpolationKeyframeUrls }
+        : {}),
     }
   })
   const nextSceneNodeData: SceneNodeData = { ...sceneNodeData, shots: nextShots }

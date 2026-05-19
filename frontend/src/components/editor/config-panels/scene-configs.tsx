@@ -1,7 +1,13 @@
+import { useState } from "react"
 import type { ConfigProps } from "./types"
 import type { SceneNodeFrontendData } from "@/types/nodes"
+import type { ShotSpec } from "@nodaro/shared"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { X, Plus } from "lucide-react"
 import { useSceneHelper } from "@/hooks/use-scene-helper"
 import { SceneHelperButtons } from "./scene-helper-buttons"
 import { SceneHelperModal } from "./scene-helper-modal"
@@ -13,7 +19,9 @@ import { SceneHelperModal } from "./scene-helper-modal"
  * that shape. Users approve / reject each scene through the pipeline panel
  * (see Section L), not through this config panel.
  *
- * Mutable fields: only `view_mode` (storyboard / scripting / default / video).
+ * Mutable fields: `view_mode` + per-shot fields for the 3 Phase 1C.3 input
+ * modes: `extends_shot_id` (video_continuation), `interpolation_keyframes`
+ * (frame_interpolation), and `camera_path_directive` (camera_path).
  * Phase 1B.3 adds §6.11 Scene-Context helper buttons (Audit Prompt, Improve
  * Prompt, Generate Motion, Optimize for Model, Add B-Roll, Bridge to Next,
  * Anchor Style) that mutate `data.shots` and `data.scene_anchor_keyframe` via
@@ -27,6 +35,26 @@ export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendDat
   const pipelineId = data.pipeline_id
   const sceneEntityId = data.pipeline_entity_id
   const { state, invoke, reset } = useSceneHelper(pipelineId, sceneEntityId)
+
+  // Local state for camera_path_directive.parameters JSON text fields, keyed
+  // by shot_id. We keep the raw textarea string here and only write parsed JSON
+  // to node data on blur (skipping invalid JSON silently).
+  const [cameraParamsRaw, setCameraParamsRaw] = useState<Record<string, string>>({})
+
+  // Patch a single shot by shot_id, merging `patch` into the existing shot.
+  function patchShot(shotId: string, patch: Partial<ShotSpec>) {
+    const updatedShots = data.shots.map((s) =>
+      s.shot_id === shotId ? { ...s, ...patch } : s,
+    )
+    onUpdate({ shots: updatedShots })
+  }
+
+  // Build a user-friendly label for a shot: "Shot N: <first 40 chars of action>"
+  function shotLabel(shot: ShotSpec, idx: number): string {
+    const action = shot.action?.trim() ?? ""
+    const truncated = action.length > 40 ? `${action.slice(0, 40)}…` : action
+    return `Shot ${idx + 1}${truncated ? `: ${truncated}` : ""}`
+  }
 
   return (
     <div className="space-y-3">
@@ -80,6 +108,235 @@ export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendDat
       <div className="text-xs text-zinc-500 italic">
         Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
       </div>
+
+      {/* ── Per-shot editors: Phase 1C.3 advanced input-mode fields ─────────── */}
+      {data.shots.map((shot, idx) => {
+        const mode = data.shot_input_mode
+
+        // Only render the per-shot editor when the scene's input mode has
+        // shot-level fields to configure.
+        if (
+          mode !== "video_continuation" &&
+          mode !== "frame_interpolation" &&
+          mode !== "camera_path"
+        ) {
+          return null
+        }
+
+        return (
+          <div key={shot.shot_id} className="space-y-2 pt-3 border-t border-zinc-200">
+            <Label className="text-xs font-semibold text-zinc-600">
+              {shotLabel(shot, idx)}
+            </Label>
+
+            {/* ── Section 1: video_continuation — extends_shot_id ──────── */}
+            {mode === "video_continuation" && (
+              <div className="space-y-1">
+                <Label htmlFor={`extends-${shot.shot_id}`} className="text-xs">
+                  Extends shot
+                </Label>
+                <Select
+                  value={shot.extends_shot_id ?? ""}
+                  onValueChange={(v) =>
+                    patchShot(shot.shot_id, { extends_shot_id: v || undefined })
+                  }
+                >
+                  <SelectTrigger id={`extends-${shot.shot_id}`} className="h-8 text-xs">
+                    <SelectValue placeholder="None (start fresh)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None (start fresh)</SelectItem>
+                    {data.shots
+                      .filter((s) => s.shot_id !== shot.shot_id)
+                      .map((s, si) => (
+                        <SelectItem key={s.shot_id} value={s.shot_id}>
+                          {shotLabel(s, si)}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {shot.extends_shot_id &&
+                  !data.shots.some(
+                    (s) => s.shot_id === shot.extends_shot_id && s.shot_id !== shot.shot_id,
+                  ) && (
+                    <p className="text-xs text-amber-600">
+                      Warning: referenced shot not found in this scene.
+                    </p>
+                  )}
+                <p className="text-xs text-zinc-500">
+                  Continuation requires VEO or Seedance 2 video model. Prior shot must come
+                  before this one.
+                </p>
+              </div>
+            )}
+
+            {/* ── Section 2: frame_interpolation — interpolation_keyframes ─ */}
+            {mode === "frame_interpolation" && (
+              <div className="space-y-2">
+                <Label className="text-xs">Interpolation keyframes</Label>
+                {(shot.interpolation_keyframes ?? []).map((kf, kfIdx) => (
+                  <div key={kfIdx} className="flex gap-1 items-start">
+                    <Input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      value={kf.timestamp_sec}
+                      onChange={(e) => {
+                        const frames = [...(shot.interpolation_keyframes ?? [])]
+                        frames[kfIdx] = { ...kf, timestamp_sec: parseFloat(e.target.value) || 0 }
+                        patchShot(shot.shot_id, { interpolation_keyframes: frames })
+                      }}
+                      className="h-7 w-20 text-xs shrink-0"
+                      aria-label={`Keyframe ${kfIdx + 1} timestamp (seconds)`}
+                    />
+                    <Textarea
+                      value={kf.prompt}
+                      onChange={(e) => {
+                        const frames = [...(shot.interpolation_keyframes ?? [])]
+                        frames[kfIdx] = { ...kf, prompt: e.target.value }
+                        patchShot(shot.shot_id, { interpolation_keyframes: frames })
+                      }}
+                      rows={2}
+                      className="text-xs flex-1 min-h-0 resize-none"
+                      placeholder="Keyframe visual prompt…"
+                      aria-label={`Keyframe ${kfIdx + 1} prompt`}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        const frames = (shot.interpolation_keyframes ?? []).filter(
+                          (_, i) => i !== kfIdx,
+                        )
+                        patchShot(shot.shot_id, { interpolation_keyframes: frames })
+                      }}
+                      aria-label={`Remove keyframe ${kfIdx + 1}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs w-full"
+                  onClick={() => {
+                    const frames = [
+                      ...(shot.interpolation_keyframes ?? []),
+                      { timestamp_sec: 0, prompt: "" },
+                    ]
+                    patchShot(shot.shot_id, { interpolation_keyframes: frames })
+                  }}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add keyframe
+                </Button>
+                <p className="text-xs text-zinc-500">
+                  Requires ≥2 keyframes. First must be timestamp 0. Costly — auto-mode falls back
+                  to first_frame.
+                </p>
+              </div>
+            )}
+
+            {/* ── Section 3: camera_path — camera_path_directive ────────── */}
+            {mode === "camera_path" && (
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <Label htmlFor={`path-kind-${shot.shot_id}`} className="text-xs">
+                    Camera path
+                  </Label>
+                  <Select
+                    value={shot.camera_path_directive?.path_kind ?? ""}
+                    onValueChange={(v) => {
+                      if (!v) return
+                      patchShot(shot.shot_id, {
+                        camera_path_directive: {
+                          ...shot.camera_path_directive,
+                          path_kind: v as "orbit" | "dolly" | "crane" | "arc" | "reveal",
+                        },
+                      })
+                    }}
+                  >
+                    <SelectTrigger
+                      id={`path-kind-${shot.shot_id}`}
+                      className="h-8 text-xs"
+                    >
+                      <SelectValue placeholder="Select path kind…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="orbit">Orbit</SelectItem>
+                      <SelectItem value="dolly">Dolly</SelectItem>
+                      <SelectItem value="crane">Crane</SelectItem>
+                      <SelectItem value="arc">Arc</SelectItem>
+                      <SelectItem value="reveal">Reveal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {shot.camera_path_directive?.path_kind === "orbit" && (
+                    <p className="text-xs text-zinc-400">
+                      Hint: try <code className="font-mono">{"{ \"degrees\": 360 }"}</code>
+                    </p>
+                  )}
+                  {shot.camera_path_directive?.path_kind === "dolly" && (
+                    <p className="text-xs text-zinc-400">
+                      Hint: try <code className="font-mono">{"{ \"distance\": 2 }"}</code>
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor={`cam-params-${shot.shot_id}`}
+                    className="text-xs"
+                  >
+                    Parameters (JSON)
+                  </Label>
+                  <Textarea
+                    id={`cam-params-${shot.shot_id}`}
+                    value={
+                      cameraParamsRaw[shot.shot_id] ??
+                      JSON.stringify(shot.camera_path_directive?.parameters ?? {}, null, 2)
+                    }
+                    onChange={(e) => {
+                      setCameraParamsRaw((prev) => ({
+                        ...prev,
+                        [shot.shot_id]: e.target.value,
+                      }))
+                    }}
+                    onBlur={() => {
+                      const raw = cameraParamsRaw[shot.shot_id]
+                      if (raw === undefined) return
+                      try {
+                        const parsed = JSON.parse(raw) as Record<string, unknown>
+                        patchShot(shot.shot_id, {
+                          camera_path_directive: {
+                            path_kind: shot.camera_path_directive?.path_kind ?? "orbit",
+                            parameters: parsed,
+                          },
+                        })
+                        // Clear raw draft on success — next render reads from node data.
+                        setCameraParamsRaw((prev) => {
+                          const next = { ...prev }
+                          delete next[shot.shot_id]
+                          return next
+                        })
+                      } catch {
+                        // Keep raw draft in state; don't write invalid JSON to node data.
+                      }
+                    }}
+                    rows={3}
+                    className="font-mono text-xs resize-none"
+                    placeholder="{}"
+                  />
+                </div>
+                <p className="text-xs text-zinc-500">
+                  Camera-path directive. Works for all video models via text-prompt fallback;
+                  SV3D when available.
+                </p>
+              </div>
+            )}
+          </div>
+        )
+      })}
       <div className="space-y-2 pt-3 border-t border-zinc-200">
         <Label>Helpers</Label>
         <SceneHelperButtons

@@ -920,6 +920,32 @@ export const VIDEO_MODEL_CAPS: Record<string, VideoModelCapabilities> = {
     prompting_style: "compact",
     maxReferenceImages: 1,
   },
+  // v4.1 Method 8 — Frame interpolation (sparse keyframes → interpolated video).
+  // RIFE: Replicate-hosted, optical-flow-based interpolation, up to 8 keyframes.
+  "rife": {
+    inputModes: ["frame_interpolation"],
+    maxInterpolationKeyframes: 8,
+    maxDurationSeconds: 60,
+    prompting_style: "compact",
+  },
+  // Topaz Apollo: cloud-hosted (Topaz.ai), higher keyframe budget.
+  // Provider routing currently stubs as `provider_not_available:topaz-apollo`
+  // pending KIE catalog check — entry kept so Shot List Critic surfaces it.
+  "topaz-apollo": {
+    inputModes: ["frame_interpolation"],
+    maxInterpolationKeyframes: 16,
+    maxDurationSeconds: 60,
+    prompting_style: "compact",
+  },
+  // v4.1 Method 10 — Parametric 3D camera path (Stability AI SV3D via Replicate).
+  // SV3D takes a single image + a camera path and renders a 3D-orbit video.
+  "stable-video-3d": {
+    inputModes: ["camera_path", "first_frame"],
+    supportsCameraPath: true,
+    maxDurationSeconds: 5,
+    prompting_style: "natural_language",
+    maxReferenceImages: 1,
+  },
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getVideoDuration } from "../../../providers/video/ffmpeg-utils.js"
+import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 export interface PipelineGenerateSpeechArgs {
@@ -119,21 +119,10 @@ export async function pipelineGenerateSpeech(
   // any audio container (mp3/wav/m4a), so this covers every provider routed
   // through this wrapper. Failure is non-fatal — null surfaces so callers can
   // fall back to the shot's planning duration.
-  const audioDurationSec = await probeAudioDuration(base.assetUrl)
+  const audioDurationSec = await probeAudioDuration(
+    base.assetUrl,
+    "pipeline-generate-speech",
+  )
 
   return { ...base, audioDurationSec }
-}
-
-async function probeAudioDuration(audioUrl: string): Promise<number | null> {
-  try {
-    const duration = await getVideoDuration(audioUrl)
-    if (!Number.isFinite(duration) || duration <= 0) return null
-    return duration
-  } catch (err) {
-    console.warn(
-      `[pipeline-generate-speech] ffprobe failed for ${audioUrl}:`,
-      err instanceof Error ? err.message : err,
-    )
-    return null
-  }
 }

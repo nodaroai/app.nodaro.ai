@@ -211,6 +211,66 @@ describe("runSceneDirector", () => {
     ).rejects.toThrow(/Scene 99 not found/)
   })
 
+  it("includes Method 3/8/10 mode-selection heuristic rows in the system prompt", async () => {
+    ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
+      output: fakeSceneNodeData,
+      llmCallId: "x",
+      costUsd: 0.08,
+      inputTokens: 1300,
+      outputTokens: 800,
+    })
+
+    await runSceneDirector({
+      supabase: {} as never,
+      pipelineId: "p1",
+      stageId: "s5",
+      userId: "u1",
+      sceneId: "scene-entity-1",
+      plan: fakePlan,
+      sceneIndex: 1,
+      shotInputMode: "first_frame",
+    })
+
+    const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    // Method 3 — video_continuation
+    expect(call.systemPrompt).toContain("video_continuation")
+    expect(call.systemPrompt).toContain("extends_shot_id")
+    expect(call.systemPrompt).toMatch(/VEO \+ Seedance 2 family/)
+    // Method 8 — frame_interpolation
+    expect(call.systemPrompt).toContain("frame_interpolation")
+    expect(call.systemPrompt).toContain("interpolation_keyframes")
+    expect(call.systemPrompt).toMatch(/auto-mode falls back to first_frame/i)
+    // Method 10 — camera_path
+    expect(call.systemPrompt).toContain("camera_path")
+    expect(call.systemPrompt).toContain("camera_path_directive")
+    expect(call.systemPrompt).toMatch(/orbit, dolly, crane, arc, reveal/)
+  })
+
+  it("includes the provider-availability caveat (Methods 8/10 limited; same-scene extends_shot_id)", async () => {
+    ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
+      output: fakeSceneNodeData,
+      llmCallId: "x",
+      costUsd: 0.08,
+      inputTokens: 1300,
+      outputTokens: 800,
+    })
+
+    await runSceneDirector({
+      supabase: {} as never,
+      pipelineId: "p1",
+      stageId: "s5",
+      userId: "u1",
+      sceneId: "scene-entity-1",
+      plan: fakePlan,
+      sceneIndex: 1,
+      shotInputMode: "first_frame",
+    })
+
+    const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.systemPrompt).toMatch(/Methods 8 \(frame_interpolation\) and 10 \(camera_path\) are currently provider-limited/)
+    expect(call.systemPrompt).toMatch(/extends_shot_id MUST reference a prior shot's shot_id within the same scene/)
+  })
+
   it("injects critic feedback into user prompt when present", async () => {
     ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
       output: fakeSceneNodeData,

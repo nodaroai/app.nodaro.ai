@@ -1104,4 +1104,25 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
       | undefined
     expect(completed?.narration).toBe(true)
   })
+
+  // ─── Phase 1C.3 Task A1 — registry order snapshot ─────────────────────
+
+  it("STAGE_7_SUB_STEPS registry order is stable", async () => {
+    // Order is load-bearing — Methods 3/8/10 (Phase 1C.3) APPEND to this
+    // array. The downstream final_merge wrapper reads `stageOutputAcc.music_result`
+    // (set by music) and `stageOutputAcc.narration_audio_url` (set by narration),
+    // so a careless reorder breaks the chain silently. Pin the snapshot here.
+    const { STAGE_7_SUB_STEPS } = await import(
+      "../sub-steps/_step-registry.js"
+    )
+    expect(STAGE_7_SUB_STEPS.map((s) => s.key)).toEqual([
+      "narration",
+      "dialogue_recheck",
+      "silent_cut",
+      "music",
+      "realignment",
+      "editor",
+      "final_merge",
+    ])
+  })
 })

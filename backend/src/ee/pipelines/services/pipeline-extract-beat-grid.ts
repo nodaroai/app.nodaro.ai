@@ -71,9 +71,18 @@ export function _resetAubioDetectionForTests(): void {
 /**
  * Runs `aubio onset <path>` and parses its stdout (one float per line, in
  * seconds). Returns an empty array on parse failures.
+ *
+ * Node's default `maxBuffer` is 1 MiB. A 3-minute track at high onset
+ * density (~20 onsets/s) can emit ~3600 lines × ~10 bytes = ~36 KiB — well
+ * within 1 MiB. However, long tracks (>10 min) or verbose aubio builds can
+ * easily exceed 1 MiB, causing an `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` error
+ * and killing the beat-grid step. 5 MiB is a safe ceiling for typical film
+ * lengths (≤30 min) without wasting significant RAM.
  */
 async function extractBeatGridAubio(audioPath: string): Promise<number[]> {
-  const { stdout } = await execFileAsync("aubio", ["onset", audioPath])
+  const { stdout } = await execFileAsync("aubio", ["onset", audioPath], {
+    maxBuffer: 5 * 1024 * 1024,
+  })
   const markers: number[] = []
   for (const line of stdout.split("\n")) {
     const trimmed = line.trim()

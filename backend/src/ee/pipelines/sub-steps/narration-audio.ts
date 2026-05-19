@@ -69,10 +69,8 @@ export async function runNarrationAudio(
     userId,
     text: script.text,
     voiceId: script.voice_id,
-    // Stick with the default (elevenlabs-v3) - it accepts [audio tags] for
-    // delivery cues. The Showrunner's `delivery_style` could be turned into
-    // an [audio tag] prefix in a follow-up; for v1 we let the script's plain
-    // text carry the delivery.
+    // Stick with the default (elevenlabs-v3) — it accepts [audio tags] for
+    // delivery cues that the LLM may inline directly in `script.text`.
   })
 
   return {

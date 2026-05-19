@@ -345,6 +345,15 @@ async function maybeForceSequentialMode(
     .shot_generation_mode
   if (currentMode === "sequential") return
 
+  // Why: this is a read-modify-write on `pipelines.config` (select then
+  // update), which is technically a lost-update race window. However, the
+  // window is bounded to Stage 5 only — no other concurrent writer touches
+  // `shot_generation_mode` at this point in the pipeline lifecycle (Stage 6+
+  // only reads the field; user config edits arrive before Stage 5 starts).
+  // The practical risk is effectively zero given the single-pipeline sequential
+  // execution model. Revisit with a JSONB merge UPDATE (`config = config ||
+  // '{"shot_generation_mode":"sequential"}'::jsonb`) if multi-writer stages
+  // are introduced in a later phase.
   await supabase
     .from("pipelines")
     .update({

@@ -247,9 +247,6 @@ export const ShowrunnerPlanSchema = z.object({
     .object({
       text: z.string().min(20).max(4000),
       voice_id: z.string().optional(),
-      delivery_style: z
-        .enum(["calm", "epic", "intimate", "documentary"])
-        .optional(),
     })
     .optional(),
   music_plan: z.object({

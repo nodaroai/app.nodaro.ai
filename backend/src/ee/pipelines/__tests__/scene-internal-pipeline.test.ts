@@ -22,6 +22,10 @@ vi.mock("../continuity.js", () => ({
   // cast / no location / no priorLastFrame) keep working without changes.
   // Specific tests override this to assert the wiring.
   allocateReferenceSlots: vi.fn().mockResolvedValue([]),
+  // J2a — `prepareSceneRefContext` is called once per scene before the shot
+  // loop. Return an empty context (entitiesByTypeKey = empty Map) so the
+  // existing tests that don't exercise entity resolution keep passing.
+  prepareSceneRefContext: vi.fn().mockResolvedValue({ entitiesByTypeKey: new Map() }),
 }))
 vi.mock("../llms/image-critic.js", () => ({
   runImageCritic: vi.fn(),

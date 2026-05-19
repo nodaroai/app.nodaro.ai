@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
-import { allocateReferenceSlots, extractLastFrame } from "./continuity.js"
+import { isSeedance2Provider, type SceneNodeData, type ShotSpec } from "@nodaro/shared"
+import {
+  allocateReferenceSlots,
+  extractLastFrame,
+  prepareSceneRefContext,
+  type SceneRefContext,
+} from "./continuity.js"
 import { pipelineAnimateShot } from "./services/pipeline-animate-shot.js"
 import { pipelineGenerateSpeech } from "./services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "./services/pipeline-lip-sync.js"
@@ -18,6 +23,10 @@ export interface SceneInternalPipelineContext {
   supabase: SupabaseClient
   pipelineId: string
   userId: string
+  /** Phase 1C.3 — pipeline run mode. Drives the Method 8 (frame_interpolation)
+   *  auto-mode fallback inside `pipelineAnimateShot`. Defaults to "manual"
+   *  in the per-shot animate call when omitted. */
+  pipelineMode?: "manual" | "auto" | "guided"
 }
 
 export interface SceneInternalPipelineOptions {
@@ -405,6 +414,23 @@ async function animateSequential(
 ): Promise<AnimateBranchResult> {
   const shotResults: SceneInternalPipelineShotResult[] = []
   const shotVideoUrls: Record<string, string> = {}
+
+  // J2a — fetch pipeline_entities + assets ONCE for the whole scene.
+  // Without this, allocateReferenceSlots pays 2 DB queries per shot:
+  // for an 8-shot scene that's 16 queries; for a 5×8 pipeline it's 80.
+  const sceneRefCtx = await prepareSceneRefContext(ctx.supabase, ctx.pipelineId, sceneData)
+
+  // Phase 1C.3 Method 3 — track each successfully-animated shot's KIE
+  // taskId so a subsequent video_continuation shot can resolve
+  // `priorClipKieTaskId` by `shot.extends_shot_id`. Populated lazily after
+  // each animate (query `jobs.output_data.kieTaskId` for the just-completed
+  // jobId).
+  const shotKieTaskIdById: Record<string, string> = {}
+  // Phase 1C.3 Method 3 (Seedance 2 path) — track each shot's extracted
+  // last_frame URL so a subsequent video_continuation shot can resolve
+  // `priorLastFrameUrl` by `shot.extends_shot_id`. Populated after each
+  // successful extract_frame call below.
+  const shotLastFrameUrlById: Record<string, string> = {}
   let priorLastFrameUrl: string | null = null
   let priorLastFrameAssetId: string | null = null
 
@@ -469,10 +495,64 @@ async function animateSequential(
     // the provider's `maxReferenceImages` budget. Multi-ref-capable
     // providers (Kling Omni=7, Seedance 2=5) get richer context; 1-ref
     // providers degrade with a logged warning.
-    const referenceUrls = await safelyAllocateRefs(ctx, sceneEntity, sceneData, shot, {
-      priorLastFrameUrl,
-      priorLastFrameAssetId,
-    })
+    const referenceUrls = await safelyAllocateRefs(
+      ctx,
+      sceneEntity,
+      sceneData,
+      shot,
+      { priorLastFrameUrl, priorLastFrameAssetId },
+      sceneRefCtx,
+    )
+
+    // Phase 1C.3 Method 3 — resolve continuation refs from the cached maps
+    // when this shot opts into video_continuation. The shot's
+    // `extends_shot_id` references a shot earlier in the same scene (Shot
+    // List Critic gates cross-scene extends).
+    //
+    // Branch by model: VEO needs the prior clip's KIE taskId (for the native
+    // /extend-video endpoint); Seedance 2 needs the prior clip's R2 URL
+    // (for `reference_video_urls`) + the prior last_frame URL (for
+    // `first_frame_url`).
+    let priorClipKieTaskId: string | undefined
+    let resolvedPriorClipUrl: string | undefined
+    let resolvedPriorLastFrameUrl: string | undefined
+    if (
+      sceneData.shot_input_mode === "video_continuation" &&
+      shot.extends_shot_id
+    ) {
+      if (isSeedance2Provider(sceneData.video_model)) {
+        resolvedPriorClipUrl = shotVideoUrls[shot.extends_shot_id]
+        resolvedPriorLastFrameUrl = shotLastFrameUrlById[shot.extends_shot_id]
+        if (!resolvedPriorClipUrl || !resolvedPriorLastFrameUrl) {
+          return {
+            ok: false,
+            reason: `animate_failed:video_continuation:${shot.shot_id}:prior_shot_seedance2_refs_unavailable`,
+            shotResults,
+            shotVideoUrls,
+          }
+        }
+      } else {
+        priorClipKieTaskId = shotKieTaskIdById[shot.extends_shot_id]
+        if (!priorClipKieTaskId) {
+          return {
+            ok: false,
+            reason: `animate_failed:video_continuation:${shot.shot_id}:prior_shot_kieTaskId_unavailable`,
+            shotResults,
+            shotVideoUrls,
+          }
+        }
+      }
+    }
+
+    // Phase 1C.3 Method 8 — read pre-generated interpolation keyframe URLs
+    // from Stage 6's per-shot stash. Stage 6 multi-keyframe gen writes
+    // `interpolation_keyframe_urls` onto `scene_node_data.shots[N]` BEFORE
+    // Stage 7 runs.
+    const interpolationKeyframeUrls =
+      sceneData.shot_input_mode === "frame_interpolation"
+        ? (shot as ShotSpec & { interpolation_keyframe_urls?: string[] })
+            .interpolation_keyframe_urls
+        : undefined
 
     let animateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
     try {
@@ -485,6 +565,11 @@ async function animateSequential(
         sceneNodeData: sceneData,
         startFrameUrl,
         referenceUrls,
+        priorClipKieTaskId,
+        priorClipUrl: resolvedPriorClipUrl,
+        priorLastFrameUrl: resolvedPriorLastFrameUrl,
+        interpolationKeyframeUrls,
+        pipelineMode: ctx.pipelineMode,
       })
     } catch (err) {
       console.error(
@@ -497,6 +582,19 @@ async function animateSequential(
         shotResults,
         shotVideoUrls,
       }
+    }
+
+    // Phase 1C.3 Method 3 — cache this shot's kieTaskId for later
+    // video_continuation shots in the same scene. Only relevant when the
+    // scene's input mode is video_continuation (we want chained VEO
+    // extensions) — skip the lookup otherwise to keep tests + non-VEO
+    // animate paths fast.
+    if (
+      sceneData.shot_input_mode === "video_continuation" &&
+      animateResult.jobId
+    ) {
+      const taskId = await lookupKieTaskIdForJob(ctx.supabase, animateResult.jobId)
+      if (taskId) shotKieTaskIdById[shot.shot_id] = taskId
     }
 
     // Best-effort last_frame extraction for the next shot's chain. Skip on
@@ -517,6 +615,10 @@ async function animateSequential(
         priorLastFrameAssetId = extracted.assetId
         lastFrameAssetId = extracted.assetId
         lastFrameUrl = extracted.url
+        // Phase 1C.3 Method 3 (Seedance 2 path) — cache by shot_id so a
+        // later video_continuation shot can resolve `priorLastFrameUrl`
+        // from its `extends_shot_id`.
+        shotLastFrameUrlById[shot.shot_id] = extracted.url
       } catch (err) {
         // Extract failure breaks the chain but doesn't block the rest of
         // the scene — fall back to the next shot's own keyframe.
@@ -564,6 +666,9 @@ async function animateParallel(
   sceneEntity: { id: string },
   sceneData: SceneNodeData,
 ): Promise<AnimateBranchResult> {
+  // J2a — fetch pipeline_entities + assets ONCE for the whole scene.
+  const sceneRefCtx = await prepareSceneRefContext(ctx.supabase, ctx.pipelineId, sceneData)
+
   const tasks = sceneData.shots.map((shot) => async () => {
     const startFrameUrl = (shot as ShotSpec).keyframe_url ?? null
     // F1 — parallel mode has no continuity chain across shots, so the
@@ -575,7 +680,16 @@ async function animateParallel(
       sceneData,
       shot as ShotSpec,
       { priorLastFrameUrl: null, priorLastFrameAssetId: null },
+      sceneRefCtx,
     )
+    // Phase 1C.3 — Method 8 keyframe URLs from Stage 6's per-shot stash.
+    // Method 3 (video_continuation) is never picked in parallel mode (the
+    // Shot List Critic gates it) so we don't plumb priorClipKieTaskId here.
+    const interpolationKeyframeUrls =
+      sceneData.shot_input_mode === "frame_interpolation"
+        ? (shot as ShotSpec & { interpolation_keyframe_urls?: string[] })
+            .interpolation_keyframe_urls
+        : undefined
     const animateResult = await pipelineAnimateShot({
       supabase: ctx.supabase,
       pipelineId: ctx.pipelineId,
@@ -585,6 +699,8 @@ async function animateParallel(
       sceneNodeData: sceneData,
       startFrameUrl,
       referenceUrls,
+      interpolationKeyframeUrls,
+      pipelineMode: ctx.pipelineMode,
     })
     return { shot: shot as ShotSpec, animateResult }
   })
@@ -647,6 +763,7 @@ async function safelyAllocateRefs(
   sceneData: SceneNodeData,
   shot: ShotSpec,
   args: { priorLastFrameUrl: string | null; priorLastFrameAssetId: string | null },
+  sceneContext?: SceneRefContext,
 ): Promise<ReadonlyArray<string> | undefined> {
   try {
     const slots = await allocateReferenceSlots({
@@ -659,6 +776,7 @@ async function safelyAllocateRefs(
         args.priorLastFrameUrl && args.priorLastFrameAssetId
           ? { url: args.priorLastFrameUrl, assetId: args.priorLastFrameAssetId }
           : null,
+      sceneContext,
     })
     if (slots.length === 0) return undefined
     return slots.map((s) => s.url)
@@ -668,6 +786,43 @@ async function safelyAllocateRefs(
       err instanceof Error ? err.message : err,
     )
     return undefined
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// KIE taskId lookup helper (Phase 1C.3 Method 3)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Reads `jobs.output_data.kieTaskId` for a just-completed animate jobId.
+ *
+ * Used by sequential animate to populate `shotKieTaskIdById` so a subsequent
+ * `shot_input_mode='video_continuation'` shot can resolve its
+ * `priorClipKieTaskId` from `extends_shot_id`. Returns null when the row
+ * doesn't carry a kieTaskId (e.g. non-KIE provider, or the worker hasn't
+ * landed `output_data` yet — rare but possible).
+ */
+async function lookupKieTaskIdForJob(
+  supabase: SupabaseClient,
+  jobId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("output_data")
+      .eq("id", jobId)
+      .maybeSingle()
+    if (error || !data) return null
+    const output = (data as { output_data?: Record<string, unknown> | null })
+      .output_data
+    const taskId = (output as { kieTaskId?: unknown } | null | undefined)?.kieTaskId
+    return typeof taskId === "string" && taskId.length > 0 ? taskId : null
+  } catch {
+    // Defensive: if the mocked supabase chain in tests doesn't implement
+    // .maybeSingle() (most existing fixtures don't), swallow and treat as
+    // "no kieTaskId available". Method 3 dispatcher handles the null
+    // case by returning a clean structured failure.
+    return null
   }
 }
 
