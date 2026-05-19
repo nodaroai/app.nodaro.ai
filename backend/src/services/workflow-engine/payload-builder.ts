@@ -310,12 +310,22 @@ function expandWiredCharacterRefs(
   return out
 }
 
+/** Location variant buckets — kept in sync with frontend LocationNodeData. */
+const LOCATION_VARIANT_BUCKETS = [
+  "timeOfDay",
+  "weather",
+  "seasons",
+  "angles",
+  "lighting",
+  "atmosphereMotions",
+] as const
+
 /**
- * Expand a wired Location upstream into a single canonical ConnectedReference
- * (Phase 2 #1 of the Location Studio design — adds canonical-description text
- * injection into downstream prompts). Mirrors `expandWiredCharacterRefs`
- * shape but locations have a single canonical entry; per-variant fan-out
- * lands in Phase 2 #2 (`@location:1:variant` mention syntax).
+ * Expand a wired Location upstream into a canonical ConnectedReference plus
+ * one entry per variant across the 6 buckets (timeOfDay / weather / seasons
+ * / angles / lighting / atmosphereMotions). Phase 2 #2 — powers
+ * `@oldlibrary:1:weather/rain` mention resolution by giving the resolver
+ * pre-indexed entries to match against.
  *
  * Returns an empty list when no wired-location upstream OR upstream has no
  * `sourceImageUrl` — caller falls through to the existing wired-image flow.
@@ -337,17 +347,48 @@ function expandWiredLocationRefs(
       (locData.locationName as string | undefined) ??
       (locData.label as string | undefined) ??
       "Location"
-    const locationSlug = characterMentionSlug(locName)
+    const locationSlug = characterMentionSlug(locName) || undefined
+    const description = (locData.description as string | undefined) ?? undefined
+    const canonicalDescription =
+      (locData.canonicalDescription as string | null | undefined) ?? null
+
+    // Canonical entry — the main image URL.
     out.push({
       id: upstream.id,
       defaultName: locName,
       source: "wired-location",
-      description: (locData.description as string | undefined) ?? undefined,
+      description,
       url: sourceUrl,
-      locationCanonicalDescription:
-        (locData.canonicalDescription as string | null | undefined) ?? null,
-      locationSlug: locationSlug || undefined,
+      locationCanonicalDescription: canonicalDescription,
+      locationSlug,
     })
+
+    // Per-variant entries. Each bucket holds `{name, url}[]`; the variant
+    // slug used by the mention resolver is `locationMentionSlug(name)` so
+    // a stored "Light Rain" matches `@oldlibrary:1:weather/light-rain`.
+    for (const bucket of LOCATION_VARIANT_BUCKETS) {
+      const items = locData[bucket]
+      if (!Array.isArray(items)) continue
+      for (const item of items) {
+        const variantName = (item as { name?: string }).name
+        const variantUrl = (item as { url?: string }).url
+        if (!variantName || !variantUrl) continue
+        const variantSlug = characterMentionSlug(variantName)
+        if (!variantSlug) continue
+        out.push({
+          id: `${upstream.id}_${bucket}_${variantSlug}`,
+          defaultName: `${locName} / ${variantName}`,
+          source: "wired-location",
+          description,
+          url: variantUrl,
+          locationCanonicalDescription: canonicalDescription,
+          locationSlug,
+          locationVariantBucket: bucket,
+          locationVariantSlug: variantSlug,
+          locationVariantDisplayName: variantName,
+        })
+      }
+    }
   }
   return out
 }
