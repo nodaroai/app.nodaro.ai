@@ -127,6 +127,11 @@ export const ShotSpecSchema = z.object({
   // in 1C.1 (continuity.applyContinuityToStartFrame already reads this).
   bridged_frame_url: z.string().url().optional(),
 
+  // Phase 1D.1 Method 7 — set true when the user accepts a MatchCutCritic
+  // 'break' verdict for this shot's pair. Stage 6 reads this to know the
+  // break is resolved and the scene can advance to Stage 7.
+  accepted_match_cut_break: z.boolean().optional(),
+
   // ─── Phase 1C.2 — dialogue + editor cut metadata ───────────────────────────
   // All optional; planning-time ShotSpec carries none of these. Populated by
   // the Editor LLM (Stage 7) and the silent-cut-preview sub-gate handler.
@@ -255,3 +260,22 @@ export const SceneMetadataSchema = z.object({
   scene_node_data: SceneNodeDataSchema.optional(),
 })
 export type SceneMetadata = z.infer<typeof SceneMetadataSchema>
+
+/**
+ * MatchCutVerdictSchema — Phase 1D.1 Method 7.
+ *
+ * What Stage 6 persists in `pipeline_stages.output.match_cut_verdicts` for
+ * each match-cut shot pair. Keyed by the TARGET shot_id (the shot with
+ * `shot_intent.is_match_cut=true`). The pair is [target, next-shot].
+ *
+ * Stage 6 runs `runValidateMatchCut` for every eligible target and stores
+ * one MatchCutVerdict per pair. The `pendingBreaks` list in the orchestrator
+ * result identifies shots the user must explicitly accept before Stage 7 runs.
+ */
+export const MatchCutVerdictSchema = z.object({
+  shot_pair: z.tuple([z.string(), z.string()]),
+  match_strength: z.enum(["strong", "moderate", "weak", "break"]),
+  suggested_adjustments: z.string().max(300),
+  checked_at: z.string().datetime(),
+})
+export type MatchCutVerdict = z.infer<typeof MatchCutVerdictSchema>

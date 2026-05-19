@@ -348,3 +348,52 @@ Available on **Cloud** edition only. Community + Business return 403 `edition_re
 | GET | `/v1/pipelines/:id/pending-approvals` | `pipelines:approve` | List stages awaiting approval |
 | POST | `/v1/pipelines/:id/stages/:stage_name/approve` | `pipelines:approve` | Approve a stage |
 | POST | `/v1/pipelines/:id/stages/:stage_name/reject` | `pipelines:approve` | Reject + feedback |
+
+## Match Cut Critic — Auto-invocation (Phase 1D.1)
+
+### Method 7 — Match Cut Critic (auto-invocation, Phase 1D.1)
+
+When a shot has `shot_intent.is_match_cut: true`, Stage 6 (scene_images) automatically
+invokes the MatchCutCritic — a Sonnet vision call compares the shot's keyframe with the
+NEXT shot's keyframe in the same scene and returns a `match_strength` rating:
+
+| Strength | Action |
+|----------|--------|
+| strong   | Pass through; no gate fires |
+| moderate | Pass through; verdict shown in panel for audit |
+| weak     | Pass through; warning shown in panel |
+| break    | **Stage 6 sub-gates** until the user accepts OR regens the keyframe |
+
+When a break is detected, the SceneNode panel surfaces:
+- Side-by-side keyframe thumbnails for the pair
+- Red "BREAK" chip + the critic's suggested adjustments
+- "Accept break" button (records `accepted_match_cut_break: true` on the shot)
+- "Improve start frame" link (existing §6.11.3 helper)
+
+The gate clears when the last pending break is either accepted or resolved by a regen
+that produces a non-break verdict. Pricing: ~3 credits per match-cut shot (Sonnet vision
+call). Only fires when `is_match_cut` is set on the shot AND a next shot exists in the
+same scene.
+
+The §6.11.12 🎯 Validate Match Cut helper button (shipped Phase 1C.1) remains available
+for on-demand re-validation after a regen.
+
+### New endpoint (Phase 1D.1)
+
+| Method | Path | Scope | Notes |
+|--------|------|-------|-------|
+| POST | `/v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break` | `pipelines:approve` | Accepts a match-cut break for a shot (`shotId` in body); clears sub-gate when last break resolved |
+
+### New shared types (Phase 1D.1)
+
+- **`MatchCutVerdictSchema`** (`@nodaro/shared`) — `{ shot_pair: [string, string], match_strength: "strong" | "moderate" | "weak" | "break", suggested_adjustments: string[], checked_at: string }`
+- **`SubGateName`** extended: `'match_cut_break_pending'` added to `SubGateNameSchema`
+- **`ShotSpec.accepted_match_cut_break`** — `boolean?` — survives stage re-runs
+
+### Stage 6 output shape (Phase 1D.1)
+
+`pipeline_stages.output` for `scene_images` gains two fields:
+- `match_cut_verdicts: Record<shotId, MatchCutVerdict>` — all verdicts keyed by shot ID
+- `match_cut_break_pending: string[]` — shot IDs whose `match_strength === "break"` and `accepted_match_cut_break` is not yet `true`
+
+When `match_cut_break_pending` is non-empty, Stage 6 sets `current_sub_gate='match_cut_break_pending'` + `status='awaiting_approval'` and refuses to advance to Stage 7.

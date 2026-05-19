@@ -173,6 +173,23 @@ export const pipelinesApi = {
       body ?? {},
     )
   },
+  /**
+   * Phase 1D.1 — Zero-credit action that flips `accepted_match_cut_break=true`
+   * on the target shot and removes it from `match_cut_break_pending` in Stage 6
+   * output. When the list empties the sub-gate is cleared and the pipeline can
+   * advance to Stage 7.
+   *
+   * URL: POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break
+   */
+  acceptMatchCutBreak(
+    pipelineId: string,
+    sceneId: string,
+    shotId: string,
+  ): Promise<{ ok: true; pendingRemaining: number }> {
+    return postJson(`/v1/pipelines/${pipelineId}/entities/${sceneId}/helpers/accept_match_cut_break`, {
+      shotId,
+    })
+  },
 }
 
 export type { PipelineEvent }

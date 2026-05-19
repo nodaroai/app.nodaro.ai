@@ -1,11 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
+import type { MatchCutVerdict, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
 import { ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { allocateReferenceSlots } from "../continuity.js"
 import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+import { runMatchCutOrchestrator } from "../match-cut-orchestrator.js"
 
 export interface RunSceneImagesStageArgs {
   supabase: SupabaseClient
@@ -55,13 +56,25 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   // Re-entrancy guard: if a prior pass already approved or completed the stage,
   // the engine wouldn't re-invoke us; but if a partial retry lands and the row
   // is already awaiting_approval we bail without doing redundant gen.
+  //
+  // Exception: when the stage is awaiting_approval WITH current_sub_gate =
+  // "match_cut_break_pending", the accept_match_cut_break route set it back to
+  // "running" before re-enqueueing — so we only skip on awaiting_approval when
+  // current_sub_gate is absent (i.e. the standard keyframe-review pause).
   const { data: existingStage } = await supabase
     .from("pipeline_stages")
-    .select("status")
+    .select("status, output")
     .eq("id", stageId)
     .maybeSingle()
+  const existingOutput = (existingStage?.output as Record<string, unknown> | null) ?? {}
+  const resumingFromMatchCutGate =
+    existingStage?.status === "running" &&
+    Array.isArray(existingOutput.match_cut_break_pending) &&
+    (existingOutput.match_cut_break_pending as string[]).length === 0 &&
+    existingOutput.keyframes_generated === true
   if (
-    existingStage?.status === "awaiting_approval" ||
+    (existingStage?.status === "awaiting_approval" &&
+      !existingOutput.current_sub_gate) ||
     existingStage?.status === "approved" ||
     existingStage?.status === "completed"
   ) {
@@ -96,6 +109,14 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   }
   if (!scenes || scenes.length === 0) {
     await failStage(supabase, stageId, "no_scenes")
+    return
+  }
+
+  // Phase 1D.1: When resuming after the match_cut_break_pending sub-gate was
+  // cleared (all breaks accepted), skip straight to the final awaiting_approval
+  // transition — keyframes are already persisted from the first pass.
+  if (resumingFromMatchCutGate) {
+    await advanceToAwaitingApproval(supabase, pipelineId, stageId, existingOutput)
     return
   }
 
@@ -147,7 +168,91 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
     return
   }
 
-  // 6. Transition canvas SceneNodes to awaiting_approval + mark stage.
+  // 5b. Phase 1D.1 — MatchCutCritic pass. Run the match-cut orchestrator over
+  //     every scene. Aggregate verdicts and pending-break lists across scenes.
+  //     A "break" verdict means the two keyframes don't form a viable match cut
+  //     and the user must explicitly accept the break before Stage 7 animates
+  //     them. Store verdicts on the stage output for the panel to render.
+  const allMatchCutVerdicts: Record<string, MatchCutVerdict> = {}
+  const allPendingBreaks: string[] = []
+
+  // Re-read scenes with updated metadata (keyframes now persisted).
+  const { data: scenesWithKeyframes } = await supabase
+    .from("pipeline_entities")
+    .select("id, entity_key, metadata")
+    .eq("pipeline_id", pipelineId)
+    .eq("entity_type", "scene")
+    .order("entity_key", { ascending: true })
+
+  for (const sceneEntity of scenesWithKeyframes ?? []) {
+    const sceneNodeData = (
+      (sceneEntity.metadata as Record<string, unknown> | null)?.scene_node_data
+    ) as SceneNodeData | undefined
+    if (!sceneNodeData) continue
+
+    const { verdicts, pendingBreaks } = await runMatchCutOrchestrator({
+      supabase,
+      pipelineId,
+      stageId,
+      sceneId: sceneEntity.id,
+      userId,
+      plan,
+      scene: sceneNodeData,
+    })
+    Object.assign(allMatchCutVerdicts, verdicts)
+    allPendingBreaks.push(...pendingBreaks)
+  }
+
+  if (allPendingBreaks.length > 0) {
+    // Sub-gate: user must accept each break before Stage 7 can proceed.
+    // Write verdicts + pending list to stage output, set current_sub_gate,
+    // and pause at awaiting_approval. The accept_match_cut_break route will
+    // remove shots from the list; when the list empties it sets status back
+    // to "running" and re-enqueues the pipeline.
+    await supabase
+      .from("pipeline_stages")
+      .update({
+        output: {
+          ...existingOutput,
+          keyframes_generated: true,
+          match_cut_verdicts: allMatchCutVerdicts,
+          match_cut_break_pending: allPendingBreaks,
+          current_sub_gate: "match_cut_break_pending",
+        },
+        status: "awaiting_approval",
+      })
+      .eq("id", stageId)
+    pipelineEvents.publish({
+      type: "stage:awaiting_sub_gate",
+      pipelineId,
+      stageName: "scene_images",
+      subGate: "match_cut_break_pending",
+      payload: { pendingBreaks: allPendingBreaks },
+    })
+    return
+  }
+
+  // 6. No pending match-cut breaks (or no match-cut shots at all). Persist
+  //    verdicts for audit and advance to the standard awaiting_approval.
+  await advanceToAwaitingApproval(supabase, pipelineId, stageId, {
+    ...existingOutput,
+    keyframes_generated: true,
+    match_cut_verdicts: allMatchCutVerdicts,
+    match_cut_break_pending: [],
+  })
+}
+
+/**
+ * Final transition for Stage 6: flip canvas SceneNodes to
+ * `pipeline_owned_awaiting_approval`, write stage output, and emit SSE.
+ * Called both from the normal completion path and from the sub-gate resume path.
+ */
+async function advanceToAwaitingApproval(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  stageId: string,
+  outputPatch: Record<string, unknown>,
+): Promise<void> {
   await transitionStageEntityNodesAndEmit(
     supabase,
     pipelineId,
@@ -155,9 +260,13 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
     "pipeline_owned_awaiting_approval",
     "scene-images",
   )
+  // Strip current_sub_gate when advancing from a sub-gated state.
+  const nextOutput = { ...outputPatch }
+  delete nextOutput.current_sub_gate
+
   await supabase
     .from("pipeline_stages")
-    .update({ status: "awaiting_approval" })
+    .update({ status: "awaiting_approval", output: nextOutput })
     .eq("id", stageId)
   pipelineEvents.publish({
     type: "stage:status",

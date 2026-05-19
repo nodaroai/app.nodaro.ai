@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodSchema } from "zod"
+import { z } from "zod"
 import {
   BridgeToNextSceneInputSchema,
   FixContinuityInputSchema,
@@ -11,6 +12,7 @@ import {
   type SceneHelperName,
   type SceneNodeData,
   type ShowrunnerPlan,
+  type ShotSpec,
 } from "@nodaro/shared"
 import { hasCredits } from "../lib/config.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
@@ -367,4 +369,163 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
 
 export async function sceneHelpersRoutes(app: FastifyInstance) {
   for (const cfg of HELPERS) registerHelperRoute(app, cfg)
+  registerAcceptMatchCutBreakRoute(app)
+}
+
+// ── POST /v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break ──
+//
+// Phase 1D.1 — Zero-credit state-mutation action. Flips
+// `accepted_match_cut_break=true` on the target shot, removes the shot_id from
+// `match_cut_break_pending` in the Stage 6 output, and (when the list empties)
+// clears the `match_cut_break_pending` sub-gate so the pipeline can resume
+// Stage 6's final awaiting_approval transition.
+//
+// Not wired through the HELPERS credit-reservation path (cost=0 and the action
+// is a flag flip, not an LLM call). Auth + edition + scope gates mirror the
+// existing helpers.
+
+const AcceptMatchCutBreakBodySchema = z.object({ shotId: z.string().min(1) })
+
+function registerAcceptMatchCutBreakRoute(app: FastifyInstance) {
+  app.post<{
+    Params: { id: string; sceneId: string }
+    Body: { shotId: string }
+  }>(
+    "/v1/pipelines/:id/entities/:sceneId/helpers/accept_match_cut_break",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const parsed = AcceptMatchCutBreakBodySchema.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: parsed.error.issues },
+        })
+      }
+      const { shotId } = parsed.data
+
+      // Load pipeline ownership + scene entity in parallel.
+      const [pipelineRes, entityRes] = await Promise.all([
+        supabase
+          .from("pipelines")
+          .select("id, user_id")
+          .eq("id", req.params.id)
+          .maybeSingle(),
+        supabase
+          .from("pipeline_entities")
+          .select("id, metadata")
+          .eq("id", req.params.sceneId)
+          .eq("pipeline_id", req.params.id)
+          .eq("entity_type", "scene")
+          .maybeSingle(),
+      ])
+
+      const pipeline = pipelineRes.data
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+      const entity = entityRes.data
+      if (!entity) {
+        return reply.status(404).send({ error: { code: "scene_not_found" } })
+      }
+
+      const sceneNodeData = (entity.metadata as Record<string, unknown> | null)
+        ?.scene_node_data as SceneNodeData | undefined
+      if (!sceneNodeData) {
+        return reply.status(409).send({ error: { code: "scene_not_planned" } })
+      }
+
+      // 1. Locate the target shot and validate it is a match-cut shot.
+      const shots = sceneNodeData.shots as ShotSpec[]
+      const shotIdx = shots.findIndex((s) => s.shot_id === shotId)
+      if (shotIdx < 0) {
+        return reply.status(400).send({ error: { code: "shot_not_found" } })
+      }
+      const shot = shots[shotIdx]!
+      if (!shot.shot_intent?.is_match_cut) {
+        return reply.status(400).send({ error: { code: "not_a_match_cut" } })
+      }
+
+      // 2. Flip accepted_match_cut_break=true on the target shot and persist.
+      const nextShots = shots.map((s, i) =>
+        i === shotIdx ? { ...s, accepted_match_cut_break: true } : s,
+      )
+      const nextSceneNodeData: SceneNodeData = { ...sceneNodeData, shots: nextShots }
+      const { error: entityUpdateErr } = await supabase
+        .from("pipeline_entities")
+        .update({
+          metadata: {
+            ...((entity.metadata as Record<string, unknown>) ?? {}),
+            scene_node_data: nextSceneNodeData,
+          },
+        })
+        .eq("id", entity.id)
+      if (entityUpdateErr) {
+        return reply.status(500).send({
+          error: { code: "db_error", detail: entityUpdateErr.message },
+        })
+      }
+
+      // 3. Fetch Stage 6 output to update match_cut_break_pending.
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id, status, output")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", "scene_images")
+        .maybeSingle()
+      if (!stageRow) {
+        // Scene entity updated successfully even if stage row is missing.
+        return reply.send({ ok: true, pendingRemaining: 0 })
+      }
+
+      const stageOutput = (stageRow.output as Record<string, unknown> | null) ?? {}
+      const pendingList = Array.isArray(stageOutput.match_cut_break_pending)
+        ? (stageOutput.match_cut_break_pending as string[])
+        : []
+      const newPendingList = pendingList.filter((id) => id !== shotId)
+
+      // 4. If all breaks are now accepted, clear the sub-gate and set stage
+      //    back to "running" so the engine re-invokes Stage 6's final
+      //    awaiting_approval transition on the next enqueue.
+      const nextOutput: Record<string, unknown> = {
+        ...stageOutput,
+        match_cut_break_pending: newPendingList,
+      }
+      let statusUpdate: string | undefined
+      if (
+        newPendingList.length === 0 &&
+        stageOutput.current_sub_gate === "match_cut_break_pending"
+      ) {
+        delete nextOutput.current_sub_gate
+        statusUpdate = "running"
+      }
+
+      const { error: stageUpdateErr } = await supabase
+        .from("pipeline_stages")
+        .update({
+          output: nextOutput,
+          ...(statusUpdate ? { status: statusUpdate } : {}),
+        })
+        .eq("id", stageRow.id)
+      if (stageUpdateErr) {
+        return reply.status(500).send({
+          error: { code: "db_error", detail: stageUpdateErr.message },
+        })
+      }
+
+      // 5. Re-enqueue the pipeline so Stage 6 can complete to awaiting_approval.
+      if (statusUpdate === "running") {
+        const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+        await enqueuePipelineRun({
+          pipelineId: req.params.id,
+          userId,
+          reason: "stage_advance",
+        })
+      }
+
+      return reply.send({ ok: true, pendingRemaining: newPendingList.length })
+    },
+  )
 }

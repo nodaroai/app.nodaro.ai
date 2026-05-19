@@ -108,37 +108,45 @@ export const PipelineCompletedEventSchema = z.object({
 export type PipelineCompletedEvent = z.infer<typeof PipelineCompletedEventSchema>
 
 /**
- * Phase 1C.2 — Sub-gate names. Stage 7 (animate_audio_edit) can pause at one
- * of these mid-stage gates before resuming the rest of the stage; the gate
- * name is persisted on `pipeline_stages.output.current_sub_gate` (JSONB) so a
- * resumed orchestrator picks up at the right step.
+ * Phase 1C.2 — Sub-gate names. Stage 7 (animate_audio_edit) and Stage 6
+ * (scene_images) can pause at one of these mid-stage gates before resuming
+ * the rest of the stage; the gate name is persisted on
+ * `pipeline_stages.output.current_sub_gate` (JSONB) so a resumed orchestrator
+ * picks up at the right step.
  *
- *   `silent_cut_preview`  — Editor LLM has emitted cut_decisions; user reviews
- *                           the preview reel before the per-shot trims commit.
- *   `dialogue_recheck`    — A re-recorded dialogue line shifted the
- *                           dialogue_no_cut_zone; user confirms the new cuts
- *                           still respect the zone.
+ *   `silent_cut_preview`       — Stage 7: Editor LLM has emitted cut_decisions;
+ *                                user reviews the preview reel before the
+ *                                per-shot trims commit.
+ *   `dialogue_recheck`         — Stage 7: A re-recorded dialogue line shifted
+ *                                the dialogue_no_cut_zone; user confirms the
+ *                                new cuts still respect the zone.
+ *   `match_cut_break_pending`  — Stage 6: MatchCutCritic found one or more
+ *                                match-cut shot pairs with `match_strength =
+ *                                "break"`. User must accept each break (sets
+ *                                `accepted_match_cut_break=true` on the shot)
+ *                                before Stage 7 can animate those pairs.
  */
 export const SubGateNameSchema = z.enum([
   "silent_cut_preview",
   "dialogue_recheck",
+  "match_cut_break_pending",
 ])
 export type SubGateName = z.infer<typeof SubGateNameSchema>
 
 /**
- * Phase 1C.2 — emitted when Stage 7 (animate_audio_edit) pauses at a sub-gate
- * (silent_cut_preview / dialogue_recheck). Carries an optional `payload`
+ * Phase 1C.2 — emitted when Stage 6 (scene_images) or Stage 7
+ * (animate_audio_edit) pauses at a sub-gate. Carries an optional `payload`
  * (JSONB-shaped) for whatever the gate needs to render — e.g. the preview
- * reel URL, the affected shot ids, or the new dialogue duration.
+ * reel URL, the affected shot ids, or the pending-break list.
  *
  * Distinct from `stage:status awaiting_approval` (which is the top-level
- * stage gate). Sub-gates do NOT flip stage_status to awaiting_approval; they
- * stash `current_sub_gate` on the stage output and pause work in-place.
+ * stage gate). Sub-gates stash `current_sub_gate` on the stage output AND
+ * flip `status = "awaiting_approval"` so the pipeline engine waits.
  */
 export const StageAwaitingSubGateEventSchema = z.object({
   type: z.literal("stage:awaiting_sub_gate"),
   pipelineId: z.string().uuid(),
-  stageName: z.literal("animate_audio_edit"),
+  stageName: z.enum(["animate_audio_edit", "scene_images"]),
   subGate: SubGateNameSchema,
   payload: z.record(z.unknown()).optional(),
 })
