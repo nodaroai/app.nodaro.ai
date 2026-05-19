@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { ConfigProps } from "./types"
 import type { SceneNodeFrontendData } from "@/types/nodes"
-import type { ShotSpec } from "@nodaro/shared"
+import type { MatchCutVerdict, ShotSpec } from "@nodaro/shared"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { X, Plus } from "lucide-react"
 import { useSceneHelper } from "@/hooks/use-scene-helper"
 import { SceneHelperButtons } from "./scene-helper-buttons"
 import { SceneHelperModal } from "./scene-helper-modal"
+import { pipelinesApi } from "@/lib/pipelines-api"
 
 /**
  * SceneConfig — Phase 1B.2 read-only config panel for the pipeline-managed
@@ -27,8 +28,29 @@ import { SceneHelperModal } from "./scene-helper-modal"
  * Anchor Style) that mutate `data.shots` and `data.scene_anchor_keyframe` via
  * Accept-gated patches. The 3 vision-keyframe helpers render disabled with a
  * "Pending Phase 1C" tooltip.
+ *
+ * Phase 1D.1 adds `stageOutput` (optional) for match-cut verdict display.
+ * The prop is plumbed from config-panel.tsx via a React Query on Stage 6
+ * (`scene_images`). When absent the match-cut block shows "Pending critic
+ * verdict…" (e.g. before the pipeline has reached Stage 6).
  */
-export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendData>) {
+interface SceneConfigProps extends ConfigProps<SceneNodeFrontendData> {
+  /**
+   * Stage 6 (`scene_images`) output from `pipeline_stages.output`.
+   * Used to surface `match_cut_verdicts` per shot. Optional — when absent
+   * the match-cut block renders a "pending" state.
+   *
+   * Wired from config-panel.tsx via a `pipelinesApi.getStage(pipelineId,
+   * "scene_images")` query keyed on `nodeData.pipeline_id`. Polls at 5 s
+   * while the panel is open, stops once the stage is "approved".
+   */
+  stageOutput?: {
+    match_cut_verdicts?: Record<string, MatchCutVerdict>
+    match_cut_break_pending?: string[]
+  }
+}
+
+export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
   // pipeline_id is written by canvas-materializer when the scene is created;
   // pipeline_entity_id is the bound row in pipeline_entities. The §6.11 helper
   // buttons stay disabled until both are present.
@@ -40,6 +62,9 @@ export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendDat
   // by shot_id. We keep the raw textarea string here and only write parsed JSON
   // to node data on blur (skipping invalid JSON silently).
   const [cameraParamsRaw, setCameraParamsRaw] = useState<Record<string, string>>({})
+
+  // Per-shot loading state for the accept-break action (Phase 1D.1).
+  const [acceptBreakLoading, setAcceptBreakLoading] = useState<Record<string, boolean>>({})
 
   // Patch a single shot by shot_id, merging `patch` into the existing shot.
   function patchShot(shotId: string, patch: Partial<ShotSpec>) {
@@ -109,16 +134,19 @@ export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendDat
         Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
       </div>
 
-      {/* ── Per-shot editors: Phase 1C.3 advanced input-mode fields ─────────── */}
+      {/* ── Per-shot editors: Phase 1C.3 input-mode fields + Phase 1D.1 match-cut ── */}
       {data.shots.map((shot, idx) => {
         const mode = data.shot_input_mode
+        const isMatchCutShot = shot.shot_intent?.is_match_cut === true && idx < data.shots.length - 1
 
         // Only render the per-shot editor when the scene's input mode has
-        // shot-level fields to configure.
+        // shot-level fields to configure, OR this shot has a match-cut verdict
+        // to surface (Phase 1D.1).
         if (
           mode !== "video_continuation" &&
           mode !== "frame_interpolation" &&
-          mode !== "camera_path"
+          mode !== "camera_path" &&
+          !isMatchCutShot
         ) {
           return null
         }
@@ -334,6 +362,100 @@ export function SceneConfig({ data, onUpdate }: ConfigProps<SceneNodeFrontendDat
                 </p>
               </div>
             )}
+
+            {/* ── Section 4: match-cut verdict + accept-break (Phase 1D.1) ── */}
+            {isMatchCutShot && (() => {
+              const verdict = stageOutput?.match_cut_verdicts?.[shot.shot_id]
+              const nextShot = data.shots[idx + 1]!
+              const isLoading = acceptBreakLoading[shot.shot_id] ?? false
+
+              const strengthChipClass =
+                verdict?.match_strength === "strong"
+                  ? "bg-green-500/20 text-green-300"
+                  : verdict?.match_strength === "moderate"
+                    ? "bg-amber-500/20 text-amber-300"
+                    : verdict?.match_strength === "weak"
+                      ? "bg-orange-500/20 text-orange-300"
+                      : verdict?.match_strength === "break"
+                        ? "bg-red-500/20 text-red-300"
+                        : "bg-zinc-500/20 text-zinc-400"
+
+              return (
+                <div className="border-l-2 border-amber-400 pl-3 my-2 space-y-2">
+                  <Label className="text-xs font-semibold">Match Cut</Label>
+
+                  {/* Side-by-side thumbnails */}
+                  <div className="flex gap-2">
+                    {shot.keyframe_url && (
+                      <img
+                        src={shot.keyframe_url}
+                        alt={`Shot ${shot.shot_id} keyframe`}
+                        className="w-24 h-14 object-cover rounded"
+                      />
+                    )}
+                    {nextShot.keyframe_url && (
+                      <img
+                        src={nextShot.keyframe_url}
+                        alt={`Shot ${nextShot.shot_id} keyframe`}
+                        className="w-24 h-14 object-cover rounded"
+                      />
+                    )}
+                  </div>
+
+                  {/* Verdict chip + actions */}
+                  {!verdict ? (
+                    <p className="text-xs text-zinc-500 italic">Pending critic verdict…</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <span
+                        className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${strengthChipClass}`}
+                      >
+                        {verdict.match_strength}
+                      </span>
+
+                      {verdict.match_strength === "break" &&
+                        !shot.accepted_match_cut_break && (
+                          <div className="space-y-1">
+                            <p className="text-xs text-zinc-400">{verdict.suggested_adjustments}</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              disabled={isLoading || !pipelineId || !sceneEntityId}
+                              onClick={() => {
+                                if (!pipelineId || !sceneEntityId) return
+                                setAcceptBreakLoading((prev) => ({
+                                  ...prev,
+                                  [shot.shot_id]: true,
+                                }))
+                                pipelinesApi
+                                  .acceptMatchCutBreak(pipelineId, sceneEntityId, shot.shot_id)
+                                  .then(() => {
+                                    patchShot(shot.shot_id, { accepted_match_cut_break: true })
+                                  })
+                                  .finally(() => {
+                                    setAcceptBreakLoading((prev) => ({
+                                      ...prev,
+                                      [shot.shot_id]: false,
+                                    }))
+                                  })
+                              }}
+                            >
+                              {isLoading ? "Accepting…" : "Accept break"}
+                            </Button>
+                          </div>
+                        )}
+
+                      {shot.accepted_match_cut_break && (
+                        <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400">
+                          Break accepted
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )
       })}

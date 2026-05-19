@@ -32,7 +32,8 @@ import type {
   OrchestratorContext,
 } from "../services/workflow-engine/types.js"
 import { WORKFLOW_TIMEOUT_MS } from "../services/workflow-engine/types.js"
-import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
+import { filterCloneNodes, PARAMETER_NODE_TYPES, getParameterPromptHint, locationMentionSlug } from "@nodaro/shared"
+import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
 import { migrateEdgeOutputMode } from "@nodaro/shared"
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "@nodaro/shared"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
@@ -125,6 +126,36 @@ async function cleanupStaleExecutions(): Promise<void> {
 
   if (reconciled > 0 || abandoned > 0) {
     console.log(`[orchestrator] Startup reconcile: ${reconciled} completed, ${abandoned} abandoned, ${rows.length - reconciled - abandoned} left for retry`)
+  }
+}
+
+/**
+ * When `data.selectedVariant` is set (e.g. `"weather/rain"` from app-input
+ * override), patch `data.sourceImageUrl` to the matching variant's URL so
+ * all downstream consumers (output-extractor, expandWiredLocationRefs
+ * canonical entry, frontend mirror) treat the variant as the canonical
+ * image for this run. Match uses `locationMentionSlug` on both sides so
+ * publisher-stored `"Light Rain"` (slug `light-rain`) matches an override
+ * of `"weather/light-rain"`. Mutates `data` in place; no-op on malformed
+ * input or unknown variant.
+ */
+function applyLocationVariantOverride(data: Record<string, unknown>): void {
+  const spec = typeof data.selectedVariant === "string" ? data.selectedVariant.trim() : ""
+  const slashAt = spec.indexOf("/")
+  if (slashAt <= 0) return
+  const bucket = spec.slice(0, slashAt)
+  if (!(LOCATION_VARIANT_BUCKETS as readonly string[]).includes(bucket)) return
+  const target = locationMentionSlug(spec.slice(slashAt + 1))
+  if (!target) return
+  const items = data[bucket]
+  if (!Array.isArray(items)) return
+  for (const it of items) {
+    const name = (it as { name?: unknown } | null)?.name
+    if (typeof name !== "string") continue
+    if (locationMentionSlug(name) !== target) continue
+    const url = (it as { url?: unknown }).url
+    if (typeof url === "string" && url) data.sourceImageUrl = url
+    return
   }
 }
 
@@ -292,32 +323,8 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           delete cleaned.generatedVideoUrl
           delete cleaned.generatedAudioUrl
           delete cleaned.generatedText
-          // Phase 2 #4 — when a location's `selectedVariant` was overridden
-          // (e.g. "weather/rain"), look up the matching variant's URL in the
-          // asset buckets and patch `sourceImageUrl` so all downstream
-          // consumers (output-extractor, payload-builder's
-          // expandWiredLocationRefs canonical entry, frontend mirror)
-          // treat the variant as the canonical image for this run.
-          if (node.type === "location" && typeof cleaned.selectedVariant === "string") {
-            const variantSpec = cleaned.selectedVariant.trim()
-            const slashAt = variantSpec.indexOf("/")
-            if (slashAt > 0) {
-              const bucket = variantSpec.slice(0, slashAt)
-              const variantName = variantSpec.slice(slashAt + 1).toLowerCase()
-              const BUCKET_KEYS = ["timeOfDay", "weather", "seasons", "angles", "lighting", "atmosphereMotions"]
-              if (BUCKET_KEYS.includes(bucket)) {
-                const items = cleaned[bucket]
-                if (Array.isArray(items)) {
-                  const match = items.find((it: unknown) => {
-                    const name = (it as { name?: unknown } | null)?.name
-                    return typeof name === "string" && name.toLowerCase() === variantName
-                  }) as { url?: string } | undefined
-                  if (match?.url) {
-                    cleaned.sourceImageUrl = match.url
-                  }
-                }
-              }
-            }
+          if (node.type === "location") {
+            applyLocationVariantOverride(cleaned)
           }
           node.data = cleaned
         }

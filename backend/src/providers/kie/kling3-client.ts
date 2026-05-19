@@ -256,11 +256,18 @@ export async function kling3Generate(
   return { taskId, videoUrl }
 }
 
-async function pollKling3Task(
+/**
+ * Poll an existing Kling 3.0 task until success / fail / max attempts.
+ * Exported so reconciliation handlers can resume polling a stuck task.
+ * `apiKey` is optional — defaults to `config.KIE_API_KEY`.
+ */
+export async function pollKling3Task(
   taskId: string,
-  apiKey: string,
+  apiKey?: string,
   onProgress?: (progress: number) => Promise<void> | void
 ): Promise<string> {
+  const resolvedKey = apiKey ?? config.KIE_API_KEY
+  if (!resolvedKey) throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
   const maxAttempts = MAX_POLL_ATTEMPTS_VIDEO
   let attempts = 0
 
@@ -272,7 +279,7 @@ async function pollKling3Task(
     try {
       detailResponse = await fetch(
         `${KIE_API_BASE}/api/v1/jobs/recordInfo?taskId=${taskId}`,
-        { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) }
+        { headers: { Authorization: `Bearer ${resolvedKey}` }, signal: AbortSignal.timeout(10_000) }
       )
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {

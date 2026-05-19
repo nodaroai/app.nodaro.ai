@@ -303,8 +303,8 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     jobId: string
     prompt: string
     sourceImageUrl: string
-    /** Phase 2 #2 — when set, the worker refines this existing clip via
-     *  video-to-video instead of running image-to-video from sourceImageUrl. */
+    /** When set, refine this clip via video-to-video instead of running
+     *  image-to-video from sourceImageUrl. */
     refineFromVideoUrl?: string
     provider?: string
     aspectRatio?: string
@@ -321,9 +321,6 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     providerKindForVideoModel(resolvedProvider),
   )
 
-  // Phase 2 #2 — Atmosphere motion refinement path. When `refineFromVideoUrl`
-  // is set we route to `videoToVideo` with the existing clip as input;
-  // otherwise the legacy image-to-video path from the source frame.
   const result = refineFromVideoUrl
     ? await videoToVideo(
         refineFromVideoUrl,

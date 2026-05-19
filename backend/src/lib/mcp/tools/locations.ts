@@ -681,12 +681,11 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
           .url()
           .optional()
           .describe(
-            "Phase 2 #2 refinement path: when set, the worker routes to " +
-            "video-to-video using THIS clip as the source instead of running " +
-            "image-to-video from `source_image_url`. Use this to iterate on " +
-            "an existing atmosphere clip with a new prompt (e.g. 'same shot " +
-            "but light rain instead of fog'). Routes through providers with " +
-            "the video-to-video capability (currently Wan 2.6 via KIE).",
+            "Refinement path: when set, route to video-to-video using THIS " +
+            "clip as the source instead of running image-to-video from " +
+            "`source_image_url`. Use to iterate on an existing atmosphere " +
+            "clip with a new prompt (e.g. 'same shot but light rain instead " +
+            "of fog'). Routes through providers with video-to-video capability.",
           ),
       },
       annotations: {

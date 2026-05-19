@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { X, Play, Maximize2, Minimize2, Loader2, FastForward } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-is-mobile"
@@ -14,6 +15,7 @@ const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-conf
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
+import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   NODE_DEFINITIONS,
   type ImageToVideoData,
@@ -399,6 +401,20 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
   update: (data: Record<string, unknown>) => void
   selectedNodeId: string | undefined
 }) {
+  // Phase 1D.1 — Stage 6 (scene_images) query for match-cut verdict display.
+  // Runs only when a scene node is selected and its data carries pipeline_id.
+  // Polls at 5 s intervals while the panel is open (same cadence as the
+  // pipeline-panel's script-stage query). Stops polling once the stage reaches
+  // "approved" (verdicts are immutable after that).
+  const scenePipelineId = nodeType === "scene" ? (nodeData.pipeline_id as string | undefined) : undefined
+  const { data: sceneImagesStage } = useQuery({
+    queryKey: ["pipeline-stage", scenePipelineId, "scene_images"],
+    queryFn: () => pipelinesApi.getStage(scenePipelineId!, "scene_images"),
+    enabled: Boolean(scenePipelineId),
+    refetchInterval: (q) => (q.state.data?.status === "approved" ? false : 5000),
+    retry: false,
+  })
+
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} />
     case "list": return <LoopConfig {...configProps} nodeId={selectedNodeId} singleColumn />
@@ -565,7 +581,12 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "face": return <FaceConfig {...configProps} />
     case "object": return <ObjectConfig {...configProps} />
     case "location": return <LocationConfig {...configProps} nodeId={selectedNodeId!} />
-    case "scene": return <SceneConfig {...configProps} />
+    case "scene": return (
+      <SceneConfig
+        {...configProps}
+        stageOutput={sceneImagesStage?.output as { match_cut_verdicts?: Record<string, import("@nodaro/shared").MatchCutVerdict>; match_cut_break_pending?: string[] } | undefined}
+      />
+    )
     case "generative-pipeline": return <GenerativePipelineConfig {...configProps} />
     default: return null
   }

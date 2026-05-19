@@ -106,10 +106,25 @@ export async function runLumaModifyTask(
 
   await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Luma]")
 
-  // Step 2: Poll for completion using Luma-specific endpoint
+  return pollLumaTask(taskId, MAX_POLL_ATTEMPTS_VIDEO)
+}
+
+/**
+ * Poll an existing Luma Modify task until success / fail / max attempts.
+ * Exported so reconciliation handlers can resume polling a stuck task.
+ */
+export async function pollLumaTask(
+  taskId: string,
+  maxAttempts: number = MAX_POLL_ATTEMPTS_VIDEO,
+): Promise<{ resultJson: KieResultJson }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
+  }
+
   // successFlag: 0=generating, 1=success, 2=create failed, 3=generate failed, 4=callback failed
   let attempts = 0
-  while (attempts < MAX_POLL_ATTEMPTS_VIDEO) {
+  while (attempts < maxAttempts) {
     attempts++
     await sleep(pollDelay(attempts))
 
@@ -215,7 +230,7 @@ export async function runLumaModifyTask(
   }
 
   throw createSanitizedError(
-    `Luma Modify task timed out after ${MAX_POLL_ATTEMPTS_VIDEO} poll attempts`,
+    `Luma Modify task timed out after ${maxAttempts} poll attempts`,
     "Video generation"
   )
 }

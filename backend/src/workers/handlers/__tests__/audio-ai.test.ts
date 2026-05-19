@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
+  const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
 
   const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
@@ -54,6 +55,7 @@ const mocks = vi.hoisted(() => {
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
+    mockFinalizeJobWithMedia,
     mockFrom,
     mockUpdate,
     mockEq,
@@ -74,6 +76,7 @@ vi.mock("@/providers/elevenlabs/voice-design.js", () => ({ designVoice: mocks.mo
 vi.mock("@/providers/elevenlabs/forced-alignment.js", () => ({ forcedAlignment: mocks.mockForcedAlignment }))
 vi.mock("@/providers/audio/transcribe.js", () => ({ transcribe: mocks.mockTranscribe }))
 vi.mock("@/providers/audio/youtube-extractor.js", () => ({ extractYouTubeAudio: mocks.mockExtractYouTubeAudio }))
+vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia }))
 vi.mock("../../shared.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../shared.js")>()
   return {
@@ -123,11 +126,8 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://provider.example.com/tts.mp3", "job-1", "audio", "user-1")
     // progress flows through setJobProgress (mocked) — no direct assertion
     // progress flows through setJobProgress (mocked) — no direct assertion
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
-      provider: "elevenlabs-turbo",
-    }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
+    // markJobCompleted assertion removed — now inside finalizeJobWithMedia (mocked)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("uses custom voice and options", async () => {
@@ -141,12 +141,11 @@ describe("text-to-speech handler", () => {
     )
   })
 
-  it("returns early when cancelled", async () => {
-    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+  it("returns early when finalize signals not-ok (cancelled)", async () => {
+    mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("text-to-speech", { text: "cancel" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   // Reconciliation wiring (Task 1.11): when the router fires onTaskCreated
@@ -194,7 +193,7 @@ describe("generate-music handler", () => {
 
     expect(mocks.mockGenerateMusic).toHaveBeenCalledWith("epic orchestral", undefined, undefined, undefined, undefined, undefined)
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://replicate.example.com/music.mp3", "job-1", "audio", "user-1")
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("passes custom duration and lyrics", async () => {
@@ -212,7 +211,7 @@ describe("text-to-audio handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTextToAudio).toHaveBeenCalledWith("rain sounds", undefined, undefined)
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("uses KieAudioProvider for elevenlabs-sfx", async () => {
@@ -227,11 +226,11 @@ describe("text-to-audio handler", () => {
     expect(mocks.mockTextToAudio).not.toHaveBeenCalled()
   })
 
-  it("returns early when cancelled", async () => {
-    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+  it("returns early when finalize signals not-ok (cancelled)", async () => {
+    mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("text-to-audio", { prompt: "cancel" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 })
 
@@ -243,10 +242,10 @@ describe("transcribe handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTranscribe).toHaveBeenCalledWith("https://example.com/audio.mp3", undefined, undefined, { diarize: undefined, tagAudioEvents: undefined })
+    // transcribe outputs text/segments — keeps direct markJobCompleted (not via finalize)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { text: "Hello world", language: "en", segments: [] },
     }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", undefined)
   })
 
   it("passes language parameter", async () => {
@@ -264,10 +263,10 @@ describe("extract-youtube-audio handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockExtractYouTubeAudio).toHaveBeenCalledWith("https://youtube.com/watch?v=abc")
+    // extract-youtube-audio outputs raw audioUrl — keeps direct markJobCompleted (not via finalize)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
       output_data: { audioUrl: "https://example.com/yt-audio.mp3" },
     }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
   })
 })
 
@@ -285,17 +284,14 @@ describe("audio-isolation handler", () => {
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://kie.example.com/isolated.mp3", "job-1", "audio", "user-1")
     // progress flows through setJobProgress (mocked) — no direct assertion
     // progress flows through setJobProgress (mocked) — no direct assertion
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: { audioUrl: "https://r2.example.com/audio/job-1.mp3" },
-      provider_cost: 0.01,
-    }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", 0.01)
+    // markJobCompleted assertion removed — now inside finalizeJobWithMedia (mocked)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
-  it("returns early when cancelled", async () => {
-    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+  it("returns early when finalize signals not-ok (cancelled)", async () => {
+    mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 })

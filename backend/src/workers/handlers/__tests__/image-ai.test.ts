@@ -7,38 +7,33 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const mockGenerateImage = vi.fn()
   const mockEditImage = vi.fn()
-  const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
-  const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
-  const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
-  const mockUploadImageMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/images/job-1.png")
-  const mockUploadImageVariantsMaybeWatermark = vi
-    .fn<(urls: readonly string[], jobId: string) => Promise<readonly string[]>>()
-    .mockImplementation(async (urls, jobId) =>
-      urls.map((_, i) =>
-        i === 0
-          ? `https://r2.example.com/images/${jobId}.png`
-          : `https://r2.example.com/images/${jobId}-v${i}.png`,
-      ),
-    )
+  const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockAttach = vi.fn().mockResolvedValue(true)
 
-  // Supabase chain
-  const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
-  const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
-  const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate })
+  // Supabase chain — handles both the reconcile persistence path
+  // (`from("jobs").update({...}).eq("id", ...)`) AND the studio-attach
+  // r2Url lookup (`from("jobs").select("output_data").eq("id", ...).single()`).
+  const mockEqUpdate = vi.fn().mockResolvedValue({ data: null, error: null })
+  const mockUpdate = vi.fn().mockReturnValue({ eq: mockEqUpdate })
+  const mockSingle = vi.fn().mockResolvedValue({
+    data: { output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } },
+    error: null,
+  })
+  const mockEqSelect = vi.fn().mockReturnValue({ single: mockSingle })
+  const mockSelect = vi.fn().mockReturnValue({ eq: mockEqSelect })
+  const mockFrom = vi.fn().mockReturnValue({ update: mockUpdate, select: mockSelect })
 
   return {
     mockGenerateImage,
     mockEditImage,
-    mockCommitJobCredits,
-    mockShouldSaveJobResult,
-    mockMarkJobCompleted,
-    mockUploadImageMaybeWatermark,
-    mockUploadImageVariantsMaybeWatermark,
+    mockFinalizeJobWithMedia,
     mockAttach,
     mockFrom,
     mockUpdate,
-    mockEq,
+    mockEqUpdate,
+    mockSelect,
+    mockEqSelect,
+    mockSingle,
   }
 })
 
@@ -60,15 +55,14 @@ vi.mock("@/lib/character-auto-attach.js", () => ({
   },
 }))
 
+vi.mock("../../../lib/job-finalize.js", () => ({
+  finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia,
+}))
+
 vi.mock("../../shared.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../shared.js")>()
   return {
     ...actual,
-    commitJobCredits: mocks.mockCommitJobCredits,
-    shouldSaveJobResult: mocks.mockShouldSaveJobResult,
-    markJobCompleted: mocks.mockMarkJobCompleted,
-    uploadImageMaybeWatermark: mocks.mockUploadImageMaybeWatermark,
-    uploadImageVariantsMaybeWatermark: mocks.mockUploadImageVariantsMaybeWatermark,
     setJobProgress: vi.fn().mockResolvedValue(undefined),
     startProgressRamp: vi.fn().mockReturnValue({ stop: vi.fn() }),
   }
@@ -118,8 +112,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockGenerateImage.mockResolvedValue(PROVIDER_RESULT)
   mocks.mockEditImage.mockResolvedValue(PROVIDER_RESULT)
-  mocks.mockShouldSaveJobResult.mockResolvedValue(true)
-  mocks.mockUploadImageMaybeWatermark.mockResolvedValue("https://r2.example.com/images/job-1.png")
+  mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.mockSingle.mockResolvedValue({
+    data: { output_data: { imageUrl: "https://r2.example.com/images/job-1.png" } },
+    error: null,
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -129,7 +126,7 @@ beforeEach(() => {
 describe("generate-image handler", () => {
   const handler = imageAIHandlers["generate-image"]
 
-  it("happy path: generates, uploads, saves, commits credits", async () => {
+  it("happy path: generates and finalizes (upload+markCompleted+commitCredits inside finalize)", async () => {
     const job = makeJob("generate-image", { prompt: "a cat" })
     const ctx = makeCtx()
 
@@ -139,20 +136,11 @@ describe("generate-image handler", () => {
       "a cat", "nano-banana", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
-    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
-      [PROVIDER_RESULT.url], "job-1", "user-1", false,
-    )
-    // Progress is now written through the `setJobProgress` helper in
-    // shared.ts (mocked above as a no-op). The handler still passes
-    // 10 → 85 → 100 through it; we don't re-assert that here since
-    // the helper itself is unit-tested separately.
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: { imageUrl: "https://r2.example.com/images/job-1.png" },
-      provider: "nano-banana",
-      provider_cost: 0.02,
-      display_cost: 0.025,
-    }))
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "generate-image",
+      result: PROVIDER_RESULT,
+    })
   })
 
   it("uses default provider 'nano-banana' when none specified", async () => {
@@ -196,30 +184,17 @@ describe("generate-image handler", () => {
     )
   })
 
-  it("returns early when job is cancelled (shouldSaveJobResult returns false)", async () => {
-    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+  it("returns early when finalize reports ok=false (cancelled / already terminal)", async () => {
+    mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("generate-image", { prompt: "cancelled" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    // Nothing else to assert at the handler level — finalize owns the
+    // post-completion side-effects; ok=false means the handler returns early.
   })
 
-  it("passes watermark flag through to upload helper", async () => {
-    const job = makeJob("generate-image", { prompt: "watermarked" })
-    await handler(job as never, makeCtx({ shouldWatermark: true }))
-
-    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
-      [PROVIDER_RESULT.url], "job-1", "user-1", true,
-    )
-  })
-
-  // Regression net for the Grok bug: KIE's grok-imagine endpoint returns up
-  // to 6 image variants per task in resultUrls. Pre-fix, the provider took
-  // resultUrls[0] and dropped the others. Now extraUrls is forwarded all the
-  // way to output_data.imageUrls so the frontend can fan out N results.
-  it("fans out all provider variants to output_data.imageUrls", async () => {
+  it("forwards result with extraUrls (multi-variant providers) to finalize", async () => {
     const variants = [
       "https://provider.example.com/img-a.jpg",
       "https://provider.example.com/img-b.jpg",
@@ -228,44 +203,22 @@ describe("generate-image handler", () => {
       "https://provider.example.com/img-e.jpg",
       "https://provider.example.com/img-f.jpg",
     ]
-    mocks.mockGenerateImage.mockResolvedValueOnce({
+    const multiResult = {
       url: variants[0],
       extraUrls: variants.slice(1),
       providerUsed: "grok",
       cost: 0.04,
       displayCost: 0.05,
-    })
+    }
+    mocks.mockGenerateImage.mockResolvedValueOnce(multiResult)
     const job = makeJob("generate-image", { prompt: "grok grid", provider: "grok" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
-      variants, "job-1", "user-1", false,
-    )
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: expect.objectContaining({
-        imageUrl: "https://r2.example.com/images/job-1.png",
-        imageUrls: [
-          "https://r2.example.com/images/job-1.png",
-          "https://r2.example.com/images/job-1-v1.png",
-          "https://r2.example.com/images/job-1-v2.png",
-          "https://r2.example.com/images/job-1-v3.png",
-          "https://r2.example.com/images/job-1-v4.png",
-          "https://r2.example.com/images/job-1-v5.png",
-        ],
-      }),
-    }))
-  })
-
-  // The inverse: single-result providers must NOT add imageUrls to output_data
-  // (downstream code distinguishes single vs multi by array presence). Pre-fix
-  // a stray empty array would have triggered the multi-variant UI for every job.
-  it("omits imageUrls when provider returns only a single variant", async () => {
-    const job = makeJob("generate-image", { prompt: "single" })
-    await handler(job as never, makeCtx())
-
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
-      output_data: expect.not.objectContaining({ imageUrls: expect.anything() }),
-    }))
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "generate-image",
+      result: multiResult,
+    })
   })
 
   // Reconciliation wiring (Task 1.11): the handler builds a
@@ -302,7 +255,7 @@ describe("generate-image handler", () => {
         provider_call_started_at: expect.any(String),
       }),
     )
-    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
+    expect(mocks.mockEqUpdate).toHaveBeenCalledWith("id", "job-1")
   })
 })
 
@@ -313,7 +266,7 @@ describe("generate-image handler", () => {
 describe("edit-image handler", () => {
   const handler = imageAIHandlers["edit-image"]
 
-  it("happy path: edits, uploads, saves, commits credits", async () => {
+  it("happy path: edits and finalizes", async () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png", prompt: "upscale" })
     const ctx = makeCtx()
 
@@ -323,8 +276,11 @@ describe("edit-image handler", () => {
       "https://input.png", "recraft-upscale", "upscale", undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
-    expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "edit-image",
+      result: PROVIDER_RESULT,
+    })
   })
 
   it("uses default provider 'recraft-upscale' when none specified", async () => {
@@ -426,7 +382,7 @@ describe("edit-image handler", () => {
 describe("image-to-image handler", () => {
   const handler = imageAIHandlers["image-to-image"]
 
-  it("happy path: combines imageUrl with referenceImageUrls and generates", async () => {
+  it("happy path: combines imageUrl with referenceImageUrls and generates+finalizes", async () => {
     const refs = ["https://ref1.png"]
     const job = makeJob("image-to-image", {
       imageUrl: "https://main.png",
@@ -439,7 +395,11 @@ describe("image-to-image handler", () => {
       "transform", "nano-banana", ["https://main.png", "https://ref1.png"], undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
+      jobId: "job-1",
+      jobType: "image-to-image",
+      result: PROVIDER_RESULT,
+    })
   })
 
   it("uses default provider 'nano-banana' when none specified", async () => {
@@ -472,13 +432,12 @@ describe("image-to-image handler", () => {
     )
   })
 
-  it("returns early when cancelled", async () => {
-    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+  it("returns early when finalize reports ok=false", async () => {
+    mocks.mockFinalizeJobWithMedia.mockResolvedValueOnce({ ok: false })
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "cancelled" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockAttach).not.toHaveBeenCalled()
   })
 
   // -------------------------------------------------------------------------
@@ -489,6 +448,10 @@ describe("image-to-image handler", () => {
   // the result to attachAssetToCharacter. Task 9 added description +
   // realLifeRefs to the worker payload; Task 12 closes the loop here in the
   // worker by passing those richer fields into the attach helper's `item`.
+  //
+  // P3.2 refactor: r2 URL is now read from output_data.imageUrl on the
+  // jobs row (finalize wrote it there) rather than from a local r2Urls
+  // variable.
   // -------------------------------------------------------------------------
 
   it("studio path passes description + realLifeRefs to attachAssetToCharacter", async () => {

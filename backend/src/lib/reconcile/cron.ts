@@ -10,8 +10,10 @@ import { sweepStaleSyncJob } from "./sync-sweep.js"
 export interface ReconcileResult {
   scanned: number
   swept: number
-  /** Async kinds (KIE/Replicate/ElevenLabs) detected but not yet recoverable
-   *  — per-provider recovery handlers are not in this scope. */
+  /** Async kinds successfully dispatched to a per-provider handler. */
+  recovered: number
+  /** Async kinds with no matching handler (e.g., kie-suno today). Bumped
+   *  in attempts by the handler; cron just counts. */
   skippedAsync: number
   notStale: number
   errors: number
@@ -34,7 +36,22 @@ interface CandidateRow {
   provider_task_id: string | null
   provider_call_started_at: string | null
   reconcile_attempts: number
+  job_type: string | null
+  input_data: Record<string, unknown> | null
 }
+
+const KIE_KINDS: ReadonlySet<string> = new Set([
+  "kie-standard", "kie-veo", "kie-suno", "kie-kontext", "kie-luma",
+  "kie-kling3", "kie-runway", "kie-lip-sync",
+])
+
+const REPLICATE_KINDS: ReadonlySet<string> = new Set([
+  "replicate-prediction", "replicate-training",
+])
+
+const ELEVENLABS_KINDS: ReadonlySet<string> = new Set([
+  "elevenlabs-async",
+])
 
 function sqlCutoff(): string {
   return new Date(Date.now() - SQL_PREFILTER_BUFFER_MS).toISOString()
@@ -52,14 +69,20 @@ function isStale(row: CandidateRow): boolean {
 /**
  * Reconciliation cron entrypoint. Scans inflight `jobs` rows whose
  * `provider_call_started_at` is past their kind's threshold and dispatches
- * by `provider_kind`. Sync kinds + null kind get swept (mark failed +
- * refund); async kinds are counted as `skippedAsync` until per-provider
- * recovery handlers land.
+ * by `provider_kind`:
+ *   - sync kinds + null → sweepStaleSyncJob (mark failed + refund)
+ *   - kie-* → reconcileKieJob
+ *   - replicate-* → reconcileReplicateJob
+ *   - elevenlabs-async → reconcileElevenLabsJob
+ *
+ * Async per-provider handlers either complete the job (via finalizeJobWithMedia),
+ * fail it (markFailed + refund), or bump reconcile_attempts and try next tick.
  */
 export async function reconcileInflightJobs(): Promise<ReconcileResult> {
   const result: ReconcileResult = {
     scanned: 0,
     swept: 0,
+    recovered: 0,
     skippedAsync: 0,
     notStale: 0,
     errors: 0,
@@ -67,7 +90,7 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts")
+    .select("id, provider_kind, provider_task_id, provider_call_started_at, reconcile_attempts, job_type, input_data")
     .in("status", ["pending", "processing"])
     .not("provider_call_started_at", "is", null)
     .lt("provider_call_started_at", sqlCutoff())
@@ -89,20 +112,51 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
 
     const kind = row.provider_kind as ProviderKind | null
 
-    if (kind === null || isSyncKind(kind)) {
-      try {
+    try {
+      if (kind === null || isSyncKind(kind)) {
         await sweepStaleSyncJob({
           id: row.id,
           provider_kind: row.provider_kind,
           reconcile_attempts: row.reconcile_attempts,
         })
         result.swept++
-      } catch (err) {
-        console.error(`[reconcile/cron] sweep failed for job ${row.id}:`, err)
-        result.errors++
+      } else if (KIE_KINDS.has(kind)) {
+        const { reconcileKieJob } = await import("./kie.js")
+        await reconcileKieJob({
+          id: row.id,
+          provider_kind: row.provider_kind,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
+        })
+        result.recovered++
+      } else if (REPLICATE_KINDS.has(kind)) {
+        const { reconcileReplicateJob } = await import("./replicate.js")
+        await reconcileReplicateJob({
+          id: row.id,
+          provider_kind: row.provider_kind,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
+        })
+        result.recovered++
+      } else if (ELEVENLABS_KINDS.has(kind)) {
+        const { reconcileElevenLabsJob } = await import("./elevenlabs.js")
+        await reconcileElevenLabsJob({
+          id: row.id,
+          provider_kind: row.provider_kind,
+          provider_task_id: row.provider_task_id,
+          reconcile_attempts: row.reconcile_attempts,
+          job_type: row.job_type,
+          input_data: row.input_data,
+        })
+        result.recovered++
+      } else {
+        result.skippedAsync++
       }
-    } else {
-      result.skippedAsync++
+    } catch (err) {
+      console.error(`[reconcile/cron] handler failed for job ${row.id}:`, err)
+      result.errors++
     }
   }
 

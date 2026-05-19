@@ -34,14 +34,8 @@ export const generateLocationMotionBody = z.object({
   sourceImageUrl: safeUrlSchema,
   provider: z.enum(LOCATION_ATMOSPHERE_PROVIDERS).optional().default("kling"),
   name: z.string().min(1).max(200),
-  // Phase 2 #2 — Atmosphere motion clip refinement (video-to-video).
-  // When set, the worker uses the existing clip as the SOURCE VIDEO for a
-  // video-to-video refinement instead of running image-to-video from the
-  // source frame. The `sourceImageUrl` still has to be provided (Zod can't
-  // distinguish required-only-when-absent in a single shape), but it's
-  // ignored on this path — the worker reads `refineFromVideoUrl` first.
-  // Routes to providers with `video-to-video` capability (currently Wan 2.6
-  // via KIE; mock provider in tests).
+  // When set, worker routes to video-to-video using this clip as the
+  // source instead of running image-to-video from sourceImageUrl.
   refineFromVideoUrl: safeUrlSchema.optional(),
   // Optional descriptive context for `buildLocationMotionPrompt`. The
   // canonical description is preferred when present; the helper falls back to

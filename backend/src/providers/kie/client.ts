@@ -681,7 +681,21 @@ export interface VeoPollResult {
  * Shared VEO record-info polling loop.
  * Polls GET /api/v1/veo/record-info?taskId= until successFlag=1 (success) or 2/3 (failure).
  * Returns resultUrls + raw response on success; throws on failure or timeout.
+ *
+ * Exported wrapper for reconciliation handlers. `label` distinguishes log
+ * lines between "VEO", "VEO Extend", and "VEO 4K"; defaults to "VEO".
+ * `apiKey` defaults to `config.KIE_API_KEY`.
  */
+export async function pollVeoTask(
+  taskId: string,
+  label: string = "VEO",
+  apiKey?: string,
+): Promise<VeoPollResult> {
+  const resolvedKey = apiKey ?? config.KIE_API_KEY
+  if (!resolvedKey) throw createSanitizedError("KIE_API_KEY is not configured", "Video generation")
+  return pollVeoRecordInfo(taskId, label, resolvedKey)
+}
+
 async function pollVeoRecordInfo(
   taskId: string,
   label: string,

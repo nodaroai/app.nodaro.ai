@@ -103,12 +103,25 @@ export async function runFluxKontextTask(
 
   await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Kontext]")
 
-  // Step 2: Poll for completion with exponential backoff
-  // Uses successFlag pattern (same as VEO):
-  //   0 = generating, 1 = success, 2 = create task failed, 3 = generate failed
-  // Result at data.response.resultImageUrl
+  return pollKontextTask(taskId, MAX_POLL_ATTEMPTS)
+}
+
+/**
+ * Poll an existing Kontext task until success / fail / max attempts.
+ * Exported so reconciliation handlers can resume polling a task whose
+ * worker died mid-poll.
+ */
+export async function pollKontextTask(
+  taskId: string,
+  maxAttempts: number = MAX_POLL_ATTEMPTS,
+): Promise<{ resultJson: KieResultJson }> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Image generation")
+  }
+
   let attempts = 0
-  while (attempts < MAX_POLL_ATTEMPTS) {
+  while (attempts < maxAttempts) {
     attempts++
     await sleep(pollDelay(attempts))
 
@@ -184,7 +197,7 @@ export async function runFluxKontextTask(
   }
 
   throw createSanitizedError(
-    `Kontext task timed out after ${MAX_POLL_ATTEMPTS} poll attempts`,
+    `Kontext task timed out after ${maxAttempts} poll attempts`,
     "Image generation"
   )
 }

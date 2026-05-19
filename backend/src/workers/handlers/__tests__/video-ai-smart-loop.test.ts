@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
+  const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
@@ -42,6 +43,7 @@ const mocks = vi.hoisted(() => {
     mockWatermarkLocalVideoAndUpload,
     mockGenerateAndUploadThumbnail,
     mockSetJobProgress,
+    mockFinalizeJobWithMedia,
     mockFrom,
   }
 })
@@ -77,6 +79,10 @@ vi.mock("@/providers/video/ffmpeg-utils.js", () => ({
   createWorkDir: vi.fn().mockResolvedValue("/tmp/workdir"),
   downloadFile: vi.fn().mockResolvedValue(undefined),
   stripAudio: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock("../../../lib/job-finalize.js", () => ({
+  finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia,
 }))
 
 vi.mock("../../shared.js", async (importOriginal) => {
@@ -205,8 +211,8 @@ describe("image-to-video handler — smart-loop-cut", () => {
     )
 
     // Job still completes
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    // commitJobCredits now lives inside finalizeJobWithMedia (mocked above)
   })
 
   it("skips smart-loop-cut when loopTrim is undefined", async () => {
@@ -220,7 +226,7 @@ describe("image-to-video handler — smart-loop-cut", () => {
 
     expect(mocks.mockApplySmartLoopCut).not.toHaveBeenCalled()
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("skips smart-loop-cut when loopTrim.enabled is false", async () => {
@@ -235,7 +241,7 @@ describe("image-to-video handler — smart-loop-cut", () => {
 
     expect(mocks.mockApplySmartLoopCut).not.toHaveBeenCalled()
     expect(mocks.mockRefundLoopTrimAddon).not.toHaveBeenCalled()
-    expect(mocks.mockMarkJobCompleted).toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("forwards outputSilent=true when sound=false", async () => {

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
   const mockMarkJobCompleted = vi.fn().mockResolvedValue(true)
+  const mockFinalizeJobWithMedia = vi.fn().mockResolvedValue({ ok: true })
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   const mockWatermarkLocalVideoAndUpload = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1-merged.mp4")
   const mockGenerateAndUploadThumbnail = vi.fn().mockResolvedValue("https://r2.example.com/thumbnails/job-1.png")
@@ -52,6 +53,7 @@ const mocks = vi.hoisted(() => {
     mockUploadVideoMaybeWatermark,
     mockWatermarkLocalVideoAndUpload,
     mockGenerateAndUploadThumbnail,
+    mockFinalizeJobWithMedia,
     mockFrom,
     mockUpdate,
     mockEq,
@@ -104,6 +106,10 @@ vi.mock("@/providers/kie/video.js", () => ({
   KieVideoProvider: class {
     speechToVideo = mocks.mockSpeechToVideo
   },
+}))
+
+vi.mock("../../../lib/job-finalize.js", () => ({
+  finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia,
 }))
 
 // ---------------------------------------------------------------------------
@@ -188,7 +194,7 @@ describe("image-to-video handler", () => {
       VIDEO_RESULT.url, "job-1", "user-1", false,
     )
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("audio merge branch: uploads raw → merges → watermarks local", async () => {
@@ -361,7 +367,7 @@ describe("video-to-video handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("uses default provider 'wan' when none specified", async () => {
@@ -404,7 +410,7 @@ describe("text-to-video handler", () => {
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("uses default provider 'minimax' when none specified", async () => {
@@ -461,7 +467,7 @@ describe("lip-sync handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("uses default provider 'kling-avatar' when none specified", async () => {
@@ -518,7 +524,7 @@ describe("motion-transfer handler", () => {
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("always uses hardcoded 'kling' provider", async () => {
@@ -589,7 +595,7 @@ describe("video-upscale handler", () => {
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("always uses hardcoded 'topaz' provider", async () => {
@@ -655,7 +661,7 @@ describe("speech-to-video handler", () => {
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
-    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", S2V_RESULT.cost)
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 
   it("passes resolution and optional params", async () => {

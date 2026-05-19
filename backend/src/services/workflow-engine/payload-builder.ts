@@ -314,7 +314,7 @@ function expandWiredCharacterRefs(
 }
 
 /** Location variant buckets — kept in sync with frontend LocationNodeData. */
-const LOCATION_VARIANT_BUCKETS = [
+export const LOCATION_VARIANT_BUCKETS = [
   "timeOfDay",
   "weather",
   "seasons",
@@ -334,53 +334,65 @@ const LOCATION_VARIANT_BUCKETS = [
  * `sourceImageUrl` — caller falls through to the existing wired-image flow.
  */
 /**
- * Phase 2 #1 — Smart variant selection.
- *
- * Common environmental terms that map to variant names a location might
- * have. When a user's prompt contains one of these keywords AND the
- * location has a matching variant, the smart matcher swaps that variant's
- * URL into the canonical slot so the model sees the right reference
- * without the user explicitly typing the variant slug.
- *
- * The match strategy: lowercase, word-boundary on the prompt; for each
- * variant on each bucket, check the variant's slugified name AND any
- * synonym in this table. Longest match wins so "twilight" beats "night".
- *
- * Conservative on the synonym table — the variant's own name is always
- * the primary match; synonyms only catch common English alternatives the
- * publisher might not have used as a literal name (publisher names like
- * "Light Rain" → match via "rain"; "Golden Hour" → match via "sunset"/
- * "evening"/"dusk" via synonyms keyed on "golden hour").
- *
- * Tied score: first match in bucket order (timeOfDay > weather > seasons
- * > angles > lighting > atmosphereMotions) — matches how publishers
- * typically order intent.
+ * Common environmental terms → publisher-named variant slug. The
+ * variant's own name is the primary match; synonyms catch common
+ * alternatives (e.g. `"Light Rain"` matches via `rain`, `"Golden Hour"`
+ * via `dusk`'s synonyms). Longest match wins so `twilight` beats `night`.
  */
 const VARIANT_SYNONYMS: Record<string, ReadonlyArray<string>> = {
-  // timeOfDay
   night: ["night", "nighttime", "midnight"],
   dusk: ["dusk", "sunset", "twilight", "golden hour"],
   dawn: ["dawn", "sunrise", "daybreak"],
   morning: ["morning"],
   noon: ["noon", "midday"],
   afternoon: ["afternoon"],
-  // weather
   rain: ["rain", "rainy", "raining", "rainfall", "downpour"],
   snow: ["snow", "snowy", "snowing", "snowfall", "blizzard"],
   fog: ["fog", "foggy", "misty", "mist", "haze"],
   clear: ["clear sky", "sunny", "cloudless"],
   storm: ["storm", "stormy", "thunderstorm", "thunder", "lightning"],
   cloudy: ["cloudy", "overcast"],
-  // seasons
   spring: ["spring"],
   summer: ["summer"],
   autumn: ["autumn", "fall foliage"],
   winter: ["winter"],
-  // lighting
   neon: ["neon", "neon-lit", "neon lights"],
   candlelit: ["candlelit", "candle", "candlelight"],
   moonlit: ["moonlit", "moonlight"],
   cinematic: ["cinematic"],
+}
+
+// Bucket priority: timeOfDay tends to be the most semantically load-bearing
+// modifier; atmosphereMotions are last because their names are usually
+// action phrases that don't appear in static prompts.
+const SMART_VARIANT_BUCKETS_BY_PRIORITY: ReadonlyArray<string> = [
+  "timeOfDay", "weather", "seasons", "lighting", "angles", "atmosphereMotions",
+]
+
+// Precompile term → regex at module load. Word-boundary `\b` is fine for
+// single-word terms; multi-word terms ("golden hour") use a relaxed
+// non-word boundary because `\b` doesn't sit between letter+space.
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+const SYNONYM_REGEXES: ReadonlyMap<string, RegExp> = (() => {
+  const m = new Map<string, RegExp>()
+  for (const terms of Object.values(VARIANT_SYNONYMS)) {
+    for (const term of terms) {
+      if (m.has(term)) continue
+      m.set(term, term.includes(" ")
+        ? new RegExp(`(^|\\W)${escapeRegex(term)}(\\W|$)`, "i")
+        : new RegExp(`\\b${escapeRegex(term)}\\b`, "i"))
+    }
+  }
+  return m
+})()
+function regexFor(term: string): RegExp {
+  const cached = SYNONYM_REGEXES.get(term)
+  if (cached) return cached
+  return term.includes(" ")
+    ? new RegExp(`(^|\\W)${escapeRegex(term)}(\\W|$)`, "i")
+    : new RegExp(`\\b${escapeRegex(term)}\\b`, "i")
 }
 
 function pickSmartVariant(
@@ -388,13 +400,8 @@ function pickSmartVariant(
   locData: Record<string, unknown>,
 ): { bucket: string; name: string; url: string } | null {
   if (!prompt) return null
-  const lowered = prompt.toLowerCase()
-  // Bucket order = intent priority. timeOfDay tends to be the most
-  // semantically-load-bearing modifier; atmosphereMotions are last because
-  // their names are usually action phrases that won't appear in static prompts.
-  const BUCKETS_BY_PRIORITY = ["timeOfDay", "weather", "seasons", "lighting", "angles", "atmosphereMotions"]
   let best: { bucket: string; name: string; url: string; len: number } | null = null
-  for (const bucket of BUCKETS_BY_PRIORITY) {
+  for (const bucket of SMART_VARIANT_BUCKETS_BY_PRIORITY) {
     const items = locData[bucket]
     if (!Array.isArray(items)) continue
     for (const item of items) {
@@ -402,17 +409,9 @@ function pickSmartVariant(
       const url = (item as { url?: unknown }).url
       if (typeof name !== "string" || typeof url !== "string" || !url) continue
       const slug = name.toLowerCase().trim()
-      // Match terms: the variant name itself plus any known synonyms.
       const matchTerms = [slug, ...(VARIANT_SYNONYMS[slug] ?? [])]
       for (const term of matchTerms) {
-        // Word-boundary match so "rain" doesn't trigger inside "drain" or
-        // "training". JS regex `\b` works on ASCII boundaries which is
-        // fine for English prompts; multi-word terms ("golden hour") need
-        // a relaxed match because `\b` doesn't sit between letter+space.
-        const re = term.includes(" ")
-          ? new RegExp(`(^|\\W)${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\W|$)`, "i")
-          : new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
-        if (re.test(lowered)) {
+        if (regexFor(term).test(prompt)) {
           if (!best || term.length > best.len) {
             best = { bucket, name, url, len: term.length }
           }
@@ -432,8 +431,6 @@ export function expandWiredLocationRefs(
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  // Phase 2 #1 — Smart variant selection. Look up the consumer node's
-  // prompt once; per-location matching happens below.
   const consumer = buildCtx.nodes.find((n) => n.id === consumerNodeId)
   const consumerPrompt =
     (consumer?.data?.prompt as string | undefined) ??
@@ -454,17 +451,11 @@ export function expandWiredLocationRefs(
     const canonicalDescription =
       (locData.canonicalDescription as string | null | undefined) ?? null
 
-    // Phase 2 #1 — Smart variant selection. If the user hasn't explicitly
-    // overridden via Phase 2 #4 `selectedVariant`, scan the consumer's
-    // prompt for keywords matching one of this location's variants and
-    // swap the canonical URL accordingly. Explicit selectedVariant always
-    // wins; only auto-match when none was provided.
-    const selectedVariant = locData.selectedVariant as string | undefined
-    if (!selectedVariant) {
+    // Smart variant selection — only fires when the user hasn't explicitly
+    // pinned a variant via `selectedVariant` (app-input override path).
+    if (!(locData.selectedVariant as string | undefined)) {
       const smart = pickSmartVariant(consumerPrompt, locData)
-      if (smart) {
-        sourceUrl = smart.url
-      }
+      if (smart) sourceUrl = smart.url
     }
 
     // Canonical entry — the main image URL.
