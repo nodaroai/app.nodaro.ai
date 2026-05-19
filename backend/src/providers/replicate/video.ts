@@ -10,8 +10,10 @@ import type {
   TextToVideoProvider,
   ProviderResult,
   ProviderOptions,
+  ReconcileOpts,
 } from "../provider.interface.js"
 import { replicate, extractUrl, extractCost } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 
 interface ReplicateVideoModelConfig {
   model: string
@@ -90,7 +92,8 @@ export class ReplicateVideoProvider
     model?: string,
     duration?: number,
     endFrameUrl?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const resolvedModel = model ?? "minimax"
     const cfg =
@@ -192,6 +195,7 @@ export class ReplicateVideoProvider
       model: cfg.model as `${string}/${string}`,
       input: replicateInput,
     })
+    await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:imageToVideo]")
     const completed = await replicate.wait(prediction)
     const output = completed.output
 
@@ -210,7 +214,8 @@ export class ReplicateVideoProvider
     model?: string,
     duration?: number,
     aspectRatio?: string,
-    _options?: ProviderOptions
+    _options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const resolvedModel = model ?? "minimax"
     const replicateModel =
@@ -231,6 +236,7 @@ export class ReplicateVideoProvider
         prompt_optimizer: true,
       },
     })
+    await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:textToVideo]")
     const completed = await replicate.wait(prediction)
     const output = completed.output
 

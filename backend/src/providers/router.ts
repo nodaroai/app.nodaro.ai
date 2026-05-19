@@ -19,6 +19,7 @@ import type {
   ProviderCapability,
   ProviderResult,
   ProviderOptions,
+  ReconcileOpts,
   ImageGenerationProvider,
   ImageToVideoProvider,
   TextToVideoProvider,
@@ -142,7 +143,8 @@ export async function generateImage(
   prompt: string,
   model: string,
   referenceImageUrls?: string[],
-  extraParams?: Record<string, unknown>
+  extraParams?: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "image-generation",
@@ -150,7 +152,7 @@ export async function generateImage(
     "generateImage",
     async (instance) => {
       const p = resolveModule<ImageGenerationProvider>(instance, "image")
-      return p.generateImage(prompt, referenceImageUrls, model, extraParams)
+      return p.generateImage(prompt, referenceImageUrls, model, extraParams, reconcileOpts)
     }
   )
 }
@@ -159,7 +161,8 @@ export async function editImage(
   imageUrl: string,
   model: string,
   prompt?: string,
-  extraParams?: Record<string, unknown>
+  extraParams?: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "image-editing",
@@ -167,7 +170,7 @@ export async function editImage(
     "editImage",
     async (instance) => {
       const p = resolveModule<ImageGenerationProvider & { editImage: ImageGenerationProvider["generateImage"] }>(instance, "image") as unknown as import("./provider.interface.js").ImageEditingProvider
-      return p.editImage(imageUrl, prompt, model, extraParams)
+      return p.editImage(imageUrl, prompt, model, extraParams, reconcileOpts)
     }
   )
 }
@@ -178,7 +181,8 @@ export async function imageToVideo(
   prompt?: string,
   duration?: number,
   endFrameUrl?: string,
-  options?: ProviderOptions
+  options?: ProviderOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "image-to-video",
@@ -186,7 +190,7 @@ export async function imageToVideo(
     "imageToVideo",
     async (instance) => {
       const p = resolveModule<ImageToVideoProvider>(instance, "video")
-      return p.imageToVideo(imageUrl, prompt, model, duration, endFrameUrl, options)
+      return p.imageToVideo(imageUrl, prompt, model, duration, endFrameUrl, options, reconcileOpts)
     }
   )
 }
@@ -196,7 +200,8 @@ export async function textToVideo(
   model: string,
   duration?: number,
   aspectRatio?: string,
-  options?: ProviderOptions
+  options?: ProviderOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "text-to-video",
@@ -204,7 +209,7 @@ export async function textToVideo(
     "textToVideo",
     async (instance) => {
       const p = resolveModule<TextToVideoProvider>(instance, "video")
-      return p.textToVideo(prompt, model, duration, aspectRatio, options)
+      return p.textToVideo(prompt, model, duration, aspectRatio, options, reconcileOpts)
     }
   )
 }
@@ -213,7 +218,8 @@ export async function videoToVideo(
   videoUrl: string,
   model: string,
   prompt?: string,
-  options?: ProviderOptions
+  options?: ProviderOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "video-to-video",
@@ -221,7 +227,7 @@ export async function videoToVideo(
     "videoToVideo",
     async (instance) => {
       const p = resolveModule<VideoToVideoProvider>(instance, "video")
-      return p.videoToVideo(videoUrl, prompt, model, options)
+      return p.videoToVideo(videoUrl, prompt, model, options, reconcileOpts)
     }
   )
 }
@@ -236,7 +242,8 @@ export async function motionTransfer(
     resolution?: "480p" | "580p" | "720p" | "1080p"
     provider?: string
     backgroundSource?: "input_video" | "input_image"
-  }
+  },
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "motion-transfer",
@@ -244,7 +251,7 @@ export async function motionTransfer(
     "motionTransfer",
     async (instance) => {
       const p = resolveModule<MotionTransferProvider>(instance, "video")
-      return p.motionTransfer(imageUrl, videoUrl, prompt, options)
+      return p.motionTransfer(imageUrl, videoUrl, prompt, options, reconcileOpts)
     }
   )
 }
@@ -253,7 +260,8 @@ export async function videoUpscale(
   videoUrl: string,
   model: string,
   upscaleFactor?: "1" | "2" | "4",
-  options?: ProviderOptions
+  options?: ProviderOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "video-upscale",
@@ -261,7 +269,7 @@ export async function videoUpscale(
     "videoUpscale",
     async (instance) => {
       const p = resolveModule<VideoUpscaleProvider>(instance, "video")
-      return p.videoUpscale(videoUrl, upscaleFactor, options)
+      return p.videoUpscale(videoUrl, upscaleFactor, options, reconcileOpts)
     }
   )
 }
@@ -272,7 +280,8 @@ export async function lipSync(
   model: string,
   prompt?: string,
   resolution?: string,
-  audioDurationSec?: number
+  audioDurationSec?: number,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "lip-sync",
@@ -280,7 +289,7 @@ export async function lipSync(
     "lipSync",
     async (instance) => {
       const p = resolveModule<LipSyncProvider>(instance, "video")
-      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec)
+      return p.lipSync(imageUrl, audioUrl, prompt, model, resolution, audioDurationSec, reconcileOpts)
     }
   )
 }
@@ -289,7 +298,8 @@ export async function generateMusic(
   prompt: string,
   model: string,
   duration?: number,
-  lyrics?: string
+  lyrics?: string,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "music-generation",
@@ -297,7 +307,7 @@ export async function generateMusic(
     "generateMusic",
     async (instance) => {
       const p = resolveModule<MusicGenerationProvider>(instance, "audio")
-      return p.generateMusic(prompt, model, duration, lyrics)
+      return p.generateMusic(prompt, model, duration, lyrics, reconcileOpts)
     }
   )
 }
@@ -306,7 +316,8 @@ export async function textToSpeech(
   text: string,
   model: string,
   voice?: string,
-  options?: TextToSpeechOptions
+  options?: TextToSpeechOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {
   return routeAndExecute(
     "text-to-speech",
@@ -314,7 +325,7 @@ export async function textToSpeech(
     "textToSpeech",
     async (instance) => {
       const p = resolveModule<TextToSpeechProvider>(instance, "audio")
-      return p.textToSpeech(text, voice, model, options)
+      return p.textToSpeech(text, voice, model, options, reconcileOpts)
     }
   )
 }

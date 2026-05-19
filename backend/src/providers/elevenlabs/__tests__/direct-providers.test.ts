@@ -615,6 +615,48 @@ describe("dubbing — startDubbing", () => {
   })
 })
 
+describe("dubbing — startDubbing onTaskCreated reconciliation hook", () => {
+  it("fires with the dubbing_id after the start POST returns", async () => {
+    fetchMock
+      .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
+      .mockResolvedValueOnce(jsonResponse({
+        dubbing_id: "el-dub-1",
+        expected_duration_sec: 30,
+      }))
+
+    let captured: string | null = null
+    const result = await startDubbing("https://x.test/a.mp3", "es", undefined, {
+      onTaskCreated: async (id) => {
+        captured = id
+      },
+    })
+
+    expect(captured).toBe("el-dub-1")
+    expect(result.dubbingId).toBe("el-dub-1")
+  })
+
+  it("swallows callback errors and still returns the start result", async () => {
+    fetchMock
+      .mockResolvedValueOnce(audioResponse(Buffer.from("audio")))
+      .mockResolvedValueOnce(jsonResponse({
+        dubbing_id: "el-dub-2",
+        expected_duration_sec: 10,
+      }))
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await startDubbing("https://x.test/a.mp3", "es", undefined, {
+      onTaskCreated: async () => {
+        throw new Error("persistence failed")
+      },
+    })
+
+    expect(result.dubbingId).toBe("el-dub-2")
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
 describe("dubbing — pollDubbingStatus", () => {
   it("GETs /v1/dubbing/{id} and returns parsed JSON", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({

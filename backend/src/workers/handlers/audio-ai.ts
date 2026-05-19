@@ -21,6 +21,8 @@ import {
   withProgressRamp,
   type HandlerFn,
 } from "../shared.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { providerKindForTtsModel } from "../../lib/reconcile/provider-kind.js"
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
   const { text, voice, provider, voiceType, stability, similarityBoost, style, speed, languageCode } = job.data as {
@@ -69,11 +71,16 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     return
   }
 
+  const resolvedTtsProvider = provider ?? "elevenlabs-turbo"
+  const ttsOnTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForTtsModel(resolvedTtsProvider),
+  )
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => routedTextToSpeech(processedText, provider ?? "elevenlabs-turbo", voice, hasOptions ? ttsOptions : undefined),
+    () => routedTextToSpeech(processedText, resolvedTtsProvider, voice, hasOptions ? ttsOptions : undefined, { onTaskCreated: ttsOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -120,6 +127,7 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
   }
   console.log(`[worker] text-to-audio ${ctx.jobId} (provider: ${provider ?? "tangoflux"})`)
 
+  const sfxOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const audioUrl: string = await withProgressRamp(
     job,
     ctx.jobId,
@@ -131,9 +139,11 @@ const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) 
           duration,
           loop,
           promptInfluence,
-        })
+        }, { onTaskCreated: sfxOnTaskCreated })
         return result.url
       }
+      // Replicate `replicate.run()` path (tangoflux) blocks until done; no
+      // early taskId is exposed, so no onTaskCreated wiring possible.
       return await textToAudio(prompt, provider as AudioProvider | undefined, duration)
     },
   )
@@ -203,11 +213,12 @@ const handleAudioIsolation: HandlerFn = async function handleAudioIsolation(job,
   const { audioUrl } = job.data as { jobId: string; audioUrl: string }
   console.log(`[worker] audio-isolation ${ctx.jobId}`)
   const kieAudio = new KieAudioProvider()
+  const audioIsoOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => kieAudio.isolateAudio(audioUrl),
+    () => kieAudio.isolateAudio(audioUrl, { onTaskCreated: audioIsoOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
@@ -231,6 +242,7 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   }
   console.log(`[worker] text-to-dialogue ${ctx.jobId} (${dialogue.length} lines)`)
   const kieAudio = new KieAudioProvider()
+  const dialogueOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
@@ -238,7 +250,7 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
     () => kieAudio.generateDialogue(dialogue, {
       stability,
       languageCode,
-    }),
+    }, { onTaskCreated: dialogueOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.url, ctx.jobId, "audio", ctx.jobUserId)
@@ -284,7 +296,13 @@ const handleDubbing: HandlerFn = async function handleDubbing(job, ctx) {
     sourceLanguage?: string; numSpeakers?: number
   }
   console.log(`[worker] dubbing ${ctx.jobId} (target: ${targetLanguage})`)
-  const { dubbingId } = await startDubbing(audioUrl, targetLanguage, { sourceLang: sourceLanguage, numSpeakers })
+  const dubbingOnTaskCreated = makeOnTaskCreated(ctx.jobId, "elevenlabs-async")
+  const { dubbingId } = await startDubbing(
+    audioUrl,
+    targetLanguage,
+    { sourceLang: sourceLanguage, numSpeakers },
+    { onTaskCreated: dubbingOnTaskCreated },
+  )
   await setJobProgress(job, ctx.jobId, 20)
 
   await waitForDubbing(dubbingId, (status) => {

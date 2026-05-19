@@ -23,11 +23,14 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
 export async function runLumaModifyTask(
   input: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson }> {
   const apiKey = config.KIE_API_KEY
 
@@ -100,6 +103,8 @@ export async function runLumaModifyTask(
 
   const taskId = createData.data.taskId
   console.log(`[KIE.ai Luma] Task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Luma]")
 
   // Step 2: Poll for completion using Luma-specific endpoint
   // successFlag: 0=generating, 1=success, 2=create failed, 3=generate failed, 4=callback failed

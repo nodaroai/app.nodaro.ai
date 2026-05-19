@@ -669,3 +669,169 @@ describe("auth headers", () => {
     },
   )
 })
+
+// ===========================================================================
+// 8) reconcileOpts.onTaskCreated — Phase 1 reconciliation hook
+// ===========================================================================
+//
+// Every task-creating function in these 4 special-endpoint clients creates a
+// fresh upstream KIE task and then polls. The Phase 1 reconciliation pipeline
+// needs a chance to persist `jobs.provider_task_id` BEFORE polling starts so
+// a worker crash mid-poll can be reconciled later. Same pattern as
+// runKieTask / runVeoTask.
+describe("onTaskCreated reconciliation hook", () => {
+  it("runFluxKontextTask calls onTaskCreated with the Kontext taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/flux/kontext/generate")) {
+        return jsonResponse({ code: 0, data: { taskId: "kx-recon-1" } })
+      }
+      if (url.includes("/flux/kontext/record-info")) {
+        pollCalled = true
+        expect(onTaskCreatedTaskId).toBe("kx-recon-1")
+        return jsonResponse({
+          data: { successFlag: 1, response: { resultImageUrl: "https://r2/x.png" } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => runFluxKontextTask("m", { prompt: "p" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("kx-recon-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("runLumaModifyTask calls onTaskCreated with the Luma taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/modify/generate")) {
+        return jsonResponse({ code: 0, data: { taskId: "lm-recon-1" } })
+      }
+      if (url.includes("/modify/record-info")) {
+        pollCalled = true
+        expect(onTaskCreatedTaskId).toBe("lm-recon-1")
+        return jsonResponse({
+          data: { successFlag: 1, response: { resultUrls: ["https://r2/v.mp4"] } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => runLumaModifyTask({ prompt: "p", videoUrl: "v" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("lm-recon-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("runRunwayTask calls onTaskCreated with the Runway taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/runway/generate")) {
+        return jsonResponse({ code: 0, data: { taskId: "rw-recon-1" } })
+      }
+      if (url.includes("/runway/record-detail")) {
+        pollCalled = true
+        expect(onTaskCreatedTaskId).toBe("rw-recon-1")
+        return jsonResponse({
+          data: { state: "success", videoInfo: { videoUrl: "https://r2/run.mp4" } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => runRunwayTask({ prompt: "p" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("rw-recon-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("runRunwayExtendTask calls onTaskCreated with its OWN new extend taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/runway/extend")) {
+        return jsonResponse({ code: 0, data: { taskId: "ext-recon-1" } })
+      }
+      if (url.includes("/runway/record-detail")) {
+        pollCalled = true
+        // The extend task creates its own fresh taskId — that's what gets
+        // persisted, not the parent taskId.
+        expect(onTaskCreatedTaskId).toBe("ext-recon-1")
+        return jsonResponse({
+          data: { state: "success", videoInfo: { videoUrl: "https://r2/ext.mp4" } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => runRunwayExtendTask("parent-task-id", "extend prompt", "720p", {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("ext-recon-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("runAlephTask calls onTaskCreated with the Aleph taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/aleph/generate")) {
+        return jsonResponse({ code: 0, data: { taskId: "al-recon-1" } })
+      }
+      if (url.includes("/aleph/record-info")) {
+        pollCalled = true
+        expect(onTaskCreatedTaskId).toBe("al-recon-1")
+        return jsonResponse({
+          data: { successFlag: 1, response: { resultVideoUrl: "https://r2/al.mp4" } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => runAlephTask({ prompt: "stylize", videoUrl: "in" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("al-recon-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("swallows errors thrown from onTaskCreated and still polls (Kontext)", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/flux/kontext/generate")) {
+        return jsonResponse({ code: 0, data: { taskId: "kx-err" } })
+      }
+      if (url.includes("/flux/kontext/record-info")) {
+        return jsonResponse({
+          data: { successFlag: 1, response: { resultImageUrl: "https://ok.png" } },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await withTimers(() => runFluxKontextTask("m", {}, {
+      onTaskCreated: async () => { throw new Error("db down") },
+    }))
+
+    expect(result.resultJson.resultUrls).toEqual(["https://ok.png"])
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+})

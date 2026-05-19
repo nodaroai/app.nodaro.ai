@@ -13,6 +13,7 @@ import { ASPECT_DIMENSIONS } from "../lib/aspect-dimensions.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const generateBody = z.object({
   prompt: z.string().min(1).max(2000),
@@ -90,6 +91,11 @@ export async function sceneGraphAIRoutes(app: FastifyInstance) {
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
         // Build user message with asset list

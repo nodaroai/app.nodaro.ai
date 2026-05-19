@@ -43,6 +43,16 @@ export type ProviderCapability =
 // Progress callback for long-running tasks
 export type ProgressCallback = (progress: number) => Promise<void>
 
+/**
+ * Optional reconciliation hooks every async provider call can plug into.
+ * The `onTaskCreated` callback fires after the upstream returns a taskId,
+ * before the poll loop — used to persist the taskId on the caller's job row
+ * so a crashed worker can be recovered.
+ */
+export interface ReconcileOpts {
+  onTaskCreated?: (taskId: string) => Promise<void>
+}
+
 // Standard options passed to all operations
 export interface ProviderOptions {
   onProgress?: ProgressCallback
@@ -91,7 +101,8 @@ export interface ImageGenerationProvider {
     prompt: string,
     referenceImageUrls?: string[],
     model?: string,
-    extraParams?: Record<string, unknown>
+    extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -100,7 +111,8 @@ export interface ImageEditingProvider {
     imageUrl: string,
     prompt?: string,
     model?: string,
-    extraParams?: Record<string, unknown>
+    extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -111,7 +123,8 @@ export interface ImageToVideoProvider {
     model?: string,
     duration?: number,
     endFrameUrl?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -121,7 +134,8 @@ export interface TextToVideoProvider {
     model?: string,
     duration?: number,
     aspectRatio?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -130,7 +144,8 @@ export interface VideoToVideoProvider {
     videoUrl: string,
     prompt?: string,
     model?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -144,7 +159,8 @@ export interface MotionTransferProvider {
       resolution?: "480p" | "580p" | "720p" | "1080p"
       provider?: string
       backgroundSource?: "input_video" | "input_image"
-    }
+    },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -152,7 +168,8 @@ export interface VideoUpscaleProvider {
   videoUpscale(
     videoUrl: string,
     upscaleFactor?: "1" | "2" | "4",
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -163,7 +180,8 @@ export interface LipSyncProvider {
     prompt?: string,
     model?: string,
     resolution?: string,
-    audioDurationSec?: number
+    audioDurationSec?: number,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -172,7 +190,8 @@ export interface MusicGenerationProvider {
     prompt: string,
     model?: string,
     duration?: number,
-    lyrics?: string
+    lyrics?: string,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 
@@ -189,7 +208,8 @@ export interface TextToSpeechProvider {
     text: string,
     voice?: string,
     model?: string,
-    options?: TextToSpeechOptions
+    options?: TextToSpeechOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult>
 }
 

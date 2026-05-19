@@ -11,6 +11,11 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import {
+  providerKindForImageModel,
+  providerKindForVideoModel,
+} from "../../lib/reconcile/provider-kind.js"
 import {
   attachAssetToCharacter,
   setCharacterPortrait,
@@ -91,7 +96,11 @@ function makeEntityImageHandler(
     // still pins 1:1 via opts because faces are always square crops.
     const effectiveAspectRatio = aspectRatio ?? opts?.aspectRatio
     const extraParams = effectiveAspectRatio ? { aspect_ratio: effectiveAspectRatio } : undefined
-    const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, extraParams)
+    const onTaskCreated = makeOnTaskCreated(
+      ctx.jobId,
+      providerKindForImageModel(resolvedProvider),
+    )
+    const result = await generateImage(prompt, resolvedProvider, referenceImageUrls, extraParams, { onTaskCreated })
     await setJobProgress(job, ctx.jobId, 50)
 
     const r2Url = await uploadImageMaybeWatermark(result.url, ctx.jobId, ctx.jobUserId, ctx.shouldWatermark)
@@ -212,6 +221,10 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
   // Pass the resolved aspect ratio (default 9:16 for motions, overridden by
   // the character node toggle or an explicit `aspectRatio`) through the
   // image-to-video provider chain via `options.aspectRatio`.
+  const onTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoModel(resolvedProvider),
+  )
   const result = await imageToVideo(
     sourceImageUrl,
     resolvedProvider,
@@ -219,6 +232,7 @@ const handleGenerateCharacterMotion: HandlerFn = async function handleGenerateCh
     undefined,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
+    { onTaskCreated },
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -297,6 +311,10 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
   const resolvedProvider = provider ?? "kling"
   console.log(`[worker] generate-location-motion ${ctx.jobId} (provider: ${resolvedProvider}): "${prompt}"`)
 
+  const onTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoModel(resolvedProvider),
+  )
   const result = await imageToVideo(
     sourceImageUrl,
     resolvedProvider,
@@ -304,6 +322,7 @@ const handleGenerateLocationMotion: HandlerFn = async function handleGenerateLoc
     undefined,
     undefined,
     aspectRatio ? { aspectRatio } : undefined,
+    { onTaskCreated },
   )
   await setJobProgress(job, ctx.jobId, 50)
 

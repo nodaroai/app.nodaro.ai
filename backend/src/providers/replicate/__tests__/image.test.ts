@@ -199,6 +199,44 @@ describe("ReplicateImageProvider.generateImage", () => {
       provider.generateImage("test", undefined, "totally-fake-model"),
     ).rejects.toThrow(/Unknown model/)
   })
+
+  it("calls onTaskCreated with the Replicate prediction.id before waiting", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let waitCalledAt = -1
+    let callbackFiredAt = -1
+    let counter = 0
+    mocks.mockCreate.mockResolvedValueOnce({ id: "rep-pred-1" })
+    mocks.mockWait.mockImplementationOnce(async () => {
+      waitCalledAt = counter++
+      return {
+        output: "https://replicate.example.com/image.png",
+        metrics: { predict_time: 2.5 },
+      }
+    })
+
+    await provider.generateImage("a cat", undefined, "flux-2-pro", undefined, {
+      onTaskCreated: async (id) => {
+        onTaskCreatedTaskId = id
+        callbackFiredAt = counter++
+      },
+    })
+
+    expect(onTaskCreatedTaskId).toBe("rep-pred-1")
+    // Callback must fire BEFORE wait
+    expect(callbackFiredAt).toBeLessThan(waitCalledAt)
+  })
+
+  it("does not fail the prediction if onTaskCreated throws", async () => {
+    mocks.mockCreate.mockResolvedValueOnce({ id: "rep-pred-2" })
+
+    const result = await provider.generateImage("a cat", undefined, "flux-2-klein", undefined, {
+      onTaskCreated: async () => {
+        throw new Error("persistence failed")
+      },
+    })
+
+    expect(result.url).toBe("https://replicate.example.com/image.png")
+  })
 })
 
 describe("kontext-multi via generateImage (image-to-image worker path)", () => {

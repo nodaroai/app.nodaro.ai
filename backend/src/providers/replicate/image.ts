@@ -10,8 +10,10 @@
 import type {
   ImageGenerationProvider,
   ProviderResult,
+  ReconcileOpts,
 } from "../provider.interface.js"
 import { replicate, extractUrl, extractCost } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { translateToEnglish } from "../../lib/translate.js"
 
 const DEFAULT_ASPECT_RATIO = "1:1"
@@ -158,6 +160,7 @@ async function runImagePrediction(
   model: string,
   referenceImageUrls?: string[],
   extraParams?: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<ProviderResult> {
   const spec = IMAGE_MODELS[model]
   if (!spec) {
@@ -192,6 +195,7 @@ async function runImagePrediction(
       input,
     })
   }
+  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:image]")
   const completed = await replicate.wait(prediction)
   const output = completed.output
 
@@ -219,8 +223,9 @@ export class ReplicateImageProvider implements ImageGenerationProvider {
     referenceImageUrls?: string[],
     model?: string,
     extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const resolved = model ?? REPLICATE_IMAGE_MODEL_IDS[0]
-    return runImagePrediction(prompt, resolved, referenceImageUrls, extraParams)
+    return runImagePrediction(prompt, resolved, referenceImageUrls, extraParams, reconcileOpts)
   }
 }

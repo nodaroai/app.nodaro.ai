@@ -13,7 +13,9 @@
  */
 
 import Replicate from "replicate"
+import type { ReconcileOpts } from "../provider.interface.js"
 import { extractUrl } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 
 // TODO: Verify the Grounded SAM model before enabling this feature.
 // The model "adirik/grounded-sam" returned 404 during development.
@@ -29,22 +31,27 @@ export async function runGroundedSam(
   textPrompt: string,
   boxThreshold: number,
   apiToken: string,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<string> {
   console.log(`[Replicate:groundedSam] image=${imageUrl.slice(0, 60)}...`)
   console.log(`[Replicate:groundedSam] prompt="${textPrompt}" boxThreshold=${boxThreshold}`)
 
   const replicate = new Replicate({ auth: apiToken })
 
-  const output = await replicate.run(
-    GROUNDED_SAM_MODEL,
-    {
-      input: {
-        image: imageUrl,
-        text_prompt: textPrompt,
-        box_threshold: boxThreshold,
-      },
+  // Decomposed from `replicate.run(...)` into `predictions.create` +
+  // `replicate.wait` so we can fire onTaskCreated with prediction.id before
+  // entering the poll loop (matches the rest of this provider).
+  const prediction = await replicate.predictions.create({
+    model: GROUNDED_SAM_MODEL,
+    input: {
+      image: imageUrl,
+      text_prompt: textPrompt,
+      box_threshold: boxThreshold,
     },
-  )
+  })
+  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:groundedSam]")
+  const completed = await replicate.wait(prediction)
+  const output = completed.output
 
   // Grounded SAM returns an array of output URLs; the mask PNG is the last
   // element (preceding entries are intermediate visualisations).

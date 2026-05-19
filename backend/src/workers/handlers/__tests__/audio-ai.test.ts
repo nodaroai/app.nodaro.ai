@@ -116,7 +116,10 @@ describe("text-to-speech handler", () => {
     const job = makeJob("text-to-speech", { text: "Hello world" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalledWith("Hello world", "elevenlabs-turbo", undefined, undefined)
+    expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalledWith(
+      "Hello world", "elevenlabs-turbo", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://provider.example.com/tts.mp3", "job-1", "audio", "user-1")
     // progress flows through setJobProgress (mocked) — no direct assertion
     // progress flows through setJobProgress (mocked) — no direct assertion
@@ -134,6 +137,7 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockRoutedTextToSpeech).toHaveBeenCalledWith(
       "Hi", "elevenlabs-turbo", "Daniel",
       expect.objectContaining({ stability: 0.5, speed: 1.2, languageCode: "en-US" }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -143,6 +147,41 @@ describe("text-to-speech handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+  })
+
+  // Reconciliation wiring (Task 1.11): when the router fires onTaskCreated
+  // with a taskId, the persistence layer writes provider_kind +
+  // provider_task_id + provider_call_started_at on the job row. KIE TTS
+  // (elevenlabs-turbo) routes through KIE standard so the kind is
+  // "kie-standard".
+  it("persists provider_kind + provider_task_id on the job row via makeOnTaskCreated", async () => {
+    mocks.mockRoutedTextToSpeech.mockImplementationOnce(
+      async (
+        _text: unknown,
+        _model: unknown,
+        _voice: unknown,
+        _options: unknown,
+        reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
+      ) => {
+        if (reconcileOpts?.onTaskCreated) {
+          await reconcileOpts.onTaskCreated("t-test")
+        }
+        return { url: "https://provider.example.com/tts.mp3", providerUsed: "elevenlabs-turbo", cost: 0.01, displayCost: 0.0125 }
+      },
+    )
+    const job = makeJob("text-to-speech", { text: "reconcile-me" })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "kie-standard",
+        provider_task_id: "t-test",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
   })
 })
 
@@ -180,9 +219,11 @@ describe("text-to-audio handler", () => {
     const job = makeJob("text-to-audio", { prompt: "explosion", provider: "elevenlabs-sfx", duration: 5, loop: true, promptInfluence: 0.8 })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockKieAudioProviderInstance.generateSoundEffect).toHaveBeenCalledWith("explosion", {
-      duration: 5, loop: true, promptInfluence: 0.8,
-    })
+    expect(mocks.mockKieAudioProviderInstance.generateSoundEffect).toHaveBeenCalledWith(
+      "explosion",
+      { duration: 5, loop: true, promptInfluence: 0.8 },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockTextToAudio).not.toHaveBeenCalled()
   })
 
@@ -237,7 +278,10 @@ describe("audio-isolation handler", () => {
     const job = makeJob("audio-isolation", { audioUrl: "https://example.com/song.mp3" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockKieAudioProviderInstance.isolateAudio).toHaveBeenCalledWith("https://example.com/song.mp3")
+    expect(mocks.mockKieAudioProviderInstance.isolateAudio).toHaveBeenCalledWith(
+      "https://example.com/song.mp3",
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadToR2).toHaveBeenCalledWith("https://kie.example.com/isolated.mp3", "job-1", "audio", "user-1")
     // progress flows through setJobProgress (mocked) — no direct assertion
     // progress flows through setJobProgress (mocked) — no direct assertion

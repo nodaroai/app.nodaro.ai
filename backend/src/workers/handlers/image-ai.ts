@@ -10,6 +10,8 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { attachAssetToCharacter, resolveAssetColumn } from "../../lib/character-auto-attach.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras } = job.data as {
@@ -56,9 +58,16 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   const hasExtraParams = Object.keys(extraParams).length > 0
   await setJobProgress(job, ctx.jobId, 10)
   const ramp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 80 })
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedModel))
   let result
   try {
-    result = await generateImage(prompt, resolvedModel, referenceImageUrls, hasExtraParams ? extraParams : undefined)
+    result = await generateImage(
+      prompt,
+      resolvedModel,
+      referenceImageUrls,
+      hasExtraParams ? extraParams : undefined,
+      { onTaskCreated },
+    )
   } finally {
     ramp.stop()
   }
@@ -125,9 +134,16 @@ const handleEditImage: HandlerFn = async function handleEditImage(job, ctx) {
 
   await setJobProgress(job, ctx.jobId, 10)
   const editRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 55 })
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedProvider))
   let result
   try {
-    result = await editImage(inputId, resolvedProvider, effectivePrompt, hasExtraParams ? extraParams : undefined)
+    result = await editImage(
+      inputId,
+      resolvedProvider,
+      effectivePrompt,
+      hasExtraParams ? extraParams : undefined,
+      { onTaskCreated },
+    )
   } finally {
     editRamp.stop()
   }
@@ -204,9 +220,16 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
   // 10% for the full 30s–2min the call can take (especially nano-banana-pro
   // 4K). Match the T2I handler's ramp shape; cap below the post-call jump.
   const i2iRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 55 })
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(resolvedProvider))
   let result
   try {
-    result = await generateImage(prompt, resolvedProvider, allImages, hasExtraParams ? extraParams : undefined)
+    result = await generateImage(
+      prompt,
+      resolvedProvider,
+      allImages,
+      hasExtraParams ? extraParams : undefined,
+      { onTaskCreated },
+    )
   } finally {
     i2iRamp.stop()
   }

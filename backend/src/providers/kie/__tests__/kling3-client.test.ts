@@ -806,3 +806,63 @@ describe("kling3Generate — onProgress", () => {
     expect(resolved).toBe(true)
   })
 })
+
+// ===========================================================================
+// 12) reconcileOpts.onTaskCreated — Phase 1 reconciliation hook
+// ===========================================================================
+//
+// Mirrors the runKieTask / runVeoTask reconciliation hook: kling3Generate
+// creates an upstream KIE task, then polls for completion. The Phase 1
+// reconciliation pipeline needs to persist `jobs.provider_task_id` BEFORE
+// polling starts so a worker crash mid-poll can be reconciled later.
+describe("kling3Generate — onTaskCreated reconciliation hook", () => {
+  it("calls onTaskCreated with the Kling3 taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/jobs/createTask")) {
+        return jsonResponse({ code: 0, data: { taskId: "k3-1" } })
+      }
+      if (url.includes("/jobs/recordInfo")) {
+        pollCalled = true
+        // Assert onTaskCreated already fired by the time we poll
+        expect(onTaskCreatedTaskId).toBe("k3-1")
+        return jsonResponse({
+          data: { state: "success", videoUrl: "https://r2/k3.mp4" },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => kling3Generate({ prompt: "p" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("k3-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("swallows errors thrown from onTaskCreated and still polls", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/jobs/createTask")) {
+        return jsonResponse({ code: 0, data: { taskId: "k3-err" } })
+      }
+      if (url.includes("/jobs/recordInfo")) {
+        return jsonResponse({
+          data: { state: "success", videoUrl: "https://r2/k3.mp4" },
+        })
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await withTimers(() => kling3Generate({ prompt: "p" }, {
+      onTaskCreated: async () => { throw new Error("persistence failed") },
+    }))
+
+    expect(result.videoUrl).toBe("https://r2/k3.mp4")
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+})

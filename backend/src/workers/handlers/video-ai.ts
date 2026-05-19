@@ -65,6 +65,13 @@ import {
   refundLoopTrimAddon,
   type HandlerFn,
 } from "../shared.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import {
+  providerKindForVideoModel,
+  providerKindForLipSyncModel,
+  providerKindForVideoToVideoModel,
+} from "../../lib/reconcile/provider-kind.js"
+import type { ProviderKind } from "../../lib/reconcile/types.js"
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation } = job.data as {
@@ -130,9 +137,14 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   await setJobProgress(job, ctx.jobId, 5)
   const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 35 })
 
+  const resolvedI2vProvider = provider ?? "minimax"
+  const onTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoModel(resolvedI2vProvider),
+  )
   let result
   try {
-    result = await imageToVideo(imageUrl, provider ?? "minimax", prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -250,13 +262,18 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
     audioSetting?: "auto" | "origin"
     promptExtend?: boolean
   }
-  console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${provider ?? "wan"})`)
+  const resolvedV2vProvider = provider ?? "wan"
+  console.log(`[worker] video-to-video ${ctx.jobId} (provider: ${resolvedV2vProvider})`)
 
+  const v2vOnTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoToVideoModel(resolvedV2vProvider),
+  )
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => videoToVideo(videoUrl, provider ?? "wan", prompt, {
+    () => videoToVideo(videoUrl, resolvedV2vProvider, prompt, {
       duration,
       resolution,
       audio,
@@ -268,7 +285,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
       videoEditDuration,
       audioSetting,
       promptExtend,
-    }),
+    }, { onTaskCreated: v2vOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -332,9 +349,14 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // movement instead of pinning at 0%.
   await setJobProgress(job, ctx.jobId, 5)
   const t2vRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 40 })
+  const resolvedT2vProvider = provider ?? "minimax"
+  const t2vOnTaskCreated = makeOnTaskCreated(
+    ctx.jobId,
+    providerKindForVideoModel(resolvedT2vProvider),
+  )
   let result
   try {
-    result = await textToVideo(prompt, provider ?? "minimax", duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation })
+    result = await textToVideo(prompt, resolvedT2vProvider, duration, aspectRatio, { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation }, { onTaskCreated: t2vOnTaskCreated })
   } finally {
     t2vRamp.stop()
   }
@@ -423,6 +445,19 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
 
   try {
 
+  // Pick the right ProviderKind per branch. Replicate lip-sync runs on
+  // Replicate predictions; Seedance routes through KIE's i2v provider;
+  // KIE-native lip-sync (kling-avatar*, infinitalk) uses its own poll budget.
+  let lipSyncKind: ProviderKind
+  if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    lipSyncKind = "replicate-prediction"
+  } else if (SEEDANCE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
+    lipSyncKind = providerKindForVideoModel(resolvedProvider)
+  } else {
+    lipSyncKind = providerKindForLipSyncModel(resolvedProvider)
+  }
+  const lipSyncOnTaskCreated = makeOnTaskCreated(ctx.jobId, lipSyncKind)
+
   if (REPLICATE_LIP_SYNC_PROVIDERS.has(resolvedProvider as never)) {
     // Replicate path
     const faceUrl = videoUrl || imageUrl
@@ -433,6 +468,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
       faceUrl,
       audioUrl,
       { guidanceScale, inferenceSteps, seed, pads, smooth, fps, resizeFactor, enhancer, preprocess, still, poseStyle, expressionScale },
+      { onTaskCreated: lipSyncOnTaskCreated },
     )
     resultUrl = outUrl
     resultCost = cost
@@ -461,6 +497,7 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
         // a new one. (KIE merges reference_audio_urls into output by default.)
         generateAudio: false,
       },
+      { onTaskCreated: lipSyncOnTaskCreated },
     )
     resultUrl = result.url
     resultCost = result.cost
@@ -470,7 +507,15 @@ const handleLipSync: HandlerFn = async function handleLipSync(job, ctx) {
   } else {
     // KIE path (existing) — audioDurationSec drives per-second pricing for
     // kling-avatar(-pro) and selects the longer poll budget for >30s runs.
-    const result = await lipSync(imageUrl!, audioUrl, resolvedProvider, prompt, resolution, audioDurationSec)
+    const result = await lipSync(
+      imageUrl!,
+      audioUrl,
+      resolvedProvider,
+      prompt,
+      resolution,
+      audioDurationSec,
+      { onTaskCreated: lipSyncOnTaskCreated },
+    )
     resultUrl = result.url
     resultCost = result.cost
     resultDisplayCost = result.displayCost
@@ -521,6 +566,7 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
 
   const { KieVideoProvider } = await import("../../providers/kie/video.js")
   const kieVideo = new KieVideoProvider()
+  const s2vOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
@@ -533,7 +579,7 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
       inferenceSteps,
       guidanceScale,
       shift,
-    }),
+    }, { onTaskCreated: s2vOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -574,6 +620,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
     await setJobProgress(job, ctx.jobId, progress)
   }
 
+  const mtOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
@@ -589,7 +636,8 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
         resolution: resolution ?? "720p",
         provider: mtProvider,
         backgroundSource,
-      }
+      },
+      { onTaskCreated: mtOnTaskCreated },
     ),
   )
   await setJobProgress(job, ctx.jobId, 50)
@@ -632,11 +680,15 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     ctx.jobId,
     { start: 5, cap: 45 },
     async () => {
+      const upscaleOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
       if (upscaleProvider === "veo-1080p" && kieTaskId) {
+        // Quasi-sync poll endpoint — no createTask, so no taskId callback.
+        // The provider_kind still applies; persistence happens via the
+        // higher-level orchestrator if needed.
         const result = await runVeo1080pTask(kieTaskId)
         return result.url
       } else if (upscaleProvider === "veo-4k" && kieTaskId) {
-        const { resultJson } = await runVeo4kTask(kieTaskId)
+        const { resultJson } = await runVeo4kTask(kieTaskId, 0, { onTaskCreated: upscaleOnTaskCreated })
         const url = resultJson.resultUrls?.[0]
         if (!url) throw new Error("VEO 4K succeeded but no URL found")
         return url
@@ -646,7 +698,7 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
           console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
           await setJobProgress(job, ctx.jobId, progress)
         }
-        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress })
+        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress }, { onTaskCreated: upscaleOnTaskCreated })
         return result.url
       }
     },
@@ -685,18 +737,20 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
 
   // Both extend providers run a long KIE task — wrap in a ramp so the
   // widget bar moves while we wait.
+  const extendKind: ProviderKind = provider === "veo-extend" ? "kie-veo" : "kie-runway"
+  const extendOnTaskCreated = makeOnTaskCreated(ctx.jobId, extendKind)
   const extendResult = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
     async (): Promise<{ url: string; taskId: string | undefined }> => {
       if (provider === "veo-extend") {
-        const { resultJson, taskId } = await runVeoExtendTask(kieTaskId, prompt, model, seeds)
+        const { resultJson, taskId } = await runVeoExtendTask(kieTaskId, prompt, model, seeds, { onTaskCreated: extendOnTaskCreated })
         const url = resultJson.resultUrls?.[0]
         if (!url) throw new Error("VEO extend succeeded but no URL found")
         return { url, taskId }
       } else {
-        const { resultJson, taskId } = await runRunwayExtendTask(kieTaskId, prompt, quality ?? "720p")
+        const { resultJson, taskId } = await runRunwayExtendTask(kieTaskId, prompt, quality ?? "720p", { onTaskCreated: extendOnTaskCreated })
         const url = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
         if (!url) throw new Error("Runway extend succeeded but no URL found")
         return { url, taskId }
@@ -737,8 +791,9 @@ const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
   }
   console.log(`[worker] face-swap ${ctx.jobId}`)
 
+  const faceSwapOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
   const outputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, async () => {
-    const { videoUrl: out } = await replicateFaceSwap(faceImageUrl, videoUrl)
+    const { videoUrl: out } = await replicateFaceSwap(faceImageUrl, videoUrl, { onTaskCreated: faceSwapOnTaskCreated })
     return out
   })
   await setJobProgress(job, ctx.jobId, 50)
@@ -772,8 +827,9 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 
   // Grounded SAM doesn't expose live progress — wrap in a ramp so the widget
   // bar moves while the segmentation runs.
+  const maskOnTaskCreated = makeOnTaskCreated(ctx.jobId, "replicate-prediction")
   const maskOutputUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 80 }, () =>
-    runGroundedSam(imageUrl, prompt, threshold ?? 0.3, config.REPLICATE_API_TOKEN),
+    runGroundedSam(imageUrl, prompt, threshold ?? 0.3, config.REPLICATE_API_TOKEN, { onTaskCreated: maskOnTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 85)
 
