@@ -1342,3 +1342,114 @@ describe("buildScenePrompt", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Phase 2 #1: Location canonical-description injection (Location Studio
+// design doc). When a wired-location ref attaches to a downstream node, the
+// directive bullet should pick up the location's canonicalDescription so the
+// model sees the rich description without the user typing it. Per-ref
+// description (the user-typed Description on the location node) still wins
+// when present, and `suppressedCanonicalLocationIds` filters the canonical
+// fallback (mirrors `suppressedCanonicalCharacterIds`).
+// ---------------------------------------------------------------------------
+
+describe("buildImagePrompt — location canonical-description injection", () => {
+  it("includes locationCanonicalDescription in the directive bullet for wired-location refs", () => {
+    const result = buildImagePrompt({
+      prompt: "A hero stands in front of {image:1:location}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          url: "https://r2/old-library.png",
+          locationCanonicalDescription: "A dimly-lit Victorian library with leather-bound books and brass fixtures",
+          locationSlug: "old-library",
+        },
+      ],
+    })
+    expect(result.prompt).toContain(
+      "Image 1 (location — A dimly-lit Victorian library with leather-bound books and brass fixtures)",
+    )
+  })
+
+  it("per-ref description wins over canonical when both are set", () => {
+    const result = buildImagePrompt({
+      prompt: "A hero in front of {image:1:location}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          description: "Stately library at dusk",
+          url: "https://r2/old-library.png",
+          locationCanonicalDescription: "A dimly-lit Victorian library with leather-bound books",
+          locationSlug: "old-library",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (location — Stately library at dusk)")
+    expect(result.prompt).not.toContain("dimly-lit Victorian library")
+  })
+
+  it("suppressedCanonicalLocationIds drops the canonical fallback", () => {
+    const result = buildImagePrompt({
+      prompt: "A hero in front of {image:1:location}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          url: "https://r2/old-library.png",
+          locationCanonicalDescription: "A dimly-lit Victorian library",
+          locationSlug: "old-library",
+        },
+      ],
+      suppressedCanonicalLocationIds: ["old-library"],
+    })
+    // No canonical text; bare positional directive instead.
+    expect(result.prompt).not.toContain("Victorian library")
+    expect(result.prompt).toContain("Image 1 (location)")
+  })
+
+  it("does NOT inject locationCanonicalDescription for non-location refs", () => {
+    const result = buildImagePrompt({
+      prompt: "A hero in front of {image:1:object}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "obj_1",
+          defaultName: "Sword",
+          source: "wired-object",
+          url: "https://r2/sword.png",
+          // Even if we accidentally populate this on a non-location ref, the
+          // directive builder should ignore it.
+          locationCanonicalDescription: "should-be-ignored",
+          locationSlug: "sword",
+        },
+      ],
+    })
+    expect(result.prompt).not.toContain("should-be-ignored")
+  })
+
+  it("no-op when locationCanonicalDescription is empty string", () => {
+    const result = buildImagePrompt({
+      prompt: "A hero in front of {image:1:location}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          url: "https://r2/old-library.png",
+          locationCanonicalDescription: "   ",
+          locationSlug: "old-library",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (location)")
+  })
+})
+

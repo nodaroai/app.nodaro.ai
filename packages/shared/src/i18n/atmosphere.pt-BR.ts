@@ -38,6 +38,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "Gotas de Chuva na Pele", description: "Gotas de água visíveis formando pérolas na pele" },
   "bioluminescent-cloud": { label: "Nuvem de Partículas Bioluminescentes", description: "Partículas brilhantes verde-azuladas à deriva" },
   "motion-streaks": { label: "Rastros de Movimento", description: "Rastros de motion-blur em linhas de velocidade" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "Nublado", description: "Cobertura parcial de nuvens, luz mista" },
+  "storm": { label: "Tempestade", description: "Tempestade violenta com chuva e raios" },
+  "blizzard": { label: "Nevasca", description: "Tempestade de neve violenta, quase whiteout" },
+  "fog": { label: "Neblina", description: "Neblina densa de baixa visibilidade" },
+  "mist": { label: "Bruma", description: "Bruma fina e difusa" },
 }
 
 export default map

@@ -79,6 +79,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "Short Lighting", description: "Camera से दूर रोशन side, slimming" },
   "hatchet": { label: "Hatchet Lighting", description: "ऊपर से skim, विपरीत side पर गहरी छाया" },
   "clamshell": { label: "Clamshell Lighting", description: "ऊपर + नीचे reflector, sandwiched beauty" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "उषाकाल", description: "सूर्योदय से पहले की पीली रोशनी" },
+  "morning": { label: "सुबह", description: "ताज़ी चमकदार सुबह की रोशनी" },
+  "afternoon": { label: "दोपहर बाद", description: "देर दोपहर की गर्म चमक" },
+  "dusk": { label: "गोधूलि", description: "सूर्यास्त के बाद की मद्धम रोशनी" },
+  "midnight": { label: "मध्यरात्रि", description: "गहरी रात, लगभग काला आकाश" },
 }
 
 export default map

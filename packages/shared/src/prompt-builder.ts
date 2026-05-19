@@ -732,6 +732,7 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
   const suppressedCanonicalCharacterIds = new Set(
     config.suppressedCanonicalCharacterIds ?? [],
   )
+  const suppressedCanonicalLocationIds = config.suppressedCanonicalLocationIds ?? []
 
   // Character LoRA inference path: trigger word + LoRA model carry identity,
   // so we strip raw `@slug[:V[:variant]]` tokens from the prompt AND drop the
@@ -923,7 +924,7 @@ export function buildImagePrompt(config: BuildImagePromptConfig): BuildImageProm
     const identities = collectIdentities(prompt, nonCharacterRefs, identityMeta)
 
     const directives = identities
-      .map((id) => buildIdentityDirective(id))
+      .map((id) => buildIdentityDirective(id, suppressedCanonicalLocationIds))
       .filter((s) => s.length > 0)
       .join("\n")
     if (directives) {
@@ -1087,6 +1088,20 @@ interface ResolvedIdentity {
   fidelity: IdentityFidelity
   customText?: string
   description?: string           // from upstream connected reference
+  /** `source` from the upstream ConnectedReference — used to opt the directive
+   *  builder into source-aware behavior (e.g. appending location canonical
+   *  description to wired-location bullets). Mirrors the character pattern
+   *  where `characterCanonicalDescription` is used by the Phase 0 mention
+   *  resolver, but for locations the consumer is the directive builder. */
+  source?: ReferenceSource
+  /** Location's canonical description, propagated from the wired-location
+   *  ConnectedReference. The directive builder appends this to the bullet
+   *  when source === "wired-location" AND the location's slug is NOT in
+   *  `suppressedCanonicalLocationIds`. */
+  locationCanonicalDescription?: string | null
+  /** Slug for the location source, used by `suppressedCanonicalLocationIds`
+   *  filtering. */
+  locationSlug?: string
 }
 
 function defaultFidelityForSource(source: ReferenceSource | undefined): IdentityFidelity {
@@ -1129,6 +1144,9 @@ function collectIdentities(
       fidelity: m?.fidelity ?? defaultFidelityForSource(ref?.source),
       customText: m?.customText?.trim() || undefined,
       description: ref?.description,
+      source: ref?.source,
+      locationCanonicalDescription: ref?.locationCanonicalDescription,
+      locationSlug: ref?.locationSlug,
     }
   })
 }
@@ -1171,12 +1189,33 @@ const PERSON_LABELS: ReadonlySet<string> = new Set([
   "person", "character", "face", "subject", "people",
 ])
 
-function buildIdentityDirective(id: ResolvedIdentity): string {
+function buildIdentityDirective(
+  id: ResolvedIdentity,
+  suppressedCanonicalLocationIds?: readonly string[],
+): string {
   if (id.fidelity === "custom" && id.customText) {
     return `- ${id.customText}`
   }
 
-  const subject = formatDirectiveSubject(id.label, id.imageIndex, id.description)
+  // Location canonical-description injection (Phase 2 #1). Mirrors the
+  // character canonical-description pattern (see `characterCanonicalDescription`
+  // in the Phase 0 mention resolver above). When a wired-location ref has
+  // canonical text AND the user hasn't suppressed it via the × button on the
+  // Injected References list, the canonical description gets folded into the
+  // directive subject so the model sees "Image N (location — <canonical
+  // description>)" without the user typing it. Per-ref description (from the
+  // user-typed Description field on the location node) still wins when present.
+  let effectiveDescription = id.description
+  if (
+    !effectiveDescription
+    && id.source === "wired-location"
+    && id.locationCanonicalDescription
+    && !(id.locationSlug && suppressedCanonicalLocationIds?.includes(id.locationSlug))
+  ) {
+    effectiveDescription = id.locationCanonicalDescription.trim() || undefined
+  }
+
+  const subject = formatDirectiveSubject(id.label, id.imageIndex, effectiveDescription)
   const lower = id.label.toLowerCase()
 
   // Role-aware verbs — these read more naturally than "match exactly" for
@@ -1235,9 +1274,10 @@ export function buildIdentityDirectives(
   prompt: string,
   refs: readonly ConnectedReference[],
   meta: readonly IdentityMeta[] = [],
+  suppressedCanonicalLocationIds?: readonly string[],
 ): string {
   return collectIdentities(prompt, refs, meta)
-    .map((id) => buildIdentityDirective(id))
+    .map((id) => buildIdentityDirective(id, suppressedCanonicalLocationIds))
     .filter((s) => s.length > 0)
     .join("\n")
 }

@@ -78,6 +78,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "Zoom de Match Cut", description: "Zoom sincronizado al ritmo para cortes" },
   "screen-tap": { label: "Toque de Pantalla", description: "Transición con toque de dedo en pantalla" },
   "phone-flip": { label: "Cambio de Cámara del Teléfono", description: "Cambio entre cámara frontal y trasera" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "Deriva Suave", description: "Movimiento flotante ambiental lento" },
+  "parallax": { label: "Paralaje", description: "Movimiento lateral con separación de profundidad entre primer plano y fondo" },
 }
 
 export default map

@@ -38,6 +38,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "قطرات مطر على الجلد", description: "قطرات ماء مرئية تتجمع على الجلد" },
   "bioluminescent-cloud": { label: "سحابة جسيمات Bioluminescent", description: "جسيمات زرقاء-خضراء متوهجة تنجرف" },
   "motion-streaks": { label: "خطوط حركة", description: "خطوط Motion-Blur بأسلوب Speed-Lines" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "غائم", description: "غطاء سحابي جزئي، ضوء مختلط" },
+  "storm": { label: "عاصفة", description: "عاصفة رعدية عنيفة مع مطر وبرق" },
+  "blizzard": { label: "عاصفة ثلجية", description: "عاصفة ثلجية عنيفة، تقريبًا انعدام رؤية" },
+  "fog": { label: "ضباب كثيف", description: "ضباب كثيف منخفض الرؤية" },
+  "mist": { label: "رذاذ", description: "رذاذ خفيف منتشر" },
 }
 
 export default map

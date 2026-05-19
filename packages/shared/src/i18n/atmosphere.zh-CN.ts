@@ -141,6 +141,12 @@ const map: LocaleCatalogMap = {
     label: "速度残影",
     description: "速度线般的运动模糊条纹",
   },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "多云", description: "部分云层覆盖，混合光线" },
+  "storm": { label: "暴风雨", description: "伴有雨和闪电的猛烈雷暴" },
+  "blizzard": { label: "暴风雪", description: "猛烈的暴风雪，几近白茫一片" },
+  "fog": { label: "浓雾", description: "能见度低的浓雾" },
+  "mist": { label: "薄雾", description: "薄而扩散的雾气" },
 }
 
 export default map

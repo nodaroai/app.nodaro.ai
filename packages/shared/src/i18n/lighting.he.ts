@@ -77,6 +77,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "Short", description: "הצד המואר פונה הרחק מהמצלמה, מצמצם" },
   "hatchet": { label: "Hatchet", description: "Skim עליון, צל עמוק בצד הנגדי" },
   "clamshell": { label: "Clamshell", description: "מלמעלה + רפלקטור מלמטה, ביוטי כריך" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "שחר", description: "זוהר חיוור לפני זריחת השמש" },
+  "morning": { label: "בוקר", description: "אור בוקר טרי ובהיר" },
+  "afternoon": { label: "אחר הצהריים", description: "זוהר חם של אחר הצהריים המאוחר" },
+  "dusk": { label: "בין הערביים", description: "אור דועך אחרי השקיעה" },
+  "midnight": { label: "חצות", description: "הלילה העמוק ביותר, שמיים כמעט שחורים" },
 }
 
 export default map

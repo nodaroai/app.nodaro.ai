@@ -9,6 +9,7 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
+import { useLocationDataSubscription } from "@/hooks/use-location-data-subscription"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -71,6 +72,17 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
     nodeData.anglesStatus === "running" ||
     nodeData.lightingStatus === "running" ||
     nodeData.atmosphereStatus === "running"
+
+  // Background polling while the studio is closed — keeps badge counts +
+  // running-status fields in sync with worker-appended assets. Self-throttling
+  // (only polls when anyAssetRunning) and self-stopping (clears running
+  // status when no matching pendingJobs remain). See the hook for details.
+  useLocationDataSubscription({
+    nodeId: id,
+    locationDbId: nodeData.locationDbId || undefined,
+    anyAssetRunning,
+    currentNodeData: nodeData,
+  })
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete))

@@ -38,6 +38,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "त्वचा पर बारिश की बूँदें", description: "त्वचा पर जमी हुई दिखाई देती पानी की बूँदें" },
   "bioluminescent-cloud": { label: "Bioluminescent कण-बादल", description: "बहते हुए चमकते नीले-हरे कण" },
   "motion-streaks": { label: "Motion की लकीरें", description: "Speed-line motion-blur की लकीरें" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "बादल", description: "आंशिक बादल आवरण, मिश्रित प्रकाश" },
+  "storm": { label: "तूफान", description: "बारिश और बिजली के साथ हिंसक आंधी" },
+  "blizzard": { label: "हिमतूफान", description: "हिंसक बर्फीला तूफान, लगभग सफेद आउट" },
+  "fog": { label: "घना कोहरा", description: "घना कम-दृश्यता कोहरा" },
+  "mist": { label: "धुंध", description: "पतली फैलती धुंध" },
 }
 
 export default map

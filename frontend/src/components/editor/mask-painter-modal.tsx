@@ -7,8 +7,9 @@ import {
   Undo2, Redo2, Loader2,
 } from "lucide-react"
 import { uploadImage, getImageProxyUrl } from "@/lib/api"
-import { generateMaskBlob } from "@/lib/mask-utils"
+import { generateMaskBlob, paintStrokeOnCtx } from "@/lib/mask-utils"
 import type { MaskStroke } from "@/lib/mask-utils"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 
 type Tool = "brush" | "eraser" | "lasso"
 type ViewMode = "overlay" | "mask" | "source"
@@ -28,8 +29,8 @@ export function MaskPainterModal({
   const imgElRef = useRef<HTMLImageElement>(null)
   const activeStrokeRef = useRef<MaskStroke | null>(null)
 
-  const [imageLoaded, setImageLoaded] = useState(false)
   const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null)
+  const imageLoaded = imgSize !== null
   const [tool, setTool] = useState<Tool>("brush")
   const [brushSize, setBrushSize] = useState(30)
   const [opacity, setOpacity] = useState(100)
@@ -40,6 +41,8 @@ export function MaskPainterModal({
   const [baseImageData, setBaseImageData] = useState<ImageData | null>(null)
   const [saving, setSaving] = useState(false)
 
+  useBackToClose(isOpen, onClose)
+
   // Reset on open
   useEffect(() => {
     if (!isOpen) return
@@ -48,7 +51,6 @@ export function MaskPainterModal({
     setLassoPoints([])
     setBaseImageData(null)
     activeStrokeRef.current = null
-    setImageLoaded(false)
     setImgSize(null)
     setTool("brush")
     setBrushSize(30)
@@ -57,7 +59,6 @@ export function MaskPainterModal({
     setSaving(false)
   }, [isOpen])
 
-  // Load initialMaskUrl as base layer — scaled to source image dimensions
   useEffect(() => {
     if (!isOpen || !initialMaskUrl || !imgSize) return
     const img = new Image()
@@ -67,29 +68,25 @@ export function MaskPainterModal({
       offscreen.width = imgSize.w
       offscreen.height = imgSize.h
       const ctx = offscreen.getContext("2d")!
-      ctx.drawImage(img, 0, 0, imgSize.w, imgSize.h)  // scale to source image size
+      ctx.drawImage(img, 0, 0, imgSize.w, imgSize.h)
       setBaseImageData(ctx.getImageData(0, 0, imgSize.w, imgSize.h))
     }
     img.src = getImageProxyUrl(initialMaskUrl)
   }, [isOpen, initialMaskUrl, imgSize])
 
   const handleUndo = useCallback(() => {
-    setStrokes((prev) => {
-      if (prev.length === 0) return prev
-      const popped = prev[prev.length - 1]
-      setRedoStack((r) => [...r, popped])
-      return prev.slice(0, -1)
-    })
-  }, [])
+    if (strokes.length === 0) return
+    const popped = strokes[strokes.length - 1]
+    setStrokes(strokes.slice(0, -1))
+    setRedoStack((r) => [...r, popped])
+  }, [strokes])
 
   const handleRedo = useCallback(() => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev
-      const top = prev[prev.length - 1]
-      setStrokes((s) => [...s, top])
-      return prev.slice(0, -1)
-    })
-  }, [])
+    if (redoStack.length === 0) return
+    const top = redoStack[redoStack.length - 1]
+    setStrokes((s) => [...s, top])
+    setRedoStack(redoStack.slice(0, -1))
+  }, [redoStack])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
@@ -109,7 +106,6 @@ export function MaskPainterModal({
   function handleImageLoad() {
     const img = imgElRef.current
     if (!img) return
-    setImageLoaded(true)
     setImgSize({ w: img.naturalWidth, h: img.naturalHeight })
   }
 
@@ -142,42 +138,17 @@ export function MaskPainterModal({
     }
   }
 
-  function drawStrokeOnCtx(
-    ctx: CanvasRenderingContext2D,
-    stroke: MaskStroke,
-    scaleX: number,
-    scaleY: number,
-  ) {
-    const alpha = stroke.opacity ?? 1
-    ctx.globalAlpha = alpha
-
-    if (stroke.fill && !stroke.isLasso) {
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-      ctx.globalAlpha = 1
-      return
-    }
-
-    if (stroke.isLasso) {
-      if (stroke.points.length < 3) { ctx.globalAlpha = 1; return }
-      ctx.beginPath()
-      ctx.moveTo(stroke.points[0].x / scaleX, stroke.points[0].y / scaleY)
-      for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x / scaleX, pt.y / scaleY)
-      ctx.closePath()
-      ctx.fill()
-      ctx.globalAlpha = 1
-      return
-    }
-
+  function drawLassoOutline(ctx: CanvasRenderingContext2D, color: string, scaleX: number, scaleY: number) {
+    if (lassoPoints.length === 0) return
+    ctx.globalCompositeOperation = "source-over"
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([4, 4])
     ctx.beginPath()
-    for (const pt of stroke.points) {
-      const cx = pt.x / scaleX
-      const cy = pt.y / scaleY
-      const r = stroke.radius / scaleX
-      ctx.moveTo(cx + r, cy)
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    }
-    ctx.fill()
-    ctx.globalAlpha = 1
+    ctx.moveTo(lassoPoints[0].x / scaleX, lassoPoints[0].y / scaleY)
+    for (const p of lassoPoints.slice(1)) ctx.lineTo(p.x / scaleX, p.y / scaleY)
+    ctx.stroke()
+    ctx.setLineDash([])
   }
 
   function redrawOverlay() {
@@ -190,12 +161,12 @@ export function MaskPainterModal({
 
     if (viewMode === "source") return
 
+    const allStrokes = [...strokes, ...(activeStrokeRef.current ? [activeStrokeRef.current] : [])]
+
     if (viewMode === "mask") {
-      // Render actual B/W mask on canvas (base + strokes)
       ctx.fillStyle = "#000000"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       if (baseImageData && imgSize) {
-        // Scale base layer down to display canvas size
         const offscreen = document.createElement("canvas")
         offscreen.width = imgSize.w
         offscreen.height = imgSize.h
@@ -203,46 +174,21 @@ export function MaskPainterModal({
         offCtx.putImageData(baseImageData, 0, 0)
         ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height)
       }
-      const allStrokes = [...strokes, ...(activeStrokeRef.current ? [activeStrokeRef.current] : [])]
+      ctx.globalCompositeOperation = "source-over"
       for (const stroke of allStrokes) {
         ctx.fillStyle = stroke.isEraser ? "#000000" : "#ffffff"
-        ctx.globalCompositeOperation = "source-over"
-        drawStrokeOnCtx(ctx, stroke, scaleX, scaleY)
+        paintStrokeOnCtx(ctx, stroke, scaleX, scaleY)
       }
-      // Lasso in-progress outline
-      if (lassoPoints.length > 0) {
-        ctx.strokeStyle = "#ffffff"
-        ctx.lineWidth = 1.5
-        ctx.setLineDash([4, 4])
-        ctx.beginPath()
-        ctx.moveTo(lassoPoints[0].x / scaleX, lassoPoints[0].y / scaleY)
-        for (const p of lassoPoints.slice(1)) ctx.lineTo(p.x / scaleX, p.y / scaleY)
-        ctx.stroke()
-        ctx.setLineDash([])
-      }
-      ctx.globalCompositeOperation = "source-over"
+      drawLassoOutline(ctx, "#ffffff", scaleX, scaleY)
       return
     }
 
-    // overlay mode: red transparent strokes over source image (same as original)
-    const allStrokes = [...strokes, ...(activeStrokeRef.current ? [activeStrokeRef.current] : [])]
     for (const stroke of allStrokes) {
       ctx.fillStyle = `rgba(239, 68, 68, ${0.4 * (stroke.opacity ?? 1)})`
       ctx.globalCompositeOperation = stroke.isEraser ? "destination-out" : "source-over"
-      drawStrokeOnCtx(ctx, stroke, scaleX, scaleY)
+      paintStrokeOnCtx(ctx, stroke, scaleX, scaleY)
     }
-    // Lasso in-progress outline
-    if (lassoPoints.length > 0) {
-      ctx.globalCompositeOperation = "source-over"
-      ctx.strokeStyle = "rgba(239, 68, 68, 0.9)"
-      ctx.lineWidth = 1.5
-      ctx.setLineDash([4, 4])
-      ctx.beginPath()
-      ctx.moveTo(lassoPoints[0].x / scaleX, lassoPoints[0].y / scaleY)
-      for (const p of lassoPoints.slice(1)) ctx.lineTo(p.x / scaleX, p.y / scaleY)
-      ctx.stroke()
-      ctx.setLineDash([])
-    }
+    drawLassoOutline(ctx, "rgba(239, 68, 68, 0.9)", scaleX, scaleY)
     ctx.globalCompositeOperation = "source-over"
   }
 
@@ -315,10 +261,11 @@ export function MaskPainterModal({
   }
 
   function handlePointerUp() {
-    if (!activeStrokeRef.current) return
-    setStrokes((prev) => [...prev, activeStrokeRef.current!])
-    setRedoStack([])
+    const stroke = activeStrokeRef.current
+    if (!stroke) return
     activeStrokeRef.current = null
+    setStrokes((prev) => [...prev, stroke])
+    setRedoStack([])
   }
 
   function handleDoubleClick(e: React.MouseEvent) {
@@ -336,8 +283,7 @@ export function MaskPainterModal({
 
   function handleInvert() {
     const fullFill: MaskStroke = { points: [], radius: 0, isEraser: false, fill: true }
-    const inverted = strokes.map((s) => ({ ...s, isEraser: !s.isEraser }))
-    setStrokes([fullFill, ...inverted])
+    setStrokes((prev) => [fullFill, ...prev.map((s) => ({ ...s, isEraser: !s.isEraser }))])
     setRedoStack([])
   }
 

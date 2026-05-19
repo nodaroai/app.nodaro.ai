@@ -91,6 +91,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "Match Cut Zoom", description: "Cut के लिए beat-समय वाला zoom" },
   "screen-tap": { label: "Screen Tap", description: "On-screen finger-tap transition" },
   "phone-flip": { label: "Phone Flip", description: "आगे/पीछे camera flip" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "धीमी बहाव", description: "धीमी परिवेशीय तैरती गति" },
+  "parallax": { label: "लंबन", description: "अग्रभूमि/पृष्ठभूमि गहराई पृथक्करण के साथ पार्श्व गति" },
 }
 
 export default map

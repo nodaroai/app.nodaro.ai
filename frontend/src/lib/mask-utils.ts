@@ -7,6 +7,49 @@ export interface MaskStroke {
   opacity?: number  // 0–1 brush alpha, default 1
 }
 
+/**
+ * Paint a single stroke onto a 2D canvas context. `fillStyle`,
+ * `globalCompositeOperation`, and any pre-existing `globalAlpha` should
+ * already be set by the caller. `scaleX`/`scaleY` divide source-pixel
+ * coordinates down to a smaller display canvas (default 1 = source-pixel).
+ */
+export function paintStrokeOnCtx(
+  ctx: CanvasRenderingContext2D,
+  stroke: MaskStroke,
+  scaleX = 1,
+  scaleY = 1,
+): void {
+  ctx.globalAlpha = stroke.opacity ?? 1
+
+  if (stroke.fill && !stroke.isLasso) {
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+    ctx.globalAlpha = 1
+    return
+  }
+
+  if (stroke.isLasso) {
+    if (stroke.points.length < 3) { ctx.globalAlpha = 1; return }
+    ctx.beginPath()
+    ctx.moveTo(stroke.points[0].x / scaleX, stroke.points[0].y / scaleY)
+    for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x / scaleX, pt.y / scaleY)
+    ctx.closePath()
+    ctx.fill()
+    ctx.globalAlpha = 1
+    return
+  }
+
+  ctx.beginPath()
+  for (const pt of stroke.points) {
+    const cx = pt.x / scaleX
+    const cy = pt.y / scaleY
+    const r = stroke.radius / scaleX
+    ctx.moveTo(cx + r, cy)
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  }
+  ctx.fill()
+  ctx.globalAlpha = 1
+}
+
 /** Generate a black/white mask PNG blob from painted stroke data */
 export function generateMaskBlob(
   width: number,
@@ -27,36 +70,8 @@ export function generateMaskBlob(
   }
 
   for (const stroke of strokes) {
-    const alpha = stroke.opacity ?? 1
-    ctx.globalAlpha = alpha
     ctx.fillStyle = stroke.isEraser ? "#000000" : "#ffffff"
-
-    if (stroke.fill && !stroke.isLasso) {
-      // invert: fill entire canvas
-      ctx.fillRect(0, 0, width, height)
-      ctx.globalAlpha = 1
-      continue
-    }
-
-    if (stroke.isLasso) {
-      if (stroke.points.length < 3) { ctx.globalAlpha = 1; continue }
-      ctx.beginPath()
-      ctx.moveTo(stroke.points[0].x, stroke.points[0].y)
-      for (const pt of stroke.points.slice(1)) ctx.lineTo(pt.x, pt.y)
-      ctx.closePath()
-      ctx.fill()
-      ctx.globalAlpha = 1
-      continue
-    }
-
-    // brush: paint a circle at every point
-    ctx.beginPath()
-    for (const pt of stroke.points) {
-      ctx.moveTo(pt.x + stroke.radius, pt.y)
-      ctx.arc(pt.x, pt.y, stroke.radius, 0, Math.PI * 2)
-    }
-    ctx.fill()
-    ctx.globalAlpha = 1
+    paintStrokeOnCtx(ctx, stroke)
   }
 
   return new Promise((resolve, reject) => {

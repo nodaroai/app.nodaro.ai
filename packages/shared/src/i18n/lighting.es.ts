@@ -78,6 +78,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "Iluminación Corta", description: "Lado iluminado lejos de la cámara, efecto adelgazante" },
   "hatchet": { label: "Iluminación Hacha", description: "Rasante cenital, sombra profunda en el lado opuesto" },
   "clamshell": { label: "Iluminación Clamshell", description: "Arriba + reflector debajo, belleza emparedada" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "Amanecer", description: "Resplandor pálido antes del amanecer" },
+  "morning": { label: "Mañana", description: "Luz matinal fresca y brillante" },
+  "afternoon": { label: "Tarde", description: "Cálido resplandor de la tarde tardía" },
+  "dusk": { label: "Crepúsculo", description: "Luz que se desvanece tras la puesta del sol" },
+  "midnight": { label: "Medianoche", description: "La noche más profunda, cielo casi negro" },
 }
 
 export default map

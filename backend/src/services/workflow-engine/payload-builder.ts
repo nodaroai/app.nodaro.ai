@@ -142,9 +142,18 @@ function buildConnectedRefsForGenerate(
   wiredCharRefs: readonly ConnectedReference[],
   refUrlMap: ReadonlyMap<string, string>,
   orderIds: readonly string[],
+  /** Wired Location upstream refs (Phase 2 #1) — emitted first so the
+   *  directive builder can attach the location's canonical description to
+   *  its bullet. URL-deduped against the wired-character refs and refUrlMap. */
+  wiredLocRefs: readonly ConnectedReference[] = [],
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const seenUrls = new Set<string>()
+  for (const r of wiredLocRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
   for (const r of wiredCharRefs) {
     if (!r.url || seenUrls.has(r.url)) continue
     seenUrls.add(r.url)
@@ -181,9 +190,17 @@ function buildConnectedRefsForGenerate(
 function buildConnectedRefsFromUrls(
   wiredCharRefs: readonly ConnectedReference[],
   directRefs: readonly string[],
+  /** Wired Location upstream refs (Phase 2 #1). Same dedup contract as
+   *  `buildConnectedRefsForGenerate`. */
+  wiredLocRefs: readonly ConnectedReference[] = [],
 ): ConnectedReference[] {
   const out: ConnectedReference[] = []
   const seenUrls = new Set<string>()
+  for (const r of wiredLocRefs) {
+    if (!r.url || seenUrls.has(r.url)) continue
+    seenUrls.add(r.url)
+    out.push(r)
+  }
   for (const r of wiredCharRefs) {
     if (!r.url || seenUrls.has(r.url)) continue
     seenUrls.add(r.url)
@@ -289,6 +306,48 @@ function expandWiredCharacterRefs(
         })
       }
     }
+  }
+  return out
+}
+
+/**
+ * Expand a wired Location upstream into a single canonical ConnectedReference
+ * (Phase 2 #1 of the Location Studio design — adds canonical-description text
+ * injection into downstream prompts). Mirrors `expandWiredCharacterRefs`
+ * shape but locations have a single canonical entry; per-variant fan-out
+ * lands in Phase 2 #2 (`@location:1:variant` mention syntax).
+ *
+ * Returns an empty list when no wired-location upstream OR upstream has no
+ * `sourceImageUrl` — caller falls through to the existing wired-image flow.
+ */
+function expandWiredLocationRefs(
+  consumerNodeId: string,
+  buildCtx: PayloadBuildContext | undefined,
+): ConnectedReference[] {
+  if (!buildCtx?.nodes || !buildCtx.edges) return []
+  const out: ConnectedReference[] = []
+  const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
+  for (const e of incoming) {
+    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    if (!upstream || upstream.type !== "location") continue
+    const locData = upstream.data
+    const sourceUrl = locData.sourceImageUrl as string | undefined
+    if (!sourceUrl) continue
+    const locName =
+      (locData.locationName as string | undefined) ??
+      (locData.label as string | undefined) ??
+      "Location"
+    const locationSlug = characterMentionSlug(locName)
+    out.push({
+      id: upstream.id,
+      defaultName: locName,
+      source: "wired-location",
+      description: (locData.description as string | undefined) ?? undefined,
+      url: sourceUrl,
+      locationCanonicalDescription:
+        (locData.canonicalDescription as string | null | undefined) ?? null,
+      locationSlug: locationSlug || undefined,
+    })
   }
   return out
 }
@@ -1171,6 +1230,12 @@ export function buildPayload(
       // exist (even without a wired character) — extras need the dedicated
       // directive emission in `buildExtraRefDirectives`.
       const wiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      // Phase 2 #1: location canonical-description injection. Prepend wired
+      // Location refs so the directive builder emits "Image N (location —
+      // <canonical>)" bullets. URL-dedupe in the connected-refs builder
+      // keeps a Location's main image URL from appearing twice if it also
+      // arrived via the chainRefs path.
+      const wiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)
       const extraRefEntries = expandExtraRefsToConnectedReferences(
         readExtraRefs(data),
         buildExtraRefCharacterContextLookup(node.id, buildCtx),
@@ -1200,6 +1265,7 @@ export function buildPayload(
       const styleBypass = hasConnectedStyleNode(node.id, buildCtx)
       const generateRefOrder = readStringArray(data.referenceOrder)
       const generateSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
+      const generateSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
       const result = useConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
@@ -1214,12 +1280,14 @@ export function buildPayload(
                 wiredCharRefs,
                 refUrlMap,
                 orderIds,
+                wiredLocRefs,
               ),
               ...extraRefEntries,
             ],
             ancestorRefs,
             referenceOrder: generateRefOrder,
             suppressedCanonicalCharacterIds: generateSuppressed,
+            suppressedCanonicalLocationIds: generateSuppressedLoc,
             // LoRA path: skip mention machinery (trigger word + LoRA carry identity).
             skipCharacterMentions: lora !== null,
           })
@@ -1235,6 +1303,7 @@ export function buildPayload(
             ancestorRefs,
             referenceOrder: generateRefOrder,
             suppressedCanonicalCharacterIds: generateSuppressed,
+            suppressedCanonicalLocationIds: generateSuppressedLoc,
           })
 
       return {
@@ -1408,16 +1477,19 @@ export function buildPayload(
       // when any wired character exists so the canonical fallback applies for
       // unmentioned characters and frontend/backend parity is preserved.
       const i2iWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+      const i2iWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
       const i2iExtraRefEntries = expandExtraRefsToConnectedReferences(
         readExtraRefs(data),
         buildExtraRefCharacterContextLookup(node.id, buildCtx),
       )
-      const i2iUseConnectedRefs = i2iWiredCharRefs.length > 0 || i2iExtraRefEntries.length > 0
+      const i2iUseConnectedRefs =
+        i2iWiredCharRefs.length > 0 || i2iWiredLocRefs.length > 0 || i2iExtraRefEntries.length > 0
 
       // Build prompt with style + character descriptions (same as generate-image)
       const i2iStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
       const i2iRefOrder = readStringArray(data.referenceOrder)
       const i2iSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
+      const i2iSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
       const i2iResult = i2iUseConnectedRefs
         ? buildImagePrompt({
             prompt: rawPrompt,
@@ -1428,12 +1500,13 @@ export function buildPayload(
             userTemplates: settings?.userPromptTemplates,
             flowTemplates: settings?.flowPromptTemplates,
             connectedReferences: [
-              ...buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs),
+              ...buildConnectedRefsFromUrls(i2iWiredCharRefs, directRefs, i2iWiredLocRefs),
               ...i2iExtraRefEntries,
             ],
             ancestorRefs: [],
             referenceOrder: i2iRefOrder,
             suppressedCanonicalCharacterIds: i2iSuppressed,
+            suppressedCanonicalLocationIds: i2iSuppressedLoc,
           })
         : buildImagePrompt({
             prompt: rawPrompt,
@@ -1447,6 +1520,7 @@ export function buildPayload(
             ancestorRefs: [],
             referenceOrder: i2iRefOrder,
             suppressedCanonicalCharacterIds: i2iSuppressed,
+            suppressedCanonicalLocationIds: i2iSuppressedLoc,
           })
 
       return {
@@ -1612,15 +1686,18 @@ export function buildPayload(
         // character exists so the per-character contract (mentioned → variant
         // only / unmentioned → canonical fallback) applies in both paths.
         const modWiredCharRefs = expandWiredCharacterRefs(node.id, buildCtx)
+        const modWiredLocRefs = expandWiredLocationRefs(node.id, buildCtx)  // Phase 2 #1
         const modExtraRefEntries = expandExtraRefsToConnectedReferences(
           readExtraRefs(data),
           buildExtraRefCharacterContextLookup(node.id, buildCtx),
         )
-        const modUseConnectedRefs = modWiredCharRefs.length > 0 || modExtraRefEntries.length > 0
+        const modUseConnectedRefs =
+          modWiredCharRefs.length > 0 || modWiredLocRefs.length > 0 || modExtraRefEntries.length > 0
 
         const modStyleBypass = hasConnectedStyleNode(node.id, buildCtx)
         const modRefOrder = readStringArray(data.referenceOrder)
         const modSuppressed = readStringArray(data.suppressedCanonicalCharacterIds)
+        const modSuppressedLoc = readStringArray(data.suppressedCanonicalLocationIds)
         const i2iResult = modUseConnectedRefs
           ? buildImagePrompt({
               prompt: rawPrompt,
@@ -1631,12 +1708,13 @@ export function buildPayload(
               userTemplates: settings?.userPromptTemplates,
               flowTemplates: settings?.flowPromptTemplates,
               connectedReferences: [
-                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs),
+                ...buildConnectedRefsFromUrls(modWiredCharRefs, directRefs, modWiredLocRefs),
                 ...modExtraRefEntries,
               ],
               ancestorRefs: [],
               referenceOrder: modRefOrder,
               suppressedCanonicalCharacterIds: modSuppressed,
+              suppressedCanonicalLocationIds: modSuppressedLoc,
             })
           : buildImagePrompt({
               prompt: rawPrompt,
@@ -1650,6 +1728,7 @@ export function buildPayload(
               ancestorRefs: [],
               referenceOrder: modRefOrder,
               suppressedCanonicalCharacterIds: modSuppressed,
+              suppressedCanonicalLocationIds: modSuppressedLoc,
             })
 
         return {

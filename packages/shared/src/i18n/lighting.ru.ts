@@ -77,6 +77,12 @@ const map: LocaleCatalogMap = {
   "short": { label: "Короткий", description: "Освещена сторона, отвернутая от камеры, делает лицо стройнее" },
   "hatchet": { label: "Топорный", description: "Скользящий свет сверху, глубокая тень с противоположной стороны" },
   "clamshell": { label: "Раковина", description: "Сверху + рефлектор снизу, бьюти-сэндвич" },
+  // Location-studio extension (PR #2505 follow-up)
+  "dawn": { label: "Рассвет", description: "Бледное сияние перед восходом солнца" },
+  "morning": { label: "Утро", description: "Свежий яркий утренний свет" },
+  "afternoon": { label: "День", description: "Тёплое свечение позднего дня" },
+  "dusk": { label: "Сумерки", description: "Угасающий свет после заката" },
+  "midnight": { label: "Полночь", description: "Глубокая ночь, почти чёрное небо" },
 }
 
 export default map

@@ -36,6 +36,12 @@ const map: LocaleCatalogMap = {
   "raindrops-on-skin": { label: "Капли дождя на коже", description: "Видимые капли воды, собирающиеся на коже" },
   "bioluminescent-cloud": { label: "Биолюминесцентное облако частиц", description: "Светящиеся сине-зелёные частицы, дрейфующие в воздухе" },
   "motion-streaks": { label: "Полосы движения", description: "Скоростные полосы размытия движения" },
+  // Location-studio extension (PR #2505 follow-up)
+  "cloudy": { label: "Облачно", description: "Частичная облачность, смешанный свет" },
+  "storm": { label: "Гроза", description: "Сильная гроза с дождём и молниями" },
+  "blizzard": { label: "Метель", description: "Сильная снежная буря, почти полная белизна" },
+  "fog": { label: "Туман", description: "Густой туман с низкой видимостью" },
+  "mist": { label: "Дымка", description: "Тонкая рассеянная дымка" },
 }
 
 export default map

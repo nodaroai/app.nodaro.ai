@@ -91,6 +91,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "マッチカット・ズーム", description: "カット用にビートに合わせたズーム" },
   "screen-tap": { label: "スクリーンタップ", description: "画面上の指タップによるトランジション" },
   "phone-flip": { label: "フォンフリップ", description: "前面／背面カメラの切り替え" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "穏やかなドリフト", description: "ゆっくりとした環境的な浮遊する動き" },
+  "parallax": { label: "パララックス", description: "前景と背景の奥行きが分離する横方向の動き" },
 }
 
 export default map

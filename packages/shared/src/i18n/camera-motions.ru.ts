@@ -91,6 +91,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "Зум для match cut", description: "Зум, синхронизированный с битом для склейки" },
   "screen-tap": { label: "Касание экрана", description: "Переход с касанием пальца по экрану" },
   "phone-flip": { label: "Переключение камеры телефона", description: "Переключение между фронтальной и основной камерой" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "Плавный Дрейф", description: "Медленное плавающее окружающее движение" },
+  "parallax": { label: "Параллакс", description: "Боковое движение с разделением глубины переднего и заднего планов" },
 }
 
 export default map

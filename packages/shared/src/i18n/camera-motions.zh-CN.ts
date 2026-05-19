@@ -91,6 +91,9 @@ const map: LocaleCatalogMap = {
   "match-cut-zoom": { label: "节拍变焦",         description: "卡点变焦用于剪辑" },
   "screen-tap":     { label: "点屏切换",         description: "屏幕上手指点击触发的转场" },
   "phone-flip":     { label: "翻面切换",         description: "前后摄像头翻转切换" },
+  // Location-studio extension (PR #2505 follow-up)
+  "gentle-drift": { label: "缓慢漂移", description: "缓慢的环境浮动运动" },
+  "parallax": { label: "视差", description: "前景与背景深度分离的横向运动" },
 }
 
 export default map

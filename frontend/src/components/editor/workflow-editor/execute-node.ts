@@ -512,6 +512,40 @@ function expandCharacterNodeIntoRefs(
 }
 
 /**
+ * Build a single `ConnectedReference` from a wired Location upstream — picking
+ * up the location's main image URL, description, and canonical description so
+ * the directive builder can emit "Image N (location — A dimly-lit Victorian
+ * library)" without the user having to type the description into the prompt.
+ *
+ * Mirrors `expandCharacterNodeIntoRefs` shape but locations have a single
+ * canonical entry (no per-variant fan-out yet — Phase 2 #2 will add
+ * @location:1:variant for that).
+ *
+ * Returns null when the location has no source image; the consumer falls back
+ * to a plain `wired-image` ref (existing behavior).
+ */
+function expandLocationNodeIntoRef(
+  locationNode: WorkflowNode,
+): [string, Omit<ConnectedReference, "id">] | null {
+  const locData = locationNode.data as LocationNodeData
+  const sourceUrl = locData.sourceImageUrl
+  if (!sourceUrl) return null
+  const locName = locData.locationName || (locData.label as string | undefined) || "Location"
+  const locationSlug = characterMentionSlug(locName) // reused slug helper — same shape
+  return [
+    locationNode.id,
+    {
+      defaultName: locName,
+      source: "wired-location",
+      description: locData.description ?? undefined,
+      url: sourceUrl,
+      locationCanonicalDescription: locData.canonicalDescription ?? null,
+      locationSlug: locationSlug || undefined,
+    },
+  ]
+}
+
+/**
  * Build a `slug → ExtraRefCharacterContext` lookup for the consumer node by
  * walking back through edges to wired Character upstreams. Used by the
  * extra-ref expansion (`expandExtraRefsToConnectedReferences`) so character-
@@ -624,6 +658,19 @@ function buildConnectedRefsForI2I(
       refMetaMap.set(id, meta);
       if (meta.url) characterUrlsCovered.add(meta.url);
     }
+  }
+
+  // Step 1.5: same treatment for wired Location upstreams — picks up
+  // canonical-description so the directive bullet says
+  // "Image N (location — <canonical desc>)" without the user having to type
+  // it. Phase 2 #1 of the Location Studio design.
+  const locationUpstreams = wiredSourceNodes.filter((n) => n.type === "location");
+  for (const upstream of locationUpstreams) {
+    const expansion = expandLocationNodeIntoRef(upstream);
+    if (!expansion) continue;
+    const [id, meta] = expansion;
+    refMetaMap.set(id, meta);
+    if (meta.url) characterUrlsCovered.add(meta.url);
   }
 
   // Step 2: add non-character upstream URLs (from `chainRefs`, the upstream
@@ -1199,6 +1246,22 @@ export function executeNode(
             }
             // Fall through to generic upstream handling for unnamed characters.
           }
+          // Location upstream — enrich with canonical-description so the
+          // directive bullet picks it up via the prompt-builder (Phase 2 #1).
+          if (upstream.type === "location") {
+            const locData = upstream.data as LocationNodeData;
+            const locName = locData.locationName || (upstreamData.label as string) || "Location";
+            const locationSlug = characterMentionSlug(locName); // reused slugify
+            refMetaMap.set(upstream.id, {
+              defaultName: locName,
+              source: "wired-location",
+              description: locData.description ?? undefined,
+              url: chainRefs[i],
+              locationCanonicalDescription: locData.canonicalDescription ?? null,
+              locationSlug: locationSlug || undefined,
+            });
+            continue;
+          }
           refMetaMap.set(upstream.id, {
             defaultName: (upstreamData.label as string) || (upstreamData.name as string) || upstream.type!,
             source: wiredSourceTypeMap[upstream.type!],
@@ -1409,6 +1472,7 @@ export function executeNode(
       // identical URL lists.
       referenceOrder: imgData.referenceOrder ?? undefined,
       suppressedCanonicalCharacterIds: imgData.suppressedCanonicalCharacterIds ?? undefined,
+      suppressedCanonicalLocationIds: imgData.suppressedCanonicalLocationIds ?? undefined,
       // LoRA path: strip @-mention tokens, skip Phase-0 ref injection.
       skipCharacterMentions: internalLora !== undefined,
     });
@@ -1631,6 +1695,7 @@ export function executeNode(
       ancestorRefs: [],
       referenceOrder: i2iData.referenceOrder ?? undefined,
       suppressedCanonicalCharacterIds: i2iData.suppressedCanonicalCharacterIds ?? undefined,
+      suppressedCanonicalLocationIds: i2iData.suppressedCanonicalLocationIds ?? undefined,
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
@@ -1775,6 +1840,7 @@ export function executeNode(
       ancestorRefs: [],
       referenceOrder: modData.referenceOrder ?? undefined,
       suppressedCanonicalCharacterIds: modData.suppressedCanonicalCharacterIds ?? undefined,
+      suppressedCanonicalLocationIds: modData.suppressedCanonicalLocationIds ?? undefined,
     });
 
     // Post-assembly empty-prompt check: only reject when the FINAL prompt
