@@ -6,6 +6,7 @@ import {
   renewSubscriptionCredits,
   sendStorageWarnings,
   sweepStaleVoiceJobs,
+  sweepSoftDeletedLocationAssets,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
 import { reconcileOrphanedTrainings } from "../../lib/character-lora-reconciliation.js"
@@ -23,6 +24,7 @@ import { reconcileInflightJobs } from "../../lib/reconcile/cron.js"
  * - reconcileInflightJobs:      every 5 minutes (sync-sweep stuck/legacy rows)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
+ * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
  * - sendStorageWarnings:        daily at 09:00 UTC
  *
  * All jobs are idempotent and wrapped in try/catch to prevent server crashes.
@@ -107,6 +109,26 @@ export function startCleanupCron(): void {
       )
     } catch (err) {
       console.error("[cron] Canceled cleanup failed:", err)
+    }
+  })
+
+  // Soft-deleted location asset purge (Phase 2 #8) -- daily at 04:00 UTC.
+  // 30-day grace period from `deleted_at`; sweep makes the R2 keys 404 from
+  // direct CDN URLs without touching the DB row (so the location can still
+  // be inspected post-purge, just without working images).
+  cron.schedule("0 4 * * *", async () => {
+    console.log("[cron] Starting soft-deleted location asset sweep...")
+    const start = Date.now()
+    try {
+      const result = await sweepSoftDeletedLocationAssets()
+      console.log(
+        `[cron] Location quarantine sweep done: ` +
+        `rowsScanned=${result.rowsScanned} rowsPurged=${result.rowsPurged} ` +
+        `r2KeysDeleted=${result.r2KeysDeleted} errors=${result.errors} ` +
+        `(${Date.now() - start}ms)`,
+      )
+    } catch (err) {
+      console.error("[cron] Location quarantine sweep failed:", err)
     }
   })
 
