@@ -892,6 +892,19 @@ export {
 export type { CharacterMentionTokenInfo } from "./character-mention-slug.js"
 
 export {
+  LOCATION_USAGE_MODES,
+  DEFAULT_LOCATION_USAGE_MODE,
+  isLocationUsageMode,
+  locationMentionSlug,
+  parseLocationMentionToken,
+  findLocationMentionTokens,
+} from "./location-mention-slug.js"
+export type {
+  LocationUsageMode,
+  LocationMentionTokenInfo,
+} from "./location-mention-slug.js"
+
+export {
   USAGE_MODES,
   DEFAULT_USAGE_MODE,
   isUsageMode,
