@@ -38,14 +38,14 @@ beforeEach(() => {
 describe("KieImageProvider.generateImage", () => {
   it("happy path with default model (nano-banana)", async () => {
     const result = await provider.generateImage("a cat")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("nano-banana-pro", expect.objectContaining({ prompt: "a cat" }))
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("nano-banana-pro", expect.objectContaining({ prompt: "a cat" }), undefined, undefined, undefined)
     expect(result.url).toBe("https://kie.example.com/result.png")
     expect(result.cost).toBe(0.02)
   })
 
   it("uses custom model (flux)", async () => {
     const result = await provider.generateImage("a dog", undefined, "flux")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("flux-2/pro-text-to-image", expect.objectContaining({ prompt: "a dog" }))
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("flux-2/pro-text-to-image", expect.objectContaining({ prompt: "a dog" }), undefined, undefined, undefined)
     expect(result.cost).toBe(0.05)
   })
 
@@ -59,6 +59,9 @@ describe("KieImageProvider.generateImage", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "nano-banana-pro",
       expect.objectContaining({ image_input: ["https://ref1.png"] }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -67,6 +70,9 @@ describe("KieImageProvider.generateImage", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "gpt-image/1.5-text-to-image",
       expect.objectContaining({ input_urls: ["https://img1.png", "https://img2.png"] }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -75,6 +81,9 @@ describe("KieImageProvider.generateImage", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "grok-imagine/image-to-image",
       expect.objectContaining({ image_urls: ["https://img.png"] }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -96,7 +105,7 @@ describe("KieImageProvider.generateImage", () => {
 describe("KieImageProvider.editImage", () => {
   it("happy path with default model (recraft-upscale)", async () => {
     const result = await provider.editImage("https://input.png")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("recraft/crisp-upscale", expect.objectContaining({ image: "https://input.png" }))
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("recraft/crisp-upscale", expect.objectContaining({ image: "https://input.png" }), undefined, undefined, undefined)
     expect(result.url).toBe("https://kie.example.com/result.png")
     expect(result.cost).toBe(0.04)
   })
@@ -106,6 +115,9 @@ describe("KieImageProvider.editImage", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "google/nano-banana-edit",
       expect.objectContaining({ prompt: "make it blue", image_urls: ["https://input.png"] }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 

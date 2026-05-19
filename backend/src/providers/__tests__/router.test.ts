@@ -135,7 +135,7 @@ describe("routeAndExecute (via generateImage)", () => {
     expect(result.url).toBe("https://r2/img.png")
     expect(result.cost).toBe(0.02)
     expect(result.providerUsed).toBe("kie")
-    expect(generate).toHaveBeenCalledWith("a dog", undefined, "nano-banana", undefined)
+    expect(generate).toHaveBeenCalledWith("a dog", undefined, "nano-banana", undefined, undefined)
   })
 
   it("walks past providers that don't support the model and uses the next one", async () => {
@@ -309,7 +309,7 @@ describe("typed wrapper dispatch", () => {
       "image-editing",
       "nano-banana-edit",
     )
-    expect(fn).toHaveBeenCalledWith("https://input.png", "make it red", "nano-banana-edit", { foo: 1 })
+    expect(fn).toHaveBeenCalledWith("https://input.png", "make it red", "nano-banana-edit", { foo: 1 }, undefined)
   })
 
   it("imageToVideo routes via image-to-video capability + imageToVideo method", async () => {
@@ -319,7 +319,7 @@ describe("typed wrapper dispatch", () => {
     await imageToVideo("img", "veo3", "prompt", 8, "endframe", { mode: "pro" })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("image-to-video", "veo3")
-    expect(fn).toHaveBeenCalledWith("img", "prompt", "veo3", 8, "endframe", { mode: "pro" })
+    expect(fn).toHaveBeenCalledWith("img", "prompt", "veo3", 8, "endframe", { mode: "pro" }, undefined)
   })
 
   it("textToVideo routes via text-to-video capability + textToVideo method", async () => {
@@ -329,7 +329,7 @@ describe("typed wrapper dispatch", () => {
     await textToVideo("a duck", "kling", 10, "16:9", { sound: true })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("text-to-video", "kling")
-    expect(fn).toHaveBeenCalledWith("a duck", "kling", 10, "16:9", { sound: true })
+    expect(fn).toHaveBeenCalledWith("a duck", "kling", 10, "16:9", { sound: true }, undefined)
   })
 
   it("videoToVideo routes via video-to-video capability", async () => {
@@ -339,7 +339,7 @@ describe("typed wrapper dispatch", () => {
     await videoToVideo("vid", "wan", "p", { aspectRatio: "16:9" })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("video-to-video", "wan")
-    expect(fn).toHaveBeenCalledWith("vid", "p", "wan", { aspectRatio: "16:9" })
+    expect(fn).toHaveBeenCalledWith("vid", "p", "wan", { aspectRatio: "16:9" }, undefined)
   })
 
   it("motionTransfer routes via motion-transfer capability", async () => {
@@ -349,7 +349,7 @@ describe("typed wrapper dispatch", () => {
     await motionTransfer("img", "vid", "kling", "p", { resolution: "720p" })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("motion-transfer", "kling")
-    expect(fn).toHaveBeenCalledWith("img", "vid", "p", { resolution: "720p" })
+    expect(fn).toHaveBeenCalledWith("img", "vid", "p", { resolution: "720p" }, undefined)
   })
 
   it("videoUpscale routes via video-upscale capability", async () => {
@@ -359,7 +359,7 @@ describe("typed wrapper dispatch", () => {
     await videoUpscale("vid", "topaz", "2", { mode: "fast" })
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("video-upscale", "topaz")
-    expect(fn).toHaveBeenCalledWith("vid", "2", { mode: "fast" })
+    expect(fn).toHaveBeenCalledWith("vid", "2", { mode: "fast" }, undefined)
   })
 
   it("lipSync routes via lip-sync capability", async () => {
@@ -369,7 +369,7 @@ describe("typed wrapper dispatch", () => {
     await lipSync("img", "audio", "kling-avatar", "motion-prompt", "720p", 42)
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("lip-sync", "kling-avatar")
-    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p", 42)
+    expect(fn).toHaveBeenCalledWith("img", "audio", "motion-prompt", "kling-avatar", "720p", 42, undefined)
   })
 
   it("generateMusic routes via music-generation capability + audio submodule", async () => {
@@ -379,7 +379,7 @@ describe("typed wrapper dispatch", () => {
     await generateMusic("rock anthem", "suno-v5", 60, "lyrics here")
 
     expect(configMocks.buildRoutingDecision).toHaveBeenCalledWith("music-generation", "suno-v5")
-    expect(fn).toHaveBeenCalledWith("rock anthem", "suno-v5", 60, "lyrics here")
+    expect(fn).toHaveBeenCalledWith("rock anthem", "suno-v5", 60, "lyrics here", undefined)
   })
 
   it("textToSpeech routes via text-to-speech capability + audio submodule", async () => {
@@ -392,7 +392,7 @@ describe("typed wrapper dispatch", () => {
       "text-to-speech",
       "elevenlabs-turbo",
     )
-    expect(fn).toHaveBeenCalledWith("hello world", "voice-id-1", "elevenlabs-turbo", { speed: 1 })
+    expect(fn).toHaveBeenCalledWith("hello world", "voice-id-1", "elevenlabs-turbo", { speed: 1 }, undefined)
   })
 })
 

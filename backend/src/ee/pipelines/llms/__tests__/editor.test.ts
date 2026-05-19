@@ -20,14 +20,14 @@ function makeSupabaseMock() {
     from: vi.fn().mockImplementation((table: string) => {
       if (table === "editor_decisions") {
         return {
-          // runEditor batches every cut_decision into a single INSERT — accept
-          // both array and single-object shapes so older single-row callers
-          // (if any reappear) don't silently no-op.
-          insert: async (
-            payload: Record<string, unknown> | Array<Record<string, unknown>>,
-          ) => {
-            if (Array.isArray(payload)) editorDecisions.push(...payload)
-            else editorDecisions.push(payload)
+          // Phase 1C.2.1 §I1a — runEditor ALWAYS batches every cut_decision
+          // into a single array INSERT. Lock that invariant in: a payload
+          // arriving as a single object signals a regression to the pre-1C.2
+          // per-row pattern (which would silently throttle to N round-trips
+          // and re-introduce the audit drift §I1a guards against).
+          insert: async (payload: Array<Record<string, unknown>>) => {
+            expect(Array.isArray(payload)).toBe(true)
+            editorDecisions.push(...payload)
             return { data: null, error: null }
           },
         }

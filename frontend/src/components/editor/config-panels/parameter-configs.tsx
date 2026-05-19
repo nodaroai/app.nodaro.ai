@@ -56,6 +56,10 @@ import type {
   RenderQualityData,
   CompositionEffectsData,
   PostProcessEffectsData,
+  TransitionData,
+  TransitionPosition,
+  TransitionDuration,
+  TransitionIntensity,
 } from "@/types/nodes"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { FramingPicker } from "./framing-picker"
@@ -87,11 +91,12 @@ import { ExposureSettingsPicker } from "./exposure-settings-picker"
 import { RenderQualityPicker } from "./render-quality-picker"
 import { CompositionEffectsPicker } from "./composition-effects-picker"
 import { PostProcessEffectsPicker } from "./post-process-effects-picker"
+import { TransitionPicker } from "./transition-picker"
 import { PhotographerPicker } from "./photographer-picker"
 import { AestheticPicker } from "./aesthetic-picker"
 import { EraPicker } from "./era-picker"
 import { PromptInjectionPreview } from "./prompt-injection-preview"
-import { composeCameraMotionHintForNode } from "@/lib/cinematography-hints"
+import { composeCameraMotionHintForNode, composeTransitionHintForNode } from "@/lib/cinematography-hints"
 import { buildFramingHints } from "@nodaro/shared"
 import { getLensPromptHint } from "@nodaro/shared"
 import { getCameraFormatPromptHint } from "@nodaro/shared"
@@ -1260,6 +1265,75 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
         onValueChange={(v) => onUpdate({ postProcess: v })}
         maxSelected={2}
       />
+    </div>
+  )
+}
+
+const TIMING_SELECTS = [
+  { key: "position",  label: "Position",  options: [
+    { value: "auto",   label: "Auto" },
+    { value: "start",  label: "Start" },
+    { value: "middle", label: "Middle" },
+    { value: "end",    label: "End" },
+    { value: "full",   label: "Full" },
+  ]},
+  { key: "duration",  label: "Duration",  options: [
+    { value: "auto",    label: "Auto" },
+    { value: "instant", label: "Instant" },
+    { value: "short",   label: "Short (~1s)" },
+    { value: "medium",  label: "Medium (~2s)" },
+    { value: "long",    label: "Long (~3s)" },
+  ]},
+  { key: "intensity", label: "Intensity", options: [
+    { value: "auto",    label: "Auto" },
+    { value: "subtle",  label: "Subtle" },
+    { value: "natural", label: "Natural" },
+    { value: "dynamic", label: "Dynamic" },
+    { value: "crazy",   label: "Crazy" },
+  ]},
+] as const
+
+export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
+  const dir = useLocaleDir()
+  const composed = composeTransitionHintForNode(data)
+
+  return (
+    <div className="flex flex-col gap-3" dir={dir}>
+      <LocaleHeader />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
+      <CustomTextRows
+        idPrefix="transition"
+        preText={data.preText}
+        postText={data.postText}
+        prePlaceholder="e.g. hard cut from action"
+        postPlaceholder="e.g. into establishing shot"
+        onChange={onUpdate}
+      />
+      <Label>Transition</Label>
+      <TransitionPicker
+        value={data.transition}
+        onValueChange={(v) => onUpdate({ transition: v as string | string[] | undefined })}
+        maxSelected={2}
+      />
+
+      <div className="grid grid-cols-3 gap-2">
+        {TIMING_SELECTS.map(({ key, label: labelText, options }) => (
+          <div key={key} className="flex flex-col gap-1">
+            <Label className="text-[10px] uppercase">{labelText}</Label>
+            <Select
+              value={(data[key] as string) ?? "auto"}
+              onValueChange={(v) => onUpdate({ [key]: v })}
+            >
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {options.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

@@ -1159,3 +1159,65 @@ describe("create-task error parity (all generation functions)", () => {
     expect(init.headers["Content-Type"]).toBe("application/json")
   })
 })
+
+// ===========================================================================
+// 14) reconcileOpts.onTaskCreated — Phase 1 reconciliation hook
+// ===========================================================================
+//
+// Every task-creating Suno function (sunoGenerate / sunoCover / sunoExtend /
+// sunoLyrics / sunoSeparate / sunoMusicVideo / sunoMashup / sunoReplaceSection
+// / sunoAddInstrumental / sunoAddVocals / sunoConvertWav / sunoUploadExtend)
+// extracts a fresh upstream Suno taskId from the create response and then
+// polls. The Phase 1 reconciliation pipeline needs a chance to persist
+// `jobs.provider_task_id` BEFORE polling starts so a worker crash mid-poll
+// can be reconciled later. Same pattern as runKieTask / runVeoTask.
+//
+// sunoGenerate is the canonical test — the other ~12 functions share the
+// same pattern (extract taskId → fire hook → poll).
+describe("onTaskCreated reconciliation hook", () => {
+  it("sunoGenerate calls onTaskCreated with the Suno taskId before polling", async () => {
+    let onTaskCreatedTaskId: string | null = null
+    let pollCalled = false
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === `${KIE_API_BASE}/api/v1/generate`) {
+        return jsonResponse({ code: 0, data: { taskId: "suno-1" } })
+      }
+      if (url.includes("/api/v1/generate/record-info")) {
+        pollCalled = true
+        expect(onTaskCreatedTaskId).toBe("suno-1")
+        return recordInfoSuccess("suno-1")
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+
+    await withTimers(() => sunoGenerate({ prompt: "p" }, {
+      onTaskCreated: async (id) => { onTaskCreatedTaskId = id },
+    }))
+
+    expect(onTaskCreatedTaskId).toBe("suno-1")
+    expect(pollCalled).toBe(true)
+  })
+
+  it("swallows errors thrown from onTaskCreated and still polls (sunoGenerate)", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === `${KIE_API_BASE}/api/v1/generate`) {
+        return jsonResponse({ code: 0, data: { taskId: "suno-err" } })
+      }
+      if (url.includes("/api/v1/generate/record-info")) {
+        return recordInfoSuccess("suno-err")
+      }
+      throw new Error(`unexpected url ${url}`)
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const result = await withTimers(() => sunoGenerate({ prompt: "p" }, {
+      onTaskCreated: async () => { throw new Error("db down") },
+    }))
+
+    expect(result.taskId).toBe("suno-err")
+    expect(result.tracks).toHaveLength(1)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+})

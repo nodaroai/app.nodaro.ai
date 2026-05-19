@@ -6,6 +6,9 @@ import {
   buildFaceTemplateInputs,
   buildMotionPrompt,
   PLACEHOLDER_CHARACTER_NAME,
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  LOCATION_REFERENCE_PHOTO_KIND_LABELS,
+  locationReferencePhotoKindLabel,
 } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {
@@ -135,5 +138,35 @@ describe("buildMotionPrompt", () => {
     const out = buildMotionPrompt({ name: PLACEHOLDER_CHARACTER_NAME, motionPrompt: "waving" })
     expect(out).not.toContain(PLACEHOLDER_CHARACTER_NAME)
     expect(out).toBe("waving. realistic style.")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 2 #3: kind-tagged reference-photo subject-line annotation. The map
+// is the single source of truth for the human-friendly label each photo kind
+// renders as in the assembled prompt; the helper is a typed wrapper.
+// ---------------------------------------------------------------------------
+
+describe("locationReferencePhotoKindLabel", () => {
+  it("returns the expected label for each kind", () => {
+    expect(locationReferencePhotoKindLabel("wide")).toBe("wide-angle reference")
+    expect(locationReferencePhotoKindLabel("interior")).toBe("interior reference")
+    expect(locationReferencePhotoKindLabel("exterior")).toBe("exterior reference")
+    expect(locationReferencePhotoKindLabel("detail")).toBe("detail reference")
+    expect(locationReferencePhotoKindLabel("moodBoard")).toBe("mood-board reference")
+    expect(locationReferencePhotoKindLabel("other")).toBe("reference")
+  })
+
+  it("LOCATION_REFERENCE_PHOTO_KIND_LABELS covers every kind in LOCATION_REFERENCE_PHOTO_KINDS", () => {
+    // Guard against the kind enum drifting from the label map. The map is a
+    // `Record<LocationReferencePhotoKind, string>` so TS would already catch
+    // missing keys, but this runtime check also verifies labels are non-empty.
+    for (const kind of LOCATION_REFERENCE_PHOTO_KINDS) {
+      expect(LOCATION_REFERENCE_PHOTO_KIND_LABELS[kind]).toBeDefined()
+      expect(LOCATION_REFERENCE_PHOTO_KIND_LABELS[kind].length).toBeGreaterThan(0)
+    }
+    expect(Object.keys(LOCATION_REFERENCE_PHOTO_KIND_LABELS).sort()).toEqual(
+      [...LOCATION_REFERENCE_PHOTO_KINDS].sort(),
+    )
   })
 })

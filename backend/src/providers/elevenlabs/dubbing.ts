@@ -1,4 +1,6 @@
+import type { ReconcileOpts } from "../provider.interface.js"
 import { ELEVENLABS_BASE_URL, getElevenLabsHeaders, fetchAudioFromUrl } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 
 export interface DubbingOptions {
   sourceLang?: string
@@ -22,6 +24,7 @@ export async function startDubbing(
   audioUrl: string,
   targetLang: string,
   options?: DubbingOptions,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<DubbingStartResult> {
   const headers = getElevenLabsHeaders()
   const audioBuffer = await fetchAudioFromUrl(audioUrl)
@@ -53,6 +56,7 @@ export async function startDubbing(
   }
 
   const result = (await response.json()) as { dubbing_id: string; expected_duration_sec: number }
+  await fireOnTaskCreated(reconcileOpts, result.dubbing_id, "[elevenlabs/dubbing]")
   return {
     dubbingId: result.dubbing_id,
     expectedDurationSec: result.expected_duration_sec,

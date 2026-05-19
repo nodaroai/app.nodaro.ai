@@ -138,4 +138,34 @@ describe("runSilentCutReview", () => {
     expect(result.ok).toBe(false)
     expect(result.awaitingApproval).toBe(false)
   })
+
+  // Phase 1C.2.1 §I1b — runSilentCutReview MUST NOT touch pipeline_stages
+  // directly. The orchestrator (animate-audio-edit.ts) owns the sub_gate /
+  // status / output writes against that table per the second /simplify pass.
+  // Regressing this invariant would double-write (sub-step + orchestrator)
+  // and re-introduce the awaiting_approval race condition that bug fixed.
+  it("does NOT write to pipeline_stages directly (orchestrator owns those writes)", async () => {
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "cv-1",
+      assetId: "asset-cv-1",
+      assetUrl: "https://r2/silent-cut.mp4",
+      creditsSpent: 0,
+    })
+    const { supabase } = makeSupabaseMock({
+      scenes: [
+        { entity_key: "scene_01", composite_video_url: "https://r2/s1.mp4" },
+        { entity_key: "scene_02", composite_video_url: "https://r2/s2.mp4" },
+      ],
+    })
+    await runSilentCutReview({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      mode: "manual",
+    })
+    const fromCalls = (supabase as never as {
+      from: { mock: { calls: unknown[][] } }
+    }).from.mock.calls.map((c) => c[0])
+    expect(fromCalls).not.toContain("pipeline_stages")
+  })
 })

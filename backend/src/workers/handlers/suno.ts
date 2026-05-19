@@ -18,6 +18,8 @@ import {
   type HandlerFn,
   type JobContext,
 } from "../shared.js"
+import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { providerKindForSuno } from "../../lib/reconcile/provider-kind.js"
 
 /**
  * Upload every Suno track to R2 in parallel under variant-suffixed keys and
@@ -88,11 +90,12 @@ const handleSunoGenerate: HandlerFn = async function handleSunoGenerate(job, ctx
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-generate ${ctx.jobId} (model: ${model ?? "V5"}, customMode: ${customMode}, instrumental: ${instrumental}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, personaId, personaModel }),
+    () => sunoGenerate({ prompt, model, lyrics, style, title, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, customMode, instrumental, personaId, personaModel }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno returned no tracks")
 }
@@ -110,11 +113,12 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
     console.log(`[worker] Social URL detected for cover, downloading audio first...`)
     resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
   }
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }),
+    () => sunoCover({ prompt, uploadUrl: resolvedUploadUrl, model, lyrics, style, title, negativeStyle, vocalGender, customMode, instrumental, personaId, personaModel }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno cover returned no tracks")
 }
@@ -126,11 +130,12 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
     personaId?: string; personaModel?: "voice_persona" | "style_persona"
   }
   console.log(`[worker] suno-extend ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId}${personaId ? `, persona: ${personaModel ?? "voice_persona"}` : ""})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }),
+    () => sunoExtend({ audioId, defaultParamFlag, prompt, model, style, title, continueAt, negativeStyle, vocalGender, styleWeight, weirdnessConstraint, audioWeight, personaId, personaModel }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno extend returned no tracks")
 }
@@ -138,11 +143,12 @@ const handleSunoExtend: HandlerFn = async function handleSunoExtend(job, ctx) {
 const handleSunoLyrics: HandlerFn = async function handleSunoLyrics(job, ctx) {
   const { prompt } = job.data as { jobId: string; prompt: string; usageLogId?: string }
   console.log(`[worker] suno-lyrics ${ctx.jobId}`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 10, cap: 80 },
-    () => sunoLyrics({ prompt }),
+    () => sunoLyrics({ prompt }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
@@ -160,11 +166,12 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
   }
   const sepType = separateType ?? "separate_vocal"
   console.log(`[worker] suno-separate ${ctx.jobId} (type: ${sepType}, audioId: ${audioId})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }),
+    () => sunoSeparate({ taskId: sunoTaskId, audioId, type: sepType }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
 
@@ -210,11 +217,12 @@ const handleSunoSeparate: HandlerFn = async function handleSunoSeparate(job, ctx
 const handleSunoMusicVideo: HandlerFn = async function handleSunoMusicVideo(job, ctx) {
   const { taskId: sunoTaskId, audioId } = job.data as { jobId: string; taskId: string; audioId: string; usageLogId?: string }
   console.log(`[worker] suno-music-video ${ctx.jobId}`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoMusicVideo({ taskId: sunoTaskId, audioId }),
+    () => sunoMusicVideo({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.videoUrl, ctx.jobId, "video", ctx.jobUserId)
@@ -235,11 +243,12 @@ const handleSunoMashup: HandlerFn = async function handleSunoMashup(job, ctx) {
     negativeStyle?: string; vocalGender?: string
   }
   console.log(`[worker] suno-mashup ${ctx.jobId} (model: ${model ?? "V5"})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }),
+    () => sunoMashup({ uploadUrlList, model, customMode, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno mashup returned no tracks")
 }
@@ -249,11 +258,12 @@ const handleSunoReplaceSection: HandlerFn = async function handleSunoReplaceSect
     jobId: string; taskId: string; audioId: string; infillStartS: number; infillEndS: number; prompt: string; tags: string; title?: string
   }
   console.log(`[worker] suno-replace-section ${ctx.jobId} (audioId: ${audioId}, ${infillStartS}s-${infillEndS}s)`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title }),
+    () => sunoReplaceSection({ taskId: sunoTaskId, audioId, infillStartS, infillEndS, prompt, tags, title }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno replace-section returned no tracks")
 }
@@ -263,11 +273,12 @@ const handleSunoAddInstrumental: HandlerFn = async function handleSunoAddInstrum
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
   console.log(`[worker] suno-add-instrumental ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }),
+    () => sunoAddInstrumental({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno add-instrumental returned no tracks")
 }
@@ -277,11 +288,12 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
     jobId: string; taskId: string; audioId: string; model?: SunoAddTrackModel
   }
   console.log(`[worker] suno-add-vocals ${ctx.jobId} (model: ${model ?? "V5"}, audioId: ${audioId})`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }),
+    () => sunoAddVocals({ taskId: sunoTaskId, audioId, model }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno add-vocals returned no tracks")
 }
@@ -289,11 +301,12 @@ const handleSunoAddVocals: HandlerFn = async function handleSunoAddVocals(job, c
 const handleSunoConvertWav: HandlerFn = async function handleSunoConvertWav(job, ctx) {
   const { taskId: sunoTaskId, audioId } = job.data as { jobId: string; taskId: string; audioId: string; usageLogId?: string }
   console.log(`[worker] suno-convert-wav ${ctx.jobId}`)
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoConvertWav({ taskId: sunoTaskId, audioId }),
+    () => sunoConvertWav({ taskId: sunoTaskId, audioId }, { onTaskCreated }),
   )
   await setJobProgress(job, ctx.jobId, 50)
   const r2Url = await uploadToR2(result.audioUrl, ctx.jobId, "audio", ctx.jobUserId)
@@ -319,11 +332,12 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
     console.log(`[worker] Social URL detected for upload-extend, downloading audio first...`)
     resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
   }
+  const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(
     job,
     ctx.jobId,
     { start: 5, cap: 45 },
-    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }),
+    () => sunoUploadExtend({ uploadUrl: resolvedUploadUrl, continueAt, defaultParamFlag, model, style, title, negativeStyle, vocalGender }, { onTaskCreated }),
   )
   await finalizeSunoJob(job, ctx, result, "Suno upload-extend returned no tracks")
 }

@@ -16,6 +16,7 @@ import { llmComplete } from "../lib/llm-client.js"
 import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const lottieAssetSchema = z.object({
   id: z.string(),
@@ -97,6 +98,11 @@ export async function lottieOverlayAIRoutes(app: FastifyInstance) {
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
         const assetLines = lottieAssets?.map((a) =>

@@ -123,6 +123,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       expect.any(Object),
       120,
       undefined,
+      undefined,
     )
   })
 
@@ -132,6 +133,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "kling-2.6/image-to-video",
       expect.any(Object),
       120,
+      undefined,
       undefined,
     )
   })
@@ -143,6 +145,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "cinematic",
       ["https://img.png"],
       { aspectRatio: undefined, seed: undefined },
+      undefined,
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
@@ -156,6 +159,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "cinematic",
       ["https://img.png"],
       { aspectRatio: undefined, seed: undefined },
+      undefined,
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
   })
@@ -220,6 +224,7 @@ describe("KieVideoProvider.imageToVideo", () => {
         prompt: "cinematic",
         imageUrls: ["https://img.png"],
       }),
+      undefined,
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/kling3-video.mp4")
@@ -259,6 +264,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "cinematic scene",
       ["https://ref1.png", "https://ref2.png"],
       expect.objectContaining({ generationType: "REFERENCE_2_VIDEO" }),
+      undefined,
     )
   })
 
@@ -293,6 +299,7 @@ describe("KieVideoProvider.imageToVideo", () => {
         image_urls: ["https://start.png", "https://ref1.png", "https://ref2.png", "https://ref3.png"],
       }),
       expect.any(Number),
+      undefined,
       undefined,
     )
   })
@@ -371,6 +378,7 @@ describe("KieVideoProvider.imageToVideo", () => {
       "test",
       ["https://cdn.nodaro.ai/images/big.png"],
       expect.any(Object),
+      undefined,
     )
   })
 })
@@ -386,6 +394,7 @@ describe("KieVideoProvider.textToVideo", () => {
       "hailuo/02-text-to-video-pro",
       expect.objectContaining({ prompt: "a sunset scene" }),
       120,
+      undefined,
       undefined,
     )
     expect(result.url).toBe("https://cdn.kie.ai/video.mp4")
@@ -409,6 +418,7 @@ describe("KieVideoProvider.textToVideo", () => {
       "space exploration",
       undefined,
       { aspectRatio: undefined, seed: undefined },
+      undefined,
     )
     expect(mocks.mockRunKieTask).not.toHaveBeenCalled()
     expect(result.url).toBe("https://cdn.kie.ai/veo-video.mp4")
@@ -427,6 +437,7 @@ describe("KieVideoProvider.textToVideo", () => {
       expect.objectContaining({
         prompt: "cinematic",
       }),
+      undefined,
     )
     // textToVideo for kling-3.0 should NOT pass imageUrls
     const callArgs = mocks.mockKling3Generate.mock.calls[0][0]

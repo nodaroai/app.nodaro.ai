@@ -9,6 +9,7 @@ import type {
   ImageGenerationProvider,
   ImageEditingProvider,
   ProviderResult,
+  ReconcileOpts,
 } from "../provider.interface.js"
 import sharp from "sharp"
 import { createSanitizedError, runKieTask } from "./client.js"
@@ -97,7 +98,8 @@ export class KieImageProvider
     prompt: string,
     referenceImageUrls?: string[],
     model?: string,
-    extraParams?: Record<string, unknown>
+    extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "nano-banana"
     const modelConfig = KIE_IMAGE_MODELS[provider]
@@ -235,8 +237,8 @@ export class KieImageProvider
     // Flux Kontext uses a special endpoint (not standard createTask)
     const isKontext = provider === "flux-kontext" || provider === "flux-kontext-max"
     const result = isKontext
-      ? await runFluxKontextTask(modelConfig.model, input)
-      : await runKieTask(modelConfig.model, input)
+      ? await runFluxKontextTask(modelConfig.model, input, reconcileOpts)
+      : await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
 
     const allUrls = result.resultJson.resultUrls ?? []
     const imageUrl = allUrls[0]
@@ -278,7 +280,8 @@ export class KieImageProvider
     imageUrl: string,
     prompt?: string,
     model?: string,
-    extraParams?: Record<string, unknown>
+    extraParams?: Record<string, unknown>,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "recraft-upscale"
     const modelConfig = KIE_IMAGE_MODELS[provider]
@@ -338,7 +341,7 @@ export class KieImageProvider
       JSON.stringify(input, null, 2)
     )
 
-    const { resultJson, providerMs } = await runKieTask(modelConfig.model, input)
+    const { resultJson, providerMs } = await runKieTask(modelConfig.model, input, undefined, undefined, reconcileOpts)
 
     const allUrls = resultJson.resultUrls ?? []
     const outputUrl = allUrls[0]

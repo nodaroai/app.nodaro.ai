@@ -35,6 +35,9 @@ import {
   buildObjectPrompt,
   buildLocationPrompt,
   buildFaceTemplateInputs,
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind,
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
@@ -330,7 +333,7 @@ const LOCATION_VARIANT_BUCKETS = [
  * Returns an empty list when no wired-location upstream OR upstream has no
  * `sourceImageUrl` — caller falls through to the existing wired-image flow.
  */
-function expandWiredLocationRefs(
+export function expandWiredLocationRefs(
   consumerNodeId: string,
   buildCtx: PayloadBuildContext | undefined,
 ): ConnectedReference[] {
@@ -388,6 +391,30 @@ function expandWiredLocationRefs(
           locationVariantDisplayName: variantName,
         })
       }
+    }
+
+    // Phase 2 #3: emit one ConnectedReference per user-uploaded reference photo.
+    // These auto-attach (unlike per-variant entries which are mention-only) and
+    // carry their `kind` so the prompt-builder can annotate the subject line.
+    const refPhotos = (locData.referencePhotos as Array<{ kind?: string; url?: string }> | undefined) ?? []
+    for (let idx = 0; idx < refPhotos.length; idx++) {
+      const photo = refPhotos[idx]
+      const photoUrl = (photo.url ?? "").trim()
+      if (!photoUrl) continue
+      if (!photo.kind) continue
+      // Validate the kind is one of the 6 known values to avoid passing
+      // arbitrary strings downstream. Cast through the union after the guard.
+      if (!LOCATION_REFERENCE_PHOTO_KINDS.includes(photo.kind as LocationReferencePhotoKind)) continue
+      const kind = photo.kind as LocationReferencePhotoKind
+      out.push({
+        id: `${upstream.id}_refphoto_${kind}_${idx}`,
+        defaultName: `${locName} (${locationReferencePhotoKindLabel(kind)})`,
+        source: "wired-location",
+        url: photoUrl,
+        locationCanonicalDescription: canonicalDescription,
+        locationSlug,
+        locationReferencePhotoKind: kind,
+      })
     }
   }
   return out
@@ -1083,7 +1110,7 @@ function hasConnectedStyleNode(
  */
 /** Video-only cinematography dims; callers targeting still-image consumers
  *  pass these via `options.excludeTypes` to strip incoherent hints. */
-const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal"])
+const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal", "transition"])
 
 function collectCinematographyHints(
   consumerNodeId: string,

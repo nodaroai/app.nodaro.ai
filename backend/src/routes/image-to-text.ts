@@ -11,6 +11,7 @@ import { safeFetch } from "../lib/safe-fetch.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -95,6 +96,11 @@ export async function imageToTextRoutes(app: FastifyInstance) {
       )
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
         const systemPrompt = customPrompt || SYSTEM_PROMPTS[detailLevel]

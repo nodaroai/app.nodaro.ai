@@ -66,6 +66,7 @@ import {
   VOICE_TIMBRES,
   VOICE_ARCHETYPES,
 } from "../index.js"
+import { TRANSITIONS } from "../transitions.js"
 
 // ---------------------------------------------------------------------------
 // Lookup helper — pick an id from a catalog or return a placeholder. Empty
@@ -138,6 +139,9 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   "composition-effects": { compositionEffect: firstId(COMPOSITION_EFFECTS) },
   "post-process-effects": { postProcess: firstId(POST_PROCESS_EFFECTS) },
   "action-fx": { actionFx: firstId(ACTION_FX) },
+  // TRANSITIONS[0] is "auto" with an intentionally empty promptHint — use a
+  // real transition id so the sync test exercises the hint dispatch.
+  "transition": { transition: "cross-dissolve" },
   "loop-subject": { loopSubject: firstId(LOOP_SUBJECTS) },
   "scene-count": { count: 5 },
   "duration": { seconds: 8 },

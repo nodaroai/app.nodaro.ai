@@ -24,6 +24,7 @@ import {
 import type { ExposableField, ExposableOutput } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { IdentityMeta } from "@nodaro/shared"
+import type { TransitionPosition, TransitionDuration, TransitionIntensity } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS } from "@/components/editor/config-panels/model-options"
 
@@ -1032,6 +1033,19 @@ export interface PostProcessEffectsData {
   preText?: string
   /** Free-text appended after the structured hint. */
   postText?: string
+}
+
+export type { TransitionPosition, TransitionDuration, TransitionIntensity }
+
+export interface TransitionData {
+  label: string
+  transition: string | string[]            // catalog id OR array of 1-2 ids (multi-pick)
+  position?: TransitionPosition
+  duration?: TransitionDuration
+  intensity?: TransitionIntensity
+  preText?: string
+  postText?: string
+  [key: string]: unknown
 }
 
 /** Standalone Temporal parameter node data. */
@@ -3767,6 +3781,7 @@ export type SceneNodeData =
   | AspectRatioData
   | MotionData
   | CameraMotionData
+  | TransitionData
   | FramingData
   | LensData
   | CameraFormatData
@@ -3922,6 +3937,7 @@ export type SceneNodeType =
   | "aspect-ratio"
   | "motion"
   | "camera-motion"
+  | "transition"
   | "framing"
   | "lens"
   | "camera-format"
@@ -4261,6 +4277,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Camera Motion", cameraMotion: "static" },
+  },
+  {
+    type: "transition",
+    label: "Transition",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Transition",
+      transition: "auto",
+      position: "auto",
+      duration: "auto",
+      intensity: "auto",
+    },
   },
   {
     type: "framing",

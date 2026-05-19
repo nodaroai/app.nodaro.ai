@@ -5,7 +5,9 @@
  * Follows the VIDEO_MODEL_CONFIGS pattern from replicate/video.ts.
  */
 
+import type { ReconcileOpts } from "../provider.interface.js"
 import { replicate, extractUrl, extractCost } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 
 interface LipSyncModelConfig {
   // Community models require version-based predictions (not model-based)
@@ -60,6 +62,7 @@ export async function replicateLipSync(
   faceUrl: string,
   audioUrl: string,
   params: ReplicateLipSyncParams = {},
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ videoUrl: string; cost: number | null }> {
   const cfg = LIP_SYNC_MODEL_CONFIGS[provider]
   if (!cfg) {
@@ -104,6 +107,7 @@ export async function replicateLipSync(
     version: cfg.version,
     input,
   })
+  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:lipSync]")
   const completed = await replicate.wait(prediction)
   const output = completed.output
 

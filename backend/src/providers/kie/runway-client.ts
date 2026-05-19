@@ -20,6 +20,8 @@ import {
   MAX_POLL_ATTEMPTS_VIDEO,
   type KieResultJson,
 } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
@@ -103,8 +105,12 @@ async function postKieEndpoint(
 
 export async function runRunwayTask(
   input: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
   const { taskId, apiKey } = await postKieEndpoint("/api/v1/runway/generate", input, "Runway generate")
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Runway]")
+
   const videoUrl = await pollRunwayRecordDetail(taskId, "Runway", apiKey)
   return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
 }
@@ -201,13 +207,17 @@ async function pollRunwayRecordDetail(
 export async function runRunwayExtendTask(
   taskId: string,
   prompt: string,
-  quality: "720p" | "1080p" = "720p"
+  quality: "720p" | "1080p" = "720p",
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
   const { taskId: extendTaskId, apiKey } = await postKieEndpoint(
     "/api/v1/runway/extend",
     { taskId, prompt, quality },
     "Runway extend"
   )
+
+  await fireOnTaskCreated(reconcileOpts, extendTaskId, "[KIE.ai Runway Extend]")
+
   const videoUrl = await pollRunwayRecordDetail(extendTaskId, "Runway Extend", apiKey)
   return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId: extendTaskId }
 }
@@ -222,8 +232,12 @@ export async function runRunwayExtendTask(
  */
 export async function runAlephTask(
   input: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
   const { taskId, apiKey } = await postKieEndpoint("/api/v1/aleph/generate", input, "Aleph generate")
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Aleph]")
+
   const videoUrl = await pollAlephRecordInfo(taskId, apiKey)
   return { resultJson: { resultUrls: [videoUrl], videoUrl }, taskId }
 }

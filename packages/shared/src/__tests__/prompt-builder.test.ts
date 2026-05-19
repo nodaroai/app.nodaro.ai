@@ -1588,3 +1588,82 @@ describe("buildImagePrompt — @location mention resolution", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Phase 2 #3: kind-tagged reference-photo subject-line annotation. When a
+// wired-location ConnectedReference carries a `locationReferencePhotoKind`,
+// the directive subject's parenthetical should pick up the kind's
+// human-friendly label so the model sees the photo's role inline.
+// ---------------------------------------------------------------------------
+
+describe("buildIdentityDirectives — locationReferencePhotoKind subject-line annotation", () => {
+  it("annotates the subject with 'wide-angle reference' for kind=wide", () => {
+    // The {image:N:label} token regex only accepts [a-zA-Z0-9_-] for the
+    // label, so the test uses the hyphenated form "old-library".
+    const result = buildImagePrompt({
+      prompt: "A hero stands in front of {image:1:old-library}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1_refphoto_wide_0",
+          defaultName: "Old Library (wide-angle reference)",
+          source: "wired-location",
+          url: "https://r2/old-library-wide.png",
+          locationSlug: "old-library",
+          locationReferencePhotoKind: "wide",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (old-library — wide-angle reference)")
+  })
+
+  it("maps every kind to its expected label substring", () => {
+    const cases: ReadonlyArray<{ kind: "wide" | "interior" | "exterior" | "detail" | "moodBoard" | "other"; substring: string }> = [
+      { kind: "wide", substring: "wide-angle reference" },
+      { kind: "interior", substring: "interior reference" },
+      { kind: "exterior", substring: "exterior reference" },
+      { kind: "detail", substring: "detail reference" },
+      { kind: "moodBoard", substring: "mood-board reference" },
+      { kind: "other", substring: "reference" },
+    ]
+    for (const { kind, substring } of cases) {
+      const result = buildImagePrompt({
+        prompt: "A hero stands in front of {image:1:old-library}",
+        provider: "nano-banana",
+        connectedReferences: [
+          {
+            id: `loc_1_refphoto_${kind}_0`,
+            defaultName: `Old Library (${kind})`,
+            source: "wired-location",
+            url: `https://r2/old-library-${kind}.png`,
+            locationSlug: "old-library",
+            locationReferencePhotoKind: kind,
+          },
+        ],
+      })
+      expect(result.prompt).toContain(`old-library — ${substring}`)
+    }
+  })
+
+  it("does NOT annotate when locationReferencePhotoKind is unset (negative test)", () => {
+    // Plain wired-location canonical ref — should render as
+    // "Image 1 (old-library)" with no kind annotation in the parenthetical.
+    const result = buildImagePrompt({
+      prompt: "A hero stands in front of {image:1:old-library}",
+      provider: "nano-banana",
+      connectedReferences: [
+        {
+          id: "loc_1",
+          defaultName: "Old Library",
+          source: "wired-location",
+          url: "https://r2/old-library.png",
+          locationSlug: "old-library",
+        },
+      ],
+    })
+    expect(result.prompt).toContain("Image 1 (old-library)")
+    expect(result.prompt).not.toContain("wide-angle reference")
+    expect(result.prompt).not.toContain("interior reference")
+    expect(result.prompt).not.toContain("mood-board reference")
+  })
+})
+

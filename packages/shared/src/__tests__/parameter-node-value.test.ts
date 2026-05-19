@@ -84,3 +84,23 @@ describe("parameter-node-value — action-fx", () => {
     expect(getParameterValue({}, "action-fx")).toBeUndefined()
   })
 })
+
+describe("getParameterValue — transition", () => {
+  it("returns the id for a single string value", () => {
+    expect(getParameterValue({ transition: "cross-dissolve" }, "transition")).toBe("cross-dissolve")
+  })
+
+  it("returns the first id for an array value (multi-pick)", () => {
+    expect(getParameterValue({ transition: ["smash-cut", "white-flash"] }, "transition"))
+      .toBe("smash-cut")
+  })
+
+  it("returns undefined for empty string / empty array", () => {
+    expect(getParameterValue({ transition: "" }, "transition")).toBeUndefined()
+    expect(getParameterValue({ transition: [] }, "transition")).toBeUndefined()
+  })
+
+  it("transition is in PARAMETER_NODE_TYPES set", () => {
+    expect(PARAMETER_NODE_TYPES.has("transition")).toBe(true)
+  })
+})

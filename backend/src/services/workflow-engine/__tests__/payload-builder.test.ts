@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildPayload, buildNodeRefMap } from "../payload-builder.js"
+import { buildPayload, buildNodeRefMap, expandWiredLocationRefs } from "../payload-builder.js"
 import type { SimpleNode, SimpleEdge, ResolvedInputs, NodeExecutionState } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -645,5 +645,150 @@ describe("buildNodeRefMap", () => {
       nodeStates: {},
     })
     expect(result.get("Image")).toBe("saved.png")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 2 #3: expandWiredLocationRefs emits one ConnectedReference per
+// user-uploaded reference photo, carrying the photo's `kind` so the prompt
+// builder can annotate the subject line at generate time. These auto-attach
+// (unlike per-variant entries which are mention-only) — the
+// connectedReferences filter at prompt-builder.ts:1011-1016 keeps them because
+// they have `locationReferencePhotoKind` set but `locationVariantBucket`
+// unset.
+// ---------------------------------------------------------------------------
+
+describe("expandWiredLocationRefs — reference photos (Phase 2 #3)", () => {
+  function locationNode(id: string, extra: Record<string, unknown> = {}): SimpleNode {
+    return node(id, "location", {
+      label: "Old Library",
+      locationName: "Old Library",
+      sourceImageUrl: "https://r2/old-library.png",
+      description: "Stately library at dusk",
+      canonicalDescription: "A dimly-lit Victorian library with leather-bound books",
+      ...extra,
+    })
+  }
+
+  it("returns only the canonical entry when referencePhotos is empty", () => {
+    const loc = locationNode("loc-1", { referencePhotos: [] })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    expect(refs).toHaveLength(1)
+    expect(refs[0].id).toBe("loc-1")
+    expect(refs[0].locationReferencePhotoKind).toBeUndefined()
+  })
+
+  it("emits canonical + N entries when N reference photos are present", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [
+        { kind: "wide", url: "https://r2/wide.png" },
+        { kind: "interior", url: "https://r2/interior.png" },
+        { kind: "moodBoard", url: "https://r2/mood.png" },
+      ],
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    // 1 canonical + 3 reference photos.
+    expect(refs).toHaveLength(4)
+
+    const photoRefs = refs.filter((r) => r.locationReferencePhotoKind !== undefined)
+    expect(photoRefs).toHaveLength(3)
+
+    const wide = photoRefs.find((r) => r.locationReferencePhotoKind === "wide")
+    expect(wide).toBeDefined()
+    expect(wide!.id).toBe("loc-1_refphoto_wide_0")
+    expect(wide!.url).toBe("https://r2/wide.png")
+    expect(wide!.defaultName).toBe("Old Library (wide-angle reference)")
+    expect(wide!.source).toBe("wired-location")
+
+    const interior = photoRefs.find((r) => r.locationReferencePhotoKind === "interior")
+    expect(interior).toBeDefined()
+    expect(interior!.id).toBe("loc-1_refphoto_interior_1")
+    expect(interior!.defaultName).toBe("Old Library (interior reference)")
+
+    const mood = photoRefs.find((r) => r.locationReferencePhotoKind === "moodBoard")
+    expect(mood).toBeDefined()
+    expect(mood!.id).toBe("loc-1_refphoto_moodBoard_2")
+    expect(mood!.defaultName).toBe("Old Library (mood-board reference)")
+  })
+
+  it("skips reference photos with empty URLs", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [
+        { kind: "wide", url: "" },
+        { kind: "interior", url: "   " },
+        { kind: "detail", url: "https://r2/detail.png" },
+      ],
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    // 1 canonical + 1 valid detail entry; the empty URLs are dropped.
+    expect(refs).toHaveLength(2)
+    const photoRefs = refs.filter((r) => r.locationReferencePhotoKind !== undefined)
+    expect(photoRefs).toHaveLength(1)
+    expect(photoRefs[0].locationReferencePhotoKind).toBe("detail")
+    expect(photoRefs[0].url).toBe("https://r2/detail.png")
+  })
+
+  it("skips reference photos with unknown/invalid kinds", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [
+        { kind: "wide", url: "https://r2/wide.png" },
+        { kind: "garbage", url: "https://r2/garbage.png" },
+        { kind: "", url: "https://r2/empty-kind.png" },
+      ],
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    // Canonical + 1 valid wide; "garbage" and "" are dropped.
+    expect(refs).toHaveLength(2)
+    const photoRefs = refs.filter((r) => r.locationReferencePhotoKind !== undefined)
+    expect(photoRefs).toHaveLength(1)
+    expect(photoRefs[0].locationReferencePhotoKind).toBe("wide")
+  })
+
+  it("propagates locationSlug and locationCanonicalDescription onto each reference-photo entry", () => {
+    const loc = locationNode("loc-1", {
+      referencePhotos: [
+        { kind: "wide", url: "https://r2/wide.png" },
+        { kind: "exterior", url: "https://r2/exterior.png" },
+      ],
+    })
+    const consumer = node("gen-1", "generate-image")
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const photoRefs = refs.filter((r) => r.locationReferencePhotoKind !== undefined)
+    expect(photoRefs).toHaveLength(2)
+    for (const r of photoRefs) {
+      expect(r.locationSlug).toBe("old-library")
+      expect(r.locationCanonicalDescription).toBe(
+        "A dimly-lit Victorian library with leather-bound books",
+      )
+      // Reference-photo entries MUST leave locationVariantBucket unset so the
+      // connectedReferences filter at prompt-builder.ts:1011-1016 keeps them
+      // (the filter drops entries with locationVariantBucket set, but
+      // reference photos auto-attach — they're not gated by @-mention).
+      expect(r.locationVariantBucket).toBeUndefined()
+    }
   })
 })

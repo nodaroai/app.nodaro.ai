@@ -182,6 +182,7 @@ describe("image-to-video handler", () => {
     expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
       "https://img.png", "minimax", "animate", undefined, undefined,
       expect.objectContaining({ onProgress: expect.any(Function) }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
       VIDEO_RESULT.url, "job-1", "user-1", false,
@@ -301,7 +302,44 @@ describe("image-to-video handler", () => {
     expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
       "https://img.png", "minimax", undefined, undefined, undefined,
       expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
+  })
+
+  // Reconciliation wiring (Task 1.11): when the provider fires onTaskCreated
+  // with a taskId, the persistence layer writes provider_kind +
+  // provider_task_id + provider_call_started_at on the job row. minimax routes
+  // through KIE standard, so the kind is "kie-standard".
+  it("persists provider_kind + provider_task_id on the job row via makeOnTaskCreated", async () => {
+    mocks.mockImageToVideo.mockImplementationOnce(
+      async (
+        _imageUrl: unknown,
+        _provider: unknown,
+        _prompt: unknown,
+        _duration: unknown,
+        _endFrame: unknown,
+        _options: unknown,
+        reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
+      ) => {
+        if (reconcileOpts?.onTaskCreated) {
+          await reconcileOpts.onTaskCreated("t-test")
+        }
+        return VIDEO_RESULT
+      },
+    )
+    const job = makeJob("image-to-video", { imageUrl: "https://img.png" })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "kie-standard",
+        provider_task_id: "t-test",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
   })
 })
 
@@ -316,7 +354,11 @@ describe("video-to-video handler", () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4", prompt: "stylize" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", "stylize", expect.any(Object))
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith(
+      "https://vid.mp4", "wan", "stylize",
+      expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
@@ -326,14 +368,22 @@ describe("video-to-video handler", () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "wan", undefined, expect.any(Object))
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith(
+      "https://vid.mp4", "wan", undefined,
+      expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("video-to-video", { videoUrl: "https://vid.mp4", provider: "custom" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith("https://vid.mp4", "custom", undefined, expect.any(Object))
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith(
+      "https://vid.mp4", "custom", undefined,
+      expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 })
 
@@ -349,7 +399,9 @@ describe("text-to-video handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTextToVideo).toHaveBeenCalledWith(
-      "a sunset", "minimax", undefined, undefined, expect.any(Object),
+      "a sunset", "minimax", undefined, undefined,
+      expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
@@ -360,7 +412,9 @@ describe("text-to-video handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockTextToVideo).toHaveBeenCalledWith(
-      "test", "minimax", undefined, undefined, expect.any(Object),
+      "test", "minimax", undefined, undefined,
+      expect.any(Object),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -403,6 +457,7 @@ describe("lip-sync handler", () => {
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
@@ -418,6 +473,7 @@ describe("lip-sync handler", () => {
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "kling-avatar", undefined, undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -433,6 +489,7 @@ describe("lip-sync handler", () => {
 
     expect(mocks.mockLipSync).toHaveBeenCalledWith(
       "https://face.png", "https://speech.mp3", "hailuo-avatar", "talking", "1080p", undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 })
@@ -458,6 +515,7 @@ describe("motion-transfer handler", () => {
         characterOrientation: "image",
         resolution: "720p",
       }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", VIDEO_RESULT.cost)
@@ -528,6 +586,7 @@ describe("video-upscale handler", () => {
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
       "https://vid.mp4", "topaz", "2",
       expect.objectContaining({ onProgress: expect.any(Function) }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1")
@@ -539,6 +598,7 @@ describe("video-upscale handler", () => {
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
       expect.anything(), "topaz", expect.anything(), expect.anything(),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -558,6 +618,7 @@ describe("video-upscale handler", () => {
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "2", expect.anything(),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -567,6 +628,7 @@ describe("video-upscale handler", () => {
 
     expect(mocks.mockVideoUpscale).toHaveBeenCalledWith(
       expect.anything(), expect.anything(), "4", expect.anything(),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 })
@@ -589,6 +651,7 @@ describe("speech-to-video handler", () => {
     expect(mocks.mockSpeechToVideo).toHaveBeenCalledWith(
       "https://img.png", "https://audio.mp3", "talking head", undefined,
       expect.objectContaining({}),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockGenerateAndUploadThumbnail).toHaveBeenCalled()
@@ -608,6 +671,7 @@ describe("speech-to-video handler", () => {
     expect(mocks.mockSpeechToVideo).toHaveBeenCalledWith(
       "https://img.png", "https://audio.mp3", "talking", "720p",
       expect.objectContaining({ seed: 42 }),
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 

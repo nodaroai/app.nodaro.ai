@@ -119,7 +119,10 @@ describe("generate-character handler", () => {
     const job = makeJob("generate-character", { prompt: "a warrior" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a warrior", "nano-banana", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a warrior", "nano-banana", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(PROVIDER_RESULT.url, "job-1", "user-1", false)
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
@@ -127,13 +130,19 @@ describe("generate-character handler", () => {
   it("uses custom provider", async () => {
     const job = makeJob("generate-character", { prompt: "a wizard", provider: "flux" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a wizard", "flux", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a wizard", "flux", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("passes source image as reference", async () => {
     const job = makeJob("generate-character", { prompt: "style transfer", sourceImageUrl: "https://ref.png" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("style transfer", "nano-banana", ["https://ref.png"], undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "style transfer", "nano-banana", ["https://ref.png"], undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("forwards aspectRatio from job.data to generateImage extraParams.aspect_ratio", async () => {
@@ -147,7 +156,42 @@ describe("generate-character handler", () => {
       "nano-banana",
       undefined,
       { aspect_ratio: "3:4" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
+  })
+
+  // Reconciliation wiring (Task 1.11): when generateImage fires
+  // onTaskCreated with a taskId, the persistence layer writes provider_kind
+  // + provider_task_id + provider_call_started_at on the job row. nano-banana
+  // routes through KIE so the kind is "kie-standard".
+  it("persists provider_kind + provider_task_id on the job row via makeOnTaskCreated", async () => {
+    mocks.mockGenerateImage.mockImplementationOnce(
+      async (
+        _prompt: unknown,
+        _model: unknown,
+        _refs: unknown,
+        _extra: unknown,
+        reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
+      ) => {
+        if (reconcileOpts?.onTaskCreated) {
+          await reconcileOpts.onTaskCreated("t-test")
+        }
+        return PROVIDER_RESULT
+      },
+    )
+    const job = makeJob("generate-character", { prompt: "reconcile-me" })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "kie-standard",
+        provider_task_id: "t-test",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
   })
 })
 
@@ -157,7 +201,10 @@ describe("generate-face handler", () => {
   it("forces 1:1 aspect ratio", async () => {
     const job = makeJob("generate-face", { prompt: "a portrait" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a portrait", "nano-banana", undefined, { aspect_ratio: "1:1" })
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a portrait", "nano-banana", undefined, { aspect_ratio: "1:1" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 })
 
@@ -203,7 +250,10 @@ describe("generate-object handler", () => {
   it("happy path", async () => {
     const job = makeJob("generate-object", { prompt: "a treasure chest" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a treasure chest", "nano-banana", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a treasure chest", "nano-banana", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 })
@@ -226,7 +276,10 @@ describe("generate-location handler", () => {
   it("happy path", async () => {
     const job = makeJob("generate-location", { prompt: "a dark forest" })
     await handler(job as never, makeCtx())
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a dark forest", "nano-banana", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a dark forest", "nano-banana", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
 })
@@ -379,6 +432,7 @@ describe("generate-character-motion handler", () => {
       undefined,
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false)
     expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
@@ -400,6 +454,7 @@ describe("generate-character-motion handler", () => {
       undefined,
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -417,6 +472,7 @@ describe("generate-character-motion handler", () => {
       undefined,
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", true)
   })
@@ -436,6 +492,7 @@ describe("generate-character-motion handler", () => {
       undefined,
       undefined,
       { aspectRatio: "9:16" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -476,6 +533,7 @@ describe("generate-location-motion handler", () => {
       undefined,
       undefined,
       { aspectRatio: "16:9" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
       VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false,
@@ -504,6 +562,7 @@ describe("generate-location-motion handler", () => {
       undefined,
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 

@@ -10,6 +10,7 @@ import type {
   TextToSpeechProvider,
   TextToSpeechOptions,
   ProviderResult,
+  ReconcileOpts,
 } from "../provider.interface.js"
 import {
   createSanitizedError,
@@ -86,7 +87,8 @@ export class KieAudioProvider
     prompt: string,
     model?: string,
     duration?: number,
-    lyrics?: string
+    lyrics?: string,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "suno"
     const modelConfig = KIE_MUSIC_MODELS[provider]
@@ -114,7 +116,9 @@ export class KieAudioProvider
     const { resultJson, rawRecordInfo, providerMs } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      undefined,
+      reconcileOpts,
     )
 
     const audioUrl =
@@ -147,7 +151,8 @@ export class KieAudioProvider
     text: string,
     voice?: string,
     model?: string,
-    options?: TextToSpeechOptions
+    options?: TextToSpeechOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     // Map legacy "elevenlabs" to "elevenlabs-turbo"
     const provider = model === "elevenlabs" ? "elevenlabs-turbo" : (model ?? "elevenlabs-turbo")
@@ -183,7 +188,10 @@ export class KieAudioProvider
 
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
-      input
+      input,
+      undefined,
+      undefined,
+      reconcileOpts,
     )
 
     const audioUrl =
@@ -208,7 +216,8 @@ export class KieAudioProvider
       duration?: number
       loop?: boolean
       promptInfluence?: number
-    }
+    },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const modelConfig = KIE_SOUND_EFFECT_MODELS["elevenlabs-sfx"]
     if (!modelConfig) {
@@ -231,7 +240,9 @@ export class KieAudioProvider
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      undefined,
+      reconcileOpts,
     )
 
     const audioUrl =
@@ -250,7 +261,7 @@ export class KieAudioProvider
     return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
   }
 
-  async isolateAudio(audioUrl: string): Promise<ProviderResult> {
+  async isolateAudio(audioUrl: string, reconcileOpts?: ReconcileOpts): Promise<ProviderResult> {
     const modelConfig = KIE_AUDIO_ISOLATION_MODELS["elevenlabs-isolation"]
     if (!modelConfig) {
       throw createSanitizedError(
@@ -266,7 +277,9 @@ export class KieAudioProvider
     const { resultJson, costTime } = await runKieTask(
       modelConfig.model,
       { audio_url: audioUrl },
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      undefined,
+      reconcileOpts,
     )
 
     const resultUrl =
@@ -289,7 +302,8 @@ export class KieAudioProvider
 
   async speechToText(
     audioUrl: string,
-    options?: { languageCode?: string; diarize?: boolean; tagAudioEvents?: boolean }
+    options?: { languageCode?: string; diarize?: boolean; tagAudioEvents?: boolean },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<{ text: string; language: string; cost: number }> {
     const modelConfig = KIE_STT_MODELS["elevenlabs-stt"]
     if (!modelConfig) {
@@ -311,7 +325,9 @@ export class KieAudioProvider
     const { resultJson, costTime } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      undefined,
+      reconcileOpts,
     )
 
     const raw = resultJson as Record<string, unknown>
@@ -329,7 +345,8 @@ export class KieAudioProvider
 
   async generateDialogue(
     dialogue: Array<{ text: string; voice: string }>,
-    options?: { stability?: number; languageCode?: string }
+    options?: { stability?: number; languageCode?: string },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const modelConfig = KIE_DIALOGUE_MODELS["elevenlabs-dialogue"]
     if (!modelConfig) {
@@ -356,7 +373,9 @@ export class KieAudioProvider
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
-      MAX_POLL_ATTEMPTS_VIDEO
+      MAX_POLL_ATTEMPTS_VIDEO,
+      undefined,
+      reconcileOpts,
     )
 
     const audioUrl =

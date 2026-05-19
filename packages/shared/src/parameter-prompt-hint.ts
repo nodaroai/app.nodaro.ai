@@ -33,6 +33,13 @@ import { buildPoseHints } from "./pose.js"
 import { buildStylingHints } from "./styling.js"
 import { buildTemporalHints } from "./temporal.js"
 import { composeCameraMotionHintFromConnections } from "./camera-motions.js"
+import {
+  composeTransitionHintFromConnections,
+  type TransitionDuration,
+  type TransitionIntensity,
+  type TransitionPosition,
+  type TransitionTiming,
+} from "./transitions.js"
 import { buildMaterialHints } from "./materials.js"
 import { getAnimal } from "./animals.js"
 import { getVehicle } from "./vehicles.js"
@@ -120,6 +127,34 @@ export function getParameterPromptHint(
       else if (edge.targetHandle === "endState") endHints.push(hint)
     }
     return composeCameraMotionHintFromConnections(motionId, startHints, endHints)
+  }
+
+  if (node.type === "transition") {
+    const raw = data.transition
+    const transitionId: string | string[] | undefined =
+      Array.isArray(raw)
+        ? raw.filter((s): s is string => typeof s === "string" && s.length > 0)
+        : (asStr(raw) || undefined)
+    const timing: TransitionTiming = {
+      position:  asStr(data.position)  as TransitionPosition  | undefined,
+      duration:  asStr(data.duration)  as TransitionDuration  | undefined,
+      intensity: asStr(data.intensity) as TransitionIntensity | undefined,
+    }
+    if (!ctx) {
+      return composeTransitionHintFromConnections(transitionId, [], [], timing)
+    }
+    const startHints: string[] = []
+    const endHints: string[] = []
+    for (const edge of ctx.edges) {
+      if (edge.target !== node.id) continue
+      const src = ctx.nodes.find((n) => n.id === edge.source)
+      if (!src) continue
+      const hint = getParameterPromptHint(src) // no ctx — cycle-safe
+      if (!hint) continue
+      if      (edge.targetHandle === "startState") startHints.push(hint)
+      else if (edge.targetHandle === "endState")   endHints.push(hint)
+    }
+    return composeTransitionHintFromConnections(transitionId, startHints, endHints, timing)
   }
 
   switch (node.type) {

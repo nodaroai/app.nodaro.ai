@@ -63,6 +63,7 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "render-quality",
   "composition-effects",
   "post-process-effects",
+  "transition",
 ]
 
 export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<string>>> = {

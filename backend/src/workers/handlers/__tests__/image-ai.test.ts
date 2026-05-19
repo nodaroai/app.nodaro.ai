@@ -135,7 +135,10 @@ describe("generate-image handler", () => {
 
     await handler(job as never, ctx)
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a cat", "nano-banana", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a cat", "nano-banana", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalledWith(
       [PROVIDER_RESULT.url], "job-1", "user-1", false,
     )
@@ -156,14 +159,20 @@ describe("generate-image handler", () => {
     const job = makeJob("generate-image", { prompt: "a dog" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a dog", "nano-banana", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a dog", "nano-banana", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("generate-image", { prompt: "a bird", provider: "flux" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("a bird", "flux", undefined, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "a bird", "flux", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("passes referenceImageUrls to provider", async () => {
@@ -171,7 +180,10 @@ describe("generate-image handler", () => {
     const job = makeJob("generate-image", { prompt: "style transfer", referenceImageUrls: refs })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("style transfer", "nano-banana", refs, undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "style transfer", "nano-banana", refs, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("converts aspectRatio to extraParams", async () => {
@@ -180,6 +192,7 @@ describe("generate-image handler", () => {
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "wide shot", "nano-banana", undefined, { aspect_ratio: "16:9" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -254,6 +267,43 @@ describe("generate-image handler", () => {
       output_data: expect.not.objectContaining({ imageUrls: expect.anything() }),
     }))
   })
+
+  // Reconciliation wiring (Task 1.11): the handler builds a
+  // `makeOnTaskCreated` callback and passes it to `generateImage`. When the
+  // provider fires it with a fresh taskId, the persistence layer issues a
+  // supabase update setting provider_kind + provider_task_id +
+  // provider_call_started_at on the job row. We assert by intercepting the
+  // mock generateImage call: pull the reconcileOpts arg, invoke its callback,
+  // then check the supabase update mock.
+  it("persists provider_kind + provider_task_id on the job row via makeOnTaskCreated", async () => {
+    mocks.mockGenerateImage.mockImplementationOnce(
+      async (
+        _prompt: string,
+        _model: string,
+        _refs: unknown,
+        _extra: unknown,
+        reconcileOpts?: { onTaskCreated?: (taskId: string) => Promise<void> },
+      ) => {
+        if (reconcileOpts?.onTaskCreated) {
+          await reconcileOpts.onTaskCreated("t-test")
+        }
+        return PROVIDER_RESULT
+      },
+    )
+    const job = makeJob("generate-image", { prompt: "reconcile-me" })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockFrom).toHaveBeenCalledWith("jobs")
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "kie-standard",
+        provider_task_id: "t-test",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -269,7 +319,10 @@ describe("edit-image handler", () => {
 
     await handler(job as never, ctx)
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", "upscale", undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://input.png", "recraft-upscale", "upscale", undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
     expect(mocks.mockUploadImageVariantsMaybeWatermark).toHaveBeenCalled()
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
@@ -278,21 +331,30 @@ describe("edit-image handler", () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined, undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://input.png", "recraft-upscale", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png", provider: "recraft-remove-bg" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-remove-bg", undefined, undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://input.png", "recraft-remove-bg", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("handles undefined prompt", async () => {
     const job = makeJob("edit-image", { imageUrl: "https://input.png" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockEditImage).toHaveBeenCalledWith("https://input.png", "recraft-upscale", undefined, undefined)
+    expect(mocks.mockEditImage).toHaveBeenCalledWith(
+      "https://input.png", "recraft-upscale", undefined, undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   // -------------------------------------------------------------------------
@@ -314,6 +376,7 @@ describe("edit-image handler", () => {
       "grok-upscale",
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -342,6 +405,7 @@ describe("edit-image handler", () => {
       "recraft-upscale",
       undefined,
       undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
 
@@ -373,6 +437,7 @@ describe("image-to-image handler", () => {
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "transform", "nano-banana", ["https://main.png", "https://ref1.png"], undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
   })
@@ -381,21 +446,30 @@ describe("image-to-image handler", () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "edit" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "nano-banana", ["https://main.png"], undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "edit", "nano-banana", ["https://main.png"], undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("uses custom provider when specified", async () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "edit", provider: "flux-i2i" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("edit", "flux-i2i", ["https://main.png"], undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "edit", "flux-i2i", ["https://main.png"], undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("works without referenceImageUrls", async () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "solo" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockGenerateImage).toHaveBeenCalledWith("solo", "nano-banana", ["https://main.png"], undefined)
+    expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
+      "solo", "nano-banana", ["https://main.png"], undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
   })
 
   it("returns early when cancelled", async () => {

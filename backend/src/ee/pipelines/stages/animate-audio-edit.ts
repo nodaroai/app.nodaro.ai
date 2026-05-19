@@ -10,6 +10,7 @@ import {
   type FinalMergeSceneInput,
 } from "../services/pipeline-final-merge.js"
 import { runDialogueRecheck } from "../sub-steps/dialogue-recheck.js"
+import { runNarrationAudio } from "../sub-steps/narration-audio.js"
 import { runSilentCutReview } from "../sub-steps/silent-cut-review.js"
 import { runShotRealignment } from "../sub-steps/shot-realignment.js"
 import { runMusicTimeline, type MusicTimelineResult } from "../music-timeline.js"
@@ -19,6 +20,7 @@ import {
   type EditorShotInput,
 } from "../llms/editor.js"
 import { generateFreecutExport } from "../freecut-export.js"
+import { generateFcpxmlExport } from "../freecut-fcpxml.js"
 
 export interface RunAnimateAudioEditStageArgs {
   supabase: SupabaseClient
@@ -83,7 +85,9 @@ export async function runAnimateAudioEditStage(
     shot_generation_mode?: "parallel" | "sequential"
     lipsync_enabled?: boolean
     music_enabled?: boolean
+    narration_enabled?: boolean
     freecut_export_enabled?: boolean
+    freecut_export_format?: "json" | "fcpxml"
   }
   const mode: "parallel" | "sequential" = config.shot_generation_mode ?? "parallel"
   const lipSyncEnabled = config.lipsync_enabled ?? true
@@ -118,6 +122,11 @@ export async function runAnimateAudioEditStage(
   const sceneConcurrency =
     mode === "sequential" ? SCENE_CONCURRENCY_SEQUENTIAL : SCENE_CONCURRENCY_PARALLEL
   const ctx = { supabase, pipelineId, userId }
+  // Persist per-scene metadata updates into a Map keyed by scene id so we can
+  // reassign into `scenes` (the locally-cached `SceneRow[]`) after the fan-out
+  // settles WITHOUT mutating the input rows in place. Mirrors the
+  // return-fresh-array convention `persistCutDecisions` already follows.
+  const updatedByScene = new Map<string, Record<string, unknown>>()
   const tasks = scenes.map((scene) => async () => {
     const sceneEntity = scene as {
       id: string
@@ -130,51 +139,34 @@ export async function runAnimateAudioEditStage(
       runImageCritic,
     })
 
-    if (result.ok && result.composite_video_url) {
-      const prevSceneNodeData =
-        (sceneEntity.metadata as Record<string, unknown> | null)?.scene_node_data as
-          | SceneNodeData
-          | undefined
-      const nextShots = (prevSceneNodeData?.shots ?? []).map((s) => {
-        const r = result.per_shot_results?.find((x) => x.shot_id === s.shot_id)
-        if (!r) return s
-        return {
-          ...s,
-          video_asset_id: r.video_asset_id ?? s.video_asset_id,
-          video_url: r.video_url ?? s.video_url,
-          last_frame_asset_id: r.last_frame_asset_id ?? s.last_frame_asset_id,
-          last_frame_url: r.last_frame_url ?? s.last_frame_url,
-          ...(r.has_dialogue ? { has_dialogue: true } : {}),
-          ...(r.actual_audio_duration_sec != null
-            ? { actual_audio_duration_sec: r.actual_audio_duration_sec }
-            : {}),
-        }
-      })
-      const nextSceneNodeData = {
-        ...(prevSceneNodeData ?? {}),
-        shots: nextShots,
-        composite_video_asset_id: result.composite_video_asset_id,
-        composite_video_url: result.composite_video_url,
-      }
-      const nextMetadata = {
-        ...(sceneEntity.metadata ?? {}),
-        scene_node_data: nextSceneNodeData,
-      }
+    if (result.ok && result.composite_video_url && result.updated_metadata) {
+      const nextMetadata = result.updated_metadata
       await supabase
         .from("pipeline_entities")
         .update({ metadata: nextMetadata })
         .eq("id", sceneEntity.id)
-      // Mutate the in-memory `scenes` entry as well so the downstream
-      // sub-step chain (collectAllShotsFromScenes / loadScenesWithCutDecisions)
-      // sees the just-written composite_video_url + per_shot results
-      // without an extra `loadScenes` round-trip.
-      sceneEntity.metadata = nextMetadata
+      // Stage the in-memory metadata refresh for after the fan-out completes
+      // — runSceneInternalPipeline is contractually immutable on its input,
+      // so we don't reach in and mutate `sceneEntity.metadata` here. The
+      // reassignment into `scenes[i]` happens once below.
+      updatedByScene.set(sceneEntity.id, nextMetadata)
     }
 
     return result
   })
 
   const results = await settledWithLimit(tasks, sceneConcurrency, undefined, false)
+
+  // Apply the staged per-scene metadata updates into the local `scenes`
+  // array so downstream helpers (`collectAllShotsFromScenes`,
+  // `loadScenesWithCutDecisions`) see the fresh values without an extra
+  // `loadScenes` round-trip.
+  if (updatedByScene.size > 0) {
+    scenes = scenes.map((s) => {
+      const nextMeta = updatedByScene.get(s.id)
+      return nextMeta ? { ...s, metadata: nextMeta } : s
+    })
+  }
 
   const failed = results.filter(
     (r) =>
@@ -193,18 +185,24 @@ export async function runAnimateAudioEditStage(
   // sub-step (music / editor / final_merge) throws and the worker dies.
   // Without that guarantee, `resumeActiveOrchestrators` would re-run
   // already-paid sub-steps because `completed.<step>=true` never reached
-  // the DB. The finally flush is suppressed by `terminalWriteDone` when
-  // `setSubGate` or `failStage` has already written its own output
-  // payload (so we don't clobber `current_sub_gate` or `failure_reason`).
+  // the DB. The finally flush is suppressed when the handler reached a
+  // terminal write site (setSubGate / failStage) so we don't clobber the
+  // `current_sub_gate` / `failure_reason` payload already on the row.
+  //
+  // The terminal-write gate is a typed sentinel returned by setSubGate /
+  // failAndMarkTerminal — the compiler enforces that any future early-return
+  // site visibly threads a `{ kind: "terminal" }` value into `result` so the
+  // finally flush is correctly skipped. (Previously a bare boolean was easy
+  // to forget; the typed return makes the discipline structural.)
   //
   // ⚠️ Side-channel hazard: any helper that writes to
-  // `pipeline_stages.output` out-of-band MUST also mutate
-  // `stageOutputAcc` (so the subsequent flush is idempotent) OR set
-  // `terminalWriteDone = true`. The original 1C.2 regression — Suno was
-  // re-paid on resume because `runSilentCutReview` wrote to the row
-  // directly and the batched flush wiped both that write AND the
-  // updated `sub_step_completed` map — was fixed by moving the silent_cut
-  // sub-gate write into `setSubGate`. See commit fixing a0a23642.
+  // `pipeline_stages.output` out-of-band MUST also mutate `stageOutputAcc`
+  // (so the subsequent flush is idempotent) OR return `{ kind: "terminal" }`.
+  // The original 1C.2 regression — Suno was re-paid on resume because
+  // `runSilentCutReview` wrote to the row directly and the batched flush
+  // wiped both that write AND the updated `sub_step_completed` map — was
+  // fixed by moving the silent_cut sub-gate write into `setSubGate`. See
+  // commit fixing a0a23642.
   const stageOutputAcc: Record<string, unknown> = {
     ...((existingStage?.output as Record<string, unknown> | null) ?? {}),
   }
@@ -212,7 +210,7 @@ export async function runAnimateAudioEditStage(
     ...((stageOutputAcc.sub_step_completed as Record<string, boolean> | undefined) ??
       {}),
   }
-  let terminalWriteDone = false
+  let handlerResult: StageHandlerResult = { kind: "continue" }
   const flushStageOutput = async () => {
     stageOutputAcc.sub_step_completed = { ...completed }
     await supabase
@@ -220,12 +218,50 @@ export async function runAnimateAudioEditStage(
       .update({ output: stageOutputAcc })
       .eq("id", stageId)
   }
-  const failAndMarkTerminal = async (reason: string) => {
+  const failAndMarkTerminal = async (
+    reason: string,
+  ): Promise<StageHandlerResultTerminal> => {
     await failStage(supabase, stageId, reason)
-    terminalWriteDone = true
+    return TERMINAL
   }
 
   try {
+    // 5_a0. 7c Narration audio. Runs ONCE per pipeline (not per-scene) and
+    //       produces the omniscient narrator voice-over that gets mixed over
+    //       the music in the final merge (G5). Skips when narration_enabled
+    //       is false OR plan.narration_script is undefined. Must run BEFORE
+    //       7d' so the narration URL is available on stageOutputAcc when the
+    //       final-merge step looks for it (and so resume-after-narration
+    //       doesn't re-pay the TTS step).
+    if (!completed.narration) {
+      const plan = await loadShowrunnerPlan(supabase, pipelineId)
+      if (plan) {
+        const narration = await runNarrationAudio({
+          supabase,
+          pipelineId,
+          stageId,
+          userId,
+          plan,
+          config,
+        })
+        if (!narration.skipped) {
+          stageOutputAcc.narration_audio_url = narration.narrationUrl
+          stageOutputAcc.narration_audio_duration_sec = narration.narrationDurationSec
+          stageOutputAcc.narration_audio_asset_id = narration.narrationAssetId
+        }
+      }
+      // We set completed.narration unconditionally — even when the plan is
+      // missing (defensive: avoid retrying a no-op). The skip semantics are
+      // the same.
+      completed.narration = true
+      // Flush after the (paid) TTS step so resume-after-failure doesn't
+      // re-pay narration. The flush is idempotent — stageOutputAcc is the
+      // source of truth and the finally clause would also fire, but doing it
+      // here matches the music checkpoint pattern (commit fixing a0a23642
+      // regression).
+      await flushStageOutput()
+    }
+
     // 5a. 7d' Dialogue duration recheck.
     if (!completed.dialogue_recheck) {
       const recheck = await runDialogueRecheck({
@@ -235,11 +271,16 @@ export async function runAnimateAudioEditStage(
       })
       if (recheck.awaitingUserDecision) {
         stageOutputAcc.dialogue_recheck_result = recheck
-        await setSubGate(supabase, pipelineId, stageId, "dialogue_recheck", {
-          ...stageOutputAcc,
-          sub_step_completed: { ...completed },
-        })
-        terminalWriteDone = true
+        handlerResult = await setSubGate(
+          supabase,
+          pipelineId,
+          stageId,
+          "dialogue_recheck",
+          {
+            ...stageOutputAcc,
+            sub_step_completed: { ...completed },
+          },
+        )
         return
       }
       completed.dialogue_recheck = true
@@ -261,11 +302,16 @@ export async function runAnimateAudioEditStage(
         // its own update, the batched flush below would overwrite it (this is
         // the regression fixed in commit fixing a0a23642).
         stageOutputAcc.silent_cut_preview_url = silent.previewUrl
-        await setSubGate(supabase, pipelineId, stageId, "silent_cut_preview", {
-          ...stageOutputAcc,
-          sub_step_completed: { ...completed },
-        })
-        terminalWriteDone = true
+        handlerResult = await setSubGate(
+          supabase,
+          pipelineId,
+          stageId,
+          "silent_cut_preview",
+          {
+            ...stageOutputAcc,
+            sub_step_completed: { ...completed },
+          },
+        )
         return
       }
       completed.silent_cut = true
@@ -341,42 +387,75 @@ export async function runAnimateAudioEditStage(
     if (!completed.final_merge) {
       const mergeScenes = loadScenesWithCutDecisions(scenes)
       if (mergeScenes.length === 0) {
-        await failAndMarkTerminal("no_scene_composites_for_final_merge")
+        handlerResult = await failAndMarkTerminal(
+          "no_scene_composites_for_final_merge",
+        )
         return
       }
 
       const useFreecut =
         config.freecut_export_enabled === true && pipelineMode === "manual"
 
+      // Phase 1C.2.1 §G5 — surface the narration URL so all three branches
+      // (FreeCut JSON, FCPXML, MP4) can pipe it through. Empty string when
+      // sub-step 7c didn't produce one (no plan.narration_script or
+      // narration_enabled=false).
+      const narrationAssetUrl =
+        (stageOutputAcc.narration_audio_url as string | undefined) ?? ""
+
       let finalAssetId: string | null = null
       let finalAssetUrl = ""
-      let finalOutputFormat: "mp4" | "freecut" = "mp4"
+      let finalOutputFormat: "mp4" | "freecut" | "fcpxml" = "mp4"
       try {
         if (useFreecut) {
-          const exportResult = await generateFreecutExport({
-            supabase,
-            pipelineId,
-            userId,
-            scenes: mergeScenes,
-            musicAssetUrl: musicResult?.musicAssetUrl ?? "",
-          })
-          finalAssetId = exportResult.exportAssetId
-          finalAssetUrl = exportResult.exportAssetUrl
-          finalOutputFormat = "freecut"
+          // Phase 1C.2.1 §H2 — dispatch on the freecut_export_format toggle.
+          // JSON (default) → Nodaro-flat-timeline-v1; FCPXML → FCPXML 1.10
+          // for direct ingest into FCP / DaVinci Resolve / Premiere. Both
+          // reuse the same in-memory reduction; only the serializer differs.
+          const exportFormat = config.freecut_export_format ?? "json"
+          if (exportFormat === "fcpxml") {
+            const exportResult = await generateFcpxmlExport({
+              supabase,
+              pipelineId,
+              userId,
+              scenes: mergeScenes,
+              musicAssetUrl: musicResult?.musicAssetUrl ?? "",
+              narrationAssetUrl,
+            })
+            finalAssetId = exportResult.exportAssetId
+            finalAssetUrl = exportResult.exportAssetUrl
+            finalOutputFormat = "fcpxml"
+          } else {
+            const exportResult = await generateFreecutExport({
+              supabase,
+              pipelineId,
+              userId,
+              scenes: mergeScenes,
+              musicAssetUrl: musicResult?.musicAssetUrl ?? "",
+              narrationAssetUrl,
+            })
+            finalAssetId = exportResult.exportAssetId
+            finalAssetUrl = exportResult.exportAssetUrl
+            finalOutputFormat = "freecut"
+          }
         } else {
+          // MP4 path — pipelineFinalMerge's amix filter ducks music to 60%
+          // when both are present; unchanged behavior when narrationAssetUrl
+          // is empty.
           const result = await pipelineFinalMerge({
             supabase,
             pipelineId,
             userId,
             scenes: mergeScenes,
             musicAssetUrl: musicResult?.musicAssetUrl ?? "",
+            narrationAssetUrl,
           })
           finalAssetId = result.finalAssetId
           finalAssetUrl = result.finalAssetUrl
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        await failAndMarkTerminal(`final_merge_failed: ${msg}`)
+        handlerResult = await failAndMarkTerminal(`final_merge_failed: ${msg}`)
         return
       }
 
@@ -385,7 +464,7 @@ export async function runAnimateAudioEditStage(
         .update({ final_output_asset_id: finalAssetId })
         .eq("id", pipelineId)
       if (pipelineUpdateErr) {
-        await failAndMarkTerminal(
+        handlerResult = await failAndMarkTerminal(
           `pipelines_update_failed: ${pipelineUpdateErr.message}`,
         )
         return
@@ -405,7 +484,7 @@ export async function runAnimateAudioEditStage(
     // re-pay Suno. The flush is suppressed when the caller already wrote
     // the row (setSubGate / failStage paths) to avoid clobbering
     // `current_sub_gate` or `failure_reason`.
-    if (!terminalWriteDone) {
+    if (handlerResult.kind === "continue") {
       await flushStageOutput().catch((err) => {
         console.error("[stage:animate_audio_edit] final flush failed:", err)
       })
@@ -459,13 +538,31 @@ async function loadScenes(
   return { scenes: (data ?? []) as SceneRow[], error: null }
 }
 
+/**
+ * Typed sentinel for the Stage 7 handler's flow control. The handler kicks
+ * off in `{ kind: "continue" }` and any sub-step that performs a terminal
+ * write to `pipeline_stages.output` (sub-gate pause, failStage) reassigns
+ * the result to `{ kind: "terminal" }`. The finally clause checks this
+ * sentinel to decide whether to flush the accumulator — flushing on top of
+ * a terminal write would clobber `current_sub_gate` or `failure_reason`.
+ *
+ * Pattern matches the discriminated-union signaling used elsewhere in the
+ * pipeline engine (e.g. `SceneInternalPipelineResult`). The compiler now
+ * forces every early-return site to thread this value visibly, replacing
+ * the prior boolean flag which was easy to forget when adding sites.
+ */
+type StageHandlerResultContinue = { kind: "continue" }
+type StageHandlerResultTerminal = { kind: "terminal" }
+type StageHandlerResult = StageHandlerResultContinue | StageHandlerResultTerminal
+const TERMINAL: StageHandlerResultTerminal = { kind: "terminal" }
+
 async function setSubGate(
   supabase: SupabaseClient,
   pipelineId: string,
   stageId: string,
   gate: SubGateName,
   outputPatch: Record<string, unknown>,
-): Promise<void> {
+): Promise<StageHandlerResultTerminal> {
   // Single UPDATE: write the accumulated stage output (with `current_sub_gate`
   // + sub_step_completed) AND flip status to awaiting_approval at once. This
   // replaces the prior 2-query sequence (mergeStageOutput → status update).
@@ -483,6 +580,7 @@ async function setSubGate(
     subGate: gate,
     payload: outputPatch,
   })
+  return TERMINAL
 }
 
 async function loadShowrunnerPlan(

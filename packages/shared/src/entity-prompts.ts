@@ -115,6 +115,26 @@ export const LOCATION_REFERENCE_PHOTO_KINDS = [
 export type LocationReferencePhotoKind = (typeof LOCATION_REFERENCE_PHOTO_KINDS)[number]
 
 /**
+ * Human-friendly label for each photo kind, used in prompt subject lines
+ * (`Image N (Old Library — wide-angle reference)`) so the model knows the
+ * role of each reference photo at generate time. Kept as a separate map
+ * from `LOCATION_REFERENCE_PHOTO_KINDS` so labels can be edited without
+ * disturbing the kind enum (which is the schema-of-record).
+ */
+export const LOCATION_REFERENCE_PHOTO_KIND_LABELS: Record<LocationReferencePhotoKind, string> = {
+  wide: "wide-angle reference",
+  interior: "interior reference",
+  exterior: "exterior reference",
+  detail: "detail reference",
+  moodBoard: "mood-board reference",
+  other: "reference",
+}
+
+export function locationReferencePhotoKindLabel(kind: LocationReferencePhotoKind): string {
+  return LOCATION_REFERENCE_PHOTO_KIND_LABELS[kind]
+}
+
+/**
  * Reserved name the Character Studio auto-assigns when a user clicks Generate
  * before naming the character. Treated as "no name" by prompt builders so the
  * literal string "Untitled character" never leaks into a generation prompt.

@@ -23,6 +23,10 @@ import type {
   ReferenceSource,
   SceneData,
 } from "./types.js"
+import {
+  locationReferencePhotoKindLabel,
+  type LocationReferencePhotoKind,
+} from "./entity-prompts.js"
 
 export interface ResolveCharacterMentionsResult {
   /** Prompt with @-tokens replaced by display names + "Use these characters:" directive prepended. */
@@ -1310,6 +1314,9 @@ interface ResolvedIdentity {
   /** Slug for the location source, used by `suppressedCanonicalLocationIds`
    *  filtering. */
   locationSlug?: string
+  /** Mirrors ConnectedReference.locationReferencePhotoKind — propagated so
+   *  `buildIdentityDirective` can annotate the subject line. */
+  locationReferencePhotoKind?: string
 }
 
 function defaultFidelityForSource(source: ReferenceSource | undefined): IdentityFidelity {
@@ -1355,6 +1362,7 @@ function collectIdentities(
       source: ref?.source,
       locationCanonicalDescription: ref?.locationCanonicalDescription,
       locationSlug: ref?.locationSlug,
+      locationReferencePhotoKind: ref?.locationReferencePhotoKind,
     }
   })
 }
@@ -1423,7 +1431,18 @@ function buildIdentityDirective(
     effectiveDescription = id.locationCanonicalDescription.trim() || undefined
   }
 
-  const subject = formatDirectiveSubject(id.label, id.imageIndex, effectiveDescription)
+  // Phase 2 #3: kind-tagged reference-photo annotation. When the ref carries
+  // a `locationReferencePhotoKind`, fold its human-friendly label into the
+  // subject's parenthetical so the model sees the photo's role inline with
+  // the location name (e.g. "Image 1 (Old Library — wide-angle reference)").
+  // The annotation rides on the LABEL (not the description) so it survives
+  // the description-overrides-canonical precedence above.
+  let effectiveLabel = id.label
+  if (id.locationReferencePhotoKind && effectiveLabel) {
+    effectiveLabel = `${effectiveLabel} — ${locationReferencePhotoKindLabel(id.locationReferencePhotoKind as LocationReferencePhotoKind)}`
+  }
+
+  const subject = formatDirectiveSubject(effectiveLabel, id.imageIndex, effectiveDescription)
   const lower = id.label.toLowerCase()
 
   // Role-aware verbs — these read more naturally than "match exactly" for

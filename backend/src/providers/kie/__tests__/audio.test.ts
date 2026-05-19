@@ -42,14 +42,14 @@ beforeEach(() => {
 describe("KieAudioProvider.generateMusic", () => {
   it("happy path with default model", async () => {
     const result = await provider.generateMusic("epic orchestral")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "epic orchestral" }, 90)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "epic orchestral" }, 90, undefined, undefined)
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
     expect(result.cost).toBe(0.10)
   })
 
   it("passes duration and lyrics", async () => {
     await provider.generateMusic("rock", undefined, 30, "yeah!")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "rock", duration: 30, lyrics: "yeah!" }, 90)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("suno/v4", { prompt: "rock", duration: 30, lyrics: "yeah!" }, 90, undefined, undefined)
   })
 
   it("throws when no result URL", async () => {
@@ -64,6 +64,9 @@ describe("KieAudioProvider.textToSpeech", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "elevenlabs/text-to-speech-turbo-2-5",
       expect.objectContaining({ text: "Hello world", voice: "Rachel" }),
+      undefined,
+      undefined,
+      undefined,
     )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })
@@ -75,6 +78,9 @@ describe("KieAudioProvider.textToSpeech", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "elevenlabs/text-to-speech-turbo-2-5",
       expect.objectContaining({ voice: "Daniel", stability: 0.5, similarity_boost: 0.8, speed: 1.2 }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -83,6 +89,9 @@ describe("KieAudioProvider.textToSpeech", () => {
     expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
       "elevenlabs/text-to-speech-turbo-2-5",
       expect.objectContaining({ language_code: "fr" }),
+      undefined,
+      undefined,
+      undefined,
     )
   })
 
@@ -95,7 +104,13 @@ describe("KieAudioProvider.textToSpeech", () => {
 describe("KieAudioProvider.generateSoundEffect", () => {
   it("happy path", async () => {
     const result = await provider.generateSoundEffect("explosion")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("elevenlabs/sound-effect-v2", { text: "explosion" }, 90)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
+      "elevenlabs/sound-effect-v2",
+      { text: "explosion" },
+      90,
+      undefined,
+      undefined,
+    )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })
 
@@ -105,6 +120,8 @@ describe("KieAudioProvider.generateSoundEffect", () => {
       "elevenlabs/sound-effect-v2",
       expect.objectContaining({ text: "rain", duration_seconds: 10, loop: true, prompt_influence: 0.5 }),
       90,
+      undefined,
+      undefined,
     )
   })
 })
@@ -112,7 +129,13 @@ describe("KieAudioProvider.generateSoundEffect", () => {
 describe("KieAudioProvider.isolateAudio", () => {
   it("happy path", async () => {
     const result = await provider.isolateAudio("https://example.com/song.mp3")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith("elevenlabs/audio-isolation", { audio_url: "https://example.com/song.mp3" }, 90)
+    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
+      "elevenlabs/audio-isolation",
+      { audio_url: "https://example.com/song.mp3" },
+      90,
+      undefined,
+      undefined,
+    )
     expect(result.url).toBe("https://kie.example.com/audio.mp3")
   })
 

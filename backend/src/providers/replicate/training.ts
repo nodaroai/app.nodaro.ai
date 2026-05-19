@@ -10,7 +10,9 @@
  *    `node_modules/replicate/index.d.ts:328-366`).
  */
 
+import type { ReconcileOpts } from "../provider.interface.js"
 import { replicate } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 import { config } from "../../lib/config.js"
 
 // Pinned trainer version — bump when Replicate releases a newer trainer.
@@ -34,6 +36,7 @@ export interface CreateTrainingArgs {
  */
 export async function createCharacterTraining(
   args: CreateTrainingArgs,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ trainingId: string }> {
   const training = await replicate.trainings.create(
     "ostris",
@@ -56,6 +59,7 @@ export async function createCharacterTraining(
   if (!training?.id) {
     throw new Error("[Replicate:training] trainings.create returned no id")
   }
+  await fireOnTaskCreated(reconcileOpts, training.id, "[replicate:training]")
   return { trainingId: training.id }
 }
 

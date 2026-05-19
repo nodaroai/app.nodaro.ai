@@ -10,6 +10,8 @@
  */
 
 import { config } from "../../lib/config.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
@@ -234,24 +236,29 @@ export function pollDelay(attempt: number): number {
 // CORE API FUNCTIONS
 // =============================================================================
 
+export interface CreateKieTaskResult {
+  taskId: string
+}
+
+export interface RunKieTaskOptions {
+  /**
+   * Fires AFTER createTask returns a taskId, BEFORE the first poll. Used by
+   * the reconciliation system to persist `jobs.provider_task_id` so a crashed
+   * worker can be recovered later. Throws here are caught + logged — they
+   * never prevent polling.
+   */
+  onTaskCreated?: (taskId: string) => Promise<void>
+}
+
 /**
- * Submit a task to KIE.ai and poll for completion
- * @param onProgress - Optional callback called when progress updates (0-100)
+ * Submit a task to KIE.ai. Returns the upstream taskId. Split off from
+ * `runKieTask` so callers can resume polling an existing task without
+ * re-creating it.
  */
-export async function runKieTask(
+export async function createKieTask(
   model: string,
   input: Record<string, unknown>,
-  maxAttempts: number = MAX_POLL_ATTEMPTS,
-  onProgress?: ProgressCallback
-): Promise<{
-  resultJson: KieResultJson
-  /** Provider-reported generation time in seconds (KIE `costTime`). */
-  costTime?: number
-  /** Same as `costTime` but in milliseconds for ProviderResult.providerMs. */
-  providerMs?: number
-  rawRecordInfo?: Record<string, unknown>
-  taskId?: string
-}> {
+): Promise<CreateKieTaskResult> {
   const apiKey = config.KIE_API_KEY
 
   if (!apiKey) {
@@ -272,7 +279,6 @@ export async function runKieTask(
     console.log(`[KIE.ai] >>>>>> END REQUEST BODY <<<<<<`)
   }
 
-  // Step 1: Create task
   const createResponse = await fetch(
     `${KIE_API_BASE}/api/v1/jobs/createTask`,
     {
@@ -335,8 +341,34 @@ export async function runKieTask(
 
   const taskId = createData.data.taskId
   console.log(`[KIE.ai] Task created: ${taskId}`)
+  return { taskId }
+}
 
-  // Step 2: Poll for completion with exponential backoff
+/**
+ * Poll an existing KIE task until success / fail / max attempts.
+ * Mirrors the original `runKieTask` poll loop body verbatim — same retry
+ * semantics for HTTP errors, JSON-parse errors, missing-state responses, and
+ * AbortSignal timeouts (any of those continue to the next attempt instead of
+ * throwing).
+ */
+export async function pollKieTask(
+  taskId: string,
+  maxAttempts: number = MAX_POLL_ATTEMPTS,
+  onProgress?: ProgressCallback,
+): Promise<{
+  resultJson: KieResultJson
+  /** Provider-reported generation time in seconds (KIE `costTime`). */
+  costTime?: number
+  /** Same as `costTime` but in milliseconds for ProviderResult.providerMs. */
+  providerMs?: number
+  rawRecordInfo?: Record<string, unknown>
+  taskId: string
+}> {
+  const apiKey = config.KIE_API_KEY
+  if (!apiKey) {
+    throw createSanitizedError("KIE_API_KEY is not configured", "Image generation")
+  }
+
   let attempts = 0
   while (attempts < maxAttempts) {
     attempts++
@@ -450,6 +482,37 @@ export async function runKieTask(
 }
 
 /**
+ * Submit a task to KIE.ai and poll for completion.
+ *
+ * Backwards-compatible wrapper: create → opts.onTaskCreated → poll.
+ *
+ * @param onProgress - Optional callback called when progress updates (0-100)
+ * @param opts.onTaskCreated - Optional callback fired AFTER createTask returns
+ *                             the taskId, BEFORE the first poll. Used to
+ *                             persist `jobs.provider_task_id` for crash
+ *                             reconciliation. Throws are caught + logged.
+ */
+export async function runKieTask(
+  model: string,
+  input: Record<string, unknown>,
+  maxAttempts: number = MAX_POLL_ATTEMPTS,
+  onProgress?: ProgressCallback,
+  opts?: RunKieTaskOptions,
+): Promise<{
+  resultJson: KieResultJson
+  /** Provider-reported generation time in seconds (KIE `costTime`). */
+  costTime?: number
+  /** Same as `costTime` but in milliseconds for ProviderResult.providerMs. */
+  providerMs?: number
+  rawRecordInfo?: Record<string, unknown>
+  taskId?: string
+}> {
+  const { taskId } = await createKieTask(model, input)
+  await fireOnTaskCreated(opts, taskId, "[KIE.ai]")
+  return pollKieTask(taskId, maxAttempts, onProgress)
+}
+
+/**
  * VEO3 uses a special API endpoint: /api/v1/veo/generate
  * Polling uses: /api/v1/veo/record-info (NOT the standard /api/v1/jobs/recordInfo)
  * Status is indicated by successFlag (not state):
@@ -462,7 +525,8 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[],
-  options?: { aspectRatio?: string; seed?: number; generationType?: string; resolution?: string; enableTranslation?: boolean }
+  options?: { aspectRatio?: string; seed?: number; generationType?: string; resolution?: string; enableTranslation?: boolean },
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{
   resultJson: KieResultJson
   costTime?: number
@@ -586,6 +650,8 @@ export async function runVeoTask(
 
   const taskId = createData.data.taskId
   console.log(`[KIE.ai VEO] Task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai VEO]")
 
   const poll = await pollVeoRecordInfo(taskId, "VEO", apiKey)
   return {
@@ -717,7 +783,8 @@ export async function runVeoExtendTask(
   taskId: string,
   prompt: string,
   model?: "fast" | "quality",
-  seeds?: number
+  seeds?: number,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{
   resultJson: KieResultJson
   taskId: string
@@ -782,6 +849,8 @@ export async function runVeoExtendTask(
   }
 
   console.log(`[KIE.ai VEO Extend] Task created: ${extendTaskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, extendTaskId, "[KIE.ai VEO Extend]")
 
   const poll = await pollVeoRecordInfo(extendTaskId, "VEO Extend", apiKey)
   return {
@@ -852,7 +921,8 @@ export async function runVeo1080pTask(
  */
 export async function runVeo4kTask(
   taskId: string,
-  index: number = 0
+  index: number = 0,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson; taskId: string }> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -902,6 +972,8 @@ export async function runVeo4kTask(
   // Otherwise poll (code 422 = still processing)
   const fourKTaskId = createData.data?.taskId ?? taskId
   console.log(`[KIE.ai VEO 4K] Task processing: ${fourKTaskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, fourKTaskId, "[KIE.ai VEO 4K]")
 
   const { resultUrls } = await pollVeoRecordInfo(fourKTaskId, "VEO 4K", apiKey)
   return { resultJson: { resultUrls }, taskId: fourKTaskId }

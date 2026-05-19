@@ -6,13 +6,16 @@
  * Output: video with face replaced
  */
 
+import type { ReconcileOpts } from "../provider.interface.js"
 import { replicate, extractUrl, extractCost } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
 
 const ROOP_VERSION = "11b6bf0f4e14d808f655e87e5448233cceff10a45f659d71539cafb7163b2e84"
 
 export async function replicateFaceSwap(
   faceImageUrl: string,
   targetVideoUrl: string,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ videoUrl: string; cost: number | null }> {
   console.log(`[Replicate:faceSwap] faceImage=${faceImageUrl.slice(0, 60)}...`)
   console.log(`[Replicate:faceSwap] targetVideo=${targetVideoUrl.slice(0, 60)}...`)
@@ -24,6 +27,7 @@ export async function replicateFaceSwap(
       target_video: targetVideoUrl,
     },
   })
+  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:faceSwap]")
   const completed = await replicate.wait(prediction)
   const output = completed.output
 

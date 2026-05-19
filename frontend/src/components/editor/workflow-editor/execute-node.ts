@@ -198,6 +198,7 @@ import {
   runLocationGeneration,
 } from "./asset-executors";
 import { buildImagePrompt, applyReferenceOrderToVideo } from "@nodaro/shared";
+import { LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared";
 import type { CharacterDef, ConnectedReference, ReferenceSource, ExtraRefCharacterContext } from "@nodaro/shared";
 import { characterMentionSlug, findCharacterMentionTokens, resolveCharacterMentions } from "@nodaro/shared";
 import { usageModeDirective, DEFAULT_USAGE_MODE } from "@nodaro/shared";
@@ -585,6 +586,31 @@ function expandLocationNodeIntoRefs(
         },
       ])
     }
+  }
+
+  // Phase 2 #3: emit one ConnectedReference per user-uploaded reference photo.
+  // These auto-attach (unlike per-variant entries which are mention-only) and
+  // carry their `kind` so the prompt-builder can annotate the subject line.
+  // The TS type already enforces `kind` is a LocationReferencePhotoKind, so we
+  // only need to skip empty URLs defensively (e.g. mid-upload rows).
+  const refPhotos = locData.referencePhotos ?? []
+  for (let idx = 0; idx < refPhotos.length; idx++) {
+    const photo = refPhotos[idx]
+    const photoUrl = (photo.url ?? "").trim()
+    if (!photoUrl) continue
+    if (!LOCATION_REFERENCE_PHOTO_KINDS.includes(photo.kind as LocationReferencePhotoKind)) continue
+    const kind = photo.kind as LocationReferencePhotoKind
+    out.push([
+      `${locationNode.id}_refphoto_${kind}_${idx}`,
+      {
+        defaultName: `${locName} (${locationReferencePhotoKindLabel(kind)})`,
+        source: "wired-location",
+        url: photoUrl,
+        locationCanonicalDescription: canonicalDescription,
+        locationSlug,
+        locationReferencePhotoKind: kind,
+      },
+    ])
   }
   return out
 }

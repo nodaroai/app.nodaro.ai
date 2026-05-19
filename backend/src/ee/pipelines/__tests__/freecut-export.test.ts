@@ -218,6 +218,57 @@ describe("generateFreecutExport", () => {
     expect(videoTrack.clips[0]!.transition_out).toBeNull()
   })
 
+  it("3b. narration audio track emitted as a second audio track when narrationAssetUrl present (§H2)", async () => {
+    const supabase = makeSupabase()
+    await generateFreecutExport({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "https://r2/music.mp3",
+      narrationAssetUrl: "https://r2/narr.mp3",
+    })
+    const tl = getUploadedTimeline()
+    // 1 video track + 2 audio tracks (music + narration as separate layers).
+    expect(tl.tracks).toHaveLength(3)
+    expect(tl.tracks[0]!.type).toBe("video")
+    expect(tl.tracks[1]!.type).toBe("audio")
+    expect(tl.tracks[2]!.type).toBe("audio")
+    const musicTrack = tl.tracks[1] as { type: "audio"; clips: Array<{ asset_url: string }> }
+    const narrTrack = tl.tracks[2] as { type: "audio"; clips: Array<{ asset_url: string }> }
+    expect(musicTrack.clips[0]!.asset_url).toBe("https://r2/music.mp3")
+    expect(narrTrack.clips[0]!.asset_url).toBe("https://r2/narr.mp3")
+  })
+
+  it("3c. narration only (no music) → audio track contains narration", async () => {
+    const supabase = makeSupabase()
+    await generateFreecutExport({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      scenes: [
+        {
+          sceneEntityId: "scene-1",
+          compositeUrl: "https://r2/scene-1.mp4",
+          shots: [{ shot_id: "shot_01", duration_seconds: 5 }],
+        },
+      ],
+      musicAssetUrl: "",
+      narrationAssetUrl: "https://r2/narr.mp3",
+    })
+    const tl = getUploadedTimeline()
+    expect(tl.tracks).toHaveLength(2)
+    expect(tl.tracks[0]!.type).toBe("video")
+    const narrTrack = tl.tracks[1] as { type: "audio"; clips: Array<{ asset_url: string }> }
+    expect(narrTrack.clips[0]!.asset_url).toBe("https://r2/narr.mp3")
+  })
+
   it("4. per-scene head/tail trim is reflected in start_in_clip_sec / end_in_clip_sec", async () => {
     const supabase = makeSupabase()
     await generateFreecutExport({
@@ -286,5 +337,27 @@ describe("Stage 7 wiring (freecut_export_enabled toggle)", () => {
     const mode = "manual"
     const useFreecut = config.freecut_export_enabled === true && mode === ("manual" as string)
     expect(useFreecut).toBe(false)
+  })
+
+  it("freecut_export_format=fcpxml routes to the FCPXML serializer (1C.2.1 §H2)", async () => {
+    const config = {
+      freecut_export_enabled: true,
+      freecut_export_format: "fcpxml" as const,
+    }
+    const mode = "manual"
+    const useFreecut = config.freecut_export_enabled === true && mode === "manual"
+    const exportFormat = useFreecut ? (config.freecut_export_format ?? "json") : null
+    expect(useFreecut).toBe(true)
+    expect(exportFormat).toBe("fcpxml")
+  })
+
+  it("freecut_export_format missing defaults to json (back-compat)", async () => {
+    const config: { freecut_export_enabled: boolean; freecut_export_format?: "json" | "fcpxml" } = {
+      freecut_export_enabled: true,
+    }
+    const mode = "manual"
+    const useFreecut = config.freecut_export_enabled === true && mode === "manual"
+    const exportFormat = useFreecut ? (config.freecut_export_format ?? "json") : null
+    expect(exportFormat).toBe("json")
   })
 })

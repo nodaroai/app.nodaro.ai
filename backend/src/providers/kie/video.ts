@@ -15,6 +15,7 @@ import type {
   LipSyncProvider,
   ProviderResult,
   ProviderOptions,
+  ReconcileOpts,
 } from "../provider.interface.js"
 import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds } from "@nodaro/shared"
 import {
@@ -365,6 +366,7 @@ async function runKling3(
   aspectRatio: string,
   options: ProviderOptions | undefined,
   imageUrls?: string[],
+  reconcileOpts?: ReconcileOpts,
 ): Promise<ProviderResult> {
   const snappedDuration = duration
     ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
@@ -383,7 +385,7 @@ async function runKling3(
     klingElements: options?.klingElements,
     motionPrompt: options?.motionPrompt,
     onProgress: options?.onProgress,
-  })
+  }, reconcileOpts)
 
   // Audit log for Kling 3.0 (known to have variable duration/audio pricing)
   logCreditAudit({
@@ -411,7 +413,8 @@ export class KieVideoProvider
     model?: string,
     duration?: number,
     endFrameUrl?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "minimax"
     const modelConfig = KIE_VIDEO_MODELS[provider]
@@ -486,6 +489,7 @@ export class KieVideoProvider
         options?.aspectRatio ?? "16:9",
         options,
         imageUrls,
+        reconcileOpts,
       )
     }
 
@@ -509,7 +513,8 @@ export class KieVideoProvider
           generationType: options?.generationType,
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
-        }
+        },
+        reconcileOpts,
       )
 
       const videoUrl =
@@ -545,7 +550,7 @@ export class KieVideoProvider
         duration: snapped,
         imageUrl,
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, reconcileOpts)
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -698,7 +703,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const videoUrl =
@@ -732,7 +738,8 @@ export class KieVideoProvider
     model?: string,
     duration?: number,
     aspectRatio?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "minimax"
     const modelConfig = KIE_TEXT_TO_VIDEO_MODELS[provider]
@@ -759,6 +766,8 @@ export class KieVideoProvider
         duration,
         aspectRatio ?? options?.aspectRatio ?? "16:9",
         options,
+        undefined,
+        reconcileOpts,
       )
     }
 
@@ -773,7 +782,8 @@ export class KieVideoProvider
           seed: options?.seed,
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
-        }
+        },
+        reconcileOpts,
       )
 
       const videoUrl =
@@ -809,7 +819,7 @@ export class KieVideoProvider
         duration: snapped,
         ...(aspectRatio && { aspectRatio }),
       }
-      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput)
+      const { resultJson, taskId: runwayTaskId } = await runRunwayTask(runwayInput, reconcileOpts)
       const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!videoUrl) {
         throw createSanitizedError(
@@ -873,7 +883,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const videoUrl =
@@ -896,7 +907,8 @@ export class KieVideoProvider
     videoUrl: string,
     prompt?: string,
     model?: string,
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "wan"
     const modelConfig = KIE_VIDEO_TO_VIDEO_MODELS[provider]
@@ -938,7 +950,7 @@ export class KieVideoProvider
       if (options?.referenceImageUrl) {
         alephInput.referenceImage = options.referenceImageUrl
       }
-      const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput)
+      const { resultJson, taskId: alephTaskId } = await runAlephTask(alephInput, reconcileOpts)
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
         throw createSanitizedError(
@@ -957,7 +969,7 @@ export class KieVideoProvider
       const { resultJson } = await runLumaModifyTask({
         prompt: finalPrompt,
         videoUrl,
-      })
+      }, reconcileOpts)
       const outputUrl = resultJson.resultUrls?.[0]
       if (!outputUrl) {
         throw createSanitizedError(
@@ -989,7 +1001,8 @@ export class KieVideoProvider
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
-        options?.onProgress
+        options?.onProgress,
+        reconcileOpts,
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1022,7 +1035,8 @@ export class KieVideoProvider
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
-        options?.onProgress
+        options?.onProgress,
+        reconcileOpts,
       )
       const outputUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
       if (!outputUrl) {
@@ -1070,7 +1084,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const outputUrl =
@@ -1098,7 +1113,8 @@ export class KieVideoProvider
       resolution?: "480p" | "580p" | "720p" | "1080p"
       provider?: string
       backgroundSource?: "input_video" | "input_image"
-    }
+    },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = options?.provider ?? "kling"
     const modelConfig = KIE_MOTION_TRANSFER_MODELS[provider]
@@ -1178,7 +1194,8 @@ export class KieVideoProvider
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
-        options?.onProgress
+        options?.onProgress,
+        reconcileOpts,
       )
 
       const outputUrl =
@@ -1216,7 +1233,8 @@ export class KieVideoProvider
         modelConfig.model,
         input,
         MAX_POLL_ATTEMPTS_VIDEO,
-        options?.onProgress
+        options?.onProgress,
+        reconcileOpts,
       )
 
       const outputUrl =
@@ -1261,7 +1279,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const outputUrl =
@@ -1283,7 +1302,8 @@ export class KieVideoProvider
   async videoUpscale(
     videoUrl: string,
     upscaleFactor?: "1" | "2" | "4",
-    options?: ProviderOptions
+    options?: ProviderOptions,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const modelConfig = KIE_VIDEO_UPSCALE_MODELS["topaz"]
     if (!modelConfig) {
@@ -1322,7 +1342,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const outputUrl =
@@ -1347,7 +1368,8 @@ export class KieVideoProvider
     prompt?: string,
     model?: string,
     resolution?: string,
-    audioDurationSec?: number
+    audioDurationSec?: number,
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const provider = model ?? "kling-avatar"
     const modelConfig = KIE_LIP_SYNC_MODELS[provider]
@@ -1399,7 +1421,9 @@ export class KieVideoProvider
     const { resultJson, providerMs } = await runKieTask(
       modelConfig.model,
       input,
-      pollAttempts
+      pollAttempts,
+      undefined,
+      reconcileOpts,
     )
 
     const videoUrl =
@@ -1432,7 +1456,8 @@ export class KieVideoProvider
       guidanceScale?: number
       shift?: number
       onProgress?: (progress: number) => Promise<void>
-    }
+    },
+    reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
     const modelConfig = KIE_SPEECH_TO_VIDEO_MODELS["wan-s2v"]
     if (!modelConfig) {
@@ -1498,7 +1523,8 @@ export class KieVideoProvider
       modelConfig.model,
       input,
       MAX_POLL_ATTEMPTS_VIDEO,
-      options?.onProgress
+      options?.onProgress,
+      reconcileOpts,
     )
 
     const videoUrl =

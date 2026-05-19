@@ -17,12 +17,15 @@ import {
   type KieTaskResponse,
   type VeoRecordInfoResponse,
 } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
 export async function runFluxKontextTask(
   model: string,
   input: Record<string, unknown>,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ resultJson: KieResultJson }> {
   const apiKey = config.KIE_API_KEY
 
@@ -97,6 +100,8 @@ export async function runFluxKontextTask(
 
   const taskId = createData.data.taskId
   console.log(`[KIE.ai Kontext] Task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai Kontext]")
 
   // Step 2: Poll for completion with exponential backoff
   // Uses successFlag pattern (same as VEO):

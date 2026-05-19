@@ -17,6 +17,11 @@ vi.mock("../services/pipeline-combine-videos.js", () => ({
 }))
 vi.mock("../continuity.js", () => ({
   extractLastFrame: vi.fn(),
+  // F1 — Stage 7 calls `allocateReferenceSlots` before every animate. The
+  // default mock returns an empty slot list so existing test fixtures (no
+  // cast / no location / no priorLastFrame) keep working without changes.
+  // Specific tests override this to assert the wiring.
+  allocateReferenceSlots: vi.fn().mockResolvedValue([]),
 }))
 vi.mock("../llms/image-critic.js", () => ({
   runImageCritic: vi.fn(),
@@ -27,7 +32,7 @@ import { pipelineAnimateShot } from "../services/pipeline-animate-shot.js"
 import { pipelineGenerateSpeech } from "../services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "../services/pipeline-lip-sync.js"
 import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
-import { extractLastFrame } from "../continuity.js"
+import { allocateReferenceSlots, extractLastFrame } from "../continuity.js"
 import { runImageCritic } from "../llms/image-critic.js"
 
 beforeEach(() => vi.clearAllMocks())
@@ -411,6 +416,163 @@ describe("runSceneInternalPipeline", () => {
     // Scene still combined successfully.
     expect(pipelineCombineVideos).toHaveBeenCalledTimes(1)
     expect(result.composite_video_url).toBe("https://r2/composite.mp4")
+  })
+
+  it("F1: wires allocateReferenceSlots output into pipelineAnimateShot.referenceUrls (sequential mode)", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf-asset",
+      url: "https://r2/lf.png",
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+    // Slot 0 = priorLastFrame anchor (filled for shot 1+); slot 1 = character
+    // reference. Allocator returns them in priority order.
+    ;(allocateReferenceSlots as ReturnType<typeof vi.fn>).mockImplementation(
+      async ({ priorLastFrame }: { priorLastFrame?: { url: string } | null }) => {
+        if (priorLastFrame) {
+          return [
+            { kind: "continuity_anchor", url: priorLastFrame.url, label: "anchor" },
+            { kind: "primary_character", url: "https://r2/hero.png", label: "hero" },
+          ]
+        }
+        return [{ kind: "primary_character", url: "https://r2/hero.png", label: "hero" }]
+      },
+    )
+
+    // cast_keys=[] so the speech-side loadCastVoiceMap short-circuits and
+    // doesn't need a real supabase mock. The F1 wiring under test is the
+    // animate path's reference allocation, not voice resolution.
+    const sceneData = makeSceneNodeData(2)
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "sequential", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    // Two animate calls (one per shot); both received non-empty referenceUrls.
+    expect(pipelineAnimateShot).toHaveBeenCalledTimes(2)
+    const call0Args = (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+    expect(call0Args?.referenceUrls).toEqual(["https://r2/hero.png"])
+    // Shot 1+ should have the prior shot's last_frame URL in slot 0 + char in slot 1.
+    const call1Args = (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls[1]?.[0]
+    expect(call1Args?.referenceUrls).toEqual([
+      "https://r2/lf.png",
+      "https://r2/hero.png",
+    ])
+  })
+
+  it("F1: parallel mode passes no continuity anchor (priorLastFrame=null on every shot)", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+    ;(allocateReferenceSlots as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { kind: "primary_character", url: "https://r2/hero.png", label: "hero" },
+    ])
+
+    const sceneData = makeSceneNodeData(3)
+    await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(allocateReferenceSlots).toHaveBeenCalledTimes(3)
+    for (const call of (allocateReferenceSlots as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call[0].priorLastFrame).toBeNull()
+    }
+    // pipelineAnimateShot got the character ref on every call.
+    expect(pipelineAnimateShot).toHaveBeenCalledTimes(3)
+    for (const call of (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls) {
+      expect(call[0].referenceUrls).toEqual(["https://r2/hero.png"])
+    }
+  })
+
+  it("F1: allocator failure is non-fatal — animate proceeds with undefined referenceUrls", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf",
+      url: "https://r2/lf.png",
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+    ;(allocateReferenceSlots as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error("supabase: connection lost"),
+    )
+
+    const sceneData = makeSceneNodeData(1)
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "sequential", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(pipelineAnimateShot).toHaveBeenCalledTimes(1)
+    const callArgs = (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+    expect(callArgs?.referenceUrls).toBeUndefined()
+  })
+
+  it("D1 immutability: does NOT mutate the input sceneEntity.metadata", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(extractLastFrame as ReturnType<typeof vi.fn>).mockResolvedValue({
+      assetId: "lf",
+      url: "https://r2/lf.png",
+    })
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "c",
+      assetId: "composite-asset",
+      assetUrl: "https://r2/composite.mp4",
+      creditsSpent: 0,
+    })
+
+    const sceneData = makeSceneNodeData(2)
+    const inputMetadata = Object.freeze({ scene_node_data: sceneData })
+    const frozenSceneEntity = Object.freeze({
+      id: "scene-1",
+      metadata: inputMetadata,
+    })
+
+    // If `runSceneInternalPipeline` mutates the frozen input, the strict-mode
+    // assignment throws synchronously. The function MUST return the fresh
+    // metadata via `updated_metadata` and leave the input untouched.
+    const result = await runSceneInternalPipeline(
+      makeCtx(),
+      frozenSceneEntity as never,
+      { mode: "sequential", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.updated_metadata).toBeDefined()
+    // Sanity: the frozen object reference is still identical.
+    expect(frozenSceneEntity.metadata).toBe(inputMetadata)
+    // Updated_metadata carries the composite + per-shot data.
+    const updated = result.updated_metadata as {
+      scene_node_data: { composite_video_url: string; shots: ReadonlyArray<{ video_url?: string }> }
+    }
+    expect(updated.scene_node_data.composite_video_url).toBe("https://r2/composite.mp4")
+    expect(updated.scene_node_data.shots[0]?.video_url).toBe("https://r2/vid-shot_01.mp4")
   })
 
   it("scene_node_data missing → fails with scene_node_data_missing reason", async () => {

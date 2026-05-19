@@ -147,6 +147,7 @@ export const I18N_CATALOGS = [
   "style",
   "styling",
   "temporal",
+  "transitions",
   "vehicles",
   "voice-character",
   "voice-delivery",

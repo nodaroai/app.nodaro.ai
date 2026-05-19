@@ -289,6 +289,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"],
   },
   {
+    type: "transition",
+    label: "Transition",
+    icon: <GitBranch className="h-4 w-4" />,
+    category: "Camera",
+    keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"],
+  },
+  {
     type: "framing",
     label: "Framing",
     icon: <Frame className="h-4 w-4" />,

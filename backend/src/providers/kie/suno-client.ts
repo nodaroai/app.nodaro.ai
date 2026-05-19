@@ -12,6 +12,8 @@
 
 import { config } from "../../lib/config.js"
 import { KIE_API_BASE, createSanitizedError, sleep, pollDelay } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 import type { SunoModel, SunoAddTrackModel } from "@nodaro/shared"
 
 export type { SunoModel, SunoAddTrackModel }
@@ -302,7 +304,8 @@ interface SunoRecordInfoResponse {
  * Generate a song with Suno via KIE.ai
  */
 export async function sunoGenerate(
-  params: SunoGenerateParams
+  params: SunoGenerateParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -389,6 +392,9 @@ export async function sunoGenerate(
   }
 
   if (DEBUG) console.log(`[Suno] Task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -396,7 +402,8 @@ export async function sunoGenerate(
  * Create a cover version of an existing audio track
  */
 export async function sunoCover(
-  params: SunoCoverParams
+  params: SunoCoverParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -480,6 +487,9 @@ export async function sunoCover(
   }
 
   if (DEBUG) console.log(`[Suno] Cover task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -487,7 +497,8 @@ export async function sunoCover(
  * Extend an existing Suno track from a specific timestamp
  */
 export async function sunoExtend(
-  params: SunoExtendParams
+  params: SunoExtendParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -573,6 +584,9 @@ export async function sunoExtend(
   }
 
   if (DEBUG) console.log(`[Suno] Extend task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -580,7 +594,8 @@ export async function sunoExtend(
  * Generate lyrics from a prompt via Suno (text only, not audio)
  */
 export async function sunoLyrics(
-  params: SunoLyricsParams
+  params: SunoLyricsParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoLyricsResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -648,6 +663,9 @@ export async function sunoLyrics(
   }
 
   if (DEBUG) console.log(`[Suno] Lyrics task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoLyricsTask(taskId)
 }
 
@@ -856,7 +874,8 @@ async function pollSunoLyricsTask(taskId: string): Promise<SunoLyricsResult> {
  * Separate a Suno track into stems (vocal + instrumental, or up to 12 stems)
  */
 export async function sunoSeparate(
-  params: SunoSeparateParams
+  params: SunoSeparateParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoSeparateResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -926,6 +945,9 @@ export async function sunoSeparate(
   }
 
   if (DEBUG) console.log(`[Suno] Separate task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoSeparateTask(taskId)
 }
 
@@ -1051,7 +1073,8 @@ async function pollSunoSeparateTask(taskId: string): Promise<SunoSeparateResult>
  * Endpoint: POST /api/v1/mp4/generate
  */
 export async function sunoMusicVideo(
-  params: SunoMusicVideoParams
+  params: SunoMusicVideoParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoMusicVideoResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1120,6 +1143,9 @@ export async function sunoMusicVideo(
   }
 
   if (DEBUG) console.log(`[Suno] Music video task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoMusicVideoTask(taskId)
 }
 
@@ -1217,7 +1243,8 @@ async function pollSunoMusicVideoTask(taskId: string): Promise<SunoMusicVideoRes
  * Endpoint: POST /api/v1/generate/mashup
  */
 export async function sunoMashup(
-  params: SunoMashupParams
+  params: SunoMashupParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1294,6 +1321,9 @@ export async function sunoMashup(
   }
 
   if (DEBUG) console.log(`[Suno] Mashup task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -1306,7 +1336,8 @@ export async function sunoMashup(
  * Endpoint: POST /api/v1/generate/replace-section
  */
 export async function sunoReplaceSection(
-  params: SunoReplaceSectionParams
+  params: SunoReplaceSectionParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1381,6 +1412,9 @@ export async function sunoReplaceSection(
   }
 
   if (DEBUG) console.log(`[Suno] Replace section task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -1475,7 +1509,8 @@ export async function sunoStyleBoost(
  * Endpoint: POST /api/v1/generate/add-instrumental
  */
 export async function sunoAddInstrumental(
-  params: SunoAddInstrumentalParams
+  params: SunoAddInstrumentalParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1547,6 +1582,9 @@ export async function sunoAddInstrumental(
   }
 
   if (DEBUG) console.log(`[Suno] Add instrumental task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -1559,7 +1597,8 @@ export async function sunoAddInstrumental(
  * Endpoint: POST /api/v1/generate/add-vocals
  */
 export async function sunoAddVocals(
-  params: SunoAddVocalsParams
+  params: SunoAddVocalsParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1631,6 +1670,9 @@ export async function sunoAddVocals(
   }
 
   if (DEBUG) console.log(`[Suno] Add vocals task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 
@@ -1644,7 +1686,8 @@ export async function sunoAddVocals(
  * Poll: GET /api/v1/wav/record-info?taskId=
  */
 export async function sunoConvertWav(
-  params: SunoConvertWavParams
+  params: SunoConvertWavParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoConvertWavResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1713,6 +1756,9 @@ export async function sunoConvertWav(
   }
 
   if (DEBUG) console.log(`[Suno] WAV convert task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoWavTask(taskId)
 }
 
@@ -1804,7 +1850,8 @@ async function pollSunoWavTask(taskId: string): Promise<SunoConvertWavResult> {
  * Endpoint: POST /api/v1/generate/upload-extend
  */
 export async function sunoUploadExtend(
-  params: SunoUploadExtendParams
+  params: SunoUploadExtendParams,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -1882,6 +1929,9 @@ export async function sunoUploadExtend(
   }
 
   if (DEBUG) console.log(`[Suno] Upload extend task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Suno]")
+
   return pollSunoTask(taskId)
 }
 

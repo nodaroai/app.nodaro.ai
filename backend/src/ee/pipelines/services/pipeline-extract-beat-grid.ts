@@ -1,5 +1,7 @@
+import { execFile } from "node:child_process"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
+import { promisify } from "node:util"
 import {
   cleanupWorkDir,
   createWorkDir,
@@ -8,35 +10,79 @@ import {
 } from "../../../providers/video/ffmpeg-utils.js"
 import { uploadBufferToR2 } from "../../../lib/storage.js"
 
+const execFileAsync = promisify(execFile)
+
 /**
  * Phase 1C.2 sub-step 7g — trim the generated music track to the exact target
  * duration and extract a beat-grid for the Editor LLM.
  *
- * **Beat detection strategy:** aubio is NOT available in our Dockerfile —
- * confirmed by the only `apt-get install` blocks shipping `ffmpeg curl
- * ca-certificates yt-dlp` (no `aubio-tools`). Adding aubio is out of scope
- * for 1C.2; we fall back to the FFmpeg `silencedetect` filter as documented
- * in the plan. silencedetect is less accurate than onset-based beat detection
- * — it returns silence boundaries which we use as a heuristic proxy for beat
- * markers. For most cinematic scores this surfaces 8-32 markers across the
- * track, which is enough for the Editor LLM to snap cut points to.
- *
- * TODO(Phase 1C.3+): bake `aubio-tools` into the production image and swap
- * the silencedetect heuristic for `aubio onset` (proper beat detection).
+ * **Beat detection strategy (1C.2.1):** when `aubio` is on PATH (production
+ * Dockerfile installs `aubio-tools`), call `aubio onset <trimmed.mp3>` to get
+ * proper onset detection — one float per line on stdout, in seconds. When
+ * aubio is absent (e.g. local dev without aubio-tools), fall back to the
+ * original FFmpeg `silencedetect` heuristic. The aubio path is preferred
+ * because silence boundaries are only a proxy for beat markers; aubio's
+ * energy-based onset detector finds actual transients.
  *
  * **Pipeline:**
  *   1. Download the generated music track to a tmp file.
- *   2. Trim to target duration + add fade-out + run silencedetect — ALL in
- *      one ffmpeg pass. silencedetect is metadata-only (no audio transform);
- *      chained after afade so a single decode pass writes the trimmed mp3
- *      AND emits `silence_start` markers on stderr.
- *   3. Upload the trimmed track to R2; return URL + beat grid + BPM estimate
+ *   2. Trim to target duration + add fade-out + (when aubio is unavailable)
+ *      run silencedetect — ALL in one ffmpeg pass. silencedetect is
+ *      metadata-only (no audio transform); chained after afade so a single
+ *      decode pass writes the trimmed mp3 AND emits `silence_start` markers
+ *      on stderr.
+ *   3. When aubio is available, run `aubio onset` against the trimmed mp3 to
+ *      get the beat grid. Otherwise parse the silencedetect markers from
+ *      stderr.
+ *   4. Upload the trimmed track to R2; return URL + beat grid + BPM estimate
  *      (`60 / median_inter_onset_interval`).
  *
- * Failure handling: silencedetect errors are non-fatal — the result carries
+ * Failure handling: both detector paths are non-fatal — the result carries
  * an empty beat grid + BPM=0 and the caller (music-timeline orchestrator)
  * proceeds without snap targets.
  */
+
+/**
+ * Module-init detection: probe whether `aubio` is on PATH so we can pick the
+ * detector path at run-time without paying the spawn cost per call. The
+ * promise is cached at module load so a single `aubio --version` is paid
+ * once per process. Test paths that mock `child_process.execFile` always
+ * win because the mock replaces the binding before this promise resolves.
+ */
+let aubioAvailablePromise: Promise<boolean> | null = null
+
+function detectAubio(): Promise<boolean> {
+  if (aubioAvailablePromise === null) {
+    aubioAvailablePromise = execFileAsync("aubio", ["--version"])
+      .then(() => true)
+      .catch(() => false)
+  }
+  return aubioAvailablePromise
+}
+
+/**
+ * Resets the cached aubio detection. Test-only — production code paths read
+ * the cached promise exactly once per process lifetime.
+ */
+export function _resetAubioDetectionForTests(): void {
+  aubioAvailablePromise = null
+}
+
+/**
+ * Runs `aubio onset <path>` and parses its stdout (one float per line, in
+ * seconds). Returns an empty array on parse failures.
+ */
+async function extractBeatGridAubio(audioPath: string): Promise<number[]> {
+  const { stdout } = await execFileAsync("aubio", ["onset", audioPath])
+  const markers: number[] = []
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    const value = parseFloat(trimmed)
+    if (Number.isFinite(value) && value >= 0) markers.push(value)
+  }
+  return markers
+}
 
 export interface PipelineExtractBeatGridArgs {
   /** R2 URL of the music track produced by sub-step 7f (pipelineGenerateMusic). */
@@ -80,15 +126,18 @@ export async function pipelineExtractBeatGrid(
     // 1. Download.
     await downloadFile(musicUrl, sourcePath)
 
-    // 2. Trim + fade-out + silencedetect in a single ffmpeg pass. `silencedetect`
-    //    is a metadata-only filter — it doesn't transform audio, it only emits
-    //    `silence_start: <sec>` markers on stderr. Chaining it after `afade`
-    //    keeps the audio intact while scanning silence boundaries in one decode
-    //    pass (vs. the previous two-pass approach: trim → re-read trimmed file).
+    // 2. Trim + fade-out (+ silencedetect when aubio isn't available) in a
+    //    single ffmpeg pass. `silencedetect` is a metadata-only filter — it
+    //    doesn't transform audio, it only emits `silence_start: <sec>`
+    //    markers on stderr. We always emit silencedetect lines so the
+    //    fallback path keeps working even if aubio is on PATH but fails at
+    //    run-time (e.g. unsupported codec).
     //    `-t` caps total duration; threshold `-30dB` + min duration `0.05s`
     //    catches inter-beat low points without flooding on noise floor jitter.
     const fadeStartSec = Math.max(0, targetDurationSec - fadeOutDurationSec)
     let beatGridSeconds: number[] = []
+    const aubioAvailable = await detectAubio()
+    let trimStderr = ""
     try {
       const { stderr } = await runFfmpegCapture([
         "-y",
@@ -100,25 +149,32 @@ export async function pipelineExtractBeatGrid(
         "-b:a", "192k",
         trimmedPath,
       ])
-      beatGridSeconds = parseSilenceDetectMarkers(stderr)
+      trimStderr = stderr
     } catch (err) {
-      // runFfmpegCapture attaches stderr to the thrown error — try to parse
-      // it before giving up. Many FFmpeg builds exit non-zero on `-f null -`
-      // but still emit the silencedetect lines.
+      // runFfmpegCapture attaches stderr to the thrown error — save it for
+      // the fallback silencedetect parse below.
       const e = err as { stderr?: string }
-      if (e?.stderr) {
-        try {
-          beatGridSeconds = parseSilenceDetectMarkers(e.stderr)
-        } catch {
-          // Final fallback — empty grid.
-        }
-      }
-      if (beatGridSeconds.length === 0) {
+      if (e?.stderr) trimStderr = e.stderr
+      console.warn(
+        "[pipeline-extract-beat-grid] ffmpeg trim+fade failed:",
+        err instanceof Error ? err.message : err,
+      )
+    }
+
+    if (aubioAvailable) {
+      try {
+        beatGridSeconds = await extractBeatGridAubio(trimmedPath)
+      } catch (err) {
+        // Fall back to silencedetect — aubio failed at run-time despite the
+        // probe passing at module init.
         console.warn(
-          "[pipeline-extract-beat-grid] silencedetect failed:",
+          "[pipeline-extract-beat-grid] aubio onset failed; falling back to silencedetect:",
           err instanceof Error ? err.message : err,
         )
+        beatGridSeconds = parseSilenceDetectMarkers(trimStderr)
       }
+    } else {
+      beatGridSeconds = parseSilenceDetectMarkers(trimStderr)
     }
 
     // 3. Upload trimmed track to R2.

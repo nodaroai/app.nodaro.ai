@@ -30,11 +30,16 @@ vi.mock("@/lib/sse.js", () => ({
   createSSEStream: vi.fn(),
 }))
 
+vi.mock("@/lib/reconcile/persistence.js", () => ({
+  markProviderCallStart: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { aiWriterRoutes } from "../ai-writer.js"
 import { supabase } from "../../lib/supabase.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { createSSEStream } from "../../lib/sse.js"
+import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 
 let app: FastifyInstance
 
@@ -125,6 +130,13 @@ describe("POST /v1/ai-writer/generate (sync)", () => {
     expect(body.jobId).toBe("job-1")
     expect(body.generatedText).toBe("Roses are red, cats are great...")
     expect(CreditsService.commitCredits).toHaveBeenCalledWith("usage-1")
+  })
+
+  it("calls markProviderCallStart with anthropic-sync before llmComplete", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/ai-writer/generate", payload: VALID_SYNC_PAYLOAD })
+    expect(res.statusCode).toBe(200)
+    expect(markProviderCallStart).toHaveBeenCalledTimes(1)
+    expect(markProviderCallStart).toHaveBeenCalledWith("job-1", "anthropic-sync")
   })
 
   it("returns 502 when Claude API throws", async () => {

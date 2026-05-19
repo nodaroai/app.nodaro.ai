@@ -15,6 +15,8 @@ import {
   createSanitizedError,
   pollDelay,
 } from "./client.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 const DEBUG = config.NODE_ENV === "development"
 
@@ -119,7 +121,8 @@ function applyElementNamePrefixes(
 }
 
 export async function kling3Generate(
-  params: Kling3Params
+  params: Kling3Params,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<Kling3Result> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
@@ -245,6 +248,8 @@ export async function kling3Generate(
   }
 
   if (DEBUG) console.log(`[Kling3] Task created: ${taskId}`)
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[Kling3]")
 
   const videoUrl = await pollKling3Task(taskId, apiKey, params.onProgress)
 
