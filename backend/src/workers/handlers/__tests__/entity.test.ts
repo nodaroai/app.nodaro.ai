@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const mockGenerateImage = vi.fn()
   const mockImageToVideo = vi.fn()
+  const mockVideoToVideo = vi.fn()
   const mockGenerateScript = vi.fn()
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => {
   return {
     mockGenerateImage,
     mockImageToVideo,
+    mockVideoToVideo,
     mockGenerateScript,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
@@ -55,7 +57,11 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom, rpc: mocks.mockRpc } }))
-vi.mock("@/providers/index.js", () => ({ generateImage: mocks.mockGenerateImage, imageToVideo: mocks.mockImageToVideo }))
+vi.mock("@/providers/index.js", () => ({
+  generateImage: mocks.mockGenerateImage,
+  imageToVideo: mocks.mockImageToVideo,
+  videoToVideo: mocks.mockVideoToVideo,
+}))
 vi.mock("@/providers/script/script-generator.js", () => ({ generateScript: mocks.mockGenerateScript }))
 vi.mock("@/lib/character-auto-attach.js", () => ({
   attachAssetToCharacter: mocks.mockAttach,
@@ -104,6 +110,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockGenerateImage.mockResolvedValue(PROVIDER_RESULT)
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_PROVIDER_RESULT)
+  mocks.mockVideoToVideo.mockResolvedValue(VIDEO_PROVIDER_RESULT)
   mocks.mockGenerateScript.mockResolvedValue({ title: "My Script", scenes: [{ description: "Scene 1" }] })
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
   mocks.mockMarkJobCompleted.mockResolvedValue(true)
@@ -563,6 +570,34 @@ describe("generate-location-motion handler", () => {
       undefined,
       undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
+  // Phase 2 #2 — Atmosphere motion refinement. When refineFromVideoUrl is
+  // set, the worker routes to videoToVideo with the existing clip as input
+  // instead of running image-to-video from the source frame.
+  it("routes to videoToVideo when refineFromVideoUrl is set (Phase 2 #2)", async () => {
+    const job = makeJob("generate-location-motion", {
+      prompt: "Same shot but light rain instead of fog",
+      sourceImageUrl: "https://x/loc.png", // present but ignored on refine path
+      refineFromVideoUrl: "https://x/loc-fog.mp4",
+      provider: "wan",
+      aspectRatio: "16:9",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith(
+      "https://x/loc-fog.mp4",
+      "wan",
+      "Same shot but light rain instead of fog",
+      { aspectRatio: "16:9" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    // The legacy image-to-video path must NOT fire on the refine route.
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    // Result is still uploaded + persisted the same way.
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false,
     )
   })
 

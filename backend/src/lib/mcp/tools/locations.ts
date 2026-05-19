@@ -676,6 +676,18 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
           .max(200)
           .optional()
           .describe("Display name for the atmosphere-motion entry (defaults to motion description)."),
+        refine_from_video_url: z
+          .string()
+          .url()
+          .optional()
+          .describe(
+            "Phase 2 #2 refinement path: when set, the worker routes to " +
+            "video-to-video using THIS clip as the source instead of running " +
+            "image-to-video from `source_image_url`. Use this to iterate on " +
+            "an existing atmosphere clip with a new prompt (e.g. 'same shot " +
+            "but light rain instead of fog'). Routes through providers with " +
+            "the video-to-video capability (currently Wan 2.6 via KIE).",
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -701,6 +713,9 @@ function registerGenerationTools(opts: RegisterLocationToolsOpts): void {
         payload.attachToLocationId = args.attach_to_location_id
       }
       if (args.attach_name) payload.attachName = args.attach_name
+      if (args.refine_from_video_url) {
+        payload.refineFromVideoUrl = args.refine_from_video_url
+      }
 
       const res = await fastify.inject({
         method: "POST",

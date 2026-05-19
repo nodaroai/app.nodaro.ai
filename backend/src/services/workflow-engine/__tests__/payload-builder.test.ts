@@ -792,3 +792,131 @@ describe("expandWiredLocationRefs — reference photos (Phase 2 #3)", () => {
     }
   })
 })
+
+// Phase 2 #1 — Smart variant selection. When the consumer's prompt
+// contains a keyword that matches one of the location's variants AND
+// the user hasn't explicitly overridden via `selectedVariant`, the
+// canonical entry's URL gets swapped to the matching variant.
+describe("expandWiredLocationRefs — smart variant selection (Phase 2 #1)", () => {
+  const buildLocation = (extra: Record<string, unknown> = {}) =>
+    node("loc-1", "location", {
+      sourceImageUrl: "https://r2/canonical.png",
+      locationName: "Old Library",
+      timeOfDay: [
+        { name: "night", url: "https://r2/night.png" },
+        { name: "dusk", url: "https://r2/dusk.png" },
+      ],
+      weather: [{ name: "rain", url: "https://r2/rain.png" }],
+      ...extra,
+    })
+
+  it("swaps canonical URL when the prompt contains a matching variant name", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "generate-image", {
+      prompt: "Hero stands in the library at night, dramatic.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/night.png")
+  })
+
+  it("matches via synonyms (sunset → dusk)", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "generate-image", {
+      prompt: "Hero stands in the library at sunset, golden light.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/dusk.png")
+  })
+
+  it("matches weather variants (rainy → rain)", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "generate-image", {
+      prompt: "A rainy evening in the library.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/rain.png")
+  })
+
+  it("uses word boundaries so substring noise doesn't match (drain ≠ rain)", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "generate-image", {
+      prompt: "Hero refuses to drain the moat.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/canonical.png")
+  })
+
+  it("falls through to canonical when no keyword matches", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "generate-image", {
+      prompt: "Hero walks down the corridor.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/canonical.png")
+  })
+
+  it("explicit selectedVariant (Phase 2 #4) wins over smart match", () => {
+    // selectedVariant is applied by the orchestrator BEFORE
+    // expandWiredLocationRefs runs (it patches sourceImageUrl). We test
+    // here that the smart matcher is SKIPPED when selectedVariant is
+    // present — even if the prompt also has a different keyword.
+    const loc = buildLocation({
+      // selectedVariant present → the orchestrator would have already
+      // patched sourceImageUrl to the variant's URL. The smart matcher
+      // must NOT override it again.
+      selectedVariant: "weather/rain",
+      sourceImageUrl: "https://r2/rain.png", // mimics orchestrator patch
+    })
+    const consumer = node("gen-1", "generate-image", {
+      // Prompt also mentions "night" — smart matcher could pick night,
+      // but selectedVariant takes precedence.
+      prompt: "Hero stands in the library at night.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/rain.png")
+  })
+
+  it("falls back to motionPrompt when consumer has no prompt field", () => {
+    const loc = buildLocation()
+    const consumer = node("gen-1", "image-to-video", {
+      motionPrompt: "Slow dolly through the library at dusk.",
+    })
+    const refs = expandWiredLocationRefs("gen-1", {
+      nodes: [loc, consumer],
+      edges: [edge("loc-1", "gen-1")],
+      nodeStates: {},
+    })
+    const canonical = refs.find((r) => r.id === "loc-1")
+    expect(canonical?.url).toBe("https://r2/dusk.png")
+  })
+})
