@@ -9,6 +9,7 @@ import {
 import { uploadImage, getImageProxyUrl } from "@/lib/api"
 import { generateMaskBlob, paintStrokeOnCtx } from "@/lib/mask-utils"
 import type { MaskStroke } from "@/lib/mask-utils"
+import { useBackToClose } from "@/hooks/use-back-to-close"
 
 type Tool = "brush" | "eraser" | "lasso"
 type ViewMode = "overlay" | "mask" | "source"
@@ -39,6 +40,8 @@ export function MaskPainterModal({
   const [lassoPoints, setLassoPoints] = useState<Array<{ x: number; y: number }>>([])
   const [baseImageData, setBaseImageData] = useState<ImageData | null>(null)
   const [saving, setSaving] = useState(false)
+
+  useBackToClose(isOpen, onClose)
 
   // Reset on open
   useEffect(() => {
@@ -72,22 +75,18 @@ export function MaskPainterModal({
   }, [isOpen, initialMaskUrl, imgSize])
 
   const handleUndo = useCallback(() => {
-    setStrokes((prev) => {
-      if (prev.length === 0) return prev
-      const popped = prev[prev.length - 1]
-      setRedoStack((r) => [...r, popped])
-      return prev.slice(0, -1)
-    })
-  }, [])
+    if (strokes.length === 0) return
+    const popped = strokes[strokes.length - 1]
+    setStrokes(strokes.slice(0, -1))
+    setRedoStack((r) => [...r, popped])
+  }, [strokes])
 
   const handleRedo = useCallback(() => {
-    setRedoStack((prev) => {
-      if (prev.length === 0) return prev
-      const top = prev[prev.length - 1]
-      setStrokes((s) => [...s, top])
-      return prev.slice(0, -1)
-    })
-  }, [])
+    if (redoStack.length === 0) return
+    const top = redoStack[redoStack.length - 1]
+    setStrokes((s) => [...s, top])
+    setRedoStack(redoStack.slice(0, -1))
+  }, [redoStack])
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") onClose()
