@@ -15,7 +15,14 @@
 -- shows a placeholder image; the row remains intact in case the user has
 -- a backup or wants to re-upload.
 
+-- Defensive: prod CI surfaced `column "deleted_at" does not exist (SQLSTATE 42703)`
+-- on 2026-05-19 when this migration tried to create the partial index below,
+-- even though migration 124_location-studio-columns.sql adds the column.
+-- Re-asserting `deleted_at` here via `IF NOT EXISTS` makes the migration
+-- self-sufficient — a no-op when the column already exists, a recovery when
+-- it doesn't. Idempotent either way.
 ALTER TABLE locations
+  ADD COLUMN IF NOT EXISTS deleted_at          TIMESTAMPTZ DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS r2_assets_purged_at TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS locations_quarantine_sweep_idx
