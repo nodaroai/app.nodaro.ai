@@ -41,7 +41,7 @@
     "@remotion/renderer": "^4.0.0",
     "@supabase/supabase-js": "^2.49.1",
     "apify-client": "^2.23.0",
-    "archiver": "^8.0.0",
+    "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.34.3",
     "dotenv": "^16.4.7",
