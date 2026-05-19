@@ -311,6 +311,131 @@ describe("EnvironmentalAssetTab", () => {
   })
 })
 
+// Phase 2 #11 — Search/filter inside Location Studio asset grids.
+// The shared workhorse should expose a search input ONLY when the combined
+// count (items + tracked + presets) exceeds ~10. Below that threshold the
+// chrome stays hidden so small grids aren't cluttered.
+describe("EnvironmentalAssetTab — search/filter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    toastError.mockClear()
+    toastSuccess.mockClear()
+    toastInfo.mockClear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // Build a 12-element preset list so totalCount > 10 trips the search gate
+  // even with zero items + zero in-flight jobs. The literal preset strings
+  // double as the case-insensitive search corpus.
+  const LARGE_PRESETS = [
+    "neon",
+    "candlelit",
+    "cinematic",
+    "moonlit",
+    "sunset",
+    "noon",
+    "blue-hour",
+    "golden-hour",
+    "tungsten",
+    "fluorescent",
+    "rim-light",
+    "soft-fill",
+  ] as const
+
+  it("hides the search input when total count <= 10", () => {
+    // 3 presets + 0 items + 0 tracked = 3 → search hidden.
+    renderTab(makeStudio())
+    expect(screen.queryByPlaceholderText(/search lighting/i)).not.toBeInTheDocument()
+  })
+
+  it("shows the search input when total count > 10", () => {
+    renderTab(makeStudio(), LARGE_PRESETS)
+    expect(screen.getByPlaceholderText(/search lighting/i)).toBeInTheDocument()
+  })
+
+  it("typing in search filters items by name (case-insensitive substring)", async () => {
+    const existingItems: LocationAssetItem[] = [
+      { name: "Neon Sunset", url: "https://example.com/a.png" },
+      { name: "Candlelit Diner", url: "https://example.com/b.png" },
+      { name: "Cinematic Rim", url: "https://example.com/c.png" },
+    ]
+    renderTab(
+      makeStudio({
+        stagedData: makeStagedData({ lighting: existingItems }),
+      }),
+      LARGE_PRESETS,
+    )
+
+    // Before typing, all three asset cards visible.
+    expect(screen.getByAltText("Neon Sunset")).toBeInTheDocument()
+    expect(screen.getByAltText("Candlelit Diner")).toBeInTheDocument()
+    expect(screen.getByAltText("Cinematic Rim")).toBeInTheDocument()
+
+    // Type "neon" (lowercase) — only "Neon Sunset" should remain. Match is
+    // case-insensitive substring against `item.name`.
+    const search = screen.getByPlaceholderText(/search lighting/i)
+    await userEvent.type(search, "neon")
+    expect(screen.getByAltText("Neon Sunset")).toBeInTheDocument()
+    expect(screen.queryByAltText("Candlelit Diner")).not.toBeInTheDocument()
+    expect(screen.queryByAltText("Cinematic Rim")).not.toBeInTheDocument()
+  })
+
+  it("typing in search filters preset chips by literal AND localized label", async () => {
+    renderTab(makeStudio(), LARGE_PRESETS)
+    const search = screen.getByPlaceholderText(/search lighting/i)
+
+    // Sanity: all 12 preset chips render before search.
+    for (const p of LARGE_PRESETS) {
+      expect(screen.getByRole("button", { name: p })).toBeInTheDocument()
+    }
+
+    await userEvent.type(search, "hour")
+    // Only "blue-hour" and "golden-hour" contain "hour".
+    expect(screen.getByRole("button", { name: "blue-hour" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "golden-hour" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "neon" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "tungsten" })).not.toBeInTheDocument()
+  })
+
+  it("renders zero-results message with a Clear button when query matches nothing", async () => {
+    renderTab(makeStudio(), LARGE_PRESETS)
+    const search = screen.getByPlaceholderText(/search lighting/i)
+    await userEvent.type(search, "xyznomatch")
+
+    // Zero-results banner replaces the empty-state copy.
+    expect(screen.getByText(/no matches for "xyznomatch"/i)).toBeInTheDocument()
+    // Old empty-state copy must NOT render — search is active.
+    expect(screen.queryByText(/no lighting variants yet/i)).not.toBeInTheDocument()
+    // No preset chips should be visible.
+    expect(screen.queryByRole("button", { name: "neon" })).not.toBeInTheDocument()
+    // Zero-results region has its own Clear button.
+    const clearButtons = screen.getAllByRole("button", { name: /clear/i })
+    expect(clearButtons.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it("Clear button resets the search query and restores all chips/items", async () => {
+    renderTab(makeStudio(), LARGE_PRESETS)
+    const search = screen.getByPlaceholderText(/search lighting/i) as HTMLInputElement
+    await userEvent.type(search, "neon")
+
+    // After typing, "tungsten" is filtered out.
+    expect(screen.queryByRole("button", { name: "tungsten" })).not.toBeInTheDocument()
+
+    // The header-row Clear button is the first one (next to the input).
+    // We grab any Clear button and click it.
+    const clearButton = screen.getAllByRole("button", { name: /^clear$/i })[0]
+    await userEvent.click(clearButton)
+    expect(search.value).toBe("")
+    // All 12 preset chips restored.
+    for (const p of LARGE_PRESETS) {
+      expect(screen.getByRole("button", { name: p })).toBeInTheDocument()
+    }
+  })
+})
+
 // Locale smoke test — separate suite so we can swap the useLocalizedCatalog
 // mock without polluting the default-locale suite above. We import the
 // component lazily after registering the mock to ensure the patched hook is

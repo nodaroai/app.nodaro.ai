@@ -90,3 +90,83 @@ describe("ReferencePhotosSection", () => {
     expect(onChange).toHaveBeenCalledWith([{ kind: "interior", url: "https://example.com/b.png" }])
   })
 })
+
+// Phase 2 #11 — Search/filter inside Location Studio asset grids.
+// Reference photos have no `name` field — we match against the kind enum
+// (e.g. "wide"), the human label from `LOCATION_REFERENCE_PHOTO_KIND_LABELS`
+// (e.g. "wide-angle reference"), and the trailing URL filename.
+describe("ReferencePhotosSection — search/filter", () => {
+  beforeEach(() => {
+    toastInfo.mockClear()
+    toastError.mockClear()
+  })
+
+  function elevenPhotos(): LocationReferencePhoto[] {
+    return [
+      { kind: "wide", url: "https://example.com/wide-shot.png" },
+      { kind: "interior", url: "https://example.com/cafe-interior.png" },
+      { kind: "exterior", url: "https://example.com/storefront.png" },
+      { kind: "detail", url: "https://example.com/door-detail.png" },
+      { kind: "moodBoard", url: "https://example.com/mood-1.png" },
+      { kind: "other", url: "https://example.com/misc.png" },
+      { kind: "wide", url: "https://example.com/wide-2.png" },
+      { kind: "interior", url: "https://example.com/booth-photo.png" },
+      { kind: "moodBoard", url: "https://example.com/mood-2.png" },
+      { kind: "detail", url: "https://example.com/menu.png" },
+      { kind: "moodBoard", url: "https://example.com/mood-3.png" },
+    ]
+  }
+
+  it("hides the search input when photos.length <= 10", () => {
+    const photos: LocationReferencePhoto[] = Array.from({ length: 5 }, (_, i) => ({
+      kind: "wide" as const,
+      url: `https://example.com/p${i}.png`,
+    }))
+    render(<ReferencePhotosSection photos={photos} onChange={() => {}} />)
+    expect(
+      screen.queryByPlaceholderText(/search reference photos/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it("shows the search input when photos.length > 10", () => {
+    render(<ReferencePhotosSection photos={elevenPhotos()} onChange={() => {}} />)
+    expect(
+      screen.getByPlaceholderText(/search reference photos/i),
+    ).toBeInTheDocument()
+  })
+
+  it("filters by kind enum (case-insensitive)", async () => {
+    const user = userEvent.setup()
+    render(<ReferencePhotosSection photos={elevenPhotos()} onChange={() => {}} />)
+    const search = screen.getByPlaceholderText(/search reference photos/i)
+    await user.type(search, "mood")
+    // moodBoard kind: 3 entries should remain; non-mood kinds filtered out.
+    const wideThumbs = screen.queryAllByAltText("wide")
+    expect(wideThumbs.length).toBe(0)
+    const moodThumbs = screen.queryAllByAltText("moodBoard")
+    expect(moodThumbs.length).toBe(3)
+  })
+
+  it("filters by URL filename", async () => {
+    const user = userEvent.setup()
+    render(<ReferencePhotosSection photos={elevenPhotos()} onChange={() => {}} />)
+    const search = screen.getByPlaceholderText(/search reference photos/i)
+    await user.type(search, "booth")
+    // Only the interior photo with "booth-photo.png" filename should match.
+    const interior = screen.queryAllByAltText("interior")
+    expect(interior.length).toBe(1)
+    // No other thumbs should be visible.
+    expect(screen.queryAllByAltText("wide").length).toBe(0)
+    expect(screen.queryAllByAltText("moodBoard").length).toBe(0)
+  })
+
+  it("renders zero-results banner with Clear button when nothing matches", async () => {
+    const user = userEvent.setup()
+    render(<ReferencePhotosSection photos={elevenPhotos()} onChange={() => {}} />)
+    const search = screen.getByPlaceholderText(/search reference photos/i)
+    await user.type(search, "noresultsxyz")
+    expect(screen.getByText(/no matches for "noresultsxyz"/i)).toBeInTheDocument()
+    const clearButtons = screen.getAllByRole("button", { name: /^clear$/i })
+    expect(clearButtons.length).toBeGreaterThanOrEqual(1)
+  })
+})

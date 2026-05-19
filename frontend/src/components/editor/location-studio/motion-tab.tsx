@@ -137,6 +137,31 @@ export function MotionTab({ studio }: MotionTabProps) {
   const customDisabled = disabled || !customPrompt.trim()
   const presetTooltip = noSourceImage ? "Approve a main image first" : undefined
 
+  // Phase 2 #11 — Search/filter. Same shape as EnvironmentalAssetTab: hide
+  // input until the grid is large enough to need it. Filter items by name,
+  // tracked placeholders by name, presets by both raw + localized label.
+  const [searchQuery, setSearchQuery] = useState("")
+  const q = searchQuery.trim().toLowerCase()
+  const visibleItems = q
+    ? items.filter((i) => i.name.toLowerCase().includes(q))
+    : items
+  const visiblePresets = q
+    ? MOTION_PRESETS.filter((p) => {
+        const label = resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)
+        return p.toLowerCase().includes(q) || label.toLowerCase().includes(q)
+      })
+    : MOTION_PRESETS
+  const visibleTracked = q
+    ? trackedMotions.filter((j) => j.name.toLowerCase().includes(q))
+    : trackedMotions
+  const totalCount = items.length + trackedMotions.length + MOTION_PRESETS.length
+  const showSearch = totalCount > 10
+  const zeroResults =
+    q.length > 0 &&
+    visibleItems.length === 0 &&
+    visibleTracked.length === 0 &&
+    visiblePresets.length === 0
+
   return (
     <div className="space-y-4 max-w-4xl">
       <h2 className="text-[12px] font-medium text-slate-300">
@@ -152,34 +177,59 @@ export function MotionTab({ studio }: MotionTabProps) {
         </div>
       )}
 
-      {/* Asset grid — video cards + in-flight placeholders */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {items.map((item, idx) => (
-          <div
-            key={`${item.url}-${idx}`}
-            data-testid={`motion-card-${idx}`}
-            className="relative group aspect-video border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
-          >
-            <video
-              src={item.url}
-              preload="metadata"
-              controls
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
-              {item.name}
-            </div>
+      {showSearch && (
+        <div className="flex items-center gap-2">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search atmosphere motions…"
+            aria-label="Search atmosphere motions"
+            className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
+          />
+          {q && (
             <button
               type="button"
-              onClick={() => handleRemove(idx)}
-              aria-label={`Remove ${item.name}`}
-              className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              onClick={() => setSearchQuery("")}
+              className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              Remove
+              Clear
             </button>
-          </div>
-        ))}
-        {trackedMotions.map((j) => (
+          )}
+        </div>
+      )}
+
+      {/* Asset grid — video cards + in-flight placeholders */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {visibleItems.map((item) => {
+          const originalIdx = items.indexOf(item)
+          return (
+            <div
+              key={`${item.url}-${originalIdx}`}
+              data-testid={`motion-card-${originalIdx}`}
+              className="relative group aspect-video border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+            >
+              <video
+                src={item.url}
+                preload="metadata"
+                controls
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
+                {item.name}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleRemove(originalIdx)}
+                aria-label={`Remove ${item.name}`}
+                className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+              >
+                Remove
+              </button>
+            </div>
+          )
+        })}
+        {visibleTracked.map((j) => (
           <div
             key={j.jobId}
             className="aspect-video border border-[#1e293b] rounded bg-[#0e1117] flex items-center justify-center text-[11px] text-slate-400"
@@ -187,10 +237,22 @@ export function MotionTab({ studio }: MotionTabProps) {
             Generating {j.name}…
           </div>
         ))}
-        {items.length === 0 && trackedMotions.length === 0 && (
+        {!q && items.length === 0 && trackedMotions.length === 0 && (
           <div className="col-span-full text-center text-[11px] text-slate-500 py-8 border border-dashed border-[#1e293b] rounded">
             No atmosphere motions yet — pick a preset below or enter a custom
             motion prompt.
+          </div>
+        )}
+        {zeroResults && (
+          <div className="col-span-full text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded">
+            No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-pink-400 hover:underline"
+            >
+              Clear
+            </button>
           </div>
         )}
       </div>
@@ -219,7 +281,7 @@ export function MotionTab({ studio }: MotionTabProps) {
 
       {/* Preset chips */}
       <div className="flex flex-wrap gap-2">
-        {MOTION_PRESETS.map((p) => (
+        {visiblePresets.map((p) => (
           <button
             key={p}
             type="button"

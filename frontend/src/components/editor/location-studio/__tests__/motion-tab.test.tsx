@@ -254,6 +254,89 @@ describe("MotionTab", () => {
   })
 })
 
+// Phase 2 #11 — Search/filter inside Location Studio asset grids (motion).
+describe("MotionTab — search/filter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    toastError.mockClear()
+    toastSuccess.mockClear()
+    toastInfo.mockClear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it("hides the search input when total count <= 10", () => {
+    // 0 items + 0 tracked + 8 presets = 8 → search hidden.
+    renderTab(makeStudio())
+    expect(
+      screen.queryByPlaceholderText(/search atmosphere motions/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it("shows the search input when total count > 10", () => {
+    // Push the items list past the threshold: 4 items + 8 presets = 12 > 10.
+    const fourItems: LocationAssetItem[] = [
+      { name: "clip-a", url: "https://example.com/a.mp4" },
+      { name: "clip-b", url: "https://example.com/b.mp4" },
+      { name: "clip-c", url: "https://example.com/c.mp4" },
+      { name: "clip-d", url: "https://example.com/d.mp4" },
+    ]
+    renderTab(
+      makeStudio({
+        stagedData: makeStagedData({ atmosphereMotions: fourItems }),
+      }),
+    )
+    expect(
+      screen.getByPlaceholderText(/search atmosphere motions/i),
+    ).toBeInTheDocument()
+  })
+
+  it("typing in search filters preset chips by name (case-insensitive)", async () => {
+    // Cross the threshold by passing in 4 items.
+    const fourItems: LocationAssetItem[] = [
+      { name: "clip-a", url: "https://example.com/a.mp4" },
+      { name: "clip-b", url: "https://example.com/b.mp4" },
+      { name: "clip-c", url: "https://example.com/c.mp4" },
+      { name: "clip-d", url: "https://example.com/d.mp4" },
+    ]
+    renderTab(
+      makeStudio({
+        stagedData: makeStagedData({ atmosphereMotions: fourItems }),
+      }),
+    )
+    const search = screen.getByPlaceholderText(/search atmosphere motions/i)
+    await userEvent.type(search, "PAN")
+    // "slow pan-left" + "slow pan-right" contain "pan".
+    expect(screen.getByRole("button", { name: "slow pan-left" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "slow pan-right" })).toBeInTheDocument()
+    // Others should be filtered out.
+    expect(screen.queryByRole("button", { name: "drone fly-over" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "static atmospheric" })).not.toBeInTheDocument()
+  })
+
+  it("zero-results message renders with a Clear button", async () => {
+    const fourItems: LocationAssetItem[] = [
+      { name: "clip-a", url: "https://example.com/a.mp4" },
+      { name: "clip-b", url: "https://example.com/b.mp4" },
+      { name: "clip-c", url: "https://example.com/c.mp4" },
+      { name: "clip-d", url: "https://example.com/d.mp4" },
+    ]
+    renderTab(
+      makeStudio({
+        stagedData: makeStagedData({ atmosphereMotions: fourItems }),
+      }),
+    )
+    const search = screen.getByPlaceholderText(/search atmosphere motions/i)
+    await userEvent.type(search, "zzznope")
+    expect(screen.getByText(/no matches for "zzznope"/i)).toBeInTheDocument()
+    // Clear button inside the zero-results banner.
+    const clearButtons = screen.getAllByRole("button", { name: /clear/i })
+    expect(clearButtons.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
 // Locale smoke test — separate suite so we can swap the useLocalizedCatalog
 // mock without polluting the default-locale suite above. We import the
 // component lazily after registering the mock to ensure the patched hook is

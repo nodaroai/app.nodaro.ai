@@ -1,6 +1,9 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { LOCATION_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
+import {
+  LOCATION_REFERENCE_PHOTO_KINDS,
+  LOCATION_REFERENCE_PHOTO_KIND_LABELS,
+} from "@nodaro/shared"
 import type { LocationReferencePhoto, LocationReferencePhotoKind } from "@/types/nodes"
 
 /**
@@ -23,6 +26,26 @@ interface ReferencePhotosSectionProps {
 export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSectionProps) {
   const [pendingUrl, setPendingUrl] = useState("")
   const [pendingKind, setPendingKind] = useState<LocationReferencePhotoKind>("moodBoard")
+  // Phase 2 #11 — Search/filter. Reference photos have no `name` field, so we
+  // match against the kind enum value (e.g. "wide"), the human label from
+  // `LOCATION_REFERENCE_PHOTO_KIND_LABELS` (e.g. "wide-angle reference"), and
+  // the trailing filename in the URL. Show input only when the grid is large
+  // enough to need it.
+  const [searchQuery, setSearchQuery] = useState("")
+  const q = searchQuery.trim().toLowerCase()
+  const showSearch = photos.length > 10
+  const visiblePhotos = q
+    ? photos.filter((p) => {
+        const filename = p.url.split("/").pop()?.toLowerCase() ?? ""
+        const label = LOCATION_REFERENCE_PHOTO_KIND_LABELS[p.kind]?.toLowerCase() ?? ""
+        return (
+          p.kind.toLowerCase().includes(q) ||
+          label.includes(q) ||
+          filename.includes(q)
+        )
+      })
+    : photos
+  const zeroResults = q.length > 0 && visiblePhotos.length === 0
 
   function add() {
     const trimmed = pendingUrl.trim()
@@ -48,29 +71,67 @@ export function ReferencePhotosSection({ photos, onChange }: ReferencePhotosSect
       <h3 className="text-[12px] font-medium text-slate-300 mb-2">
         Reference photos <span className="text-slate-500">({photos.length}/{MAX_PHOTOS})</span>
       </h3>
-      {photos.length > 0 && (
+      {showSearch && (
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search reference photos…"
+            aria-label="Search reference photos"
+            className="flex-1 px-3 py-1.5 text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded text-slate-200 placeholder:text-slate-600"
+          />
+          {q && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-[11px] text-slate-400 hover:text-slate-200"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {visiblePhotos.length > 0 && (
         <div className="grid grid-cols-4 gap-2 mb-2">
-          {photos.map((p, i) => (
-            <div key={p.url + i} className="relative group">
-              <img
-                src={p.url}
-                alt={p.kind}
-                loading="lazy"
-                className="w-full aspect-square object-cover rounded border border-[#1e293b]"
-              />
-              <span className="absolute top-1 left-1 bg-black/70 text-[9px] text-white px-1 rounded">
-                {p.kind}
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                aria-label={`Remove ${p.kind}`}
-                className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+          {visiblePhotos.map((p) => {
+            // Original index needed for remove() to slice the correct entry
+            // from the full `photos` array — filtering changes positions.
+            const originalIdx = photos.indexOf(p)
+            return (
+              <div key={p.url + originalIdx} className="relative group">
+                <img
+                  src={p.url}
+                  alt={p.kind}
+                  loading="lazy"
+                  className="w-full aspect-square object-cover rounded border border-[#1e293b]"
+                />
+                <span className="absolute top-1 left-1 bg-black/70 text-[9px] text-white px-1 rounded">
+                  {p.kind}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(originalIdx)}
+                  aria-label={`Remove ${p.kind}`}
+                  className="absolute top-1 right-1 bg-black/70 hover:bg-red-500 text-white text-[10px] w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ✕
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {zeroResults && (
+        <div className="text-center text-[11px] text-slate-500 py-6 border border-dashed border-[#1e293b] rounded mb-2">
+          No matches for &quot;{searchQuery.trim()}&quot;.{" "}
+          <button
+            type="button"
+            onClick={() => setSearchQuery("")}
+            className="text-pink-400 hover:underline"
+          >
+            Clear
+          </button>
         </div>
       )}
       <div className="flex gap-2 items-center">
