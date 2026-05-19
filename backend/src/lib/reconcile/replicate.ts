@@ -2,6 +2,7 @@ import { config } from "../config.js"
 import { supabase } from "../supabase.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { deleteCharacterLora } from "../../providers/replicate/training.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -17,6 +18,20 @@ interface ReplicatePrediction {
   output?: string | string[] | null
   error?: string | null
   metrics?: { predict_time?: number }
+}
+
+interface ReplicateTraining {
+  status: "starting" | "processing" | "succeeded" | "failed" | "canceled"
+  output?: { version?: string } | null
+  version?: string
+  error?: string | null
+}
+
+interface InflightCharacter {
+  id: string
+  user_id: string
+  lora_training_replicate_id: string
+  deleted_at: string | null
 }
 
 async function fetchReplicatePrediction(
@@ -38,6 +53,112 @@ async function fetchReplicatePrediction(
     )
     return null
   }
+}
+
+async function fetchReplicateTraining(
+  trainingId: string,
+): Promise<ReplicateTraining | null> {
+  try {
+    const res = await fetch(
+      `https://api.replicate.com/v1/trainings/${trainingId}`,
+      { headers: { Authorization: `Bearer ${config.REPLICATE_API_TOKEN}` } },
+    )
+    if (!res.ok) {
+      console.warn(`[reconcile/replicate] GET training ${trainingId} → ${res.status}`)
+      return null
+    }
+    return (await res.json()) as ReplicateTraining
+  } catch (err) {
+    console.warn(
+      `[reconcile/replicate] fetch training ${trainingId} threw: ${(err as Error).message}`,
+    )
+    return null
+  }
+}
+
+/**
+ * Find the `characters` row tied to a stuck Replicate training. The link is
+ * `characters.lora_training_replicate_id = jobs.provider_task_id` (set when
+ * the training was dispatched). Returns null when no matching character is
+ * found (orphan job; caller bumps attempts).
+ */
+async function findCharacterForTraining(
+  trainingId: string,
+): Promise<InflightCharacter | null> {
+  const { data } = await supabase
+    .from("characters")
+    .select("id, user_id, lora_training_replicate_id, deleted_at")
+    .eq("lora_training_replicate_id", trainingId)
+    .limit(1)
+    .single()
+  return (data as InflightCharacter | null) ?? null
+}
+
+/**
+ * Apply a terminal Replicate training status to the linked character +
+ * the originating job row. Mirrors the webhook handler's monotonic
+ * state guards: `.not("status", "in", "(...)")` blocks regressions when
+ * a later webhook delivery races us.
+ */
+async function applyTrainingTerminalStatus(
+  jobId: string,
+  character: InflightCharacter,
+  remote: ReplicateTraining,
+): Promise<void> {
+  if (remote.status === "succeeded") {
+    const versionStr = remote.version ?? remote.output?.version ?? null
+    await supabase
+      .from("characters")
+      .update({
+        lora_training_status: "succeeded",
+        lora_replicate_version: versionStr,
+        lora_trained_at: new Date().toISOString(),
+        lora_training_error: null,
+      })
+      .eq("id", character.id)
+      .eq("user_id", character.user_id)
+      .not("lora_training_status", "in", "(succeeded,cancelled)")
+
+    await supabase
+      .from("jobs")
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", character.user_id)
+      .not("status", "in", "(completed,failed,cancelled)")
+
+    if (character.deleted_at) {
+      // Soft-deleted between dispatch and reconciliation — clean up the
+      // orphan Replicate model. Idempotent (404 swallowed).
+      await deleteCharacterLora(`nodaroai/char-${character.id}`)
+    }
+  } else if (remote.status === "failed" || remote.status === "canceled") {
+    const finalStatus = remote.status === "canceled" ? "cancelled" : "failed"
+    await supabase
+      .from("characters")
+      .update({
+        lora_training_status: finalStatus,
+        lora_training_error: remote.error ?? null,
+      })
+      .eq("id", character.id)
+      .eq("user_id", character.user_id)
+      .not("lora_training_status", "in", "(succeeded,cancelled)")
+
+    await supabase
+      .from("jobs")
+      .update({
+        status: finalStatus,
+        error_message: remote.error ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", character.user_id)
+      .not("status", "in", "(completed,failed,cancelled)")
+    await refundReservedCreditsForJob(jobId).catch(() => {})
+  }
+  // starting/processing → still in flight, caller bumps attempts
 }
 
 async function bumpAttempts(jobId: string, reason: string): Promise<void> {
@@ -75,17 +196,32 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  *   - status=failed|canceled → markFailed + refund
  *   - status=starting|processing → bumpAttempts
  *
- * For `provider_kind="replicate-training"`, delegates to the LoRA-specific
- * reconciliation helper (P3.9 will migrate the standalone LoRA cron here).
- * Until that lands, training rows are no-ops here (covered by the existing
- * standalone reconcileOrphanedTrainings cron).
+ * For `provider_kind="replicate-training"`, fetches the training via
+ * `/v1/trainings/:id`, looks up the linked `characters` row, and applies
+ * the same terminal-state updates the LoRA webhook handler would have.
+ * Replaces the standalone reconcileOrphanedTrainings cron (deleted in P3.5).
  */
 export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void> {
   if (!row.provider_task_id) return
 
   if (row.provider_kind === "replicate-training") {
-    // LoRA training reconcile handled by the existing standalone cron.
-    // Phase 3.9 migrates it into this file (reconcileOneTraining).
+    const remote = await fetchReplicateTraining(row.provider_task_id)
+    if (!remote) {
+      await bumpAttempts(row.id, "fetch training failed")
+      return
+    }
+    if (remote.status === "starting" || remote.status === "processing") {
+      await bumpAttempts(row.id, `training still ${remote.status}`)
+      return
+    }
+    // Terminal — find the character + apply the same updates the webhook
+    // handler would have. Skip silently if no character is linked (orphan job).
+    const character = await findCharacterForTraining(row.provider_task_id)
+    if (!character) {
+      await bumpAttempts(row.id, "no character linked to training")
+      return
+    }
+    await applyTrainingTerminalStatus(row.id, character, remote)
     return
   }
 

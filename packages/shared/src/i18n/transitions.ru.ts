@@ -1,8 +1,97 @@
 import type { LocaleCatalogMap } from "./types.js"
 
-// Empty stub — resolver at i18n/index.ts:102,116 falls back to English.
-// Per i18n/types.ts:14, only `label` and `description` are ever translated.
-// Replace `{}` with real translations as they become available.
-const map: LocaleCatalogMap = {}
+const map: LocaleCatalogMap = {
+  // ── Standard ──
+  "auto": { label: "Авто", description: "Модель выбирает подходящий переход" },
+  "none": { label: "Без перехода / прямой монтаж", description: "Мгновенная смена без эффекта" },
+  "cross-dissolve": { label: "Перекрёстное растворение", description: "Плавное смешение двух сцен" },
+  "fade-to-black": { label: "Затемнение", description: "Постепенное затемнение, затем новая сцена" },
+  "fade-to-white": { label: "Засветка", description: "Осветление до белого, затем новая сцена" },
+  "match-cut": { label: "Монтаж по форме", description: "Совпадение формы или движения между сценами" },
+  "smash-cut": { label: "Резкий монтаж", description: "Резкий переход между контрастными сценами" },
+  "iris": { label: "Ирис", description: "Круг закрывается, затем открывается на новой сцене" },
+  "wipe": { label: "Шторка", description: "Линия пересекает кадр, открывая новую сцену" },
+  "roll-transition": { label: "Прокрутка", description: "Кадр вращается на 90-180°, останавливаясь на новой сцене" },
+  "seamless-match": { label: "Незаметный переход", description: "Скрытый монтаж, замаскированный движением и цветом" },
+
+  // ── Time ──
+  "fast-forward-day-night": { label: "Ускорение (день → ночь)", description: "Тайм-лапс от дня к ночи в той же сцене" },
+  "fast-forward-night-day": { label: "Ускорение (ночь → рассвет)", description: "Тайм-лапс от ночи к рассвету в той же сцене" },
+  "seasonal-shift": { label: "Смена сезонов", description: "Одна сцена через все четыре сезона" },
+  "aging": { label: "Старение", description: "Персонаж стареет перед камерой" },
+  "rewind": { label: "Перемотка", description: "Время обращается, движение идёт назад" },
+  "freeze-frame-jump": { label: "Стоп-кадр с прыжком", description: "Движение замирает, затем прыгает в другой момент" },
+  "weather-shift": { label: "Смена погоды", description: "Одна сцена при разной погоде" },
+  "flashback": { label: "Флэшбэк", description: "Переход-воспоминание в прошлый момент" },
+
+  // ── Element ──
+  "dissolve-to-mist": { label: "Растворение в тумане", description: "Персонаж растворяется в тумане и восстанавливается" },
+  "water-splash": { label: "Всплеск воды", description: "Персонаж становится водой, плещет и восстанавливается" },
+  "sand-scatter": { label: "Рассыпание песка", description: "Персонаж рассыпается в песок и уносится ветром" },
+  "fire-burnup": { label: "Сгорание", description: "Персонаж сгорает в угли и восстанавливается" },
+  "smoke-puff": { label: "Клуб дыма", description: "Персонаж исчезает в дыму и появляется вновь" },
+  "magic-sparkles": { label: "Магические искры", description: "Распад на светящиеся частицы и восстановление" },
+  "lightning-flash": { label: "Удар молнии", description: "Молния освещает кадр, сцена меняется" },
+  "ink-splash": { label: "Чернильный всплеск", description: "Чернила накрывают кадр, обнажая новую сцену" },
+  "sand-storm": { label: "Песчаная буря", description: "Буря поглощает кадр, сцена меняется" },
+  "paint-splash": { label: "Всплеск краски", description: "Краска накрывает кадр, обнажая новую сцену" },
+  "aurora-sweep": { label: "Северное сияние", description: "Занавес авроры проходит и открывает новую сцену" },
+  "sakura-petals": { label: "Буря сакуры", description: "Шквал розовых лепестков накрывает кадр" },
+  "garden-bloom": { label: "Цветение сада", description: "Цветы расцветают и открывают новую сцену" },
+  "powder-burst": { label: "Взрыв цветного порошка", description: "Облако пигмента расширяется и открывает новую сцену" },
+
+  // ── Morph ──
+  "liquid-morph": { label: "Жидкий морф", description: "Персонаж тает и перетекает в новый образ" },
+  "pixelate-reform": { label: "Пикселизация и восстановление", description: "Пиксели рассыпаются и собираются в новый образ" },
+  "shatter-glass": { label: "Осколки и восстановление", description: "Персонаж разбивается как стекло и восстанавливается" },
+  "origami-fold": { label: "Складывание оригами", description: "Персонаж складывается как бумага в новый образ" },
+  "vortex-swirl": { label: "Вихрь", description: "Персонаж закручивается в вихрь и выходит в новом облике" },
+  "dream-ripple": { label: "Рябь сновидения", description: "Круговая рябь пересекает кадр, открывая новую сцену" },
+  "wireframe-morph": { label: "Каркасный морф", description: "Персонаж превращается в геометрический каркас и восстанавливается" },
+  "polygon-shatter": { label: "Полигональное разрушение", description: "Персонаж разлетается полигонами и собирается вновь" },
+  "melt-down": { label: "Расплавление и восстановление", description: "Персонаж плавится как воск и поднимается вновь" },
+
+  // ── Portal ──
+  "zoom-into-eye": { label: "Зум в глаз", description: "Камера ныряет в зрачок, внутри новый мир" },
+  "zoom-into-mirror": { label: "Зум в зеркало", description: "Камера проходит сквозь зеркало в отражённый мир" },
+  "zoom-into-screen": { label: "Зум в экран", description: "Камера проходит через экран телевизора или телефона" },
+  "zoom-into-book": { label: "Зум в книгу", description: "Камера входит в иллюстрацию книги" },
+  "walk-through-door": { label: "Проход через дверь", description: "Камера проходит сквозь дверь в новую сцену" },
+  "fall-into-hole": { label: "Падение в отверстие", description: "Камера падает в отверстие и появляется в новой сцене" },
+  "pull-out-reveal": { label: "Отъезд с раскрытием", description: "Открывается, что сцена была внутри картины или рамки" },
+  "zoom-into-mouth": { label: "Зум в рот", description: "Камера входит в рот и оказывается в новом мире" },
+  "push-through-glass": { label: "Проход сквозь стекло", description: "Камера проходит сквозь стеклянную панель в другой мир" },
+  "soul-jump": { label: "Прыжок души", description: "Полупрозрачная душа покидает одно тело и входит в другое" },
+
+  // ── Physics ──
+  "explosion-blast": { label: "Взрывная волна", description: "Взрыв захлёстывает кадр, открывая новую сцену" },
+  "shockwave": { label: "Ударная волна", description: "Ударная волна искажает кадр, сцена меняется" },
+  "punch-into-camera": { label: "Удар в камеру", description: "Кулак бьёт в объектив, сцена меняется" },
+  "debris-shower": { label: "Обломки в кадре", description: "Обломки пролетают через кадр, за ними новая сцена" },
+  "gravity-flip": { label: "Переворот гравитации", description: "Гравитация переворачивается, камера вращается на 180°" },
+  "building-explosion": { label: "Взрыв здания", description: "Здание взрывается, сквозь дым открывается новая сцена" },
+  "vehicle-explosion": { label: "Взрыв машины", description: "Машина взрывается, огонь захлёстывает кадр" },
+  "jump-match": { label: "Совпадающий прыжок", description: "Персонаж прыгает и приземляется уже в новой сцене" },
+  "hand-swipe": { label: "Смахивание рукой", description: "Рука проходит перед объективом, сцена меняется" },
+
+  // ── Light ──
+  "white-flash": { label: "Белая вспышка", description: "Кадр заливается белым, затем появляется новая сцена" },
+  "lens-flare-swipe": { label: "Блик объектива", description: "Анаморфный блик пересекает кадр" },
+  "light-streak": { label: "Световая полоса", description: "Яркая полоса пересекает кадр, открывая новую сцену" },
+  "color-invert": { label: "Инверсия цвета", description: "Цвета инвертируются на мгновение, сцена меняется" },
+  "sun-glare": { label: "Солнечный блик", description: "Блик солнца заливает объектив, открывая новую сцену" },
+  "lens-crack": { label: "Трещина объектива", description: "Объектив трескается, новая сцена видна сквозь трещины" },
+  "dirty-lens-wipe": { label: "Протирка грязного объектива", description: "Объектив вытирается, открывая новую сцену" },
+  "eye-light-burst": { label: "Световой луч из глаз", description: "Луч из глаз персонажа заливает кадр" },
+
+  // ── Glitch ──
+  "digital-glitch": { label: "Цифровой глитч", description: "RGB-расщепление, строчные артефакты, датамош" },
+  "vhs-rewind": { label: "Перемотка VHS", description: "Помехи трекинга VHS и артефакты перемотки" },
+  "datamosh": { label: "Датамош", description: "Векторы движения перетекают между сценами" },
+  "channel-flip": { label: "Переключение канала", description: "Телевизионный шум и переключение канала" },
+  "hologram-flicker": { label: "Мерцание голограммы", description: "Голографическое мерцание открывает новую сцену" },
+  "display-wipe": { label: "Дисплейный переход", description: "Сцена сжимается в маленький экран, затем разворачивается" },
+  "double-exposure": { label: "Двойная экспозиция", description: "Две сцены накладываются прозрачно, первая гаснет" },
+}
 
 export default map

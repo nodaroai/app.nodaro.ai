@@ -1,4 +1,6 @@
+import { variantJobId } from "@nodaro/shared"
 import { supabase } from "../supabase.js"
+import { uploadToR2 } from "../storage.js"
 import {
   pollKieTask,
   pollVeoTask,
@@ -8,6 +10,7 @@ import { pollKling3Task } from "../../providers/kie/kling3-client.js"
 import { pollKontextTask } from "../../providers/kie/kontext-client.js"
 import { pollLumaTask } from "../../providers/kie/luma-client.js"
 import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client.js"
+import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 
@@ -18,6 +21,20 @@ export interface KieJobRow {
   reconcile_attempts: number
   job_type: string | null
 }
+
+/** Suno music job_types whose poll shape matches `SunoTaskResult` (multi-track
+ *  audio). Other Suno operations (lyrics, separate, music-video, wav) use
+ *  different poll endpoints + return shapes; left in skippedAsync. */
+const SUNO_MUSIC_JOB_TYPES: ReadonlySet<string> = new Set([
+  "suno-generate",
+  "suno-cover",
+  "suno-extend",
+  "suno-mashup",
+  "suno-replace-section",
+  "suno-add-instrumental",
+  "suno-add-vocals",
+  "suno-upload-extend",
+])
 
 /** Single-attempt poll dispatcher. Returns the recovered URL(s) on success;
  *  throws when the upstream task is still running OR has terminally failed.
@@ -70,14 +87,91 @@ async function singlePoll(row: KieJobRow): Promise<{
       return { url: videoUrl, extraUrls: [] }
     }
     case "kie-suno": {
-      // Suno output has multi-track shape (sunoTracks array) that the standard
-      // finalize audio dispatch can't preserve. Skip — Suno reconcile requires
-      // a dedicated handler that calls uploadAllSunoTracks (Phase 3.5).
-      throw new Error("kie-suno reconcile not yet supported")
+      // Suno reconcile is handled via reconcileKieSunoJob (multi-track output).
+      // singlePoll is only used for single-URL kinds; this path is unreachable
+      // because the caller branches on kie-suno before reaching singlePoll.
+      throw new Error("kie-suno should be handled by reconcileKieSunoJob")
     }
     default:
       throw new Error(`unknown KIE provider_kind: ${row.provider_kind}`)
   }
+}
+
+/**
+ * Suno-specific reconcile: poll the music task, upload all tracks to R2 under
+ * variant-suffixed keys, then call finalize with `mediaUrl` = primary track
+ * and `extraOutputData` carrying the full multi-track metadata. This preserves
+ * the same output_data shape the worker handler writes via uploadAllSunoTracks.
+ */
+async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
+  if (!row.provider_task_id) return
+  if (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type)) {
+    // Suno variant we don't recover (lyrics, separate, music-video, wav).
+    await bumpAttempts(row.id, `suno variant not recoverable: ${row.job_type}`)
+    return
+  }
+
+  // Get user_id for the R2 upload key (variantJobId paths land under the user's
+  // namespace).
+  const { data: jobUser } = await supabase
+    .from("jobs")
+    .select("user_id")
+    .eq("id", row.id)
+    .single()
+  const userId = (jobUser as { user_id?: string } | null)?.user_id ?? undefined
+
+  let result: SunoTaskResult
+  try {
+    result = await pollSunoTask(row.provider_task_id)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (err instanceof KieError && msg.includes("task failed")) {
+      await markFailed(row.id, msg)
+      await refundReservedCreditsForJob(row.id)
+    } else {
+      await bumpAttempts(row.id, err)
+    }
+    return
+  }
+
+  const validTracks = result.tracks.filter((t) => t.audioUrl)
+  if (validTracks.length === 0) {
+    await markFailed(row.id, "Suno returned no tracks")
+    await refundReservedCreditsForJob(row.id)
+    return
+  }
+
+  // Upload each track to R2 under variant-suffixed keys (matches the worker
+  // handler's uploadAllSunoTracks).
+  const r2Urls = await Promise.all(
+    validTracks.map((t, i) =>
+      uploadToR2(t.audioUrl, variantJobId(row.id, i), "audio", userId),
+    ),
+  )
+  const primary = validTracks[0]!
+
+  await finalizeJobWithMedia({
+    jobId: row.id,
+    jobType: "generate-music",
+    result: { url: r2Urls[0]!, cost: null, providerUsed: "suno" },
+    mediaUrl: r2Urls[0]!,
+    extraOutputData: {
+      ...(r2Urls.length > 1 ? { audioUrls: r2Urls } : {}),
+      sunoTrackId: primary.id,
+      sunoTitle: primary.title,
+      sunoDuration: primary.duration,
+      sunoImageUrl: primary.imageUrl,
+      sunoTaskId: result.taskId,
+      sunoTracks: validTracks.map((t, i) => ({
+        id: t.id,
+        title: t.title,
+        duration: t.duration,
+        imageUrl: t.imageUrl,
+        audioUrl: r2Urls[i]!,
+      })),
+      trackCount: validTracks.length,
+    },
+  })
 }
 
 async function bumpAttempts(jobId: string, err: unknown): Promise<void> {
@@ -123,6 +217,11 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  */
 export async function reconcileKieJob(row: KieJobRow): Promise<void> {
   if (!row.provider_task_id) return
+
+  // Suno is a special case: multi-track output, dedicated upload + finalize path.
+  if (row.provider_kind === "kie-suno") {
+    return reconcileKieSunoJob(row)
+  }
 
   let result: { url: string; extraUrls: readonly string[]; providerMs?: number }
   try {

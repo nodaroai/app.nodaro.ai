@@ -202,7 +202,11 @@ describe("reconcileReplicateJob", () => {
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
   })
 
-  it("replicate-training kind → no-op (handled by standalone cron until Phase 3.9)", async () => {
+  it("replicate-training still-running → bumps attempts, no fetch character", async () => {
+    mocks.fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ status: "processing" }),
+    })
     const row: ReplicateJobRow = {
       id: "j-tr",
       provider_kind: "replicate-training",
@@ -211,8 +215,10 @@ describe("reconcileReplicateJob", () => {
       job_type: "character-lora-training",
     }
     await reconcileReplicateJob(row)
-    expect(mocks.fetchMock).not.toHaveBeenCalled()
+    expect(mocks.fetchMock).toHaveBeenCalledTimes(1)
+    expect(mocks.fetchMock.mock.calls[0]![0]).toContain("/v1/trainings/tr-1")
     expect(mocks.finalizeMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
   })
 
   it("succeeded with no output → markFailed + refund", async () => {

@@ -670,9 +670,14 @@ export async function sunoLyrics(
 }
 
 /**
- * Poll a Suno task until completion
+ * Poll a Suno music task (sunoGenerate/Cover/Extend/Mashup/ReplaceSection/
+ * AddInstrumental/AddVocals/UploadExtend — all share the same SunoTaskResult
+ * shape). Exported so reconciliation handlers can resume polling a stuck task.
+ *
+ * NOT applicable to sunoLyrics / sunoSeparate / sunoMusicVideo / sunoConvertWav
+ * — those have different return shapes and stay internal.
  */
-async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
+export async function pollSunoTask(taskId: string): Promise<SunoTaskResult> {
   const apiKey = config.KIE_API_KEY!
 
   let attempts = 0
