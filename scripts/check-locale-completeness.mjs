@@ -5,7 +5,7 @@
 // have a strict "all locales or none" requirement. English is intentionally
 // excluded — it's defined inline in the catalog source, not as a sidecar.
 //
-// Currently checks: `location-variants` (11 sidecars).
+// Currently checks: `seasons` (11 sidecars).
 // To add a new catalog with the same requirement, append an entry to CATALOGS.
 import fs from "node:fs"
 import path from "node:path"
@@ -30,7 +30,7 @@ const LOCALES = [
 
 const CATALOGS = [
   {
-    name: "location-variants",
+    name: "seasons",
     dir: "packages/shared/src/i18n",
   },
 ]

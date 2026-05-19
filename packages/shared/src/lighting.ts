@@ -26,15 +26,20 @@ export interface Lighting {
 }
 
 export const LIGHTINGS: ReadonlyArray<Lighting> = [
-  // Time of day (10)
+  // Time of day (15)
+  { id: "dawn",          label: "Dawn",          category: "time-of-day", description: "Pre-sunrise pale glow",         promptHint: "dawn lighting, the pre-sunrise pale glow with deep blue ambient tones transitioning to soft pink and orange at the horizon, low contrast, cool ambient" },
   { id: "sunrise",       label: "Sunrise",       category: "time-of-day", description: "Warm low sun, long shadows",   promptHint: "sunrise lighting, warm low-angle sun with long shadows and soft golden tones" },
-  { id: "golden-hour",   label: "Golden Hour",   category: "time-of-day", description: "Warm sunset glow",              promptHint: "golden hour lighting, warm sunset glow with soft directional sunlight and saturated golden tones" },
+  { id: "morning",       label: "Morning",       category: "time-of-day", description: "Bright fresh morning light",    promptHint: "morning lighting, bright fresh ambient daylight with soft directional sun, warm white tones and clean shadows" },
   { id: "noon",          label: "Noon",          category: "time-of-day", description: "Harsh overhead midday sun",     promptHint: "midday noon lighting, harsh overhead sun with high contrast and strong vertical shadows" },
   { id: "harsh-midday",  label: "Harsh Midday",  category: "time-of-day", description: "Bleached white-sun zenith",     promptHint: "harsh midday white-sun lighting, sun directly overhead at zenith, blown-out white highlights and short hard shadows pooled directly beneath the subject" },
+  { id: "afternoon",     label: "Afternoon",     category: "time-of-day", description: "Warm late afternoon glow",      promptHint: "afternoon lighting, warm directional late-afternoon sun with elongated shadows, saturated amber tones leading into golden hour" },
   { id: "overcast",      label: "Overcast",      category: "time-of-day", description: "Soft diffused daylight",        promptHint: "overcast daylight, soft diffused light from a uniformly cloudy sky with no harsh shadows" },
+  { id: "golden-hour",   label: "Golden Hour",   category: "time-of-day", description: "Warm sunset glow",              promptHint: "golden hour lighting, warm sunset glow with soft directional sunlight and saturated golden tones" },
+  { id: "dusk",          label: "Dusk",          category: "time-of-day", description: "Post-sunset fading light",      promptHint: "dusk lighting, the post-sunset fading light with deepening blue sky, residual warm horizon glow, and rising ambient cool tones" },
   { id: "blue-hour",     label: "Blue Hour",     category: "time-of-day", description: "Cool dusk twilight",            promptHint: "blue hour twilight lighting, cool desaturated tones just after sunset with soft ambient light" },
   { id: "twilight",      label: "Twilight",      category: "time-of-day", description: "Between blue hour and night",   promptHint: "twilight lighting, the transitional dusk between blue hour and full night, deep indigo sky with the last residual ambient glow on the horizon and emerging artificial city lights" },
   { id: "night",         label: "Night",         category: "time-of-day", description: "Deep night, low ambient",       promptHint: "night lighting, deep dark scene with minimal ambient illumination and high contrast highlights" },
+  { id: "midnight",      label: "Midnight",      category: "time-of-day", description: "Deepest night, near-black sky", promptHint: "midnight lighting, the deepest part of night with a near-black sky, minimal ambient illumination, scattered cool moonlight or starlight as the only natural source" },
   { id: "moonlight",     label: "Moonlight",     category: "time-of-day", description: "Cool blue moonlit scene",       promptHint: "moonlight, cool blue ambient illumination with soft directional moonlit highlights and deep shadows" },
   { id: "neon-night",    label: "Neon Night",    category: "time-of-day", description: "Saturated neon city night",     promptHint: "neon night lighting, saturated magenta and cyan neon glow against deep night ambient, urban cyberpunk feel" },
 

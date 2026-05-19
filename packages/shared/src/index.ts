@@ -388,6 +388,16 @@ export {
 } from "./atmosphere.js"
 export type { Atmosphere } from "./atmosphere.js"
 
+export { SEASONS } from "./seasons.js"
+export type { Season } from "./seasons.js"
+
+export {
+  LOCATION_PRESET_TO_CATALOG,
+  LOCATION_BUCKET_TO_CATALOG_ID,
+  resolveLocationPresetCatalog,
+} from "./location-preset-catalog-map.js"
+export type { LocationCatalogRef } from "./location-preset-catalog-map.js"
+
 export {
   ACTION_FX,
   ACTION_FX_IDS,

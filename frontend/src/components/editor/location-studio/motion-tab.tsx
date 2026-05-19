@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
   LOCATION_ATMOSPHERE_PROVIDERS,
+  LOCATION_PRESET_TO_CATALOG,
   type LocationAtmosphereProvider,
 } from "@nodaro/shared"
 import { generateLocationMotion } from "@/lib/api"
@@ -59,9 +60,9 @@ export function MotionTab({ studio }: MotionTabProps) {
   // Localized labels for the 8 motion preset chips. The English preset string
   // is still the load-bearing value (sent as `motionPrompt` / `attachName` and
   // stored in the locations row). Localization only affects what we RENDER.
-  // Catalog key format: `"motion.<preset>"` (matches the sidecar files at
-  // `packages/shared/src/i18n/location-variants.<locale>.ts`).
-  const { resolveLabel } = useLocalizedCatalog("location-variants")
+  // Pulls from the existing `camera-motions` picker catalog — same
+  // translations users see in the camera-motion picker node.
+  const { resolveLabel } = useLocalizedCatalog("camera-motions")
 
   // The worker appends to `atmosphere_motions` via `append_location_asset` —
   // nothing to patch locally. Canvas refresh happens on next save / modal reopen.
@@ -227,7 +228,7 @@ export function MotionTab({ studio }: MotionTabProps) {
             title={presetTooltip}
             className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {resolveLabel(`motion.${p}`, p)}
+            {resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)}
           </button>
         ))}
       </div>

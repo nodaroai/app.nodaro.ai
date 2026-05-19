@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import {
+  LOCATION_BUCKET_TO_CATALOG_ID,
+  LOCATION_PRESET_TO_CATALOG,
+} from "@nodaro/shared"
 import { generateLocationAsset } from "@/lib/api"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
@@ -85,10 +89,13 @@ export function EnvironmentalAssetTab({
   const jobs = useLocationStudioJobs([])
   // Localized labels for preset chips. The English preset string is still the
   // load-bearing value (sent as `variant` / `attachName` to the API + stored
-  // in the locations row). Localization only affects what we RENDER. Catalog
-  // key format: `"<bucketName>.<preset>"` (matches the sidecar files at
-  // `packages/shared/src/i18n/location-variants.<locale>.ts`).
-  const { resolveLabel } = useLocalizedCatalog("location-variants")
+  // in the locations row). Localization only affects what we RENDER. Each
+  // location-studio bucket maps to ONE canonical picker catalog
+  // (lighting / atmosphere / framing / seasons) so the location studio
+  // reuses the same translations that the camera-motion / framing / lighting
+  // picker nodes already ship — no parallel `location-variants` catalog.
+  const catalogId = LOCATION_BUCKET_TO_CATALOG_ID[bucketName]
+  const { resolveLabel } = useLocalizedCatalog(catalogId)
 
   // The worker appends the asset to the location row's bucket via
   // `append_location_asset` — nothing to patch here. The tracked placeholder
@@ -248,7 +255,7 @@ export function EnvironmentalAssetTab({
             disabled={disabled}
             className="px-3 py-1 text-[11px] rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {resolveLabel(`${bucketName}.${p}`, p)}
+            {resolveLabel(LOCATION_PRESET_TO_CATALOG[p]?.entryId ?? p, p)}
           </button>
         ))}
       </div>

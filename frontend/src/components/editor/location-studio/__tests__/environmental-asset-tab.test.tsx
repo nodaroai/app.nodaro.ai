@@ -326,14 +326,16 @@ describe("EnvironmentalAssetTab (i18n)", () => {
     vi.restoreAllMocks()
   })
 
-  it("renders localized preset chip labels from the location-variants catalog", async () => {
+  it("renders localized preset chip labels from the canonical lighting catalog", async () => {
     // Mock the hook to return a French-style translation map for the lighting
-    // bucket. The English preset strings remain the load-bearing values
+    // bucket. Catalog entry ids come from the LOCATION_PRESET_TO_CATALOG
+    // adapter: neon → neon-night, candlelit → candlelight, cinematic →
+    // three-point. The English preset strings remain the load-bearing values
     // forwarded to generateLocationAsset (`variant` + `attachName`).
     const TRANSLATIONS: Record<string, string> = {
-      "lighting.neon": "Néon",
-      "lighting.candlelit": "Bougies",
-      "lighting.cinematic": "Cinématique",
+      "neon-night": "Néon",
+      "candlelight": "Bougies",
+      "three-point": "Cinématique",
     }
     vi.doMock("@/hooks/use-localized-entry", () => ({
       useLocalizedCatalog: () => ({
@@ -389,7 +391,7 @@ describe("EnvironmentalAssetTab (i18n)", () => {
       useLocalizedCatalog: () => ({
         locale: "fr",
         resolveLabel: (id: string, englishLabel: string) =>
-          id === "lighting.neon" ? "Néon" : englishLabel,
+          id === "neon-night" ? "Néon" : englishLabel,
         resolveDescription: (_id: string, englishDescription: string) =>
           englishDescription,
         matches: () => true,
