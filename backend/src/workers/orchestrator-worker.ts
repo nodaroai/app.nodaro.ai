@@ -292,6 +292,33 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           delete cleaned.generatedVideoUrl
           delete cleaned.generatedAudioUrl
           delete cleaned.generatedText
+          // Phase 2 #4 — when a location's `selectedVariant` was overridden
+          // (e.g. "weather/rain"), look up the matching variant's URL in the
+          // asset buckets and patch `sourceImageUrl` so all downstream
+          // consumers (output-extractor, payload-builder's
+          // expandWiredLocationRefs canonical entry, frontend mirror)
+          // treat the variant as the canonical image for this run.
+          if (node.type === "location" && typeof cleaned.selectedVariant === "string") {
+            const variantSpec = cleaned.selectedVariant.trim()
+            const slashAt = variantSpec.indexOf("/")
+            if (slashAt > 0) {
+              const bucket = variantSpec.slice(0, slashAt)
+              const variantName = variantSpec.slice(slashAt + 1).toLowerCase()
+              const BUCKET_KEYS = ["timeOfDay", "weather", "seasons", "angles", "lighting", "atmosphereMotions"]
+              if (BUCKET_KEYS.includes(bucket)) {
+                const items = cleaned[bucket]
+                if (Array.isArray(items)) {
+                  const match = items.find((it: unknown) => {
+                    const name = (it as { name?: unknown } | null)?.name
+                    return typeof name === "string" && name.toLowerCase() === variantName
+                  }) as { url?: string } | undefined
+                  if (match?.url) {
+                    cleaned.sourceImageUrl = match.url
+                  }
+                }
+              }
+            }
+          }
           node.data = cleaned
         }
       }

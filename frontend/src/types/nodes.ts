@@ -3157,6 +3157,13 @@ export type LocationNodeData = {
    *  until then. The studio uses this to decide whether to show the consent
    *  checkbox above the reference-photos grid. */
   piiConsentAt?: string
+  /** Phase 2 #4 — When set via `inputOverrides` from an app run (or MCP
+   *  `run_app`), the orchestrator looks up the matching variant in the
+   *  asset buckets and patches `sourceImageUrl` with that variant's URL.
+   *  Format: `"<bucket>/<variant-name>"` (e.g. `"weather/rain"`,
+   *  `"timeOfDay/night"`). Not persisted to the DB row — purely a
+   *  per-run override that lives on the workflow snapshot's node data. */
+  selectedVariant?: string
   canonicalDescription: string
   styleLock: boolean
   // Asset generation status

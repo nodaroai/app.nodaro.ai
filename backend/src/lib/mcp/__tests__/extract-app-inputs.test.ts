@@ -156,6 +156,51 @@ describe("extractAppInputSchema", () => {
     })
     expect(schema.fields).toHaveLength(1)
   })
+
+  // Phase 2 #4 — locations are exposed as app inputs whose value is a
+  // `selectedVariant` slug in the form `"<bucket>/<variant>"`.
+  it("surfaces a location node with fieldKey=selectedVariant (Phase 2 #4)", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [{ type: "node", nodeId: "loc1" }],
+        },
+      },
+      snapshotNodes: [
+        {
+          id: "loc1",
+          type: "location",
+          data: {
+            label: "Old Library",
+            timeOfDay: [{ name: "night", url: "https://r2/night.png" }],
+            weather: [{ name: "rain", url: "https://r2/rain.png" }],
+          },
+        },
+      ],
+    })
+    expect(schema.fields).toHaveLength(1)
+    const field = schema.fields[0]!
+    expect(field.type).toBe("text")
+    expect(field.label).toBe("Old Library")
+    expect(schema.keyMap[field.key]).toEqual({
+      nodeId: "loc1",
+      fieldKey: "selectedVariant",
+    })
+  })
+
+  it("auto-derives location nodes as inputs when no presentationSettings (Phase 2 #4)", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: null,
+      snapshotNodes: [
+        { id: "loc1", type: "location", data: { label: "Park" } },
+        { id: "txt1", type: "text-prompt", data: { label: "Prompt" } },
+      ],
+    })
+    // Both nodes should surface — location now joins the NODE_TYPE_INFO
+    // table, so the auto-derive fallback includes it.
+    expect(schema.fields).toHaveLength(2)
+    expect(schema.fields.some((f) => f.label === "Park")).toBe(true)
+  })
 })
 
 describe("extractComponentInputSchema", () => {
