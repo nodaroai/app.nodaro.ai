@@ -122,7 +122,7 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
     await transitionStageEntityNodesAndEmit(
       supabase,
       pipelineId,
-      stageId,
+      "location",
       "pipeline_owned_awaiting_approval",
       "locations",
     )

@@ -11,6 +11,11 @@ import type {
   AddBRollResult,
   BridgeToNextSceneResult,
   AnchorSceneStyleResult,
+  AuditImagesResult,
+  FixContinuityInput,
+  FixContinuityResult,
+  ValidateMatchCutInput,
+  ValidateMatchCutResult,
 } from "@nodaro/shared"
 import { getAuthHeaders } from "@/lib/api"
 
@@ -68,6 +73,10 @@ export type SceneHelperBody = {
   add_broll: undefined
   bridge_to_next_scene: { target_shot_id: string }
   anchor_scene_style: undefined
+  // Phase 1C.1 vision-keyframe helpers
+  audit_images: undefined
+  fix_continuity: FixContinuityInput
+  validate_match_cut: ValidateMatchCutInput
 }
 
 export type SceneHelperResult = {
@@ -78,6 +87,10 @@ export type SceneHelperResult = {
   add_broll: AddBRollResult
   bridge_to_next_scene: BridgeToNextSceneResult
   anchor_scene_style: AnchorSceneStyleResult
+  // Phase 1C.1 vision-keyframe helpers
+  audit_images: AuditImagesResult
+  fix_continuity: FixContinuityResult
+  validate_match_cut: ValidateMatchCutResult
 }
 
 export const pipelinesApi = {

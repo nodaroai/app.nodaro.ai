@@ -92,7 +92,23 @@ export const PipelineDriftSummarySchema = z.object({
 export type PipelineDriftSummary = z.infer<typeof PipelineDriftSummarySchema>
 
 /**
- * Union of the four Phase 1B.4 lifecycle event payloads. The broader
+ * Phase 1C.1 — emitted by Stage 8 (post_merge) when the pipeline reaches the
+ * `completed` terminal state. Carries the final merged-MP4 asset id + URL so
+ * the SSE consumer can render the player without an extra round-trip.
+ *
+ * Distinct from the legacy `pipeline:done` lifecycle event (which carries no
+ * payload). SSE forwarders close on either type.
+ */
+export const PipelineCompletedEventSchema = z.object({
+  type: z.literal("pipeline:completed"),
+  pipelineId: z.string(),
+  finalOutputAssetId: z.string().uuid().nullable(),
+  finalOutputUrl: z.string(),
+})
+export type PipelineCompletedEvent = z.infer<typeof PipelineCompletedEventSchema>
+
+/**
+ * Union of the Phase 1B.4 + 1C.1 lifecycle event payloads. The broader
  * `PipelineEvent` union in `pipeline-events.ts` extends this so SSE
  * forwarders accept all of them transparently.
  */
@@ -101,3 +117,4 @@ export type PipelineLifecycleEvent =
   | EntityStaleEvent
   | PipelineForkedEvent
   | PipelineDriftSummary
+  | PipelineCompletedEvent

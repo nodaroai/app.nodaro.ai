@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
 import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
 import { refundPipelineCredits } from "./credits.js"
@@ -11,9 +12,11 @@ export interface DriveArgs {
 }
 
 // Canonical ordering used to pick the next pending stage when no in-flight row
-// exists. Phase 1B.2 covers Stages 1–5; Stages 6–8 land in Phase 1B.3+.
-const STAGE_ORDER = ["script", "characters", "objects", "locations", "shot_list"] as const
-type StageOrderName = (typeof STAGE_ORDER)[number]
+// exists. `PIPELINE_STAGE_NAMES` in @nodaro/shared is the single source of
+// truth for stage names + ordering — backing PipelineStageNameSchema (consumed
+// by SSE event validators) AND this engine's ordered walk.
+const STAGE_ORDER = PIPELINE_STAGE_NAMES
+type StageOrderName = PipelineStageName
 
 /**
  * Engine entry. Reads the pipeline row, picks the next stage to run based on
@@ -70,7 +73,11 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       ? STAGE_ORDER.indexOf(lastApproved.stage_name as StageOrderName)
       : -1
     if (lastIdx < 0 || lastIdx + 1 >= STAGE_ORDER.length) {
-      // Phase 1B.2: after Shot List stage, mark completed (Stages 6–8 land in 1B.3+).
+      // Phase 1C.1: after Stage 8 (post_merge) the pipeline is completed.
+      // Stage 8's own handler also flips `pipelines.status` and publishes
+      // `pipeline:completed`; this branch is a defensive fallback for the
+      // theoretical case where every stage row is approved but the pipeline
+      // row didn't move yet.
       await supabase.from("pipelines").update({ status: "completed" }).eq("id", pipelineId)
       pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "completed" })
       pipelineEvents.publish({ type: "pipeline:done", pipelineId })
@@ -149,6 +156,21 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
   if (stageToRun === "shot_list") {
     const { runShotListStage } = await import("./stages/shot-list.js")
     await runShotListStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "scene_images") {
+    const { runSceneImagesStage } = await import("./stages/scene-images.js")
+    await runSceneImagesStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "animate_audio_edit") {
+    const { runAnimateAudioEditStage } = await import("./stages/animate-audio-edit.js")
+    await runAnimateAudioEditStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    return
+  }
+  if (stageToRun === "post_merge") {
+    const { runPostMergeStage } = await import("./stages/post-merge.js")
+    await runPostMergeStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
     return
   }
   // Exhaustive switch — should never reach.

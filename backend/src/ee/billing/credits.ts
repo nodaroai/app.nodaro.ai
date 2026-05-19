@@ -595,6 +595,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "scene-helper:add_broll": 2,
   "scene-helper:bridge_to_next_scene": 2,
   "scene-helper:anchor_scene_style": 5,
+  // Phase 1C.1 vision-keyframe helpers — DB row in migration 134.
+  // Audit Images: 1 Sonnet vision call per shot (≤8 shots). 3cr covers the
+  // amortized average. Validate Match Cut: 1 Sonnet vision call with 2 images.
+  // Fix Continuity: 1 Sonnet vision call + (conditional) image regen via
+  // pipelineGenerateImage; 4cr covers the critic + 1cr buffer over the cheap
+  // image_model regen (e.g. nano-banana). All 3 entries are added together
+  // so the credit-pricing-migration-sync REVERSE-direction test stays green
+  // (migration 134 seeds all 3 model_pricing rows in one statement).
+  "scene-helper:audit_images": 3,
+  "scene-helper:fix_continuity": 4,
+  "scene-helper:validate_match_cut": 3,
 }
 
 // Tier order for restriction checks

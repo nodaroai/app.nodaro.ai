@@ -122,7 +122,7 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
     await transitionStageEntityNodesAndEmit(
       supabase,
       pipelineId,
-      stageId,
+      "character",
       "pipeline_owned_awaiting_approval",
       "characters",
     )

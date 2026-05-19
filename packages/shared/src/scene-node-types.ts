@@ -76,6 +76,40 @@ export const ShotSpecSchema = z.object({
       pivot: z.enum(["subject", "origin"]).optional(),
     })
     .optional(),
+
+  // ─── Execution state (engine writes; null on planning) ─────────────────────
+  // Phase 1C.1: per-shot execution state lands directly on the shot record so
+  // the SceneNode internal pipeline + continuity chain can read/write them in
+  // one place. All optional — planning-time ShotSpec carries none of these.
+
+  // Stage 6 (scene_images) writes these after keyframe generation.
+  keyframe_asset_id: z.string().uuid().optional(),
+  keyframe_url: z.string().url().optional(),
+
+  // Stage 7 (animate_audio_edit) step 3 (animate) writes these after the
+  // image-to-video / text-to-video call succeeds.
+  video_asset_id: z.string().uuid().optional(),
+  video_url: z.string().url().optional(),
+
+  // Stage 7 step 3 (extract_frame chain — sequential mode only) writes these
+  // after each shot's last frame is extracted at duration - 0.1s. Used by the
+  // next shot's continuity chain (Method 1).
+  last_frame_asset_id: z.string().uuid().optional(),
+  last_frame_url: z.string().url().optional(),
+
+  // Stage 7 step 4 (speech) writes these per shot with dialogue_line.
+  audio_asset_id: z.string().uuid().optional(),
+  audio_url: z.string().url().optional(),
+
+  // Stage 7 step 5 (lip-sync) writes these when lipsync_enabled and the shot
+  // has dialogue. The lipsynced clip replaces the shot's video_url in the
+  // step-6 combine call.
+  lipsynced_asset_id: z.string().uuid().optional(),
+  lipsynced_url: z.string().url().optional(),
+
+  // Phase 1C.3 — bridged frame (Method 5). Defensive placeholder; never set
+  // in 1C.1 (continuity.applyContinuityToStartFrame already reads this).
+  bridged_frame_url: z.string().url().optional(),
 })
 export type ShotSpec = z.infer<typeof ShotSpecSchema>
 
@@ -139,6 +173,12 @@ export const SceneNodeDataSchema = z.object({
   composite_video: AssetRefSchema.nullable().default(null),
   last_frame: AssetRefSchema.nullable().default(null),
   scene_audio_track: AssetRefSchema.nullable().default(null),
+
+  // Phase 1C.1 Stage 7 result — composite video assembled from the per-shot
+  // clips inside this scene. Optional flat fields kept alongside
+  // `composite_video` (AssetRefSchema) so consumers can read either shape.
+  composite_video_asset_id: z.string().uuid().optional(),
+  composite_video_url: z.string().url().optional(),
 })
 export type SceneNodeData = z.infer<typeof SceneNodeDataSchema>
 

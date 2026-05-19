@@ -1,10 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import type { ZodSchema } from "zod"
 import {
-  ImprovePromptInputSchema,
-  GenerateMotionInputSchema,
-  OptimizeForModelInputSchema,
   BridgeToNextSceneInputSchema,
+  FixContinuityInputSchema,
+  GenerateMotionInputSchema,
+  ImprovePromptInputSchema,
+  OptimizeForModelInputSchema,
+  ValidateMatchCutInputSchema,
   type ImprovePromptInput,
   type SceneHelperName,
   type SceneNodeData,
@@ -137,6 +139,15 @@ function commonArgs(ctx: HelperRunCtx) {
 interface HelperConfig<TBody> {
   name: SceneHelperName
   body?: ZodSchema<TBody>
+  /**
+   * Optional pre-flight check that runs AFTER body parse + context load but
+   * BEFORE credit reservation. Returns null to proceed, or a `{status, code}`
+   * pair to short-circuit with a non-200 response. The use case is
+   * `validate_match_cut`: the helper only runs on shots flagged
+   * `is_match_cut=true`, and we should not reserve credits on a request that
+   * will fail validation.
+   */
+  validate?: (ctx: HelperRunCtx, body: TBody) => { status: number; code: string } | null
   run: (ctx: HelperRunCtx, body: TBody) => Promise<unknown>
 }
 
@@ -200,6 +211,52 @@ const HELPERS: ReadonlyArray<HelperConfig<unknown>> = [
       (await import("../ee/pipelines/llms/helpers/anchor-scene-style.js"))
         .runAnchorSceneStyle({ ...commonArgs(ctx), pipelineEntityId: ctx.pipelineEntityId }),
   } as HelperConfig<unknown>,
+  // ─── Phase 1C.1 vision-keyframe helpers (active 2026-05-19) ──────────────
+  {
+    name: "audit_images",
+    run: async (ctx) =>
+      (await import("../ee/pipelines/llms/helpers/audit-images.js"))
+        .runAuditImages(commonArgs(ctx)),
+  } as HelperConfig<unknown>,
+  {
+    name: "fix_continuity",
+    body: FixContinuityInputSchema,
+    run: async (ctx, body) =>
+      (await import("../ee/pipelines/llms/helpers/fix-continuity.js"))
+        .runFixContinuity({
+          ...commonArgs(ctx),
+          targetShotId: (body as { target_shot_id: string }).target_shot_id,
+        }),
+  } as HelperConfig<unknown>,
+  {
+    name: "validate_match_cut",
+    body: ValidateMatchCutInputSchema,
+    // Pre-flight: refuse the request (no credit reservation) when the target
+    // shot doesn't have shot_intent.is_match_cut=true. Cheaper than reserving
+    // + refunding and gives the user a clearer error code.
+    validate: (ctx, body) => {
+      const targetShotId = (body as { target_shot_id: string }).target_shot_id
+      const shotIdx = ctx.scene.shots.findIndex((s) => s.shot_id === targetShotId)
+      if (shotIdx < 0) return { status: 400, code: "shot_not_found" }
+      const shot = ctx.scene.shots[shotIdx]!
+      if (!shot.shot_intent?.is_match_cut) {
+        return { status: 400, code: "not_a_match_cut" }
+      }
+      // Match-cut compares shot N against shot N+1 (the cut between them).
+      // The final shot has no successor — reject pre-credit so the user
+      // gets a clear error instead of a refund cycle from the runtime throw.
+      if (shotIdx === ctx.scene.shots.length - 1) {
+        return { status: 400, code: "last_shot_no_match_target" }
+      }
+      return null
+    },
+    run: async (ctx, body) =>
+      (await import("../ee/pipelines/llms/helpers/validate-match-cut.js"))
+        .runValidateMatchCut({
+          ...commonArgs(ctx),
+          targetShotId: (body as { target_shot_id: string }).target_shot_id,
+        }),
+  } as HelperConfig<unknown>,
 ]
 
 // Dynamic imports of the EE credit module stay inside the handler so
@@ -227,6 +284,26 @@ function registerHelperRoute(app: FastifyInstance, cfg: HelperConfig<unknown>) {
 
       const ctx = await loadHelperContext(req.params.id, req.params.sceneId, userId)
       if (!ctx.ok) return reply.status(ctx.status).send({ error: { code: ctx.code } })
+
+      // Pre-flight validation runs BEFORE credit reservation — refuse the
+      // request with the helper-specific code (e.g. validate_match_cut →
+      // not_a_match_cut) without spending a reservation we'd have to refund.
+      if (cfg.validate) {
+        const runCtx: HelperRunCtx = {
+          pipelineId: req.params.id,
+          pipelineEntityId: ctx.pipelineEntityId,
+          stageId: ctx.stageId,
+          userId,
+          plan: ctx.plan,
+          scene: ctx.scene,
+        }
+        const validation = cfg.validate(runCtx, parsedBody)
+        if (validation) {
+          return reply
+            .status(validation.status)
+            .send({ error: { code: validation.code } })
+        }
+      }
 
       const { reserveHelperCredits, refundHelperCredits } = await import(
         "../ee/pipelines/scene-helper-credits.js"
