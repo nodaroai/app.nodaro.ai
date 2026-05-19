@@ -1,6 +1,7 @@
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import { getParameterPromptHint } from "@nodaro/shared"
-import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
+import { composeTransitionHintFromConnections, type TransitionTiming } from "@nodaro/shared"
+import type { WorkflowNode, WorkflowEdge, TransitionData } from "@/types/nodes"
 
 /**
  * Dispatch by parameter-node type to that node's prompt-hint string. Used by
@@ -61,11 +62,31 @@ export function composeCameraMotionHintForNode(
  *  - the backend workflow-engine payload builder (same),
  *  - the FinalPromptPreview + ConnectedCinematographySources UI components.
  */
+/**
+ * Compose the full structured transition prompt for a given transition node
+ * by forwarding the transition id(s) along with timing options and any
+ * start/end hints from connected nodes.
+ *
+ * Returns the bare transition hint when no start/end context exists.
+ */
+export function composeTransitionHintForNode(
+  data: TransitionData,
+  startHints: ReadonlyArray<string> = [],
+  endHints: ReadonlyArray<string> = [],
+): string {
+  const timing: TransitionTiming = {
+    position:  data.position,
+    duration:  data.duration,
+    intensity: data.intensity,
+  }
+  return composeTransitionHintFromConnections(data.transition, startHints, endHints, timing)
+}
+
 /** Video-only cinematography dims. Still-image consumers (generate-image,
  *  edit-image, image-to-image, Location entity reference-image gen) pass
  *  these via `options.excludeTypes` to `collectCinematographyHints` so a
  *  stray Motion/Temporal connection doesn't inject incoherent hints. */
-export const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal"])
+export const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal", "transition"])
 
 export function collectCinematographyHints(
   consumerNodeId: string,

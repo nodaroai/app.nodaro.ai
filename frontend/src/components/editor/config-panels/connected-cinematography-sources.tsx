@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, type ReactNode } from "react"
-import { Frame, Aperture, Film, Lightbulb, SwatchBook, CloudFog, Clock, Video, SlidersHorizontal, Palette, Brush, type LucideIcon } from "lucide-react"
+import { Frame, Aperture, Film, Lightbulb, SwatchBook, CloudFog, Clock, Video, SlidersHorizontal, Palette, Brush, GitBranch, type LucideIcon } from "lucide-react"
 import { getCameraMotion, getCameraMotionLabel } from "@nodaro/shared"
 import { getFraming, FRAMING_FIELD_BY_CATEGORY, FRAMING_CATEGORY_LABELS } from "@nodaro/shared"
 import { getLighting, LIGHTING_FIELD_BY_CATEGORY, LIGHTING_CATEGORY_LABELS } from "@nodaro/shared"
@@ -10,6 +10,7 @@ import { getCameraFormat, getCameraFormatLabel } from "@nodaro/shared"
 import { getColorLook, getColorLookLabel } from "@nodaro/shared"
 import { getAtmosphere, getAtmosphereLabel } from "@nodaro/shared"
 import { getStyle, getStyleLabel } from "@nodaro/shared"
+import { getTransition, getTransitionLabel, pickIds } from "@nodaro/shared"
 import { getTemporal, TEMPORAL_FIELD_BY_CATEGORY, TEMPORAL_CATEGORY_LABELS } from "@nodaro/shared"
 import { FramingPreview } from "./framing-preview"
 import { LightingPreview } from "./lighting-preview"
@@ -210,6 +211,20 @@ function collectSources(
           icon: SlidersHorizontal,
           title: `${srcNodeLabel}: ${motion}`,
           description: "Motion",
+          preview: null,
+        })
+        break
+      }
+      case "transition": {
+        const ids = pickIds(data.transition)
+        if (ids.length === 0) continue
+        const labels = ids.map((id) => getTransitionLabel(id))
+        const primary = getTransition(ids[0])
+        entries.push({
+          key: src.id,
+          icon: GitBranch,
+          title: `${srcNodeLabel}: ${labels.join(" + ")}`,
+          description: primary?.description ?? "",
           preview: null,
         })
         break

@@ -14,7 +14,8 @@ import { SceneCountNode } from "./scene-count-node";
 import { DurationNode } from "./duration-node";
 import { AspectRatioNode } from "./aspect-ratio-node";
 import { MotionNode } from "./motion-node";
-import { CameraMotionNode } from "./camera-motion-node";
+import { CameraMotionNode } from "./camera-motion-node"
+import { TransitionNode } from "./transition-node";
 import { FramingNode } from "./framing-node";
 import { LensNode } from "./lens-node";
 import { CameraFormatNode } from "./camera-format-node";
@@ -170,6 +171,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "aspect-ratio": AspectRatioNode,
   motion: MotionNode,
   "camera-motion": CameraMotionNode,
+  "transition": TransitionNode,
   "framing": FramingNode,
   "lens": LensNode,
   "camera-format": CameraFormatNode,

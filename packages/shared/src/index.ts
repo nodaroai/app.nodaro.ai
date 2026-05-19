@@ -717,6 +717,25 @@ export {
 export type { Styling, StylingDimension, StylingValue } from "./styling.js"
 
 export {
+  TRANSITIONS,
+  TRANSITION_IDS,
+  TRANSITION_CATEGORY_ORDER,
+  TRANSITION_CATEGORY_LABELS,
+  getTransition,
+  getTransitionLabel,
+  getTransitionPromptHint,
+  composeTransitionHintFromConnections,
+} from "./transitions.js"
+export type {
+  Transition,
+  TransitionCategory,
+  TransitionPosition,
+  TransitionDuration,
+  TransitionIntensity,
+  TransitionTiming,
+} from "./transitions.js"
+
+export {
   VEHICLES,
   VEHICLE_SUBCATEGORY_LABELS,
   VEHICLE_SUBCATEGORY_ORDER,

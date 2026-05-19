@@ -1110,7 +1110,7 @@ function hasConnectedStyleNode(
  */
 /** Video-only cinematography dims; callers targeting still-image consumers
  *  pass these via `options.excludeTypes` to strip incoherent hints. */
-const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal"])
+const STILL_IMAGE_EXCLUDE_TYPES: ReadonlySet<string> = new Set(["camera-motion", "temporal", "transition"])
 
 function collectCinematographyHints(
   consumerNodeId: string,

@@ -77,6 +77,7 @@ import {
   RenderQualityConfig,
   CompositionEffectsConfig,
   PostProcessEffectsConfig,
+  TransitionConfig,
   GenerateScriptConfig,
   QACheckConfig,
   GenerateImageConfig,
@@ -241,6 +242,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "render-quality": "Render Quality",
   "composition-effects": "Composition Effects",
   "post-process-effects": "Post-Process Effects",
+  "transition": "Transition",
   "generate-script": "Generate Script",
   "generate-image": "Generate Image",
   "modify-image": "Modify Image",
@@ -450,6 +452,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "render-quality": return <RenderQualityConfig {...configProps} />
     case "composition-effects": return <CompositionEffectsConfig {...configProps} />
     case "post-process-effects": return <PostProcessEffectsConfig {...configProps} />
+    case "transition": return <TransitionConfig {...configProps} />
     case "generate-script": return <GenerateScriptConfig {...configProps} />
     case "generate-image": return <GenerateImageConfig {...configProps} nodeId={selectedNodeId} />
     case "modify-image": return <ModifyImageConfig {...configProps} nodeId={selectedNodeId} />

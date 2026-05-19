@@ -75,3 +75,57 @@ describe("getParameterValue — Sound nodes", () => {
     expect(getParameterValue({ archetype: "mentor" }, "voice-delivery")).toBe("mentor")
   })
 })
+
+describe("getParameterPromptHint — transition", () => {
+  it("returns bare hint when no context, no timing, no connections", () => {
+    const r = getParameterPromptHint({
+      id: "n1",
+      type: "transition",
+      data: { transition: "cross-dissolve" },
+    } as any)
+    expect(r.length).toBeGreaterThan(0)
+    expect(r).toContain("cross-dissolve")
+  })
+
+  it("returns empty for 'auto' / empty string", () => {
+    expect(getParameterPromptHint({ id: "n1", type: "transition", data: { transition: "auto" } } as any)).toBe("")
+    expect(getParameterPromptHint({ id: "n1", type: "transition", data: { transition: "" } } as any)).toBe("")
+  })
+
+  it("composes timing clauses from data fields", () => {
+    const r = getParameterPromptHint({
+      id: "n1",
+      type: "transition",
+      data: { transition: "cross-dissolve", position: "end", duration: "medium" },
+    } as any)
+    expect(r).toContain("the transition occurs at the end of the clip")
+    expect(r).toContain("lasting approximately 2 seconds")
+  })
+
+  it("multi-pick array data shape works", () => {
+    const r = getParameterPromptHint({
+      id: "n1",
+      type: "transition",
+      data: { transition: ["smash-cut", "white-flash"] },
+    } as any)
+    expect(r).toMatch(/smash/i)
+    expect(r).toMatch(/flash/i)
+  })
+
+  it("composes start/end from graph context with startState/endState edges", () => {
+    const ctx = {
+      nodes: [
+        { id: "n1", type: "transition", data: { transition: "fast-forward-day-night" } },
+        { id: "n2", type: "tone",       data: { tone: "warm golden morning light" } },
+        { id: "n3", type: "tone",       data: { tone: "deep blue moonlit night" } },
+      ],
+      edges: [
+        { source: "n2", target: "n1", targetHandle: "startState", sourceHandle: "out" },
+        { source: "n3", target: "n1", targetHandle: "endState",   sourceHandle: "out" },
+      ],
+    }
+    const r = getParameterPromptHint(ctx.nodes[0] as any, ctx as any)
+    expect(r).toMatch(/starting from .+morning/i)
+    expect(r).toMatch(/ending at .+night/)
+  })
+})

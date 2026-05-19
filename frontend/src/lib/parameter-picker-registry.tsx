@@ -40,6 +40,7 @@ import { COMPOSITION_EFFECTS } from "@nodaro/shared"
 import { POST_PROCESS_EFFECTS } from "@nodaro/shared"
 import { ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER } from "@nodaro/shared"
 import { LOOP_SUBJECTS, LOOP_SUBJECT_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_ORDER } from "@nodaro/shared"
+import { TRANSITIONS, TRANSITION_CATEGORY_LABELS, TRANSITION_CATEGORY_ORDER } from "@nodaro/shared"
 import { FRAMINGS } from "@nodaro/shared"
 import { LIGHTINGS } from "@nodaro/shared"
 import { PEOPLE } from "@nodaro/shared"
@@ -338,6 +339,19 @@ const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     catalogId: "camera-format",
     entries: mapCat(CAMERA_FORMATS),
     renderIcon: (id) => <CameraFormatPreview cameraFormatId={id} className="size-full" />,
+  },
+
+  {
+    kind: "single",
+    nodeType: "transition",
+    label: "Transition",
+    valueField: "transition",
+    defaultValue: "auto",
+    catalogId: "transitions",
+    entries: mapCat(TRANSITIONS, "category"),
+    groupOrder: TRANSITION_CATEGORY_ORDER as ReadonlyArray<string>,
+    groupLabels: TRANSITION_CATEGORY_LABELS,
+    // renderIcon omitted — config-panel grid uses text-only tiles (action-fx parity).
   },
 
   // -------- "Subject / Object" family --------

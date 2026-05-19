@@ -63,6 +63,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
   { type: "motion", label: "Motion", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Parameter" },
   { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Camera", keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"] },
+  { type: "transition", label: "Transition", icon: <GitBranch className="h-4 w-4" />, category: "Camera", keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"] },
   { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Camera", keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"] },
   { type: "lens", label: "Lens", icon: <Aperture className="h-4 w-4" />, category: "Camera", keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"] },
   { type: "camera-format", label: "Camera / Film Stock", icon: <Film className="h-4 w-4" />, category: "Camera", keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"] },
