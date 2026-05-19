@@ -64,6 +64,8 @@ Configure shared settings that feed into multiple downstream nodes. These contro
 | [Aspect Ratio](./parameters/aspect-ratio.md) | Define video/image aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:5) |
 | [Motion](./parameters/motion.md) | Control motion intensity | Adjust video generation movement (subtle/moderate/dynamic) |
 | [Camera Motion](./parameters/camera-motion.md) | Define camera movement type | Set camera behavior (static, pan, zoom) for video generation |
+| [Transition](./parameters/transition.md) | Pick a cinematic transition between frames (76-entry catalog, 8 categories, multi-pick + timing fields) | Inject transition effects into AI-generated video clips (cross-dissolve, time-shift, morph, portal, glitch, etc.) |
+| [Character FX](./parameters/character-fx.md) | Apply a character-driven effect (transformation, power, body-mod, face FX, aura) with target ref name substitution | Animate transformations, fantastical powers, body modifications, or subject-bound auras on a named character |
 | [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
 | [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
 | [Instrumentation](./parameters/instrumentation.md) | Pick instruments + production style + vocal presence | Feed music generators; flips MiniMax `instrumental` flag |
