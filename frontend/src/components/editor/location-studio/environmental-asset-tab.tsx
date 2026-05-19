@@ -187,6 +187,39 @@ export function EnvironmentalAssetTab({
     studio.patch({ [bucketName]: next } as Partial<LocationNodeData>)
   }
 
+  // Phase 2 #10 — Bulk asset operations. The Set tracks selected items by
+  // their ORIGINAL index in the unfiltered `items` array so search filtering
+  // doesn't desync the selection. Multi-select shows a checkbox overlay on
+  // every card (always visible, not just on hover) once at least one card
+  // is selected; the floating action bar at the top of the grid offers
+  // "Delete N" + "Cancel". `mark-favorite` and `export-zip` are deferred —
+  // delete-all is the most-asked-for action.
+  const [selectedIdx, setSelectedIdx] = useState<ReadonlySet<number>>(new Set())
+  const isSelectionMode = selectedIdx.size > 0
+
+  function toggleSelected(idx: number) {
+    setSelectedIdx((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) {
+        next.delete(idx)
+      } else {
+        next.add(idx)
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIdx(new Set())
+  }
+
+  function handleBulkDelete() {
+    if (selectedIdx.size === 0) return
+    const remaining = items.filter((_, i) => !selectedIdx.has(i))
+    studio.patch({ [bucketName]: remaining } as Partial<LocationNodeData>)
+    clearSelection()
+  }
+
   const trackedForBucket = jobs.tracked.filter((j) => j.assetType === bucketName)
   const customDisabled = disabled || !customPrompt.trim()
 
@@ -254,16 +287,63 @@ export function EnvironmentalAssetTab({
         </div>
       )}
 
+      {/* Phase 2 #10 — Bulk action bar. Appears only when at least one card
+          is selected. The Delete button is destructive, so it gets the same
+          rose treatment as other destructive UI in the editor. */}
+      {isSelectionMode && (
+        <div
+          role="toolbar"
+          aria-label="Bulk actions"
+          className="flex items-center justify-between gap-2 px-3 py-2 rounded bg-[#1a1d27] border border-[#1e293b] text-[11px] text-slate-300"
+        >
+          <span>
+            {selectedIdx.size} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="px-2 py-1 rounded text-slate-400 hover:bg-[#1e293b] hover:text-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
+            >
+              Delete {selectedIdx.size}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Asset grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {visibleItems.map((item, idx) => {
+        {visibleItems.map((item) => {
           // We need the index from the ORIGINAL items array so handleRemove
           // patches the correct entry — filtering changes positional indices.
           const originalIdx = items.indexOf(item)
+          const isSelected = selectedIdx.has(originalIdx)
           return (
             <div
               key={`${item.url}-${originalIdx}`}
-              className="relative group aspect-video border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+              onClick={(e) => {
+                // In selection mode, clicking anywhere on the card toggles
+                // selection. Outside selection mode the card is purely a
+                // viewer; we don't want a single click to start selection
+                // (use the checkbox in the corner for that).
+                if (isSelectionMode) {
+                  e.preventDefault()
+                  toggleSelected(originalIdx)
+                }
+              }}
+              className={
+                "relative group aspect-video border rounded overflow-hidden bg-[#0e1117] "
+                + (isSelected
+                  ? "border-[#22d3ee] ring-2 ring-[#22d3ee] cursor-pointer"
+                  : "border-[#1e293b] " + (isSelectionMode ? "cursor-pointer" : ""))
+              }
             >
               <img
                 src={item.url}
@@ -274,14 +354,34 @@ export function EnvironmentalAssetTab({
               <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5">
                 {item.name}
               </div>
-              <button
-                type="button"
-                onClick={() => handleRemove(originalIdx)}
-                aria-label={`Remove ${item.name}`}
-                className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
-              >
-                Remove
-              </button>
+              {/* Phase 2 #10 — selection checkbox. Always visible when at
+                  least one card is already selected; otherwise opacity-0 so
+                  it only appears on hover. Stops propagation so the card-
+                  level click handler doesn't double-fire. */}
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  toggleSelected(originalIdx)
+                }}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Select ${item.name}`}
+                className={
+                  "absolute top-1 left-1 size-4 accent-[#22d3ee] cursor-pointer "
+                  + (isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100")
+                }
+              />
+              {!isSelectionMode && (
+                <button
+                  type="button"
+                  onClick={() => handleRemove(originalIdx)}
+                  aria-label={`Remove ${item.name}`}
+                  className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )
         })}

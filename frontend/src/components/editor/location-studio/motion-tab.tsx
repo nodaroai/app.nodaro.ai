@@ -131,6 +131,34 @@ export function MotionTab({ studio }: MotionTabProps) {
     studio.patch({ atmosphereMotions: next } as Partial<LocationNodeData>)
   }
 
+  // Phase 2 #10 — Bulk select + delete. Same shape as
+  // EnvironmentalAssetTab; see that file for the rationale.
+  const [selectedIdx, setSelectedIdx] = useState<ReadonlySet<number>>(new Set())
+  const isSelectionMode = selectedIdx.size > 0
+
+  function toggleSelected(idx: number) {
+    setSelectedIdx((prev) => {
+      const next = new Set(prev)
+      if (next.has(idx)) {
+        next.delete(idx)
+      } else {
+        next.add(idx)
+      }
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedIdx(new Set())
+  }
+
+  function handleBulkDelete() {
+    if (selectedIdx.size === 0) return
+    const remaining = items.filter((_, i) => !selectedIdx.has(i))
+    studio.patch({ atmosphereMotions: remaining } as Partial<LocationNodeData>)
+    clearSelection()
+  }
+
   const trackedMotions = jobs.tracked.filter(
     (j) => j.assetType === "atmosphere_motions",
   )
@@ -199,15 +227,54 @@ export function MotionTab({ studio }: MotionTabProps) {
         </div>
       )}
 
+      {/* Phase 2 #10 — Bulk action bar. Same shape as EnvironmentalAssetTab. */}
+      {isSelectionMode && (
+        <div
+          role="toolbar"
+          aria-label="Bulk actions"
+          className="flex items-center justify-between gap-2 px-3 py-2 rounded bg-[#1a1d27] border border-[#1e293b] text-[11px] text-slate-300"
+        >
+          <span>{selectedIdx.size} selected</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="px-2 py-1 rounded text-slate-400 hover:bg-[#1e293b] hover:text-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white font-medium"
+            >
+              Delete {selectedIdx.size}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Asset grid — video cards + in-flight placeholders */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {visibleItems.map((item) => {
           const originalIdx = items.indexOf(item)
+          const isSelected = selectedIdx.has(originalIdx)
           return (
             <div
               key={`${item.url}-${originalIdx}`}
               data-testid={`motion-card-${originalIdx}`}
-              className="relative group aspect-video border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]"
+              onClick={(e) => {
+                if (isSelectionMode) {
+                  e.preventDefault()
+                  toggleSelected(originalIdx)
+                }
+              }}
+              className={
+                "relative group aspect-video border rounded overflow-hidden bg-[#0e1117] "
+                + (isSelected
+                  ? "border-[#22d3ee] ring-2 ring-[#22d3ee] cursor-pointer"
+                  : "border-[#1e293b] " + (isSelectionMode ? "cursor-pointer" : ""))
+              }
             >
               <video
                 src={item.url}
@@ -218,14 +285,31 @@ export function MotionTab({ studio }: MotionTabProps) {
               <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">
                 {item.name}
               </div>
-              <button
-                type="button"
-                onClick={() => handleRemove(originalIdx)}
-                aria-label={`Remove ${item.name}`}
-                className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
-              >
-                Remove
-              </button>
+              {/* Phase 2 #10 — selection checkbox. */}
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  toggleSelected(originalIdx)
+                }}
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Select ${item.name}`}
+                className={
+                  "absolute top-1 left-1 size-4 accent-[#22d3ee] cursor-pointer z-10 "
+                  + (isSelectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100")
+                }
+              />
+              {!isSelectionMode && (
+                <button
+                  type="button"
+                  onClick={() => handleRemove(originalIdx)}
+                  aria-label={`Remove ${item.name}`}
+                  className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )
         })}
