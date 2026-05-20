@@ -234,7 +234,7 @@ FFmpeg-based video manipulation.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with fade, dissolve, or cut transitions |
+| [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with ~50 FFmpeg `xfade` transitions: cuts, fades, dips, wipes, slides, irises, slices, reveals, covers, blurs, and zooms |
 | [Resize Video](./processing-video/resize-video.md) | Crop, pad, or stretch to target aspect ratio | Reformat video dimensions for different platforms |
 | [Social Media Format](./processing-video/social-media-format.md) | Auto-format for platform specifications | Prepare video for Instagram, TikTok, YouTube, etc. |
 | [Trim Video](./processing-video/trim-video.md) | Cut video to start/end times | Extract specific sections from longer video |
