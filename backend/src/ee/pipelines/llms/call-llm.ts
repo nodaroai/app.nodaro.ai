@@ -6,6 +6,16 @@ import { getAnthropicClient } from "../../../lib/anthropic.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
+/**
+ * Models that reject the `temperature` parameter with a 400. Add new reasoning
+ * models here as they ship. Anthropic's extended-thinking models (Opus 4.7+)
+ * don't accept temperature; their output diversity is controlled by the
+ * thinking budget, not by sampling temperature.
+ */
+const TEMPERATURE_UNSUPPORTED_MODELS = new Set<string>([
+  "claude-opus-4-7",
+])
+
 // Accept any Zod schema whose PARSED OUTPUT is T. The schema's INPUT type may
 // diverge from T (e.g. ZodDefault makes input optional but output required),
 // which is the case for ShowrunnerPlanSchema. zodToJsonSchema + safeParse only
@@ -103,10 +113,15 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
           ]
         : userPrompt
 
+    // Anthropic's reasoning models (Opus 4.7+) reject the `temperature`
+    // parameter with a 400 — extended-thinking is incompatible with explicit
+    // temperature control. Omit it for those models; Sonnet/Haiku still
+    // accept it.
+    const supportsTemperature = !TEMPERATURE_UNSUPPORTED_MODELS.has(modelId)
     const resp = await anthropic.messages.create({
       model: modelId,
       max_tokens: 8192,
-      temperature,
+      ...(supportsTemperature ? { temperature } : {}),
       system: systemBlock,
       tools: [toolDef],
       tool_choice: { type: "tool", name: "emit" },

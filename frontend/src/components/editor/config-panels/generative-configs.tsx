@@ -90,7 +90,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
           onChange={(e) => onUpdate({ target_duration_seconds: Number(e.target.value) })}
         />
         {!validation.ok && (
-          <div className="mt-1 text-xs text-red-600">{validation.reason}</div>
+          <div className="mt-1 text-xs text-red-600 dark:text-red-400">{validation.reason}</div>
         )}
       </div>
       <div>
@@ -132,7 +132,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
       <Button onClick={handleRun} disabled={running || !validation.ok}>
         {running ? "Starting..." : data.pipeline_id ? "Re-run" : "Run pipeline"}
       </Button>
-      {err && <div className="text-xs text-red-600">{err}</div>}
+      {err && <div className="text-xs text-red-600 dark:text-red-400">{err}</div>}
     </div>
   )
 }
