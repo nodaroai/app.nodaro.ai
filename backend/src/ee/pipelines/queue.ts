@@ -18,7 +18,7 @@ const connection = new IORedis(config.REDIS_URL, {
 export interface PipelineOrchestrationJobData {
   pipelineId: string
   userId: string
-  reason: "initial" | "resume" | "user_reject" | "stage_advance"
+  reason: "initial" | "resume" | "user_reject" | "stage_advance" | "branched"
 }
 
 export const pipelineOrchestrationQueue = new Queue<PipelineOrchestrationJobData>(

@@ -54,6 +54,10 @@ export interface PipelineRecord {
   spent_credits: number
   reserved_credits: number
   upfront_credit_estimate: number
+  /** Phase 1D.3 — set when this pipeline was created via POST /v1/pipelines/:id/branch */
+  branched_from_pipeline_id: string | null
+  /** Phase 1D.3 — the stage from which this pipeline was branched */
+  branched_from_stage: string | null
 }
 
 /**
@@ -173,6 +177,23 @@ export const pipelinesApi = {
       body ?? {},
     )
   },
+  /**
+   * Phase 1D.3 — Branch a completed pipeline from a specific approved stage.
+   * Clones all upstream stages as 'approved' and re-runs from `fromStage`.
+   * Returns the new pipeline id + lists of cloned entity ids.
+   *
+   * URL: POST /v1/pipelines/:id/branch
+   * Errors: 400 `pipeline_not_completed` | `invalid_stage`; 403 `forbidden`; 404 `pipeline_not_found`
+   */
+  branch: (
+    id: string,
+    fromStage: PipelineStageName,
+  ): Promise<{
+    pipelineId: string
+    clonedStages: string[]
+    clonedEntities: string[]
+  }> => postJson(`/v1/pipelines/${id}/branch`, { fromStage }),
+
   /**
    * Phase 1D.1 — Zero-credit action that flips `accepted_match_cut_break=true`
    * on the target shot and removes it from `match_cut_break_pending` in Stage 6

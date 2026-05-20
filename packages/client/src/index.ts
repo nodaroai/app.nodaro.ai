@@ -40,6 +40,7 @@ export { OAuthResource } from "./resources/oauth.js"
 export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
+export { PipelinesResource } from "./resources/pipelines.js"
 
 // --- Resource type definitions ---
 export type {
@@ -150,3 +151,9 @@ export {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
 } from "./resources/locations.js"
+
+export type {
+  BranchPipelineInput,
+  BranchPipelineResult,
+} from "./resources/pipelines.js"
+export type { PipelineStageName } from "./resources/pipelines.js"

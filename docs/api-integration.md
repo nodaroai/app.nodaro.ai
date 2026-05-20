@@ -350,7 +350,34 @@ A complete walkthrough — including motion generation and using character
 assets as references in downstream image/video calls — is in
 [Character Platform](./character-platform.md).
 
-## 10. SDK alternative (TypeScript)
+## 10. Pipelines
+
+Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
+→ objects → locations → shot list → scene images → animate + audio + edit → post merge.
+
+### Branch (re-run from stage)
+
+#### `POST /v1/pipelines/:id/branch`
+
+Create a new pipeline by re-running from a completed stage. The original pipeline
+must be in `status='completed'`. Upstream stages clone forward (status='approved'),
+the branch stage starts running, downstream stages are created fresh by the
+orchestrator.
+
+**Body:** `{ fromStage: "script" | "characters" | "objects" | "locations" | "shot_list" | "scene_images" | "animate_audio_edit" | "post_merge" }`
+
+**Response (201):** `{ pipelineId: string, clonedStages: string[], clonedEntities: number }`
+
+**Errors:** 400 (pipeline_not_completed, invalid_stage) · 404 (pipeline_not_found) · 403 (forbidden) · 401 (unauthorized)
+
+**Scope (OAuth):** `pipelines:execute`
+
+Asset rows are NOT duplicated — pipeline entities reference the same asset_ids
+(assets are content-addressed by R2 path; safe to share across pipelines).
+Chat turns (Guided Mode, Phase 1D.2) explicitly do NOT clone — the branched
+pipeline starts with empty chat history per chat-enabled stage.
+
+## 11. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 
