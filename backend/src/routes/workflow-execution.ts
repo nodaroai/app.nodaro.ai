@@ -310,7 +310,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     const execId = parsed.data.id
 
-    // Load current state from DB
+    // Load current state from DB. The detail GET (and the executions-list
+    // endpoint) merges standalone-job rows into the execution surface, so any
+    // job_id can land here as `execId`. Check workflow_executions first; on
+    // miss, fall back to the jobs table — otherwise the frontend hits 404 on
+    // every workflow load and floods devtools.
     const { data: execution, error } = await supabase
       .from("workflow_executions")
       .select("*")
@@ -319,9 +323,37 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       .single()
 
     if (error || !execution) {
-      return reply.status(404).send({
-        error: { code: "not_found", message: "Execution not found" },
-      })
+      // Jobs fallback: emit a one-shot SSE for the job's current state then
+      // close. Single-node jobs don't emit ExecutionEvents (no orchestrator
+      // worker runs for them), so there's nothing to stream beyond the
+      // initial snapshot — the frontend's 3-s job-detail polling carries the
+      // live updates from here.
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, workflow_id, user_id, workflow_execution_id, status, provider, mcp_client, input_data, credits, error_message, started_at, completed_at, created_at, updated_at")
+        .eq("id", execId)
+        .eq("user_id", req.userId)
+        .is("workflow_execution_id", null)
+        .single()
+
+      if (jobError || !job) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Execution not found" },
+        })
+      }
+
+      const sse = await createSSEStream(req, reply)
+      const jobAsExec = jobToExecutionResponse(job) as unknown as Record<string, unknown>
+      sse.sendEvent({ type: "metadata", data: jobAsExec })
+      const jobTerminalStatuses = new Set(["completed", "failed", "cancelled"])
+      if (jobTerminalStatuses.has(job.status as string)) {
+        sse.sendEvent({ type: "done", data: jobAsExec })
+      }
+      // Always close after the initial snapshot — even non-terminal jobs.
+      // The frontend's `/v1/workflow-executions/:id` poll (3-s) keeps watching;
+      // it has its own jobs fallback so it'll see the eventual terminal state.
+      sse.close()
+      return reply
     }
 
     const sse = await createSSEStream(req, reply)
