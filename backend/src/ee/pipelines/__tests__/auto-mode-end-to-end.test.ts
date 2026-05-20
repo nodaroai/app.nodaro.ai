@@ -391,11 +391,11 @@ function seedPipeline(state: MockState, id: string, overrides: Partial<PipelineR
     ...overrides,
   })
   // Seed the script stage row in `running` state. In production the script
-  // handler does this itself via `ensureStageRow` before the engine reads
-  // pipeline_stages on the SAME call. In tests we mock the script handler,
-  // so we seed the row up front so the engine's `nextStage` finder picks it
-  // up on the first iteration. (Without this, the engine's "no rows" defensive
-  // path at line 75 fires and marks the pipeline completed immediately.)
+  // handler does this itself via `ensureStageRow` when the engine dispatches
+  // STAGE_ORDER[0]. In tests we mock the script handler (so it doesn't insert
+  // the row), so we seed the row up front to let subsequent iterations see
+  // the stage as already-running. The first-iteration fresh-pipeline dispatch
+  // path is covered by the regression test below.
   state.stages.push({
     id: "stage-script",
     pipeline_id: id,
@@ -613,5 +613,58 @@ describe("Auto Mode end-to-end (Phase 1D.2a §9 smoke 1)", () => {
     expect(runCharactersStage).not.toHaveBeenCalled()
     // The engine does NOT enqueue itself in manual-pass mode; the approve route does.
     expect(enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  it("regression: fresh pipeline with no stage rows dispatches script (not 'completed' fallback)", async () => {
+    // Reproduces the engine.ts:75 bug fix. Before the fix, a fresh pipeline
+    // (empty pipeline_stages) had lastIdx=-1 which triggered the
+    // "all-stages-approved → completed" fallback, marking the pipeline
+    // completed without ever dispatching Stage 1.
+    //
+    // After the fix: lastIdx=-1 falls through to STAGE_ORDER[0] = "script"
+    // and the script handler is dispatched on iteration 1.
+    const state: MockState = {
+      pipelines: new Map([
+        [
+          "p-fresh",
+          {
+            id: "p-fresh",
+            user_id: "u1",
+            status: "queued",
+            mode: "auto" as const,
+            activation_mode: "interactive" as const,
+            input_prompt: "story prompt",
+            target_duration_seconds: 60,
+            format: "short_film",
+            output_resolution: "1080p",
+            language: "en",
+            reserved_credits: 100,
+            spent_credits: 0,
+            reservation_usage_log_id: "log-1",
+            failure_reason: null,
+          },
+        ],
+      ]),
+      stages: [], // ← critical: NO pre-seeded stage rows
+    }
+
+    ;(runScriptStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved",
+      plan: fakePlan,
+      scriptCritic: passScriptVerdict,
+      castCoverageCritic: passCastVerdict,
+      locationsCoverageCritic: passLocationsVerdict,
+      objectsValidation: passObjectsVerdict,
+    })
+
+    const supabase = makeSupabase(state)
+    await drivePipeline({ supabase: supabase as never, pipelineId: "p-fresh" })
+
+    // The script handler MUST have been dispatched on the very first call.
+    expect(runScriptStage).toHaveBeenCalled()
+    // The pipeline should NOT be prematurely 'completed' — at most it's
+    // 'running' (the engine writes 'running' at line 41 before dispatch).
+    const finalPipeline = state.pipelines.get("p-fresh")!
+    expect(finalPipeline.status).not.toBe("completed")
   })
 })
