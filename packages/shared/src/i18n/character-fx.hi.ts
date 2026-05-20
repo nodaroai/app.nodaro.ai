@@ -13,7 +13,7 @@ const map: LocaleCatalogMap = {
   "animalization": { label: "पशु रूपांतरण", description: "जानवर में बदलना" },
   "gorilla-form": { label: "गोरिल्ला रूप", description: "विशाल गोरिल्ला में रूपांतरण" },
   "mystification": { label: "जादुई रूपांतरण", description: "जादुई आभा चरित्र को ढककर बदल देती है" },
-  "gas-form": { label: "गैस रूपांतरण", description: "शरीर रंगीन गैस के बादल में बदल जाता है" },
+  "gas-form": { label: "गैस रूपांतरण", description: "शरीर गैस के बादल में विलीन होकर पुनः बनता है" },
   "diamond-skin": { label: "हीरे की त्वचा", description: "शरीर हीरे के पहलुओं में बदल जाता है" },
   "agent-reveal": { label: "एजेंट उद्घाटन", description: "सूट और धूप के चश्मे चरित्र पर प्रकट होते हैं" },
 

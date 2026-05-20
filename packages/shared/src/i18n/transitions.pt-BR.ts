@@ -7,7 +7,7 @@ const map: LocaleCatalogMap = {
   "cross-dissolve": { label: "Fusão Cruzada", description: "Mistura gradual entre cenas" },
   "fade-to-black": { label: "Fade para Preto", description: "Escurece ao preto, segunda cena emerge" },
   "fade-to-white": { label: "Fade para Branco", description: "Clareia ao branco, segunda cena emerge" },
-  "match-cut": { label: "Corte Combinado", description: "Correspondência de forma ou movimento entre cenas" },
+  "match-cut": { label: "Corte de Raccord", description: "Correspondência de forma ou movimento entre cenas" },
   "smash-cut": { label: "Corte Brusco", description: "Corte abrupto entre cenas visualmente contrastantes" },
   "iris": { label: "Íris", description: "Íris circular fecha e abre na segunda cena" },
   "wipe": { label: "Varredura", description: "Varredura linear substitui a primeira cena" },

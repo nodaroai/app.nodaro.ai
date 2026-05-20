@@ -87,7 +87,7 @@ const map: LocaleCatalogMap = {
   // ── Glitch ──
   "digital-glitch": { label: "디지털 글리치", description: "RGB 분리+스캔라인+데이터모시 글리치" },
   "vhs-rewind": { label: "VHS 되감기", description: "VHS 테이프 되감기 스타일 트래킹 왜곡" },
-  "datamosh": { label: "데이터모시", description: "모션 벡터가 두 장면을 번지게 하며 전환" },
+  "datamosh": { label: "데이터모쉬", description: "모션 벡터가 두 장면을 번지게 하며 전환" },
   "channel-flip": { label: "채널 전환", description: "TV 정전기와 함께 채널이 바뀌는 효과" },
   "hologram-flicker": { label: "홀로그램 깜빡임", description: "홀로그램 깜빡임 속에서 새 장면이 출현" },
   "display-wipe": { label: "디스플레이 와이프", description: "장면이 화면으로 압축되었다 새 장면으로 펼쳐짐" },

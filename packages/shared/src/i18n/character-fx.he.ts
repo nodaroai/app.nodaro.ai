@@ -25,7 +25,7 @@ const map: LocaleCatalogMap = {
   "earth-bending": { label: "כיפוף אדמה", description: "מרים לוחות אבן מהאדמה" },
   "lightning-hands": { label: "ברקים מהידיים", description: "קשתות חשמליות פורצות מהידיים" },
   "levitation": { label: "ריחוף", description: "מתרומם מהאדמה, הגוף אנכי או אופקי" },
-  "telekinesis": { label: "טלקינזיס", description: "חפצים קרובים צפים ומקיפים את הדמות" },
+  "telekinesis": { label: "טלקינזיה", description: "חפצים קרובים צפים ומקיפים את הדמות" },
   "invisibility": { label: "אי-נראות", description: "הגוף הופך שקוף ובלתי נראה" },
   "hero-flight": { label: "טיסת גיבור", description: "מתנתק לשמיים בתנוחת טיסת גיבור" },
   "super-speed": { label: "מהירות-על", description: "מתנועע במהירות-על עם צלליות מרובות" },

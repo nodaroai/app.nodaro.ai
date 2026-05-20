@@ -13,6 +13,7 @@ import { pollRunwayTask, pollAlephTask } from "../../providers/kie/runway-client
 import { pollSunoTask, type SunoTaskResult } from "../../providers/kie/suno-client.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
 export interface KieJobRow {
   id: string
@@ -107,7 +108,7 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
   if (!row.provider_task_id) return
   if (!row.job_type || !SUNO_MUSIC_JOB_TYPES.has(row.job_type)) {
     // Suno variant we don't recover (lyrics, separate, music-video, wav).
-    await bumpAttempts(row.id, `suno variant not recoverable: ${row.job_type}`)
+    await bumpAttemptsOrExhaust(row.id, `suno variant not recoverable: ${row.job_type}`)
     return
   }
 
@@ -129,7 +130,7 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
       await markFailed(row.id, msg)
       await refundReservedCreditsForJob(row.id)
     } else {
-      await bumpAttempts(row.id, err)
+      await bumpAttemptsOrExhaust(row.id, err)
     }
     return
   }
@@ -172,23 +173,6 @@ async function reconcileKieSunoJob(row: KieJobRow): Promise<void> {
       trackCount: validTracks.length,
     },
   })
-}
-
-async function bumpAttempts(jobId: string, err: unknown): Promise<void> {
-  const msg = (err instanceof Error ? err.message : String(err)).slice(0, 500)
-  const { data } = await supabase
-    .from("jobs")
-    .select("reconcile_attempts")
-    .eq("id", jobId)
-    .single()
-  const current = ((data as { reconcile_attempts?: number } | null)?.reconcile_attempts ?? 0)
-  await supabase
-    .from("jobs")
-    .update({
-      reconcile_attempts: current + 1,
-      reconcile_last_error: msg,
-    })
-    .eq("id", jobId)
 }
 
 async function markFailed(jobId: string, reason: string): Promise<void> {
@@ -235,7 +219,7 @@ export async function reconcileKieJob(row: KieJobRow): Promise<void> {
       await refundReservedCreditsForJob(row.id)
     } else {
       // still pending / transient / unsupported kind — try again next tick
-      await bumpAttempts(row.id, err)
+      await bumpAttemptsOrExhaust(row.id, err)
     }
     return
   }

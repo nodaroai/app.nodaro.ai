@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js"
 import { uploadBufferToR2 } from "../storage.js"
 import { finalizeJobWithMedia } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
+import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
 export interface ElevenLabsJobRow {
   id: string
@@ -58,22 +59,6 @@ async function downloadDubbingAudio(
   }
 }
 
-async function bumpAttempts(jobId: string, reason: string): Promise<void> {
-  const { data } = await supabase
-    .from("jobs")
-    .select("reconcile_attempts")
-    .eq("id", jobId)
-    .single()
-  const current = ((data as { reconcile_attempts?: number } | null)?.reconcile_attempts ?? 0)
-  await supabase
-    .from("jobs")
-    .update({
-      reconcile_attempts: current + 1,
-      reconcile_last_error: reason.slice(0, 500),
-    })
-    .eq("id", jobId)
-}
-
 async function markFailed(jobId: string, reason: string): Promise<void> {
   await supabase
     .from("jobs")
@@ -91,7 +76,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  * Reconcile a stuck ElevenLabs dubbing job. Polls /v1/dubbing/:id once, then:
  *   - status=dubbed → download the audio, upload to R2, finalize with the URL
  *   - status=failed → markFailed + refund
- *   - status=dubbing → bumpAttempts
+ *   - status=dubbing → bumpAttemptsOrExhaust
  *
  * Audio download is required here because ElevenLabs serves dubbed audio at a
  * separate endpoint that returns the bytes directly — there's no persistent
@@ -101,18 +86,18 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
 export async function reconcileElevenLabsJob(row: ElevenLabsJobRow): Promise<void> {
   if (!row.provider_task_id) return
   if (row.provider_kind !== "elevenlabs-async") {
-    await bumpAttempts(row.id, `unknown elevenlabs kind: ${row.provider_kind}`)
+    await bumpAttemptsOrExhaust(row.id, `unknown elevenlabs kind: ${row.provider_kind}`)
     return
   }
 
   const meta = await fetchDubbingMetadata(row.provider_task_id)
   if (!meta) {
-    await bumpAttempts(row.id, "fetch failed")
+    await bumpAttemptsOrExhaust(row.id, "fetch failed")
     return
   }
 
   if (meta.status === "dubbing") {
-    await bumpAttempts(row.id, "still dubbing")
+    await bumpAttemptsOrExhaust(row.id, "still dubbing")
     return
   }
   if (meta.status === "failed") {
@@ -127,7 +112,7 @@ export async function reconcileElevenLabsJob(row: ElevenLabsJobRow): Promise<voi
     ?? "en"
   const audioBuffer = await downloadDubbingAudio(row.provider_task_id, targetLang)
   if (!audioBuffer) {
-    await bumpAttempts(row.id, "audio download failed")
+    await bumpAttemptsOrExhaust(row.id, "audio download failed")
     return
   }
 

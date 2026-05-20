@@ -13,7 +13,7 @@ const map: LocaleCatalogMap = {
   "animalization": { label: "Анимализация", description: "Превращается в животное" },
   "gorilla-form": { label: "Форма гориллы", description: "Превращается в массивную гориллу" },
   "mystification": { label: "Магическое превращение", description: "Магическая аура окутывает и преображает персонажа" },
-  "gas-form": { label: "Газовая форма", description: "Тело рассеивается в облако цветного газа" },
+  "gas-form": { label: "Газовая форма", description: "Тело рассеивается в газообразную форму" },
   "diamond-skin": { label: "Алмазная кожа", description: "Тело кристаллизуется в алмазные грани" },
   "agent-reveal": { label: "Агентское перевоплощение", description: "Костюм и очки мгновенно появляются на персонаже" },
 
@@ -61,7 +61,7 @@ const map: LocaleCatalogMap = {
   "frost-aura": { label: "Морозная аура", description: "Иней и лёд расходятся от персонажа" },
   "shadow-aura": { label: "Теневая аура", description: "Тёмные щупальца тени вьются вокруг персонажа" },
   "electricity-aura": { label: "Электрическая аура", description: "Дуги тока как у катушки Тесла окружают персонажа" },
-  "sparkles-around": { label: "Магические искры", description: "Искры и звёздные частицы кружатся вокруг персонажа" },
+  "sparkles-around": { label: "Магические искры вокруг", description: "Искры и звёздные частицы кружатся вокруг персонажа" },
   "fairies-around": { label: "Феи вокруг", description: "Крошечные светящиеся феи порхают вокруг персонажа" },
   "objects-orbit": { label: "Орбита предметов", description: "Маленькие предметы парят и вращаются вокруг персонажа" },
   "petals-around": { label: "Лепестки вокруг", description: "Лепестки сакуры медленно кружатся вокруг персонажа" },

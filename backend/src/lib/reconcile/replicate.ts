@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js"
 import { finalizeJobWithMedia, type FinalizeJobType } from "../job-finalize.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 import { deleteCharacterLora } from "../../providers/replicate/training.js"
+import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 
 export interface ReplicateJobRow {
   id: string
@@ -161,22 +162,6 @@ async function applyTrainingTerminalStatus(
   // starting/processing → still in flight, caller bumps attempts
 }
 
-async function bumpAttempts(jobId: string, reason: string): Promise<void> {
-  const { data } = await supabase
-    .from("jobs")
-    .select("reconcile_attempts")
-    .eq("id", jobId)
-    .single()
-  const current = ((data as { reconcile_attempts?: number } | null)?.reconcile_attempts ?? 0)
-  await supabase
-    .from("jobs")
-    .update({
-      reconcile_attempts: current + 1,
-      reconcile_last_error: reason.slice(0, 500),
-    })
-    .eq("id", jobId)
-}
-
 async function markFailed(jobId: string, reason: string): Promise<void> {
   await supabase
     .from("jobs")
@@ -194,7 +179,7 @@ async function markFailed(jobId: string, reason: string): Promise<void> {
  * Reconcile a stuck Replicate job. Polls /v1/predictions/:id once, then:
  *   - status=succeeded → finalize with output URL(s)
  *   - status=failed|canceled → markFailed + refund
- *   - status=starting|processing → bumpAttempts
+ *   - status=starting|processing → bumpAttemptsOrExhaust
  *
  * For `provider_kind="replicate-training"`, fetches the training via
  * `/v1/trainings/:id`, looks up the linked `characters` row, and applies
@@ -207,18 +192,18 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
   if (row.provider_kind === "replicate-training") {
     const remote = await fetchReplicateTraining(row.provider_task_id)
     if (!remote) {
-      await bumpAttempts(row.id, "fetch training failed")
+      await bumpAttemptsOrExhaust(row.id, "fetch training failed")
       return
     }
     if (remote.status === "starting" || remote.status === "processing") {
-      await bumpAttempts(row.id, `training still ${remote.status}`)
+      await bumpAttemptsOrExhaust(row.id, `training still ${remote.status}`)
       return
     }
     // Terminal — find the character + apply the same updates the webhook
     // handler would have. Skip silently if no character is linked (orphan job).
     const character = await findCharacterForTraining(row.provider_task_id)
     if (!character) {
-      await bumpAttempts(row.id, "no character linked to training")
+      await bumpAttemptsOrExhaust(row.id, "no character linked to training")
       return
     }
     await applyTrainingTerminalStatus(row.id, character, remote)
@@ -228,12 +213,12 @@ export async function reconcileReplicateJob(row: ReplicateJobRow): Promise<void>
   // replicate-prediction path
   const pred = await fetchReplicatePrediction(row.provider_task_id)
   if (!pred) {
-    await bumpAttempts(row.id, "fetch failed")
+    await bumpAttemptsOrExhaust(row.id, "fetch failed")
     return
   }
 
   if (pred.status === "starting" || pred.status === "processing") {
-    await bumpAttempts(row.id, `still ${pred.status}`)
+    await bumpAttemptsOrExhaust(row.id, `still ${pred.status}`)
     return
   }
 

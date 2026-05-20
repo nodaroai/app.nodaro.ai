@@ -70,7 +70,7 @@ const map: LocaleCatalogMap = {
   "debris-shower": { label: "मलबे की बौछार", description: "मलबा फ्रेम पार करता है, दृश्य बदलता है" },
   "gravity-flip": { label: "गुरुत्वाकर्षण पलटना", description: "गुरुत्व उलट जाता है, कैमरा 180° घूमता है" },
   "building-explosion": { label: "इमारत विस्फोट", description: "इमारत फटती है, धुएँ में नया दृश्य उभरता है" },
-  "vehicle-explosion": { label: "वाहन विस्फोट", description: "वाहन फटता है, आग छाती है, नया दृश्य दिखता है" },
+  "vehicle-explosion": { label: "वाहन विस्फोट", description: "वाहन फटता है, आग छाती है फ्रेम पर, नया दृश्य दिखता है" },
   "jump-match": { label: "जंप मैच", description: "पात्र कूदता है, उतरने पर नए दृश्य में होता है" },
   "hand-swipe": { label: "हाथ का झटका", description: "हाथ लेंस पर झटका देता है, दृश्य बदलता है" },
 
@@ -79,7 +79,7 @@ const map: LocaleCatalogMap = {
   "lens-flare-swipe": { label: "लेंस फ़्लेयर स्वाइप", description: "अनामॉर्फिक लेंस फ़्लेयर फ्रेम पार करती है" },
   "light-streak": { label: "प्रकाश की लकीर", description: "प्रकाश की लकीर फ्रेम पार करती है, दृश्य बदलता है" },
   "color-invert": { label: "रंग इन्वर्ट फ़्लैश", description: "रंग एक पल के लिए उलट जाते हैं, दृश्य बदलता है" },
-  "sun-glare": { label: "सूरज की चकाचौंध", description: "सूरज की रोशनी लेंस छाती है, नया दृश्य उभरता है" },
+  "sun-glare": { label: "सूरज की चकाचौंध", description: "सूरज की रोशनी लेंस पर छा जाती है, नया दृश्य उभरता है" },
   "lens-crack": { label: "लेंस में दरार", description: "लेंस में दरार पड़ती है, नया दृश्य उससे दिखता है" },
   "dirty-lens-wipe": { label: "गंदे लेंस की सफ़ाई", description: "लेंस साफ़ होता है, नया दृश्य उभरता है" },
   "eye-light-burst": { label: "आँखों से प्रकाश विस्फोट", description: "पात्र की आँखों से किरण निकलकर फ्रेम ढकती है" },

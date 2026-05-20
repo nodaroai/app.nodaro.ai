@@ -54,6 +54,13 @@ export const MIN_STALE_THRESHOLD_MS = Math.min(
   ...Object.values(STALE_THRESHOLD_MS),
 )
 
+/** Per-job reconcile attempt cap. After this many failed poll attempts the
+ *  shared `bumpAttemptsOrExhaust` helper force-fails the job + refunds + logs
+ *  a `reconcile_exhausted` anomaly. 18 × 5-min cron cadence = 90-min budget;
+ *  15-min headroom above the longest legitimate threshold (`kie-lip-sync`
+ *  75min). Spec ref: §5.5 + §7 edge case "reconcile_attempts ≥ 18". */
+export const MAX_ATTEMPTS = 18
+
 const SYNC_KINDS: ReadonlySet<ProviderKind> = new Set([
   "kie-llm",
   "elevenlabs-sync",

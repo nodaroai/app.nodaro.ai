@@ -79,7 +79,7 @@ const map: LocaleCatalogMap = {
   "lens-flare-swipe":       { label: "Flare-Wisch",             description: "Ein anamorphes Lens-Flare fegt über den Rahmen" },
   "light-streak":           { label: "Lichtstreifen",           description: "Ein Lichtstreifen fegt über den Rahmen" },
   "color-invert":           { label: "Farbinversionsblitz",     description: "Die Farben invertieren kurzzeitig" },
-  "sun-glare":              { label: "Sonneneinstrahlung",      description: "Starkes Sonnenlicht überstrahlt den Rahmen" },
+  "sun-glare":              { label: "Sonnenblendung",          description: "Starkes Sonnenlicht überstrahlt den Rahmen" },
   "lens-crack":             { label: "Objektivriss",            description: "Das Objektiv reißt, Szene durch das gebrochene Glas" },
   "dirty-lens-wipe":        { label: "Objektivreinigung",       description: "Das schmutzige Objektiv wird gewischt, neue Szene erscheint" },
   "eye-light-burst":        { label: "Augenlichtausbruch",      description: "Ein heller Strahl aus den Augen des Sujets überstrahlt den Rahmen" },

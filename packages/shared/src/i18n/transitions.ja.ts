@@ -5,7 +5,7 @@ const map: LocaleCatalogMap = {
   "auto": { label: "自動", description: "モデルに任せる" },
   "none": { label: "ハードカット", description: "瞬時の切替、トランジションなし" },
   "cross-dissolve": { label: "クロスディゾルブ", description: "ショット間の緩やかなブレンド" },
-  "fade-to-black": { label: "フェードアウト", description: "暗転後、次のシーンが浮かび上がる" },
+  "fade-to-black": { label: "暗転", description: "暗転後、次のシーンが浮かび上がる" },
   "fade-to-white": { label: "ホワイトアウト", description: "白飛び後、次のシーンが現れる" },
   "match-cut": { label: "マッチカット", description: "形や動きを合わせたカット" },
   "smash-cut": { label: "スマッシュカット", description: "対照的なシーン間の衝撃的な急転" },
@@ -20,7 +20,7 @@ const map: LocaleCatalogMap = {
   "seasonal-shift": { label: "季節の変遷", description: "同じ場面で四季が移り変わる" },
   "aging": { label: "エイジング", description: "被写体が目に見えて老いる" },
   "rewind": { label: "巻き戻し", description: "時間が逆行し、動きが逆再生される" },
-  "freeze-frame-jump": { label: "フリーズフレーム", description: "動きが止まり、時間が飛んで再開" },
+  "freeze-frame-jump": { label: "フリーズフレームジャンプ", description: "動きが止まり、時間が飛んで再開" },
   "weather-shift": { label: "天気の変化", description: "同じ場面で天気が変わる" },
   "flashback": { label: "フラッシュバック", description: "過去の記憶へのフラッシュバック" },
 
