@@ -35,12 +35,34 @@ export function createVideoWorker() {
     async (job) => {
       const { jobId } = job.data as { jobId: string }
 
-      // Fetch job record (with should_watermark from reservation) + user profile for public_outputs
+      // Fetch job record (with should_watermark from reservation) + user profile for public_outputs.
+      // `provider_task_id` is fetched to detect a BullMQ stall-retry: if the
+      // upstream task was already created on a prior worker, we MUST NOT call
+      // createTask again (that would duplicate-bill the provider). The
+      // reconcile cron will poll the existing task and finalize.
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
+
+      // Stall-retry guard. If provider_task_id is already set, the upstream
+      // call was initiated by a prior worker — most likely BullMQ retried this
+      // job because the original worker's lock expired (lockDuration 15min;
+      // KIE poll budgets can exceed that for VEO / lip-sync). Calling
+      // createTask again would create a duplicate upstream task and double-bill.
+      // Skip the handler entirely; the reconcile cron (5min cadence) will poll
+      // the existing taskId and finalize. The BullMQ job exits "completed"
+      // because no exception fires; jobs.status stays as-is until reconcile
+      // writes the terminal state.
+      if (jobRecord?.provider_task_id) {
+        console.log(
+          `[worker] Stall-retry for job ${jobId} (provider_task_id=${jobRecord.provider_task_id}); ` +
+          `skipping handler — reconcile cron will recover`,
+        )
+        return
+      }
+
       const usageLogId = jobRecord?.usage_log_id
       const jobUserId = (jobRecord?.user_id as string) ?? undefined
 
