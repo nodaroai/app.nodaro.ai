@@ -72,7 +72,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
     const lastIdx = lastApproved
       ? STAGE_ORDER.indexOf(lastApproved.stage_name as StageOrderName)
       : -1
-    if (lastIdx < 0 || lastIdx + 1 >= STAGE_ORDER.length) {
+    if (lastIdx + 1 >= STAGE_ORDER.length) {
       // Phase 1C.1: after Stage 8 (post_merge) the pipeline is completed.
       // Stage 8's own handler also flips `pipelines.status` and publishes
       // `pipeline:completed`; this branch is a defensive fallback for the
@@ -83,6 +83,12 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       pipelineEvents.publish({ type: "pipeline:done", pipelineId })
       return
     }
+    // For a freshly-queued pipeline (no stage rows yet), lastIdx is -1 and
+    // STAGE_ORDER[-1 + 1] = STAGE_ORDER[0] = "script". The script handler
+    // calls `ensureStageRow` to insert the script `pipeline_stages` row at
+    // dispatch time. Removing the `lastIdx < 0` short-circuit (which used to
+    // wrap into this branch) is critical — otherwise fresh pipelines mark
+    // `completed` before Stage 1 ever runs (caught by Phase 1D.2a L1 review).
     stageToRun = STAGE_ORDER[lastIdx + 1]!
   }
 
