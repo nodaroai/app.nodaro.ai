@@ -107,6 +107,30 @@ downstream i2v nodes or as B-roll loops.
   image-to-video generation on that provider. See `docs/nodes/ai-video/image-to-video.md`
   for the per-provider table.
 
+#### Refinement (video-to-video)
+
+Pass `refineFromVideoUrl` (REST) / `refine_from_video_url` (MCP) to route
+the worker through video-to-video using THAT clip as the source instead of
+running image-to-video from the source frame. Use to iterate on an existing
+atmosphere clip with a new prompt without shifting composition:
+
+```bash
+# REST — refine an existing fog clip into rain
+curl -X POST $API/v1/generate-location-motion \
+  -H "Authorization: Bearer $NODARO_API_KEY" \
+  -d '{
+    "motionPrompt": "same shot but light rain instead of fog",
+    "sourceImageUrl": "https://r2/loc.png",
+    "refineFromVideoUrl": "https://r2/loc-fog.mp4",
+    "provider": "wan-i2v",
+    "name": "Old Library"
+  }'
+```
+
+Routes through providers with the `video-to-video` capability (currently
+Wan 2.6 via KIE). Same auto-attach behavior — the refined clip lands in
+`atmosphere_motions[]` when `attachToLocationId` is set.
+
 ## Reference photos (mood-board)
 
 The mood-board is a small array of caller-supplied reference images that
@@ -134,6 +158,28 @@ Pass the array via `referencePhotos` on the create / update body. The
 canonical-fallback injector picks the entries up automatically whenever a
 downstream consumer references the location, and per-consumer suppression
 is available via the canvas's Injected References × button.
+
+#### Kind-tagged conditioning
+
+Each reference photo's `kind` propagates into the prompt builder's subject
+line — `Image 1 (Old Library — wide-angle reference) — <canonical
+description>` — so the model understands the role of each ref at generate
+time (wide-angle establishing context vs. interior detail vs. mood-board
+inspiration). The kind labels are stable; you don't need to change anything
+in your call sites.
+
+#### PII consent
+
+Reference photos may contain people's faces. Before the first photo can be
+added to a location (via the studio UI), the user must tick a consent
+checkbox confirming they have rights and consent. The tick is captured as a
+timestamp on the `locations.pii_consent_at` column.
+
+- Returned on `GET /v1/locations/:id` as `piiConsentAt` (ISO timestamp or null)
+- Accepted on `POST /v1/locations` as `piiConsentAt` (optional)
+- API/SDK callers MUST set this when first attaching reference photos to a
+  location — `null` is treated as "not consented yet" and the studio UI
+  shows the gate on next open
 
 ## The main-image approval flow
 
@@ -186,6 +232,37 @@ soft guidance.
 
 For programmatic flows, prefer Pattern A — explicit URLs are easier to
 reason about and don't depend on the canvas wiring.
+
+**Pattern C — `@location:N:bucket/variant` mention syntax (canvas).** In
+generate-image / image-to-image / modify-image prompts, type
+`@oldlibrary:1:weather/rain` to pin a specific variant inline. The slug is
+the location's slugified name (`old-library` → `oldlibrary` — see
+`locationMentionSlug` in `@nodaro/shared`); the `bucket/variant` segment
+maps to one of the 6 asset buckets (`timeOfDay`, `weather`, `seasons`,
+`angles`, `lighting`, `atmosphereMotions`) and the variant's slugified
+name. Three optional shapes:
+
+| Shape | Effect |
+|-------|--------|
+| `@oldlibrary:1` | Canonical reference image, `identical` mode |
+| `@oldlibrary:1:layout` | Canonical with `style` / `layout` / `none` mode override |
+| `@oldlibrary:1:weather/rain` | Pin the rain variant (bucket/variant pair) |
+| `@oldlibrary:1:weather/rain:style` | Variant + mode override |
+
+The 4 usage modes (`identical`, `style`, `layout`, `none`) control how the
+model uses the reference — match exactly, style/mood transfer, compositional
+layout transfer, or attach the image without textual bias. The studio's
+autocomplete pill (cyan) shows the mode via a dropdown.
+
+**Pattern D — Smart variant selection (automatic).** When a wired location
+feeds a generator and you DON'T type a `@location:N:variant` mention, the
+prompt-builder scans your prompt for keywords matching the location's
+variant names. `"at sunset"` → `timeOfDay/dusk` if you have a dusk variant;
+`"rainy evening"` → `weather/rain`; `"neon-lit street"` → `lighting/neon`.
+A small synonym table handles common alternatives ("sunset" matches "dusk",
+"rainy" matches "rain"). Bucket priority on ties: timeOfDay > weather >
+seasons > lighting > angles > atmosphereMotions. Explicit `@-mention`
+always wins over smart match.
 
 ## Style Lock semantics
 
@@ -496,7 +573,39 @@ generate_location_motion({
   attach_to_location_id: "loc-uuid",
   attach_name: "neon dolly-in"
 })
+
+// Refinement — iterate an existing clip via video-to-video.
+generate_location_motion({
+  motion_prompt: "same shot but light rain instead of fog",
+  source_image_url: "https://r2/loc.png",
+  refine_from_video_url: "https://r2/loc-fog.mp4",
+  provider: "wan-i2v",
+  name: "Rainy Tokyo Alley"
+})
 ```
+
+#### App input parameterization for locations
+
+When a workflow with a wired Location node is published as an app
+(`/v1/apps`), the location surfaces as an app input via `get_app_inputs`
+with `fieldKey: "selectedVariant"`. Callers pass a slug-form string to
+pin a variant at run time:
+
+```jsonc
+run_app({
+  slug: "neon-noir-poster",
+  inputs: {
+    my_location: "weather/rain"   // "<bucket>/<variant-name>"
+  }
+})
+```
+
+The orchestrator looks up the variant in the location's asset buckets and
+patches `sourceImageUrl` so all downstream consumers see it as canonical
+for this run. Format is `<bucket>/<variant-name>` where bucket is one of
+the 6 asset buckets and variant-name slugifies to match the publisher-
+stored entry (case-insensitive, `Light Rain` ↔ `light-rain`). Unknown
+buckets or unmatched variant names fall through to canonical silently.
 
 Variant names for canonical asset types:
 
