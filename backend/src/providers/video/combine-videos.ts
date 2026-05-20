@@ -221,7 +221,15 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     for (let i = 0; i < rawPaths.length; i++) {
       const normalizedPath = join(workDir, `normalized_${i}.mp4`)
       await normalizeVideoForCombine(rawPaths[i], normalizedPath, target.width, target.height)
-      const trimmedPath = await trimClipFrames(normalizedPath, workDir, i, trimStartFrames, trimEndFrames)
+      // Frame trim is meant to clean transition artifacts at clip BOUNDARIES.
+      // The first clip's start and the last clip's end are not boundaries —
+      // they're the final video's opening/closing frames the user chose to
+      // keep. Suppress trim on those outer edges.
+      const isFirst = i === 0
+      const isLast = i === rawPaths.length - 1
+      const effStart = isFirst ? 0 : trimStartFrames
+      const effEnd = isLast ? 0 : trimEndFrames
+      const trimmedPath = await trimClipFrames(normalizedPath, workDir, i, effStart, effEnd)
       inputPaths.push(trimmedPath)
     }
 

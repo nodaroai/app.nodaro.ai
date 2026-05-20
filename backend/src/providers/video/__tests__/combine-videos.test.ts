@@ -186,16 +186,18 @@ describe("combineVideos — pre-processing", () => {
 // ===========================================================================
 
 describe("combineVideos — frame trim", () => {
-  it("trims start and end when trimStartFrames + trimEndFrames > 0 (fps probe + ffmpeg trim)", async () => {
-    // Order: 2 resolution probes (target pick) → then 2 clips × (fps probe,
-    // then duration probe before trim). 'cut' doesn't probe durations again.
+  it("only trims at clip boundaries: first clip preserves start, last clip preserves end", async () => {
+    // Trim removes transition artifacts at clip joins. The first clip's start
+    // and the last clip's end are the final video's opening/closing frames —
+    // never touched. 2-clip case: clip 0 gets only -to (end trim), clip 1
+    // gets only -ss (start trim).
     stubResolutionProbes(2)
     mocks.runFfprobe
-      .mockResolvedValueOnce("30/1") // fps for clip 0
-      .mockResolvedValueOnce("30/1") // fps for clip 1
+      .mockResolvedValueOnce("30/1") // fps for clip 0 (end trim only)
+      .mockResolvedValueOnce("30/1") // fps for clip 1 (start trim only)
     mocks.getVideoDuration
-      .mockResolvedValueOnce(10) // duration for clip 0 trim
-      .mockResolvedValueOnce(10) // duration for clip 1 trim
+      .mockResolvedValueOnce(10) // duration for clip 0 (needed for -to calc)
+      .mockResolvedValueOnce(10) // duration for clip 1
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
@@ -204,10 +206,39 @@ describe("combineVideos — frame trim", () => {
       transition: "cut",
     }))
 
-    // The first 2 ffmpeg calls are the trims; expect -ss 1 and -to 9.
+    // Trim 0 (first clip): only end trim → -to 9, NO -ss
     const trim0 = ffargs(0)
-    expect(trim0[trim0.indexOf("-ss") + 1]).toBe("1")
+    expect(trim0).not.toContain("-ss")
     expect(trim0[trim0.indexOf("-to") + 1]).toBe("9")
+
+    // Trim 1 (last clip): only start trim → -ss 1, NO -to
+    const trim1 = ffargs(1)
+    expect(trim1[trim1.indexOf("-ss") + 1]).toBe("1")
+    expect(trim1).not.toContain("-to")
+  })
+
+  it("middle clips trim both start and end (3-clip case)", async () => {
+    stubResolutionProbes(3)
+    mocks.runFfprobe
+      .mockResolvedValueOnce("30/1") // fps for clip 0 (end trim)
+      .mockResolvedValueOnce("30/1") // fps for clip 1 (both trims)
+      .mockResolvedValueOnce("30/1") // fps for clip 2 (start trim)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(10) // clip 0
+      .mockResolvedValueOnce(10) // clip 1
+      .mockResolvedValueOnce(10) // clip 2
+
+    await combineVideos(defaultOptions({
+      videoUrls: ["a.mp4", "b.mp4", "c.mp4"],
+      trimStartFrames: 30,
+      trimEndFrames: 30,
+      transition: "cut",
+    }))
+
+    // Trim 1 is the middle clip — trims both ends.
+    const trim1 = ffargs(1)
+    expect(trim1[trim1.indexOf("-ss") + 1]).toBe("1")
+    expect(trim1[trim1.indexOf("-to") + 1]).toBe("9")
   })
 
   it("skips trim when start+end exceeds clip duration (no extra ffmpeg call)", async () => {
@@ -232,12 +263,12 @@ describe("combineVideos — frame trim", () => {
 
   it("falls back to fps=24 when fps probe yields invalid fraction", async () => {
     stubResolutionProbes(2)
-    mocks.runFfprobe
-      .mockResolvedValueOnce("invalid") // fps clip 0
-      .mockResolvedValueOnce("invalid") // fps clip 1
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(10)
-      .mockResolvedValueOnce(10)
+    // Under boundary-only trim, clip 0 (first) skips trim entirely with
+    // trimEndFrames=0, so only clip 1 needs fps + duration probes. Queueing
+    // extras would leak into subsequent tests because vi.clearAllMocks() does
+    // NOT drain mockResolvedValueOnce queues.
+    mocks.runFfprobe.mockResolvedValueOnce("invalid") // fps for clip 1
+    mocks.getVideoDuration.mockResolvedValueOnce(10)  // duration for clip 1
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
@@ -246,7 +277,7 @@ describe("combineVideos — frame trim", () => {
       transition: "cut",
     }))
 
-    // -ss should equal 24/24 = 1
+    // First ffmpeg call is clip 1's trim → -ss 24/24 = 1
     const trim0 = ffargs(0)
     expect(trim0[trim0.indexOf("-ss") + 1]).toBe("1")
   })
