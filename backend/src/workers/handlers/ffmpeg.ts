@@ -195,11 +195,23 @@ const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx
 }
 
 const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {
-  const { videoUrl, speed, adjustAudio } = job.data as {
-    jobId: string; videoUrl: string; speed: number; adjustAudio: boolean
+  const { videoUrl, speed, adjustAudio, reverse, audioMode, quality, ramps } = job.data as {
+    jobId: string
+    videoUrl: string
+    speed: number
+    adjustAudio?: boolean
+    reverse?: boolean
+    audioMode?: "pitch-preserve" | "pitch-shift" | "drop"
+    quality?: "fast" | "smooth"
+    ramps?: ReadonlyArray<{ start: number; end: number; speed: number }>
   }
-  console.log(`[worker] speed-ramp ${ctx.jobId}`)
-  const outputPath = await speedRamp({ videoUrl, speed, adjustAudio })
+  const tags = [
+    quality === "smooth" ? "smooth" : null,
+    reverse ? "reverse" : null,
+    ramps && ramps.length > 0 ? `ramps=${ramps.length}` : null,
+  ].filter(Boolean).join(",")
+  console.log(`[worker] speed-ramp ${ctx.jobId}${tags ? ` [${tags}]` : ""}`)
+  const outputPath = await speedRamp({ videoUrl, speed, adjustAudio, reverse, audioMode, quality, ramps })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }

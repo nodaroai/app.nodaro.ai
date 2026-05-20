@@ -2042,11 +2042,25 @@ export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: 
   return res.json()
 }
 
-export async function speedRampApi(videoUrl: string, speed: number, adjustAudio: boolean, userId?: string): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { videoUrl, speed, adjustAudio }
-  if (userId) {
-    body.userId = userId
-  }
+export async function speedRampApi(
+  videoUrl: string,
+  speed: number,
+  adjustAudio?: boolean,
+  userId?: string,
+  extras?: {
+    reverse?: boolean
+    audioMode?: "pitch-preserve" | "pitch-shift" | "drop"
+    quality?: "fast" | "smooth"
+    ramps?: ReadonlyArray<{ start: number; end: number; speed: number }>
+  },
+): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { videoUrl, speed }
+  if (adjustAudio !== undefined) body.adjustAudio = adjustAudio
+  if (extras?.reverse !== undefined) body.reverse = extras.reverse
+  if (extras?.audioMode !== undefined) body.audioMode = extras.audioMode
+  if (extras?.quality !== undefined) body.quality = extras.quality
+  if (extras?.ramps && extras.ramps.length > 0) body.ramps = extras.ramps
+  if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/speed-ramp`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },

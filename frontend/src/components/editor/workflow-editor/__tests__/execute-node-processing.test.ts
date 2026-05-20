@@ -832,6 +832,12 @@ describe("speed-ramp", () => {
       2.0,
       true,
       "u1",
+      {
+        reverse: undefined,
+        audioMode: undefined,
+        quality: undefined,
+        ramps: undefined,
+      },
     )
   })
 })

@@ -1,7 +1,7 @@
 ---
 node_type: speed-ramp
-generated_at: 2026-05-18T13:23:37.628Z
-generated_from: cb1e786d
+generated_at: 2026-05-20T12:36:29.536Z
+generated_from: f43e0370
 ---
 
 # Adjust Speed
@@ -16,11 +16,15 @@ generated_from: cb1e786d
 **Required data fields:**
 - `label: string`
 - `speed: number`
-- `adjustAudio: boolean`
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
 - `currentJobProgress?: number`
+- `reverse?: boolean`
+- `audioMode?: "pitch-preserve" | "pitch-shift" | "drop"`
+- `quality?: "fast" | "smooth"`
+- `ramps?: ReadonlyArray<SpeedRampSegment>`
+- `adjustAudio?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
@@ -32,7 +36,9 @@ generated_from: cb1e786d
 {
   "label": "Adjust Speed",
   "speed": 1,
-  "adjustAudio": true,
+  "reverse": false,
+  "audioMode": "pitch-preserve",
+  "quality": "fast",
   "fieldMappings": {}
 }
 ```
@@ -63,7 +69,9 @@ generated_from: cb1e786d
   "data": {
     "label": "Adjust Speed",
     "speed": 1,
-    "adjustAudio": true,
+    "reverse": false,
+    "audioMode": "pitch-preserve",
+    "quality": "fast",
     "fieldMappings": {}
   }
 }

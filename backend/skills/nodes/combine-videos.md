@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-05-18T13:23:37.518Z
-generated_from: cb1e786d
+generated_at: 2026-05-20T12:52:11.311Z
+generated_from: aef31e47
 ---
 
 # combine-videos
@@ -15,7 +15,7 @@ generated_from: cb1e786d
 
 **Required data fields:**
 - `label: string`
-- `transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"`
+- `transition: string`
 - `transitionDuration: number`
 - `audioMode: "keep" | "crossfade" | "remove"`
 - `fieldMappings: FieldMappings`

@@ -9,7 +9,7 @@
  * - combine-audio.ts        → trim-then-concat with WAV intermediate
  * - add-captions.ts         → drawtext filter with text-escape + position
  * - social-media-format.ts  → image vs video output, crop/pad/stretch
- * - speed-ramp.ts           → speed clamp [0.25, 4.0], atempo chain
+ * - speed-ramp.ts           → speed clamp [0.05, 100.0], atempo chain
  * - split-media.ts          → segment-based chunking, video + audio
  * - merge-video-audio.ts    → audioTracks vs single audioUrl, adelay
  *                              chain, codec probe, keepOriginalAudio fallback
@@ -440,16 +440,16 @@ describe("speedRamp", () => {
     expect(args[idx + 1]).toBe("setpts=PTS/2")
   })
 
-  it("clamps speed to [0.25, 4.0]: 0.1 → 0.25", async () => {
-    await speedRamp({ videoUrl: "u", speed: 0.1, adjustAudio: false })
+  it("clamps speed to [0.05, 100]: 0.01 → 0.05", async () => {
+    await speedRamp({ videoUrl: "u", speed: 0.01, adjustAudio: false })
     const args = ffargs()
-    expect(args[args.indexOf("-filter:v") + 1]).toBe("setpts=PTS/0.25")
+    expect(args[args.indexOf("-filter:v") + 1]).toBe("setpts=PTS/0.05")
   })
 
-  it("clamps speed to [0.25, 4.0]: 100 → 4", async () => {
-    await speedRamp({ videoUrl: "u", speed: 100, adjustAudio: false })
+  it("clamps speed to [0.05, 100]: 250 → 100", async () => {
+    await speedRamp({ videoUrl: "u", speed: 250, adjustAudio: false })
     const args = ffargs()
-    expect(args[args.indexOf("-filter:v") + 1]).toBe("setpts=PTS/4")
+    expect(args[args.indexOf("-filter:v") + 1]).toBe("setpts=PTS/100")
   })
 
   it("adjustAudio false: drops audio with -an", async () => {

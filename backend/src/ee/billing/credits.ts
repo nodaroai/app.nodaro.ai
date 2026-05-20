@@ -549,6 +549,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "trim-video": 1,
   "extract-frame": 1,
   "speed-ramp": 2,
+  "speed-ramp:smooth": 5, // motion-compensated interpolation (minterpolate) — 5-20x slower than fast
   "loop-video": 1,
   "fade-video": 1,
   "transcode-video": 1,

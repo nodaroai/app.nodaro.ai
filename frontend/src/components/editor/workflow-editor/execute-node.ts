@@ -4745,7 +4745,12 @@ export function executeNode(
     const d = node.data as SpeedRampData;
     return runProcessingNode(
       node.id,
-      () => speedRampApi(videoUrl, d.speed, d.adjustAudio, ctx.userId),
+      () => speedRampApi(videoUrl, d.speed, d.adjustAudio, ctx.userId, {
+        reverse: d.reverse,
+        audioMode: d.audioMode,
+        quality: d.quality,
+        ramps: d.ramps,
+      }),
       "generatedVideoUrl",
       "Adjust Speed",
       ctx,
