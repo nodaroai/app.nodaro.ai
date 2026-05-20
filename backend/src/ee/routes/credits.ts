@@ -4,6 +4,7 @@ import { CreditsService } from "../services/credits.js"
 import { supabase } from "../../lib/supabase.js"
 import { formatZodError } from "../../lib/zod-error.js"
 import { handlePriceNotConfigured } from "../lib/credit-guard-impl.js"
+import { PriceNotConfiguredError } from "../billing/credits.js"
 
 const modelCostsBody = z.object({
   models: z.array(z.string().min(1)).min(1).max(50),
@@ -167,7 +168,14 @@ export async function creditsRoutes(app: FastifyInstance) {
 
   /**
    * POST /v1/credits/model-costs
-   * Get credit costs for multiple models in a single request
+   * Batch lookup for editor cost previews. Returns the subset of models with
+   * a known price + a list of identifiers that have no pricing row.
+   *
+   * Per-model fault isolation (Promise.allSettled): one unpriced identifier
+   * cannot 503 the whole batch and take down the editor's cost panel. The
+   * hard-fail policy still triggers at credit-guard reservation time when the
+   * user actually runs the node — that's the intended user-facing gate, not
+   * the editor preview lookup.
    */
   app.post("/v1/credits/model-costs", async (req, reply) => {
     const parsed = modelCostsBody.safeParse(req.body ?? {})
@@ -178,21 +186,39 @@ export async function creditsRoutes(app: FastifyInstance) {
     }
     const { models } = parsed.data
 
-    try {
-      const costs: Record<string, number> = {}
-      await Promise.all(
-        models.map(async (model) => {
-          costs[model] = await CreditsService.getModelCreditCost(model)
-        }),
-      )
-      return { data: costs }
-    } catch (error) {
-      if (handlePriceNotConfigured(error, reply, "POST /v1/credits/model-costs")) return
-      console.error("[credits] Failed to get model costs:", error)
-      return reply.status(500).send({
-        error: { code: "internal_error", message: "Failed to get model costs" },
-      })
+    const results = await Promise.allSettled(
+      models.map(async (model) => {
+        const cost = await CreditsService.getModelCreditCost(model)
+        return { model, cost }
+      }),
+    )
+
+    const costs: Record<string, number> = {}
+    const missing: string[] = []
+    const otherErrors: string[] = []
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!
+      if (r.status === "fulfilled") {
+        costs[r.value.model] = r.value.cost
+        continue
+      }
+      const id = models[i]!
+      if (r.reason instanceof PriceNotConfiguredError) {
+        missing.push(id)
+        continue
+      }
+      otherErrors.push(id)
+      console.error(`[credits] model-costs lookup failed for "${id}":`, r.reason)
     }
+
+    if (missing.length > 0) {
+      console.warn(
+        `[credits] model-costs: ${missing.length} unpriced identifier(s): ${missing.join(", ")}`,
+      )
+    }
+
+    return { data: costs, missing, errors: otherErrors }
   })
 
   /**

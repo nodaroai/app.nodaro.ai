@@ -4114,7 +4114,26 @@ export async function getBatchModelCreditCosts(models: string[]): Promise<Record
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to get model costs")
   }
-  const body = await res.json()
+  const body = await res.json() as {
+    data: Record<string, number>
+    // Per-model fault isolation: identifiers with no pricing row in
+    // model_pricing AND no STATIC_CREDIT_COSTS entry are reported here
+    // instead of 503'ing the batch. Anything in `missing` is undisplayable
+    // until an operator seeds it; the credit-guard hard-fail still triggers
+    // at Run time. Surface to devtools so it's not silent.
+    missing?: string[]
+    errors?: string[]
+  }
+  if (body.missing?.length) {
+    console.warn(
+      `[credits] model-costs: ${body.missing.length} unpriced identifier(s) — operator must seed: ${body.missing.join(", ")}`,
+    )
+  }
+  if (body.errors?.length) {
+    console.error(
+      `[credits] model-costs: lookup failed for ${body.errors.length} identifier(s): ${body.errors.join(", ")}`,
+    )
+  }
   return body.data
 }
 
