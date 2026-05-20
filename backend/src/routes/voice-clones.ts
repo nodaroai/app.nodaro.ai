@@ -9,6 +9,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const fromUrlBody = z.object({
   audioUrl: safeUrlSchema,
@@ -140,6 +141,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       const blob = new Blob([buffer as BlobPart], { type: mimeType })
       formData.append("files", blob, `sample.${ext}`)
 
+      await markProviderCallStart(job.id, "elevenlabs-sync")
       const cloneResponse = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/add`, {
         method: "POST",
         headers: {
@@ -277,6 +279,7 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
       const blob = new Blob([buffer as BlobPart], { type: mimeType })
       formData.append("files", blob, `sample.${ext}`)
 
+      await markProviderCallStart(job.id, "elevenlabs-sync")
       const cloneResponse = await fetch(`${ELEVENLABS_BASE_URL}/v1/voices/add`, {
         method: "POST",
         headers: { "xi-api-key": config.ELEVENLABS_API_KEY },

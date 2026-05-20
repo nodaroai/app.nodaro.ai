@@ -92,9 +92,28 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     // sweepStaleSyncJob is NOT called — async kind goes to the kie handler instead.
     expect(sweepStaleSyncJob).not.toHaveBeenCalled()
-    // Async kinds increment `recovered`, not `skippedAsync`.
     expect(result.recovered).toBe(1)
-    expect(result.skippedAsync).toBe(0)
+  })
+
+  it("unknown provider_kind falls through to sweepStaleSyncJob (spec §5.5 catch-all)", async () => {
+    const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    // Cast through to bypass the ProviderKind literal type guard — this is
+    // the exact case the catch-all defends against: a new value added to the
+    // PROVIDER_KIND_VALUES tuple without updating the dispatch sets in cron.ts.
+    mocks.rows.push({
+      id: "j-future",
+      status: "processing",
+      provider_kind: "kie-future-model" as unknown as string,
+      provider_task_id: "task-1",
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+    })
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({
+      id: "j-future",
+      provider_kind: "kie-future-model",
+    }))
+    expect(result.swept).toBe(1)
   })
 
   it("skips rows within their kind's stale threshold", async () => {
@@ -116,7 +135,7 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     expect(result.scanned).toBe(0)
     expect(result.swept).toBe(0)
-    expect(result.skippedAsync).toBe(0)
+    expect(result.recovered).toBe(0)
     expect(result.errors).toBe(0)
   })
 

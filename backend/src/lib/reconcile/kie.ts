@@ -25,7 +25,8 @@ export interface KieJobRow {
 
 /** Suno music job_types whose poll shape matches `SunoTaskResult` (multi-track
  *  audio). Other Suno operations (lyrics, separate, music-video, wav) use
- *  different poll endpoints + return shapes; left in skippedAsync. */
+ *  different poll endpoints + return shapes; bumped via the shared cap helper
+ *  and force-failed at attempt 18 if still stuck. */
 const SUNO_MUSIC_JOB_TYPES: ReadonlySet<string> = new Set([
   "suno-generate",
   "suno-cover",

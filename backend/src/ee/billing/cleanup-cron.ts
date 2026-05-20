@@ -170,7 +170,7 @@ export function startCleanupCron(): void {
       const result = await reconcileInflightJobs()
       if (result.scanned > 0 || result.errors > 0) {
         console.log(
-          `[cron] reconcile: scanned=${result.scanned} recovered=${result.recovered} swept=${result.swept} skippedAsync=${result.skippedAsync} notStale=${result.notStale} errors=${result.errors} (${Date.now() - start}ms)`,
+          `[cron] reconcile: scanned=${result.scanned} recovered=${result.recovered} swept=${result.swept} notStale=${result.notStale} errors=${result.errors} (${Date.now() - start}ms)`,
         )
       }
     } catch (err) {

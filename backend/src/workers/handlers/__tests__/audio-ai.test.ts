@@ -295,3 +295,38 @@ describe("audio-isolation handler", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
   })
 })
+
+describe("voice-design handler", () => {
+  const handler = audioAIHandlers["voice-design"]
+
+  it("marks provider_call_started_at with elevenlabs-sync before upstream call (Phase 5.1)", async () => {
+    mocks.mockDesignVoice.mockResolvedValueOnce({ audioBuffer: Buffer.from("fake"), generatedVoiceId: "v-1" })
+    const job = makeJob("voice-design", { text: "hello", voiceDescription: "warm narrator" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "elevenlabs-sync",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+    expect(mocks.mockEq).toHaveBeenCalledWith("id", "job-1")
+  })
+})
+
+describe("forced-alignment handler", () => {
+  const handler = audioAIHandlers["forced-alignment"]
+
+  it("marks provider_call_started_at with elevenlabs-sync before upstream call (Phase 5.1)", async () => {
+    mocks.mockForcedAlignment.mockResolvedValueOnce({ alignment: [{ text: "hi", start: 0, end: 1 }] })
+    const job = makeJob("forced-alignment", { audioUrl: "https://example.com/audio.mp3", transcript: "hi" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_kind: "elevenlabs-sync",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+  })
+})

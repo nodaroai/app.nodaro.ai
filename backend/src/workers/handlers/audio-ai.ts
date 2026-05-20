@@ -22,7 +22,7 @@ import {
   type HandlerFn,
 } from "../shared.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
-import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
+import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/persistence.js"
 import { providerKindForTtsModel } from "../../lib/reconcile/provider-kind.js"
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
@@ -357,6 +357,7 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
     seed?: number; quality?: number; shouldEnhance?: boolean
   }
   console.log(`[worker] voice-design ${ctx.jobId}`)
+  await markProviderCallStart(ctx.jobId, "elevenlabs-sync")
   const result = await withProgressRamp(
     job,
     ctx.jobId,
@@ -380,6 +381,7 @@ const handleVoiceDesign: HandlerFn = async function handleVoiceDesign(job, ctx) 
 const handleForcedAlignment: HandlerFn = async function handleForcedAlignment(job, ctx) {
   const { audioUrl, transcript } = job.data as { jobId: string; audioUrl: string; transcript: string }
   console.log(`[worker] forced-alignment ${ctx.jobId}`)
+  await markProviderCallStart(ctx.jobId, "elevenlabs-sync")
   const result = await forcedAlignment(audioUrl, transcript)
   await setJobProgress(job, ctx.jobId, 100)
   if (!await shouldSaveJobResult(ctx.jobId)) return
