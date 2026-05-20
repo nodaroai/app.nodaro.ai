@@ -24,7 +24,7 @@ const map: LocaleCatalogMap = {
   "water-bending": { label: "수류 조종", description: "손동작으로 흐르는 물을 조종" },
   "earth-bending": { label: "대지 조종", description: "지면에서 석판을 솟구치게 함" },
   "lightning-hands": { label: "번개 손", description: "손에서 전기 아크가 뻗어 나옴" },
-  "levitation": { label: "공중 부양", description: "땅에서 천천히 떠오름" },
+  "levitation": { label: "공중 부양", description: "지면에서 떠올라 몸이 수직 또는 수평으로 부유" },
   "telekinesis": { label: "염동력", description: "주변 물체가 떠올라 공전함" },
   "invisibility": { label: "투명화", description: "몸이 투명한 굴절 윤곽으로 사라짐" },
   "hero-flight": { label: "영웅 비행", description: "슈퍼히어로 자세로 하늘로 날아오름" },

@@ -24,7 +24,7 @@ const map: LocaleCatalogMap = {
   "water-bending": { label: "ウォーターベンディング", description: "ジェスチャーで水を自在に操る" },
   "earth-bending": { label: "アースベンディング", description: "地面から石板を持ち上げる" },
   "lightning-hands": { label: "電撃の手", description: "手から電気の弧が放たれる" },
-  "levitation": { label: "浮遊", description: "地面から浮き上がる" },
+  "levitation": { label: "浮遊", description: "地面から浮き上がり、体は垂直または水平に保たれる" },
   "telekinesis": { label: "サイコキネシス", description: "近くの物体が浮いて周回する" },
   "invisibility": { label: "透明化", description: "体が透明な屈折シマーになる" },
   "hero-flight": { label: "ヒーロー飛行", description: "スーパーヒーローの姿勢で空へ飛び立つ" },

@@ -24,7 +24,7 @@ const map: LocaleCatalogMap = {
   "water-bending": { label: "御水术", description: "以手势操控流动的水" },
   "earth-bending": { label: "御土术", description: "从地面召唤石板升起" },
   "lightning-hands": { label: "雷电之手", description: "双手迸出蓝白电弧" },
-  "levitation": { label: "悬浮", description: "缓缓离地升起" },
+  "levitation": { label: "悬浮", description: "离地升起，身体呈垂直或水平姿势" },
   "telekinesis": { label: "心灵遥控", description: "附近物体漂浮并环绕旋转" },
   "invisibility": { label: "隐身", description: "身体淡化为透明屈光轮廓" },
   "hero-flight": { label: "英雄飞行", description: "以超英姿势腾空而起" },

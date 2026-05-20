@@ -87,7 +87,7 @@ const map: LocaleCatalogMap = {
   // ── Glitch ──
   "digital-glitch": { label: "גליץ' דיגיטלי", description: "שיבוש דיגיטלי: פיצול RGB, קריעת שורות, דאטאמוש" },
   "vhs-rewind": { label: "הרצה לאחור VHS", description: "שיבוש טראקינג VHS ואפקט הרצת קלטת" },
-  "datamosh": { label: "דאטאמוש", description: "וקטורי תנועה מוליכים בין הסצנות" },
+  "datamosh": { label: "דאטאמוש", description: "וקטורי תנועה מחלחלים בין הסצנות" },
   "channel-flip": { label: "החלפת ערוץ", description: "הפרעות טלוויזיוניות עם רעש החלפת ערוצים" },
   "hologram-flicker": { label: "מצמוץ הולוגרמה", description: "מצמוץ הולוגרמה מגלה את הסצנה החדשה" },
   "display-wipe": { label: "מחיקת תצוגה", description: "הסצנה מתכווצת למסך קטן ואז מתרחבת" },

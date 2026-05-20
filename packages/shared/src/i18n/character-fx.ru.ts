@@ -13,7 +13,7 @@ const map: LocaleCatalogMap = {
   "animalization": { label: "Анимализация", description: "Превращается в животное" },
   "gorilla-form": { label: "Форма гориллы", description: "Превращается в массивную гориллу" },
   "mystification": { label: "Магическое превращение", description: "Магическая аура окутывает и преображает персонажа" },
-  "gas-form": { label: "Газовая форма", description: "Тело рассеивается в облако цветного газа" },
+  "gas-form": { label: "Газовая форма", description: "Тело рассеивается в газообразную форму" },
   "diamond-skin": { label: "Алмазная кожа", description: "Тело кристаллизуется в алмазные грани" },
   "agent-reveal": { label: "Агентское перевоплощение", description: "Костюм и очки мгновенно появляются на персонаже" },
 
