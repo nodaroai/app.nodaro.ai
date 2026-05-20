@@ -13,6 +13,7 @@ import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
 import { entityHandlers } from "./handlers/entity.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
+import { tryInlineReconcile } from "./inline-reconcile.js"
 
 const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
@@ -36,30 +37,39 @@ export function createVideoWorker() {
       const { jobId } = job.data as { jobId: string }
 
       // Fetch job record (with should_watermark from reservation) + user profile for public_outputs.
-      // `provider_task_id` is fetched to detect a BullMQ stall-retry: if the
-      // upstream task was already created on a prior worker, we MUST NOT call
-      // createTask again (that would duplicate-bill the provider). The
-      // reconcile cron will poll the existing task and finalize.
+      // `provider_task_id` + `provider_kind` + `reconcile_attempts` + `job_type`
+      // are fetched to (a) detect a BullMQ stall-retry, and (b) immediately
+      // recover the row via the same handler the reconcile cron uses.
       const { data: jobRecord } = await supabase
         .from("jobs")
-        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, profiles!user_id(public_outputs)")
+        .select("usage_log_id, user_id, should_watermark, force_private, mcp_client, workflow_execution_id, provider_task_id, provider_kind, reconcile_attempts, job_type, profiles!user_id(public_outputs)")
         .eq("id", jobId)
         .single()
 
-      // Stall-retry guard. If provider_task_id is already set, the upstream
-      // call was initiated by a prior worker — most likely BullMQ retried this
-      // job because the original worker's lock expired (lockDuration 15min;
-      // KIE poll budgets can exceed that for VEO / lip-sync). Calling
-      // createTask again would create a duplicate upstream task and double-bill.
-      // Skip the handler entirely; the reconcile cron (5min cadence) will poll
-      // the existing taskId and finalize. The BullMQ job exits "completed"
-      // because no exception fires; jobs.status stays as-is until reconcile
-      // writes the terminal state.
+      // Stall-retry guard + inline recovery. If `provider_task_id` is set, the
+      // upstream call already ran on a prior worker that died (Railway redeploy,
+      // OOM, etc.) and BullMQ retried this job. We MUST NOT call createTask
+      // again (that would duplicate-bill the provider).
+      //
+      // The old behavior here was `return` ("wait for the reconcile cron"),
+      // which meant the row sat in `processing` for up to <threshold> + <cron
+      // cadence> minutes — 30 min for kie-suno, longer for VEO/lip-sync. For
+      // operations that complete in 1-5 min upstream that's a terrible UX.
+      //
+      // The new behavior: dispatch the exact same per-provider reconcile
+      // handler the cron uses, inline, right now. Recovery happens within
+      // ~5 min of worker death (BullMQ's stall-detect cadence) instead of
+      // 30+ min. All reconcile handlers are idempotent (finalize is CAS-guarded;
+      // bumpAttempts is safe to repeat), so the cron remains the safety net if
+      // this inline pass throws or KIE is still processing.
       if (jobRecord?.provider_task_id) {
-        console.log(
-          `[worker] Stall-retry for job ${jobId} (provider_task_id=${jobRecord.provider_task_id}); ` +
-          `skipping handler — reconcile cron will recover`,
-        )
+        await tryInlineReconcile({
+          id: jobId,
+          provider_kind: (jobRecord.provider_kind as string | null) ?? null,
+          provider_task_id: jobRecord.provider_task_id as string,
+          reconcile_attempts: (jobRecord.reconcile_attempts as number | null) ?? 0,
+          job_type: (jobRecord.job_type as string | null) ?? null,
+        })
         return
       }
 

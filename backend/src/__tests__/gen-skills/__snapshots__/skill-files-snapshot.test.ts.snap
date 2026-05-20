@@ -373,9 +373,13 @@ exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match sna
 
 **Optional data fields:**
 - \`currentJobProgress?: number\`
-- \`trimMode?: "time" | "frames" | "smart-loop-cut"\`
+- \`trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"\`
 - \`trimStartFrames?: number\`
 - \`trimEndFrames?: number\`
+- \`trimStartSeconds?: number\`
+- \`trimEndSeconds?: number\`
+- \`keepFirstSeconds?: number\`
+- \`keepLastSeconds?: number\`
 - \`smartLoopCutLookback?: number\`
 - \`outputSilentVideo?: boolean\`
 - \`executionStatus?: "idle" | "running" | "completed" | "failed"\`
