@@ -107,7 +107,15 @@ function requireAuthProviderAndId(req: FastifyRequest, reply: FastifyReply): str
 }
 
 export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
-  app.post("/v1/characters/:id/approve-portrait", async (req, reply) => {
+  app.post(
+    "/v1/characters/:id/approve-portrait",
+    {
+      // 10 req/min/IP — gates the paid LLM caption (Claude Sonnet vision,
+      ***REDACTED-OSS-SCRUB***
+      ***REDACTED-OSS-SCRUB***
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (req, reply) => {
     const characterId = requireAuthProviderAndId(req, reply)
     if (characterId === null) return
 
@@ -186,7 +194,13 @@ export async function characterPortraitApprovalRoutes(app: FastifyInstance) {
     return { portraitUrl, canonicalDescription }
   })
 
-  app.post("/v1/characters/:id/llm-caption", async (req, reply) => {
+  app.post(
+    "/v1/characters/:id/llm-caption",
+    {
+      // 10 req/min/IP — gates the paid LLM caption. Mirrors location-llm-caption.
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (req, reply) => {
     const characterId = requireAuthProviderAndId(req, reply)
     if (characterId === null) return
 
