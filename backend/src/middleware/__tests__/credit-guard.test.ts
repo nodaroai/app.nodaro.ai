@@ -149,8 +149,8 @@ describe("creditGuard", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.ok).toBe(true)
-    // No supabase profile query should have been made
-    expect(mockFrom).not.toHaveBeenCalled()
+    // No credit-check should run (the dedup SELECT on "jobs" is allowed).
+    expect(mockCheckCreditsWithProfile).not.toHaveBeenCalled()
   })
 
   it("skips for anonymous requests (no userId)", async () => {
@@ -165,7 +165,9 @@ describe("creditGuard", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.ok).toBe(true)
+    // No userId → dedup is also skipped, so mockFrom genuinely isn't called.
     expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockCheckCreditsWithProfile).not.toHaveBeenCalled()
   })
 
   it("skips for ffmpeg model identifier", async () => {
@@ -180,7 +182,7 @@ describe("creditGuard", () => {
     expect(res.statusCode).toBe(200)
     const body = res.json()
     expect(body.ok).toBe(true)
-    expect(mockFrom).not.toHaveBeenCalled()
+    expect(mockCheckCreditsWithProfile).not.toHaveBeenCalled()
   })
 
   it("returns 500 when profile query fails", async () => {

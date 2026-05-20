@@ -1,5 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { hasCredits } from "../lib/config.js"
+import { supabase } from "../lib/supabase.js"
+import { computeFingerprint, findRecentMatchingJob } from "../lib/dedup-fingerprint.js"
 
 // Credit-guard shim. The 62 routes that import { creditGuard, reserveCreditsForJob }
 // from this file see no behavioral change. In community/business editions, both
@@ -31,6 +33,11 @@ export interface CreditGuardOpts {
    *  Markup is applied inside creditGuard so checkCredits and reserveCredits
    *  receive the same final number. */
   computeCredits?: (parsedBody: unknown) => number | Promise<number>
+  /** Anti-double-click dedup. Default: true. Set to false on routes whose
+   *  response body shape is incompatible with `{ jobId, deduped: true }` —
+   *  e.g., voice-clone returns `{ id, name, elevenlabsVoiceId, ... }` and
+   *  the frontend would break on the simplified dedup response. */
+  dedup?: boolean
 }
 
 // FastifyRequest augmentation (userId, userRole, creditReservation, storageSnapshot)
@@ -58,13 +65,26 @@ export function creditGuard(
   modelResolver: (req: FastifyRequest) => string,
   opts?: CreditGuardOpts,
 ) {
-  if (!hasCredits()) {
-    return async (_req: FastifyRequest, _reply: FastifyReply): Promise<void> => {}
-  }
-  // Kick off the import eagerly at route-registration time so per-request
-  // await is just promise-resolution after the first call.
-  const implPromise = import("../ee/lib/credit-guard-impl.js")
+  // Kick off the cloud impl import eagerly at route-registration time so
+  // per-request await is just promise-resolution after the first call.
+  const implPromise = hasCredits() ? import("../ee/lib/credit-guard-impl.js") : null
+  const dedupEnabled = opts?.dedup !== false
+
   return async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    // Anti-double-click dedup (all editions). Runs BEFORE credit reservation
+    // so duplicates never reserve. Skipped for unauthed requests (no userId)
+    // or non-body requests (GET).
+    if (dedupEnabled && req.userId && req.body) {
+      const fp = computeFingerprint(req.url, req.body)
+      const existing = await findRecentMatchingJob(req.userId, fp)
+      if (existing) {
+        reply.header("X-Dedup-Hit", "1")
+        return reply.code(200).send({ jobId: existing.id, deduped: true })
+      }
+      req.inputFingerprint = fp
+    }
+
+    if (!implPromise) return
     const impl = await implPromise
     return impl.creditGuardImpl(modelResolver, opts)(req, reply)
   }
@@ -83,6 +103,22 @@ export async function reserveCreditsForJob(
   jobId: string,
   modelIdentifier: string,
 ): Promise<CreditReservation | undefined> {
+  // Backfill input_fingerprint for anti-double-click dedup (all editions).
+  // creditGuard wrote `req.inputFingerprint` at preHandler time. Done here
+  // (after the route's INSERT) so we don't need to touch every job-creating
+  // route's INSERT statement — every job-creating route already calls
+  // reserveCreditsForJob right after inserting the jobs row.
+  if (req.inputFingerprint) {
+    await supabase
+      .from("jobs")
+      .update({ input_fingerprint: req.inputFingerprint })
+      .eq("id", jobId)
+      .then(() => {}, (err) => {
+        // Non-critical — dedup is best-effort. Failing to backfill just means
+        // the next identical POST in the next 10s won't be deduped.
+        console.warn(`[credit-guard] dedup backfill failed for job ${jobId}:`, err.message)
+      })
+  }
   if (!hasCredits()) return undefined
   const impl = await import("../ee/lib/credit-guard-impl.js")
   return impl.reserveCreditsForJobImpl(req, reply, jobId, modelIdentifier)

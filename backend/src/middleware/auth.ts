@@ -17,6 +17,10 @@ declare module "fastify" {
     isAppRun?: boolean
     creditReservation?: import("./credit-guard.js").CreditReservation
     storageSnapshot?: import("./credit-guard.js").StorageSnapshot
+    /** SHA-256 fingerprint of (req.url + stable-stringified body), set by
+     *  creditGuard for anti-double-click dedup. Route handlers should write
+     *  it to the `input_fingerprint` column on the jobs INSERT. */
+    inputFingerprint?: string
     /** Set when the request is authenticated via a developer-app OAuth token. */
     appAuthorization?: {
       appId: string

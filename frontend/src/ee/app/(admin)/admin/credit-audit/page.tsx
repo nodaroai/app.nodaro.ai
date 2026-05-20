@@ -41,17 +41,50 @@ interface ActualAuditModel {
   variable: boolean
 }
 
-interface AuditResult {
-  mode: "theoretical" | "actual"
+// ---------- Per-task mode types ----------
+// Per-task drill-down: matches each KIE task to our `jobs` row via
+// `provider_task_id` (Phase 1 reconciliation). Surfaces outlier tasks the
+// model-level aggregate `actual` mode would hide.
+interface PerTaskDiff {
+  kieTaskId: string
+  kieModel: string
+  kieCredits: number
+  ourJobId: string | null
+  ourCredits: number | null
+  ourCreditsActual: number | null
+  ourModelIdentifier: string | null
+  ourProviderKind: string | null
+  expectedCredits: number
+  diff: number | null
+  diffPercent: number | null
+  status: "OK" | "UNMATCHED" | "UNDERCHARGED" | "OVERCHARGED"
+}
+
+interface AuditResultBase {
   lookbackMinutes: number
   totalRecords: number
   successRecords: number
+  timestamp?: string
+}
+
+interface AuditResultModels extends AuditResultBase {
+  mode: "theoretical" | "actual"
   uniqueModels: number
   mismatches: number
   models: (AuditModel | ActualAuditModel)[]
   totalUsageLogs?: number
-  timestamp?: string
 }
+
+interface AuditResultPerTask extends AuditResultBase {
+  mode: "per-task"
+  matchedJobs: number
+  unmatched: number
+  undercharged: number
+  overcharged: number
+  tasks: PerTaskDiff[]
+}
+
+type AuditResult = AuditResultModels | AuditResultPerTask
 
 const STORAGE_KEY = "nodaro-credit-audit-result"
 
@@ -87,7 +120,7 @@ function formatPeriod(minutes: number): string {
 export default function AdminCreditAudit() {
   const [token, setToken] = useState("")
   const [lookbackMinutes, setLookbackMinutes] = useState(10080) // 7 days
-  const [auditMode, setAuditMode] = useState<"theoretical" | "actual">("theoretical")
+  const [auditMode, setAuditMode] = useState<"theoretical" | "actual" | "per-task">("theoretical")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<AuditResult | null>(null)
@@ -158,11 +191,19 @@ export default function AdminCreditAudit() {
     URL.revokeObjectURL(url)
   }
 
-  const filteredModels = result?.models.filter(m => {
-    if (filter === "mismatches") return m.status !== "OK"
-    if (filter === "variable") return m.variable
-    return true
-  }) ?? []
+  const filteredModels = result && (result.mode === "theoretical" || result.mode === "actual")
+    ? result.models.filter(m => {
+        if (filter === "mismatches") return m.status !== "OK"
+        if (filter === "variable") return m.variable
+        return true
+      })
+    : []
+  const filteredTasks = result && result.mode === "per-task"
+    ? result.tasks.filter(t => {
+        if (filter === "mismatches") return t.status !== "OK"
+        return true
+      })
+    : []
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -175,7 +216,7 @@ export default function AdminCreditAudit() {
       <div className="rounded-lg border border-border bg-card p-4 mb-6">
         {/* Mode toggle */}
         <div className="flex gap-1 p-0.5 rounded-lg bg-muted/50 w-fit mb-4">
-          {(["theoretical", "actual"] as const).map(m => (
+          {(["theoretical", "actual", "per-task"] as const).map(m => (
             <button
               key={m}
               onClick={() => setAuditMode(m)}
@@ -185,14 +226,16 @@ export default function AdminCreditAudit() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {m === "theoretical" ? "Pricing Table" : "Actual Charges"}
+              {m === "theoretical" ? "Pricing Table" : m === "actual" ? "Actual Charges" : "Per-task Diff"}
             </button>
           ))}
         </div>
         <p className="text-xs text-muted-foreground mb-3">
           {auditMode === "theoretical"
             ? "Compares KIE provider costs against our STATIC pricing table. Catches stale prices."
-            : "Compares KIE provider costs against what we ACTUALLY charged users. Catches code bugs (wrong duration estimates, wrong credit identifiers)."}
+            : auditMode === "actual"
+            ? "Compares KIE provider costs against what we ACTUALLY charged users. Catches code bugs (wrong duration estimates, wrong credit identifiers)."
+            : "Per-task drill-down: matches each KIE task to our `jobs` row via `provider_task_id` (Phase 1 reconciliation). Surfaces outlier tasks the aggregate `actual` mode would average away."}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 items-end">
@@ -248,7 +291,7 @@ export default function AdminCreditAudit() {
                 Last run: {result.timestamp ? new Date(result.timestamp).toLocaleString() : "unknown"}
               </p>
               <Badge variant="outline" className="text-[10px]">
-                {result.mode === "actual" ? "Actual Charges" : "Pricing Table"}
+                {result.mode === "actual" ? "Actual Charges" : result.mode === "per-task" ? "Per-task Diff" : "Pricing Table"}
               </Badge>
             </div>
             <div className="flex gap-2">
@@ -265,35 +308,54 @@ export default function AdminCreditAudit() {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             <StatCard label="KIE Tasks" value={result.successRecords} sub={`of ${result.totalRecords} records`} />
-            {result.mode === "actual"
-              ? <StatCard label="Our Jobs" value={result.totalUsageLogs ?? 0} />
-              : <StatCard label="Models" value={result.uniqueModels} />
-            }
+            {result.mode === "actual" ? (
+              <StatCard label="Our Jobs" value={result.totalUsageLogs ?? 0} />
+            ) : result.mode === "per-task" ? (
+              <StatCard label="Matched Jobs" value={result.matchedJobs} sub={`${result.unmatched} unmatched`} />
+            ) : (
+              <StatCard label="Models" value={result.uniqueModels} />
+            )}
             <StatCard
               label="Mismatches"
-              value={result.mismatches}
-              highlight={result.mismatches > 0}
+              value={result.mode === "per-task" ? result.undercharged + result.overcharged : result.mismatches}
+              highlight={result.mode === "per-task" ? (result.undercharged + result.overcharged) > 0 : result.mismatches > 0}
             />
             <StatCard label="Period" value={formatPeriod(result.lookbackMinutes)} />
           </div>
 
           {/* Filter tabs */}
           <div className="flex gap-2 mb-4">
-            {(["all", "mismatches", "variable"] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  filter === f
-                    ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
-                    : "text-muted-foreground hover:text-foreground border border-transparent"
-                }`}
-              >
-                {f === "all" ? `All (${result.models.length})` :
-                 f === "mismatches" ? `Mismatches (${result.mismatches})` :
-                 `Variable (${result.models.filter(m => m.variable).length})`}
-              </button>
-            ))}
+            {result.mode === "per-task" ? (
+              (["all", "mismatches"] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    filter === f
+                      ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
+                      : "text-muted-foreground hover:text-foreground border border-transparent"
+                  }`}
+                >
+                  {f === "all" ? `All (${result.tasks.length})` : `Mismatches (${result.undercharged + result.overcharged + result.unmatched})`}
+                </button>
+              ))
+            ) : (
+              (["all", "mismatches", "variable"] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    filter === f
+                      ? "bg-[#ff0073]/10 text-[#ff0073] border border-[#ff0073]/20"
+                      : "text-muted-foreground hover:text-foreground border border-transparent"
+                  }`}
+                >
+                  {f === "all" ? `All (${result.models.length})` :
+                   f === "mismatches" ? `Mismatches (${result.mismatches})` :
+                   `Variable (${result.models.filter(m => m.variable).length})`}
+                </button>
+              ))
+            )}
           </div>
 
           {/* Results table */}
@@ -301,6 +363,8 @@ export default function AdminCreditAudit() {
             <div className="overflow-x-auto">
               {result.mode === "actual" ? (
                 <ActualTable models={filteredModels as ActualAuditModel[]} />
+              ) : result.mode === "per-task" ? (
+                <PerTaskTable tasks={filteredTasks} />
               ) : (
                 <TheoreticalTable models={filteredModels as AuditModel[]} />
               )}
@@ -471,6 +535,69 @@ function ActualTable({ models }: { models: ActualAuditModel[] }) {
             </td>
           </tr>
         )}
+      </tbody>
+    </table>
+  )
+}
+
+function PerTaskTable({ tasks }: { tasks: PerTaskDiff[] }) {
+  if (tasks.length === 0) {
+    return (
+      <div className="p-8 text-center text-sm text-muted-foreground">
+        No tasks in this view.
+      </div>
+    )
+  }
+  return (
+    <table className="w-full text-sm">
+      <thead className="bg-muted/50 border-b border-border">
+        <tr>
+          <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">KIE Task</th>
+          <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Model</th>
+          <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Our Job</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground" title="Raw KIE credits ([ratio wording removed])">KIE cr</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Expected</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Actual</th>
+          <th className="text-right px-4 py-2.5 font-medium text-xs text-muted-foreground">Diff</th>
+          <th className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {tasks.map(t => {
+          const cfg = STATUS_CONFIG[t.status]
+          const Icon = cfg.icon
+          return (
+            <tr key={t.kieTaskId} className="border-t border-border hover:bg-muted/30">
+              <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground" title={t.kieTaskId}>
+                {t.kieTaskId.slice(0, 12)}
+              </td>
+              <td className="px-4 py-2.5 text-xs">{t.kieModel}</td>
+              <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
+                {t.ourJobId ? (
+                  <span title={t.ourJobId}>{t.ourJobId.slice(0, 8)}</span>
+                ) : (
+                  <span className="text-orange-400">—</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5 text-right text-xs tabular-nums">{t.kieCredits}</td>
+              <td className="px-4 py-2.5 text-right text-xs tabular-nums">{t.expectedCredits}</td>
+              <td className="px-4 py-2.5 text-right text-xs tabular-nums">
+                {t.ourCredits != null ? t.ourCredits : <span className="text-muted-foreground">—</span>}
+              </td>
+              <td className={`px-4 py-2.5 text-right text-xs tabular-nums ${
+                t.diff == null ? "" : t.diff > 0 ? "text-yellow-400" : t.diff < 0 ? "text-red-400" : "text-muted-foreground"
+              }`}>
+                {t.diff != null ? (t.diff > 0 ? `+${t.diff}` : t.diff) : "—"}
+              </td>
+              <td className="px-4 py-2.5">
+                <Badge className={`text-[10px] font-normal ${cfg.color}`} variant="outline">
+                  <Icon className="h-2.5 w-2.5 mr-1" />
+                  {cfg.label}
+                </Badge>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
