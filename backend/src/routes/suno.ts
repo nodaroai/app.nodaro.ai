@@ -16,6 +16,7 @@ import {
   sunoVoiceRecordInfo,
 } from "../providers/kie/suno-client.js"
 import { CreditsService } from "../ee/billing/credits.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
@@ -1114,8 +1115,9 @@ export async function sunoRoutes(app: FastifyInstance) {
       })
     }
     // Record ownership AFTER KIE succeeds. If the insert fails the user can
-    // still retry validate; nothing has been charged. The cleanup-cron sweeps
-    // stale `suno-voice-validate` rows older than 24h.
+    // still retry validate; nothing has been charged. The reconcile cron's
+    // sync-sweep handles abandoned `kie-suno-voice-validate` rows past 24h.
+    const nowIso = new Date().toISOString()
     await supabase
       .from("jobs")
       .insert({
@@ -1123,7 +1125,9 @@ export async function sunoRoutes(app: FastifyInstance) {
         status: "processing",
         provider: "kie",
         model_identifier: SUNO_VOICE_VALIDATE_TAG,
-        started_at: new Date().toISOString(),
+        started_at: nowIso,
+        provider_kind: "kie-suno-voice-validate",
+        provider_call_started_at: nowIso,
         input_data: buildJobInputData(parsed.data, SUNO_VOICE_VALIDATE_TAG),
         metadata: { kie_task_id: result.taskId },
       })
@@ -1275,6 +1279,10 @@ export async function sunoRoutes(app: FastifyInstance) {
       }
 
       // Step 3 — call KIE generate synchronously; on failure refund + mark failed.
+      // markProviderCallStart sets `provider_kind` + `provider_call_started_at`
+      // so reconcile's sync-sweep can refund the 20cr reservation if the user
+      // abandons the modal (past 2h). Migrated from `sweepStaleVoiceJobs`.
+      await markProviderCallStart(job.id, "kie-suno-voice-create")
       try {
         const { taskId: kieTaskId } = await sunoVoiceGenerate({
           taskId: parsed.data.taskId,

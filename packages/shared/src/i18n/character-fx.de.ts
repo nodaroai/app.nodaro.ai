@@ -18,7 +18,7 @@ const map: LocaleCatalogMap = {
   "agent-reveal":      { label: "Agenten-Enthüllung",      description: "Anzug und Sonnenbrille materialisieren sich auf dem Sujet" },
 
   // ── Power ──
-  "fire-breathe":      { label: "Feuer Speien",            description: "Atmet einen anhaltenden Feuerstrahl aus" },
+  "fire-breathe":      { label: "Feuerspeien",             description: "Atmet einen anhaltenden Feuerstrahl aus" },
   "ice-breathe":       { label: "Eisatem",                 description: "Atmet einen Strahl eiskalter Luft aus" },
   "air-bending":       { label: "Luftkontrolle",           description: "Manipuliert einen wirbelnden Luftvortex" },
   "water-bending":     { label: "Wasserkontrolle",         description: "Manipuliert fließendes Wasser mit Gesten" },
