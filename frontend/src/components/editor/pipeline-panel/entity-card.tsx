@@ -1,4 +1,4 @@
-import type { EntityStatus } from "@nodaro/shared"
+import type { EntityStatus, PipelineMode } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -8,6 +8,13 @@ interface Props {
   onApprove: () => void
   onReject: () => void
   disabled?: boolean
+  /**
+   * Phase 1D.2a §4.5 — in auto mode the orchestrator bulk-approves entities
+   * once the per-stage critic chain accepts the batch, so the per-card
+   * Approve/Reject controls are hidden. Optional; undefined keeps the
+   * existing manual behavior.
+   */
+  mode?: PipelineMode | null
 }
 
 // Same status-pill table as scene-card.tsx — kept in lock-step.
@@ -20,7 +27,7 @@ const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
   failed: "bg-red-100 text-red-800",
 }
 
-export function EntityCard({ entity, onApprove, onReject, disabled }: Props) {
+export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Props) {
   const status = entity.status
   const name = String(
     (entity.metadata as Record<string, unknown> | null)?.name ?? entity.entity_key,
@@ -69,7 +76,7 @@ export function EntityCard({ entity, onApprove, onReject, disabled }: Props) {
           ))}
         </div>
       )}
-      {status === "awaiting_approval" && (
+      {status === "awaiting_approval" && mode !== "auto" && (
         <div className="flex gap-1">
           <Button size="sm" onClick={onApprove} disabled={disabled} className="flex-1">
             Approve

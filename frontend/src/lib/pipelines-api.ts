@@ -1,6 +1,7 @@
 import type {
   PipelineInput,
   PipelineEvent,
+  PipelineMode,
   PipelineStatus,
   PipelineStageName,
   SubGateName,
@@ -47,6 +48,19 @@ async function postJson<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await getAuthHeaders()),
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`)
+  return res.json() as Promise<T>
+}
+
 export interface PipelineRecord {
   id: string
   status: PipelineStatus
@@ -58,6 +72,19 @@ export interface PipelineRecord {
   branched_from_pipeline_id: string | null
   /** Phase 1D.3 — the stage from which this pipeline was branched */
   branched_from_stage: string | null
+  /**
+   * Phase 1D.2a §4.5 — execution mode (`manual` | `guided` | `auto`). Drives
+   * the Auto/Guided badge in the panel header AND the visibility of the
+   * Switch-to-Manual button. May be `null` for pre-Phase-1D.2a rows.
+   */
+  mode?: PipelineMode | null
+  /**
+   * Phase 1D.2a §4.5 — terminal failure reason set when `status === 'failed'`.
+   * Values ending in `_unresolvable` (e.g. `script_critic_unresolvable`) come
+   * from the auto-mode critic chain and trigger the panel's critic-failure
+   * surface.
+   */
+  failure_reason?: string | null
 }
 
 /**
@@ -211,6 +238,19 @@ export const pipelinesApi = {
       shotId,
     })
   },
+
+  /**
+   * Phase 1D.2a §4.5 — Flip a pipeline running in `auto` or `guided` mode to
+   * `manual`. Allowed only while `status ∈ {running, awaiting_approval}`. The
+   * backend enforces the same gate; failed runs use the Branch path instead.
+   * The current target is intentionally restricted to `manual` — auto↔guided
+   * switching is not part of this phase.
+   */
+  patchMode: (
+    pipelineId: string,
+    mode: "manual",
+  ): Promise<{ ok: true; mode: "manual" }> =>
+    patchJson(`/v1/pipelines/${pipelineId}`, { mode }),
 }
 
 export type { PipelineEvent }

@@ -3,16 +3,20 @@ import type {
   ShowrunnerPlan,
   ScriptCriticVerdict,
   CastCoverageCriticVerdict,
+  LocationsCoverageCriticVerdict,
+  ObjectsValidationResult,
   PipelineMode,
   PipelineActivationMode,
   PipelineFormat,
   PipelineOutputResolution,
   StyleDirectives,
 } from "@nodaro/shared"
+import { validateObjects } from "@nodaro/shared"
 import { runDetection } from "../llms/detection.js"
 import { runShowrunner } from "../llms/showrunner.js"
 import { runScriptCritic } from "../llms/script-critic.js"
 import { runCastCoverageCritic } from "../llms/cast-coverage-critic.js"
+import { runLocationsCoverageCritic } from "../llms/locations-coverage-critic.js"
 import { pipelineEvents } from "../events.js"
 import { ensureStageRow, incrementCriticRetry } from "../stage-utils.js"
 
@@ -33,14 +37,17 @@ export interface RunScriptStageArgs {
 
 export type ScriptStageOutcome =
   | {
-      status: "awaiting_approval"
+      status: "approved" | "awaiting_approval"
       plan: ShowrunnerPlan
       scriptCritic: ScriptCriticVerdict
       castCoverageCritic: CastCoverageCriticVerdict
+      locationsCoverageCritic: LocationsCoverageCriticVerdict
+      objectsValidation: ObjectsValidationResult
     }
   | {
       status: "failed"
       reason: string
+      failure_detail?: string
     }
 
 /**
@@ -96,20 +103,23 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       styleDirectives: args.styleDirectives,
     })
 
-    let [scriptVerdict, castVerdict] = await Promise.all([
+    let [scriptVerdict, castVerdict, locationsVerdict] = await Promise.all([
       runScriptCritic({
         supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
       }),
       runCastCoverageCritic({
         supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
       }),
+      runLocationsCoverageCritic({
+        supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
+      }),
     ])
+    let objectsVerdict = validateObjects(plan.objects, plan)
 
     let criticRetryCount = 0
     while (
-      (scriptVerdict.verdict === "fail" || castVerdict.verdict === "fail") &&
-      criticRetryCount < 2 &&
-      hasBlockingIssue(scriptVerdict, castVerdict)
+      hasBlockingIssue(scriptVerdict, castVerdict, locationsVerdict, objectsVerdict) &&
+      criticRetryCount < 2
     ) {
       criticRetryCount++
       await incrementCriticRetry(args.supabase, stageId)
@@ -129,27 +139,41 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
         activationMode: args.activationMode,
         mode: args.mode,
         styleDirectives: args.styleDirectives,
-        criticFeedback: { scriptVerdict, castVerdict },
+        criticFeedback: { scriptVerdict, castVerdict, locationsVerdict, objectsVerdict },
       })
-      ;[scriptVerdict, castVerdict] = await Promise.all([
+      ;[scriptVerdict, castVerdict, locationsVerdict] = await Promise.all([
         runScriptCritic({
           supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
         }),
         runCastCoverageCritic({
           supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
         }),
+        runLocationsCoverageCritic({
+          supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
+        }),
       ])
+      objectsVerdict = validateObjects(plan.objects, plan)
     }
 
-    if (scriptVerdict.verdict === "fail" && hasBlockingIssue(scriptVerdict, castVerdict)) {
-      return { status: "failed", reason: "script_critic_unresolvable" }
+    // Cap-reached failure guard. Note: previously this branch was prefixed with
+    // `scriptVerdict.verdict === "fail" &&`, which silently let a blocking-only
+    // CAST/locations/objects failure slip through to `awaiting_approval`. The
+    // new guard fires on any blocking critic regardless of script verdict.
+    if (hasBlockingIssue(scriptVerdict, castVerdict, locationsVerdict, objectsVerdict)) {
+      return {
+        status: "failed",
+        reason: "script_critic_unresolvable",
+        failure_detail: pickBlockingDetail(scriptVerdict, castVerdict, locationsVerdict, objectsVerdict),
+      }
     }
 
     return {
-      status: "awaiting_approval",
+      status: args.mode === "auto" ? "approved" : "awaiting_approval",
       plan,
       scriptCritic: scriptVerdict,
       castCoverageCritic: castVerdict,
+      locationsCoverageCritic: locationsVerdict,
+      objectsValidation: objectsVerdict,
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
@@ -157,10 +181,30 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
   }
 }
 
-function hasBlockingIssue(s: ScriptCriticVerdict, c: CastCoverageCriticVerdict): boolean {
+function hasBlockingIssue(
+  s: ScriptCriticVerdict,
+  c: CastCoverageCriticVerdict,
+  l: LocationsCoverageCriticVerdict,
+  o: ObjectsValidationResult,
+): boolean {
   return (
     s.issues.some((i) => i.severity === "blocking") ||
-    c.issues.some((i) => i.severity === "blocking")
+    c.issues.some((i) => i.severity === "blocking") ||
+    l.issues.some((i) => i.severity === "blocking") ||
+    o.issues.some((i) => i.severity === "blocking")
   )
+}
+
+function pickBlockingDetail(
+  s: ScriptCriticVerdict,
+  c: CastCoverageCriticVerdict,
+  l: LocationsCoverageCriticVerdict,
+  o: ObjectsValidationResult,
+): string {
+  if (s.issues.some((i) => i.severity === "blocking")) return "script"
+  if (c.issues.some((i) => i.severity === "blocking")) return "cast_coverage"
+  if (l.issues.some((i) => i.severity === "blocking")) return "locations_coverage"
+  if (o.issues.some((i) => i.severity === "blocking")) return "objects_validation"
+  return "unknown"
 }
 

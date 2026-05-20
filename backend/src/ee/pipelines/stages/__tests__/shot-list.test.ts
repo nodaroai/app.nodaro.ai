@@ -2,13 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 vi.mock("../../llms/scene-director.js", () => ({ runSceneDirector: vi.fn() }))
 vi.mock("../../llms/shot-list-critic.js", () => ({ runShotListCritic: vi.fn() }))
-vi.mock("../../stage-utils.js", () => ({
-  ensureStageRow: vi.fn().mockResolvedValue("stage-5"),
-  failStage: vi.fn(),
+vi.mock("../../stage-utils.js", async () => {
+  const actual = await vi.importActual<typeof import("../../stage-utils.js")>(
+    "../../stage-utils.js",
+  )
+  return {
+    ...actual,
+    ensureStageRow: vi.fn().mockResolvedValue("stage-5"),
+    failStage: vi.fn(),
+  }
+})
+vi.mock("../../queue.js", () => ({
+  enqueuePipelineRun: vi.fn(async () => undefined),
 }))
 
 import { runSceneDirector } from "../../llms/scene-director.js"
 import { runShotListCritic } from "../../llms/shot-list-critic.js"
+import { enqueuePipelineRun } from "../../queue.js"
+import { pipelineEvents } from "../../events.js"
 import { runShotListStage } from "../shot-list.js"
 
 beforeEach(() => vi.clearAllMocks())
@@ -180,6 +191,41 @@ function makeSupabase(
         }
       }
       if (table === "pipeline_entities") {
+        // Auto-mode bulk-update path uses a chained .eq().eq().eq() pattern
+        // (pipeline_id + entity_type + status filters) that resolves the
+        // PostgREST builder without a terminator. Build a chain that tracks
+        // every .eq() filter and applies the patch to matching rows on
+        // resolution. Mirrors the characters.test.ts helper.
+        const makeUpdateChain = (
+          patch: Record<string, unknown>,
+        ): {
+          eq: (col: string, val: unknown) => unknown
+        } => {
+          const filters: Record<string, unknown> = {}
+          const applyPatchAndResolve = () => {
+            const matches = Array.from(entities.values()).filter((row) =>
+              Object.entries(filters).every(([k, v]) => {
+                if (k === "id") return row.id === v
+                return row[k] === v
+              }),
+            )
+            for (const row of matches) {
+              entities.set(row.id as string, { ...row, ...patch })
+            }
+            return { data: null, error: null }
+          }
+          const node: {
+            eq: (col: string, val: unknown) => unknown
+            then: (resolve: (v: unknown) => unknown) => unknown
+          } = {
+            eq: (col: string, val: unknown) => {
+              filters[col] = val
+              return node
+            },
+            then: (resolve) => resolve(applyPatchAndResolve()),
+          }
+          return node
+        }
         return {
           // shot-list.ts batches scene upserts into a single call with an array;
           // accept either shape so existing per-row callers keep working.
@@ -210,13 +256,7 @@ function makeSupabase(
               contains: async () => ({ data: [], error: null }),
             }),
           }),
-          update: (patch: Record<string, unknown>) => ({
-            eq: async (_col: string, val: string) => {
-              const row = entities.get(val)
-              if (row) entities.set(val, { ...row, ...patch })
-              return { data: null, error: null }
-            },
-          }),
+          update: (patch: Record<string, unknown>) => makeUpdateChain(patch),
         }
       }
       // pipeline_entity_nodes — markEntityNodeState target. No rows exist in
@@ -502,5 +542,147 @@ describe("runShotListStage", () => {
       expect(e.status).toBe("failed")
     }
     expect(runShotListCritic).not.toHaveBeenCalled()
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 1D.2a §4.1 (H1): auto-mode bulk-approve at the per-scene gate
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("auto-mode (H1)", () => {
+    const passVerdict = {
+      verdict: "pass" as const,
+      issues: [],
+      duration_analysis: {
+        target_seconds: 20,
+        actual_sum_seconds: 20,
+        deviation_percent: 0,
+        within_tolerance: true,
+      },
+    }
+
+    it("auto-mode: bulk-approves every scene + stage row, emits stage:status approved, re-enqueues orchestrator", async () => {
+      ;(runSceneDirector as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(fakeSceneNodeData(1))
+        .mockResolvedValueOnce(fakeSceneNodeData(2))
+        .mockResolvedValueOnce(fakeSceneNodeData(3))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+      const supabase = makeSupabase()
+      const sseEvents: Array<Record<string, unknown>> = []
+      const unsub = pipelineEvents.subscribe("p1-auto", (e) =>
+        sseEvents.push(e as unknown as Record<string, unknown>),
+      )
+
+      try {
+        await runShotListStage({
+          supabase,
+          pipelineId: "p1-auto",
+          userId: "u1",
+          userTier: "pro",
+          mode: "auto",
+        })
+      } finally {
+        unsub()
+      }
+
+      // Every scene entity flipped to `approved` (auto-mode bulk-flip ran
+      // AFTER the per-scene loop transitioned each to `awaiting_approval`).
+      const entities = (
+        supabase as never as { _entities: Map<string, Record<string, unknown>> }
+      )._entities
+      expect(entities.size).toBe(3)
+      for (const e of entities.values()) {
+        expect(e.status).toBe("approved")
+      }
+
+      // Stage row got marked approved with a completed_at timestamp.
+      const stageUpdates = (
+        supabase as never as { _stageUpdates: Array<Record<string, unknown>> }
+      )._stageUpdates
+      const approvedUpdate = stageUpdates.find((u) => u.status === "approved")
+      expect(approvedUpdate).toBeDefined()
+      expect(approvedUpdate?.completed_at).toBeDefined()
+      // And NOT awaiting_approval.
+      expect(stageUpdates.find((u) => u.status === "awaiting_approval")).toBeUndefined()
+
+      // SSE `stage:status approved` was emitted.
+      const approvedEvent = sseEvents.find(
+        (e) => e.type === "stage:status" && e.status === "approved",
+      )
+      expect(approvedEvent).toBeDefined()
+
+      // Orchestrator re-enqueued with stage_advance.
+      expect(enqueuePipelineRun).toHaveBeenCalledTimes(1)
+      expect(enqueuePipelineRun).toHaveBeenCalledWith({
+        pipelineId: "p1-auto",
+        userId: "u1",
+        reason: "stage_advance",
+      })
+    })
+
+    it("auto-mode: does NOT advance when any scene failed (stage stays running for user retry)", async () => {
+      // Mix one success + two failures. The "anyFailed" guard at top of the
+      // stage handler must short-circuit BEFORE the auto-mode bulk-approve
+      // would otherwise run.
+      ;(runSceneDirector as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(fakeSceneNodeData(1))
+        .mockRejectedValue(new Error("api down"))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+      const supabase = makeSupabase()
+      await runShotListStage({
+        supabase,
+        pipelineId: "p1-auto-fail",
+        userId: "u1",
+        userTier: "pro",
+        mode: "auto",
+      })
+
+      // Stage row was NOT flipped to approved — failed scenes block advance.
+      const stageUpdates = (
+        supabase as never as { _stageUpdates: Array<Record<string, unknown>> }
+      )._stageUpdates
+      expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined()
+      // Orchestrator was NOT re-enqueued.
+      expect(enqueuePipelineRun).not.toHaveBeenCalled()
+    })
+
+    it("manual-mode: existing behavior unchanged — does NOT bulk-approve, does NOT re-enqueue", async () => {
+      // Regression net: same happy-path inputs but `mode: "manual"`. Scenes
+      // sit at `awaiting_approval`; stage row stays `running`; orchestrator is
+      // not re-enqueued. The per-scene awaiting_approval gates surface in the
+      // panel and the user drives each one individually.
+      ;(runSceneDirector as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(fakeSceneNodeData(1))
+        .mockResolvedValueOnce(fakeSceneNodeData(2))
+        .mockResolvedValueOnce(fakeSceneNodeData(3))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+      const supabase = makeSupabase()
+      await runShotListStage({
+        supabase,
+        pipelineId: "p1-manual",
+        userId: "u1",
+        userTier: "pro",
+        mode: "manual",
+      })
+
+      // Scenes stayed at awaiting_approval (per-scene gate).
+      const entities = (
+        supabase as never as { _entities: Map<string, Record<string, unknown>> }
+      )._entities
+      for (const e of entities.values()) {
+        expect(e.status).toBe("awaiting_approval")
+      }
+
+      // No stage-level approved update fired.
+      const stageUpdates = (
+        supabase as never as { _stageUpdates: Array<Record<string, unknown>> }
+      )._stageUpdates
+      expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined()
+
+      // Orchestrator was NOT re-enqueued.
+      expect(enqueuePipelineRun).not.toHaveBeenCalled()
+    })
   })
 })

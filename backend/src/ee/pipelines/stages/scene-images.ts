@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { MatchCutVerdict, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { allocateReferenceSlots } from "../continuity.js"
@@ -13,6 +13,26 @@ export interface RunSceneImagesStageArgs {
   pipelineId: string
   userId: string
   userTier: string
+  /**
+   * Phase 1D.2a §4.1 (H2): when `"auto"`, the stage skips the keyframe-review
+   * `awaiting_approval` pause AFTER the Phase 1D.1 match-cut critic clears
+   * (no pending breaks). On a clean critic pass, the stage bulk-flips every
+   * scene entity from `awaiting_approval` → `approved`, batch-flips the
+   * matching canvas nodes from `pipeline_owned_awaiting_approval` →
+   * `pipeline_owned_approved`, marks the stage row `approved`, emits the
+   * `stage:status approved` SSE, and re-enqueues the orchestrator with
+   * `reason: "stage_advance"` so Stage 7 (animate_audio_edit) picks up.
+   *
+   * **Match-cut sub-gate is preserved unconditionally** — when the critic
+   * reports any pending break, the stage still pauses at sub-gate
+   * `match_cut_break_pending` regardless of mode. Auto-advance only happens
+   * on the no-break path; the user must explicitly accept every break via
+   * `acceptMatchCutBreak`, which re-enqueues the stage and the next pass
+   * runs through `resumingFromMatchCutGate` (also gated on mode here).
+   *
+   * Defaults to `"manual"`, preserving the prior pause-for-user behavior.
+   */
+  mode?: "manual" | "auto" | "guided"
 }
 
 /**
@@ -49,7 +69,7 @@ const CROSS_SCENE_CONCURRENCY = 5
  * re-enters once the user approves the keyframe batch.
  */
 export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promise<void> {
-  const { supabase, pipelineId, userId } = args
+  const { supabase, pipelineId, userId, mode } = args
 
   const stageId = await ensureStageRow(supabase, pipelineId, "scene_images", 6)
 
@@ -113,10 +133,20 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   }
 
   // Phase 1D.1: When resuming after the match_cut_break_pending sub-gate was
-  // cleared (all breaks accepted), skip straight to the final awaiting_approval
-  // transition — keyframes are already persisted from the first pass.
+  // cleared (all breaks accepted), skip straight to the final transition —
+  // keyframes are already persisted from the first pass.
+  //
+  // Phase 1D.2a §4.1 (H2): in auto-mode, advance straight to `approved` and
+  // re-enqueue the orchestrator. Manual/guided keep the prior pause for the
+  // keyframe-review user gate. The match-cut sub-gate above already ran in
+  // the prior pass and was cleared by `acceptMatchCutBreak` — auto-mode never
+  // bypasses the critic, only the human-only keyframe-review pause.
   if (resumingFromMatchCutGate) {
-    await advanceToAwaitingApproval(supabase, pipelineId, stageId, existingOutput)
+    if (mode === "auto") {
+      await advanceToApproved(supabase, pipelineId, stageId, userId, existingOutput)
+    } else {
+      await advanceToAwaitingApproval(supabase, pipelineId, stageId, existingOutput)
+    }
     return
   }
 
@@ -233,13 +263,23 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   }
 
   // 6. No pending match-cut breaks (or no match-cut shots at all). Persist
-  //    verdicts for audit and advance to the standard awaiting_approval.
-  await advanceToAwaitingApproval(supabase, pipelineId, stageId, {
+  //    verdicts for audit and advance.
+  //
+  //    Phase 1D.2a §4.1 (H2): auto-mode advances straight to `approved` here
+  //    (no user pause for keyframe review). The critic already ran and
+  //    cleared with zero breaks — auto-advance only kicks in on the clean
+  //    path. Manual/guided keep the existing `awaiting_approval` pause.
+  const sharedOutput = {
     ...existingOutput,
     keyframes_generated: true,
     match_cut_verdicts: allMatchCutVerdicts,
     match_cut_break_pending: [],
-  })
+  }
+  if (mode === "auto") {
+    await advanceToApproved(supabase, pipelineId, stageId, userId, sharedOutput)
+  } else {
+    await advanceToAwaitingApproval(supabase, pipelineId, stageId, sharedOutput)
+  }
 }
 
 /**
@@ -274,6 +314,61 @@ async function advanceToAwaitingApproval(
     stageName: "scene_images",
     status: "awaiting_approval",
   })
+}
+
+/**
+ * Phase 1D.2a §4.1 (H2): auto-mode counterpart to `advanceToAwaitingApproval`.
+ * Bulk-flips every scene entity from `awaiting_approval` → `approved` (idempotent
+ * — only touches awaiting_approval rows so previously-approved scenes from a
+ * resumed run aren't bumped), batch-flips canvas nodes to
+ * `pipeline_owned_approved`, marks the stage row `approved`, emits the
+ * `stage:status approved` SSE, and re-enqueues the orchestrator with
+ * `reason: "stage_advance"` so Stage 7 picks up.
+ *
+ * Called ONLY when the match-cut critic cleared with zero pending breaks —
+ * auto-mode never bypasses the critic, only the human-only keyframe-review
+ * pause that comes after a clean critic pass.
+ */
+async function advanceToApproved(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  stageId: string,
+  userId: string,
+  outputPatch: Record<string, unknown>,
+): Promise<void> {
+  // Bulk-flip awaiting_approval scene entities → approved. This UPDATE is a
+  // no-op when scenes are already `pending`/`generating` (the post-keyframe
+  // loop above hasn't paused at awaiting_approval for them yet) — the
+  // status='awaiting_approval' filter scopes the write.
+  //
+  // In practice every scene reaches `awaiting_approval` via the
+  // transitionStageEntityNodesAndEmit call below in the manual path, but
+  // scene entities themselves are not flipped to awaiting_approval by Stage 6
+  // — only the canvas nodes are. Scene entity statuses are managed by Stage
+  // 5 (shot-list). We mirror G1/G2/G3 here as a defensive idempotency net
+  // for the case where a future change re-introduces a per-scene entity
+  // awaiting_approval inside Stage 6.
+  await bulkApproveStageEntities(supabase, pipelineId, "scene", "scene-images")
+  // Strip current_sub_gate when advancing from a sub-gated state.
+  const nextOutput = { ...outputPatch }
+  delete nextOutput.current_sub_gate
+
+  await supabase
+    .from("pipeline_stages")
+    .update({
+      status: "approved",
+      completed_at: new Date().toISOString(),
+      output: nextOutput,
+    })
+    .eq("id", stageId)
+  pipelineEvents.publish({
+    type: "stage:status",
+    pipelineId,
+    stageName: "scene_images",
+    status: "approved",
+  })
+  const { enqueuePipelineRun } = await import("../queue.js")
+  await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
 }
 
 interface GenerateKeyframesForSceneArgs {

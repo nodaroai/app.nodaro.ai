@@ -7,7 +7,7 @@ import {
 import { pipelineEvents } from "../events.js"
 import { runVoiceMatcher } from "../llms/voice-matcher.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
   transitionStageEntityNodesAndEmit,
@@ -19,6 +19,19 @@ export interface RunCharactersStageArgs {
   pipelineId: string
   userId: string
   userTier: string
+  /**
+   * Phase 1D.2a §4.1 (G1): when `"auto"`, the stage skips the
+   * batch-variant approval gate — it bulk-flips every character entity from
+   * `awaiting_approval` → `approved`, batches the matching
+   * `pipeline_entity_nodes` rows from `pipeline_owned_awaiting_approval` →
+   * `pipeline_owned_approved`, marks the stage row `approved`, emits the
+   * `stage:status approved` SSE, and re-enqueues the orchestrator with
+   * `reason: "stage_advance"` so the next stage picks up.
+   *
+   * Defaults to `"manual"` so existing callers (and tests) keep the prior
+   * behavior: pause at `awaiting_approval` for user approval.
+   */
+  mode?: "manual" | "auto" | "guided"
 }
 
 /**
@@ -90,6 +103,18 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
   }
 
   if (anyAwaiting) {
+    // Phase 1D.2a §4.1 (G1): auto-mode short-circuits the FIRST per-entity
+    // approval gate — bulk-flip every character entity from
+    // `awaiting_approval` → `approved` (plus their canvas nodes) and
+    // re-enqueue the orchestrator so the next iteration runs
+    // `ensureCharacterVariants` against the approved entities. Manual/guided
+    // modes fall through to the existing pause.
+    if (args.mode === "auto") {
+      await bulkApproveStageEntities(supabase, pipelineId, "character", "characters")
+      const { enqueuePipelineRun } = await import("../queue.js")
+      await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
+      return
+    }
     // Pause for user — stage stays 'running'; per-entity awaiting_approval gates surface in panel.
     return
   }
@@ -111,7 +136,30 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
         (e.metadata as Record<string, unknown> | null)?.variants_awaiting_approval === true,
     )
   if (allVariantsAwaiting) {
-    // Transition stage to 'awaiting_approval' for the batch variant gate.
+    // Phase 1D.2a §4.1 (G1): auto-mode short-circuits the batch-variant
+    // approval gate — bulk-flip every entity + canvas node to `approved`,
+    // mark the stage row `approved`, emit the matching SSE, and re-enqueue
+    // the orchestrator for the next stage. Manual/guided modes fall through
+    // to the existing `awaiting_approval` pause.
+    if (args.mode === "auto") {
+      await bulkApproveStageEntities(supabase, pipelineId, "character", "characters")
+      await supabase
+        .from("pipeline_stages")
+        .update({ status: "approved", completed_at: new Date().toISOString() })
+        .eq("id", stageId)
+      pipelineEvents.publish({
+        type: "stage:status",
+        pipelineId,
+        stageName: "characters",
+        status: "approved",
+      })
+      const { enqueuePipelineRun } = await import("../queue.js")
+      await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
+      return
+    }
+
+    // Manual / guided modes: transition stage to 'awaiting_approval' for the
+    // batch variant gate (existing behavior — unchanged).
     await supabase
       .from("pipeline_stages")
       .update({ status: "awaiting_approval", output: { phase: "variant_batch_approval" } })

@@ -219,6 +219,37 @@ describe("POST /v1/pipelines", () => {
   })
 })
 
+describe("GET /v1/pipelines/:id", () => {
+  it("returns mode + failure_reason on the response body", async () => {
+    const app = await makeApp()
+    // Seed a pipeline row via POST so the mock's in-memory store has it.
+    // The POST handler sets `mode` from `input.mode ?? (auto_mode ? 'auto' : 'manual')`
+    // — pass mode='auto' explicitly so we assert on a non-default value.
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "root_1",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+        mode: "auto",
+      },
+    })
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/pipelines/${PIPELINE_ID}`,
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body).toHaveProperty("mode", "auto")
+    // failure_reason isn't set on a freshly created pipeline — the SELECT
+    // returns whatever the DB has, which is null/undefined here.
+    expect(body.failure_reason ?? null).toBeNull()
+    await app.close()
+  })
+})
+
 describe("POST /v1/pipelines/:id/stages/:stage_name/approve", () => {
   it("rejects non-script stage with stage_not_implemented", async () => {
     const app = await makeApp()

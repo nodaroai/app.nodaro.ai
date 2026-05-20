@@ -13,6 +13,7 @@ vi.mock("@/lib/pipelines-api", () => ({
     cancel: vi.fn(),
     eventsUrl: vi.fn(() => "/events"),
     branch: vi.fn(),
+    patchMode: vi.fn(),
   },
 }))
 
@@ -226,6 +227,126 @@ describe("PipelinePanel", () => {
     await waitFor(() => expect(screen.getByText("original pipeline")).toBeInTheDocument())
     await userEvent.click(screen.getByText("original pipeline"))
     expect(onNavigate).toHaveBeenCalledWith("p0")
+  })
+
+  // ── Phase 1D.2a §4.5 K2: Auto/Guided badge + critic-failure surface ─────
+  it("renders the Auto Mode badge when pipeline.mode === 'auto'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script", mode: "auto",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.getByTestId("mode-badge-auto")).toBeInTheDocument())
+    expect(screen.queryByTestId("mode-badge-guided")).not.toBeInTheDocument()
+  })
+
+  it("renders the Guided badge when pipeline.mode === 'guided'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script", mode: "guided",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.getByTestId("mode-badge-guided")).toBeInTheDocument())
+    expect(screen.queryByTestId("mode-badge-auto")).not.toBeInTheDocument()
+  })
+
+  it("renders neither badge when pipeline.mode === 'manual'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script", mode: "manual",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(screen.queryByTestId("mode-badge-auto")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("mode-badge-guided")).not.toBeInTheDocument()
+  })
+
+  it("hides Approve/Reject on Stage 1 when pipeline.mode === 'auto'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "awaiting_approval", current_stage: "script", mode: "auto",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue(fakeAwaiting)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    // The plan still renders (so the user can see what the orchestrator is
+    // approving on their behalf) — but the explicit gate buttons don't.
+    await waitFor(() => expect(screen.getByText("Mock Title")).toBeInTheDocument())
+    expect(screen.queryByText("Approve")).not.toBeInTheDocument()
+    expect(screen.queryByText("Reject")).not.toBeInTheDocument()
+  })
+
+  it("mounts ModeSwitchButton when mode='auto' AND status='running'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script", mode: "auto",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.getByTestId("mode-switch-button")).toBeInTheDocument())
+  })
+
+  it("renders the critic-failure surface for failed + _unresolvable failure reason", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "failed", current_stage: "script", mode: "auto",
+      failure_reason: "script_critic_unresolvable",
+      spent_credits: 12, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "failed", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId("critic-failure-surface")).toBeInTheDocument(),
+    )
+    expect(
+      screen.getByText(/Auto Mode failed: script_critic_unresolvable/i),
+    ).toBeInTheDocument()
+  })
+
+  it("does NOT render the critic-failure surface when failure_reason is not _unresolvable", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "failed", current_stage: "script", mode: "manual",
+      failure_reason: "user_cancelled",
+      spent_credits: 12, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "failed", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("failed")).toBeInTheDocument())
+    expect(screen.queryByTestId("critic-failure-surface")).not.toBeInTheDocument()
   })
 
   it("renders SceneGrid when current_stage is shot_list", async () => {
