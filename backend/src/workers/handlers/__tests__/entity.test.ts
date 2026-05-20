@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
   const mockUploadVideoMaybeWatermark = vi.fn().mockResolvedValue("https://r2.example.com/videos/job-1.mp4")
   const mockAttach = vi.fn().mockResolvedValue(true)
   const mockSetPortrait = vi.fn().mockResolvedValue(true)
+  const mockAutoAttachObject = vi.fn().mockResolvedValue(undefined)
+  const mockSetObjectMainImage = vi.fn().mockResolvedValue(true)
   const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null })
 
   // Default chain for `.from("locations").select(...).eq(...).eq(...).is(...).single()`
@@ -44,6 +46,8 @@ const mocks = vi.hoisted(() => {
     mockUploadVideoMaybeWatermark,
     mockAttach,
     mockSetPortrait,
+    mockAutoAttachObject,
+    mockSetObjectMainImage,
     mockRpc,
     mockFrom,
     mockUpdate,
@@ -71,6 +75,10 @@ vi.mock("@/lib/character-auto-attach.js", () => ({
     const valid = new Set(["expressions", "poses", "lighting_variations", "angles", "motions"])
     return valid.has(normalized) ? normalized : null
   },
+}))
+vi.mock("@/lib/object-auto-attach.js", () => ({
+  autoAttachObjectAsset: mocks.mockAutoAttachObject,
+  setObjectMainImage: mocks.mockSetObjectMainImage,
 }))
 vi.mock("../../shared.js", () => ({
   commitJobCredits: mocks.mockCommitJobCredits,
@@ -115,6 +123,8 @@ beforeEach(() => {
   mocks.mockShouldSaveJobResult.mockResolvedValue(true)
   mocks.mockMarkJobCompleted.mockResolvedValue(true)
   mocks.mockRpc.mockResolvedValue({ data: null, error: null })
+  mocks.mockAutoAttachObject.mockResolvedValue(undefined)
+  mocks.mockSetObjectMainImage.mockResolvedValue(true)
   // Restore the active-location default for ownership re-queries.
   mocks.mockLocationSingle.mockResolvedValue({ data: { id: "loc-1" }, error: null })
 })
@@ -740,6 +750,268 @@ describe("generate-location-motion handler", () => {
 
     expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
     expect(mocks.mockRpc).not.toHaveBeenCalled()
+  })
+})
+
+describe("generate-object auto-attach branch (makeEntityImageHandler)", () => {
+  const handler = entityHandlers["generate-object"]
+  const TEST_OBJECT_ID = "00000000-0000-0000-0000-000000000ccc"
+
+  it("calls setObjectMainImage when logPrefix === 'generate-object' and attachToObjectId is set", async () => {
+    const job = makeJob("generate-object", {
+      prompt: "a treasure chest",
+      attachToObjectId: TEST_OBJECT_ID,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSetObjectMainImage).toHaveBeenCalledTimes(1)
+    expect(mocks.mockSetObjectMainImage).toHaveBeenCalledWith({
+      objectId: TEST_OBJECT_ID,
+      userId: "user-1",
+      url: "https://r2.example.com/images/job-1.png",
+    })
+    // Asset-variant helper must NOT fire on the main-image branch.
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
+  })
+
+  it("calls autoAttachObjectAsset on generate-object-asset branch (logPrefix differs)", async () => {
+    const assetHandler = entityHandlers["generate-object-asset"]
+    const job = makeJob("generate-object-asset", {
+      prompt: "front angle of a chest",
+      assetType: "angles",
+      attachToObjectId: TEST_OBJECT_ID,
+      attachToColumn: "angles",
+      attachName: "front",
+    })
+    await assetHandler(job as never, makeCtx())
+
+    expect(mocks.mockAutoAttachObject).toHaveBeenCalledTimes(1)
+    expect(mocks.mockAutoAttachObject).toHaveBeenCalledWith({
+      objectId: TEST_OBJECT_ID,
+      column: "angles",
+      name: "front",
+      userId: "user-1",
+      url: "https://r2.example.com/images/job-1.png",
+    })
+    // Main-image helper must NOT fire on the asset branch.
+    expect(mocks.mockSetObjectMainImage).not.toHaveBeenCalled()
+  })
+
+  it("calls neither helper when ctx.jobUserId is undefined (defensive guard)", async () => {
+    const job = makeJob("generate-object", {
+      prompt: "no user",
+      attachToObjectId: TEST_OBJECT_ID,
+    })
+    await handler(job as never, makeCtx({ jobUserId: undefined }))
+
+    expect(mocks.mockSetObjectMainImage).not.toHaveBeenCalled()
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
+  })
+
+  it("calls neither helper when attachToObjectId is undefined (backward compat)", async () => {
+    const job = makeJob("generate-object", {
+      prompt: "old payload — no attach fields",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockSetObjectMainImage).not.toHaveBeenCalled()
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
+    // But job completion + credit commit still happen.
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("calls neither helper when generate-object-asset has attachToObjectId but missing attachToColumn", async () => {
+    const assetHandler = entityHandlers["generate-object-asset"]
+    const job = makeJob("generate-object-asset", {
+      prompt: "missing column",
+      assetType: "angles",
+      attachToObjectId: TEST_OBJECT_ID,
+      // attachToColumn missing
+      attachName: "front",
+    })
+    await assetHandler(job as never, makeCtx())
+
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
+    expect(mocks.mockSetObjectMainImage).not.toHaveBeenCalled()
+  })
+})
+
+describe("generate-object-motion handler", () => {
+  const handler = entityHandlers["generate-object-motion"]
+  const TEST_OBJECT_ID = "00000000-0000-0000-0000-000000000ddd"
+
+  it("registers in entityHandlers map", () => {
+    expect(handler).toBeDefined()
+    expect(typeof handler).toBe("function")
+  })
+
+  it("calls imageToVideo with (sourceImageUrl, provider, prompt, undefined, undefined, options) and stores videoUrl", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Rotate the chest 360 degrees, smooth motion.",
+      sourceImageUrl: "https://x/obj.png",
+      provider: "kling-turbo",
+      aspectRatio: "1:1",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/obj.png",
+      "kling-turbo",
+      "Rotate the chest 360 degrees, smooth motion.",
+      undefined,
+      undefined,
+      { aspectRatio: "1:1" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false,
+    )
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { videoUrl: "https://r2.example.com/videos/job-1.mp4" },
+      provider: VIDEO_PROVIDER_RESULT.providerUsed,
+      provider_cost: VIDEO_PROVIDER_RESULT.cost,
+      display_cost: VIDEO_PROVIDER_RESULT.displayCost,
+    }))
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith(
+      "usage-1", "job-1", VIDEO_PROVIDER_RESULT.cost,
+    )
+  })
+
+  it("defaults provider to kling-turbo when omitted", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Hover the item",
+      sourceImageUrl: "https://x/obj2.png",
+    })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockImageToVideo).toHaveBeenCalledWith(
+      "https://x/obj2.png",
+      "kling-turbo",
+      "Hover the item",
+      undefined,
+      undefined,
+      undefined,
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+  })
+
+  it("routes to videoToVideo when refineFromVideoUrl is set", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Refine the rotation timing",
+      sourceImageUrl: "https://x/obj.png", // present but ignored on refine path
+      refineFromVideoUrl: "https://x/obj-rot.mp4",
+      provider: "kling-turbo",
+      aspectRatio: "1:1",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockVideoToVideo).toHaveBeenCalledWith(
+      "https://x/obj-rot.mp4",
+      "kling-turbo",
+      "Refine the rotation timing",
+      { aspectRatio: "1:1" },
+      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    )
+    // The image-to-video path must NOT fire on the refine route.
+    expect(mocks.mockImageToVideo).not.toHaveBeenCalled()
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", false,
+    )
+  })
+
+  it("auto-attaches to objects.motion_clips via autoAttachObjectAsset", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Rotate slowly",
+      sourceImageUrl: "https://x/obj3.png",
+      provider: "kling-turbo",
+      aspectRatio: "1:1",
+      attachToObjectId: TEST_OBJECT_ID,
+      attachToColumn: "motion_clips",
+      attachName: "rotate-360",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockAutoAttachObject).toHaveBeenCalledTimes(1)
+    expect(mocks.mockAutoAttachObject).toHaveBeenCalledWith({
+      objectId: TEST_OBJECT_ID,
+      column: "motion_clips",
+      name: "rotate-360",
+      userId: "user-1",
+      url: "https://r2.example.com/videos/job-1.mp4",
+    })
+  })
+
+  it("backward compat: old-shape jobs without attachToObjectId complete and skip attach", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Legacy payload",
+      sourceImageUrl: "https://x/obj4.png",
+      provider: "kling-turbo",
+    })
+    await expect(handler(job as never, makeCtx())).resolves.toBeUndefined()
+
+    // autoAttachObjectAsset is still called (helper no-ops when objectId
+    // undefined per Phase C1a) — verify it received undefined IDs.
+    expect(mocks.mockAutoAttachObject).toHaveBeenCalledWith({
+      objectId: undefined,
+      column: undefined,
+      name: undefined,
+      userId: "user-1",
+      url: "https://r2.example.com/videos/job-1.mp4",
+    })
+    // Video upload + completion + credit commit still happen.
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledTimes(1)
+    expect(mocks.mockMarkJobCompleted).toHaveBeenCalledTimes(1)
+    expect(mocks.mockCommitJobCredits).toHaveBeenCalledTimes(1)
+  })
+
+  it("passes watermark flag through to upload", async () => {
+    const job = makeJob("generate-object-motion", {
+      prompt: "Watermarked",
+      sourceImageUrl: "https://x/obj5.png",
+      provider: "kling-turbo",
+      aspectRatio: "1:1",
+    })
+    await handler(job as never, makeCtx({ shouldWatermark: true }))
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledWith(
+      VIDEO_PROVIDER_RESULT.url, "job-1", "user-1", true,
+    )
+  })
+
+  it("retry guard: shouldSaveJobResult=false short-circuits before markJobCompleted + attach", async () => {
+    mocks.mockShouldSaveJobResult.mockResolvedValueOnce(false)
+    const job = makeJob("generate-object-motion", {
+      prompt: "cancelled-mid-flight",
+      sourceImageUrl: "https://x/obj6.png",
+      provider: "kling-turbo",
+      attachToObjectId: TEST_OBJECT_ID,
+      attachToColumn: "motion_clips",
+      attachName: "mid",
+    })
+    await handler(job as never, makeCtx())
+
+    // Provider ran, upload ran — those are unavoidable side effects.
+    expect(mocks.mockImageToVideo).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUploadVideoMaybeWatermark).toHaveBeenCalledTimes(1)
+    // But job completion + credit commit + attach are all suppressed.
+    expect(mocks.mockMarkJobCompleted).not.toHaveBeenCalled()
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
+  })
+
+  it("retry guard: markJobCompleted=false also suppresses credit commit + attach (CAS contention)", async () => {
+    mocks.mockMarkJobCompleted.mockResolvedValueOnce(false)
+    const job = makeJob("generate-object-motion", {
+      prompt: "CAS contention",
+      sourceImageUrl: "https://x/obj7.png",
+      provider: "kling-turbo",
+      attachToObjectId: TEST_OBJECT_ID,
+      attachToColumn: "motion_clips",
+      attachName: "cas",
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCommitJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockAutoAttachObject).not.toHaveBeenCalled()
   })
 })
 

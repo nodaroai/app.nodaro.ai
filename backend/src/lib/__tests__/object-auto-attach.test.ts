@@ -13,6 +13,7 @@ import {
   attachAssetToObject,
   autoAttachObjectAsset,
   OBJECT_ATTACH_COLUMN_SET,
+  setObjectMainImage,
 } from "../object-auto-attach.js"
 
 const mockRpc = vi.mocked(supabase.rpc)
@@ -130,5 +131,86 @@ describe("autoAttachObjectAsset", () => {
       p_column: "angles",
       p_value: { name: "front", url: "https://r2/img.png" },
     })
+  })
+})
+
+describe("setObjectMainImage", () => {
+  beforeEach(() => {
+    mockFrom.mockReset()
+  })
+
+  const buildOkUpdate = () => ({
+    update: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockResolvedValue({ error: null } as never),
+  })
+
+  const buildErrUpdate = (message: string) => ({
+    update: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockResolvedValue({ error: { message } } as never),
+  })
+
+  it("UPDATEs source_image_url with ownership + soft-delete guard", async () => {
+    const chain = buildOkUpdate()
+    mockFrom.mockReturnValue(chain as never)
+    const ok = await setObjectMainImage({
+      objectId: "obj-1",
+      userId: "user-1",
+      url: "https://r2/img.png",
+    })
+    expect(ok).toBe(true)
+    expect(mockFrom).toHaveBeenCalledWith("objects")
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ source_image_url: "https://r2/img.png" }),
+    )
+    // Verify .eq("id", "obj-1") + .eq("user_id", "user-1") + .is("deleted_at", null) chain
+    expect(chain.eq).toHaveBeenCalledTimes(2)
+    expect(chain.eq).toHaveBeenNthCalledWith(1, "id", "obj-1")
+    expect(chain.eq).toHaveBeenNthCalledWith(2, "user_id", "user-1")
+    expect(chain.is).toHaveBeenCalledWith("deleted_at", null)
+  })
+
+  it("swallows + logs supabase errors and returns false", async () => {
+    mockFrom.mockReturnValue(buildErrUpdate("permission denied") as never)
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const ok = await setObjectMainImage({
+      objectId: "obj-1",
+      userId: "user-1",
+      url: "https://r2/img.png",
+    })
+    expect(ok).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("permission denied"))
+    warnSpy.mockRestore()
+  })
+
+  it("swallows + logs thrown errors and returns false", async () => {
+    const chain = {
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockRejectedValue(new Error("network failure")),
+    }
+    mockFrom.mockReturnValue(chain as never)
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const ok = await setObjectMainImage({
+      objectId: "obj-1",
+      userId: "user-1",
+      url: "https://r2/img.png",
+    })
+    expect(ok).toBe(false)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("network failure"))
+    warnSpy.mockRestore()
+  })
+
+  it("sets explicit updated_at (belt-and-braces alongside trigger)", async () => {
+    const chain = buildOkUpdate()
+    mockFrom.mockReturnValue(chain as never)
+    await setObjectMainImage({
+      objectId: "obj-1",
+      userId: "user-1",
+      url: "https://r2/img.png",
+    })
+    const updateArg = chain.update.mock.calls[0][0] as Record<string, unknown>
+    expect(updateArg.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T/) // ISO timestamp
   })
 })
