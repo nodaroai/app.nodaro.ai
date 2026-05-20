@@ -51,9 +51,9 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
 
   return (
     <div className="mb-4">
-      <div className="text-xs uppercase text-zinc-500 mb-2">{title}</div>
+      <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400 mb-2">{title}</div>
       {data.length === 0 ? (
-        <div className="text-sm text-zinc-500 italic">No entities yet</div>
+        <div className="text-sm text-zinc-500 dark:text-zinc-400 italic">No entities yet</div>
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {data.map((entity) => (
@@ -69,10 +69,10 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
         </div>
       )}
       {rejectingId && (
-        <div className="mt-3 p-3 rounded border border-zinc-200 bg-white">
+        <div className="mt-3 p-3 rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
           <div className="text-sm font-semibold mb-2">Reject with feedback</div>
           <textarea
-            className="w-full rounded border border-zinc-300 p-2 text-sm"
+            className="w-full rounded border border-zinc-300 dark:border-[#2D2D2D] bg-white dark:bg-[#121212] p-2 text-sm"
             rows={3}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}

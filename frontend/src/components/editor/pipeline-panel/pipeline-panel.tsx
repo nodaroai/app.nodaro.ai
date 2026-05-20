@@ -205,10 +205,10 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const effectiveStatus = activePipelineStatus ?? pipeline?.status ?? "queued"
 
   return (
-    <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 bg-zinc-50 p-4 overflow-y-auto z-40">
+    <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] p-4 overflow-y-auto z-40">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div className="min-w-0">
-          <div className="text-xs uppercase text-zinc-500">Pipeline</div>
+          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Pipeline</div>
           <div className="font-semibold truncate">{pipeline?.status ?? "loading..."}</div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -219,7 +219,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           {pipeline?.mode === "auto" && (
             <Badge
               variant="outline"
-              className="bg-amber-50 border-amber-300 text-amber-700"
+              className="bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-300"
               data-testid="mode-badge-auto"
             >
               Auto Mode
@@ -228,7 +228,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           {pipeline?.mode === "guided" && (
             <Badge
               variant="outline"
-              className="bg-pink-50 border-pink-300 text-[#ff0073]"
+              className="bg-pink-50 border-pink-300 text-[#ff0073] dark:bg-pink-950 dark:border-pink-700 dark:text-[#ff66ad]"
               data-testid="mode-badge-guided"
             >
               Guided
@@ -340,13 +340,13 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
         pipeline.failure_reason &&
         pipeline.failure_reason.endsWith("_unresolvable") && (
           <div
-            className="mt-3 p-3 bg-red-50 border border-red-200 rounded"
+            className="mt-3 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded"
             data-testid="critic-failure-surface"
           >
-            <div className="text-sm font-medium text-red-700">
+            <div className="text-sm font-medium text-red-700 dark:text-red-300">
               Auto Mode failed: {pipeline.failure_reason}
             </div>
-            <div className="text-xs text-red-600 mt-1">
+            <div className="text-xs text-red-600 dark:text-red-400 mt-1">
               See stage details for the specific blocking critic.
             </div>
           </div>
@@ -357,12 +357,12 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           any stage without having to re-input the original story prompt. */}
       {pipeline?.status === "completed" && (
         <div className="mt-4">
-          <div className="text-xs uppercase text-zinc-500 mb-2">Re-run from stage</div>
+          <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400 mb-2">Re-run from stage</div>
           <div className="space-y-1" data-testid="rerun-stages-list">
             {PIPELINE_STAGE_NAMES.map((stageName) => (
               <div
                 key={stageName}
-                className="flex items-center justify-between rounded border border-zinc-200 bg-white px-3 py-2"
+                className="flex items-center justify-between rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] px-3 py-2"
               >
                 <span className="text-sm">{STAGE_LABELS[stageName]}</span>
                 <Button
@@ -402,10 +402,10 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       )}
 
       {rejectMode && (
-        <div className="mt-4 p-3 rounded border border-zinc-200 bg-white">
+        <div className="mt-4 p-3 rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
           <div className="text-sm font-semibold mb-2">Reject with feedback</div>
           <textarea
-            className="w-full rounded border border-zinc-300 p-2 text-sm"
+            className="w-full rounded border border-zinc-300 dark:border-[#2D2D2D] bg-white dark:bg-[#121212] p-2 text-sm"
             rows={4}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
@@ -418,7 +418,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
         </div>
       )}
 
-      <div className="mt-6 text-xs text-zinc-500">
+      <div className="mt-6 text-xs text-zinc-500 dark:text-zinc-400">
         Estimated cost: {pipeline?.upfront_credit_estimate ?? "—"} credits ·
         Spent: {pipeline?.spent_credits ?? 0}
       </div>
