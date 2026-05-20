@@ -1058,9 +1058,69 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("returns 404 when execution not found", async () => {
+  it("returns 404 when neither execution nor job matches", async () => {
+    // The fallback chain has 3 .eq() / .is() calls before .single() (jobs path)
+    // vs 2 .eq() before .single() (workflow_executions path). Building separate
+    // mock chains: workflow_executions returns null+error, then jobs path is
+    // ALSO checked and ALSO null.
+    const nullMiss = {
+      data: null,
+      error: { code: "PGRST116", message: "not found" },
+    }
+    const wfChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue(nullMiss),
+          }),
+        }),
+      }),
+    }
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue(nullMiss),
+            }),
+          }),
+        }),
+      }),
+    }
     const mockFrom = vi.mocked(supabase.from)
-    mockFrom.mockReturnValue({
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "workflow_executions") return wfChain as never
+      if (table === "jobs") return jobsChain as never
+      return wfChain as never
+    })
+
+    const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}/stream`)
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("falls back to jobs when id is a standalone single-node job (no more SSE 404 spam)", async () => {
+    // Reconcile blind-spot regression: the executions-list endpoint merges
+    // jobs into the surface, so any job_id can land at /stream. The old
+    // SSE route only checked workflow_executions and 404'd standalone jobs,
+    // flooding the editor devtools on every reload.
+    //
+    // We spy on `createSSEStream` to assert the route got past the
+    // workflow_executions miss and into the SSE-creation branch. The mock
+    // returns a no-op SSE handle whose `close()` triggers reply.send() so
+    // app.inject() resolves instead of hanging on an open SSE stream.
+    const sendEventSpy = vi.fn()
+    const { createSSEStream } = await import("@/lib/sse.js")
+    const originalImpl = vi.mocked(createSSEStream).getMockImplementation()
+    vi.mocked(createSSEStream).mockImplementationOnce((_req, reply) => {
+      return {
+        sendEvent: sendEventSpy,
+        sendComment: vi.fn(),
+        close: () => { (reply as { send: () => void }).send() },
+        isClosed: false,
+      } as never
+    })
+
+    const wfChain = {
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -1071,9 +1131,49 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
           }),
         }),
       }),
-    } as never)
+    }
+    const jobRow = {
+      id: TEST_EXEC_ID,
+      workflow_id: "wf-1",
+      user_id: "test-user-id",
+      workflow_execution_id: null,
+      status: "completed",
+      provider: null,
+      mcp_client: null,
+      input_data: { type: "image-to-video" },
+      credits: 30,
+      error_message: null,
+      started_at: "2026-05-20T20:00:00Z",
+      completed_at: "2026-05-20T20:05:00Z",
+      created_at: "2026-05-20T20:00:00Z",
+      updated_at: "2026-05-20T20:05:00Z",
+    }
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
+            }),
+          }),
+        }),
+      }),
+    }
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "workflow_executions") return wfChain as never
+      if (table === "jobs") return jobsChain as never
+      return wfChain as never
+    })
 
     const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}/stream`)
-    expect(res.statusCode).toBe(404)
+    expect(res.statusCode).not.toBe(404)
+    // Two events for a terminal job: metadata + done.
+    expect(sendEventSpy).toHaveBeenCalledTimes(2)
+    expect(sendEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "metadata" }))
+    expect(sendEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "done" }))
+
+    // Restore the module-level mock impl so other tests aren't affected.
+    if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
   })
 })
