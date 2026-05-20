@@ -1,7 +1,7 @@
 ---
 node_type: extract-frame
-generated_at: 2026-05-18T13:23:37.582Z
-generated_from: cb1e786d
+generated_at: 2026-05-20T19:56:14.149Z
+generated_from: c86c4b48
 ---
 
 # Extract Frame
@@ -15,11 +15,13 @@ generated_from: cb1e786d
 
 **Required data fields:**
 - `label: string`
-- `mode: "first" | "last" | "timestamp"`
+- `mode: "first" | "last" | "timestamp" | "frame-index" | "frame-from-end" | "keyframe"`
 - `timestamp: number`
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `frameIndex?: number`
+- `framesFromEnd?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedImageUrl?: string`

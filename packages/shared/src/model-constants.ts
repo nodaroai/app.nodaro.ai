@@ -793,6 +793,26 @@ export const LOCATION_ATMOSPHERE_PROVIDERS = [
 export type LocationAtmosphereProvider =
   (typeof LOCATION_ATMOSPHERE_PROVIDERS)[number]
 
+/**
+ * Subset of i2v providers tuned for short ambient object-motion clips (rotate,
+ * hover, spin, parallax). Excludes premium models (Veo3, Veo3.1, Grok-i2v,
+ * Sora2, Sora2-pro, Hailuo-2.3-pro) which are cost-prohibitive for
+ * [figures removed].
+ * Phase 2 candidate for adding veo3.1 if demand for premium hero shots
+ * materializes.
+ */
+export const OBJECT_MOTION_PROVIDERS = [
+  "kling-turbo",      // 5s, fast, cheap (10 credits) — default
+  "kling",            // 5/10s
+  "kling-3.0",        // 3-15s, premium
+  "minimax",          // 5s, end-frame support
+  "hailuo-2.3",       // 6/10s
+  "wan-i2v",          // 5/10/15s
+  "seedance",         // 4/8/12s
+  "bytedance-lite",   // 5/10s
+] as const
+export type ObjectMotionProvider = (typeof OBJECT_MOTION_PROVIDERS)[number]
+
 // =====================================================================
 // Scene Input Modes + Video Model Capability Registry (v4.0 + v4.1 spec §6.10)
 // =====================================================================

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
   const mockIsPromptBlocked = vi.fn().mockReturnValue(false)
   const mockInitProviders = vi.fn()
+  const mockTryInlineReconcile = vi.fn().mockResolvedValue(undefined)
 
   // Handler mock — a single spy we can configure per test
   const mockHandler = vi.fn().mockResolvedValue(undefined)
@@ -33,6 +34,7 @@ const mocks = vi.hoisted(() => {
     mockCreateAssetFromJob,
     mockIsPromptBlocked,
     mockInitProviders,
+    mockTryInlineReconcile,
     mockHandler,
     mockFrom,
     mockSingle,
@@ -85,6 +87,10 @@ vi.mock("@/config/content-filter.js", () => ({
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
   createAssetFromJob: mocks.mockCreateAssetFromJob,
+}))
+
+vi.mock("../inline-reconcile.js", () => ({
+  tryInlineReconcile: mocks.mockTryInlineReconcile,
 }))
 
 // Mock all handler modules to return our controllable mockHandler
@@ -185,20 +191,55 @@ describe("video worker processor", () => {
     expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
   })
 
-  // Phase 4: BullMQ stall-retry guard.
-  it("stall-retry: skips handler when provider_task_id is already set", async () => {
+  // Phase 4: BullMQ stall-retry guard + inline recovery (Layer 1).
+  it("stall-retry: skips handler AND dispatches to tryInlineReconcile when provider_task_id is set", async () => {
     mocks.mockSingle.mockResolvedValueOnce({
-      data: mockJobRecord({ provider_task_id: "t-existing" }),
+      data: mockJobRecord({
+        provider_task_id: "t-existing",
+        provider_kind: "kie-suno",
+        reconcile_attempts: 0,
+        job_type: "suno-generate",
+      }),
       error: null,
     })
 
-    const job = makeBullJob("generate-image")
+    const job = makeBullJob("suno-generate")
     await processor(job)
 
     expect(mocks.mockHandler).not.toHaveBeenCalled()
     // Status update to "processing" is also skipped — we don't touch the row.
     expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ status: "processing" }),
+    )
+    // The Layer-1 win: inline reconcile fires immediately instead of waiting
+    // for the cron at the kie-suno 30-min threshold.
+    expect(mocks.mockTryInlineReconcile).toHaveBeenCalledWith({
+      id: "job-1",
+      provider_kind: "kie-suno",
+      provider_task_id: "t-existing",
+      reconcile_attempts: 0,
+      job_type: "suno-generate",
+    })
+  })
+
+  it("stall-retry: passes null provider_kind through (cron will sweep)", async () => {
+    // Legacy row from before Phase 1 — provider_task_id set but kind missing.
+    // tryInlineReconcile handles this case by logging + returning; the cron's
+    // catch-all then sweeps the row.
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: mockJobRecord({
+        provider_task_id: "t-legacy",
+        provider_kind: null,
+        reconcile_attempts: 0,
+        job_type: "generate-image",
+      }),
+      error: null,
+    })
+
+    await processor(makeBullJob("generate-image"))
+
+    expect(mocks.mockTryInlineReconcile).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_kind: null }),
     )
   })
 

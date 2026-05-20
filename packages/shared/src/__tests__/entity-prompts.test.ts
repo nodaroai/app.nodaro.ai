@@ -9,6 +9,9 @@ import {
   LOCATION_REFERENCE_PHOTO_KINDS,
   LOCATION_REFERENCE_PHOTO_KIND_LABELS,
   locationReferencePhotoKindLabel,
+  OBJECT_ASSET_TYPES,
+  OBJECT_ATTACH_COLUMNS,
+  buildObjectMotionPrompt,
 } from "../entity-prompts.js"
 
 describe("buildCharacterPrompt", () => {
@@ -168,5 +171,80 @@ describe("locationReferencePhotoKindLabel", () => {
     expect(Object.keys(LOCATION_REFERENCE_PHOTO_KIND_LABELS).sort()).toEqual(
       [...LOCATION_REFERENCE_PHOTO_KINDS].sort(),
     )
+  })
+})
+
+describe("OBJECT_ASSET_TYPES", () => {
+  it("contains the 5 expected values", () => {
+    expect([...OBJECT_ASSET_TYPES].sort()).toEqual([
+      "angles", "custom", "materials", "motion", "variations",
+    ])
+  })
+})
+
+describe("OBJECT_ATTACH_COLUMNS", () => {
+  it("aligns with the append_object_asset RPC whitelist (migration 147)", () => {
+    expect([...OBJECT_ATTACH_COLUMNS].sort()).toEqual([
+      "angles", "materials", "motion_clips", "variations",
+    ])
+  })
+})
+
+describe("buildObjectMotionPrompt", () => {
+  it("uses canonicalDescription when present", () => {
+    const out = buildObjectMotionPrompt({
+      name: "Magic Sword",
+      motionPrompt: "slow rotation",
+      canonicalDescription: "A glowing katana with ancient runes",
+    })
+    expect(out).toMatch(/A glowing katana/)
+    expect(out).toMatch(/Motion: slow rotation/)
+    expect(out).toMatch(/realistic style/)
+    expect(out).toMatch(/product-showcase quality/)
+  })
+
+  it("falls back to category + name when no canonicalDescription", () => {
+    const out = buildObjectMotionPrompt({
+      name: "Magic Sword",
+      category: "weapon",
+      motionPrompt: "hover",
+    })
+    expect(out).toMatch(/weapon, Magic Sword/)
+    expect(out).toMatch(/Motion: hover/)
+  })
+
+  it("uses the generic-object placeholder when all identity fields are empty", () => {
+    const out = buildObjectMotionPrompt({ name: "", motionPrompt: "spin" })
+    expect(out).toMatch(/A generic object/)
+    expect(out).toMatch(/Motion: spin/)
+  })
+
+  it("appends seedPromptHint when provided", () => {
+    const out = buildObjectMotionPrompt({
+      name: "Statue",
+      motionPrompt: "rotate-360",
+      seedPromptHint: "marble surface with veining",
+    })
+    expect(out).toMatch(/Motion: rotate-360/)
+    expect(out).toMatch(/marble surface with veining\.$/)
+  })
+
+  it("omits seedSuffix when seedPromptHint is empty/whitespace", () => {
+    const out = buildObjectMotionPrompt({
+      name: "Statue",
+      motionPrompt: "rotate",
+      seedPromptHint: "   ",
+    })
+    expect(out).not.toMatch(/\.\s+\.$/)  // no awkward "..  ." pattern
+    expect(out).toMatch(/product-showcase quality\.$/)
+  })
+
+  it("honors a custom style override", () => {
+    const out = buildObjectMotionPrompt({
+      name: "Toy",
+      motionPrompt: "spin",
+      style: "3d-pixar",
+    })
+    expect(out).toMatch(/3d-pixar style/)
   })
 })

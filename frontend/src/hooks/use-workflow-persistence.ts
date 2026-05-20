@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
+import { reconcileWorkflowNodeResults } from "@/lib/reconcile-node-results"
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
@@ -663,6 +664,17 @@ export function useWorkflowPersistence(projectId?: string) {
           presSettings,
           savedViewport,
         )
+
+        // Reconcile per-node `generatedResults` against the backend's
+        // `jobs.output_data`. When a single-node run gets stuck → backend
+        // reconcile finishes it → the frontend's poll wasn't around to see
+        // the variant URLs, so the node has 1 result but the job actually
+        // has N. This catches that case on every workflow load. Fire-and-
+        // forget: the workflow becomes interactive immediately; updates land
+        // a moment later as the jobs.get calls resolve. Safe to skip — the
+        // user can manually re-run if reconciliation can't reach the job.
+        const { updateNodeData: storeUpdateNodeData } = useWorkflowStore.getState()
+        reconcileWorkflowNodeResults(nodes, storeUpdateNodeData).catch(() => {})
 
         // Prefetch model credit costs for all nodes in one batch request
         const modelIds = [...new Set(
