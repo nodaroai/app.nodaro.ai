@@ -75,7 +75,10 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
   })
 
   app.post("/v1/voice-clones", {
-    preHandler: creditGuard(() => "voice-clone"),
+    // dedup: false — voice-clone returns { id, elevenlabsVoiceId, sampleAudioUrl }
+    // (a voice_clones row, not a job row) so the dedup short-circuit response
+    // { jobId, deduped: true } wouldn't match the frontend's expected shape.
+    preHandler: creditGuard(() => "voice-clone", { dedup: false }),
   }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
@@ -213,7 +216,10 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
   // JSON variant for callers that already have an audio URL (MCP, dev API).
   // Mirrors the multipart path's job lifecycle + ElevenLabs flow.
   app.post("/v1/voice-clones/from-url", {
-    preHandler: creditGuard(() => "voice-clone"),
+    // dedup: false — voice-clone returns { id, elevenlabsVoiceId, sampleAudioUrl }
+    // (a voice_clones row, not a job row) so the dedup short-circuit response
+    // { jobId, deduped: true } wouldn't match the frontend's expected shape.
+    preHandler: creditGuard(() => "voice-clone", { dedup: false }),
   }, async (req, reply) => {
     const userId = req.userId
     if (!userId) {
