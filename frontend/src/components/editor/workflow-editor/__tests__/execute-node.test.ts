@@ -1989,6 +1989,7 @@ describe("combine-videos", () => {
       undefined,
       undefined,
       expect.any(Array),
+      undefined, // audioCrossfadeCurve — unset on this node
     )
   })
 })
