@@ -64,6 +64,7 @@ export {
   isSeedance2Provider,
   CHARACTER_MOTION_PROVIDERS,
   LOCATION_ATMOSPHERE_PROVIDERS,
+  OBJECT_MOTION_PROVIDERS,
   VEO_PROVIDERS,
   isVeoProvider,
   SceneInputModeSchema,
@@ -97,6 +98,7 @@ export type {
   UpscaleImageProvider,
   CharacterMotionProvider,
   LocationAtmosphereProvider,
+  ObjectMotionProvider,
   SceneInputMode,
   ModelPromptingStyle,
   VideoModelCapabilities,
@@ -259,6 +261,7 @@ export {
   buildFaceTemplateInputs,
   buildMotionPrompt,
   buildLocationMotionPrompt,
+  buildObjectMotionPrompt,
   PLACEHOLDER_CHARACTER_NAME,
   CHARACTER_STYLES,
   CHARACTER_ASSET_TYPES,
@@ -268,6 +271,8 @@ export {
   LOCATION_REFERENCE_PHOTO_KINDS,
   LOCATION_REFERENCE_PHOTO_KIND_LABELS,
   locationReferencePhotoKindLabel,
+  OBJECT_ASSET_TYPES,
+  OBJECT_ATTACH_COLUMNS,
   type LocationAssetType,
   type LocationAttachColumn,
   type LocationReferencePhotoKind,
@@ -280,7 +285,24 @@ export {
   type LocationPromptInput,
   type FacePromptInput,
   type CharacterMotionPromptInput,
+  type ObjectAssetType,
+  type ObjectAttachColumn,
+  type ObjectMotionPromptInput,
 } from "./entity-prompts.js"
+
+export {
+  OBJECT_PICKER_NODE_TYPES,
+} from "./object-picker-types.js"
+
+export {
+  OBJECT_ASPECT_OPTIONS,
+  OBJECT_ASPECT_DEFAULTS,
+  isObjectAspectRatio,
+  resolveObjectAspectRatio,
+  type ObjectAspectRatio,
+  type ObjectAssetTypeForAspect,
+  type ResolveObjectAspectOptions,
+} from "./object-aspect-defaults.js"
 
 export type { ExposableField, ExposableOutput, PresentationItem } from "./presentation-types.js"
 

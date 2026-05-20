@@ -266,3 +266,78 @@ export function buildLocationMotionPrompt(input: LocationMotionPromptInput): str
     "A generic location"
   return `${sceneDesc}. Camera move: ${input.motionPrompt}. ${input.style ?? "realistic"} style. Slow, ambient, cinematic.`
 }
+
+/**
+ * Object asset-type enum — the kinds of variant a user can generate off an
+ * object's anchor main image. Mirrors the literal accepted by
+ * `POST /v1/generate-object-asset` (`backend/src/routes/generate-object-asset.ts`)
+ * and consumed by the MCP `generate_object` verb (kind="asset").
+ *
+ * The `motion` value is reserved for type-system exhaustiveness on the
+ * frontend; the route rejects it because motion variants flow through the
+ * dedicated `/v1/generate-object-motion` endpoint (worker-side it's a different
+ * BullMQ job type). `custom` is the free-form bucket — callers must supply
+ * `attachToColumn` explicitly since the worker can't infer it.
+ */
+export const OBJECT_ASSET_TYPES = [
+  "angles",
+  "materials",
+  "variations",
+  "motion",
+  "custom",
+] as const
+export type ObjectAssetType = (typeof OBJECT_ASSET_TYPES)[number]
+
+/**
+ * DB columns the object-asset worker may auto-attach to. Aligns with the
+ * `append_object_asset` RPC's CASE/WHEN whitelist (migration 147). Required
+ * when `assetType === "custom"`; for canonical asset types the column is
+ * derived automatically.
+ */
+export const OBJECT_ATTACH_COLUMNS = [
+  "angles",
+  "materials",
+  "variations",
+  "motion_clips",
+] as const
+export type ObjectAttachColumn = (typeof OBJECT_ATTACH_COLUMNS)[number]
+
+/**
+ * Input shape for buildObjectMotionPrompt.
+ *
+ * Mirrors LocationMotionPromptInput's role. `canonicalDescription` is preferred
+ * (LLM-authored from the approved main image) but the helper falls back to
+ * category+name if not yet set, and to a generic placeholder if both are absent.
+ */
+export interface ObjectMotionPromptInput {
+  name: string
+  category?: string
+  style?: EntityStyle | string
+  motionPrompt: string
+  canonicalDescription?: string
+  seedPromptHint?: string
+}
+
+/**
+ * Build the prompt sent to the i2v provider for an object atmosphere/motion clip.
+ *
+ * Naming note: character's analog is `buildMotionPrompt`; location uses
+ * `buildLocationMotionPrompt`; object uses `buildObjectMotionPrompt` to make
+ * the entity type explicit at call sites.
+ *
+ * The `seedPromptHint` is appended verbatim — Phase C's route layer composes
+ * wired-picker hints (Material/Animal/Vehicle/Weapon/Furniture) into this
+ * field before passing the input. Empty hint = no-op (the trailing dot still
+ * reads cleanly: "...motion. " not "...motion.  .").
+ */
+export function buildObjectMotionPrompt(input: ObjectMotionPromptInput): string {
+  const objDesc =
+    input.canonicalDescription?.trim() ||
+    [input.category, input.name].filter(Boolean).join(", ").trim() ||
+    "A generic object"
+  const baseStyle = input.style ?? "realistic"
+  const seedSuffix = input.seedPromptHint?.trim()
+    ? `. ${input.seedPromptHint.trim()}`
+    : ""
+  return `${objDesc}. Motion: ${input.motionPrompt}. ${baseStyle} style. Smooth, controlled, product-showcase quality${seedSuffix}.`
+}
