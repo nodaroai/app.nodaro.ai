@@ -58,7 +58,7 @@ const map: LocaleCatalogMap = {
   "color-rain":        { label: "Farbregen",               description: "Leuchtend farbiger Regen um das Sujet herum" },
   "saint-glow":        { label: "Heiligenschein",          description: "Heiligenschein und göttliches Licht strahlen um das Sujet" },
   "fire-aura":         { label: "Feueraura",               description: "Flammen lecken um den Körper des Sujets" },
-  "frost-aura":        { label: "Frosthauch",              description: "Raureif und Eis strahlen vom Sujet aus" },
+  "frost-aura":        { label: "Frostaura",               description: "Raureif und Eis strahlen vom Sujet aus" },
   "shadow-aura":       { label: "Schattenaura",            description: "Dunkle Schattenranken winden sich um das Sujet" },
   "electricity-aura":  { label: "Elektro-Aura",            description: "Tesla-artige elektrische Bögen umgeben das Sujet" },
   "sparkles-around":   { label: "Magische Funken",         description: "Magische Funken kreisen um das Sujet" },
