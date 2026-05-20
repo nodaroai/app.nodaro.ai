@@ -8,6 +8,10 @@ import {
   type PipelineMode,
   type PipelineActivationMode,
   type StyleDirectives,
+  type ScriptCriticVerdict,
+  type CastCoverageCriticVerdict,
+  type LocationsCoverageCriticVerdict,
+  type ObjectsValidationResult,
 } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 
@@ -29,7 +33,12 @@ export interface RunShowrunnerArgs {
   activationMode: PipelineActivationMode
   mode: PipelineMode
   styleDirectives?: StyleDirectives
-  criticFeedback?: unknown
+  criticFeedback?: {
+    scriptVerdict?: ScriptCriticVerdict
+    castVerdict?: CastCoverageCriticVerdict
+    locationsVerdict?: LocationsCoverageCriticVerdict
+    objectsVerdict?: ObjectsValidationResult
+  }
 }
 
 export async function runShowrunner(args: RunShowrunnerArgs): Promise<ShowrunnerPlan> {

@@ -138,29 +138,67 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
     await runScriptAndPersist(args, pipeline, userTier)
     return
   }
+  // Phase 1D.2a §4.1 (G1/G2/G3): pass the pipeline's mode through to the
+  // entity stages so they can short-circuit the approval gates under
+  // `mode === "auto"`. Manual/guided modes preserve the prior pause-for-user
+  // behavior.
+  const pipelineMode = ((pipeline as { mode?: string }).mode ?? "manual") as
+    | "manual"
+    | "auto"
+    | "guided"
   if (stageToRun === "characters") {
     const { runCharactersStage } = await import("./stages/characters.js")
-    await runCharactersStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    await runCharactersStage({
+      supabase,
+      pipelineId,
+      userId: pipeline.user_id,
+      userTier,
+      mode: pipelineMode,
+    })
     return
   }
   if (stageToRun === "objects") {
     const { runObjectsStage } = await import("./stages/objects.js")
-    await runObjectsStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    await runObjectsStage({
+      supabase,
+      pipelineId,
+      userId: pipeline.user_id,
+      userTier,
+      mode: pipelineMode,
+    })
     return
   }
   if (stageToRun === "locations") {
     const { runLocationsStage } = await import("./stages/locations.js")
-    await runLocationsStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    await runLocationsStage({
+      supabase,
+      pipelineId,
+      userId: pipeline.user_id,
+      userTier,
+      mode: pipelineMode,
+    })
     return
   }
   if (stageToRun === "shot_list") {
     const { runShotListStage } = await import("./stages/shot-list.js")
-    await runShotListStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    await runShotListStage({
+      supabase,
+      pipelineId,
+      userId: pipeline.user_id,
+      userTier,
+      mode: pipelineMode,
+    })
     return
   }
   if (stageToRun === "scene_images") {
     const { runSceneImagesStage } = await import("./stages/scene-images.js")
-    await runSceneImagesStage({ supabase, pipelineId, userId: pipeline.user_id, userTier })
+    await runSceneImagesStage({
+      supabase,
+      pipelineId,
+      userId: pipeline.user_id,
+      userTier,
+      mode: pipelineMode,
+    })
     return
   }
   if (stageToRun === "animate_audio_edit") {
@@ -208,7 +246,13 @@ async function runScriptAndPersist(
   if (outcome.status === "failed") {
     await supabase
       .from("pipeline_stages")
-      .update({ status: "failed", completed_at: new Date().toISOString() })
+      .update({
+        status: "failed",
+        critic_feedback: {
+          failure_detail: outcome.failure_detail,
+        } as unknown as Record<string, unknown>,
+        completed_at: new Date().toISOString(),
+      })
       .eq("pipeline_id", pipelineId)
       .eq("stage_name", "script")
     await supabase
@@ -233,20 +277,47 @@ async function runScriptAndPersist(
     return
   }
 
-  // outcome.status === 'awaiting_approval'
+  // outcome.status === 'approved' (auto-mode) or 'awaiting_approval' (manual-mode).
+  // Both arms share the same payload — write the same pipeline_stages.output and
+  // critic_feedback regardless of which arm fired.
+  const stageStatus = outcome.status // 'approved' | 'awaiting_approval'
+  const criticFeedback = {
+    script: outcome.scriptCritic,
+    cast_coverage: outcome.castCoverageCritic,
+    locations_coverage: outcome.locationsCoverageCritic,
+    objects_validation: outcome.objectsValidation,
+  } as unknown as Record<string, unknown>
+
   await supabase
     .from("pipeline_stages")
     .update({
-      status: "awaiting_approval",
+      status: stageStatus,
       output: { plan: outcome.plan } as unknown as Record<string, unknown>,
-      critic_feedback: {
-        script: outcome.scriptCritic,
-        cast_coverage: outcome.castCoverageCritic,
-      } as unknown as Record<string, unknown>,
+      critic_feedback: criticFeedback,
       completed_at: new Date().toISOString(),
     })
     .eq("pipeline_id", pipelineId)
     .eq("stage_name", "script")
+
+  if (stageStatus === "approved") {
+    // Auto-mode: don't pause the pipeline. The engine re-enqueue happens via
+    // `approveScriptStage` -> queue; mirror that here so the next stage starts.
+    pipelineEvents.publish({
+      type: "stage:status",
+      pipelineId,
+      stageName: "script",
+      status: "approved",
+      output: outcome.plan,
+      criticFeedback,
+    })
+    const { enqueuePipelineRun } = await import("./queue.js")
+    await enqueuePipelineRun({
+      pipelineId,
+      userId: pipeline.user_id,
+      reason: "stage_advance",
+    })
+    return
+  }
 
   await supabase
     .from("pipelines")
@@ -259,7 +330,7 @@ async function runScriptAndPersist(
     stageName: "script",
     status: "awaiting_approval",
     output: outcome.plan,
-    criticFeedback: { script: outcome.scriptCritic, cast_coverage: outcome.castCoverageCritic },
+    criticFeedback,
   })
   pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "awaiting_approval" })
 }

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { EntityType } from "@nodaro/shared"
+import type { EntityType, PipelineMode } from "@nodaro/shared"
 import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { EntityCard } from "./entity-card"
@@ -9,9 +9,16 @@ interface Props {
   pipelineId: string
   entityType: EntityType
   title: string
+  /**
+   * Phase 1D.2a §4.5 — when the parent pipeline is in `auto` mode the
+   * orchestrator approves entities itself, so the user shouldn't see the
+   * per-card Approve/Reject controls. Optional for backward compat with
+   * existing call sites; `undefined` keeps manual-mode behavior.
+   */
+  mode?: PipelineMode | null
 }
 
-export function EntityGrid({ pipelineId, entityType, title }: Props) {
+export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
   const { data, refetch } = usePipelineEntities(pipelineId, entityType)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState("")
@@ -56,6 +63,7 @@ export function EntityGrid({ pipelineId, entityType, title }: Props) {
               onApprove={() => handleApprove(entity.id)}
               onReject={() => setRejectingId(entity.id)}
               disabled={busyId === entity.id}
+              mode={mode}
             />
           ))}
         </div>

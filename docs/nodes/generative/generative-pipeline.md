@@ -25,6 +25,22 @@ multiple LLMs and generation steps under approval gates.
 | short_film | 30 | 600 |
 | music_video | 30 | 600 |
 
+## Modes (manual / auto / guided)
+
+Story-to-Video pipelines can run in one of three modes, selectable at creation
+via the `mode` field on `POST /v1/pipelines` or via the Film Director skill's
+mode-selection prompt.
+
+| Mode | What happens |
+|------|-----|
+| `manual` (default) | Every stage pauses at `awaiting_approval`; you click Approve, optionally edit, and the pipeline advances. Full control. |
+| `auto` | The engine runs every stage automatically. Per-stage critics gate the output (Script + Cast Coverage + Locations Coverage + Objects Validation at Stage 1; Image Critic at Stage 6). On 3 consecutive blocking verdicts, the pipeline fails with `failure_reason='*_unresolvable'` and credits are refunded. Use when you trust the inputs and want unattended generation. |
+| `guided` | Same approval gates as manual, but adds a chat sidebar at the Script stage for natural-language refinement of the `ShowrunnerPlan` (ships in Phase 1D.2b). |
+
+**Programmatic activation** forces `mode='auto'` (no human-in-the-loop possible from an upstream-node trigger).
+
+**Recovery from auto-mode failures:** failed pipelines surface a critic-failure banner in the pipeline panel and the existing "Re-run from here" branch buttons (1D.3) let you create a new pipeline from a prior approved stage. Switching mid-flight to manual is available via the Switch-to-Manual button on running auto/guided pipelines (not on failed pipelines — use Branch instead).
+
 ## Stage 1 — Script
 
 1. **Detection** (Haiku) extracts entities from the prompt.

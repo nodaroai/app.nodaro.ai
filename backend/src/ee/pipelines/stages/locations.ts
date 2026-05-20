@@ -3,7 +3,7 @@ import type { ShowrunnerPlan } from "@nodaro/shared"
 import { MAX_LOCATION_VARIANTS } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
   transitionStageEntityNodesAndEmit,
@@ -15,6 +15,20 @@ export interface RunLocationsStageArgs {
   pipelineId: string
   userId: string
   userTier: string
+  /**
+   * Phase 1D.2a §4.1 (G3): when `"auto"`, the stage skips BOTH approval
+   * gates — the initial per-location main-image gate AND the
+   * variant-batch gate. In each case it bulk-flips every location entity
+   * (clearing the `variants_awaiting_approval` metadata flag when present
+   * for the variant gate), batches the matching `pipeline_entity_nodes`
+   * rows from `pipeline_owned_awaiting_approval` → `pipeline_owned_approved`,
+   * marks the stage row `approved`, emits the `stage:status approved` SSE,
+   * and re-enqueues the orchestrator with `reason: "stage_advance"`.
+   *
+   * Defaults to `"manual"` so existing callers (and tests) keep the prior
+   * two-phase pause behavior.
+   */
+  mode?: "manual" | "auto" | "guided"
 }
 
 /**
@@ -92,7 +106,21 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
     }
   }
 
-  if (anyAwaiting) return
+  if (anyAwaiting) {
+    // Phase 1D.2a §4.1 (G3): auto-mode short-circuits the FIRST per-location
+    // approval gate — bulk-flip every location entity from
+    // `awaiting_approval` → `approved` (plus their canvas nodes) and
+    // re-enqueue the orchestrator so the next iteration runs
+    // `ensureLocationVariants` against the approved entities. Manual/guided
+    // modes fall through to the existing pause.
+    if (args.mode === "auto") {
+      await bulkApproveStageEntities(supabase, pipelineId, "location", "locations")
+      const { enqueuePipelineRun } = await import("../queue.js")
+      await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
+      return
+    }
+    return
+  }
 
   // Re-fetch to read latest metadata.variants_awaiting_approval after variant generation.
   // The local `entities` snapshot above is stale — reading from it would miss the
@@ -111,6 +139,57 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
         (e.metadata as Record<string, unknown> | null)?.variants_awaiting_approval === true,
     )
   if (allVariantsAwaiting) {
+    // Phase 1D.2a §4.1 (G3): auto-mode short-circuits the variant-batch
+    // approval gate — bulk-flip every entity + canvas node to `approved`
+    // (clearing the `variants_awaiting_approval` metadata flag so the gate
+    // never re-triggers on a future re-entry), mark the stage row
+    // `approved`, emit the matching SSE, and re-enqueue the orchestrator
+    // for the next stage. Manual/guided modes fall through to the existing
+    // `awaiting_approval` pause.
+    if (args.mode === "auto") {
+      // Re-fetch entity ids+metadata so we can clear the
+      // `variants_awaiting_approval` flag per-row while preserving the
+      // surrounding metadata blob.
+      const { data: locEntities } = await supabase
+        .from("pipeline_entities")
+        .select("id, metadata")
+        .eq("pipeline_id", pipelineId)
+        .eq("entity_type", "location")
+      for (const ent of locEntities ?? []) {
+        const meta = (ent.metadata as Record<string, unknown> | null) ?? {}
+        const cleared = { ...meta }
+        delete cleared.variants_awaiting_approval
+        await supabase
+          .from("pipeline_entities")
+          .update({ status: "approved", metadata: cleared })
+          .eq("id", ent.id as string)
+      }
+      await transitionStageEntityNodesAndEmit(
+        supabase,
+        pipelineId,
+        "location",
+        "pipeline_owned_approved",
+        "locations",
+      )
+      await supabase
+        .from("pipeline_stages")
+        .update({ status: "approved", completed_at: new Date().toISOString() })
+        .eq("id", stageId)
+      pipelineEvents.publish({
+        type: "stage:status",
+        pipelineId,
+        stageName: "locations",
+        status: "approved",
+      })
+      const { enqueuePipelineRun } = await import("../queue.js")
+      await enqueuePipelineRun({
+        pipelineId,
+        userId,
+        reason: "stage_advance",
+      })
+      return
+    }
+
     await supabase
       .from("pipeline_stages")
       .update({ status: "awaiting_approval", output: { phase: "variant_batch_approval" } })

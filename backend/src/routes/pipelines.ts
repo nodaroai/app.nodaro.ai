@@ -181,7 +181,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const { data, error } = await supabase
       .from("pipelines")
       .select(
-        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage",
+        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason",
       )
       .eq("id", params.data.id)
       .maybeSingle()
@@ -198,6 +198,89 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const { user_id: _userId, ...publicFields } = data
     return publicFields
   })
+
+  // ── PATCH /v1/pipelines/:id — mode switch (manual target only) ─────────
+  // Phase 1D.2a §4.5. The user can flip an auto/guided run to manual at any
+  // approval gate (or while it's still running between gates). Allowed
+  // transitions: mode ∈ {auto, guided} AND status ∈ {running, awaiting_approval}.
+  // Failed runs are NOT eligible — use Branch instead. Manual→manual is a no-op
+  // and rejected for clarity (caller likely wanted a different target mode that
+  // isn't yet implemented).
+  app.patch<{ Params: { id: string }; Body: { mode: "manual" } }>(
+    "/v1/pipelines/:id",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:execute")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const params = z.object({ id: z.string().uuid() }).safeParse(req.params)
+      if (!params.success) {
+        return reply.status(400).send({ error: { code: "validation_error" } })
+      }
+      const body = z.object({ mode: z.literal("manual") }).safeParse(req.body)
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Look up pipeline + ownership.
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id, mode, status")
+        .eq("id", params.data.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Validate transition: allowed from mode IN ('auto','guided')
+      // AND status IN ('running','awaiting_approval'). Failed/completed/
+      // cancelled/forked + manual source mode are rejected with 409.
+      if (
+        !["auto", "guided"].includes(pipeline.mode) ||
+        !["running", "awaiting_approval"].includes(pipeline.status)
+      ) {
+        return reply.status(409).send({
+          error: {
+            code: "mode_transition_not_allowed",
+            message: `cannot switch to manual from mode=${pipeline.mode} status=${pipeline.status}`,
+          },
+        })
+      }
+
+      // Flip mode.
+      const { error: updateError } = await supabase
+        .from("pipelines")
+        .update({ mode: "manual" })
+        .eq("id", params.data.id)
+      if (updateError) {
+        return reply.status(500).send({
+          error: { code: "db_error", detail: updateError.message },
+        })
+      }
+
+      // Re-enqueue so the orchestrator picks up the mode change and
+      // re-evaluates the next-action policy (e.g. stop auto-approving).
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: params.data.id,
+        userId,
+        reason: "mode_switch",
+      })
+
+      // Emit SSE — status unchanged, but listeners may rerender the badge.
+      const { pipelineEvents } = await import("../ee/pipelines/events.js")
+      pipelineEvents.publish({
+        type: "pipeline:status",
+        pipelineId: params.data.id,
+        status: pipeline.status,
+      })
+
+      return reply.send({ ok: true, mode: "manual" })
+    },
+  )
 
   // ── GET /v1/pipelines ────────────────────────────────────────────────────
   app.get("/v1/pipelines", async (req, reply) => {

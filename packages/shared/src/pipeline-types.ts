@@ -324,6 +324,25 @@ export const CastCoverageCriticVerdictSchema = z.object({
 })
 export type CastCoverageCriticVerdict = z.infer<typeof CastCoverageCriticVerdictSchema>
 
+export const LocationsCoverageCriticIssueSchema = CriticIssueSchema.extend({
+  issue_type: z.enum([
+    "orphan_location",
+    "unresolved_scene_location_ref",
+    "duplicate_key",
+    "name_too_similar",
+    "description_too_short",
+    "redundant_location",
+  ]),
+  location_key: z.string().optional(),
+  scene_index: z.number().int().nullish(),
+})
+
+export const LocationsCoverageCriticVerdictSchema = z.object({
+  verdict: z.enum(["pass", "fail"]),
+  issues: z.array(LocationsCoverageCriticIssueSchema),
+})
+export type LocationsCoverageCriticVerdict = z.infer<typeof LocationsCoverageCriticVerdictSchema>
+
 // ─── Entity metadata (DB pipeline_entities.metadata) ──────────────────────────
 
 export const CharacterMetadataSchema = z.object({

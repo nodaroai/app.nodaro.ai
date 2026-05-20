@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { SceneInputMode, SceneNodeData, ShowrunnerPlan } from "@nodaro/shared"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"
 import { runShotListCritic, type ShotListCriticVerdict } from "../llms/shot-list-critic.js"
@@ -9,6 +9,7 @@ import {
   resolveEntityKeysToIds,
   setEntityDepends,
   transitionEntityNodeAndEmit,
+  transitionStageEntityNodesAndEmit,
 } from "../depends-on.js"
 
 export interface RunShotListStageArgs {
@@ -16,6 +17,17 @@ export interface RunShotListStageArgs {
   pipelineId: string
   userId: string
   userTier: string
+  /**
+   * Phase 1D.2a §4.1 (H1): when `"auto"`, after every scene reaches
+   * `awaiting_approval` the stage bulk-flips them to `approved`, batches the
+   * matching `pipeline_entity_nodes` rows from
+   * `pipeline_owned_awaiting_approval` → `pipeline_owned_approved`, marks the
+   * stage row `approved`, emits the `stage:status approved` SSE, and
+   * re-enqueues the orchestrator with `reason: "stage_advance"` so Stage 6
+   * (scene_images) picks up. Defaults to `"manual"`, preserving the prior
+   * pause-for-user behavior.
+   */
+  mode?: "manual" | "auto" | "guided"
 }
 
 const MAX_CRITIC_RETRIES_PER_SCENE = 2
@@ -151,6 +163,38 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
       stageName: "shot_list",
       status: "approved",
     })
+    return
+  }
+
+  // Phase 1D.2a §4.1 (H1): auto-mode short-circuits the per-scene approval
+  // gate once every scene reached `awaiting_approval` (and none failed). The
+  // bulk-flip mirrors G1/G2/G3 in `characters.ts`/`objects.ts`/`locations.ts`
+  // — UPDATE every awaiting-approval scene to `approved`, batch-flip the
+  // matching canvas nodes, mark the stage row `approved`, emit the SSE, and
+  // re-enqueue the orchestrator with `reason: "stage_advance"` so Stage 6
+  // (scene_images) picks up. Manual/guided modes fall through to the existing
+  // "stage stays running, per-scene awaiting_approval gates surface in the
+  // panel" behavior — no stage-level update fires until the user approves
+  // every scene individually.
+  const allAwaitingOrApproved =
+    (refreshed ?? []).length > 0 &&
+    (refreshed ?? []).every(
+      (e) => e.status === "awaiting_approval" || e.status === "approved",
+    )
+  if (args.mode === "auto" && allAwaitingOrApproved) {
+    await bulkApproveStageEntities(supabase, pipelineId, "scene", "shot-list")
+    await supabase
+      .from("pipeline_stages")
+      .update({ status: "approved", completed_at: new Date().toISOString() })
+      .eq("id", stageId)
+    pipelineEvents.publish({
+      type: "stage:status",
+      pipelineId,
+      stageName: "shot_list",
+      status: "approved",
+    })
+    const { enqueuePipelineRun } = await import("../queue.js")
+    await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
   }
 }
 

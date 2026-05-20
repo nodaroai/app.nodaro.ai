@@ -1,4 +1,4 @@
-import type { PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineMode, PipelineStageStatus, ShowrunnerPlan } from "@nodaro/shared"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
@@ -10,6 +10,14 @@ interface Props {
   onApprove: () => void
   onReject: () => void
   disabled?: boolean
+  /**
+   * Phase 1D.2a §4.5 — when the parent pipeline is running in auto mode,
+   * Approve/Reject are hidden (the orchestrator gates on critic verdicts,
+   * not human input) and an "Auto: critic gating…" hint is rendered while
+   * the stage is actively running. Optional so existing call sites still
+   * work — undefined falls back to manual-mode behavior.
+   */
+  mode?: PipelineMode
 }
 
 const STATUS_COPY: Record<string, string> = {
@@ -23,7 +31,7 @@ const STATUS_COPY: Record<string, string> = {
   cancelled: "Cancelled",
 }
 
-export function StageRow({ stageLabel, status, output, onApprove, onReject, disabled }: Props) {
+export function StageRow({ stageLabel, status, output, onApprove, onReject, disabled, mode }: Props) {
   return (
     <div className="rounded border border-zinc-200 bg-white p-3">
       <div className="flex items-center justify-between">
@@ -41,6 +49,12 @@ export function StageRow({ stageLabel, status, output, onApprove, onReject, disa
           {STATUS_COPY[status] ?? status}
         </div>
       </div>
+
+      {/* Phase 1D.2a §4.5 — auto-mode hint while the stage is actively
+          running. The critics make the gate decision, not the user. */}
+      {mode === "auto" && status === "running" && (
+        <div className="mt-2 text-xs text-zinc-500 italic">Auto: critic gating…</div>
+      )}
 
       {output && status === "awaiting_approval" && (
         <div className="mt-3 space-y-2">
@@ -60,10 +74,16 @@ export function StageRow({ stageLabel, status, output, onApprove, onReject, disa
               ))}
             </ul>
           </div>
-          <div className="flex gap-2 pt-2">
-            <Button size="sm" onClick={onApprove} disabled={disabled}>Approve</Button>
-            <Button size="sm" variant="outline" onClick={onReject} disabled={disabled}>Reject</Button>
-          </div>
+          {/* Phase 1D.2a §4.5 — Approve/Reject hidden in auto mode. The
+              orchestrator drives gate decisions via the critic chain; the
+              user can still switch to manual via the ModeSwitchButton in
+              the panel header. */}
+          {mode !== "auto" && (
+            <div className="flex gap-2 pt-2">
+              <Button size="sm" onClick={onApprove} disabled={disabled}>Approve</Button>
+              <Button size="sm" variant="outline" onClick={onReject} disabled={disabled}>Reject</Button>
+            </div>
+          )}
         </div>
       )}
     </div>

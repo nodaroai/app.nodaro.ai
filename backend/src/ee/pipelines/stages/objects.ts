@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ShowrunnerPlan } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { transitionEntityNodeAndEmit } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 
@@ -11,6 +11,18 @@ export interface RunObjectsStageArgs {
   pipelineId: string
   userId: string
   userTier: string
+  /**
+   * Phase 1D.2a §4.1 (G2): when `"auto"`, the stage skips the per-object
+   * approval gate — it bulk-flips every object entity from `awaiting_approval`
+   * → `approved`, batches the matching `pipeline_entity_nodes` rows from
+   * `pipeline_owned_awaiting_approval` → `pipeline_owned_approved`, marks the
+   * stage row `approved`, emits the `stage:status approved` SSE, and
+   * re-enqueues the orchestrator with `reason: "stage_advance"`.
+   *
+   * Defaults to `"manual"` so existing callers (and tests) keep the prior
+   * behavior: stop after generation so the user approves each object.
+   */
+  mode?: "manual" | "auto" | "guided"
 }
 
 /**
@@ -120,11 +132,30 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     }
   }
 
-  if (anyGenerating) return // pause for user approval
+  if (anyGenerating) {
+    // Phase 1D.2a §4.1 (G2): auto-mode short-circuits the per-object
+    // approval gate — bulk-flip every object entity from `awaiting_approval`
+    // → `approved` (plus their canvas nodes), mark the stage row `approved`,
+    // emit the matching SSE, and re-enqueue the orchestrator for the next
+    // stage. Manual/guided modes fall through to the existing pause.
+    if (args.mode === "auto") {
+      await autoApproveObjectsStage(supabase, pipelineId, userId, stageId)
+      return
+    }
+    return // pause for user approval
+  }
 
   // Check if any still awaiting.
   const allApproved = (entities ?? []).every((e) => e.status === "approved")
-  if (!allApproved) return
+  if (!allApproved) {
+    // Phase 1D.2a §4.1 (G2): on a re-entrant pass (no fresh generation, but
+    // entities still sitting at `awaiting_approval`) auto-mode advances the
+    // stage. Manual/guided modes pause until the user approves each card.
+    if (args.mode === "auto") {
+      await autoApproveObjectsStage(supabase, pipelineId, userId, stageId)
+    }
+    return
+  }
 
   // All approved → advance stage.
   await supabase
@@ -137,5 +168,35 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     stageName: "objects",
     status: "approved",
   })
+}
+
+/**
+ * Phase 1D.2a §4.1 (G2): bulk-approve every `awaiting_approval` object entity
+ * for `pipelineId`, batch-flip the matching `pipeline_entity_nodes` rows from
+ * `pipeline_owned_awaiting_approval` → `pipeline_owned_approved`, flip the
+ * stage row to `approved`, emit the `stage:status approved` SSE, and
+ * re-enqueue the orchestrator with `reason: "stage_advance"` so the next
+ * stage picks up. Idempotent — safe to call multiple times in the same
+ * pass.
+ */
+async function autoApproveObjectsStage(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  userId: string,
+  stageId: string,
+): Promise<void> {
+  await bulkApproveStageEntities(supabase, pipelineId, "object", "objects")
+  await supabase
+    .from("pipeline_stages")
+    .update({ status: "approved", completed_at: new Date().toISOString() })
+    .eq("id", stageId)
+  pipelineEvents.publish({
+    type: "stage:status",
+    pipelineId,
+    stageName: "objects",
+    status: "approved",
+  })
+  const { enqueuePipelineRun } = await import("../queue.js")
+  await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
 }
 

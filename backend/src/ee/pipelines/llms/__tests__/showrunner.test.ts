@@ -116,7 +116,24 @@ describe("runShowrunner", () => {
       userTier: "pro",
       activationMode: "interactive",
       mode: "manual",
-      criticFeedback: { verdict: "fail", issues: [{ description: "duration off" }] },
+      criticFeedback: {
+        scriptVerdict: {
+          verdict: "fail",
+          issues: [{
+            severity: "blocking",
+            scene_index: null,
+            description: "duration off",
+            suggested_fix: "trim scenes",
+            issue_type: "duration",
+          }],
+          duration_analysis: {
+            target_seconds: 60,
+            actual_sum_seconds: 80,
+            deviation_percent: 33,
+            within_tolerance: false,
+          },
+        },
+      },
     })
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.userPrompt).toContain("PRIOR ATTEMPT WAS REJECTED")

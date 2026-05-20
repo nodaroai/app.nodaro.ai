@@ -12,11 +12,13 @@ import { EntityGrid } from "./entity-grid"
 import { SceneGrid } from "./scene-grid"
 import { DriftBanner } from "./drift-banner"
 import { ForkButton } from "./fork-button"
+import { ModeSwitchButton } from "./mode-switch-button"
 import { SilentCutPreview } from "./silent-cut-preview"
 import {
   DialogueRecheckBanner,
   type DialogueRecheckResult,
 } from "./dialogue-recheck-banner"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
 /** Human-readable label for each pipeline stage (ordered). */
@@ -209,7 +211,37 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           <div className="text-xs uppercase text-zinc-500">Pipeline</div>
           <div className="font-semibold truncate">{pipeline?.status ?? "loading..."}</div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          {/* Phase 1D.2a §4.5 — Auto/Guided mode badge. Visible while the
+              pipeline is running in either non-manual mode; once the user
+              clicks "Switch to Manual" (below) the badge disappears on the
+              next pipeline refetch. */}
+          {pipeline?.mode === "auto" && (
+            <Badge
+              variant="outline"
+              className="bg-amber-50 border-amber-300 text-amber-700"
+              data-testid="mode-badge-auto"
+            >
+              Auto Mode
+            </Badge>
+          )}
+          {pipeline?.mode === "guided" && (
+            <Badge
+              variant="outline"
+              className="bg-pink-50 border-pink-300 text-[#ff0073]"
+              data-testid="mode-badge-guided"
+            >
+              Guided
+            </Badge>
+          )}
+          <ModeSwitchButton
+            pipelineId={pipelineId}
+            mode={pipeline?.mode ?? null}
+            status={pipeline?.status}
+            onSwitched={() => {
+              void pipelineQuery.refetch()
+            }}
+          />
           <ForkButton
             pipelineId={pipelineId}
             pipelineStatus={effectiveStatus}
@@ -266,20 +298,59 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           output={plan}
           onApprove={handleApprove}
           onReject={() => setRejectMode(true)}
+          mode={pipeline?.mode ?? undefined}
         />
         {pipeline?.current_stage === "characters" && (
-          <EntityGrid pipelineId={pipelineId} entityType="character" title="2. Characters" />
+          <EntityGrid
+            pipelineId={pipelineId}
+            entityType="character"
+            title="2. Characters"
+            mode={pipeline?.mode ?? undefined}
+          />
         )}
         {pipeline?.current_stage === "objects" && (
-          <EntityGrid pipelineId={pipelineId} entityType="object" title="3. Objects" />
+          <EntityGrid
+            pipelineId={pipelineId}
+            entityType="object"
+            title="3. Objects"
+            mode={pipeline?.mode ?? undefined}
+          />
         )}
         {pipeline?.current_stage === "locations" && (
-          <EntityGrid pipelineId={pipelineId} entityType="location" title="4. Locations" />
+          <EntityGrid
+            pipelineId={pipelineId}
+            entityType="location"
+            title="4. Locations"
+            mode={pipeline?.mode ?? undefined}
+          />
         )}
         {pipeline?.current_stage === "shot_list" && (
           <SceneGrid pipelineId={pipelineId} title="5. Shot List" />
         )}
       </div>
+
+      {/* Phase 1D.2a §4.5 — Auto-mode critic-failure surface. Triggered when
+          the pipeline failed with an `*_unresolvable` failure reason (e.g.
+          `script_critic_unresolvable`, `locations_coverage_unresolvable`),
+          which means the auto-mode critic chain exhausted its retry budget
+          without producing a viable plan. The user can branch from the
+          previous approved stage via the "Re-run from stage" list below —
+          no separate branch button is needed here. */}
+      {pipeline?.status === "failed" &&
+        pipeline.failure_reason &&
+        pipeline.failure_reason.endsWith("_unresolvable") && (
+          <div
+            className="mt-3 p-3 bg-red-50 border border-red-200 rounded"
+            data-testid="critic-failure-surface"
+          >
+            <div className="text-sm font-medium text-red-700">
+              Auto Mode failed: {pipeline.failure_reason}
+            </div>
+            <div className="text-xs text-red-600 mt-1">
+              See stage details for the specific blocking critic.
+            </div>
+          </div>
+        )}
 
       {/* Phase 1D.3 — Re-run from here. When the pipeline is completed every
           stage was approved. Render a compact list so the user can branch from
