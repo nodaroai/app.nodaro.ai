@@ -295,6 +295,67 @@ describe("combineVideos — cut transition", () => {
     // resulting filelist path: /tmp/it'\''s-work/normalized_0.mp4
     expect(list).toContain("it'\\''s-work")
   })
+
+  it("cut + audioMode=crossfade: takes filter-graph path with concat video + acrossfade audio + apad", async () => {
+    // Regression: previously the concat-demuxer fast path swallowed the
+    // audioMode=crossfade flag by stream-copying audio. Now we route this
+    // combo through a filter graph so the crossfade actually runs.
+    stubResolutionProbes(2)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+
+    await combineVideos(defaultOptions({
+      transition: "cut",
+      audioMode: "crossfade",
+      transitionDuration: 0.5,
+    }))
+
+    const args = lastArgs()
+    const fc = args[args.indexOf("-filter_complex") + 1]
+    // Video: hard-cut concat filter, not xfade
+    expect(fc).toContain("[0:v][1:v]concat=n=2:v=1:a=0[vout]")
+    expect(fc).not.toContain("xfade=")
+    // Audio: acrossfade with default linear curve
+    expect(fc).toContain("acrossfade=d=0.5")
+    expect(fc).toContain("c1=tri:c2=tri")
+    // Pad audio with silence to match total video duration (5+5=10s)
+    expect(fc).toContain("apad=whole_dur=10")
+    expect(fc).toContain("[aout_padded]")
+    // Map padded audio, not raw acrossfade output
+    const mapCalls = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-map") acc.push(args[i + 1])
+      return acc
+    }, [])
+    expect(mapCalls).toContain("[vout]")
+    expect(mapCalls).toContain("[aout_padded]")
+    // Not stream-copy: re-encodes through filter graph
+    expect(args[args.indexOf("-c:v") + 1]).toBe("libx264")
+    expect(args[args.indexOf("-c:a") + 1]).toBe("aac")
+  })
+
+  it("cut + audioMode=crossfade: falls back to concat demuxer when filter fails (e.g. clip without audio)", async () => {
+    stubResolutionProbes(2)
+    mocks.getVideoDuration
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+    // First ffmpeg call (the filter-graph attempt) rejects; fallback succeeds.
+    mocks.runFfmpeg
+      .mockRejectedValueOnce(new Error("acrossfade failed: no audio in clip 1"))
+      .mockResolvedValueOnce("")
+
+    await combineVideos(defaultOptions({
+      transition: "cut", audioMode: "crossfade",
+    }))
+
+    expect(mocks.runFfmpeg).toHaveBeenCalledTimes(2)
+    const fallbackArgs = mocks.runFfmpeg.mock.calls[1][0] as string[]
+    // Fallback is concat demuxer with stream copy — preserves existing audio
+    // even though crossfade can no longer run.
+    expect(fallbackArgs).toContain("concat")
+    expect(fallbackArgs[fallbackArgs.indexOf("-c") + 1]).toBe("copy")
+    expect(fallbackArgs).not.toContain("-an")
+  })
 })
 
 // ===========================================================================

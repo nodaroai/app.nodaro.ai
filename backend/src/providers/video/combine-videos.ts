@@ -227,8 +227,11 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
 
     const outputPath = join(workDir, "output.mp4")
 
-    // Simple cut: use concat demuxer (fastest, stream copy)
-    if (transition === "cut") {
+    // Concat-demuxer fast path: stream-copy, no filter graph. Used for cut
+    // transitions where audio doesn't need filtering. cut+crossfade falls
+    // through to the filter-graph path below because acrossfade can't run
+    // under stream-copy.
+    if (transition === "cut" && audioMode !== "crossfade") {
       const listPath = join(workDir, "filelist.txt")
       const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
       await fs.writeFile(listPath, listContent)
@@ -260,6 +263,44 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
     const inputs: string[] = []
     for (const p of inputPaths) {
       inputs.push("-i", p)
+    }
+
+    // cut+crossfade: hard-cut video (concat filter) + crossfaded audio
+    // (acrossfade chain). acrossfade shortens audio by (N-1)*d while concat
+    // keeps full video duration, so pad audio with silence (apad) to match.
+    if (transition === "cut") {
+      const videoConcatInputs = inputPaths.map((_, i) => `[${i}:v]`).join("")
+      const videoConcat = `${videoConcatInputs}concat=n=${inputPaths.length}:v=1:a=0[vout]`
+      const videoTotal = durations.reduce((sum, d) => sum + d, 0)
+      const audioFilter = buildAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
+      const paddedAudio = `${audioFilter.outputLabel}apad=whole_dur=${videoTotal}[aout_padded]`
+      const fullFilter = `${videoConcat};${audioFilter.filter};${paddedAudio}`
+
+      try {
+        await runFfmpeg([
+          "-y",
+          ...inputs,
+          "-filter_complex", fullFilter,
+          "-map", "[vout]",
+          "-map", "[aout_padded]",
+          "-c:v", "libx264",
+          "-preset", "fast",
+          "-c:a", "aac",
+          outputPath,
+        ])
+      } catch {
+        // acrossfade fails if any clip lacks an audio stream. Fall back to
+        // concat demuxer with stream copy — preserves existing audio at the
+        // cost of the crossfade effect.
+        console.log("[combineVideos] cut+crossfade failed, falling back to concat (no audio crossfade)")
+        const listPath = join(workDir, "filelist.txt")
+        const listContent = inputPaths.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n")
+        await fs.writeFile(listPath, listContent)
+        await runFfmpeg(["-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", outputPath])
+      }
+
+      console.log(`[combineVideos] Output (cut+crossfade): ${outputPath}`)
+      return outputPath
     }
 
     const xfadeType = resolveXfadeName(transition)

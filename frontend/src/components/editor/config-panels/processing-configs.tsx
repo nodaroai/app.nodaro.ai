@@ -65,9 +65,11 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         />
       </div>
 
-      {data.transition !== "cut" && (
+      {(data.transition !== "cut" || (data.audioMode ?? "crossfade") === "crossfade") && (
         <div>
-          <Label htmlFor="transition-duration">Duration — {data.transitionDuration ?? 0.5}s</Label>
+          <Label htmlFor="transition-duration">
+            {data.transition !== "cut" ? "Duration" : "Crossfade duration"} — {data.transitionDuration ?? 0.5}s
+          </Label>
           <Input
             id="transition-duration"
             type="number"
