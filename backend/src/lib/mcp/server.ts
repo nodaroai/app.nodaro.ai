@@ -12,6 +12,7 @@ import { registerModels } from "./tools/models.js"
 import { registerGallery } from "./tools/gallery.js"
 import { registerCharacterTools } from "./tools/characters.js"
 import { registerLocationTools } from "./tools/locations.js"
+import { registerObjectTools } from "./tools/objects.js"
 import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
@@ -113,6 +114,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerGallery({ server, session, fastify: opts.fastify })
   registerCharacterTools({ server, session, fastify: opts.fastify })
   registerLocationTools({ server, session, fastify: opts.fastify })
+  registerObjectTools({ server, session, fastify: opts.fastify })
   registerUploadTools({ server, session })
   registerFilmDirectorTool(server, session)
   registerSkillLoaders(server, session)
