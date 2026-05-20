@@ -9,7 +9,7 @@ const map: LocaleCatalogMap = {
   "fade-to-white": { label: "淡出至白", description: "画面泛白，第二幕从白光中显现" },
   "match-cut": { label: "匹配剪辑", description: "镜头间形状或动作的视觉呼应" },
   "smash-cut": { label: "撞击剪辑", description: "对比强烈的镜头间的突兀硬切" },
-  "iris": { label: "圆形遮幅", description: "圆形虹膜收缩后展开至第二幕" },
+  "iris": { label: "虹膜转场", description: "圆形虹膜收缩后展开至第二幕" },
   "wipe": { label: "划像", description: "直线划过替换第一个镜头" },
   "roll-transition": { label: "滚动转场", description: "画面旋转90–180°，第二幕正立落定" },
   "seamless-match": { label: "无缝匹配", description: "以运动与色调伪装的隐形剪辑" },
@@ -87,7 +87,7 @@ const map: LocaleCatalogMap = {
   // ── Glitch ──
   "digital-glitch": { label: "数字故障", description: "RGB分离+扫描线+数据溶解故障" },
   "vhs-rewind": { label: "VHS倒带", description: "VHS磁带倒带式画面扭曲" },
-  "datamosh": { label: "数据溶解", description: "运动向量模糊渗透场景切换" },
+  "datamosh": { label: "Datamosh", description: "运动向量模糊渗透场景切换" },
   "channel-flip": { label: "频道切换", description: "电视静电加频道跳转" },
   "hologram-flicker": { label: "全息闪烁", description: "全息风闪烁中新场景物化显现" },
   "display-wipe": { label: "显示屏切换", description: "场景压缩入显示屏，展开为新场景" },

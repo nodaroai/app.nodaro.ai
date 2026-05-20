@@ -4,7 +4,7 @@ const map: LocaleCatalogMap = {
   // ── Standard ──
   "auto": { label: "Авто", description: "Модель выбирает подходящий переход" },
   "none": { label: "Без перехода / прямой монтаж", description: "Мгновенная смена без эффекта" },
-  "cross-dissolve": { label: "Перекрёстное растворение", description: "Плавное смешение двух сцен" },
+  "cross-dissolve": { label: "Перекрёстный наплыв", description: "Плавное смешение двух сцен" },
   "fade-to-black": { label: "Затемнение", description: "Постепенное затемнение, затем новая сцена" },
   "fade-to-white": { label: "Засветка", description: "Осветление до белого, затем новая сцена" },
   "match-cut": { label: "Монтаж по форме", description: "Совпадение формы или движения между сценами" },

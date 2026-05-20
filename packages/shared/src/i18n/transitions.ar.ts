@@ -9,7 +9,7 @@ const map: LocaleCatalogMap = {
   "fade-to-white": { label: "تلاشٍ إلى الأبيض", description: "توهج حتى الأبيض ثم تظهر اللقطة" },
   "match-cut": { label: "قطع متطابق", description: "تطابق الشكل أو الحركة بين اللقطتين" },
   "smash-cut": { label: "قطع مفاجئ", description: "قطع مفاجئ صارخ بين لقطتين متباينتين" },
-  "iris": { label: "قطع قزحي", description: "دائرة تنغلق ثم تنفتح على اللقطة الجديدة" },
+  "iris": { label: "انتقال القزحية", description: "دائرة تنغلق ثم تنفتح على اللقطة الجديدة" },
   "wipe": { label: "مسح خطي", description: "خط يجتاح الإطار ليكشف اللقطة الجديدة" },
   "roll-transition": { label: "دوران", description: "الإطار يدور 90-180 درجة للانتقال" },
   "seamless-match": { label: "تطابق سلس", description: "قطع خفي يُموَّه بتطابق الحركة واللون" },
