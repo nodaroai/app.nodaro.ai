@@ -6,6 +6,8 @@ export const PROVIDER_KIND_VALUES = [
   "kie-standard",
   "kie-veo",
   "kie-suno",
+  "kie-suno-voice-create",
+  "kie-suno-voice-validate",
   "kie-kontext",
   "kie-luma",
   "kie-kling3",
@@ -30,20 +32,27 @@ const MIN = 60 * 1000
  * (`kie-lip-sync` 75 min) with 15-min headroom for legitimate long runs.
  */
 export const STALE_THRESHOLD_MS: Record<ProviderKind, number> = {
-  "kie-standard":         10 * MIN,
-  "kie-veo":              25 * MIN,
-  "kie-suno":             30 * MIN,
-  "kie-kontext":          10 * MIN,
-  "kie-luma":             25 * MIN,
-  "kie-kling3":           25 * MIN,
-  "kie-runway":           25 * MIN,
-  "kie-lip-sync":         75 * MIN,
-  "kie-llm":               5 * MIN,
-  "replicate-prediction": 20 * MIN,
-  "replicate-training":   30 * MIN,
-  "elevenlabs-async":     15 * MIN,
-  "elevenlabs-sync":       5 * MIN,
-  "anthropic-sync":        5 * MIN,
+  "kie-standard":             10 * MIN,
+  "kie-veo":                  25 * MIN,
+  "kie-suno":                 30 * MIN,
+  // Suno voice persona: user-driven multi-step modal. Credits reserved on
+  // POST /voice/generate; commit happens when the frontend's poll of
+  // GET /voice/record-info sees terminal status. If the user abandons the
+  // modal, sync-sweep refunds at 2h. Validate has no credits — 24h cleanup.
+  // Migrated from the standalone `sweepStaleVoiceJobs` cron (P5.2).
+  "kie-suno-voice-create":   120 * MIN,
+  "kie-suno-voice-validate": 24 * 60 * MIN,
+  "kie-kontext":              10 * MIN,
+  "kie-luma":                 25 * MIN,
+  "kie-kling3":               25 * MIN,
+  "kie-runway":               25 * MIN,
+  "kie-lip-sync":             75 * MIN,
+  "kie-llm":                   5 * MIN,
+  "replicate-prediction":     20 * MIN,
+  "replicate-training":       30 * MIN,
+  "elevenlabs-async":         15 * MIN,
+  "elevenlabs-sync":           5 * MIN,
+  "anthropic-sync":            5 * MIN,
 }
 
 /** Smallest entry in `STALE_THRESHOLD_MS`. Drives the SQL pre-filter cutoff
@@ -63,6 +72,8 @@ export const MAX_ATTEMPTS = 18
 
 const SYNC_KINDS: ReadonlySet<ProviderKind> = new Set([
   "kie-llm",
+  "kie-suno-voice-create",
+  "kie-suno-voice-validate",
   "elevenlabs-sync",
   "anthropic-sync",
 ])

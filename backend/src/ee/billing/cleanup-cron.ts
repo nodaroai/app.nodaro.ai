@@ -5,7 +5,6 @@ import {
   expireSubscriptions,
   renewSubscriptionCredits,
   sendStorageWarnings,
-  sweepStaleVoiceJobs,
   sweepSoftDeletedLocationAssets,
 } from "./cleanup-service.js"
 import { recordKieCreditSnapshot } from "../routes/admin-kie-credits.js"
@@ -17,10 +16,9 @@ import { reconcileInflightJobs } from "../../lib/reconcile/cron.js"
  * Schedule:
  * - expireSubscriptions:        every hour at :00
  * - renewSubscriptionCredits:   every hour at :30
- * - sweepStaleVoiceJobs:        every hour at :45 (refund abandoned suno-voice-create)
  * - recordKieCreditSnapshot:    every hour at :15
  * - reconcileInflightJobs:      every 5 minutes (sync-sweep + async recovery
- *                                including replicate-training)
+ *                                including replicate-training, suno-voice-*)
  * - cleanupFreeUserMedia:       daily at 03:00 UTC
  * - cleanupCanceledUserMedia:   daily at 03:30 UTC
  * - sweepSoftDeletedLocationAssets: daily at 04:00 UTC (Phase 2 #8)
@@ -66,22 +64,10 @@ export function startCleanupCron(): void {
     }
   })
 
-  // Sweep stale suno-voice jobs -- every hour at :45
-  cron.schedule("45 * * * *", async () => {
-    console.log("[cron] Starting suno-voice sweep...")
-    const start = Date.now()
-    try {
-      const result = await sweepStaleVoiceJobs()
-      console.log(
-        `[cron] Voice sweep done: ` +
-        `create.refunded=${result.created.refunded} create.failed=${result.created.markedFailed} ` +
-        `validate.failed=${result.validate.markedFailed} errors=${result.errors} ` +
-        `(${Date.now() - start}ms)`
-      )
-    } catch (err) {
-      console.error("[cron] Voice sweep failed:", err)
-    }
-  })
+  // suno-voice sweep migrated to unified reconcile cron:
+  //   kie-suno-voice-create   → sync-sweep refunds at 2h
+  //   kie-suno-voice-validate → sync-sweep marks failed at 24h
+  // See lib/reconcile/types.ts STALE_THRESHOLD_MS.
 
   // Free user media cleanup -- daily at 03:00 UTC
   cron.schedule("0 3 * * *", async () => {
@@ -178,5 +164,5 @@ export function startCleanupCron(): void {
     }
   })
 
-  console.log("[cron] Billing cleanup cron jobs started (9 schedules)")
+  console.log("[cron] Billing cleanup cron jobs started (8 schedules)")
 }
