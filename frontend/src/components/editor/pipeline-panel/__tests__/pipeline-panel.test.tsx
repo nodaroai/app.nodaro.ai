@@ -12,6 +12,14 @@ vi.mock("@/lib/pipelines-api", () => ({
     rejectStage: vi.fn(),
     cancel: vi.fn(),
     eventsUrl: vi.fn(() => "/events"),
+    branch: vi.fn(),
+  },
+}))
+
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
   },
 }))
 vi.mock("@/hooks/use-pipeline-events", () => ({
@@ -24,6 +32,7 @@ vi.mock("@/hooks/use-pipeline-events", () => ({
 }))
 
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { toast } from "sonner"
 
 function renderWithClient(ui: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -100,6 +109,123 @@ describe("PipelinePanel", () => {
     renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
     await waitFor(() => expect(screen.getByText("Hero")).toBeInTheDocument())
     expect(screen.getByText("Approve")).toBeInTheDocument()
+  })
+
+  // ── Phase 1D.3 C1: Re-run from here ─────────────────────────────────────
+  it("renders 'Re-run from here' on each stage when pipeline is completed", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "completed", current_stage: null,
+      spent_credits: 100, reserved_credits: 0, upfront_credit_estimate: 100,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: /re-run from here/i })).toHaveLength(8)
+    )
+  })
+
+  it("hides 'Re-run from here' section when pipeline status is 'running'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script",
+      spent_credits: 10, reserved_credits: 50, upfront_credit_estimate: 50,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    // Wait for the pipeline to load
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(screen.queryByText("Re-run from here")).not.toBeInTheDocument()
+  })
+
+  it("calls pipelinesApi.branch with the right stage name on click", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "completed", current_stage: null,
+      spent_credits: 100, reserved_credits: 0, upfront_credit_estimate: 100,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "approved", output: {}, critic_feedback: {},
+    })
+    ;(pipelinesApi.branch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      pipelineId: "p2", clonedStages: [], clonedEntities: [],
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId("rerun-btn-scene_images")).toBeInTheDocument()
+    )
+    await userEvent.click(screen.getByTestId("rerun-btn-scene_images"))
+    await waitFor(() =>
+      expect(pipelinesApi.branch).toHaveBeenCalledWith("p1", "scene_images")
+    )
+    expect(toast.success).toHaveBeenCalled()
+  })
+
+  // ── Phase 1D.3 D1: Branch lineage breadcrumb ─────────────────────────────
+  it("shows breadcrumb when pipeline is branched", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: "p0", branched_from_stage: "shot_list",
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(screen.getByTestId("branch-lineage-breadcrumb")).toBeInTheDocument()
+    )
+    expect(screen.getByText("Branched from")).toBeInTheDocument()
+    expect(screen.getByText("original pipeline")).toBeInTheDocument()
+    expect(screen.getByText("(at shot_list)")).toBeInTheDocument()
+  })
+
+  it("hides breadcrumb when pipeline is not branched", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(screen.queryByTestId("branch-lineage-breadcrumb")).not.toBeInTheDocument()
+  })
+
+  it("invokes onNavigateToPipeline with the parent pipeline id on breadcrumb link click", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: "p0", branched_from_stage: "shot_list",
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    const onNavigate = vi.fn()
+    renderWithClient(
+      <PipelinePanel pipelineId="p1" onClose={() => undefined} onNavigateToPipeline={onNavigate} />
+    )
+
+    await waitFor(() => expect(screen.getByText("original pipeline")).toBeInTheDocument())
+    await userEvent.click(screen.getByText("original pipeline"))
+    expect(onNavigate).toHaveBeenCalledWith("p0")
   })
 
   it("renders SceneGrid when current_stage is shot_list", async () => {

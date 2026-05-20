@@ -15,6 +15,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
   - [`client.characters`](#clientcharacters)
+  - [`client.pipelines`](#clientpipelines)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -721,6 +722,28 @@ Re-runs the LLM caption against the current portrait. Returns 400
 ```ts
 const { canonicalDescription } = await client.characters.recaption(characterId)
 ```
+
+---
+
+### `client.pipelines`
+
+Story-to-Video pipeline operations. Pipelines orchestrate multi-stage AI production
+runs (script → characters → objects → locations → shot list → scene images →
+animate + audio + edit → post merge).
+
+#### `client.pipelines.branch(id, { fromStage })`
+
+Re-run a completed pipeline from a specific stage. Creates a new pipeline with
+lineage tracked.
+
+```ts
+const result = await client.pipelines.branch("pipe-1", { fromStage: "scene_images" })
+console.log(`New pipeline: ${result.pipelineId}`)
+```
+
+Returns `{ pipelineId, clonedStages, clonedEntities }`. The original pipeline
+remains in `status='completed'`. Throws on the same errors as the underlying
+route (see api-integration.md `POST /v1/pipelines/:id/branch`).
 
 ---
 

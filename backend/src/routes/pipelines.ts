@@ -181,7 +181,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const { data, error } = await supabase
       .from("pipelines")
       .select(
-        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id",
+        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage",
       )
       .eq("id", params.data.id)
       .maybeSingle()
@@ -871,6 +871,59 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // TODO Phase 1D: integrate branch-from-stage on reject so the user
       // can iterate from the rejected sub-gate without abandoning the run.
       return reply.send({ ok: false, gate, reason: "rejected" })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/branch ───────────────────────────────────────
+  // Phase 1D.3 — clone a completed pipeline's upstream state into a new
+  // pipeline that re-runs from the given stage. The original pipeline stays
+  // `status='completed'`; the new pipeline starts `status='running'`.
+  app.post<{ Params: { id: string }; Body: { fromStage: string } }>(
+    "/v1/pipelines/:id/branch",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:execute")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const bodyParsed = z
+        .object({ fromStage: z.enum(STAGE_NAMES as [string, ...string[]]) })
+        .safeParse(req.body)
+      if (!bodyParsed.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: bodyParsed.error.issues },
+        })
+      }
+
+      const { branchPipeline, BranchPipelineError } = await import(
+        "../ee/pipelines/branch-pipeline.js"
+      )
+
+      try {
+        const result = await branchPipeline({
+          supabase,
+          originalPipelineId: req.params.id,
+          fromStage: bodyParsed.data.fromStage as PipelineStageName,
+          userId,
+        })
+        return reply.status(201).send({
+          pipelineId: result.newPipelineId,
+          clonedStages: result.clonedStages,
+          clonedEntities: result.clonedEntities,
+        })
+      } catch (err) {
+        if (err instanceof BranchPipelineError) {
+          const statusMap: Record<string, number> = {
+            pipeline_not_found: 404,
+            pipeline_not_completed: 400,
+            forbidden: 403,
+            invalid_stage: 400,
+          }
+          const httpStatus = statusMap[err.code] ?? 500
+          return reply.status(httpStatus).send({ error: { code: err.code } })
+        }
+        throw err
+      }
     },
   )
 
