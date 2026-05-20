@@ -4441,6 +4441,7 @@ export function executeNode(
       combineData.trimStartFrames,
       combineData.trimEndFrames,
       upstreamDurations,
+      combineData.audioCrossfadeCurve,
     );
   }
 

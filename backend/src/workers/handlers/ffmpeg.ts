@@ -37,7 +37,7 @@ import {
 import { isKineticCaptionStyle } from "@nodaro/shared"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
-  const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = job.data as {
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
     /** Validated upstream against `COMBINE_TRANSITION_IDS` at the route's
@@ -45,12 +45,13 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
     transition: string
     transitionDuration: number
     audioMode?: "keep" | "crossfade" | "remove"
+    audioCrossfadeCurve?: string
     trimStartFrames?: number
     trimEndFrames?: number
   }
-  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
+  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, curve=${audioCrossfadeCurve ?? "linear"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
-  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
+  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
   await setJobProgress(job, ctx.jobId, 80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)

@@ -16,6 +16,7 @@ import {
   isSeedance2Provider,
   ALL_CAPTION_STYLES,
   COMBINE_TRANSITION_IDS,
+  AUDIO_CROSSFADE_CURVE_IDS,
 } from "@nodaro/shared"
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -567,6 +568,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .optional(),
         transition_duration: z.number().min(0).max(5).optional(),
         audio_mode: z.enum(["keep", "crossfade", "remove"]).optional(),
+        audio_crossfade_curve: z
+          .enum(AUDIO_CROSSFADE_CURVE_IDS as unknown as [string, ...string[]])
+          .optional()
+          .describe("Curve shape for audio crossfade (only consulted when audio_mode='crossfade')"),
       },
               outputSchema: {
           jobId: z.string(),
@@ -620,6 +625,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         transition: args.transition,
         transitionDuration: args.transition_duration,
         audioMode: args.audio_mode,
+        audioCrossfadeCurve: args.audio_crossfade_curve,
         mcp_client: session.clientName,
         userId: session.userId,
       }

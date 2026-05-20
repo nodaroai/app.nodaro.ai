@@ -15,6 +15,7 @@ import {
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "./combine-transition-picker"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type {
   CombineVideosData,
@@ -81,7 +82,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         </div>
       )}
 
-      <div>
+      <div className="flex flex-col gap-1.5">
         <Label>Audio</Label>
         <Select
           value={data.audioMode ?? "crossfade"}
@@ -94,6 +95,28 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
             <SelectItem value="remove">Remove audio</SelectItem>
           </SelectContent>
         </Select>
+        {(data.audioMode ?? "crossfade") === "crossfade" && (
+          <div className="flex flex-col gap-1 pl-3 border-l-2 border-muted-foreground/20">
+            <Label htmlFor="audio-crossfade-curve" className="text-[11px] text-muted-foreground">
+              Crossfade curve
+            </Label>
+            <Select
+              value={data.audioCrossfadeCurve ?? DEFAULT_AUDIO_CROSSFADE_CURVE_ID}
+              onValueChange={(v) => onUpdate({ audioCrossfadeCurve: v })}
+            >
+              <SelectTrigger id="audio-crossfade-curve" aria-label="Crossfade curve" className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUDIO_CROSSFADE_CURVES.map((c) => (
+                  <SelectItem key={c.id} value={c.id} title={c.description}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div>

@@ -537,7 +537,12 @@ async function chainCombineWithTransitions(args: ChainArgs): Promise<string> {
   let videoLabel = "[0:v]"
   for (let i = 1; i < clipPaths.length; i++) {
     const t = transitions[i - 1]!
-    const xfadeType = "fade" // both dissolve + overlap map to fade
+    // Pipeline transitions are LLM-emitted story-level beats (hard_cut /
+    // match_cut / dissolve / overlap), distinct from combine-videos' raw
+    // FFmpeg-name catalog. `dissolve` here means "soft reflective blend",
+    // NOT the pixel-noise `dissolve` xfade — keep it on `fade`. `overlap`
+    // is the same fade with a longer default duration (1.0s, set below).
+    const xfadeType = "fade"
     // overlap → longer; dissolve → standard 0.5s default
     const dur =
       t.duration ??

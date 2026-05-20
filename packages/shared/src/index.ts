@@ -974,3 +974,12 @@ export type {
   CombineTransition,
   CombineTransitionGroup,
 } from "./combine-transitions.js"
+
+export {
+  AUDIO_CROSSFADE_CURVES,
+  AUDIO_CROSSFADE_CURVE_IDS,
+  DEFAULT_AUDIO_CROSSFADE_CURVE_ID,
+  getAudioCrossfadeCurve,
+  resolveAudioCrossfadeCurve,
+} from "./audio-crossfade-curves.js"
+export type { AudioCrossfadeCurve } from "./audio-crossfade-curves.js"

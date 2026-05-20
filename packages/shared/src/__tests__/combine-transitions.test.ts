@@ -21,6 +21,67 @@ describe("COMBINE_TRANSITIONS catalog", () => {
     }
   })
 
+  it("snapshot: catalog ids (sorted) — any add/remove/rename must update this", () => {
+    // Locks the full id surface so a silent rename can't break saved workflows.
+    expect([...COMBINE_TRANSITION_IDS].sort()).toMatchInlineSnapshot(`
+      [
+        "circle-close",
+        "circle-crop",
+        "circle-open",
+        "cover-down",
+        "cover-left",
+        "cover-right",
+        "cover-up",
+        "cut",
+        "diag-bl",
+        "diag-br",
+        "diag-tl",
+        "diag-tr",
+        "dip-to-black",
+        "dip-to-white",
+        "dissolve",
+        "distance",
+        "fade",
+        "fadegrays",
+        "hblur",
+        "hl-slice",
+        "horz-close",
+        "horz-open",
+        "hr-slice",
+        "pixelize",
+        "radial",
+        "rect-crop",
+        "reveal-down",
+        "reveal-left",
+        "reveal-right",
+        "reveal-up",
+        "slide-down",
+        "slide-left",
+        "slide-right",
+        "slide-up",
+        "smooth-down",
+        "smooth-left",
+        "smooth-right",
+        "smooth-up",
+        "squeeze-h",
+        "squeeze-v",
+        "vd-slice",
+        "vert-close",
+        "vert-open",
+        "vu-slice",
+        "wipe-bl",
+        "wipe-br",
+        "wipe-down",
+        "wipe-left",
+        "wipe-right",
+        "wipe-tl",
+        "wipe-tr",
+        "wipe-up",
+        "zoom-in",
+      ]
+    `)
+  })
+
   it("flags the right set as `common` (the Common tab)", () => {
     const commonIds = COMBINE_TRANSITIONS.filter((t) => t.common).map((t) => t.id)
     expect(commonIds).toEqual(

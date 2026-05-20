@@ -1,7 +1,7 @@
 ---
 node_type: character-fx
-generated_at: 2026-05-20T12:36:29.018Z
-generated_from: f43e0370
+generated_at: 2026-05-20T13:15:49.158Z
+generated_from: 806ad950
 ---
 
 # Character FX

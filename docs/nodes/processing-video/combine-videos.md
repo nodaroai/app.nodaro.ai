@@ -53,8 +53,18 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 ### Audio Modes
 
 - **keep** — Preserve original audio from each clip
-- **crossfade** — Blend audio during transition
+- **crossfade** — Blend audio during transition (curve configurable, see below)
 - **remove** — Strip all audio from output
+
+### Crossfade Curve (only when Audio = Crossfade)
+
+| Curve | FFmpeg `acrossfade=curve=` | When to use |
+|-------|----------------------------|-------------|
+| Linear | `tri` | Default — predictable but can dip in the middle for music |
+| Equal Power | `qsin` | Keeps perceived loudness roughly constant — best for music |
+| Smooth (Sine) | `hsin` | Gentler than equal-power — good for dialogue and ambient |
+| Logarithmic | `log` | Compensates for the ear's logarithmic loudness response; long, slow tails |
+| Exponential | `exp` | Sharp out / slow in — punchy, good for impact moments |
 
 ## Inputs & Outputs
 

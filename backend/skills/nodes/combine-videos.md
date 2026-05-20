@@ -1,10 +1,10 @@
 ---
 node_type: combine-videos
-generated_at: 2026-05-20T12:52:11.311Z
-generated_from: aef31e47
+generated_at: 2026-05-20T13:15:49.575Z
+generated_from: 806ad950
 ---
 
-# combine-videos
+# Combine Videos
 
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `combine-videos`
@@ -22,6 +22,7 @@ generated_from: aef31e47
 
 **Optional data fields:**
 - `currentJobProgress?: number`
+- `audioCrossfadeCurve?: string`
 - `trimStartFrames?: number`
 - `trimEndFrames?: number`
 - `clipOrder?: string[]`
@@ -43,6 +44,10 @@ generated_from: aef31e47
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
+## When to use
+
+(Add prose here. Auto-gen will preserve it across regenerations.)
+
 <!-- AUTO-GEN:START mcp-call -->
 **MCP tool:** `combine_videos`
 
@@ -51,17 +56,12 @@ generated_from: aef31e47
 - `transition`
 - `transition_duration`
 - `audio_mode`
+- `audio_crossfade_curve`
 <!-- AUTO-GEN:END mcp-call -->
-
-## When to use
-
-Stitch multiple video clips into a single output. For multi-shot films, this runs after per-shot trimming in Stage 8 (final assembly).
 
 ## Common gotchas
 
-- The backend probes every input clip's resolution and unifies them (letterboxes smaller clips to the most common dimensions). You don't need to resize manually before combining.
-- `crossfade` audio mode requires source clips to have audio tracks. If any clip is silent, it falls back to a hard cut on the audio.
-- `dip-to-black` / `dip-to-white` insert short color frames between clips — useful for emotional cuts.
+(Add prose here.)
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

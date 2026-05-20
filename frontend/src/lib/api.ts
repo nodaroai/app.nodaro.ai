@@ -1881,6 +1881,7 @@ export async function combineVideos(
   trimEndFrames?: number,
   /** Same length and order as videoUrls; included only when ALL entries are positive numbers. */
   upstreamDurations?: ReadonlyArray<number | undefined>,
+  audioCrossfadeCurve?: string,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrls, transition, transitionDuration, audioMode }
   if (userId) {
@@ -1888,6 +1889,7 @@ export async function combineVideos(
   }
   if (trimStartFrames && trimStartFrames > 0) body.trimStartFrames = trimStartFrames
   if (trimEndFrames && trimEndFrames > 0) body.trimEndFrames = trimEndFrames
+  if (audioCrossfadeCurve) body.audioCrossfadeCurve = audioCrossfadeCurve
   if (
     upstreamDurations &&
     upstreamDurations.length === videoUrls.length &&

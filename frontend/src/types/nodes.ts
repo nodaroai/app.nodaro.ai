@@ -2386,6 +2386,9 @@ export type CombineVideosData = {
   transition: string
   transitionDuration: number
   audioMode: "keep" | "crossfade" | "remove"
+  /** Any id from `AUDIO_CROSSFADE_CURVES` (`@nodaro/shared`). Only consulted
+   *  when audioMode==="crossfade". Optional — backend defaults to "linear". */
+  audioCrossfadeCurve?: string
   trimStartFrames?: number
   trimEndFrames?: number
   clipOrder?: string[]
