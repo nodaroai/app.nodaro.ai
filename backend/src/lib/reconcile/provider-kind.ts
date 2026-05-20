@@ -58,6 +58,10 @@ export function providerKindForLipSyncModel(_model: string): ProviderKind {
 
 export function providerKindForVideoToVideoModel(model: string): ProviderKind {
   if (model === "luma-modify") return "kie-luma"
+  // Runway Aleph polls `/api/v1/aleph/record-info`, NOT the standard
+  // `/api/v1/jobs/recordInfo`. Without this branch the reconciler hit the
+  // wrong endpoint and force-failed every stuck Aleph row.
+  if (model === "runway-aleph") return "kie-aleph"
   return "kie-standard"
 }
 

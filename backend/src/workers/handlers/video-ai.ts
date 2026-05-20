@@ -666,25 +666,31 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
     ctx.jobId,
     { start: 5, cap: 45 },
     async () => {
-      const upscaleOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
+      // Per-branch provider_kind: each upscale path polls a DIFFERENT KIE
+      // endpoint, so the reconcile dispatcher needs the right kind to pick
+      // the matching `pollX` function. Wiring all three through
+      // `kie-standard` (the old default) sent reconcile to
+      // `/api/v1/jobs/recordInfo` for VEO 4K / 1080p tasks that live on
+      // `/api/v1/veo/record-info` / `/api/v1/veo/get-1080p-video` — every
+      // stuck row got force-failed after 18 wrong-endpoint polls.
       if (upscaleProvider === "veo-1080p" && kieTaskId) {
-        // Quasi-sync poll endpoint — no createTask, so no taskId callback.
-        // The provider_kind still applies; persistence happens via the
-        // higher-level orchestrator if needed.
-        const result = await runVeo1080pTask(kieTaskId)
+        const veo1080OnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-veo-1080p")
+        const result = await runVeo1080pTask(kieTaskId, 0, { onTaskCreated: veo1080OnTaskCreated })
         return result.url
       } else if (upscaleProvider === "veo-4k" && kieTaskId) {
-        const { resultJson } = await runVeo4kTask(kieTaskId, 0, { onTaskCreated: upscaleOnTaskCreated })
+        const veo4kOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-veo")
+        const { resultJson } = await runVeo4kTask(kieTaskId, 0, { onTaskCreated: veo4kOnTaskCreated })
         const url = resultJson.resultUrls?.[0]
         if (!url) throw new Error("VEO 4K succeeded but no URL found")
         return url
       } else {
         if (!videoUrl) throw new Error("videoUrl is required for Topaz upscale")
+        const topazOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
         const onProgress: ProgressCallback = async (progress: number) => {
           console.log(`[worker] Job ${ctx.jobId} video-upscale progress: ${progress}%`)
           await setJobProgress(job, ctx.jobId, progress)
         }
-        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress }, { onTaskCreated: upscaleOnTaskCreated })
+        const result = await videoUpscale(videoUrl, "topaz", upscaleFactor ?? "2", { onProgress }, { onTaskCreated: topazOnTaskCreated })
         return result.url
       }
     },

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const pollKieTaskMock = vi.fn()
   const pollVeoTaskMock = vi.fn()
+  const runVeo1080pTaskMock = vi.fn()
   const pollKling3TaskMock = vi.fn()
   const pollKontextTaskMock = vi.fn()
   const pollLumaTaskMock = vi.fn()
@@ -61,6 +62,7 @@ const mocks = vi.hoisted(() => {
   return {
     pollKieTaskMock,
     pollVeoTaskMock,
+    runVeo1080pTaskMock,
     pollKling3TaskMock,
     pollKontextTaskMock,
     pollLumaTaskMock,
@@ -83,6 +85,7 @@ vi.mock("../../supabase.js", () => ({
 vi.mock("../../../providers/kie/client.js", () => ({
   pollKieTask: mocks.pollKieTaskMock,
   pollVeoTask: mocks.pollVeoTaskMock,
+  runVeo1080pTask: mocks.runVeo1080pTaskMock,
   KieError: mocks.FakeKieError,
 }))
 
@@ -162,6 +165,47 @@ describe("reconcileKieJob", () => {
     await reconcileKieJob(row)
     expect(mocks.pollVeoTaskMock).toHaveBeenCalledWith("t-veo", "VEO")
     expect(mocks.finalizeMock).toHaveBeenCalled()
+  })
+
+  it("kie-aleph success → uses pollAlephTask and finalizes", async () => {
+    // Reconcile blind-spot regression: runway-aleph used to be tagged
+    // `kie-standard`, which routed singlePoll to the wrong endpoint and
+    // force-failed every stuck Aleph row after 18 attempts.
+    mocks.pollAlephTaskMock.mockResolvedValueOnce("https://aleph.example/v.mp4")
+    const row: KieJobRow = {
+      id: "j-aleph",
+      provider_kind: "kie-aleph",
+      provider_task_id: "t-aleph",
+      reconcile_attempts: 0,
+      job_type: "video-to-video",
+    }
+    await reconcileKieJob(row)
+    expect(mocks.pollAlephTaskMock).toHaveBeenCalledWith("t-aleph")
+    expect(mocks.pollKieTaskMock).not.toHaveBeenCalled()
+    expect(mocks.finalizeMock).toHaveBeenCalled()
+  })
+
+  it("kie-veo-1080p success → re-calls runVeo1080pTask with parent kieTaskId", async () => {
+    // The 1080p endpoint reuses the original VEO task's id (no separate
+    // 1080p task is created). singlePoll uses runVeo1080pTask which retries
+    // internally; here we just verify the dispatch.
+    mocks.runVeo1080pTaskMock.mockResolvedValueOnce({ url: "https://veo.example/1080p.mp4" })
+    const row: KieJobRow = {
+      id: "j-veo1080",
+      provider_kind: "kie-veo-1080p",
+      provider_task_id: "parent-veo-id",
+      reconcile_attempts: 0,
+      job_type: "video-upscale",
+    }
+    await reconcileKieJob(row)
+    expect(mocks.runVeo1080pTaskMock).toHaveBeenCalledWith("parent-veo-id")
+    expect(mocks.finalizeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: "j-veo1080",
+        jobType: "video-upscale",
+        result: expect.objectContaining({ url: "https://veo.example/1080p.mp4" }),
+      }),
+    )
   })
 
   it("kie-kling3 success → uses pollKling3Task and finalizes", async () => {

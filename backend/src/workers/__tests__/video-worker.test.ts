@@ -228,6 +228,24 @@ describe("video worker processor", () => {
     )
   })
 
+  it("sets provider_kind='pre-task' + provider_call_started_at in the processing transition", async () => {
+    // Reconcile blind-spot regression: a worker crash between status=processing
+    // and the first onTaskCreated used to leave the row invisible to the
+    // reconcile cron (NULL provider_call_started_at filter). The pre-task
+    // sentinel + timestamp make the row visible at the 30-min threshold, and
+    // the sync-sweep marks it failed + refunds the reservation.
+    const job = makeBullJob("generate-image")
+    await processor(job)
+
+    expect(mocks.mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "processing",
+        provider_kind: "pre-task",
+        provider_call_started_at: expect.any(String),
+      }),
+    )
+  })
+
   it("uses should_watermark from job record in cloud edition", async () => {
     mocks.mockSingle.mockResolvedValueOnce({
       data: mockJobRecord({ should_watermark: true }),

@@ -120,11 +120,22 @@ export function createVideoWorker() {
       const ctx: JobContext = { jobId, jobUserId, usageLogId, shouldWatermark }
 
       try {
+        // `provider_kind="pre-task"` + `provider_call_started_at=now` make
+        // this row visible to the reconcile cron BEFORE the handler fires
+        // its first `onTaskCreated`. If the handler crashes between this
+        // UPDATE and createKieTask (R2 download OOM, unhandled rejection in
+        // preprocessing, segfault, etc.), the sync-sweep marks failed +
+        // refunds reserved credits at the 30-min threshold. The real handler
+        // overwrites both fields via `makeOnTaskCreated` once it has a
+        // taskId, so the pre-task sentinel survives only on crash.
+        const nowIso = new Date().toISOString()
         await supabase
           .from("jobs")
           .update({
             status: "processing",
-            started_at: new Date().toISOString(),
+            started_at: nowIso,
+            provider_call_started_at: nowIso,
+            provider_kind: "pre-task",
             is_public: isPublicOutput,
             job_type: job.name,
           })
