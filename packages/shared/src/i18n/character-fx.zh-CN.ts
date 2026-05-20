@@ -50,7 +50,7 @@ const map: LocaleCatalogMap = {
   "bloom-mouth": { label: "花开之口", description: "花朵和藤蔓从张开的嘴中蔓延而出" },
   "x-ray": { label: "X光透视", description: "身体变为X光风格，骨骼清晰可见" },
   "agent-snap": { label: "墨镜弹出", description: "墨镜以明快的视觉节奏扣上" },
-  "visor-x": { label: "赛博头盔", description: "科幻赛博遮阳器在眼前显现" },
+  "visor-x": { label: "赛博护目镜", description: "科幻赛博护目镜在眼前显现" },
 
   // ── Aura-Ambient ──
   "paparazzi": { label: "狗仔闪光灯", description: "相机闪光灯在主体周围不断弹出" },

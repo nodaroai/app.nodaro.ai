@@ -20,7 +20,7 @@ const map: LocaleCatalogMap = {
   // ── Power ──
   "fire-breathe": { label: "आग की साँस", description: "लौ की निरंतर धारा उगलता है" },
   "ice-breathe": { label: "बर्फ़ की साँस", description: "जमी हुई हवा की धारा छोड़ता है" },
-  "air-bending": { label: "वायु मोड़", description: "दृश्य वायु भँवर को नियंत्रित करता है" },
+  "air-bending": { label: "वायु मोड़", description: "वायु भँवर को नियंत्रित करता है" },
   "water-bending": { label: "जल मोड़", description: "इशारों से पानी की धारा नियंत्रित करता है" },
   "earth-bending": { label: "पृथ्वी मोड़", description: "ज़मीन से पत्थर की शिलाएँ उठाता है" },
   "lightning-hands": { label: "बिजली के हाथ", description: "हाथों से विद्युत चाप निकलते हैं" },

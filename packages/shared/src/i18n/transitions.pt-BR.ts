@@ -71,7 +71,7 @@ const map: LocaleCatalogMap = {
   "gravity-flip": { label: "Inversão de Gravidade", description: "Gravidade inverte, câmera gira 180°" },
   "building-explosion": { label: "Explosão de Edifício", description: "Estrutura detona, cena muda pela fumaça" },
   "vehicle-explosion": { label: "Explosão de Veículo", description: "Veículo explode em primeiro plano, cena muda" },
-  "jump-match": { label: "Salto Combinado", description: "Sujeito pula, aterrizagem combina com nova cena" },
+  "jump-match": { label: "Salto Combinado", description: "Sujeito pula, aterrissagem combina com nova cena" },
   "hand-swipe": { label: "Varredura de Mão", description: "Mão passa pela lente, cena muda durante a oclusão" },
 
   // ── Light ──

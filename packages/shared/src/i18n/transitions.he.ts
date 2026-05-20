@@ -70,7 +70,7 @@ const map: LocaleCatalogMap = {
   "debris-shower": { label: "מקלחת פסולת", description: "פסולת עוברת בפריים והסצנה משתנה מאחוריה" },
   "gravity-flip": { label: "היפוך כבידה", description: "הכבידה מתהפכת והמצלמה מסתובבת 180 מעלות" },
   "building-explosion": { label: "פיצוץ מבנה", description: "מבנה מתפוצץ והסצנה נחשפת מבעד לעשן" },
-  "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ ולהבות מכסות את הפריים" },
+  "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ, להבות מכסות את הפריים, והסצנה מתחלפת" },
   "jump-match": { label: "קפיצה תואמת", description: "הדמות קופצת ונוחתת בסצנה חדשה" },
   "hand-swipe": { label: "מחיקת יד", description: "יד עוברת מול העדשה והסצנה משתנה" },
 
