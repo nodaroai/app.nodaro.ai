@@ -10,12 +10,17 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import {
   estimateCombineVideosCredits,
   type CombineVideosEstimatorInput,
+  COMBINE_TRANSITION_IDS,
 } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
+// Zod doesn't accept a readonly string[] directly in z.enum, but the runtime
+// shape is identical. Cast to a non-empty tuple on the type side only.
+const TRANSITION_ID_TUPLE = COMBINE_TRANSITION_IDS as unknown as [string, ...string[]]
+
 const combineVideosBody = z.object({
   videoUrls: z.array(safeUrlSchema).min(2, "At least 2 video URLs required"),
-  transition: z.enum(["cut", "fade", "dissolve", "dip-to-black", "dip-to-white"]).optional().default("cut"),
+  transition: z.enum(TRANSITION_ID_TUPLE).optional().default("cut"),
   transitionDuration: z.number().min(0).max(5).optional().default(0.5),
   audioMode: z.enum(["keep", "crossfade", "remove"]).optional().default("crossfade"),
   trimStartFrames: z.number().int().min(0).max(120).optional().default(0),

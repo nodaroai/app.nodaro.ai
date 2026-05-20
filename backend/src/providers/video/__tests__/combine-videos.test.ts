@@ -74,7 +74,7 @@ import { combineVideos } from "../combine-videos.js"
 
 interface CombineCallOpts {
   videoUrls?: string[]
-  transition?: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+  transition?: string
   transitionDuration?: number
   audioMode?: "keep" | "crossfade" | "remove"
   trimStartFrames?: number
@@ -296,98 +296,51 @@ describe("combineVideos — cut transition", () => {
 })
 
 // ===========================================================================
-// 4) Dip-to-black / dip-to-white
+// 4) Dip-to-black / dip-to-white — route through FFmpeg's built-in
+// `fadeblack` / `fadewhite` xfade transitions (no intermediate color clip).
 // ===========================================================================
 
 describe("combineVideos — dip transitions", () => {
-  it("dip-to-black: generates a black color clip BETWEEN inputs at the target resolution", async () => {
-    // 2 clips → 1 black clip in between (3 total)
-    // Probe order:
-    //   - 2 resolution probes (target pick) → both "1920x1080"
-    //   - then 3 duration probes for [clip0, black, clip1]
-    //   - then 3 audio-stream probes for keep mode
+  it("dip-to-black: emits xfade transition='fadeblack' with no lavfi color clip", async () => {
     stubResolutionProbes(2, "1920x1080")
     mocks.getVideoDuration
-      .mockResolvedValueOnce(5) // clip 0
-      .mockResolvedValueOnce(0.5) // black clip
-      .mockResolvedValueOnce(5) // clip 1
-    stubAudioStreamProbes(3, true)
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(5)
+    stubAudioStreamProbes(2, true)
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
       transition: "dip-to-black",
       transitionDuration: 0.5,
-      audioMode: "keep",
+      audioMode: "remove",
     }))
 
-    // The first 3 runFfmpeg calls are the 2 normalize trims (no — those go
-    // through normalizeVideoForCombine which is mocked separately).
-    // The trim helper isn't called either since trimStartFrames=0.
-    // So the first ffmpeg call is the color-clip generation.
-    const colorArgs = ffargs(0)
-    expect(colorArgs).toContain("-f")
-    expect(colorArgs).toContain("lavfi")
-    const colorInputIdx = colorArgs.findIndex((a) => a.startsWith("color=c=black"))
-    expect(colorInputIdx).toBeGreaterThan(-1)
-    expect(colorArgs[colorInputIdx]).toContain("color=c=black")
-    expect(colorArgs[colorInputIdx]).toContain("s=1920x1080")
+    // No ffmpeg call should generate a lavfi color clip anymore.
+    for (let i = 0; i < mocks.runFfmpeg.mock.calls.length; i++) {
+      const args = ffargs(i)
+      expect(args.some((a) => typeof a === "string" && a.startsWith("color=c="))).toBe(false)
+    }
+
+    const last = lastArgs()
+    const fc = last[last.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("transition=fadeblack")
   })
 
-  it("dip-to-white: uses white color in the lavfi source", async () => {
+  it("dip-to-white: emits xfade transition='fadewhite'", async () => {
     stubResolutionProbes(2, "1280x720")
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(0.5)
-      .mockResolvedValueOnce(5)
-    stubAudioStreamProbes(3, true)
+    mocks.getVideoDuration.mockResolvedValueOnce(5).mockResolvedValueOnce(5)
+    stubAudioStreamProbes(2, true)
 
     await combineVideos(defaultOptions({
       videoUrls: ["a.mp4", "b.mp4"],
       transition: "dip-to-white",
       transitionDuration: 0.5,
-      audioMode: "keep",
+      audioMode: "remove",
     }))
 
-    const args = ffargs(0)
-    const lavfiInput = args.find((a) => a.includes("color=c=white"))
-    expect(lavfiInput).toBeDefined()
-    expect(lavfiInput).toContain("s=1280x720")
-  })
-
-  it("falls back to 1920x1080 resolution when probe returns garbage", async () => {
-    stubResolutionProbes(2, "garbage")
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(0.5)
-      .mockResolvedValueOnce(5)
-    stubAudioStreamProbes(3, true)
-
-    await combineVideos(defaultOptions({
-      videoUrls: ["a.mp4", "b.mp4"],
-      transition: "dip-to-black",
-      transitionDuration: 0.5,
-      audioMode: "keep",
-    }))
-
-    const lavfi = ffargs(0).find((a) => a.includes("color="))
-    expect(lavfi).toContain("s=1920x1080")
-  })
-
-  it("uses xfade transition='fade' for dip-to-black/white", async () => {
-    stubResolutionProbes(2, "1920x1080")
-    mocks.getVideoDuration
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(0.5)
-      .mockResolvedValueOnce(5)
-    stubAudioStreamProbes(3, true)
-
-    await combineVideos(defaultOptions({
-      transition: "dip-to-black", audioMode: "remove", transitionDuration: 0.5,
-    }))
-
-    const args = lastArgs()
-    const fcIdx = args.indexOf("-filter_complex")
-    expect(args[fcIdx + 1]).toContain("transition=fade")
+    const last = lastArgs()
+    const fc = last[last.indexOf("-filter_complex") + 1]
+    expect(fc).toContain("transition=fadewhite")
   })
 })
 
@@ -417,7 +370,7 @@ describe("combineVideos — xfade transitions", () => {
     expect(fc).toContain("[vout]")
   })
 
-  it("dissolve: maps to xfade transition='fade' (per resolveXfadeTransition)", async () => {
+  it("dissolve: maps to xfade transition='dissolve' (real pixel-noise dissolve, not aliased to fade)", async () => {
     stubResolutionProbes(2)
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
@@ -429,7 +382,33 @@ describe("combineVideos — xfade transitions", () => {
     }))
 
     const args = lastArgs()
-    expect(args[args.indexOf("-filter_complex") + 1]).toContain("transition=fade")
+    expect(args[args.indexOf("-filter_complex") + 1]).toContain("transition=dissolve")
+  })
+
+  it("each new xfade transition id is forwarded verbatim into the filter graph", async () => {
+    // Spot-check a representative set across all groups to prove the catalog
+    // → ffmpeg mapping holds. If we add a new transition we want at least the
+    // generic path (id passes through resolveXfadeName) to be covered.
+    const samples = [
+      ["wipe-left", "wipeleft"],
+      ["slide-up", "slideup"],
+      ["circle-open", "circleopen"],
+      ["pixelize", "pixelize"],
+      ["radial", "radial"],
+      ["squeeze-h", "squeezeh"],
+    ] as const
+
+    for (const [id, xfadeName] of samples) {
+      mocks.runFfmpeg.mockClear()
+      stubResolutionProbes(2)
+      mocks.getVideoDuration.mockResolvedValueOnce(5).mockResolvedValueOnce(5)
+      stubAudioStreamProbes(2, true)
+
+      await combineVideos(defaultOptions({ transition: id, audioMode: "remove" }))
+      const args = lastArgs()
+      const fc = args[args.indexOf("-filter_complex") + 1]
+      expect(fc, `${id} → ${xfadeName}`).toContain(`transition=${xfadeName}`)
+    }
   })
 
   it("clamps transition duration to 90% of shortest clip", async () => {

@@ -1,0 +1,439 @@
+/* ============================================================================
+   Combine-videos transition preview styles.
+
+   Each tile renders three stacked layers inside .ct-root:
+     • .ct-b           — clip B (bottom, static)
+     • .ct-cover-bg    — A's gradient layered above B for cover-* variants
+                          (so the animated layer reads as B arriving over A);
+                          absent for every other transition
+     • .ct-overlay     — solid black/white wash, used only by fade dip variants
+     • .ct-a           — clip A (top, animated)
+
+   The per-id `.ct-anim-<id>` class drives .ct-a's animation; everything loops
+   on a shared 2.4s cycle. `.ct-root[data-active="false"]` pauses animations
+   so off-tab tiles don't pay paint cost for clip-path / mask-image work.
+
+   A and B are colored distinctly so the eye can read the transition shape:
+   A = cool blue/cyan, B = warm pink/rose, both with a subtle diagonal stripe.
+   ========================================================================== */
+
+.ct-root {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 6px;
+  isolation: isolate;
+  background: #050a14;
+}
+
+.ct-a,
+.ct-b,
+.ct-overlay,
+.ct-cover-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ct-a {
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 6px, transparent 6px 12px),
+    linear-gradient(135deg, #38bdf8 0%, #0ea5e9 60%, #0369a1 100%);
+  z-index: 3;
+  will-change: transform, opacity, clip-path, filter;
+  animation-duration: 2.4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+.ct-b {
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.06) 0 6px, transparent 6px 12px),
+    linear-gradient(135deg, #fb7185 0%, #e11d48 60%, #9f1239 100%);
+  z-index: 1;
+}
+
+.ct-cover-bg {
+  z-index: 2;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0 6px, transparent 6px 12px),
+    linear-gradient(135deg, #38bdf8 0%, #0ea5e9 60%, #0369a1 100%);
+}
+
+.ct-overlay {
+  z-index: 2;
+  opacity: 0;
+  animation-duration: 2.4s;
+  animation-iteration-count: infinite;
+}
+
+.ct-overlay-dip-to-black { background: #000; animation-name: ct-overlay-flash; }
+.ct-overlay-dip-to-white { background: #fff; animation-name: ct-overlay-flash; }
+.ct-overlay-fadegrays    { background: #6b7280; animation-name: ct-overlay-flash; }
+
+@keyframes ct-overlay-flash {
+  0%, 10%   { opacity: 0; }
+  50%       { opacity: 1; }
+  90%, 100% { opacity: 0; }
+}
+
+/* ============================================================================
+   Per-id animations on .ct-a
+   ========================================================================== */
+
+.ct-anim-cut { animation-name: ct-anim-cut; animation-timing-function: steps(1, end); }
+@keyframes ct-anim-cut {
+  0%, 49%   { opacity: 1; }
+  50%, 99%  { opacity: 0; }
+  100%      { opacity: 1; }
+}
+
+.ct-anim-fade { animation-name: ct-anim-fade; }
+@keyframes ct-anim-fade {
+  0%, 15%   { opacity: 1; }
+  60%       { opacity: 0; }
+  85%, 100% { opacity: 0; }
+}
+
+.ct-anim-dip-to-black, .ct-anim-dip-to-white, .ct-anim-fadegrays {
+  animation-name: ct-anim-dip;
+}
+@keyframes ct-anim-dip {
+  0%, 15%   { opacity: 1; }
+  50%       { opacity: 0; }
+  100%      { opacity: 0; }
+}
+
+.ct-anim-dissolve { animation-name: ct-anim-dissolve; }
+@keyframes ct-anim-dissolve {
+  0%, 15%   { opacity: 1; mask-image: radial-gradient(circle, black 100%, transparent 100%); -webkit-mask-image: radial-gradient(circle, black 100%, transparent 100%); }
+  50%       { opacity: 1; mask-image: radial-gradient(circle, black 30%, transparent 31%); -webkit-mask-image: radial-gradient(circle, black 30%, transparent 31%); }
+  80%, 100% { opacity: 0; mask-image: radial-gradient(circle, black 0%, transparent 1%); -webkit-mask-image: radial-gradient(circle, black 0%, transparent 1%); }
+}
+
+.ct-anim-pixelize { animation-name: ct-anim-pixelize; }
+@keyframes ct-anim-pixelize {
+  0%, 15%   { opacity: 1; filter: blur(0); }
+  50%       { opacity: 1; filter: blur(8px) contrast(0.6); }
+  80%, 100% { opacity: 0; filter: blur(8px); }
+}
+
+.ct-anim-hblur { animation-name: ct-anim-hblur; }
+@keyframes ct-anim-hblur {
+  0%, 15%   { opacity: 1; filter: blur(0); }
+  50%       { opacity: 1; filter: blur(10px); }
+  80%, 100% { opacity: 0; filter: blur(10px); }
+}
+
+.ct-anim-distance { animation-name: ct-anim-distance; }
+@keyframes ct-anim-distance {
+  0%, 15%   { opacity: 1; transform: scale(1) skewX(0); }
+  50%       { opacity: 1; transform: scale(0.9) skewX(6deg); }
+  80%, 100% { opacity: 0; transform: scale(0.9) skewX(6deg); }
+}
+
+.ct-anim-radial { animation-name: ct-anim-radial; }
+@keyframes ct-anim-radial {
+  0%, 15%   { mask-image: conic-gradient(from 0deg, black 360deg, transparent 360deg); -webkit-mask-image: conic-gradient(from 0deg, black 360deg, transparent 360deg); }
+  70%       { mask-image: conic-gradient(from 0deg, black 0deg, transparent 0deg); -webkit-mask-image: conic-gradient(from 0deg, black 0deg, transparent 0deg); }
+  100%      { mask-image: conic-gradient(from 0deg, black 0deg, transparent 0deg); -webkit-mask-image: conic-gradient(from 0deg, black 0deg, transparent 0deg); }
+}
+
+.ct-anim-zoom-in { animation-name: ct-anim-zoom-in; }
+@keyframes ct-anim-zoom-in {
+  0%, 15%   { opacity: 1; transform: scale(1); }
+  70%       { opacity: 0; transform: scale(2.2); }
+  100%      { opacity: 0; transform: scale(2.2); }
+}
+
+.ct-anim-squeeze-h { animation-name: ct-anim-squeeze-h; transform-origin: center; }
+@keyframes ct-anim-squeeze-h {
+  0%, 15%   { transform: scaleX(1); }
+  60%       { transform: scaleX(0); }
+  100%      { transform: scaleX(0); }
+}
+.ct-anim-squeeze-v { animation-name: ct-anim-squeeze-v; transform-origin: center; }
+@keyframes ct-anim-squeeze-v {
+  0%, 15%   { transform: scaleY(1); }
+  60%       { transform: scaleY(0); }
+  100%      { transform: scaleY(0); }
+}
+
+/* ============================================================================
+   Wipes (hard-edge directional reveal of B via clip-path on A).
+   ========================================================================== */
+.ct-anim-wipe-left   { animation-name: ct-anim-wipe-left; }
+.ct-anim-wipe-right  { animation-name: ct-anim-wipe-right; }
+.ct-anim-wipe-up     { animation-name: ct-anim-wipe-up; }
+.ct-anim-wipe-down   { animation-name: ct-anim-wipe-down; }
+
+@keyframes ct-anim-wipe-left {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(0 100% 0 0); }
+}
+@keyframes ct-anim-wipe-right {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(0 0 0 100%); }
+}
+@keyframes ct-anim-wipe-up {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(0 0 100% 0); }
+}
+@keyframes ct-anim-wipe-down {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(100% 0 0 0); }
+}
+
+.ct-anim-wipe-tl { animation-name: ct-anim-wipe-tl; }
+.ct-anim-wipe-tr { animation-name: ct-anim-wipe-tr; }
+.ct-anim-wipe-bl { animation-name: ct-anim-wipe-bl; }
+.ct-anim-wipe-br { animation-name: ct-anim-wipe-br; }
+
+@keyframes ct-anim-wipe-tl {
+  0%, 15%   { clip-path: polygon(0 0, 200% 0, 0 200%); }
+  70%, 100% { clip-path: polygon(-100% -100%, 0 -100%, -100% 0); }
+}
+@keyframes ct-anim-wipe-tr {
+  0%, 15%   { clip-path: polygon(100% 0, 100% 200%, -100% 0); }
+  70%, 100% { clip-path: polygon(200% -100%, 200% 0, 100% -100%); }
+}
+@keyframes ct-anim-wipe-bl {
+  0%, 15%   { clip-path: polygon(0 100%, 200% 100%, 0 -100%); }
+  70%, 100% { clip-path: polygon(-100% 200%, 0 200%, -100% 100%); }
+}
+@keyframes ct-anim-wipe-br {
+  0%, 15%   { clip-path: polygon(100% 100%, -100% 100%, 100% -100%); }
+  70%, 100% { clip-path: polygon(200% 200%, 100% 200%, 200% 100%); }
+}
+
+/* ============================================================================
+   Slides — A translates off-screen.
+   ========================================================================== */
+.ct-anim-slide-left  { animation-name: ct-anim-slide-left; }
+.ct-anim-slide-right { animation-name: ct-anim-slide-right; }
+.ct-anim-slide-up    { animation-name: ct-anim-slide-up; }
+.ct-anim-slide-down  { animation-name: ct-anim-slide-down; }
+
+@keyframes ct-anim-slide-left {
+  0%, 15%   { transform: translateX(0); }
+  70%, 100% { transform: translateX(-100%); }
+}
+@keyframes ct-anim-slide-right {
+  0%, 15%   { transform: translateX(0); }
+  70%, 100% { transform: translateX(100%); }
+}
+@keyframes ct-anim-slide-up {
+  0%, 15%   { transform: translateY(0); }
+  70%, 100% { transform: translateY(-100%); }
+}
+@keyframes ct-anim-slide-down {
+  0%, 15%   { transform: translateY(0); }
+  70%, 100% { transform: translateY(100%); }
+}
+
+/* Reveals look identical to slides in a 2-layer preview. FFmpeg distinguishes
+   them at the pixel level (B is static under A); reuse the slide keyframes. */
+.ct-anim-reveal-left  { animation-name: ct-anim-slide-left; }
+.ct-anim-reveal-right { animation-name: ct-anim-slide-right; }
+.ct-anim-reveal-up    { animation-name: ct-anim-slide-up; }
+.ct-anim-reveal-down  { animation-name: ct-anim-slide-down; }
+
+/* ============================================================================
+   Covers — the animated .ct-a is repainted in B's gradient (the rule below),
+   then translates in from outside; .ct-cover-bg keeps A visible underneath.
+   ========================================================================== */
+.ct-anim-cover-left,
+.ct-anim-cover-right,
+.ct-anim-cover-up,
+.ct-anim-cover-down {
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.06) 0 6px, transparent 6px 12px),
+    linear-gradient(135deg, #fb7185 0%, #e11d48 60%, #9f1239 100%);
+}
+.ct-anim-cover-left  { animation-name: ct-anim-cover-left; }
+.ct-anim-cover-right { animation-name: ct-anim-cover-right; }
+.ct-anim-cover-up    { animation-name: ct-anim-cover-up; }
+.ct-anim-cover-down  { animation-name: ct-anim-cover-down; }
+
+@keyframes ct-anim-cover-left {
+  0%, 15%   { transform: translateX(100%); }
+  70%, 100% { transform: translateX(0); }
+}
+@keyframes ct-anim-cover-right {
+  0%, 15%   { transform: translateX(-100%); }
+  70%, 100% { transform: translateX(0); }
+}
+@keyframes ct-anim-cover-up {
+  0%, 15%   { transform: translateY(100%); }
+  70%, 100% { transform: translateY(0); }
+}
+@keyframes ct-anim-cover-down {
+  0%, 15%   { transform: translateY(-100%); }
+  70%, 100% { transform: translateY(0); }
+}
+
+/* ============================================================================
+   Smooth wipes — feathered-edge directional reveal via mask-image.
+   ========================================================================== */
+.ct-anim-smooth-left  { animation-name: ct-anim-smooth-left; }
+.ct-anim-smooth-right { animation-name: ct-anim-smooth-right; }
+.ct-anim-smooth-up    { animation-name: ct-anim-smooth-up; }
+.ct-anim-smooth-down  { animation-name: ct-anim-smooth-down; }
+
+@keyframes ct-anim-smooth-left {
+  0%, 15%   { mask-image: linear-gradient(to left, black, black 100%, transparent 130%); -webkit-mask-image: linear-gradient(to left, black, black 100%, transparent 130%); }
+  70%, 100% { mask-image: linear-gradient(to left, transparent -30%, transparent 0, black 30%); -webkit-mask-image: linear-gradient(to left, transparent -30%, transparent 0, black 30%); }
+}
+@keyframes ct-anim-smooth-right {
+  0%, 15%   { mask-image: linear-gradient(to right, black, black 100%, transparent 130%); -webkit-mask-image: linear-gradient(to right, black, black 100%, transparent 130%); }
+  70%, 100% { mask-image: linear-gradient(to right, transparent -30%, transparent 0, black 30%); -webkit-mask-image: linear-gradient(to right, transparent -30%, transparent 0, black 30%); }
+}
+@keyframes ct-anim-smooth-up {
+  0%, 15%   { mask-image: linear-gradient(to top, black, black 100%, transparent 130%); -webkit-mask-image: linear-gradient(to top, black, black 100%, transparent 130%); }
+  70%, 100% { mask-image: linear-gradient(to top, transparent -30%, transparent 0, black 30%); -webkit-mask-image: linear-gradient(to top, transparent -30%, transparent 0, black 30%); }
+}
+@keyframes ct-anim-smooth-down {
+  0%, 15%   { mask-image: linear-gradient(to bottom, black, black 100%, transparent 130%); -webkit-mask-image: linear-gradient(to bottom, black, black 100%, transparent 130%); }
+  70%, 100% { mask-image: linear-gradient(to bottom, transparent -30%, transparent 0, black 30%); -webkit-mask-image: linear-gradient(to bottom, transparent -30%, transparent 0, black 30%); }
+}
+
+/* ============================================================================
+   Circles + rectangles.
+   open: A's circle grows past the frame and fades — iris widens to reveal B.
+   close: A's circle shrinks to a dot — iris closes onto A's center.
+   ========================================================================== */
+.ct-anim-circle-open  { animation-name: ct-anim-circle-open; }
+.ct-anim-circle-close { animation-name: ct-anim-circle-close; }
+.ct-anim-circle-crop  { animation-name: ct-anim-circle-close; }
+.ct-anim-rect-crop    { animation-name: ct-anim-rect-crop; }
+
+@keyframes ct-anim-circle-open {
+  0%, 15%   { clip-path: circle(50% at 50% 50%); opacity: 1; }
+  70%       { clip-path: circle(100% at 50% 50%); opacity: 0.4; }
+  100%      { clip-path: circle(100% at 50% 50%); opacity: 0; }
+}
+@keyframes ct-anim-circle-close {
+  0%, 15%   { clip-path: circle(70% at 50% 50%); opacity: 1; }
+  70%, 100% { clip-path: circle(0% at 50% 50%); opacity: 1; }
+}
+@keyframes ct-anim-rect-crop {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(40% 40% 40% 40%); }
+}
+
+.ct-anim-horz-open  { animation-name: ct-anim-horz-open; }
+.ct-anim-horz-close { animation-name: ct-anim-horz-close; }
+.ct-anim-vert-open  { animation-name: ct-anim-vert-open; }
+.ct-anim-vert-close { animation-name: ct-anim-vert-close; }
+
+@keyframes ct-anim-horz-open {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(50% 0 50% 0); }
+}
+@keyframes ct-anim-horz-close {
+  0%, 15%   { clip-path: inset(50% 0 50% 0); }
+  70%, 100% { clip-path: inset(0 0 0 0); }
+}
+@keyframes ct-anim-vert-open {
+  0%, 15%   { clip-path: inset(0 0 0 0); }
+  70%, 100% { clip-path: inset(0 50% 0 50%); }
+}
+@keyframes ct-anim-vert-close {
+  0%, 15%   { clip-path: inset(0 50% 0 50%); }
+  70%, 100% { clip-path: inset(0 0 0 0); }
+}
+
+.ct-anim-diag-tl { animation-name: ct-anim-diag-tl; }
+.ct-anim-diag-tr { animation-name: ct-anim-diag-tr; }
+.ct-anim-diag-bl { animation-name: ct-anim-diag-bl; }
+.ct-anim-diag-br { animation-name: ct-anim-diag-br; }
+
+@keyframes ct-anim-diag-tl {
+  0%, 15%   { clip-path: polygon(0 0, 200% 0, 0 200%); }
+  70%, 100% { clip-path: polygon(0 0, 0 0, 0 0); }
+}
+@keyframes ct-anim-diag-tr {
+  0%, 15%   { clip-path: polygon(100% 0, -100% 0, 100% 200%); }
+  70%, 100% { clip-path: polygon(100% 0, 100% 0, 100% 0); }
+}
+@keyframes ct-anim-diag-bl {
+  0%, 15%   { clip-path: polygon(0 100%, 200% 100%, 0 -100%); }
+  70%, 100% { clip-path: polygon(0 100%, 0 100%, 0 100%); }
+}
+@keyframes ct-anim-diag-br {
+  0%, 15%   { clip-path: polygon(100% 100%, -100% 100%, 100% -100%); }
+  70%, 100% { clip-path: polygon(100% 100%, 100% 100%, 100% 100%); }
+}
+
+.ct-anim-hl-slice { animation-name: ct-anim-hl-slice; }
+.ct-anim-hr-slice { animation-name: ct-anim-hr-slice; }
+.ct-anim-vu-slice { animation-name: ct-anim-vu-slice; }
+.ct-anim-vd-slice { animation-name: ct-anim-vd-slice; }
+
+@keyframes ct-anim-hl-slice {
+  0%, 15%   { mask-image: repeating-linear-gradient(to right, black 0 10px, transparent 10px 10px); -webkit-mask-image: repeating-linear-gradient(to right, black 0 10px, transparent 10px 10px); }
+  70%, 100% { mask-image: repeating-linear-gradient(to right, black 0 0, transparent 0 10px); -webkit-mask-image: repeating-linear-gradient(to right, black 0 0, transparent 0 10px); }
+}
+@keyframes ct-anim-hr-slice {
+  0%, 15%   { mask-image: repeating-linear-gradient(to left, black 0 10px, transparent 10px 10px); -webkit-mask-image: repeating-linear-gradient(to left, black 0 10px, transparent 10px 10px); }
+  70%, 100% { mask-image: repeating-linear-gradient(to left, black 0 0, transparent 0 10px); -webkit-mask-image: repeating-linear-gradient(to left, black 0 0, transparent 0 10px); }
+}
+@keyframes ct-anim-vu-slice {
+  0%, 15%   { mask-image: repeating-linear-gradient(to top, black 0 8px, transparent 8px 8px); -webkit-mask-image: repeating-linear-gradient(to top, black 0 8px, transparent 8px 8px); }
+  70%, 100% { mask-image: repeating-linear-gradient(to top, black 0 0, transparent 0 8px); -webkit-mask-image: repeating-linear-gradient(to top, black 0 0, transparent 0 8px); }
+}
+@keyframes ct-anim-vd-slice {
+  0%, 15%   { mask-image: repeating-linear-gradient(to bottom, black 0 8px, transparent 8px 8px); -webkit-mask-image: repeating-linear-gradient(to bottom, black 0 8px, transparent 8px 8px); }
+  70%, 100% { mask-image: repeating-linear-gradient(to bottom, black 0 0, transparent 0 8px); -webkit-mask-image: repeating-linear-gradient(to bottom, black 0 0, transparent 0 8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-a, .ct-overlay {
+    animation: none !important;
+  }
+}
+
+/* Tile button — mirrors person-picker chip styling. */
+.ct-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg, #f9fafb);
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms, box-shadow 120ms;
+}
+.ct-tile:hover {
+  border-color: #cbd5e1;
+}
+:is(.dark) .ct-tile {
+  background: #161616;
+  border-color: #2d2d2d;
+}
+:is(.dark) .ct-tile:hover {
+  border-color: #3d3d3d;
+}
+.ct-tile[data-selected="true"] {
+  border-color: #ff0073;
+  background: rgba(255, 0, 115, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 0, 115, 0.6) inset;
+}
+.ct-tile-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: #475569;
+  padding: 2px 4px 4px;
+}
+:is(.dark) .ct-tile-label {
+  color: #e2e8f0;
+}
+.ct-tile[data-selected="true"] .ct-tile-label {
+  color: #ff0073;
+}

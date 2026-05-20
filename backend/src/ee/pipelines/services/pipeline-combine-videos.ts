@@ -11,7 +11,9 @@ export interface PipelineCombineVideosArgs {
   userId: string
   /** Ordered list of clip URLs to concat. At least 2 required (route Zod check). */
   videoUrls: ReadonlyArray<string>
-  transition?: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+  /** Any id from `COMBINE_TRANSITIONS`. Route Zod validates against the
+   *  catalog; this signature accepts the full string set. */
+  transition?: string
   transitionDuration?: number
   audioMode?: "keep" | "crossfade" | "remove"
   trimStartFrames?: number

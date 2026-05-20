@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
+import { CombineTransitionPicker } from "./combine-transition-picker"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type {
   CombineVideosData,
@@ -55,21 +56,12 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         mediaType="video"
       />
 
-      <div>
+      <div className="flex flex-col gap-1.5">
         <Label>Transition</Label>
-        <Select
+        <CombineTransitionPicker
           value={data.transition}
-          onValueChange={(v) => onUpdate({ transition: v as CombineVideosData["transition"] })}
-        >
-          <SelectTrigger aria-label="Transition"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="cut">Cut</SelectItem>
-            <SelectItem value="fade">Fade</SelectItem>
-            <SelectItem value="dissolve">Dissolve</SelectItem>
-            <SelectItem value="dip-to-black">Dip to Black</SelectItem>
-            <SelectItem value="dip-to-white">Dip to White</SelectItem>
-          </SelectContent>
-        </Select>
+          onChange={(id) => onUpdate({ transition: id })}
+        />
       </div>
 
       {data.transition !== "cut" && (

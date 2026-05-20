@@ -1,10 +1,14 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
+import { resolveXfadeName } from "@nodaro/shared"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
-  readonly transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+  /** Any id from `COMBINE_TRANSITIONS`. Validation happens at the route's
+   *  Zod boundary; this signature stays string-typed to avoid pinning the
+   *  worker to a stale subset of the catalog. */
+  readonly transition: string
   readonly transitionDuration: number
   readonly audioMode: "keep" | "crossfade" | "remove"
   readonly trimStartFrames: number
@@ -59,46 +63,6 @@ async function trimClipFrames(
   args.push("-c:v", "libx264", "-preset", "fast", "-c:a", "aac", outputPath)
 
   await runFfmpeg(args)
-  return outputPath
-}
-
-/**
- * Map user-facing transition names to FFmpeg xfade transition types.
- * "dissolve" and "dip-to-black/white" both use "fade"; dip variants
- * are handled by inserting black/white frames between clips.
- */
-function resolveXfadeTransition(transition: CombineOptions["transition"]): string {
-  if (transition === "dissolve" || transition === "dip-to-black" || transition === "dip-to-white") {
-    return "fade"
-  }
-  return transition
-}
-
-/**
- * Generate a solid-color clip (black or white) of the given duration and
- * resolution to act as an intermediate for dip-to-black / dip-to-white.
- */
-async function generateColorClip(
-  workDir: string,
-  index: number,
-  durationSec: number,
-  color: "black" | "white",
-  width: number,
-  height: number,
-): Promise<string> {
-  const outputPath = join(workDir, `${color}_${index}.mp4`)
-  await runFfmpeg([
-    "-y",
-    "-f", "lavfi",
-    "-i", `color=c=${color}:s=${width}x${height}:d=${durationSec}:r=24`,
-    "-f", "lavfi",
-    "-i", `anullsrc=r=44100:cl=stereo`,
-    "-t", String(durationSec),
-    "-c:v", "libx264",
-    "-preset", "fast",
-    "-c:a", "aac",
-    outputPath,
-  ])
   return outputPath
 }
 
@@ -199,9 +163,6 @@ function buildVideoFilter(
       `${inputA}${inputB}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset}${outputLabel}`
     )
 
-    // Running duration after this xfade
-    runningDuration = offset + transitionDuration + durations[i] - transitionDuration
-    // Simplified: runningDuration = offset + durations[i]
     runningDuration = offset + durations[i]
   }
 
@@ -277,43 +238,28 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       return outputPath
     }
 
-    // For dip-to-black/white we interleave color clips between each input
-    let clipPaths = [...inputPaths]
-    if (transition === "dip-to-black" || transition === "dip-to-white") {
-      const color = transition === "dip-to-black" ? "black" : "white"
-      const { width, height } = target
-      const dipDuration = transitionDuration
-      const expandedPaths: string[] = []
-
-      for (let i = 0; i < inputPaths.length; i++) {
-        expandedPaths.push(inputPaths[i])
-        if (i < inputPaths.length - 1) {
-          const colorClip = await generateColorClip(workDir, i, dipDuration, color as "black" | "white", width, height)
-          expandedPaths.push(colorClip)
-        }
-      }
-      clipPaths = expandedPaths
-    }
-
-    // Probe durations for all clips
     const durations: number[] = []
-    for (const clipPath of clipPaths) {
+    for (const clipPath of inputPaths) {
       const dur = await getVideoDuration(clipPath)
       durations.push(dur)
     }
     console.log(`[combineVideos] Clip durations: ${durations.map((d) => d.toFixed(2)).join(", ")}`)
 
-    // Clamp transition duration so it doesn't exceed any clip's length
+    // xfade and acrossfade fail if the transition is longer than the shortest
+    // clip; clamp to 90% of that to leave a little slack on both ends.
     const minDur = Math.min(...durations)
     const safeDuration = Math.min(transitionDuration, minDur * 0.9)
 
-    // Build input args
     const inputs: string[] = []
-    for (const p of clipPaths) {
+    for (const p of inputPaths) {
       inputs.push("-i", p)
     }
 
-    const xfadeType = resolveXfadeTransition(transition)
+    const xfadeType = resolveXfadeName(transition)
+    if (xfadeType === null) {
+      // Unreachable: `cut` is handled above; Zod rejects unknown ids.
+      throw new Error(`combineVideos: non-xfade transition reached xfade path: ${transition}`)
+    }
     const videoFilter = buildVideoFilter(durations, xfadeType, safeDuration)
 
     // Try with audio crossfade first, fall back to video-only if clips lack audio
@@ -362,11 +308,11 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
       // audioMode === "keep": concat audio streams without crossfade
       // We still need xfade for video, but concat audio separately
       // Probe each clip for audio; generate silent placeholders for clips without audio
-      const audioFlags = await Promise.all(clipPaths.map((p) => hasAudioStream(p)))
+      const audioFlags = await Promise.all(inputPaths.map((p) => hasAudioStream(p)))
       const silentParts: string[] = []
       const concatInputs: string[] = []
 
-      for (let i = 0; i < clipPaths.length; i++) {
+      for (let i = 0; i < inputPaths.length; i++) {
         if (audioFlags[i]) {
           concatInputs.push(`[${i}:a]`)
         } else {
@@ -378,7 +324,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
 
       const audioPreamble = silentParts.length > 0 ? silentParts.join(";") + ";" : ""
       const audioConcat = concatInputs.join("") +
-        `concat=n=${clipPaths.length}:v=0:a=1[aout]`
+        `concat=n=${inputPaths.length}:v=0:a=1[aout]`
       const fullFilter = `${videoFilter.filter};${audioPreamble}${audioConcat}`
 
       await runFfmpeg([

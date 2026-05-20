@@ -536,7 +536,7 @@ export function runScriptGeneration(
 export function runCombineVideos(
   nodeId: string,
   videoUrls: string[],
-  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white",
+  transition: string,
   transitionDuration: number,
   audioMode: "keep" | "crossfade" | "remove",
   ctx: ExecutionContext,
