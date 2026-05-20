@@ -23,9 +23,15 @@ export interface LoopVideoEstimatorInput {
 }
 
 export interface TrimVideoEstimatorInput {
-  trimMode?: "time" | "frames" | "smart-loop-cut"
+  trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
   startTime?: number
   endTime?: number
+  /** Seconds-mirror of frames mode: trim N seconds from start AND/OR end. */
+  trimStartSeconds?: number
+  trimEndSeconds?: number
+  /** Keep only the first/last N seconds (probes duration at runtime). */
+  keepFirstSeconds?: number
+  keepLastSeconds?: number
   trimStartFrames?: number
   trimEndFrames?: number
   smartLoopCutLookback?: number
@@ -79,6 +85,21 @@ export function estimateTrimVideoCredits(
     const startSec = (data.trimStartFrames ?? 0) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
     const endSec = (data.trimEndFrames ?? 0) / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT
     const output = Math.max(0, inputDuration - startSec - endSec)
+    return Math.max(1, Math.ceil(output / 5))
+  }
+
+  if (data.trimMode === "seconds") {
+    const output = Math.max(0, inputDuration - (data.trimStartSeconds ?? 0) - (data.trimEndSeconds ?? 0))
+    return Math.max(1, Math.ceil(output / 5))
+  }
+
+  if (data.trimMode === "keep-first-seconds") {
+    const output = Math.min(inputDuration, Math.max(0, data.keepFirstSeconds ?? 0))
+    return Math.max(1, Math.ceil(output / 5))
+  }
+
+  if (data.trimMode === "keep-last-seconds") {
+    const output = Math.min(inputDuration, Math.max(0, data.keepLastSeconds ?? 0))
     return Math.max(1, Math.ceil(output / 5))
   }
 

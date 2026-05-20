@@ -19,6 +19,13 @@ const trimVideoBody = z.object({
   // Worker probes source fps and converts.
   trimStartFrames: z.number().int().min(0).optional(),
   trimEndFrames: z.number().int().min(0).optional(),
+  // Seconds-mirror of the frames mode: trim N seconds from start AND/OR end.
+  // Worker probes duration to convert end-trim into an endTime.
+  trimStartSeconds: z.number().min(0).optional(),
+  trimEndSeconds: z.number().min(0).optional(),
+  // Keep only the first/last N seconds. Worker probes duration.
+  keepFirstSeconds: z.number().positive().optional(),
+  keepLastSeconds: z.number().positive().optional(),
   // Smart loop cut: ignore startTime/endTime/trim*Frames; the worker
   // empirically finds the trailing frame closest to frame 0 (PSNR) and
   // cuts there. `lookbackFrames` bounds how many trailing candidates to
@@ -33,7 +40,7 @@ const trimVideoBody = z.object({
   upstreamDuration: z.number().positive().optional(),
   // Mirror frontend's trimMode for the estimator (default "time"). Worker
   // doesn't read this directly — it dispatches based on which fields are set.
-  trimMode: z.enum(["time", "frames", "smart-loop-cut"]).optional(),
+  trimMode: z.enum(["time", "seconds", "keep-first-seconds", "keep-last-seconds", "frames", "smart-loop-cut"]).optional(),
 })
 
 export async function trimVideoRoutes(app: FastifyInstance) {
@@ -43,11 +50,15 @@ export async function trimVideoRoutes(app: FastifyInstance) {
         const b = body as Record<string, unknown>
         const upstream = typeof b.upstreamDuration === "number" ? b.upstreamDuration : undefined
         return estimateTrimVideoCredits({
-          trimMode: b.trimMode as "time" | "frames" | "smart-loop-cut" | undefined,
+          trimMode: b.trimMode as "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut" | undefined,
           startTime: b.startTime as number | undefined,
           endTime: b.endTime as number | undefined,
           trimStartFrames: b.trimStartFrames as number | undefined,
           trimEndFrames: b.trimEndFrames as number | undefined,
+          trimStartSeconds: b.trimStartSeconds as number | undefined,
+          trimEndSeconds: b.trimEndSeconds as number | undefined,
+          keepFirstSeconds: b.keepFirstSeconds as number | undefined,
+          keepLastSeconds: b.keepLastSeconds as number | undefined,
           smartLoopCutLookback: b.smartLoopCutLookback as number | undefined,
         }, upstream)
       },

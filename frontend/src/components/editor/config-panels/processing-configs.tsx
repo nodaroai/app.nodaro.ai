@@ -565,8 +565,11 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
         <Select value={mode} onValueChange={(v) => onUpdate({ trimMode: v as TrimVideoData["trimMode"] })}>
           <SelectTrigger aria-label="Trim mode"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="time">By time (seconds)</SelectItem>
-            <SelectItem value="frames">By frames</SelectItem>
+            <SelectItem value="time">Range — start/end (seconds)</SelectItem>
+            <SelectItem value="seconds">Trim edges (seconds)</SelectItem>
+            <SelectItem value="keep-first-seconds">Keep first N seconds</SelectItem>
+            <SelectItem value="keep-last-seconds">Keep last N seconds</SelectItem>
+            <SelectItem value="frames">Trim edges (frames)</SelectItem>
             <SelectItem value="smart-loop-cut">Smart loop cut</SelectItem>
           </SelectContent>
         </Select>
@@ -596,6 +599,78 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
               onChange={(e) => onUpdate({ endTime: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
             />
           </div>
+        </>
+      )}
+
+      {mode === "seconds" && (
+        <>
+          <div>
+            <Label htmlFor="trim-start-seconds">Trim from start (s)</Label>
+            <Input
+              id="trim-start-seconds"
+              type="number"
+              min={0}
+              step={0.1}
+              placeholder="0"
+              value={data.trimStartSeconds ?? ""}
+              onChange={(e) => onUpdate({ trimStartSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="trim-end-seconds">Trim from end (s)</Label>
+            <Input
+              id="trim-end-seconds"
+              type="number"
+              min={0}
+              step={0.1}
+              placeholder="0"
+              value={data.trimEndSeconds ?? ""}
+              onChange={(e) => onUpdate({ trimEndSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Seconds-mirror of the frames mode. Worker probes the source duration so the end-trim works on any length input.
+          </p>
+        </>
+      )}
+
+      {mode === "keep-first-seconds" && (
+        <>
+          <div>
+            <Label htmlFor="keep-first-seconds">Keep first (s)</Label>
+            <Input
+              id="keep-first-seconds"
+              type="number"
+              min={0.1}
+              step={0.1}
+              placeholder="10"
+              value={data.keepFirstSeconds ?? ""}
+              onChange={(e) => onUpdate({ keepFirstSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Output is the first N seconds of the source (clamped to the source length).
+          </p>
+        </>
+      )}
+
+      {mode === "keep-last-seconds" && (
+        <>
+          <div>
+            <Label htmlFor="keep-last-seconds">Keep last (s)</Label>
+            <Input
+              id="keep-last-seconds"
+              type="number"
+              min={0.1}
+              step={0.1}
+              placeholder="10"
+              value={data.keepLastSeconds ?? ""}
+              onChange={(e) => onUpdate({ keepLastSeconds: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground leading-snug">
+            Output is the last N seconds of the source (worker probes duration and computes the start).
+          </p>
         </>
       )}
 
@@ -667,22 +742,28 @@ export function TrimVideoConfig({ data, onUpdate }: ConfigProps<TrimVideoData>) 
 }
 
 export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameData>) {
+  const mode = data.mode || "first"
   return (
     <div className="flex flex-col gap-3">
       <div>
         <Label htmlFor="extract-mode">Frame Selection</Label>
-        <Select value={data.mode || "first"} onValueChange={(v) => onUpdate({ mode: v as ExtractFrameData["mode"] })}>
+        <Select value={mode} onValueChange={(v) => onUpdate({ mode: v as ExtractFrameData["mode"] })}>
           <SelectTrigger id="extract-mode"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="first">First Frame</SelectItem>
             <SelectItem value="last">Last Frame</SelectItem>
-            <SelectItem value="timestamp">At Timestamp</SelectItem>
+            <SelectItem value="timestamp">At Timestamp (s)</SelectItem>
+            <SelectItem value="frame-index">Frame # from start</SelectItem>
+            <SelectItem value="frame-from-end">Frame # from end</SelectItem>
+            <SelectItem value="keyframe">Nearest keyframe</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      {data.mode === "timestamp" && (
+      {(mode === "timestamp" || mode === "keyframe") && (
         <div>
-          <Label htmlFor="extract-timestamp">Timestamp (seconds)</Label>
+          <Label htmlFor="extract-timestamp">
+            {mode === "keyframe" ? "Seek to (seconds)" : "Timestamp (seconds)"}
+          </Label>
           <Input
             id="extract-timestamp"
             type="number"
@@ -691,6 +772,45 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
             value={data.timestamp ?? 0}
             onChange={(e) => onUpdate({ timestamp: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
           />
+          {mode === "keyframe" && (
+            <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+              Snaps to the nearest keyframe at or after this point. Cheaper than decoding inter-frames; 0 = first keyframe.
+            </p>
+          )}
+        </div>
+      )}
+      {mode === "frame-index" && (
+        <div>
+          <Label htmlFor="extract-frame-index">Frame index (from start)</Label>
+          <Input
+            id="extract-frame-index"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="0"
+            value={data.frameIndex ?? ""}
+            onChange={(e) => onUpdate({ frameIndex: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+          />
+          <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+            0 = first frame. Worker probes source fps to seek precisely.
+          </p>
+        </div>
+      )}
+      {mode === "frame-from-end" && (
+        <div>
+          <Label htmlFor="extract-frames-from-end">Frames back from end</Label>
+          <Input
+            id="extract-frames-from-end"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="0"
+            value={data.framesFromEnd ?? ""}
+            onChange={(e) => onUpdate({ framesFromEnd: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+          />
+          <p className="text-[10px] text-muted-foreground leading-snug mt-1">
+            0 = last frame, 1 = second-to-last, etc. Worker probes duration + fps.
+          </p>
         </div>
       )}
     </div>

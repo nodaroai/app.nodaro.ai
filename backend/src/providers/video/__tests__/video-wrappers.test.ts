@@ -175,6 +175,70 @@ describe("extractFrame", () => {
     await expect(extractFrame({ videoUrl: "u", mode: "first" })).rejects.toThrow()
     expect(mocks.cleanupWorkDir).toHaveBeenCalledWith("/tmp/work")
   })
+
+  it("keyframe mode: uses -ss <timestamp> -skip_frame nokey to snap to nearest keyframe", async () => {
+    await extractFrame({ videoUrl: "u", mode: "keyframe", timestamp: 5 })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("5")
+    expect(args).toContain("-skip_frame")
+    expect(args[args.indexOf("-skip_frame") + 1]).toBe("nokey")
+  })
+
+  it("keyframe mode: timestamp defaults to 0 (= first keyframe)", async () => {
+    await extractFrame({ videoUrl: "u", mode: "keyframe" })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+    expect(args).toContain("-skip_frame")
+  })
+
+  it("frame-index mode: probes fps and seeks at frameIndex/fps seconds", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("24/1") // fps probe
+    await extractFrame({ videoUrl: "u", mode: "frame-index", frameIndex: 48 })
+    const args = ffargs()
+    // 48 frames / 24 fps = 2s
+    expect(args[args.indexOf("-ss") + 1]).toBe("2")
+    expect(args).not.toContain("-sseof")
+  })
+
+  it("frame-index mode: defaults to frame 0", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("24/1")
+    await extractFrame({ videoUrl: "u", mode: "frame-index" })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+  })
+
+  it("frame-index mode: hard-fails when fps probe returns invalid value", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("not-a-fraction")
+    await expect(extractFrame({ videoUrl: "u", mode: "frame-index", frameIndex: 10 })).rejects.toThrow(/probe fps/)
+  })
+
+  it("frame-from-end mode: probes fps + duration, seeks (duration - (N+0.5)/fps) seconds", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("24/1") // fps probe
+    mocks.getVideoDuration.mockResolvedValueOnce(10) // duration probe
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 11 })
+    const args = ffargs()
+    // 10 - (11 + 0.5) / 24 = 10 - 0.479166... ≈ 9.520833333
+    const seekSec = parseFloat(args[args.indexOf("-ss") + 1])
+    expect(seekSec).toBeCloseTo(9.5208, 3)
+  })
+
+  it("frame-from-end mode: framesFromEnd=0 seeks to the last frame", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("24/1")
+    mocks.getVideoDuration.mockResolvedValueOnce(10)
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end" })
+    const args = ffargs()
+    // 10 - 0.5/24 ≈ 9.9792
+    const seekSec = parseFloat(args[args.indexOf("-ss") + 1])
+    expect(seekSec).toBeCloseTo(9.9792, 3)
+  })
+
+  it("frame-from-end mode: clamps to 0 when offset would go negative", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("24/1")
+    mocks.getVideoDuration.mockResolvedValueOnce(0.5)
+    await extractFrame({ videoUrl: "u", mode: "frame-from-end", framesFromEnd: 100 })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+  })
 })
 
 // ===========================================================================
@@ -464,6 +528,57 @@ describe("trimVideo", () => {
     const args = ffargs()
     expect(args).toContain("aac")
     expect(args).not.toContain("-an")
+  })
+
+  it("seconds mode: trimStartSeconds sets -ss directly, no fps probe", async () => {
+    // probeTrimMetadata is invoked, but only the duration line matters; mock
+    // returns "30/1\n10\n" anyway so the parser is happy.
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n10\n")
+    await trimVideo({ videoUrl: "u", startTime: 999, trimStartSeconds: 3 })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("3")
+  })
+
+  it("seconds mode: trimEndSeconds sets endTime = duration - trimEndSeconds", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n10\n")
+    await trimVideo({ videoUrl: "u", startTime: 0, trimEndSeconds: 2 })
+    const args = ffargs()
+    // duration 10s - 2 = 8 → -t (8 - 0) = 8
+    expect(args[args.indexOf("-t") + 1]).toBe("8")
+  })
+
+  it("keep-last-seconds: probes duration, seeks (duration - N) seconds", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n20\n") // 20s duration
+    await trimVideo({ videoUrl: "u", startTime: 0, keepLastSeconds: 5 })
+    const args = ffargs()
+    // start = 20 - 5 = 15, end = 20 → -t (20 - 15) = 5
+    expect(args[args.indexOf("-ss") + 1]).toBe("15")
+    expect(args[args.indexOf("-t") + 1]).toBe("5")
+  })
+
+  it("keep-last-seconds: clamps to source length when N exceeds duration", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n3\n") // 3s source
+    await trimVideo({ videoUrl: "u", startTime: 0, keepLastSeconds: 30 })
+    const args = ffargs()
+    // start = max(0, 3 - 30) = 0, end = 3 → -t 3
+    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+    expect(args[args.indexOf("-t") + 1]).toBe("3")
+  })
+
+  it("keep-first-seconds: -ss 0 + -t N (clamped to duration)", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n20\n")
+    await trimVideo({ videoUrl: "u", startTime: 999, keepFirstSeconds: 5 })
+    const args = ffargs()
+    expect(args[args.indexOf("-ss") + 1]).toBe("0")
+    expect(args[args.indexOf("-t") + 1]).toBe("5")
+  })
+
+  it("keep-first-seconds: clamps to source length", async () => {
+    mocks.runFfprobe.mockResolvedValueOnce("30/1\n3\n")
+    await trimVideo({ videoUrl: "u", startTime: 0, keepFirstSeconds: 30 })
+    const args = ffargs()
+    // start = 0, end = min(3, 30) = 3 → -t 3
+    expect(args[args.indexOf("-t") + 1]).toBe("3")
   })
 })
 

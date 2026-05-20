@@ -12,10 +12,23 @@ interface TrimVideoOptions {
   /** Frame-based trim from end. When set, the output ends at
    *  (sourceFrames - trimEndFrames). Overrides `endTime`. */
   readonly trimEndFrames?: number
+  /** Seconds-mirror of trim*Frames — trim N seconds from start and/or end.
+   *  When set, overrides startTime/endTime. Worker probes duration for the
+   *  end-trim calculation. */
+  readonly trimStartSeconds?: number
+  readonly trimEndSeconds?: number
+  /** Keep only the first/last N seconds of the source (overrides
+   *  startTime/endTime). Worker probes duration. */
+  readonly keepFirstSeconds?: number
+  readonly keepLastSeconds?: number
 }
 
 export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath: string }> {
-  const { videoUrl, outputSilentVideo = false, trimStartFrames, trimEndFrames } = options
+  const {
+    videoUrl, outputSilentVideo = false,
+    trimStartFrames, trimEndFrames,
+    trimStartSeconds, trimEndSeconds, keepFirstSeconds, keepLastSeconds,
+  } = options
   let { startTime, endTime } = options
   const workDir = await createWorkDir("trim-video")
 
@@ -36,6 +49,31 @@ export async function trimVideo(options: TrimVideoOptions): Promise<{ videoPath:
       }
       if (trimEndFrames !== undefined && trimEndFrames > 0) {
         endTime = Math.max(startTime, durationSec - trimEndFrames / fps)
+      }
+    }
+
+    // Seconds-mirror modes — same precedence as frames-based, overrides
+    // explicit startTime/endTime. Probe duration once (cheap).
+    if (
+      trimStartSeconds !== undefined ||
+      trimEndSeconds !== undefined ||
+      keepFirstSeconds !== undefined ||
+      keepLastSeconds !== undefined
+    ) {
+      const { durationSec } = await probeTrimMetadata(inputPath)
+      if (keepLastSeconds !== undefined && keepLastSeconds > 0) {
+        startTime = Math.max(0, durationSec - keepLastSeconds)
+        endTime = durationSec
+      } else if (keepFirstSeconds !== undefined && keepFirstSeconds > 0) {
+        startTime = 0
+        endTime = Math.min(durationSec, keepFirstSeconds)
+      } else {
+        if (trimStartSeconds !== undefined && trimStartSeconds > 0) {
+          startTime = trimStartSeconds
+        }
+        if (trimEndSeconds !== undefined && trimEndSeconds > 0) {
+          endTime = Math.max(startTime, durationSec - trimEndSeconds)
+        }
       }
     }
 

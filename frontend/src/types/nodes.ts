@@ -2620,16 +2620,28 @@ export type TrimVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
-  /** Trim mode — "time" (default; uses startTime/endTime), "frames" (uses
-   *  trimStartFrames/trimEndFrames), or "smart-loop-cut" (worker probes
-   *  source for the trailing frame closest to frame 0 and trims there). */
-  trimMode?: "time" | "frames" | "smart-loop-cut"
+  /** Trim mode:
+   *   - "time" (default): absolute startTime + endTime in seconds
+   *   - "seconds": trim N seconds from start AND/OR end (mirror of "frames")
+   *   - "keep-first-seconds": keep only the first N seconds (probes duration)
+   *   - "keep-last-seconds": keep only the last N seconds (probes duration)
+   *   - "frames": trim N frames from start and/or end (worker probes fps)
+   *   - "smart-loop-cut": worker picks trailing frame closest to frame 0 (PSNR)
+   */
+  trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
   startTime: number
   endTime: number
   /** Frame-based trim from start. Used when trimMode === "frames". */
   trimStartFrames?: number
   /** Frame-based trim from end. Used when trimMode === "frames". */
   trimEndFrames?: number
+  /** Seconds-mirror of trim*Frames. Used when trimMode === "seconds". */
+  trimStartSeconds?: number
+  trimEndSeconds?: number
+  /** Keep only N seconds. Used when trimMode === "keep-first-seconds" or
+   *  "keep-last-seconds". */
+  keepFirstSeconds?: number
+  keepLastSeconds?: number
   /** Smart-loop-cut lookback window — how many trailing frames to evaluate
    *  as candidate end-frames. Default 16, max 64. */
   smartLoopCutLookback?: number
@@ -2645,8 +2657,19 @@ export type TrimVideoData = {
 export type ExtractFrameData = {
   [key: string]: unknown
   label: string
-  mode: "first" | "last" | "timestamp"
+  /** Pick mode:
+   *   - "first" / "last" — bookend frames
+   *   - "timestamp" — frame at `timestamp` seconds
+   *   - "keyframe" — nearest keyframe at/after `timestamp` (cheap; defaults to 0 = first keyframe)
+   *   - "frame-index" — Nth frame from start (`frameIndex`)
+   *   - "frame-from-end" — Nth frame from end (`framesFromEnd`; 0 = last)
+   */
+  mode: "first" | "last" | "timestamp" | "frame-index" | "frame-from-end" | "keyframe"
   timestamp: number
+  /** Used when mode === "frame-index". */
+  frameIndex?: number
+  /** Used when mode === "frame-from-end". 0 = last, 1 = second-to-last, etc. */
+  framesFromEnd?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

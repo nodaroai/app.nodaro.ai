@@ -4633,6 +4633,10 @@ export function executeNode(
           {
             trimStartFrames: trimMode === "frames" ? d.trimStartFrames : undefined,
             trimEndFrames: trimMode === "frames" ? d.trimEndFrames : undefined,
+            trimStartSeconds: trimMode === "seconds" ? d.trimStartSeconds : undefined,
+            trimEndSeconds: trimMode === "seconds" ? d.trimEndSeconds : undefined,
+            keepFirstSeconds: trimMode === "keep-first-seconds" ? d.keepFirstSeconds : undefined,
+            keepLastSeconds: trimMode === "keep-last-seconds" ? d.keepLastSeconds : undefined,
             smartLoopCut: trimMode === "smart-loop-cut",
             smartLoopCutLookback: trimMode === "smart-loop-cut" ? d.smartLoopCutLookback : undefined,
             trimMode,
@@ -4660,7 +4664,10 @@ export function executeNode(
     return runProcessingNode(
       node.id,
       () =>
-        extractFrameApi(videoUrl, d.mode || "first", d.timestamp || undefined, ctx.userId),
+        extractFrameApi(videoUrl, d.mode || "first", d.timestamp || undefined, ctx.userId, {
+          frameIndex: d.mode === "frame-index" ? d.frameIndex : undefined,
+          framesFromEnd: d.mode === "frame-from-end" ? d.framesFromEnd : undefined,
+        }),
       "generatedImageUrl",
       "Extract Frame",
       ctx,

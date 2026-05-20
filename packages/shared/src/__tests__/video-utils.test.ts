@@ -140,6 +140,54 @@ describe("estimateTrimVideoCredits", () => {
       expect(estimateTrimVideoCredits({ trimMode: "smart-loop-cut" })).toBe(3)
     })
   })
+
+  describe("seconds mode (relative trim in seconds)", () => {
+    it("subtracts trim seconds from upstream duration", () => {
+      // 30s - 2 - 3 = 25s → ceil(25/5) = 5
+      expect(estimateTrimVideoCredits({
+        trimMode: "seconds", trimStartSeconds: 2, trimEndSeconds: 3,
+      }, 30)).toBe(5)
+    })
+
+    it("clamps to min 1 credit if trim exceeds duration", () => {
+      // 5s - 10 - 0 = -5 clamp to 0 → max(1, ceil(0)) = 1
+      expect(estimateTrimVideoCredits({
+        trimMode: "seconds", trimStartSeconds: 10,
+      }, 5)).toBe(1)
+    })
+  })
+
+  describe("keep-first-seconds mode", () => {
+    it("output is min(upstream, keepFirstSeconds)", () => {
+      // keepFirst=8, upstream=20 → output 8s → ceil(8/5) = 2
+      expect(estimateTrimVideoCredits({
+        trimMode: "keep-first-seconds", keepFirstSeconds: 8,
+      }, 20)).toBe(2)
+    })
+
+    it("clamps to upstream when keep > upstream", () => {
+      // keepFirst=30, upstream=5 → output 5s → ceil(5/5) = 1
+      expect(estimateTrimVideoCredits({
+        trimMode: "keep-first-seconds", keepFirstSeconds: 30,
+      }, 5)).toBe(1)
+    })
+  })
+
+  describe("keep-last-seconds mode", () => {
+    it("output is min(upstream, keepLastSeconds)", () => {
+      // keepLast=10, upstream=30 → output 10s → ceil(10/5) = 2
+      expect(estimateTrimVideoCredits({
+        trimMode: "keep-last-seconds", keepLastSeconds: 10,
+      }, 30)).toBe(2)
+    })
+
+    it("uses 8s fallback when upstream missing", () => {
+      // keepLast=10, upstream undefined → upstream=8 → min(8,10)=8 → ceil(8/5)=2
+      expect(estimateTrimVideoCredits({
+        trimMode: "keep-last-seconds", keepLastSeconds: 10,
+      })).toBe(2)
+    })
+  })
 })
 
 describe("estimateCombineVideosCredits", () => {
