@@ -5,6 +5,8 @@ import type {
   SubGateName,
 } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { getAuthHeaders } from "@/lib/api"
+import { streamGet } from "@/lib/sse-client"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 
 interface UsePipelineEventsResult {
@@ -74,97 +76,80 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     // (auto-pan + ELK) can react without re-subscribing to SSE.
     setStoreLastAddedNodeId(null)
 
-    const url = pipelinesApi.eventsUrl(pipelineId)
-    const source = new EventSource(url, { withCredentials: true })
-
-    source.addEventListener("open", () => setConnected(true))
-    source.addEventListener("error", () => setConnected(false))
-
-    source.addEventListener("execution", (e: MessageEvent) => {
+    // Native EventSource can't send Authorization headers, and the
+    // backend's auth middleware only reads them from there (not cookies
+    // or query strings). Use the existing fetch-based `streamGet` instead
+    // so we can attach the Supabase access token.
+    const abortCtrl = new AbortController()
+    void (async () => {
+      const headers = await getAuthHeaders()
+      const url = pipelinesApi.eventsUrl(pipelineId)
       try {
-        const parsed = JSON.parse(e.data) as { data: PipelineEvent }
-        const evt = parsed.data
-        setLastEvent(evt)
+        setConnected(true)
+        for await (const frame of streamGet<{
+          type: string
+          data?: PipelineEvent
+        }>(url, { signal: abortCtrl.signal, headers })) {
+          if (frame.type !== "execution" || !frame.data) continue
+          const evt = frame.data
+          setLastEvent(evt)
 
-        // ── Phase 1B.4 side-effects ───────────────────────────────────────
-        if (evt.type === "entity:state_change") {
-          updateNodeDataByEntityId(evt.pipelineEntityId, { pipeline_state: evt.newState })
-          if (evt.newState === "pipeline_owned_running") {
-            // The matching React Flow node id is whichever node in the store
-            // carries this `pipeline_entity_id`. Looked up via the current
-            // workflow store snapshot so this stays in sync with the canvas
-            // materializer's node create.
-            const match = useWorkflowStore
-              .getState()
-              .nodes.find(
-                (n) =>
-                  (n.data as Record<string, unknown>).pipeline_entity_id ===
-                  evt.pipelineEntityId,
-              )
-            if (match) {
-              setStoreLastAddedNodeId(match.id)
+          // ── Phase 1B.4 side-effects ─────────────────────────────────────
+          if (evt.type === "entity:state_change") {
+            updateNodeDataByEntityId(evt.pipelineEntityId, { pipeline_state: evt.newState })
+            if (evt.newState === "pipeline_owned_running") {
+              const match = useWorkflowStore
+                .getState()
+                .nodes.find(
+                  (n) =>
+                    (n.data as Record<string, unknown>).pipeline_entity_id ===
+                    evt.pipelineEntityId,
+                )
+              if (match) {
+                setStoreLastAddedNodeId(match.id)
+              }
             }
+          } else if (evt.type === "entity:stale") {
+            updateNodeDataByEntityId(evt.pipelineEntityId, { is_stale: true })
+          } else if (evt.type === "pipeline:forked") {
+            setDrift(null)
+            setStoreActiveStatus("forked")
+          } else if (evt.type === "pipeline:drift") {
+            setDrift(evt)
+          } else if (evt.type === "pipeline:status") {
+            setStoreActiveStatus(evt.status)
+          } else if (evt.type === "stage:awaiting_sub_gate") {
+            setCurrentSubGate(evt.subGate)
+          } else if (evt.type === "stage:status") {
+            if (
+              evt.stageName === "animate_audio_edit" &&
+              evt.status !== "awaiting_approval"
+            ) {
+              setCurrentSubGate(null)
+            }
+          } else if (evt.type === "pipeline:music_ready") {
+            // eslint-disable-next-line no-console
+            console.info("[pipeline] music_ready", evt.musicAssetUrl)
+          } else if (evt.type === "pipeline:editor_decisions_ready") {
+            // eslint-disable-next-line no-console
+            console.info("[pipeline] editor_decisions_ready", evt.pipelineId)
           }
-        } else if (evt.type === "entity:stale") {
-          updateNodeDataByEntityId(evt.pipelineEntityId, { is_stale: true })
-        } else if (evt.type === "pipeline:forked") {
-          setDrift(null)
-          setStoreActiveStatus("forked")
-        } else if (evt.type === "pipeline:drift") {
-          setDrift(evt)
-        } else if (evt.type === "pipeline:status") {
-          // Mirror coarse status changes so the canvas can decide whether the
-          // live-build hooks (ELK, auto-pan) are active.
-          setStoreActiveStatus(evt.status)
-        } else if (evt.type === "stage:awaiting_sub_gate") {
-          // Phase 1C.2 — Stage 7 paused at a sub-gate (silent_cut_preview or
-          // dialogue_recheck). Surface the gate name so the panel mounts the
-          // matching review UI. The gate's payload (preview URL, rebalance
-          // result) is persisted on the stage output JSONB and read by the
-          // panel via getStage.
-          setCurrentSubGate(evt.subGate)
-        } else if (evt.type === "stage:status") {
-          // Phase 1C.2 — clear the sub-gate as soon as the animate stage moves
-          // out of awaiting_approval. The orchestrator publishes stage:status
-          // running after the sub-gate approve endpoint resumes work. We
-          // filter on `stageName` to avoid drift — earlier stages also emit
-          // `stage:status` events and clearing on those would erase a still-
-          // active animate sub-gate.
-          if (
-            evt.stageName === "animate_audio_edit" &&
-            evt.status !== "awaiting_approval"
-          ) {
-            setCurrentSubGate(null)
-          }
-        } else if (evt.type === "pipeline:music_ready") {
-          // Phase 1C.2 — informational only for now. Logging keeps the
-          // event traceable in dev tools; downstream UI (waveform/beat-grid
-          // visualization) lands in 1D.
-          // eslint-disable-next-line no-console
-          console.info("[pipeline] music_ready", evt.musicAssetUrl)
-        } else if (evt.type === "pipeline:editor_decisions_ready") {
-          // Phase 1C.2 — informational only for now. The decisions are
-          // persisted on each shot's `cut_decision` and shown via Stage 8
-          // approval gate when the final merge completes.
-          // eslint-disable-next-line no-console
-          console.info("[pipeline] editor_decisions_ready", evt.pipelineId)
         }
-      } catch {
-        // ignore malformed event
+      } catch (err) {
+        if (!abortCtrl.signal.aborted) {
+          // The panel falls back to React Query polling, so an SSE failure
+          // is not user-facing — log it for dev visibility only.
+          // eslint-disable-next-line no-console
+          console.warn("[pipeline-events] SSE stream ended:", err)
+        }
+      } finally {
+        setConnected(false)
       }
-    })
-
-    source.addEventListener("done", () => {
-      setConnected(false)
-      source.close()
-    })
+    })()
 
     return () => {
-      source.close()
+      abortCtrl.abort()
       setConnected(false)
-      // Phase 1B.4 — clear shared live-build state on unmount/pipeline switch
-      // so the canvas stops auto-panning to a stale node after the panel
-      // closes. The next mount re-arms on the first running pipeline event.
       setStoreLastAddedNodeId(null)
       setStoreActiveStatus(null)
     }
