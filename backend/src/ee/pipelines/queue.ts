@@ -27,10 +27,18 @@ export const pipelineOrchestrationQueue = new Queue<PipelineOrchestrationJobData
 )
 
 export async function enqueuePipelineRun(data: PipelineOrchestrationJobData): Promise<void> {
+  // Dedup: at most one in-flight job per pipeline. BullMQ treats `add()` with
+  // an existing jobId as a no-op REGARDLESS of state (waiting / active /
+  // completed / failed). Therefore `removeOnComplete: true` + `removeOnFail:
+  // true` are REQUIRED — without them, the first dispatch's job stays in the
+  // completed set indefinitely and every subsequent approve/reject/branch
+  // re-enqueue is silently discarded, freezing the pipeline at
+  // `awaiting_approval`. `:` is reserved as BullMQ's internal Redis key
+  // separator, so the jobId uses '-'.
   await pipelineOrchestrationQueue.add("run", data, {
-    jobId: `pipeline-${data.pipelineId}`, // dedup: at most one job per pipeline at a time. Must not contain ':' — BullMQ reserves it as its internal key separator.
-    removeOnComplete: 100,
-    removeOnFail: 200,
+    jobId: `pipeline-${data.pipelineId}`,
+    removeOnComplete: true,
+    removeOnFail: true,
     attempts: 1, // engine handles resume semantics itself
   })
 }

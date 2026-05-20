@@ -11,8 +11,14 @@ import { formatZodError } from "../lib/zod-error.js"
 
 export const extractFrameBody = z.object({
   videoUrl: safeUrlSchema,
-  mode: z.enum(["first", "last", "timestamp"]).default("first"),
+  mode: z.enum(["first", "last", "timestamp", "frame-index", "frame-from-end", "keyframe"]).default("first"),
+  /** Seconds (when mode === "timestamp" or "keyframe"). */
   timestamp: z.number().min(0).optional(),
+  /** Frame index from start (0 = first). Used when mode === "frame-index". */
+  frameIndex: z.number().int().min(0).optional(),
+  /** Frame index from end (0 = last, 1 = second-to-last).
+   *  Used when mode === "frame-from-end". */
+  framesFromEnd: z.number().int().min(0).optional(),
   userId: z.string().uuid().optional(),
 })
 

@@ -1977,12 +1977,18 @@ export async function trimVideoApi(
     /** Frame-based trim. When set, overrides startTime/endTime. */
     trimStartFrames?: number
     trimEndFrames?: number
+    /** Seconds-mirror of trim*Frames. When set, overrides startTime/endTime. */
+    trimStartSeconds?: number
+    trimEndSeconds?: number
+    /** Keep only the first/last N seconds (overrides start/end). */
+    keepFirstSeconds?: number
+    keepLastSeconds?: number
     /** Smart loop cut: worker picks the trailing frame closest to frame 0. */
     smartLoopCut?: boolean
     smartLoopCutLookback?: number
     /** Trim mode for credit estimator (worker dispatches based on which
      *  fields are set, not this). */
-    trimMode?: "time" | "frames" | "smart-loop-cut"
+    trimMode?: "time" | "seconds" | "keep-first-seconds" | "keep-last-seconds" | "frames" | "smart-loop-cut"
     /** Upstream video duration (seconds) for credit estimator. */
     upstreamDuration?: number
   },
@@ -1990,6 +1996,10 @@ export async function trimVideoApi(
   const body: Record<string, unknown> = { videoUrl, startTime, endTime, outputSilentVideo }
   if (extras?.trimStartFrames != null) body.trimStartFrames = extras.trimStartFrames
   if (extras?.trimEndFrames != null) body.trimEndFrames = extras.trimEndFrames
+  if (extras?.trimStartSeconds != null) body.trimStartSeconds = extras.trimStartSeconds
+  if (extras?.trimEndSeconds != null) body.trimEndSeconds = extras.trimEndSeconds
+  if (extras?.keepFirstSeconds != null) body.keepFirstSeconds = extras.keepFirstSeconds
+  if (extras?.keepLastSeconds != null) body.keepLastSeconds = extras.keepLastSeconds
   if (extras?.smartLoopCut) body.smartLoopCut = true
   if (extras?.smartLoopCutLookback != null) body.smartLoopCutLookback = extras.smartLoopCutLookback
   if (extras?.trimMode) body.trimMode = extras.trimMode
@@ -2011,9 +2021,20 @@ export async function trimVideoApi(
   return res.json()
 }
 
-export async function extractFrameApi(videoUrl: string, mode: "first" | "last" | "timestamp" = "first", timestamp?: number, userId?: string): Promise<{ jobId: string }> {
+export async function extractFrameApi(
+  videoUrl: string,
+  mode: "first" | "last" | "timestamp" | "frame-index" | "frame-from-end" | "keyframe" = "first",
+  timestamp?: number,
+  userId?: string,
+  extras?: {
+    frameIndex?: number
+    framesFromEnd?: number
+  },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, mode }
   if (timestamp !== undefined) body.timestamp = timestamp
+  if (extras?.frameIndex != null) body.frameIndex = extras.frameIndex
+  if (extras?.framesFromEnd != null) body.framesFromEnd = extras.framesFromEnd
   if (userId) body.userId = userId
   const res = await fetch(`${API_BASE_URL}/v1/extract-frame`, {
     method: "POST",

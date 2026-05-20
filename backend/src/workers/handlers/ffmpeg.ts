@@ -107,7 +107,9 @@ const handleTrimAudio: HandlerFn = async function handleTrimAudio(job, ctx) {
 const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
   const {
     videoUrl, startTime, endTime, outputSilentVideo,
-    trimStartFrames, trimEndFrames, smartLoopCut: smartLoopCutFlag, smartLoopCutLookback,
+    trimStartFrames, trimEndFrames,
+    trimStartSeconds, trimEndSeconds, keepFirstSeconds, keepLastSeconds,
+    smartLoopCut: smartLoopCutFlag, smartLoopCutLookback,
   } = job.data as {
     jobId: string
     videoUrl: string
@@ -116,6 +118,10 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     outputSilentVideo?: boolean
     trimStartFrames?: number
     trimEndFrames?: number
+    trimStartSeconds?: number
+    trimEndSeconds?: number
+    keepFirstSeconds?: number
+    keepLastSeconds?: number
     smartLoopCut?: boolean
     smartLoopCutLookback?: number
   }
@@ -161,6 +167,10 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
     outputSilentVideo,
     trimStartFrames,
     trimEndFrames,
+    trimStartSeconds,
+    trimEndSeconds,
+    keepFirstSeconds,
+    keepLastSeconds,
   })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.videoPath, ctx.jobId, "video", ctx.jobUserId)
@@ -177,11 +187,16 @@ const handleTrimVideo: HandlerFn = async function handleTrimVideo(job, ctx) {
 }
 
 const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx) {
-  const { videoUrl, mode, timestamp } = job.data as {
-    jobId: string; videoUrl: string; mode: "first" | "last" | "timestamp"; timestamp?: number
+  const { videoUrl, mode, timestamp, frameIndex, framesFromEnd } = job.data as {
+    jobId: string
+    videoUrl: string
+    mode: "first" | "last" | "timestamp" | "frame-index" | "frame-from-end" | "keyframe"
+    timestamp?: number
+    frameIndex?: number
+    framesFromEnd?: number
   }
-  console.log(`[worker] extract-frame ${ctx.jobId}`)
-  const result = await extractFrame({ videoUrl, mode, timestamp })
+  console.log(`[worker] extract-frame ${ctx.jobId} mode=${mode}`)
+  const result = await extractFrame({ videoUrl, mode, timestamp, frameIndex, framesFromEnd })
   await setJobProgress(job, ctx.jobId, 80)
   const r2Url = await uploadFileToR2(result.imagePath, ctx.jobId, "image", ctx.jobUserId)
   await cleanupWorkDir(dirname(result.imagePath))
