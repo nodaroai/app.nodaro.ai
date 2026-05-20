@@ -271,19 +271,32 @@ async function generateCharacterMain(
       userId,
       prompt,
     })
-    // Voice match if dialogue-bearing.
+    // Voice match if dialogue-bearing. Non-fatal — the actual voice
+    // selection isn't consumed until Stage 7 (audio). Failing Stage 2 on a
+    // voice-matcher error would lose the just-completed image generation
+    // and block the whole pipeline; instead we log the error onto entity
+    // metadata for the user/admin to retrigger later and proceed.
     let voiceMatchMeta: unknown = undefined
+    let voiceMatchError: string | undefined = undefined
     if (cast.has_dialogue) {
-      voiceMatchMeta = await runVoiceMatcher({
-        supabase,
-        pipelineId,
-        stageId,
-        userId,
-        castKey: cast.key,
-        castName: cast.name,
-        visualDescription: cast.visual_description,
-        voiceProfile: cast.voice_profile,
-      })
+      try {
+        voiceMatchMeta = await runVoiceMatcher({
+          supabase,
+          pipelineId,
+          stageId,
+          userId,
+          castKey: cast.key,
+          castName: cast.name,
+          visualDescription: cast.visual_description,
+          voiceProfile: cast.voice_profile,
+        })
+      } catch (err) {
+        voiceMatchError = err instanceof Error ? err.message : String(err)
+        console.error(
+          `[characters] voice-matcher failed for ${cast.key} (pipeline=${pipelineId}); proceeding without voice assignment:`,
+          voiceMatchError,
+        )
+      }
     }
     await supabase
       .from("pipeline_entities")
@@ -293,6 +306,7 @@ async function generateCharacterMain(
         metadata: {
           ...(entity.metadata ?? {}),
           voice_match: voiceMatchMeta,
+          ...(voiceMatchError ? { voice_match_error: voiceMatchError } : {}),
         },
       })
       .eq("id", entity.id)
@@ -316,9 +330,21 @@ async function generateCharacterMain(
       mainAssetUrl: assetUrl,
     })
   } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err)
+    console.error(
+      `[characters] generateCharacterMain failed for ${entity.entity_key} (pipeline=${pipelineId}):`,
+      errMessage,
+    )
     await supabase
       .from("pipeline_entities")
-      .update({ status: "failed" })
+      .update({
+        status: "failed",
+        metadata: {
+          ...(entity.metadata ?? {}),
+          last_error: errMessage,
+          last_error_at: new Date().toISOString(),
+        },
+      })
       .eq("id", entity.id)
     pipelineEvents.publish({
       type: "entity:status",
