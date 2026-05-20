@@ -62,7 +62,7 @@ const map: LocaleCatalogMap = {
   "shadow-aura": { label: "그림자 오라", description: "어두운 그림자 촉수가 피사체 주위를 감쌈" },
   "electricity-aura": { label: "전기 오라", description: "테슬라 코일식 전기 아크가 피사체 주위를 튐" },
   "sparkles-around": { label: "마법 반짝임", description: "마법의 반짝임이 피사체 주위를 공전함" },
-  "fairies-around": { label: "요정들", description: "작은 빛나는 요정들이 주위를 날아다님" },
+  "fairies-around": { label: "주위의 요정들", description: "작은 빛나는 요정들이 주위를 날아다님" },
   "objects-orbit": { label: "물체 공전", description: "작은 물체들이 피사체 주위를 부유하며 돎" },
   "petals-around": { label: "꽃잎 주위", description: "벚꽃 잎사귀가 피사체 주위에 부드럽게 내림" },
   "glow-trace": { label: "발광 궤적", description: "빛나는 잔상이 피사체의 모든 움직임을 따라감" },

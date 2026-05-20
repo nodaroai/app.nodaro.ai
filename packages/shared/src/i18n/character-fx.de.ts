@@ -62,7 +62,7 @@ const map: LocaleCatalogMap = {
   "shadow-aura":       { label: "Schattenaura",            description: "Dunkle Schattenranken winden sich um das Sujet" },
   "electricity-aura":  { label: "Elektro-Aura",            description: "Tesla-artige elektrische Bögen umgeben das Sujet" },
   "sparkles-around":   { label: "Magische Funken",         description: "Magische Funken kreisen um das Sujet" },
-  "fairies-around":    { label: "Feen um das Sujet",       description: "Kleine leuchtende Feen flattern um das Sujet herum" },
+  "fairies-around":    { label: "Feen ringsherum",         description: "Kleine leuchtende Feen flattern um das Sujet herum" },
   "objects-orbit":     { label: "Kreisende Objekte",       description: "Kleine Objekte schweben und kreisen um das Sujet" },
   "petals-around":     { label: "Blütenblätter",           description: "Kirschblütenblätter treiben sanft um das Sujet" },
   "glow-trace":        { label: "Leuchtende Spur",         description: "Leuchtende Spuren folgen der Bewegung des Sujets" },

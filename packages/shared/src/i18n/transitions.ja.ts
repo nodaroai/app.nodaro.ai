@@ -20,7 +20,7 @@ const map: LocaleCatalogMap = {
   "seasonal-shift": { label: "季節の変遷", description: "同じ場面で四季が移り変わる" },
   "aging": { label: "エイジング", description: "被写体が目に見えて老いる" },
   "rewind": { label: "巻き戻し", description: "時間が逆行し、動きが逆再生される" },
-  "freeze-frame-jump": { label: "フリーズフレーム", description: "動きが止まり、時間が飛んで再開" },
+  "freeze-frame-jump": { label: "フリーズフレームジャンプ", description: "動きが止まり、時間が飛んで再開" },
   "weather-shift": { label: "天気の変化", description: "同じ場面で天気が変わる" },
   "flashback": { label: "フラッシュバック", description: "過去の記憶へのフラッシュバック" },
 

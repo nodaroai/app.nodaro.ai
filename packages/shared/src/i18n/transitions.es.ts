@@ -30,7 +30,7 @@ const map: LocaleCatalogMap = {
   "sand-scatter":           { label: "Dispersión de Arena",     description: "El sujeto se convierte en arena y se reforma" },
   "fire-burnup":            { label: "Combustión",              description: "El sujeto arde en brasas y se reforma" },
   "smoke-puff":             { label: "Bocanada de Humo",        description: "El sujeto desaparece en humo y reaparece" },
-  "magic-sparkles":         { label: "Partículas Mágicas",      description: "Disolución en partículas estilo Vengadores" },
+  "magic-sparkles":         { label: "Partículas Mágicas",      description: "Disolución en partículas estilo Avengers" },
   "lightning-flash":        { label: "Destello de Rayo",        description: "Un rayo impacta, la escena cambia en el destello" },
   "ink-splash":             { label: "Salpicadura de Tinta",    description: "Tinta cubre el cuadro, la escena cambia" },
   "sand-storm":             { label: "Tormenta de Arena",       description: "La tormenta envuelve el cuadro, la escena cambia" },
