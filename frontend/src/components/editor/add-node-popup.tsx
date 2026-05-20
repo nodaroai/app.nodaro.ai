@@ -93,6 +93,7 @@ import {
   PawPrint,
   Car,
   Swords,
+  Armchair,
   Camera,
   Hourglass,
   Cpu,
@@ -448,6 +449,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <Swords className="h-4 w-4" />,
     category: "Object",
     keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"],
+  },
+  {
+    type: "furniture",
+    label: "Furniture",
+    icon: <Armchair className="h-4 w-4" />,
+    category: "Object",
+    keywords: ["furniture", "chair", "sofa", "couch", "table", "desk", "bed", "lamp", "cabinet", "shelf", "wardrobe", "stool"],
   },
   {
     type: "photo-genre",

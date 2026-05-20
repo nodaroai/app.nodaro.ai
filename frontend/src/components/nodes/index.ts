@@ -43,6 +43,7 @@ import { MaterialNode } from "./material-node";
 import { AnimalNode } from "./animal-node";
 import { VehicleNode } from "./vehicle-node";
 import { WeaponNode } from "./weapon-node";
+import { FurnitureNode } from "./furniture-node";
 import { PhotoGenreNode } from "./photo-genre-node";
 import { BackdropNode } from "./backdrop-node";
 import { HeldPropNode } from "./held-prop-node";
@@ -200,6 +201,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "animal": AnimalNode,
   "vehicle": VehicleNode,
   "weapon": WeaponNode,
+  "furniture": FurnitureNode,
   "photo-genre": PhotoGenreNode,
   "backdrop": BackdropNode,
   "held-prop": HeldPropNode,

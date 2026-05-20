@@ -205,3 +205,21 @@ describe("getParameterPromptHint — character-fx", () => {
     }
   })
 })
+
+describe("getParameterPromptHint — furniture", () => {
+  it("returns a prompt fragment with the furniture label + description", () => {
+    const hint = getParameterPromptHint({ id: "n1", type: "furniture", data: { furniture: "sofa" } })
+    expect(hint).toMatch(/including a .*/)
+    expect(hint.length).toBeGreaterThan(0)
+  })
+
+  it("returns empty string for unknown furniture id", () => {
+    const hint = getParameterPromptHint({ id: "n1", type: "furniture", data: { furniture: "nonexistent-furniture" } })
+    expect(hint).toBe("")
+  })
+
+  it("returns empty string when furniture field is missing", () => {
+    const hint = getParameterPromptHint({ id: "n1", type: "furniture", data: {} })
+    expect(hint).toBe("")
+  })
+})
