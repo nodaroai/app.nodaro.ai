@@ -789,3 +789,197 @@ generate_character_motion({
   attach_name: "head turn"
 })
 ```
+
+---
+
+## Location tools
+
+Eight tools for the location lifecycle — identity edits, establishing-shot
+generation, atmospheric motion clips, and LLM-captioned approval. Scope-
+gated and mirrored on the SDK at [`client.locations`](../sdk-reference.md#clientlocations).
+For the full data model + worked examples on all four surfaces, see
+[Location Platform](../location-platform.md).
+
+### Destructive operations — intentionally NOT exposed via MCP
+
+`delete_location` and `restore_location` are deliberately omitted from
+MCP. Soft-delete is destructive-adjacent and recovery requires context an
+LLM doesn't have; users (and SDK / CLI integrations on their behalf) can
+still archive + restore through REST.
+
+### `list_locations`
+
+**Scope:** `assets:read`
+
+Summary list (name, main image URL, asset counts, identity copy). Pass
+`archived: true` for the archive.
+
+```jsonc
+list_locations({ archived: false })
+// → { locations: [ { id, name, sourceImageUrl, assetCounts, ... } ] }
+```
+
+---
+
+### `get_location`
+
+**Scope:** `assets:read`
+
+Full detail including all six asset arrays + reference photos +
+`pendingJobs` (in-flight asset generations).
+
+```jsonc
+get_location({ id: "loc-uuid" })
+```
+
+---
+
+### `create_location`
+
+**Scope:** `assets:write`
+
+Create a new row with name + optional description / category / style.
+
+```jsonc
+create_location({
+  name: "Rainy Tokyo Alley",
+  description: "Neon-soaked alley with vending machines",
+  category: "urban",
+  style: "realistic"
+})
+// → { id: "loc-uuid" }
+```
+
+---
+
+### `update_location`
+
+**Scope:** `assets:write`
+
+Update identity fields (`name`, `description`, `category`, `style`,
+`styleLock`, `canonicalDescription`). Worker-owned asset buckets are NOT
+exposed — a stale-snapshot save would clobber atomic
+`append_location_asset` writes.
+
+Optimistic-concurrency via `expected_updated_at` — on mismatch returns 409
+`concurrent_modification`. Re-fetch + merge + retry.
+
+```jsonc
+update_location({
+  id: "loc-uuid",
+  canonical_description: "...",
+  style_lock: false,
+  expected_updated_at: "2026-05-20T01:23:45.678Z"
+})
+```
+
+---
+
+### `approve_main_image`
+
+**Scope:** `assets:write`
+
+Approve a completed `generate_location` candidate as the location's main
+image. Fires the LLM caption (Claude Sonnet vision) inline.
+
+Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
+`null`) when the LLM sub-call failed — the main image is still set; call
+`recaption_location` to retry.
+
+```jsonc
+approve_main_image({
+  location_id: "loc-uuid",
+  candidate_job_id: "job-uuid"
+})
+// → { sourceImageUrl, canonicalDescription }
+```
+
+---
+
+### `recaption_location`
+
+**Scope:** `assets:write`
+
+Re-run the LLM caption against the current main image. Errors with 502 on
+LLM failure (unlike `approve_main_image` which preserves the side-effect
+and returns `""`); 400 `no_source_image` if no main image is set yet.
+
+```jsonc
+recaption_location({ id: "loc-uuid" })
+// → { canonicalDescription }
+```
+
+---
+
+### `generate_location`
+
+**Scope:** `workflows:execute`
+
+Generate a main image (`kind: "main"`) or a variant asset (`kind: "asset"`
++ `asset_type` + `variant`). Lives in the shared verb-style registry
+alongside `generate_image` and `generate_character`.
+
+For main-image generation with `count > 1`, all jobs are reserved up-front;
+mid-batch failures roll back atomically. With `count === 1` AND
+`attach_to_location_id` set, the worker writes the result directly to the
+row's `source_image_url`; otherwise call `approve_main_image` after picking
+a candidate.
+
+Variant names for canonical asset types are listed in
+[Location Platform → MCP](../location-platform.md#mcp).
+
+```jsonc
+// Main image (single candidate — auto-attaches on completion)
+generate_location({
+  kind: "main",
+  name: "Rainy Tokyo Alley",
+  attach_to_location_id: "loc-uuid"
+})
+
+// Variant asset (auto-attaches to the named bucket)
+generate_location({
+  kind: "asset",
+  name: "Rainy Tokyo Alley",
+  asset_type: "weather",
+  variant: "storm",
+  attach_to_location_id: "loc-uuid",
+  attach_name: "storm"
+})
+```
+
+---
+
+### `generate_location_motion`
+
+**Scope:** `workflows:execute`
+
+Animate the location's establishing shot into an atmospheric motion clip
+(image-to-video). The attach column is hardcoded server-side to
+`atmosphere_motions` so callers DON'T supply `attach_to_column`.
+
+**Refinement:** pass `refine_from_video_url` to route the worker through
+video-to-video using THAT clip as the source instead of running image-to-
+video from `source_image_url`. Use to iterate on an existing atmosphere
+clip with a new prompt without shifting composition. Routes through
+providers with `video-to-video` capability (currently Wan 2.6 via KIE).
+
+```jsonc
+// New atmosphere clip
+generate_location_motion({
+  motion_prompt: "slow dolly-in, neon signs flicker, light rain falling",
+  source_image_url: "https://r2/loc-main.png",
+  provider: "kling",
+  name: "Rainy Tokyo Alley",
+  attach_to_location_id: "loc-uuid",
+  attach_name: "neon dolly-in"
+})
+
+// Refine an existing clip (video-to-video)
+generate_location_motion({
+  motion_prompt: "same shot but light rain instead of fog",
+  source_image_url: "https://r2/loc-main.png",
+  refine_from_video_url: "https://r2/loc-fog.mp4",
+  provider: "wan-i2v",
+  name: "Rainy Tokyo Alley"
+})
+```

@@ -28,7 +28,7 @@ const map: LocaleCatalogMap = {
   "telekinesis":       { label: "Télékinésie",             description: "Des objets proches flottent et orbitent" },
   "invisibility":      { label: "Invisibilité",            description: "Le corps s'efface jusqu'à devenir transparent" },
   "hero-flight":       { label: "Vol Héroïque",            description: "Se lance dans le ciel en posture de vol héroïque" },
-  "super-speed":       { label: "Vitesse Supersonique",    description: "Se floute en mouvement ultrarapide" },
+  "super-speed":       { label: "Vitesse Surhumaine",      description: "Se floute en mouvement ultrarapide" },
   "soul-departure":    { label: "Départ de l'Âme",         description: "Une âme translucide s'élève hors du corps" },
 
   // ── Body-Mod ──

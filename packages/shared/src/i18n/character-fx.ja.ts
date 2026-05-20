@@ -61,7 +61,7 @@ const map: LocaleCatalogMap = {
   "frost-aura": { label: "冷気のオーラ", description: "周囲が凍りつくような冷気が放射される" },
   "shadow-aura": { label: "影のオーラ", description: "暗い影の触手が体の周囲をうねる" },
   "electricity-aura": { label: "電気のオーラ", description: "テスラコイル式の電気弧が体の周囲で弾ける" },
-  "sparkles-around": { label: "魔法の輝き", description: "魔法の輝きが体の周囲を漂う" },
+  "sparkles-around": { label: "魔法のきらめき", description: "魔法のきらめきが体の周囲を漂う" },
   "fairies-around": { label: "妖精たち", description: "小さな輝く妖精が体の周囲を飛び回る" },
   "objects-orbit": { label: "物体の周回", description: "小物体が体の周囲をゆっくり周回する" },
   "petals-around": { label: "花びら舞う", description: "桜の花びらが体の周囲に漂う" },

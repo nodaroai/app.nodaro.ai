@@ -85,7 +85,7 @@ const map: LocaleCatalogMap = {
   "eye-light-burst": { label: "आँखों से प्रकाश विस्फोट", description: "पात्र की आँखों से किरण निकलकर फ्रेम ढकती है" },
 
   // ── Glitch ──
-  "digital-glitch": { label: "डिजिटल ग्लिच", description: "RGB स्प्लिट, स्कैनलाइन, डेटामोश का शिबुश" },
+  "digital-glitch": { label: "डिजिटल ग्लिच", description: "RGB स्प्लिट, स्कैनलाइन, डेटामोश का घालमेल" },
   "vhs-rewind": { label: "VHS रिवाइंड", description: "VHS ट्रैकिंग और टेप-रिवाइंड आर्टिफ़ैक्ट" },
   "datamosh": { label: "डेटामोश", description: "मोशन वेक्टर का एक दृश्य से दूसरे में रिसाव" },
   "channel-flip": { label: "चैनल फ्लिप", description: "टीवी स्टैटिक और चैनल बदलने का झटका" },

@@ -15,6 +15,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.executions`](#clientexecutions)
   - [`client.nodes`](#clientnodes)
   - [`client.characters`](#clientcharacters)
+  - [`client.locations`](#clientlocations)
   - [`client.pipelines`](#clientpipelines)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
@@ -721,6 +722,228 @@ Re-runs the LLM caption against the current portrait. Returns 400
 
 ```ts
 const { canonicalDescription } = await client.characters.recaption(characterId)
+```
+
+---
+
+### `client.locations`
+
+Script the full location lifecycle — identity edits, establishing-shot +
+variant generation, atmosphere motion clips, and LLM-captioned approval.
+
+A "location" is the canonical environment row that Location Studio drives
+(`locations` table). Each row carries the main image URL, six asset buckets
+(`timeOfDay`, `weather`, `seasons`, `angles`, `lighting`,
+`atmosphereMotions`), reference photos, and the LLM caption that anchors
+the setting in downstream prompts. See
+[Location Platform](location-platform.md) for the full data-model
+walkthrough.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListLocationsParams): Promise<{ locations: Location[] }>
+```
+
+Lists the caller's locations. By default returns active locations only;
+pass `archived: true` for an "archive" view.
+
+```ts
+const { locations } = await client.locations.list()
+const { locations: archived } = await client.locations.list({ archived: true })
+```
+
+#### `get(id)`
+
+```ts
+get(id: string): Promise<LocationDetail>
+```
+
+Fetches a single location including `pendingJobs` (in-flight asset
+generations the studio uses to rehydrate spinners after a reload).
+Soft-deleted locations are returned by id intentionally so canvas nodes
+that hold a stale `locationDbId` keep loading.
+
+```ts
+const location = await client.locations.get(locationId)
+```
+
+#### `create(input)` / `update(id, input)`
+
+```ts
+create(input: CreateLocationInput): Promise<{ id: string }>
+update(id: string, input: UpdateLocationInput): Promise<UpdateLocationResult>
+```
+
+`create()` requires `name` + `nodeId` (the route 400s otherwise). For MCP /
+SDK callers without a canvas node, use the `"mcp-managed"` sentinel.
+
+`update()` is a partial — only the fields you pass get written. Worker-
+owned asset buckets are intentionally NOT exposed on this surface (a stale
+snapshot save would clobber `append_location_asset` writes from a worker).
+
+Optimistic-concurrency: pass `expectedUpdatedAt` to require the row's
+`updated_at` still matches; on mismatch the route returns 409
+`concurrent_modification`. The SDK surfaces that as a generic `NodaroError`
+with the same code — catch it, re-fetch, merge, and retry.
+
+```ts
+const { id } = await client.locations.create({
+  nodeId: "mcp-managed",
+  name: "Rainy Tokyo Alley",
+  description: "Neon-soaked alley with vending machines",
+  category: "urban",
+  style: "realistic",
+})
+
+await client.locations.update(id, {
+  canonicalDescription: "...",
+  styleLock: false,
+  // PII consent for reference photos (Phase 2 #7) — set when first
+  // attaching `referencePhotos` to record that the user has rights.
+  piiConsentAt: new Date().toISOString(),
+  expectedUpdatedAt: location.updatedAt,
+})
+```
+
+#### `delete(id)` / `restore(id)`
+
+```ts
+delete(id: string): Promise<{ success: true; archived: true }>
+restore(id: string): Promise<{ id: string; name: string }>
+```
+
+Soft-delete + un-archive. `delete()` is the only delete operation the SDK
+exposes; permanent destruction is UI-only by design. If a restored name
+collides (case-insensitive) with an active row, the server auto-suffixes
+`(restored)` and returns the effective name.
+
+```ts
+await client.locations.delete(locationId)
+const { name } = await client.locations.restore(locationId)
+```
+
+#### `generate(input)`
+
+```ts
+generate(input: GenerateLocationInput): Promise<GenerateLocationResult>
+```
+
+Fires `POST /v1/generate-location` to produce one or more candidate
+establishing-shot images. With `count > 1`, all jobs are reserved up-front
+before any is enqueued — mid-batch failures roll back atomically.
+
+When `attachToLocationId` is set AND `count === 1`, the worker writes the
+result directly to the row's `source_image_url`; otherwise call
+`approveMainImage()` after picking a candidate.
+
+```ts
+// Single candidate — auto-attaches on completion
+const { jobId } = await client.locations.generate({
+  name: "Rainy Tokyo Alley",
+  description: "Neon-soaked alley with vending machines",
+  attachToLocationId: locationId,
+})
+
+// Multi-candidate
+const { jobIds } = await client.locations.generate({
+  name: "Rainy Tokyo Alley",
+  count: 4,
+})
+```
+
+#### `generateAsset(input)`
+
+```ts
+generateAsset(input: GenerateLocationAssetInput): Promise<{ jobId: string }>
+```
+
+Fires `POST /v1/generate-location-asset` to produce a single variant.
+`assetType` is one of `timeOfDay` / `weather` / `seasons` / `angles` /
+`lighting` / `custom`. When the studio path is set (`attachToLocationId` +
+`attachToColumn` + `attachName`), the worker appends `{ name: attachName,
+url: <result> }` to the named JSONB bucket on completion.
+
+```ts
+const { jobId } = await client.locations.generateAsset({
+  name: "Rainy Tokyo Alley",
+  assetType: "weather",
+  variant: "storm",
+  attachToLocationId: locationId,
+  attachToColumn: "weather",
+  attachName: "storm",
+})
+```
+
+#### `generateMotion(input)`
+
+```ts
+generateMotion(input: GenerateLocationMotionInput): Promise<{ jobId: string }>
+```
+
+Fires `POST /v1/generate-location-motion` to animate the location's
+establishing shot into an atmospheric motion clip (image-to-video). The
+attach column is hardcoded server-side to `atmosphere_motions` (locations
+have a single motion bucket so callers don't supply `attachToColumn`).
+
+Pass `refineFromVideoUrl` to route through video-to-video using that clip
+as the source instead of running image-to-video from `sourceImageUrl` —
+use to iterate an existing clip with a new prompt without shifting
+composition.
+
+```ts
+// New atmosphere clip from the approved main image
+const { jobId } = await client.locations.generateMotion({
+  name: "Rainy Tokyo Alley",
+  motionPrompt: "slow dolly-in, neon signs flicker, light rain falling",
+  sourceImageUrl: mainImageUrl,
+  provider: "kling",
+  attachToLocationId: locationId,
+  attachName: "neon dolly-in",
+})
+
+// Refine an existing clip (video-to-video)
+const { jobId: refineJobId } = await client.locations.generateMotion({
+  name: "Rainy Tokyo Alley",
+  motionPrompt: "same shot but light rain instead of fog",
+  sourceImageUrl: mainImageUrl,
+  refineFromVideoUrl: existingFogClipUrl,
+  provider: "wan-i2v",
+  attachToLocationId: locationId,
+})
+```
+
+#### `approveMainImage(id, candidateJobId)`
+
+```ts
+approveMainImage(id: string, candidateJobId: string): Promise<ApproveMainImageResult>
+```
+
+Approves a completed `generate()` candidate as the location's main image.
+Sets `source_image_url` + fires the LLM caption (Claude Sonnet vision)
+inline. Returns the new main-image URL plus the caption.
+
+Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
+`null`) when the LLM sub-call failed — the main image is still set; call
+`recaption()` to retry.
+
+```ts
+const { sourceImageUrl, canonicalDescription } =
+  await client.locations.approveMainImage(locationId, candidateJobId)
+```
+
+#### `recaption(id)`
+
+```ts
+recaption(id: string): Promise<RecaptionLocationResult>
+```
+
+Re-fires the LLM caption against the location's current main image. 502s
+on LLM failure (unlike `approveMainImage` which preserves the side-effect
+and returns `""`); 400 `no_source_image` if no main image is set yet.
+
+```ts
+const { canonicalDescription } = await client.locations.recaption(locationId)
 ```
 
 ---

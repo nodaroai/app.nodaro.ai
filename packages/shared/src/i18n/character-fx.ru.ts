@@ -6,7 +6,7 @@ const map: LocaleCatalogMap = {
   "none": { label: "Нет", description: "Без эффекта на персонажа" },
   "werewolf": { label: "Оборотень", description: "Превращается в оборотня" },
   "vampire": { label: "Вампир", description: "Превращается в вампира" },
-  "cyborg": { label: "Обнаружение киборга", description: "Кожа раздвигается, открывая кибернетику" },
+  "cyborg": { label: "Раскрытие киборга", description: "Кожа раздвигается, открывая кибернетику" },
   "ghost-form": { label: "Форма призрака", description: "Тело становится прозрачным и эфемерным" },
   "statue-stone": { label: "Окаменение", description: "Тело превращается в каменную статую" },
   "liquid-metal": { label: "Жидкий металл", description: "Тело превращается в жидкий хром (стиль T-1000)" },

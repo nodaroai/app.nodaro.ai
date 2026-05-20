@@ -70,7 +70,7 @@ const map: LocaleCatalogMap = {
   "debris-shower": { label: "מקלחת פסולת", description: "פסולת עוברת בפריים והסצנה משתנה מאחוריה" },
   "gravity-flip": { label: "היפוך כבידה", description: "הכבידה מתהפכת והמצלמה מסתובבת 180 מעלות" },
   "building-explosion": { label: "פיצוץ מבנה", description: "מבנה מתפוצץ והסצנה נחשפת מבעד לעשן" },
-  "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ ולהבות מכסות את הפריים" },
+  "vehicle-explosion": { label: "פיצוץ רכב", description: "רכב מתפוצץ, להבות מכסות את הפריים, והסצנה מתחלפת" },
   "jump-match": { label: "קפיצה תואמת", description: "הדמות קופצת ונוחתת בסצנה חדשה" },
   "hand-swipe": { label: "מחיקת יד", description: "יד עוברת מול העדשה והסצנה משתנה" },
 
@@ -80,7 +80,7 @@ const map: LocaleCatalogMap = {
   "light-streak": { label: "קו אור", description: "קרן אור חוצה את הפריים וחושפת את הסצנה" },
   "color-invert": { label: "היפוך צבעים", description: "הצבעים מתהפכים לרגע והסצנה משתנה" },
   "sun-glare": { label: "בוהק שמש", description: "בוהק שמש מציף את העדשה ואז הסצנה נחשפת" },
-  "lens-crack": { label: "סדק בעדשה", description: "העדסה מסתדקת והסצנה החדשה נראית דרכה" },
+  "lens-crack": { label: "סדק בעדשה", description: "העדשה מסתדקת והסצנה החדשה נראית דרכה" },
   "dirty-lens-wipe": { label: "ניגוב עדשה מלוכלכת", description: "ניגוב מנקה את העדשה וחושף את הסצנה החדשה" },
   "eye-light-burst": { label: "פרץ אור מהעיניים", description: "קרן עוצמתית מעיני הדמות מציפה את הפריים" },
 
@@ -88,7 +88,7 @@ const map: LocaleCatalogMap = {
   "digital-glitch": { label: "גליץ' דיגיטלי", description: "שיבוש דיגיטלי: פיצול RGB, קריעת שורות, דאטאמוש" },
   "vhs-rewind": { label: "הרצה לאחור VHS", description: "שיבוש טראקינג VHS ואפקט הרצת קלטת" },
   "datamosh": { label: "דאטאמוש", description: "וקטורי תנועה מוליכים בין הסצנות" },
-  "channel-flip": { label: "החלפת ערוץ", description: "שטיק טלוויזיה עם רעש החלפת ערוצים" },
+  "channel-flip": { label: "החלפת ערוץ", description: "הפרעות טלוויזיוניות עם רעש החלפת ערוצים" },
   "hologram-flicker": { label: "מצמוץ הולוגרמה", description: "מצמוץ הולוגרמה מגלה את הסצנה החדשה" },
   "display-wipe": { label: "מחיקת תצוגה", description: "הסצנה מתכווצת למסך קטן ואז מתרחבת" },
   "double-exposure": { label: "חשיפה כפולה", description: "שתי סצנות שקופות חופפות ואז הראשונה דוהה" },

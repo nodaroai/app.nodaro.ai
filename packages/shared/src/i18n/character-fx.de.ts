@@ -49,7 +49,7 @@ const map: LocaleCatalogMap = {
   "floral-eyes":       { label: "Blumenaugen",             description: "Blumen erblühen aus den Augenhöhlen" },
   "bloom-mouth":       { label: "Blütenmund",              description: "Blumen erblühen aus dem geöffneten Mund" },
   "x-ray":             { label: "Röntgen-Enthüllung",      description: "Der Körper wird im Röntgenstil sichtbar und zeigt das Skelett" },
-  "agent-snap":        { label: "Sonnenbrille aufs Gesicht", description: "Eine Sonnenbrille schnippt mit einem Klick auf die Augen" },
+  "agent-snap":        { label: "Sonnenbrille aufs Gesicht", description: "Eine Sonnenbrille schnappt mit einem Klick auf die Augen" },
   "visor-x":           { label: "Cyber-Visier",            description: "Ein futuristisches Cyber-Visier materialisiert sich" },
 
   // ── Aura-Ambient ──

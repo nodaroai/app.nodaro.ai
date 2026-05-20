@@ -12,7 +12,7 @@ const map: LocaleCatalogMap = {
   "liquid-metal":      { label: "Metal Líquido",          description: "Forma de metal cromo líquido estilo T-1000" },
   "animalization":     { label: "Animalización",          description: "Se transforma en un animal" },
   "gorilla-form":      { label: "Forma de Gorila",        description: "Se transforma en un gorila" },
-  "mystification":     { label: "Mystificación",          description: "Aura mágica envuelve y transforma al sujeto" },
+  "mystification":     { label: "Mistificación",           description: "Aura mágica envuelve y transforma al sujeto" },
   "gas-form":          { label: "Transformación Gaseosa", description: "El cuerpo se disipa en forma gaseosa" },
   "diamond-skin":      { label: "Piel de Diamante",       description: "El cuerpo se cristaliza en facetas de diamante" },
   "agent-reveal":      { label: "Revelación de Agente",   description: "Traje y gafas oscuras se materializan sobre el sujeto" },
