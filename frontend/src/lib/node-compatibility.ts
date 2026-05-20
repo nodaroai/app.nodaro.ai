@@ -1,13 +1,30 @@
 import type { SceneNodeType } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 
 export interface ConnectionContext {
   readonly nodeId: string
   readonly handleId: string
   readonly direction: "source" | "target"
   readonly dropPosition: XYPosition
+  /** Node type of the source/consumer the user dragged from. Used by
+   *  `getCompatibleNodes` to refine the filter on context-sensitive handles
+   *  (e.g. `cinematography` hides motion-only pickers for still-image
+   *  consumers). Optional for legacy call sites that don't have it. */
+  readonly nodeType?: string
 }
+
+/** Still-image consumer node types — their `cinematography` handle excludes
+ *  motion-only pickers (mirrors `STILL_IMAGE_EXCLUDE_TYPES` in
+ *  `cinematography-hints.ts`). */
+const STILL_IMAGE_CONSUMERS: ReadonlySet<string> = new Set([
+  "generate-image", "modify-image", "image-to-image", "edit-image", "location",
+])
+
+const MOTION_ONLY_PICKER_TYPES: ReadonlySet<string> = new Set([
+  "camera-motion", "transition", "temporal", "character-fx",
+])
 
 /**
  * Maps a handle ID to the set of handle IDs it can connect to.
@@ -77,7 +94,26 @@ export function getCompatibleNodes(
   handleId: string,
   direction: "source" | "target",
   nodeOptions: readonly NodeOption[],
+  consumerNodeType?: string,
 ): CompatibleNodes {
+  // Special-case: the `cinematography` target handle accepts only parameter-
+  // picker nodes (style, lens, lighting, framing, …). Without this branch the
+  // fallback below would list every node with any output handle, which is
+  // useless.
+  if (handleId === "cinematography" && direction === "target") {
+    const excludeMotion = consumerNodeType !== undefined
+      && STILL_IMAGE_CONSUMERS.has(consumerNodeType)
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!VISUAL_PARAMETER_PICKER_NODE_TYPES.has(option.type)) continue
+      if (excludeMotion && MOTION_ONLY_PICKER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
   const compatibleSet = new Set(HANDLE_COMPATIBILITY[handleId] ?? [handleId])
 
   const direct: NodeOption[] = []

@@ -1354,7 +1354,7 @@ export function AddNodePopup({
   // Compatibility filtering for smart edge-drop
   const { compatibilityNodes, isFiltered } = useMemo(() => {
     if (!connectionContext) return { compatibilityNodes: null, isFiltered: false };
-    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, visibleNodes);
+    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, visibleNodes, connectionContext.nodeType);
     if (result.direct.length === 0 && result.compatible.length === 0) {
       return { compatibilityNodes: null, isFiltered: false };
     }
