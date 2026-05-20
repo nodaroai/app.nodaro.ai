@@ -8,15 +8,42 @@ import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.j
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 
+const rampSegmentSchema = z.object({
+  start: z.number().min(0),
+  end: z.number().positive(),
+  speed: z.number().min(0.05).max(100.0),
+}).refine((s) => s.end > s.start, { message: "segment end must be > start" })
+
 const speedRampBody = z.object({
   videoUrl: safeUrlSchema,
-  speed: z.number().min(0.25).max(4.0),
-  adjustAudio: z.boolean().optional().default(true),
+  speed: z.number().min(0.05).max(100.0),
+  reverse: z.boolean().optional().default(false),
+  audioMode: z.enum(["pitch-preserve", "pitch-shift", "drop"]).optional(),
+  quality: z.enum(["fast", "smooth"]).optional().default("fast"),
+  ramps: z.array(rampSegmentSchema).optional(),
+  // Legacy alias — when audioMode is unset, true → "pitch-preserve", false → "drop".
+  adjustAudio: z.boolean().optional(),
   userId: z.string().uuid().optional(),
-})
+}).refine((b) => {
+  // Ramps must be sorted ascending by start and non-overlapping.
+  if (!b.ramps || b.ramps.length === 0) return true
+  for (let i = 1; i < b.ramps.length; i++) {
+    if (b.ramps[i].start < b.ramps[i - 1].end) return false
+  }
+  return true
+}, { message: "ramps must be sorted ascending and non-overlapping", path: ["ramps"] })
+
+/** Build the composite credit-model identifier — `speed-ramp:smooth` when
+ *  motion-compensated interpolation is enabled, `speed-ramp` otherwise. */
+function buildSpeedRampCreditId(body: unknown): string {
+  const b = (body ?? {}) as Record<string, unknown>
+  return b.quality === "smooth" ? "speed-ramp:smooth" : "speed-ramp"
+}
 
 export async function speedRampRoutes(app: FastifyInstance) {
-  app.post("/v1/speed-ramp", { preHandler: creditGuard(() => "speed-ramp") }, async (req, reply) => {
+  app.post("/v1/speed-ramp", {
+    preHandler: creditGuard((req) => buildSpeedRampCreditId(req.body)),
+  }, async (req, reply) => {
     const parsed = speedRampBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -33,7 +60,7 @@ export async function speedRampRoutes(app: FastifyInstance) {
       })
     }
 
-    const modelIdentifier = "speed-ramp"
+    const modelIdentifier = buildSpeedRampCreditId(parsed.data)
 
     const { data: job, error } = await supabase
       .from("jobs")

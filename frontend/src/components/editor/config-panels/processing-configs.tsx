@@ -15,6 +15,7 @@ import {
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { COMPOSITION_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "./combine-transition-picker"
+import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type {
   CombineVideosData,
@@ -81,7 +82,7 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
         </div>
       )}
 
-      <div>
+      <div className="flex flex-col gap-1.5">
         <Label>Audio</Label>
         <Select
           value={data.audioMode ?? "crossfade"}
@@ -94,6 +95,28 @@ export function CombineVideosConfig({ data, onUpdate, sources }: ConfigProps<Com
             <SelectItem value="remove">Remove audio</SelectItem>
           </SelectContent>
         </Select>
+        {(data.audioMode ?? "crossfade") === "crossfade" && (
+          <div className="flex flex-col gap-1 pl-3 border-l-2 border-muted-foreground/20">
+            <Label htmlFor="audio-crossfade-curve" className="text-[11px] text-muted-foreground">
+              Crossfade curve
+            </Label>
+            <Select
+              value={data.audioCrossfadeCurve ?? DEFAULT_AUDIO_CROSSFADE_CURVE_ID}
+              onValueChange={(v) => onUpdate({ audioCrossfadeCurve: v })}
+            >
+              <SelectTrigger id="audio-crossfade-curve" aria-label="Crossfade curve" className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUDIO_CROSSFADE_CURVES.map((c) => (
+                  <SelectItem key={c.id} value={c.id} title={c.description}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       <div>
@@ -670,38 +693,146 @@ export function ExtractFrameConfig({ data, onUpdate }: ConfigProps<ExtractFrameD
 
 export function SpeedRampConfig({ data, onUpdate }: ConfigProps<SpeedRampData>) {
   const speedLabel = data.speed === 1 ? "1x (Normal)" : data.speed < 1 ? `${data.speed}x (Slow Mo)` : `${data.speed}x (Fast)`
+  // Resolve effective audio mode for the UI, honoring the legacy adjustAudio shim.
+  const audioMode: "pitch-preserve" | "pitch-shift" | "drop" =
+    data.audioMode ?? (data.adjustAudio === false ? "drop" : "pitch-preserve")
+  const quality = data.quality ?? "fast"
+  const reverse = data.reverse ?? false
+  const ramps = data.ramps ?? []
+  const usingRamps = ramps.length > 0
+
+  function updateRamp(index: number, patch: Partial<{ start: number; end: number; speed: number }>) {
+    const next = ramps.map((r, i) => (i === index ? { ...r, ...patch } : r))
+    onUpdate({ ramps: next })
+  }
+  function addRamp() {
+    const last = ramps[ramps.length - 1]
+    const start = last ? last.end : 0
+    onUpdate({ ramps: [...ramps, { start, end: start + 1, speed: 0.5 }] })
+  }
+  function removeRamp(index: number) {
+    onUpdate({ ramps: ramps.filter((_, i) => i !== index) })
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <Label htmlFor="speed">Speed: {speedLabel}</Label>
-        <input
-          id="speed"
-          type="range"
-          min={0.25}
-          max={4.0}
-          step={0.05}
-          value={data.speed}
-          onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })}
-          className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
-        />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-          <span>0.25x</span>
-          <span>1x</span>
-          <span>4x</span>
+      {!usingRamps && (
+        <div>
+          <Label htmlFor="speed">Speed: {speedLabel}</Label>
+          <input
+            id="speed"
+            type="range"
+            min={0.1}
+            max={10.0}
+            step={0.05}
+            value={data.speed}
+            onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })}
+            className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#ff0073] bg-[#F8FAFC] dark:bg-[#121212]"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span>0.1x</span>
+            <span>1x</span>
+            <span>10x</span>
+          </div>
         </div>
-      </div>
+      )}
+
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
-          id="adjust-audio"
-          checked={data.adjustAudio}
-          onChange={(e) => onUpdate({ adjustAudio: e.target.checked })}
+          id="speed-reverse"
+          checked={reverse}
+          onChange={(e) => onUpdate({ reverse: e.target.checked })}
         />
-        <Label htmlFor="adjust-audio">Adjust Audio Speed</Label>
+        <Label htmlFor="speed-reverse">Reverse playback</Label>
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        When audio adjustment is off, the audio track is removed entirely.
-      </p>
+
+      <div>
+        <Label>Audio</Label>
+        <Select
+          value={audioMode}
+          onValueChange={(v) => onUpdate({
+            audioMode: v as "pitch-preserve" | "pitch-shift" | "drop",
+            adjustAudio: undefined,
+          })}
+        >
+          <SelectTrigger aria-label="Audio mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pitch-preserve">Pitch preserved (natural voice)</SelectItem>
+            <SelectItem value="pitch-shift">Pitch shifted (chipmunk / giant)</SelectItem>
+            <SelectItem value="drop">Drop audio</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Frame quality</Label>
+        <Select value={quality} onValueChange={(v) => onUpdate({ quality: v as "fast" | "smooth" })}>
+          <SelectTrigger aria-label="Frame quality"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fast">Fast (frame-duplicate, 2 cr)</SelectItem>
+            <SelectItem value="smooth">Smooth (motion interpolation, 5 cr)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Smooth synthesizes in-between frames for cleaner slow-motion. ~5-20x slower to render.
+        </p>
+      </div>
+
+      <div className="border-t border-border/40 pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <Label>Speed ramps (variable speed)</Label>
+          <button
+            type="button"
+            onClick={addRamp}
+            className="text-[11px] px-2 py-0.5 rounded bg-[#ff0073]/10 text-[#ff0073] hover:bg-[#ff0073]/20"
+          >
+            + Add segment
+          </button>
+        </div>
+        {ramps.length === 0 ? (
+          <p className="text-[10px] text-muted-foreground">
+            Add segments for variable speed (e.g. normal → slow-mo → normal). When set, audio is dropped and the constant Speed above is ignored. Segments are in input seconds.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {ramps.map((r, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                <span className="text-muted-foreground w-4">{i + 1}</span>
+                <input
+                  type="number" min={0} step={0.1} value={r.start}
+                  onChange={(e) => updateRamp(i, { start: parseFloat(e.target.value) || 0 })}
+                  className="w-14 px-1 py-0.5 rounded border bg-background"
+                  aria-label={`Segment ${i + 1} start`}
+                />
+                <span className="text-muted-foreground">→</span>
+                <input
+                  type="number" min={0} step={0.1} value={r.end}
+                  onChange={(e) => updateRamp(i, { end: parseFloat(e.target.value) || 0 })}
+                  className="w-14 px-1 py-0.5 rounded border bg-background"
+                  aria-label={`Segment ${i + 1} end`}
+                />
+                <span className="text-muted-foreground">s @</span>
+                <input
+                  type="number" min={0.05} max={100} step={0.05} value={r.speed}
+                  onChange={(e) => updateRamp(i, { speed: parseFloat(e.target.value) || 1 })}
+                  className="w-14 px-1 py-0.5 rounded border bg-background"
+                  aria-label={`Segment ${i + 1} speed`}
+                />
+                <span className="text-muted-foreground">x</span>
+                <button
+                  type="button" aria-label={`Remove segment ${i + 1}`}
+                  onClick={() => removeRamp(i)}
+                  className="ml-auto text-muted-foreground hover:text-red-500"
+                >×</button>
+              </div>
+            ))}
+            <p className="text-[10px] text-muted-foreground">
+              Audio is dropped while ramps are active. Per-segment audio time-stretch is on the roadmap.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -71,11 +71,16 @@ describe("parseDataInterface", () => {
   })
 
   it("preserves union types as raw strings in field.type", () => {
-    const iface = parseDataInterface(NODES_TS, "CombineVideosData")
+    // CombineVideosData's `transition` was the original fixture, but PR #2595
+    // broadened it to `string` to cover ~50 FFmpeg xfade ids. RenderVideoData's
+    // `aspectRatio` is a small, stable enum union that demonstrates the same
+    // extraction behavior.
+    const iface = parseDataInterface(NODES_TS, "RenderVideoData")
     expect(iface).toBeDefined()
-    const transition = iface!.fields.find((f) => f.name === "transition")
-    expect(transition?.type).toContain("cut")
-    expect(transition?.type).toContain("fade")
+    const aspect = iface!.fields.find((f) => f.name === "aspectRatio")
+    expect(aspect?.type).toContain("16:9")
+    expect(aspect?.type).toContain("9:16")
+    expect(aspect?.type).toContain("|") // proves the union was preserved verbatim
   })
 })
 

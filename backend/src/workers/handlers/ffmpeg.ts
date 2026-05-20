@@ -37,7 +37,7 @@ import {
 import { isKineticCaptionStyle } from "@nodaro/shared"
 
 const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, ctx) {
-  const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = job.data as {
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
     /** Validated upstream against `COMBINE_TRANSITION_IDS` at the route's
@@ -45,12 +45,13 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
     transition: string
     transitionDuration: number
     audioMode?: "keep" | "crossfade" | "remove"
+    audioCrossfadeCurve?: string
     trimStartFrames?: number
     trimEndFrames?: number
   }
-  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
+  console.log(`[worker] combine-videos ${ctx.jobId}: ${videoUrls.length} videos, transition=${transition}, audio=${audioMode ?? "crossfade"}, curve=${audioCrossfadeCurve ?? "linear"}, trimStart=${trimStartFrames ?? 0}, trimEnd=${trimEndFrames ?? 0}`)
 
-  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
+  const outputPath = await combineVideos({ videoUrls, transition, transitionDuration, audioMode: audioMode ?? "crossfade", audioCrossfadeCurve, trimStartFrames: trimStartFrames ?? 0, trimEndFrames: trimEndFrames ?? 0 })
   await setJobProgress(job, ctx.jobId, 80)
 
   const r2Url = await uploadFileToR2(outputPath, ctx.jobId, "video", ctx.jobUserId)
@@ -195,11 +196,23 @@ const handleExtractFrame: HandlerFn = async function handleExtractFrame(job, ctx
 }
 
 const handleSpeedRamp: HandlerFn = async function handleSpeedRamp(job, ctx) {
-  const { videoUrl, speed, adjustAudio } = job.data as {
-    jobId: string; videoUrl: string; speed: number; adjustAudio: boolean
+  const { videoUrl, speed, adjustAudio, reverse, audioMode, quality, ramps } = job.data as {
+    jobId: string
+    videoUrl: string
+    speed: number
+    adjustAudio?: boolean
+    reverse?: boolean
+    audioMode?: "pitch-preserve" | "pitch-shift" | "drop"
+    quality?: "fast" | "smooth"
+    ramps?: ReadonlyArray<{ start: number; end: number; speed: number }>
   }
-  console.log(`[worker] speed-ramp ${ctx.jobId}`)
-  const outputPath = await speedRamp({ videoUrl, speed, adjustAudio })
+  const tags = [
+    quality === "smooth" ? "smooth" : null,
+    reverse ? "reverse" : null,
+    ramps && ramps.length > 0 ? `ramps=${ramps.length}` : null,
+  ].filter(Boolean).join(",")
+  console.log(`[worker] speed-ramp ${ctx.jobId}${tags ? ` [${tags}]` : ""}`)
+  const outputPath = await speedRamp({ videoUrl, speed, adjustAudio, reverse, audioMode, quality, ramps })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegVideoJob(outputPath, ctx)
 }

@@ -2386,6 +2386,9 @@ export type CombineVideosData = {
   transition: string
   transitionDuration: number
   audioMode: "keep" | "crossfade" | "remove"
+  /** Any id from `AUDIO_CROSSFADE_CURVES` (`@nodaro/shared`). Only consulted
+   *  when audioMode==="crossfade". Optional — backend defaults to "linear". */
+  audioCrossfadeCurve?: string
   trimStartFrames?: number
   trimEndFrames?: number
   clipOrder?: string[]
@@ -2766,12 +2769,39 @@ export type RenderVideoData = {
   currentJobProgress?: number
 }
 
+export type SpeedRampSegment = {
+  /** Start time in INPUT seconds (where 0 = the first frame of the source clip). */
+  start: number
+  /** End time in INPUT seconds. */
+  end: number
+  /** Speed factor for this segment. 1.0 = normal, 0.5 = half-speed, 2.0 = double-speed. */
+  speed: number
+}
+
 export type SpeedRampData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
+  /** Constant speed factor (0.05 to 100.0). Ignored when `ramps` is non-empty. */
   speed: number
-  adjustAudio: boolean
+  /** Reverse playback (applied after speed change). */
+  reverse?: boolean
+  /** Audio treatment:
+   *  - `pitch-preserve` (default): natural voice at any speed (atempo chain)
+   *  - `pitch-shift`: chipmunk/giant voice (asetrate)
+   *  - `drop`: discard audio entirely */
+  audioMode?: "pitch-preserve" | "pitch-shift" | "drop"
+  /** Frame interpolation quality:
+   *  - `fast` (default): frame-duplicate / frame-drop via setpts
+   *  - `smooth`: motion-compensated interpolation via minterpolate (costs 5cr instead of 2cr) */
+  quality?: "fast" | "smooth"
+  /** Optional piecewise speed ramp — segments must be sorted by start, non-overlapping.
+   *  When present, the constant `speed` field is ignored and audio is forced to drop mode. */
+  ramps?: ReadonlyArray<SpeedRampSegment>
+  /** Legacy alias kept for backward compatibility with saved workflows. When set and
+   *  `audioMode` is unset, true → "pitch-preserve", false → "drop". New workflows
+   *  should use `audioMode`. */
+  adjustAudio?: boolean
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -5459,7 +5489,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 0,
     inputs: ["in"],
     outputs: ["video"],
-    defaultData: { label: "Adjust Speed", speed: 1.0, adjustAudio: true, fieldMappings: {} },
+    defaultData: { label: "Adjust Speed", speed: 1.0, reverse: false, audioMode: "pitch-preserve", quality: "fast", fieldMappings: {} },
   },
   {
     type: "loop-video",

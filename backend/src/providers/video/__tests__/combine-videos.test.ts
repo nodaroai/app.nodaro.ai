@@ -77,6 +77,7 @@ interface CombineCallOpts {
   transition?: string
   transitionDuration?: number
   audioMode?: "keep" | "crossfade" | "remove"
+  audioCrossfadeCurve?: string
   trimStartFrames?: number
   trimEndFrames?: number
 }
@@ -87,6 +88,7 @@ function defaultOptions(over: CombineCallOpts = {}): Parameters<typeof combineVi
     transition: over.transition ?? "cut",
     transitionDuration: over.transitionDuration ?? 1,
     audioMode: over.audioMode ?? "keep",
+    audioCrossfadeCurve: over.audioCrossfadeCurve,
     trimStartFrames: over.trimStartFrames ?? 0,
     trimEndFrames: over.trimEndFrames ?? 0,
   }
@@ -487,7 +489,7 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     expect(fc).not.toContain("aevalsrc")
   })
 
-  it("audioMode=crossfade: chains acrossfade alongside xfade", async () => {
+  it("audioMode=crossfade: chains acrossfade alongside xfade with default linear curve", async () => {
     mocks.getVideoDuration
       .mockResolvedValueOnce(5)
       .mockResolvedValueOnce(5)
@@ -499,14 +501,36 @@ describe("combineVideos — audioMode for xfade transitions", () => {
     const args = lastArgs()
     const fc = args[args.indexOf("-filter_complex") + 1]
     expect(fc).toContain("acrossfade=d=0.5")
+    expect(fc).toContain("c1=tri:c2=tri") // linear default
     expect(fc).toContain("[aout]")
-    // Both video and audio outputs get mapped
     const mapCalls = args.reduce<string[]>((acc, a, i) => {
       if (a === "-map") acc.push(args[i + 1])
       return acc
     }, [])
     expect(mapCalls).toContain("[vout]")
     expect(mapCalls).toContain("[aout]")
+  })
+
+  it("audioMode=crossfade: each curve id resolves to its acrossfade curve in the filter graph", async () => {
+    const samples = [
+      ["linear", "tri"],
+      ["equal-power", "qsin"],
+      ["smooth", "hsin"],
+      ["logarithmic", "log"],
+      ["exponential", "exp"],
+    ] as const
+
+    for (const [id, curve] of samples) {
+      mocks.runFfmpeg.mockClear()
+      mocks.getVideoDuration.mockResolvedValueOnce(5).mockResolvedValueOnce(5)
+
+      await combineVideos(defaultOptions({
+        transition: "fade", audioMode: "crossfade", audioCrossfadeCurve: id,
+      }))
+
+      const fc = lastArgs()[lastArgs().indexOf("-filter_complex") + 1]
+      expect(fc, `${id} → ${curve}`).toContain(`c1=${curve}:c2=${curve}`)
+    }
   })
 
   it("audioMode=crossfade: falls back to video-only when ffmpeg fails (no audio in some clips)", async () => {

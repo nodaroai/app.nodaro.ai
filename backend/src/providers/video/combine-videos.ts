@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { downloadFile, runFfmpeg, runFfprobe, getVideoDuration, createWorkDir, cleanupWorkDir, normalizeVideoForCombine } from "./ffmpeg-utils.js"
-import { resolveXfadeName } from "@nodaro/shared"
+import { resolveXfadeName, resolveAudioCrossfadeCurve } from "@nodaro/shared"
 
 interface CombineOptions {
   readonly videoUrls: readonly string[]
@@ -11,6 +11,9 @@ interface CombineOptions {
   readonly transition: string
   readonly transitionDuration: number
   readonly audioMode: "keep" | "crossfade" | "remove"
+  /** Id from `AUDIO_CROSSFADE_CURVES`. Only consulted when `audioMode==="crossfade"`.
+   *  Falls back to `tri` (linear) when undefined. */
+  readonly audioCrossfadeCurve?: string
   readonly trimStartFrames: number
   readonly trimEndFrames: number
 }
@@ -170,11 +173,15 @@ function buildVideoFilter(
 }
 
 /**
- * Build chained acrossfade audio filter for N clips.
+ * Build chained acrossfade audio filter for N clips. `curve` is an
+ * `acrossfade=curve=...` name (e.g., "tri", "qsin"); when both `c1` and `c2`
+ * are omitted FFmpeg defaults to triangular on both sides, so we pass the
+ * curve through `c1` + `c2` to give the user the same curve at both ends.
  */
 function buildAudioFilter(
   durations: readonly number[],
   transitionDuration: number,
+  curve: string,
 ): { filter: string; outputLabel: string } {
   const parts: string[] = []
 
@@ -184,7 +191,7 @@ function buildAudioFilter(
     const outputLabel = i === durations.length - 1 ? "[aout]" : `[a${i}]`
 
     parts.push(
-      `${inputA}${inputB}acrossfade=d=${transitionDuration}${outputLabel}`
+      `${inputA}${inputB}acrossfade=d=${transitionDuration}:c1=${curve}:c2=${curve}${outputLabel}`
     )
   }
 
@@ -192,7 +199,7 @@ function buildAudioFilter(
 }
 
 export async function combineVideos(options: CombineOptions): Promise<string> {
-  const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = options
+  const { videoUrls, transition, transitionDuration, audioMode, audioCrossfadeCurve, trimStartFrames, trimEndFrames } = options
   const workDir = await createWorkDir("combine")
 
   try {
@@ -275,7 +282,7 @@ export async function combineVideos(options: CombineOptions): Promise<string> {
         outputPath,
       ])
     } else if (audioMode === "crossfade") {
-      const audioFilter = buildAudioFilter(durations, safeDuration)
+      const audioFilter = buildAudioFilter(durations, safeDuration, resolveAudioCrossfadeCurve(audioCrossfadeCurve))
       const fullFilter = `${videoFilter.filter};${audioFilter.filter}`
 
       try {

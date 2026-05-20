@@ -2957,6 +2957,10 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl || data.videoUrl,
         speed: data.speed,
         adjustAudio: data.adjustAudio,
+        reverse: data.reverse,
+        audioMode: data.audioMode,
+        quality: data.quality,
+        ramps: data.ramps,
         usageLogId,
       })
 
