@@ -28,7 +28,7 @@ export const pipelineOrchestrationQueue = new Queue<PipelineOrchestrationJobData
 
 export async function enqueuePipelineRun(data: PipelineOrchestrationJobData): Promise<void> {
   await pipelineOrchestrationQueue.add("run", data, {
-    jobId: `pipeline:${data.pipelineId}`, // dedup: at most one job per pipeline at a time
+    jobId: `pipeline-${data.pipelineId}`, // dedup: at most one job per pipeline at a time. Must not contain ':' — BullMQ reserves it as its internal key separator.
     removeOnComplete: 100,
     removeOnFail: 200,
     attempts: 1, // engine handles resume semantics itself
