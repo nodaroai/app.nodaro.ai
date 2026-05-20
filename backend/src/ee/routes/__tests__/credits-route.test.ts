@@ -267,7 +267,7 @@ describe("POST /v1/credits/model-costs", () => {
     expect(body.error.code).toBe("validation_error")
   })
 
-  it("returns costs map on success", async () => {
+  it("returns costs map + empty missing/errors on full success", async () => {
     mockGetModelCreditCost
       .mockResolvedValueOnce(4)
       .mockResolvedValueOnce(10)
@@ -286,6 +286,48 @@ describe("POST /v1/credits/model-costs", () => {
       flux: 10,
       kling: 3,
     })
+    expect(body.missing).toEqual([])
+    expect(body.errors).toEqual([])
+  })
+
+  it("returns 200 with partial data + missing[] when one identifier has no price", async () => {
+    // Per-model fault isolation: one PriceNotConfiguredError must NOT take
+    // down the whole batch (which used to 503 the editor's cost preview).
+    const { PriceNotConfiguredError } = await import("@/ee/billing/credits.js")
+    mockGetModelCreditCost
+      .mockResolvedValueOnce(4)
+      .mockRejectedValueOnce(new PriceNotConfiguredError("mystery-model"))
+      .mockResolvedValueOnce(3)
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/credits/model-costs",
+      payload: { models: ["nano-banana", "mystery-model", "kling"] },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toEqual({ "nano-banana": 4, kling: 3 })
+    expect(body.missing).toEqual(["mystery-model"])
+    expect(body.errors).toEqual([])
+  })
+
+  it("returns 200 with errors[] for non-price failures (DB blip, etc.)", async () => {
+    mockGetModelCreditCost
+      .mockResolvedValueOnce(4)
+      .mockRejectedValueOnce(new Error("transient DB error"))
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/credits/model-costs",
+      payload: { models: ["nano-banana", "flux"] },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data).toEqual({ "nano-banana": 4 })
+    expect(body.missing).toEqual([])
+    expect(body.errors).toEqual(["flux"])
   })
 })
 
