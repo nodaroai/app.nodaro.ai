@@ -29,6 +29,7 @@ import { COLOR_LOOKS, COLOR_LOOK_CATEGORY_LABELS, COLOR_LOOK_CATEGORY_ORDER } fr
 import { ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER } from "@nodaro/shared"
+import { FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER } from "@nodaro/shared"
 import { PHOTOGRAPHERS, PHOTOGRAPHER_CATEGORY_LABELS, PHOTOGRAPHER_CATEGORY_ORDER } from "@nodaro/shared"
 import { AESTHETICS, AESTHETIC_CATEGORY_LABELS, AESTHETIC_CATEGORY_ORDER } from "@nodaro/shared"
 import { ERAS, ERA_CATEGORY_LABELS, ERA_CATEGORY_ORDER } from "@nodaro/shared"
@@ -427,6 +428,17 @@ const SINGLE_PICKERS: ReadonlyArray<SingleDimParameterPickerMeta> = [
     groupOrder: WEAPON_SUBCATEGORY_ORDER as ReadonlyArray<string>,
     groupLabels: WEAPON_SUBCATEGORY_LABELS,
     renderIcon: (id) => <span className="text-2xl">{WEAPON_ICON_FOR(id)}</span>,
+  },
+  {
+    kind: "single",
+    nodeType: "furniture",
+    label: "Furniture",
+    valueField: "furniture",
+    defaultValue: "sofa",
+    catalogId: "furniture",
+    entries: mapCat(FURNITURE, "subcategory"),
+    groupOrder: FURNITURE_SUBCATEGORY_ORDER as ReadonlyArray<string>,
+    groupLabels: FURNITURE_SUBCATEGORY_LABELS,
   },
   {
     kind: "single",

@@ -51,6 +51,7 @@ import { buildMaterialHints } from "./materials.js"
 import { getAnimal } from "./animals.js"
 import { getVehicle } from "./vehicles.js"
 import { getWeapon } from "./weapons.js"
+import { getFurniture } from "./furniture.js"
 import { getPhotoGenrePromptHint } from "./photo-genre.js"
 import { getBackdropPromptHint } from "./backdrop.js"
 import { buildHeldPropHints } from "./held-prop.js"
@@ -265,6 +266,13 @@ export function getParameterPromptHint(
       return withCustomText(
         data,
         weapon ? `with a ${weapon.label.toLowerCase()}, ${weapon.description}` : "",
+      )
+    }
+    case "furniture": {
+      const furniture = getFurniture(asStr(data.furniture))
+      return withCustomText(
+        data,
+        furniture ? `including a ${furniture.label.toLowerCase()}, ${furniture.description}` : "",
       )
     }
     case "photo-genre":

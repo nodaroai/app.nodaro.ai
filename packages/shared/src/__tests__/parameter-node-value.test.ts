@@ -121,3 +121,17 @@ describe("getParameterValue — character-fx", () => {
     expect(PARAMETER_NODE_TYPES.has("character-fx")).toBe(true)
   })
 })
+
+describe("parameter-node-value — furniture", () => {
+  it("includes furniture in PARAMETER_NODE_TYPES set", () => {
+    expect(PARAMETER_NODE_TYPES.has("furniture")).toBe(true)
+  })
+
+  it("getParameterValue returns the trimmed furniture id from data", () => {
+    expect(getParameterValue({ furniture: "  sofa  " }, "furniture")).toBe("sofa")
+  })
+
+  it("getParameterValue returns undefined when furniture field is missing", () => {
+    expect(getParameterValue({}, "furniture")).toBeUndefined()
+  })
+})

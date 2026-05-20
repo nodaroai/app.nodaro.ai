@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-19T15:10:01.721Z
-generated_from: 8190f6ba
+generated_at: 2026-05-20T13:30:18.566Z
+generated_from: a183bc77
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -101,6 +101,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `filter-list` — Filter List
 - `forced-alignment` — Forced Alignment
 - `framing` — Framing
+- `furniture` — Furniture
 - `generate-image` — Generate Image
 - `generate-mask` — Generate Mask
 - `generate-music` — Generate Music

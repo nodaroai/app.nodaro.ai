@@ -44,6 +44,7 @@ import { MATERIALS } from "../materials.js"
 import { ANIMALS } from "../animals.js"
 import { VEHICLES } from "../vehicles.js"
 import { WEAPONS } from "../weapons.js"
+import { FURNITURE } from "../furniture.js"
 import { PHOTO_GENRES } from "../photo-genre.js"
 import { BACKDROPS } from "../backdrop.js"
 import { HELD_PROPS } from "../held-prop.js"
@@ -132,6 +133,7 @@ const SAMPLE_DATA_BY_TYPE: Record<string, Record<string, unknown>> = {
   "animal": { animal: firstId(ANIMALS) },
   "vehicle": { vehicle: firstId(VEHICLES) },
   "weapon": { weapon: firstId(WEAPONS) },
+  "furniture": { furniture: firstId(FURNITURE) },
   "photo-genre": { photoGenre: firstId(PHOTO_GENRES) },
   "backdrop": { backdrop: firstId(BACKDROPS) },
   "held-prop": { heldProp: firstId(HELD_PROPS) },

@@ -923,6 +923,21 @@ export interface WeaponData {
   postText?: string
 }
 
+/** Standalone Furniture parameter node data. Reuses the catalog from the
+ * Object entity's Furniture sub-category. Emits a descriptive hint for
+ * downstream gen prompts ("featuring a sofa…"). See
+ * `packages/shared/src/furniture.ts`. */
+export interface FurnitureData {
+  [key: string]: unknown
+  label: string
+  /** Furniture id from FURNITURE catalog. */
+  furniture: string
+  /** Free-text prepended before the structured hint. */
+  preText?: string
+  /** Free-text appended after the structured hint. */
+  postText?: string
+}
+
 /** Standalone Photo Genre parameter node data. Single-pick meta-preset
  * bundling lighting/framing/wardrobe/grade conventions of a recognizable
  * photographic genre (paparazzi, vogue editorial, gym mirror selfie,
@@ -3861,6 +3876,7 @@ export type SceneNodeData =
   | AnimalData
   | VehicleData
   | WeaponData
+  | FurnitureData
   | PhotoGenreData
   | BackdropData
   | HeldPropData
@@ -4018,6 +4034,7 @@ export type SceneNodeType =
   | "animal"
   | "vehicle"
   | "weapon"
+  | "furniture"
   | "photo-genre"
   | "backdrop"
   | "held-prop"
@@ -4600,6 +4617,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["out"],
     defaultData: { label: "Weapon", weapon: "katana" },
+  },
+  {
+    type: "furniture",
+    label: "Furniture",
+    category: "parameter",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Furniture", furniture: "sofa" },
   },
   {
     type: "photo-genre",

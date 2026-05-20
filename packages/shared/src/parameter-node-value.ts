@@ -35,6 +35,7 @@ export const PARAMETER_NODE_TYPES: ReadonlySet<string> = new Set([
   "animal",
   "vehicle",
   "weapon",
+  "furniture",
   "photo-genre",
   "backdrop",
   "held-prop",
@@ -142,6 +143,8 @@ export function getParameterValue(
       return trim(data.vehicle)
     case "weapon":
       return trim(data.weapon)
+    case "furniture":
+      return trim(data.furniture)
     case "photo-genre":
       return trim(data.photoGenre)
     case "backdrop":
