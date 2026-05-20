@@ -60,7 +60,13 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
   const anthropic = getAnthropicClient()
   const retries = Math.max(0, maxRetries)
 
-  const jsonSchema = zodToJsonSchema(schema, { target: "openApi3" }) as Record<string, unknown>
+  // Use draft-7 (JSON Schema) not OpenAPI 3.0. Anthropic's Messages API
+  // requires tool input_schema to match JSON Schema draft 2020-12 strictly —
+  // it rejects OpenAPI-specific extensions like `nullable: true` (Zod's
+  // .nullable() / .nullish() emit that under target=openApi3, breaking every
+  // tool call). Draft 7 is a compatible subset of 2020-12 and uses
+  // `"type": [..., "null"]` for nullable fields, which Anthropic accepts.
+  const jsonSchema = zodToJsonSchema(schema, { target: "jsonSchema7" }) as Record<string, unknown>
 
   const toolDef: Anthropic.Messages.Tool = {
     name: "emit",
