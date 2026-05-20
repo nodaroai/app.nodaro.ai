@@ -11,7 +11,7 @@ const map: LocaleCatalogMap = {
   "smash-cut":              { label: "Smash Cut",                description: "Abrupter Schnitt zwischen kontrastierenden Einstellungen" },
   "iris":                   { label: "Irisblende",               description: "Iris schließt und öffnet sich zur zweiten Einstellung" },
   "wipe":                   { label: "Wischblende",              description: "Linearer Wisch ersetzt die erste Einstellung" },
-  "roll-transition":        { label: "Rollenübergang",           description: "Bild dreht 90-180°, zweite Einstellung am Ende" },
+  "roll-transition":        { label: "Drehübergang",             description: "Bild dreht 90-180°, zweite Einstellung am Ende" },
   "seamless-match":         { label: "Nahtloser Schnitt",        description: "Versteckter Schnitt durch angeglichene Bewegung und Farbe" },
 
   // ── Time ──

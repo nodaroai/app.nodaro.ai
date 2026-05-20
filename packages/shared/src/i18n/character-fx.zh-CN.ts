@@ -20,9 +20,9 @@ const map: LocaleCatalogMap = {
   // ── Power ──
   "fire-breathe": { label: "喷火", description: "口吐持续的橙黄色火焰射流" },
   "ice-breathe": { label: "冰息", description: "呼出一道冷冻气流" },
-  "air-bending": { label: "气宗", description: "操控旋转的气流漩涡" },
-  "water-bending": { label: "水宗", description: "以手势操控流动的水" },
-  "earth-bending": { label: "土宗", description: "从地面召唤石板升起" },
+  "air-bending": { label: "御气术", description: "操控旋转的气流漩涡" },
+  "water-bending": { label: "御水术", description: "以手势操控流动的水" },
+  "earth-bending": { label: "御土术", description: "从地面召唤石板升起" },
   "lightning-hands": { label: "雷电之手", description: "双手迸出蓝白电弧" },
   "levitation": { label: "悬浮", description: "缓缓离地升起" },
   "telekinesis": { label: "心灵遥控", description: "附近物体漂浮并环绕旋转" },
