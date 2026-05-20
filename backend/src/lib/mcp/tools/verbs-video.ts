@@ -15,6 +15,7 @@ import {
   SEEDANCE_2_REF_LIMITS,
   isSeedance2Provider,
   ALL_CAPTION_STYLES,
+  COMBINE_TRANSITION_IDS,
 } from "@nodaro/shared"
 import { normalizeVideoInput } from "../normalize.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
@@ -562,7 +563,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .min(2)
           .describe("At least 2 video sources"),
         transition: z
-          .enum(["cut", "fade", "dissolve", "dip-to-black", "dip-to-white"])
+          .enum(COMBINE_TRANSITION_IDS as unknown as [string, ...string[]])
           .optional(),
         transition_duration: z.number().min(0).max(5).optional(),
         audio_mode: z.enum(["keep", "crossfade", "remove"]).optional(),

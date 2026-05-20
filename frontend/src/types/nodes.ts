@@ -2380,7 +2380,10 @@ export type CombineVideosData = {
   currentJobProgress?: number
   [key: string]: unknown
   label: string
-  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+  /** Any id from `COMBINE_TRANSITIONS` (`@nodaro/shared`). The catalog
+   *  is the single source of truth; backend Zod validates against it,
+   *  the picker only renders catalog ids. */
+  transition: string
   transitionDuration: number
   audioMode: "keep" | "crossfade" | "remove"
   trimStartFrames?: number

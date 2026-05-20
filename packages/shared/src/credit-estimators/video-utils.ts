@@ -32,7 +32,10 @@ export interface TrimVideoEstimatorInput {
 }
 
 export interface CombineVideosEstimatorInput {
-  transition?: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+  /** Any id from `COMBINE_TRANSITIONS`. The estimator only branches on
+   *  `cut` vs non-cut, so accepting the full string keeps the catalog as
+   *  the single source of truth. */
+  transition?: string
   transitionDuration?: number
   trimStartFrames?: number
   trimEndFrames?: number

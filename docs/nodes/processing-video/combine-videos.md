@@ -19,13 +19,36 @@ The Combine Videos node joins multiple video clips in sequence with configurable
 
 ### Transition Options
 
+50+ FFmpeg `xfade` transitions are available, organized into a tabbed picker in the config panel. The **Common** tab surfaces the most-used handful; the remaining tabs group every option by family. Each tile shows a looping mini-preview so you can compare options at a glance.
+
+**Common tab** — the everyday handful:
+
 | Transition | Description |
 |------------|-------------|
-| cut | Hard cut, no transition effect |
-| fade | Cross-fade between clips |
-| dissolve | Dissolve blend transition |
-| dip-to-black | Fade to black, then fade in |
-| dip-to-white | Fade to white, then fade in |
+| cut | Hard cut — instant switch, no blend. Fastest. |
+| fade | Smooth alpha cross-fade. Classic clean blend. |
+| dissolve | Random-pixel dissolve. Grainy, organic feel — good for memory beats. |
+| dip-to-black | Fade through black. Use between scenes or time jumps. |
+| dip-to-white | Fade through white. Bright, ethereal — flashbacks. |
+| wipe-left, wipe-right | Hard edge sweeps across the frame. |
+| slide-left, slide-right | Next clip pushes the current one off-screen. |
+| circle-open | Circular iris opens to reveal the next clip from center. |
+
+**All groups** — full catalog (id → FFmpeg xfade name):
+
+| Group | Transitions |
+|-------|-------------|
+| Fades & Dips | cut (concat), fade, dissolve, dip-to-black (fadeblack), dip-to-white (fadewhite), fadegrays |
+| Wipes | wipe-left, wipe-right, wipe-up, wipe-down, wipe-tl, wipe-tr, wipe-bl, wipe-br |
+| Slides | slide-left, slide-right, slide-up, slide-down |
+| Smooth | smooth-left, smooth-right, smooth-up, smooth-down (feathered-edge wipes) |
+| Shapes | circle-open, circle-close, circle-crop, rect-crop, horz-open, horz-close, vert-open, vert-close, diag-tl, diag-tr, diag-bl, diag-br |
+| Slices | hl-slice, hr-slice, vu-slice, vd-slice |
+| Reveals | reveal-left, reveal-right, reveal-up, reveal-down |
+| Covers | cover-left, cover-right, cover-up, cover-down |
+| Effects | pixelize, radial, hblur, distance, zoom-in, squeeze-h, squeeze-v |
+
+**Back-compat note:** Workflows saved with the old 5-value transition field (`cut` / `fade` / `dissolve` / `dip-to-black` / `dip-to-white`) keep working. `dip-to-black` and `dip-to-white` now use FFmpeg's built-in `fadeblack` / `fadewhite` xfade transitions instead of interleaving generated solid-color clips — visually identical, one fewer ffmpeg pass per dip. `dissolve` now produces the FFmpeg `dissolve` xfade (pixel-noise pattern), which differs subtly from `fade` — previously the two were aliased.
 
 ### Audio Modes
 

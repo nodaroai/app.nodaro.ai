@@ -961,3 +961,16 @@ export * from "./scene-node-types.js"
 export * from "./scene-helper-types.js"
 export * from "./provider-directive-defaults.js"
 export * from "./lora-routing.js"
+
+export {
+  COMBINE_TRANSITIONS,
+  COMBINE_TRANSITION_IDS,
+  COMBINE_TRANSITION_GROUP_ORDER,
+  COMBINE_TRANSITION_GROUP_LABELS,
+  getCombineTransition,
+  resolveXfadeName,
+} from "./combine-transitions.js"
+export type {
+  CombineTransition,
+  CombineTransitionGroup,
+} from "./combine-transitions.js"

@@ -54,6 +54,10 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 
 Configure shared settings that feed into multiple downstream nodes. These control generation behavior.
 
+### Generation parameters
+
+Free-form or enum settings that feed AI / video / audio generation nodes via FieldMappings or direct text wiring.
+
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Tone](./parameters/tone.md) | Define tone/style for AI generation | Set consistent tone across script and image generation |
@@ -63,9 +67,73 @@ Configure shared settings that feed into multiple downstream nodes. These contro
 | [Duration](./parameters/duration.md) | Set target duration in seconds | Define video or audio length for downstream nodes |
 | [Aspect Ratio](./parameters/aspect-ratio.md) | Define video/image aspect ratio | Set consistent dimensions (16:9, 9:16, 1:1, 4:5) |
 | [Motion](./parameters/motion.md) | Control motion intensity | Adjust video generation movement (subtle/moderate/dynamic) |
-| [Camera Motion](./parameters/camera-motion.md) | Define camera movement type | Set camera behavior (static, pan, zoom) for video generation |
-| [Transition](./parameters/transition.md) | Pick a cinematic transition between frames (76-entry catalog, 8 categories, multi-pick + timing fields) | Inject transition effects into AI-generated video clips (cross-dissolve, time-shift, morph, portal, glitch, etc.) |
-| [Character FX](./parameters/character-fx.md) | Apply a character-driven effect (transformation, power, body-mod, face FX, aura) with target ref name substitution | Animate transformations, fantastical powers, body modifications, or subject-bound auras on a named character |
+
+### Picker nodes — Look family
+
+Visual style, mood, color, atmosphere, and aesthetic pickers. Wire into an AI image/video node's `cinematography` handle.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Setting](./parameters/setting.md) | Pick from 63 settings across indoor/urban/nature/fantastical | Establish where a shot takes place |
+| [Atmosphere](./parameters/atmosphere.md) | Pick atmospheric conditions (fog, rain, smoke, ...) from 40 entries | Add weather, particles, and light scattering to a scene |
+| [Style](./parameters/style.md) | Pick a visual style preset (cinematic, anime, oil-painting, ...) from 48 entries | Lock the overall aesthetic register |
+| [Color / Look](./parameters/color-look.md) | Pick a color-grading look (warm, teal-orange, bleached, ...) from 41 entries | Set the chromatic signature of a frame |
+| [Mood](./parameters/mood.md) | Pick a mood (calm, tense, melancholic, ...) from 50 entries | Anchor the emotional tone of a generation |
+| [Photographer / Artist](./parameters/photographer.md) | Pick from 67 photographers, directors, illustrators, painters | Anchor in a recognizable creator-style canon |
+| [Aesthetic / Microtrend](./parameters/aesthetic.md) | Pick a microtrend aesthetic (y2k, cottagecore, vaporwave, ...) from 46 entries | Tap into named visual subcultures |
+| [Era / Period](./parameters/era.md) | Pick a historical era (1950s, ancient-rome, victorian, ...) from 32 entries | Set the chronological frame |
+| [Photo Genre](./parameters/photo-genre.md) | Pick a photography genre (fashion-editorial, street, macro, ...) from 46 entries | Lock genre conventions |
+| [Backdrop](./parameters/backdrop.md) | Pick a studio backdrop (white-seamless, cyc-wall, gradient, ...) from 40 entries | Studio / product / portrait composition |
+| [Render Quality](./parameters/render-quality.md) | Pick a render-pipeline preset (raytracing, octane, unreal, ...) from 24 entries | Nudge toward CG/3D aesthetics |
+| [Composition Effect](./parameters/composition-effects.md) | Pick a composition effect (bursting-through-frame, DoF, ...) from 19 entries | Compositional discipline |
+| [Post-Process Effect](./parameters/post-process-effects.md) | Pick a post-processing effect (vignette, grain, light-leak, ...) from 18 entries | Finishing-pass aesthetics |
+| [Action FX](./parameters/action-fx.md) | Pick environmental effects (multi-pick) from 72 entries | Earthquake, lightning, explosion, falling-objects — scene-event prompt injection |
+| [Loop Subject](./parameters/loop-subject.md) | Pick a loop subject (tunnel, kaleidoscope, vortex, ...) from 35 entries | Seamlessly-looped video content |
+
+### Picker nodes — Camera family
+
+Lens, format, motion, transitions, and character-driven effects.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Camera Motion](./parameters/camera-motion.md) | Pick from 71 camera motions; graph-aware startState/endState handles | Set camera behavior (static, pan, dolly, zoom) for video generation |
+| [Lens](./parameters/lens.md) | Pick from 16 lenses (wide-angle, normal-50mm, telephoto, fisheye, anamorphic, ...) | Set focal-length character |
+| [Camera / Film Stock](./parameters/camera-format.md) | Pick from 31 camera/film formats (35mm, IMAX, super-8, polaroid, VHS, ...) | Specify recording medium |
+| [Transition](./parameters/transition.md) | Pick a cinematic transition (76-entry catalog, 8 categories, multi-pick + timing fields) | Inject transition effects into AI-generated video clips (cross-dissolve, time-shift, morph, portal, glitch, etc.) |
+| [Character FX](./parameters/character-fx.md) | Apply a character-driven effect (57 entries, 5 categories) with target ref name substitution | Animate transformations, fantastical powers, body modifications, or subject-bound auras on a named character |
+
+### Picker nodes — Subject / Object family
+
+Pose, material, animals, vehicles, weapons, props.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Pose](./parameters/pose.md) | Pick a pose from 81 entries (standing, sitting, action, dynamic) | Direct subject posture |
+| [Material](./parameters/material.md) | Pick a material from 66 entries (silk, leather, metal, glass, marble, ...) | Set dominant surface/substance |
+| [Animal](./parameters/animal.md) | Pick an animal from 126 entries with descriptions | Feature animals in a scene |
+| [Vehicle](./parameters/vehicle.md) | Pick a vehicle from 107 entries with descriptions | Feature vehicles in a scene |
+| [Weapon](./parameters/weapon.md) | Pick a weapon from 85 entries with descriptions | Action / fantasy / sci-fi / period work |
+| [Held Prop](./parameters/held-prop.md) | Pick a held prop from 59 entries (smartphone, umbrella, bouquet, ...) | Add narrative texture to a portrait or scene |
+
+### Picker nodes — Multi-dim composed pickers
+
+Pickers that combine multiple independent dimensions into a single descriptor.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
+| [Framing](./parameters/framing.md) | Multi-dim: shot size + angle + coverage + composition + vantage (72 options across 5 fields) | Per-shot framing direction |
+| [Lighting](./parameters/lighting.md) | Multi-dim: time-of-day + style + direction (72 options across 3 fields) | Compose a full lighting setup |
+| [Person](./parameters/person.md) | Multi-dim: 20 attributes (type, age, ethnicity, build, face, hair, eyes, skin, …) — 547 options | Casting brief / recurring-character generation |
+| [Styling](./parameters/styling.md) | Multi-dim: makeup + eyewear + headwear + hair + jewelry + nails + face-paint + fabric (262 options across 9 fields) | Fashion-editorial / character continuity |
+| [Temporal](./parameters/temporal.md) | Multi-dim: speed + freeze + direction + shutter (18 options across 4 fields) | Time-based effects (slow-mo, freeze, reverse) |
+| [Exposure Settings](./parameters/exposure-settings.md) | Multi-dim: aperture + shutter speed + ISO (20 options across 3 fields) | Photographic exposure-triangle direction |
+
+### Picker nodes — Sound / Music / Voice
+
+Music and voice-design pickers. Wire into Suno, Generate Music, Text-to-Audio, or ElevenLabs Voice Design.
+
+| Node | Description | When to Use |
+|------|-------------|-------------|
 | [Music Genre](./parameters/music-genre.md) | Pick genre + subgenre + era for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
 | [Music Mood](./parameters/music-mood.md) | Pick energy + emotion + vibe for music generation | Feed Suno Generate, Generate Music (MiniMax), Text to Audio |
 | [Instrumentation](./parameters/instrumentation.md) | Pick instruments + production style + vocal presence | Feed music generators; flips MiniMax `instrumental` flag |

@@ -40,7 +40,9 @@ const handleCombineVideos: HandlerFn = async function handleCombineVideos(job, c
   const { videoUrls, transition, transitionDuration, audioMode, trimStartFrames, trimEndFrames } = job.data as {
     jobId: string
     videoUrls: string[]
-    transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white"
+    /** Validated upstream against `COMBINE_TRANSITION_IDS` at the route's
+     *  Zod boundary; the worker just forwards the string. */
+    transition: string
     transitionDuration: number
     audioMode?: "keep" | "crossfade" | "remove"
     trimStartFrames?: number

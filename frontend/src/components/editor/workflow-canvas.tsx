@@ -706,6 +706,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         handleId: fromHandle.id ?? "in",
         direction: (fromHandle.type as "source" | "target") ?? "source",
         dropPosition: screenToFlowPosition({ x: clientX, y: clientY }),
+        nodeType: fromNode.type,
       })
       setAddNodePopupOpen(true)
     },

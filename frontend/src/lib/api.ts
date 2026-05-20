@@ -1873,7 +1873,7 @@ export async function generateScriptApi(params: {
 
 export async function combineVideos(
   videoUrls: string[],
-  transition: "cut" | "fade" | "dissolve" | "dip-to-black" | "dip-to-white" = "cut",
+  transition: string = "cut",
   transitionDuration: number = 0.5,
   audioMode: "keep" | "crossfade" | "remove" = "crossfade",
   userId?: string,
