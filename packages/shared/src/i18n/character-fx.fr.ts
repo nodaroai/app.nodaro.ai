@@ -38,7 +38,7 @@ const map: LocaleCatalogMap = {
   "tentacles-emerge":  { label: "Tentacules qui Émergent", description: "Des tentacules serpentent hors du dos ou du corps" },
   "extra-eyes":        { label: "Yeux Supplémentaires",    description: "Des yeux additionnels s'ouvrent sur le visage ou le corps" },
   "head-explode":      { label: "Explosion de Tête",       description: "La tête explose violemment (stylisé, tout public)" },
-  "head-off":          { label: "Décapitation",            description: "La tête se détache et flotte (stylisé, tout public)" },
+  "head-off":          { label: "Tête Détachée",           description: "La tête se détache et flotte (stylisé, tout public)" },
   "spiders-from-mouth":{ label: "Araignées par la Bouche", description: "Des araignées sortent de la bouche ouverte (horreur)" },
   "skin-surge":        { label: "Ondulation de Peau",      description: "La peau ondule avec un mouvement sous la surface" },
 

@@ -60,7 +60,7 @@ const map: LocaleCatalogMap = {
   "fire-aura": { label: "火焰光环", description: "火舌围绕身体轮廓舔舐跳动" },
   "frost-aura": { label: "寒冰光环", description: "霜雪冰晶从主体向外辐射" },
   "shadow-aura": { label: "暗影光环", description: "黑暗触须在主体周围蠕动涌动" },
-  "electricity-aura": { label: "电力光环", description: "特斯拉线圈式电弧在主体周围爆裂" },
+  "electricity-aura": { label: "电气光环", description: "特斯拉线圈式电弧在主体周围爆裂" },
   "sparkles-around": { label: "魔法闪光", description: "魔法闪光粒子环绕主体旋转" },
   "fairies-around": { label: "仙子围绕", description: "微小的发光仙子在周围嬉戏飞翔" },
   "objects-orbit": { label: "物体环绕", description: "小物体漂浮并环绕主体旋转" },

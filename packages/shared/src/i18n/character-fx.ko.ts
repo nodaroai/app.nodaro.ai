@@ -37,8 +37,8 @@ const map: LocaleCatalogMap = {
   "tail-emerge": { label: "꼬리 출현", description: "척추 기저부에서 꼬리가 뻗어 나옴" },
   "tentacles-emerge": { label: "촉수 출현", description: "등이나 몸에서 촉수가 꿈틀거리며 나옴" },
   "extra-eyes": { label: "추가 눈 열림", description: "얼굴과 몸 곳곳에 추가 눈이 차례로 열림" },
-  "head-explode": { label: "두부 폭발", description: "머리가 폭발적으로 터짐 (PG-13 스타일)" },
-  "head-off": { label: "두부 분리", description: "머리가 목에서 부드럽게 분리되어 부유 (PG-13)" },
+  "head-explode": { label: "머리 폭발", description: "머리가 폭발적으로 터짐 (PG-13 스타일)" },
+  "head-off": { label: "머리 분리", description: "머리가 목에서 부드럽게 분리되어 부유 (PG-13)" },
   "spiders-from-mouth": { label: "입에서 거미", description: "벌린 입에서 거미들이 기어 나옴 (공포)" },
   "skin-surge": { label: "피부 출렁임", description: "피부 아래에서 무언가 움직이는 듯 출렁임" },
 

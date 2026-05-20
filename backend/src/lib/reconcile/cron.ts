@@ -12,9 +12,6 @@ export interface ReconcileResult {
   swept: number
   /** Async kinds successfully dispatched to a per-provider handler. */
   recovered: number
-  /** Async kinds with no matching handler (e.g., kie-suno today). Bumped
-   *  in attempts by the handler; cron just counts. */
-  skippedAsync: number
   notStale: number
   errors: number
 }
@@ -83,7 +80,6 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
     scanned: 0,
     swept: 0,
     recovered: 0,
-    skippedAsync: 0,
     notStale: 0,
     errors: 0,
   }
@@ -152,7 +148,15 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
         })
         result.recovered++
       } else {
-        result.skippedAsync++
+        // Unknown provider_kind (e.g., a future variant added to types.ts
+        // without updating the dispatch sets above). Spec §5.5 catch-all:
+        // sweep stale rows so they don't accumulate forever.
+        await sweepStaleSyncJob({
+          id: row.id,
+          provider_kind: row.provider_kind,
+          reconcile_attempts: row.reconcile_attempts,
+        })
+        result.swept++
       }
     } catch (err) {
       console.error(`[reconcile/cron] handler failed for job ${row.id}:`, err)
