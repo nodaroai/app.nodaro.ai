@@ -139,7 +139,16 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   }, [drift])
 
   async function handleApprove() {
-    await pipelinesApi.approveStage(pipelineId, "script")
+    try {
+      await pipelinesApi.approveStage(pipelineId, "script")
+    } catch (err) {
+      // 409 `stage_already_advanced` means the stage was approved by a
+      // prior click (or a concurrent path); the desired end state is
+      // already reached, so we refetch to sync the UI rather than
+      // surface the error. Any other error re-throws so the user sees it.
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!msg.includes("stage_already_advanced")) throw err
+    }
     void pipelineQuery.refetch()
   }
 
