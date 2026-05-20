@@ -48,6 +48,9 @@ describe("reconcileInflightJobs", () => {
     mocks.selectChain.data = null
     mocks.selectChain.error = null
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockClear()
+    ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
+    ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
+    ;(reconcileElevenLabsJob as ReturnType<typeof vi.fn>).mockClear()
   })
 
   it("dispatches sync kinds (anthropic-sync) to sweepStaleSyncJob", async () => {
@@ -93,6 +96,56 @@ describe("reconcileInflightJobs", () => {
     // sweepStaleSyncJob is NOT called — async kind goes to the kie handler instead.
     expect(sweepStaleSyncJob).not.toHaveBeenCalled()
     expect(result.recovered).toBe(1)
+  })
+
+  it("dispatches kie-aleph and kie-veo-1080p to reconcileKieJob (not the sync sweep)", async () => {
+    // Reconcile blind-spot regression: both kinds were absent from KIE_KINDS,
+    // so a stuck Aleph or VEO 1080p row was force-failed via sync-sweep
+    // instead of recovered via the right poll endpoint.
+    const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    mocks.rows.push(
+      {
+        id: "j-aleph",
+        status: "processing",
+        provider_kind: "kie-aleph",
+        provider_task_id: "t-aleph",
+        provider_call_started_at: stale,
+        reconcile_attempts: 0,
+      },
+      {
+        id: "j-veo1080",
+        status: "processing",
+        provider_kind: "kie-veo-1080p",
+        provider_task_id: "t-parent-veo",
+        provider_call_started_at: stale,
+        reconcile_attempts: 0,
+      },
+    )
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).not.toHaveBeenCalled()
+    expect(reconcileKieJob).toHaveBeenCalledTimes(2)
+    expect(result.recovered).toBe(2)
+  })
+
+  it("dispatches the pre-task sentinel to sweepStaleSyncJob (mark failed + refund)", async () => {
+    // Pre-task instrumentation: worker writes provider_kind=pre-task at
+    // the status=processing transition so a crash before createKieTask is
+    // visible to the reconcile filter. 30-min threshold + sync-sweep means
+    // the row gets marked failed and credits refunded.
+    const stale = new Date(Date.now() - 40 * 60 * 1000).toISOString()
+    mocks.rows.push({
+      id: "j-pretask",
+      status: "processing",
+      provider_kind: "pre-task",
+      provider_task_id: null,
+      provider_call_started_at: stale,
+      reconcile_attempts: 0,
+    })
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "j-pretask", provider_kind: "pre-task" }),
+    )
+    expect(result.swept).toBe(1)
   })
 
   it("unknown provider_kind falls through to sweepStaleSyncJob (spec §5.5 catch-all)", async () => {

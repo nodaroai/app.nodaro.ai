@@ -4,6 +4,7 @@ import { uploadToR2 } from "../storage.js"
 import {
   pollKieTask,
   pollVeoTask,
+  runVeo1080pTask,
   KieError,
 } from "../../providers/kie/client.js"
 import { pollKling3Task } from "../../providers/kie/kling3-client.js"
@@ -68,6 +69,15 @@ async function singlePoll(row: KieJobRow): Promise<{
       if (!urls?.[0]) throw new Error("VEO success but no resultUrls")
       return { url: urls[0]!, extraUrls: urls.slice(1), providerMs: r.providerMs }
     }
+    case "kie-veo-1080p": {
+      // Quasi-sync GET /api/v1/veo/get-1080p-video with the PARENT kieTaskId
+      // (the 1080p endpoint reuses the original VEO task's id; there is no
+      // separate 1080p task). One-shot poll — `runVeo1080pTask` itself retries
+      // internally if still processing, but for the reconcile path we just
+      // attempt once and let `bumpAttemptsOrExhaust` re-fire on the next tick.
+      const r = await runVeo1080pTask(id)
+      return { url: r.url, extraUrls: [] }
+    }
     case "kie-kling3": {
       const videoUrl = await pollKling3Task(id)
       return { url: videoUrl, extraUrls: [] }
@@ -86,6 +96,14 @@ async function singlePoll(row: KieJobRow): Promise<{
     }
     case "kie-runway": {
       const videoUrl = await pollRunwayTask(id, "Runway")
+      return { url: videoUrl, extraUrls: [] }
+    }
+    case "kie-aleph": {
+      // Runway Aleph (v2v) uses `/api/v1/aleph/record-info` — DIFFERENT
+      // endpoint from `kie-runway` (`/api/v1/runway/record-detail`). Wiring
+      // through `kie-standard` (the old default) sent reconcile to the wrong
+      // endpoint and force-failed every Aleph row after 18 attempts.
+      const videoUrl = await pollAlephTask(id)
       return { url: videoUrl, extraUrls: [] }
     }
     case "kie-suno": {

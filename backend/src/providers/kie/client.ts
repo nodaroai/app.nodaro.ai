@@ -880,15 +880,23 @@ export async function runVeoExtendTask(
  * VEO 3.1 1080p — get 1080p version of a completed VEO video.
  * API: GET /api/v1/veo/get-1080p-video?taskId=&index=0
  * Quasi-synchronous: may need retries while processing (~1-3 min).
+ *
+ * `reconcileOpts.onTaskCreated` fires immediately with the input `taskId` (the
+ * parent VEO video's id, reused by the 1080p endpoint — there is no separate
+ * 1080p task). Lets the reconcile cron find + re-call this endpoint if the
+ * worker crashes mid-poll.
  */
 export async function runVeo1080pTask(
   taskId: string,
-  index: number = 0
+  index: number = 0,
+  reconcileOpts?: ReconcileOpts,
 ): Promise<{ url: string }> {
   const apiKey = config.KIE_API_KEY
   if (!apiKey) {
     throw createSanitizedError("KIE_API_KEY is not configured", "Video upscale")
   }
+
+  await fireOnTaskCreated(reconcileOpts, taskId, "[KIE.ai VEO 1080p]")
 
   console.log(`[KIE.ai VEO 1080p] Requesting 1080p for task ${taskId}, index ${index}`)
 

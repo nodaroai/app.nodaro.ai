@@ -38,8 +38,8 @@ interface CandidateRow {
 }
 
 const KIE_KINDS: ReadonlySet<string> = new Set([
-  "kie-standard", "kie-veo", "kie-suno", "kie-kontext", "kie-luma",
-  "kie-kling3", "kie-runway", "kie-lip-sync",
+  "kie-standard", "kie-veo", "kie-veo-1080p", "kie-suno", "kie-kontext",
+  "kie-luma", "kie-kling3", "kie-runway", "kie-aleph", "kie-lip-sync",
 ])
 
 const REPLICATE_KINDS: ReadonlySet<string> = new Set([
