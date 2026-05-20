@@ -7,7 +7,7 @@ import { formatZodError } from "../../lib/zod-error.js"
 
 const creditAuditSyncBody = z.object({
   token: z.string().min(1, "token is required"),
-  mode: z.enum(["theoretical", "actual"]).optional(),
+  mode: z.enum(["theoretical", "actual", "per-task"]).optional(),
   days: z.number().int().min(1).max(30).optional(),
   lookbackMinutes: z.number().int().min(1).max(43200).optional(),
 })
@@ -219,7 +219,11 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
       })
     }
     const { token } = parsed.data
-    const mode = parsed.data.mode === "actual" ? "actual" as const : "theoretical" as const
+    const mode = parsed.data.mode === "actual"
+      ? "actual" as const
+      : parsed.data.mode === "per-task"
+        ? "per-task" as const
+        : "theoretical" as const
 
     // Support both lookbackMinutes (fine-grained) and days (legacy)
     const lookbackMinutes = parsed.data.lookbackMinutes
@@ -280,6 +284,143 @@ export async function adminCreditAuditRoutes(app: FastifyInstance) {
     // Read markup from DB (admin settings) so audit matches pricing formula
     const settings = await getAppSettings()
     const markupMultiplier = 1 + settings.cost_markup_percent / 100
+
+    // ---------- Per-task mode: match each KIE task to our jobs row by provider_task_id ----------
+    // Uses the `provider_task_id` column added in migration 138 (Phase 1 of reconciliation).
+    // Surfaces per-task discrepancies that the aggregated `actual` mode hides — e.g.,
+    // one outlier task overcharged while the model average looks OK.
+    if (mode === "per-task") {
+      const successfulRecords = records.filter(
+        (r) => isSuccessState(r.state) && r.taskId && r.taskId.length > 0,
+      )
+      const taskIds = [...new Set(successfulRecords.map((r) => r.taskId))]
+
+      // Batch-fetch matching jobs by provider_task_id (Supabase IN-clause cap ~1000).
+      const jobsByTaskId = new Map<string, {
+        id: string
+        credits: number | null
+        credits_actual: number | null
+        status: string
+        model_identifier: string | null
+        provider_kind: string | null
+        user_id: string
+      }>()
+      const BATCH = 500
+      for (let i = 0; i < taskIds.length; i += BATCH) {
+        const slice = taskIds.slice(i, i + BATCH)
+        const { data } = await supabase
+          .from("jobs")
+          .select("id, credits, credits_actual, status, model_identifier, provider_kind, user_id, provider_task_id")
+          .in("provider_task_id", slice)
+        for (const j of (data ?? []) as Array<{
+          id: string
+          credits: number | null
+          credits_actual: number | null
+          status: string
+          model_identifier: string | null
+          provider_kind: string | null
+          user_id: string
+          provider_task_id: string
+        }>) {
+          jobsByTaskId.set(j.provider_task_id, {
+            id: j.id,
+            credits: j.credits,
+            credits_actual: j.credits_actual,
+            status: j.status,
+            model_identifier: j.model_identifier,
+            provider_kind: j.provider_kind,
+            user_id: j.user_id,
+          })
+        }
+      }
+
+      type TaskDiff = {
+        kieTaskId: string
+        kieModel: string
+        kieCredits: number
+        ourJobId: string | null
+        ourCredits: number | null
+        ourCreditsActual: number | null
+        ourModelIdentifier: string | null
+        ourProviderKind: string | null
+        expectedCredits: number
+        diff: number | null
+        diffPercent: number | null
+        status: "OK" | "UNMATCHED" | "UNDERCHARGED" | "OVERCHARGED"
+      }
+      const taskDiffs: TaskDiff[] = []
+      for (const record of successfulRecords) {
+        const providerCostInCredits = record.consumeCredits / KIE_CREDITS_PER_NODARO
+        const expectedCredits = Math.ceil(providerCostInCredits * markupMultiplier)
+        const job = jobsByTaskId.get(record.taskId)
+        if (!job) {
+          taskDiffs.push({
+            kieTaskId: record.taskId,
+            kieModel: record.model,
+            kieCredits: record.consumeCredits,
+            ourJobId: null,
+            ourCredits: null,
+            ourCreditsActual: null,
+            ourModelIdentifier: null,
+            ourProviderKind: null,
+            expectedCredits,
+            diff: null,
+            diffPercent: null,
+            status: "UNMATCHED",
+          })
+          continue
+        }
+        const ourCredits = job.credits ?? 0
+        const diff = ourCredits - expectedCredits
+        const diffPercent = expectedCredits > 0 ? round2((diff / expectedCredits) * 100) : null
+        let status: TaskDiff["status"] = "OK"
+        // Tolerance: ±1 credit is normal rounding noise.
+        if (diff < -1) status = "UNDERCHARGED"
+        else if (diff > 1) status = "OVERCHARGED"
+
+        taskDiffs.push({
+          kieTaskId: record.taskId,
+          kieModel: record.model,
+          kieCredits: record.consumeCredits,
+          ourJobId: job.id,
+          ourCredits,
+          ourCreditsActual: job.credits_actual ?? null,
+          ourModelIdentifier: job.model_identifier,
+          ourProviderKind: job.provider_kind,
+          expectedCredits,
+          diff,
+          diffPercent,
+          status,
+        })
+      }
+
+      // Sort: mismatches first, then by absolute diff descending.
+      taskDiffs.sort((a, b) => {
+        const aBad = a.status !== "OK"
+        const bBad = b.status !== "OK"
+        if (aBad && !bBad) return -1
+        if (!aBad && bBad) return 1
+        return Math.abs(b.diff ?? 0) - Math.abs(a.diff ?? 0)
+      })
+
+      const unmatched = taskDiffs.filter((d) => d.status === "UNMATCHED").length
+      const underchargedCount = taskDiffs.filter((d) => d.status === "UNDERCHARGED").length
+      const overchargedCount = taskDiffs.filter((d) => d.status === "OVERCHARGED").length
+
+      return {
+        mode: "per-task" as const,
+        lookbackMinutes,
+        markupPercent: settings.cost_markup_percent,
+        totalRecords: records.length,
+        successRecords: successCount,
+        matchedJobs: taskDiffs.length - unmatched,
+        unmatched,
+        undercharged: underchargedCount,
+        overcharged: overchargedCount,
+        sources, errors, rawSamples,
+        tasks: taskDiffs,
+      }
+    }
 
     // ---------- Actual mode: compare KIE cost vs what we ACTUALLY charged ----------
     if (mode === "actual") {

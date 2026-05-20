@@ -96,9 +96,9 @@ describe("findRecentMatchingJob", () => {
     await findRecentMatchingJob("user-1", "fp-abc")
     const after = Date.now()
 
-    const gteCall = mocks.gteMock.mock.calls[0]
+    const gteCall = mocks.gteMock.mock.calls[0] as unknown as [string, string] | undefined
     expect(gteCall?.[0]).toBe("created_at")
-    const sinceIso = gteCall?.[1] as string
+    const sinceIso = (gteCall?.[1] ?? "") as string
     const sinceMs = new Date(sinceIso).getTime()
     expect(sinceMs).toBeGreaterThanOrEqual(before - DEDUP_TTL_MS - 1)
     expect(sinceMs).toBeLessThanOrEqual(after - DEDUP_TTL_MS + 1)

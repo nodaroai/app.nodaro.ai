@@ -69,6 +69,11 @@ function CopyButton({ text }: { text: string }) {
 
 function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boolean; onOpenChange: (v: boolean) => void }) {
   const hasError = !!job.error_message
+  const hasReconcileData =
+    job.provider_kind != null ||
+    job.provider_task_id != null ||
+    job.reconcile_attempts > 0 ||
+    job.reconcile_last_error != null
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -143,6 +148,44 @@ function JobDetailDialog({ job, open, onOpenChange }: { job: AdminJob; open: boo
             </p>
           </div>
         </div>
+
+        {hasReconcileData && (
+          <div className="border rounded-lg p-4">
+            <div className="text-sm font-medium mb-2">Reconciliation</div>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Provider Kind</span>
+                <p className="font-mono text-xs">{job.provider_kind ?? "-"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Provider Task ID</span>
+                <p className="font-mono text-xs break-all">{job.provider_task_id ?? "-"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Reconcile Attempts</span>
+                <p>
+                  {job.reconcile_attempts === 0 ? (
+                    <span className="text-muted-foreground">0</span>
+                  ) : job.reconcile_last_error === "exhausted" ? (
+                    <Badge variant="destructive" className="text-xs">{job.reconcile_attempts} — exhausted</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">{job.reconcile_attempts}</Badge>
+                  )}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Provider Call Started</span>
+                <p>{formatDateTime(job.provider_call_started_at)}</p>
+              </div>
+              {job.reconcile_last_error && (
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Last Error</span>
+                  <p className="font-mono text-xs whitespace-pre-wrap break-words">{job.reconcile_last_error}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <Tabs defaultValue="input">
           <TabsList>
@@ -246,6 +289,7 @@ export default function AdminJobsPage() {
               <th className="text-left px-3 py-2 font-medium">Credits</th>
               <th className="text-left px-3 py-2 font-medium">Provider</th>
               <th className="text-left px-3 py-2 font-medium">Cost</th>
+              <th className="text-left px-3 py-2 font-medium" title="Reconciliation attempts (Phase 1-5)">Recon</th>
               <th className="text-left px-3 py-2 font-medium">Error</th>
               <th className="text-left px-3 py-2 font-medium">Created</th>
               <th className="px-3 py-2 font-medium w-10" />
@@ -289,6 +333,17 @@ export default function AdminJobsPage() {
                 <td className="px-3 py-2 text-xs">{job.credits ?? "-"}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{job.provider ?? "-"}</td>
                 <td className="px-3 py-2 text-xs">{job.display_cost != null ? `$${job.display_cost.toFixed(4)}` : "-"}</td>
+                <td className="px-3 py-2 text-xs" title={job.reconcile_last_error ?? job.provider_kind ?? undefined}>
+                  {job.reconcile_attempts > 0 ? (
+                    job.reconcile_last_error === "exhausted" ? (
+                      <Badge variant="destructive" className="text-xs">{job.reconcile_attempts}!</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">{job.reconcile_attempts}</Badge>
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-xs max-w-[100px] truncate text-red-400" title={job.error_message ?? undefined}>
                   {job.error_message ? job.error_message.slice(0, 40) : "-"}
                 </td>
@@ -302,7 +357,7 @@ export default function AdminJobsPage() {
             ))}
             {jobs.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={13} className="px-4 py-8 text-center text-muted-foreground">
                   No jobs found.
                 </td>
               </tr>
