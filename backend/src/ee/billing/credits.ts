@@ -585,6 +585,14 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Stage 1-only run (Detection + Showrunner + 2 critics ≈ 30 credits).
   "pipeline-orchestration": 30,
   "pipeline-orchestration:stage_1_only": 30,
+  // The editor's GenerativePipelineConfig + node-toolbar call POST
+  // /v1/credits/model-costs with the node-type slug ("generative-pipeline")
+  // to display the credit estimate. Without an entry here OR a DB row the
+  // lookup throws PriceNotConfiguredError → 503. The actual per-run cost
+  // is computed by estimateUpfrontCredits (duration × format × mode), so
+  // this static row is a UI display fallback only — it's NOT the value
+  // charged at run time.
+  "generative-pipeline": 30,
   // ── Scene-Context Helpers (Phase 1B.3, §6.11) ──
   // Per-call LLM micro-actions invoked from a SceneNode's context panel.
   // Reserve/refund via backend/src/ee/pipelines/scene-helper-credits.ts.
