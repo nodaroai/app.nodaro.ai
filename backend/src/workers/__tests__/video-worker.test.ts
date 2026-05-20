@@ -185,6 +185,35 @@ describe("video worker processor", () => {
     expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
   })
 
+  // Phase 4: BullMQ stall-retry guard.
+  it("stall-retry: skips handler when provider_task_id is already set", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: mockJobRecord({ provider_task_id: "t-existing" }),
+      error: null,
+    })
+
+    const job = makeBullJob("generate-image")
+    await processor(job)
+
+    expect(mocks.mockHandler).not.toHaveBeenCalled()
+    // Status update to "processing" is also skipped — we don't touch the row.
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "processing" }),
+    )
+  })
+
+  it("normal flow: runs handler when provider_task_id is null", async () => {
+    mocks.mockSingle.mockResolvedValueOnce({
+      data: mockJobRecord({ provider_task_id: null }),
+      error: null,
+    })
+
+    const job = makeBullJob("generate-image")
+    await processor(job)
+
+    expect(mocks.mockHandler).toHaveBeenCalled()
+  })
+
   it("throws for unknown job type", async () => {
     const job = makeBullJob("unknown-job-type")
     await expect(processor(job)).rejects.toThrow("Unknown job type: unknown-job-type")
