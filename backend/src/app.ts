@@ -50,8 +50,12 @@ import { splitImageRoutes } from "./routes/split-image.js"
 import { characterRoutes } from "./routes/characters.js"
 import { faceRoutes } from "./routes/faces.js"
 import { objectRoutes } from "./routes/objects.js"
+import { objectRestoreRoutes } from "./routes/object-restore.js"
+import { objectMainImageApprovalRoutes } from "./routes/object-main-image-approval.js"
+import { objectLlmCaptionRoutes } from "./routes/object-llm-caption.js"
 import { generateObjectAssetRoutes } from "./routes/generate-object-asset.js"
 import { generateObjectRoutes } from "./routes/generate-object.js"
+import { generateObjectMotionRoutes } from "./routes/generate-object-motion.js"
 import { locationRoutes } from "./routes/locations.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
 import { locationMainImageApprovalRoutes } from "./routes/location-main-image-approval.js"
@@ -268,8 +272,12 @@ export async function buildApp() {
   await app.register(characterRoutes)
   await app.register(faceRoutes)
   await app.register(objectRoutes)
+  await app.register(objectRestoreRoutes)
+  await app.register(objectMainImageApprovalRoutes)
+  await app.register(objectLlmCaptionRoutes)
   await app.register(generateObjectAssetRoutes)
   await app.register(generateObjectRoutes)
+  await app.register(generateObjectMotionRoutes)
   await app.register(locationRoutes)
   await app.register(locationRestoreRoutes)
   await app.register(locationMainImageApprovalRoutes)

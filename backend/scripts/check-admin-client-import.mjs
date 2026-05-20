@@ -139,6 +139,30 @@ const ALLOWED_PATHS = [
   // `.eq("user_id", userId)` in-handler (verified ~lines 80-95).
   /^src\/routes\/generate-location-motion\.ts$/,
 
+  // Object LLM caption: service-role for objects lookup + UPDATE. Every
+  // query is scoped by `.eq("user_id", userId)` in-handler. Mirrors
+  // location-llm-caption.ts (Phase C1b).
+  /^src\/routes\/object-llm-caption\.ts$/,
+
+  // Object main-image approval: service-role for parallel jobs + objects
+  // fetch and UPDATE. Every query is scoped by `.eq("user_id", userId)`
+  // in-handler. Adds cross-link IDOR check on candidate.input_data.
+  // attachToObjectId === :id (spec Pass 3 F-26). Mirrors
+  // location-main-image-approval.ts (Phase C1b).
+  /^src\/routes\/object-main-image-approval\.ts$/,
+
+  // Object restore: service-role for soft-delete restore. Every query is
+  // scoped by `.eq("user_id", userId)` in-handler. Uniform "not_found"
+  // 404 for all failure paths (Pass 10 F-90b). Mirrors location-restore.ts
+  // (Phase C1b).
+  /^src\/routes\/object-restore\.ts$/,
+
+  // Generate object motion: service-role for job insert + ownership
+  // re-check on `attachToObjectId` BEFORE reserveCreditsForJob (spec Pass 3
+  // F-30). Every query is scoped by `.eq("user_id", userId)` in-handler.
+  // Mirrors generate-location-motion.ts (Phase C1b).
+  /^src\/routes\/generate-object-motion\.ts$/,
+
   // Story-to-Video pipelines (Phase 1A): every handler scopes by req.userId
   // in-handler (.eq("user_id", userId) on pipelines + JOIN-based checks for
   // child tables; cross-user rows return 404 to avoid existence leak — audited
