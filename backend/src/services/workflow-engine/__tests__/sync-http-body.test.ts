@@ -122,4 +122,41 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       expect(body.prompt).toBe("Hero")
     })
   })
+
+  describe("collect (fan-in)", () => {
+    it("constructs body { strategyId, strategyConfig, inputs, workflowExecutionId, userId }", () => {
+      const body = buildSyncHttpBody(
+        node("collect", { strategyId: "concat", strategyConfig: { separator: "-" } }),
+        { inputs: ["a", "b", "c"] },
+        CTX,
+      )
+      expect(body.strategyId).toBe("concat")
+      expect(body.strategyConfig).toEqual({ separator: "-" })
+      expect(body.inputs).toEqual(["a", "b", "c"])
+      expect(body.workflowExecutionId).toBe("exec-1")
+      expect(body.userId).toBe("user-1")
+    })
+
+    it("defaults strategyId to 'concat' and strategyConfig to {} when missing", () => {
+      const body = buildSyncHttpBody(
+        node("collect"),
+        { inputs: ["x"] },
+        CTX,
+      )
+      expect(body.strategyId).toBe("concat")
+      expect(body.strategyConfig).toEqual({})
+      expect(body.inputs).toEqual(["x"])
+    })
+
+    it("falls back to empty inputs array when resolved input list is missing", () => {
+      const body = buildSyncHttpBody(
+        node("collect", { strategyId: "vote", strategyConfig: { caseSensitive: false } }),
+        {},
+        CTX,
+      )
+      expect(body.strategyId).toBe("vote")
+      expect(body.strategyConfig).toEqual({ caseSensitive: false })
+      expect(body.inputs).toEqual([])
+    })
+  })
 })

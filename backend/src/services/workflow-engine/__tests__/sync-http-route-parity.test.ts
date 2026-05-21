@@ -35,6 +35,7 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "x-post": "backend/src/routes/social-publish.ts",
   "facebook-post": "backend/src/routes/social-publish.ts",
   "telegram-post": "backend/src/routes/social-publish.ts",
+  "collect": "backend/src/routes/collect.ts",
 }
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")

@@ -323,6 +323,20 @@ describe("getPrimaryOutput", () => {
 })
 
 // ---------------------------------------------------------------------------
+// getPrimaryOutput: collect (fan-in)
+// ---------------------------------------------------------------------------
+
+describe("getPrimaryOutput: collect", () => {
+  it("returns state.output.result for a collect node", () => {
+    expect(getPrimaryOutput({ result: "joined output" }, "collect")).toBe("joined output")
+  })
+
+  it("returns undefined when collect has no result", () => {
+    expect(getPrimaryOutput({}, "collect")).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // extractSavedNodeOutput
 // ---------------------------------------------------------------------------
 
@@ -515,6 +529,37 @@ describe("buildNodeOutputFromJobData", () => {
   it("returns empty output for empty data", () => {
     const result = buildNodeOutputFromJobData({}, "unknown")
     expect(result).toEqual({})
+  })
+
+  it("maps collect output_data.output to NodeOutput.result", () => {
+    // Collect route stores its aggregated string under `output` in jobs.output_data
+    // (route response shape: { jobId, output, meta }). The orchestrator reads it
+    // back via buildNodeOutputFromJobData and downstream getPrimaryOutput("collect")
+    // returns NodeOutput.result.
+    const result = buildNodeOutputFromJobData(
+      { output: "joined output", meta: { strategy: "concat", inputs: 3 } },
+      "collect",
+    )
+    expect(result.result).toBe("joined output")
+  })
+
+  it("does not map output->result for non-collect node types", () => {
+    // Defensive: `output` is a generic key name. The mapping must only fire
+    // for nodeType === "collect" so we don't accidentally pick it up if any
+    // other future route happens to write `output` into output_data.
+    const result = buildNodeOutputFromJobData({ output: "hi" }, "ai-writer")
+    expect(result.result).toBeUndefined()
+  })
+
+  it("ignores non-string output for collect (defensive)", () => {
+    // The collect route only writes a string under `output` (numbers are
+    // pre-stringified, see collect.ts:89). If a stub/broken caller writes a
+    // non-string, the mapping should skip rather than corrupt NodeOutput.result.
+    const result = buildNodeOutputFromJobData(
+      { output: { nested: "object" }, meta: {} },
+      "collect",
+    )
+    expect(result.result).toBeUndefined()
   })
 })
 

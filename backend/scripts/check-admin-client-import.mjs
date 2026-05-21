@@ -180,6 +180,13 @@ const ALLOWED_PATHS = [
   // client with the BullMQ pipeline worker.
   /^src\/routes\/scene-helpers\.ts$/,
 
+  // Collect: inline-HTTP route — needs service-role to insert the jobs row +
+  // reserve credits before strategy dispatch, then commit/refund on completion.
+  // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`
+  // against jobs (tenant-scope lint enforces). Mirrors sibling inline-HTTP
+  // routes (ai-writer, qa-check, web-scrape) which are baselined as legacy.
+  /^src\/routes\/collect\.ts$/,
+
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,
 ]

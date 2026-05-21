@@ -493,6 +493,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics:premium": 30,
   "composite": 0,
   "sub-workflow": 0,
+  // ── Collect (fan-in) — strategy-tiered pricing ──
+  // Pure logic strategies are free; pick-best-llm pays for an LLM ranking call.
+  // The composite key is built from the node's `data.strategyId` via the
+  // CREDIT_COSTS["collect"] resolver below. There is no base "collect" entry —
+  // the route always reads strategyId and resolves to a composite identifier.
+  "collect:pick-best-llm": 3,
+  "collect:concat": 0,
+  "collect:first-non-empty": 0,
+  "collect:count": 0,
+  "collect:vote": 0,
+  "collect:merge-json": 0,
   // ── Node types (additional entries for workflow estimation by node.type) ──
   "generate-script": 10,
   "generate-script:economy": 5,
@@ -627,6 +638,31 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "pipeline-music-timeline": 4,
   "pipeline-final-merge": 3,
   "pipeline-freecut-export": 0,
+}
+
+// ============================================================
+// Composite Credit Identifier Resolvers (per-node-type)
+// ============================================================
+//
+// Node-type → resolver(data) → composite identifier string.
+//
+// When a node's credit cost depends on a runtime config field (e.g. Collect's
+// `strategyId`) the route's `creditGuard` resolver calls into this map to
+// build the composite key, which is then looked up in `STATIC_CREDIT_COSTS`
+// (or the `model_pricing` DB table) the same way provider+quality composites
+// like `gpt-image:high` are resolved.
+//
+// Image/video providers historically build their composites via
+// `buildCreditModelIdentifier()` / `buildVideoCreditModelIdentifier()` in
+// `@nodaro/shared` (kept there because frontend mirrors the logic). This
+// `CREDIT_COSTS` map is for node-type-level resolvers that don't fit that
+// provider+quality shape — anything where the node's *strategy* or *mode*
+// drives the price.
+
+export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = {
+  // Collect (fan-in): composite key = `collect:<strategyId>`. Default to
+  // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
+  "collect": (data) => `collect:${(data as { strategyId?: string }).strategyId ?? "concat"}`,
 }
 
 // Tier order for restriction checks

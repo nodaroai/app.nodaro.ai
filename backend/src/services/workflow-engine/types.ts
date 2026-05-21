@@ -18,6 +18,8 @@ export interface NodeOutput {
   imageUrls?: readonly string[]
   audioUrls?: readonly string[]
   text?: string
+  /** Single aggregated output value (used by fan-in nodes like collect). */
+  result?: string
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */
@@ -212,6 +214,10 @@ export interface ResolvedInputs {
   lottieAssets?: Array<{ id?: string; url: string; name?: string }>
   /** Word-timed captions wired from upstream transcribe.words for kinetic captions. */
   captions?: Caption[]
+  /** Fan-in input list — populated by the resolver for collect-style targets.
+   *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
+   *  fanned out) so the collect strategy can fold it into a single value. */
+  inputs?: string[]
 }
 
 // ---------------------------------------------------------------------------
