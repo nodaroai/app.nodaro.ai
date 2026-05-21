@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import type { PipelineStageStatus, ShowrunnerPlan, SubGateName } from "@nodaro/shared"
+import type {
+  PipelineStageStatus,
+  ShowrunnerPlan,
+  StoryboardCohesionCriticVerdict,
+  SubGateName,
+} from "@nodaro/shared"
 import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
 import { toast } from "sonner"
 import { ArrowLeft } from "lucide-react"
@@ -14,6 +19,7 @@ import { DriftBanner } from "./drift-banner"
 import { ForkButton } from "./fork-button"
 import { ModeSwitchButton } from "./mode-switch-button"
 import { SilentCutPreview } from "./silent-cut-preview"
+import { StoryboardCohesionBanner } from "./storyboard-cohesion-banner"
 import {
   DialogueRecheckBanner,
   type DialogueRecheckResult,
@@ -34,6 +40,27 @@ const STAGE_LABELS: Record<PipelineStageName, string> = {
   post_merge: "8. Final Merge",
 }
 
+/**
+ * Phase 1D.2c-b-i — pipeline stages at or after `scene_images`. Used to
+ * gate the Stage 6 query (and therefore the Storyboard Cohesion banner)
+ * so we only fetch once the pipeline has progressed to Stage 6+.
+ * Hoisted to module-level so the array isn't re-allocated on every render.
+ */
+const STAGES_AT_OR_AFTER_SCENE_IMAGES: ReadonlyArray<PipelineStageName> = [
+  "scene_images",
+  "animate_audio_edit",
+  "post_merge",
+]
+
+/**
+ * Terminal pipeline statuses — polling on stage queries should stop once the
+ * parent pipeline reaches any of these, since the persisted output is
+ * immutable from that point onward.
+ */
+function isTerminalPipelineStatus(status: string | null | undefined): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
+
 interface Props {
   pipelineId: string
   onClose: () => void
@@ -52,6 +79,11 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   // next `pipeline:drift` SSE event (the hook returns a fresh object each
   // time, so the effect below resets dismissal on a new drift).
   const [driftDismissed, setDriftDismissed] = useState(false)
+  // Phase 1D.2c-b-i — local dismiss flag for the Storyboard Cohesion banner.
+  // Reset on a fresh panel mount (per-pipelineId) so a new verdict on a
+  // re-opened panel re-shows it. The verdict itself is persisted on the
+  // stage output, so the banner re-mounts with the same data either way.
+  const [cohesionDismissed, setCohesionDismissed] = useState(false)
   // Phase 1D.3 — track which stage (if any) is currently branching so the
   // button shows a loading state and the user can't double-click.
   const [branchingStage, setBranchingStage] = useState<PipelineStageName | null>(null)
@@ -59,14 +91,16 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const pipelineQuery = useQuery({
     queryKey: ["pipeline", pipelineId],
     queryFn: () => pipelinesApi.get(pipelineId),
-    refetchInterval: (q) =>
-      q.state.data?.status === "completed" || q.state.data?.status === "failed" ? false : 3000,
+    refetchInterval: (q) => (isTerminalPipelineStatus(q.state.data?.status) ? false : 3000),
   })
 
   const stageQuery = useQuery({
     queryKey: ["pipeline-stage", pipelineId, "script"],
     queryFn: () => pipelinesApi.getStage(pipelineId, "script"),
-    refetchInterval: (q) => (q.state.data?.status === "approved" ? false : 5000),
+    refetchInterval: (q) => {
+      if (isTerminalPipelineStatus(pipelineQuery.data?.status)) return false
+      return q.state.data?.status === "approved" ? false : 5000
+    },
     retry: false,
   })
 
@@ -87,8 +121,45 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     queryKey: ["pipeline-stage", pipelineId, "animate_audio_edit"],
     queryFn: () => pipelinesApi.getStage(pipelineId, "animate_audio_edit"),
     enabled: subGateActive || animateStageReachable,
-    refetchInterval: (q) =>
-      q.state.data?.status === "awaiting_approval" ? 3000 : false,
+    refetchInterval: (q) => {
+      // Terminal pipeline state → stop polling entirely. Drive-by polish
+      // applied alongside the sceneImagesStageQuery refetchInterval fix.
+      if (isTerminalPipelineStatus(pipelineQuery.data?.status)) return false
+      return q.state.data?.status === "awaiting_approval" ? 3000 : false
+    },
+    retry: false,
+  })
+
+  // Phase 1D.2c-b-i — Stage 6 (scene_images) query for the Storyboard
+  // Cohesion verdict. The critic writes its output onto this stage during
+  // Stage 6 finalization (see `scene-images.ts` — fields named
+  // `storyboard_cohesion_*`). The query is enabled once the pipeline has
+  // advanced through Stage 6 (current_stage is scene_images OR any later
+  // stage) so the banner re-mounts even after the user re-opens the panel
+  // against a paused/completed pipeline. Polling stops once the stage is
+  // approved OR the pipeline reaches a terminal state — the verdict is
+  // immutable after that.
+  const sceneImagesStageReachable =
+    pipelineQuery.data?.current_stage !== undefined &&
+    pipelineQuery.data?.current_stage !== null &&
+    (STAGES_AT_OR_AFTER_SCENE_IMAGES as ReadonlyArray<string>).includes(
+      pipelineQuery.data.current_stage,
+    )
+  // The scene_images query is also relevant for completed pipelines — the
+  // user re-opens the panel and we still want to surface the cohesion verdict
+  // alongside the "Re-run from here" controls.
+  const sceneImagesStageQuery = useQuery({
+    queryKey: ["pipeline-stage", pipelineId, "scene_images"],
+    queryFn: () => pipelinesApi.getStage(pipelineId, "scene_images"),
+    enabled:
+      sceneImagesStageReachable || pipelineQuery.data?.status === "completed",
+    refetchInterval: (q) => {
+      // Terminal pipeline state → stop polling entirely. The verdict is
+      // immutable after the stage approves / pipeline ends; continuing to
+      // poll wastes a network round-trip every 5s.
+      if (isTerminalPipelineStatus(pipelineQuery.data?.status)) return false
+      return q.state.data?.status === "approved" ? false : 5000
+    },
     retry: false,
   })
   const setActivePipelineStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
@@ -107,21 +178,38 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     }
   }, [pipelineQuery.data?.status, setActivePipelineStatus])
 
-  // Refetch when SSE indicates a state change. Keyed on `lastEvent?.type` so
-  // a no-op SSE re-fire (entity-level events) doesn't trigger a refetch.
+  // Refetch when SSE indicates a state change. Keyed on `lastEvent` (the full
+  // object, not `lastEvent?.type`) because back-to-back stage:status events
+  // for different stages share the same `type` discriminant — keying on
+  // `.type` would collapse them and silently drop the second event's
+  // stage-specific refetch. `setLastEvent(evt)` in use-pipeline-events.ts:102
+  // emits a fresh object reference per SSE frame, so the dep change does not
+  // introduce spurious re-fires.
   useEffect(() => {
     if (!lastEvent) return
     if (
-      lastEvent.type === "stage:status" ||
       lastEvent.type === "pipeline:status" ||
       lastEvent.type === "pipeline:forked"
     ) {
       void pipelineQuery.refetch()
       void stageQuery.refetch()
-      // Phase 1C.2 — refetch the animate_audio_edit stage too so any
-      // sub-gate output (preview URL, rebalance result) lands in time for
-      // the matching sub-gate UI to render.
       void animateStageQuery.refetch()
+      void sceneImagesStageQuery.refetch()
+    }
+    // Stage-level events: only refetch the affected stage query (was
+    // indiscriminately refetching every stage query on every `stage:status`
+    // event, wasting ~6 refetches per pipeline run).
+    if (lastEvent.type === "stage:status") {
+      void pipelineQuery.refetch()
+      if (lastEvent.stageName === "script") {
+        void stageQuery.refetch()
+      }
+      if (lastEvent.stageName === "scene_images") {
+        void sceneImagesStageQuery.refetch()
+      }
+      if (lastEvent.stageName === "animate_audio_edit") {
+        void animateStageQuery.refetch()
+      }
     }
     // Phase 1C.2 — sub-gate just opened; pull the latest stage output so
     // the panel renders the gate-specific data without waiting for the
@@ -129,8 +217,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     if (lastEvent.type === "stage:awaiting_sub_gate") {
       void animateStageQuery.refetch()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastEvent?.type])
+  }, [lastEvent])
 
   // Phase 1B.4 — re-show the drift banner whenever a fresh drift summary
   // arrives. `drift` is referentially-stable per event so the effect only
@@ -138,6 +225,15 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   useEffect(() => {
     if (drift) setDriftDismissed(false)
   }, [drift])
+
+  // Phase 1D.2c-b-i — reset the cohesion-banner dismissal whenever the
+  // panel switches to a different pipeline. Phase 1D.3's "Re-run from here"
+  // calls `onNavigateToPipeline`, which swaps `pipelineId` in place WITHOUT
+  // unmounting the panel — so without this effect the dismiss flag would
+  // persist and the new pipeline's verdict would be silently suppressed.
+  useEffect(() => {
+    setCohesionDismissed(false)
+  }, [pipelineId])
 
   async function handleApprove() {
     try {
@@ -218,6 +314,31 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const effectiveSubGate = currentSubGate ?? persistedSubGate
   const silentCutPreviewUrl = animateOutput?.silent_cut_preview_url ?? null
   const dialogueRecheckResult = animateOutput?.dialogue_recheck_result ?? null
+
+  // Phase 1D.2c-b-i — Storyboard Cohesion verdict (Stage 6 output JSONB).
+  // The banner mounts only when ALL four fields are present — the critic is
+  // best-effort (`scene-images.ts` catches every error path and advances the
+  // stage with NOTHING written to the cohesion-* output fields), so a
+  // partial write would indicate an upstream bug; defending here keeps the
+  // surface stable across schema changes regardless.
+  const sceneImagesStageOutput = sceneImagesStageQuery.data?.output as
+    | {
+        storyboard_cohesion_findings?: StoryboardCohesionCriticVerdict["findings"]
+        storyboard_cohesion_assessment?: StoryboardCohesionCriticVerdict["overall_assessment"]
+        storyboard_cohesion_score?: number
+        storyboard_cohesion_summary?: string
+      }
+    | undefined
+  const cohesionFindings = sceneImagesStageOutput?.storyboard_cohesion_findings
+  const cohesionAssessment = sceneImagesStageOutput?.storyboard_cohesion_assessment
+  const cohesionScore = sceneImagesStageOutput?.storyboard_cohesion_score
+  const cohesionSummary = sceneImagesStageOutput?.storyboard_cohesion_summary
+  const showCohesionBanner =
+    !cohesionDismissed &&
+    cohesionFindings !== undefined &&
+    cohesionAssessment !== undefined &&
+    cohesionScore !== undefined &&
+    cohesionSummary !== undefined
   // Status the ForkButton uses to decide visibility. SSE-driven
   // `activePipelineStatus` (set by `usePipelineEvents` on `pipeline:forked`)
   // wins over the polled pipelines.get value so the button hides immediately
@@ -318,6 +439,27 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
               }
             }}
             onDismiss={() => setDriftDismissed(true)}
+          />
+        </div>
+      )}
+
+      {/* Phase 1D.2c-b-i — Storyboard Cohesion verdict banner. Mounts as soon
+          as Stage 6 has written the four cohesion fields onto its output;
+          stays visible until the user dismisses it. The Branch CTA only
+          appears for `assessment === "incoherent"` and re-uses the existing
+          handleBranch helper (which powers the "Re-run from here" buttons)
+          to fork from the shot_list stage. */}
+      {showCohesionBanner && (
+        <div className="mb-4">
+          <StoryboardCohesionBanner
+            assessment={cohesionAssessment!}
+            score={cohesionScore!}
+            summary={cohesionSummary!}
+            findings={cohesionFindings!}
+            onBranchFromShotList={() => {
+              void handleBranch("shot_list")
+            }}
+            onDismiss={() => setCohesionDismissed(true)}
           />
         </div>
       )}

@@ -67,6 +67,22 @@ Variants (angle/expression for characters, wide/ground/etc. for locations) are N
 
 **Score-based defense:** the critic emits `prompt_adherence_score` (0-10 int) in addition to `verdict`. Scores below 5 trigger the fail path even if `verdict='pass'` — guards against an overly lenient critic.
 
+### Storyboard Cohesion (Phase 1D.2c-b-i)
+
+After Stage 6 generates all scene keyframes, a vision-LLM critic (Sonnet 4.6) reviews them as a sequence to validate cross-scene cohesion + plot-level continuity. **Warn-only** — findings surface to the user via a banner in the pipeline panel but never block the stage from advancing.
+
+The critic catches issues that no per-image critic can see:
+- **character_inconsistency** — protagonist's appearance drifts between scenes
+- **location_inconsistency** — locations meant to be the same look different
+- **lighting_mismatch** — unmotivated time-of-day jumps
+- **style_drift** — aesthetic/medium drift across the storyboard
+- **missing_establishing_shot** — action scene without setup
+- **plot_jump** — visual sequence implies a narrative gap not intended
+
+When the assessment is `incoherent` (severe issues), the banner surfaces a **Branch from Shot List** button so the user can re-plan from Stage 5 with the critic's findings as context.
+
+Adds ~5 credits to the pipeline budget (1 Sonnet call with N images input).
+
 ## Stage 1 — Script
 
 1. **Detection** (Haiku) extracts entities from the prompt.

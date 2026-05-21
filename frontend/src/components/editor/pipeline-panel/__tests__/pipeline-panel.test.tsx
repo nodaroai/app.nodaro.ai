@@ -467,4 +467,95 @@ describe("PipelinePanel", () => {
     await waitFor(() => expect(screen.getByText("Hero on the runway")).toBeInTheDocument())
     expect(screen.getByText("Approve")).toBeInTheDocument()
   })
+
+  // ── Phase 1D.2c-b-i — Storyboard Cohesion banner mount ───────────────────
+  it("mounts StoryboardCohesionBanner when scene_images stage output carries storyboard_cohesion_*", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "scene_images",
+      mode: "manual",
+      spent_credits: 60,
+      reserved_credits: 200,
+      upfront_credit_estimate: 200,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    // Per-stage response: the script poll returns the awaiting fixture; the
+    // scene_images poll returns the cohesion verdict that drives the banner.
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_pipelineId: string, stage: string) => {
+        if (stage === "scene_images") {
+          return {
+            status: "running",
+            output: {
+              storyboard_cohesion_findings: [
+                {
+                  severity: "warning",
+                  category: "character_inconsistency",
+                  affected_scenes: [2, 4],
+                  description:
+                    "Alice wears a red dress in scene 2 but blue in scene 4.",
+                  suggested_action:
+                    "Re-generate scene 4 with the scene 2 wardrobe reference.",
+                },
+              ],
+              storyboard_cohesion_assessment: "minor_issues",
+              storyboard_cohesion_score: 6,
+              storyboard_cohesion_summary:
+                "Mostly cohesive — one wardrobe mismatch.",
+            },
+            critic_feedback: {},
+          }
+        }
+        return { status: "approved", output: {}, critic_feedback: {} }
+      },
+    )
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("storyboard-cohesion-banner"),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByText("Storyboard Cohesion")).toBeInTheDocument()
+    expect(
+      screen.getByText("Mostly cohesive — one wardrobe mismatch."),
+    ).toBeInTheDocument()
+    expect(screen.getByText("character_inconsistency")).toBeInTheDocument()
+    // assessment="minor_issues" — Branch CTA should NOT render.
+    expect(
+      screen.queryByTestId("storyboard-cohesion-branch-btn"),
+    ).not.toBeInTheDocument()
+  })
+
+  it("does NOT mount StoryboardCohesionBanner when scene_images output lacks storyboard_cohesion_* fields", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "scene_images",
+      mode: "manual",
+      spent_credits: 60,
+      reserved_credits: 200,
+      upfront_credit_estimate: 200,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    // scene_images output exists but is empty — the critic hasn't run yet,
+    // or it bailed (the integration is best-effort, so we don't fail Stage 6
+    // on a critic LLM error — see scene-images-storyboard-cohesion.test.ts).
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running",
+      output: {},
+      critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(
+      screen.queryByTestId("storyboard-cohesion-banner"),
+    ).not.toBeInTheDocument()
+  })
 })

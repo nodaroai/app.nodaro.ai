@@ -7,6 +7,7 @@ import {
 } from "@nodaro/shared"
 
 ***REDACTED-OSS-SCRUB***
+***REDACTED-OSS-SCRUB***
 
 export interface EstimateUpfrontArgs {
   targetDurationSeconds: number
@@ -43,6 +44,11 @@ export interface EstimateUpfrontArgs {
  * doesn't model narration/lipsync at the pipeline level — those are
  * per-shot costs reserved separately by the worker jobs they invoke.
  *
+ * Phase 1D.2c-b-i adds the Storyboard Cohesion critic budget (5 credits)
+ * to the baseline. It runs once during Stage 6 (scene_images) in ALL 3
+ * modes (manual / auto / guided) — warn-only, never blocks — so it's
+ * added unconditionally outside the `mode === "guided"` branch.
+ *
  * 1 credit = $0.02.
  */
 export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
@@ -50,6 +56,7 @@ export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
   if (args.musicEnabled) credits += 4 // 7f music timeline
   credits += 3 // 7h Editor LLM
   credits += 3 // 7j final merge (or FreeCut export — 0 cr, but reserve for worst case)
+  credits += STORYBOARD_COHESION_CREDITS // Phase 1D.2c-b-i: Storyboard Cohesion critic (all modes)
   if (args.mode === "guided") {
     // Reserve chat-refine budget for the Script stage only (1D.2b ships
     // script-only chat). CHAT_TURN_CAPS.script = 20 → 40 credits worst-case.

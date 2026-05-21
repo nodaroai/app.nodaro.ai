@@ -390,6 +390,32 @@ export const LocationImageCriticVerdictSchema = z.object({
 })
 export type LocationImageCriticVerdict = z.infer<typeof LocationImageCriticVerdictSchema>
 
+// Phase 1D.2c-b-i — Storyboard Cohesion Critic (Stage 6, warn-only)
+
+export const StoryboardCohesionCriticVerdictSchema = z.object({
+  overall_assessment: z.enum(["coherent", "minor_issues", "incoherent"]),
+  coherence_score: z.number().int().min(0).max(10),
+  summary: z.string().min(1).max(500),
+  findings: z.array(
+    z.object({
+      severity: z.enum(["info", "warning", "blocking"]),
+      category: z.enum([
+        "character_inconsistency",
+        "location_inconsistency",
+        "lighting_mismatch",
+        "style_drift",
+        "missing_establishing_shot",
+        "plot_jump",
+        "other",
+      ]),
+      affected_scenes: z.array(z.number().int().min(1)).max(20),
+      description: z.string().min(1).max(500),
+      suggested_action: z.string().min(1).max(300),
+    }),
+  ).max(30),
+})
+export type StoryboardCohesionCriticVerdict = z.infer<typeof StoryboardCohesionCriticVerdictSchema>
+
 // ─── Entity metadata (DB pipeline_entities.metadata) ──────────────────────────
 
 export const CharacterMetadataSchema = z.object({
