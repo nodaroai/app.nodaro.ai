@@ -206,6 +206,20 @@ export function extractSourceNodeOutput(
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
     }
 
+    case "sub-workflow-input": {
+      // Source node when this workflow is invoked as a sub-workflow OR
+      // published as a component — inputOverrides set data.__injectedPortValues
+      // upstream and getPrimaryOutput(..., sourceHandle) then routes the right
+      // port value to each downstream edge.  Without this case, getNodeOutput
+      // returns undefined and downstream nodes execute with no inputs.
+      const injected = data.__injectedPortValues as Record<string, string> | undefined
+      if (!injected) return undefined
+      const output: NodeOutput = { _injectedPortValues: injected }
+      const firstValue = Object.values(injected)[0]
+      if (firstValue) output.text = firstValue
+      return output
+    }
+
     default:
       return undefined
   }

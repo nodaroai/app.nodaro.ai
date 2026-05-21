@@ -157,6 +157,44 @@ describe("extractSourceNodeOutput", () => {
   it("returns undefined for unknown type", () => {
     expect(extractSourceNodeOutput(node("1", "unknown-type"))).toBeUndefined()
   })
+
+  // sub-workflow-input: source node whose value arrives via inputOverrides into
+  // data.__injectedPortValues. Without these, the orchestrator can't wire the
+  // value to downstream nodes when this workflow runs as a sub-workflow or as
+  // a component, and the downstream gen-image / modify-image runs with empty
+  // inputs.
+  it("extracts injected port values from sub-workflow-input", () => {
+    const result = extractSourceNodeOutput(node("1", "sub-workflow-input", {
+      __injectedPortValues: { "port-a": "https://cdn/img.png" },
+    }))
+    expect(result).toEqual({
+      text: "https://cdn/img.png",
+      _injectedPortValues: { "port-a": "https://cdn/img.png" },
+    })
+  })
+
+  it("returns undefined for sub-workflow-input without injected values", () => {
+    expect(extractSourceNodeOutput(node("1", "sub-workflow-input", {
+      ports: [{ id: "port-a", name: "Input", mediaType: "image" }],
+      routeId: "r1",
+    }))).toBeUndefined()
+  })
+
+  it("preserves all port values for sourceHandle-based downstream routing", () => {
+    const result = extractSourceNodeOutput(node("1", "sub-workflow-input", {
+      __injectedPortValues: {
+        "port-img": "https://cdn/i.png",
+        "port-txt": "subject text",
+      },
+    }))
+    expect(result?._injectedPortValues).toEqual({
+      "port-img": "https://cdn/i.png",
+      "port-txt": "subject text",
+    })
+    // getPrimaryOutput uses sourceHandle to pick the right port at the consumer.
+    expect(getPrimaryOutput(result!, "sub-workflow-input", "port-img")).toBe("https://cdn/i.png")
+    expect(getPrimaryOutput(result!, "sub-workflow-input", "port-txt")).toBe("subject text")
+  })
 })
 
 // ---------------------------------------------------------------------------
