@@ -1,11 +1,11 @@
 import { getStrategy, type CollectStrategyId } from "@nodaro/shared"
-import * as concat from "./concat"
-import * as count from "./count"
-import * as firstNonEmpty from "./first-non-empty"
-import * as vote from "./vote"
-import * as mergeJson from "./merge-json"
-import * as pickBestLlm from "./pick-best-llm"
-import type { StrategyContext, StrategyResult } from "./types"
+import * as concat from "./concat.js"
+import * as count from "./count.js"
+import * as firstNonEmpty from "./first-non-empty.js"
+import * as vote from "./vote.js"
+import * as mergeJson from "./merge-json.js"
+import * as pickBestLlm from "./pick-best-llm.js"
+import type { StrategyContext, StrategyResult } from "./types.js"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const HANDLERS: Record<CollectStrategyId, (items: string[], config: any, ctx: StrategyContext) => Promise<StrategyResult>> = {

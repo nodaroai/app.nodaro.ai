@@ -1,5 +1,5 @@
-import { filterSurvivors } from "./_normalize"
-import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types"
+import { filterSurvivors } from "./_normalize.js"
+import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
 type Config = { strategy: "deep" | "shallow" }
 

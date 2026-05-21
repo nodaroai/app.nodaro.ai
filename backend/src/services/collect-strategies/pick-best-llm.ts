@@ -1,6 +1,6 @@
-import { llmComplete, type LlmContentBlock, type LlmMessage } from "../../lib/llm-client"
-import { filterSurvivors } from "./_normalize"
-import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types"
+import { llmComplete, type LlmContentBlock, type LlmMessage } from "../../lib/llm-client.js"
+import { filterSurvivors } from "./_normalize.js"
+import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
 type Config = { criteria: string; inputKind: "text" | "image-url" }
 
