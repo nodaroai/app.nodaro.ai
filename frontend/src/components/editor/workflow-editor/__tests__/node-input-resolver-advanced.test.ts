@@ -921,6 +921,28 @@ describe("getListInputForNode — edge output mode", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// getListInputForNode — fan-in early-return (mirrors backend FAN_IN_NODE_TYPES)
+// ---------------------------------------------------------------------------
+
+describe("getListInputForNode — fan-in nodes (collect)", () => {
+  it("returns undefined when target node is 'collect', even with upstream list", () => {
+    // Wire List → Collect directly. Without the early-return, executeNodeForList
+    // would fan out the collect node N times (one per list item), each call
+    // hitting POST /v1/collect and charging credits — the credit-leak bug
+    // that the symmetric backend guard prevents.
+    const listNode = makeNode("l1", "list", {
+      columns: [{ id: "default", name: "Items", handleId: "col_default", type: "text" }],
+      rows: [["a"], ["b"], ["c"]],
+    })
+    const target = makeNode("c1", "collect")
+    const edges = [makeEdge("l1", "c1", "col_default")]
+
+    const result = getListInputForNode(target, [listNode, target], edges)
+    expect(result).toBeUndefined()
+  })
+})
+
 describe("resolveNodeInputs — list edge output mode routing", () => {
   it("uses first item for default 'each' mode (fan-out handles rest)", () => {
     mockExtractNodeOutput.mockImplementation((node: any) => {

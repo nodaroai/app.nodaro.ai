@@ -3680,6 +3680,28 @@ export type RouterNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+// --- Collect Node Data ---
+
+/** Fan-in node that reduces N upstream branch results into a single output
+ *  via a pluggable strategy. The strategy registry lives in
+ *  `@nodaro/shared/collect-strategy-registry`; v1 strategies: pick-best-llm,
+ *  concat, first-non-empty, count, vote, merge-json. `strategyConfig` shape
+ *  is strategy-specific (e.g. `{ separator: "\n\n" }` for concat). */
+export interface CollectNodeData {
+  [key: string]: unknown
+  label: string
+  /** Strategy id from the shared registry. See @nodaro/shared CollectStrategyId. */
+  strategyId: "pick-best-llm" | "concat" | "first-non-empty" | "count" | "vote" | "merge-json"
+  /** Strategy-specific config (e.g. `{ separator: "\n\n" }` for concat). */
+  strategyConfig: Record<string, unknown>
+  // Execution result fields
+  result?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -4075,6 +4097,7 @@ export type SceneNodeData =
   | TeleportSendData
   | TeleportReceiveData
   | RouterNodeData
+  | CollectNodeData
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
@@ -4230,6 +4253,7 @@ export type SceneNodeType =
   | "teleport-send"
   | "teleport-receive"
   | "router"
+  | "collect"
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
@@ -6214,6 +6238,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         { id: "default_b", name: "Route B", active: false },
       ],
     } as RouterNodeData,
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Collect",
+      strategyId: "concat",
+      strategyConfig: { separator: "\n\n" },
+    } as CollectNodeData,
   },
   {
     type: "sticky-note",

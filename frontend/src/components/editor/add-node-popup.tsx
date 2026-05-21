@@ -84,6 +84,7 @@ import {
   ListMusic,
   Braces,
   Filter,
+  Funnel,
   ListFilter,
   CopyMinus,
   GitMerge,
@@ -1191,6 +1192,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Router",
     icon: <GitBranch className="h-4 w-4" />,
     category: "Workflow",
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    icon: <Funnel className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"],
   },
   {
     type: "sticky-note",

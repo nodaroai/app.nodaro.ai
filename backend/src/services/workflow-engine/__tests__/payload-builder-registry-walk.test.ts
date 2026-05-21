@@ -96,6 +96,11 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "qa-check",
   "save-to-storage",
   "web-scrape",
+  // Fan-in node — routed via sync-HTTP to POST /v1/collect (see
+  // SYNC_HTTP_NODES + SYNC_HTTP_ROUTES in node-executor.ts). The orchestrator
+  // never calls buildPayload for collect; payload-builder.ts therefore
+  // has no case for it. Single-result wrap of N upstream values into 1.
+  "collect",
   // Special-case dispatch (handled by executeNode before INLINE/SYNC_HTTP)
   "component",
   "sub-workflow",

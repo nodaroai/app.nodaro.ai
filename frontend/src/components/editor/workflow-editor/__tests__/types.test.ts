@@ -27,6 +27,7 @@ import {
   isExecutableNode,
   NODE_CREDIT_COSTS,
   EXECUTABLE_TYPES,
+  FAN_IN_NODE_TYPES,
   MAX_CONSECUTIVE_POLL_FAILURES,
 } from "../types"
 
@@ -278,5 +279,18 @@ describe("NODE_CREDIT_COSTS — new nodes", () => {
 describe("MAX_CONSECUTIVE_POLL_FAILURES", () => {
   it("equals 20", () => {
     expect(MAX_CONSECUTIVE_POLL_FAILURES).toBe(20)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// collect node type sets
+// ---------------------------------------------------------------------------
+
+describe("collect node type sets", () => {
+  it("collect IS executable", () => {
+    expect(isExecutableNode({ type: "collect" } as any)).toBe(true)
+  })
+  it("FAN_IN_NODE_TYPES exports 'collect'", () => {
+    expect(FAN_IN_NODE_TYPES.has("collect")).toBe(true)
   })
 })

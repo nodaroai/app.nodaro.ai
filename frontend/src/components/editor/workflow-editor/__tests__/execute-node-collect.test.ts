@@ -1,0 +1,313 @@
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// ---------------------------------------------------------------------------
+// Mock variables (declared before vi.mock calls)
+// ---------------------------------------------------------------------------
+
+const mockUpdateNodeData = vi.fn()
+const mockExecuteCollect = vi.fn()
+const mockResolveNodeInputs = vi.fn()
+const mockExtractNodeOutput = vi.fn()
+const mockToastError = vi.fn()
+const mockToastSuccess = vi.fn()
+const mockToastInfo = vi.fn()
+let mockNodes: any[] = []
+let mockEdges: any[] = []
+
+// ---------------------------------------------------------------------------
+// Mocks
+// ---------------------------------------------------------------------------
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    info: (...args: unknown[]) => mockToastInfo(...args),
+  },
+}))
+
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: {
+    getState: () => ({
+      updateNodeData: mockUpdateNodeData,
+      nodes: mockNodes,
+      edges: mockEdges,
+      characterDefinitions: [],
+      userPromptTemplates: {},
+      flowPromptTemplates: {},
+    }),
+  },
+}))
+
+vi.mock("@/lib/api", () => ({
+  executeCollect: (...args: unknown[]) => mockExecuteCollect(...args),
+  // unrelated stubs needed for import
+  generateImage: vi.fn(),
+  getJobStatus: vi.fn(),
+  generateAIWriterStream: vi.fn(),
+  generateSceneGraph: vi.fn(),
+  generateAfterEffects: vi.fn(),
+  generateLottieOverlay: vi.fn(),
+  generate3DTitle: vi.fn(),
+  generateMotionGraphics: vi.fn(),
+  renderVideoWithSceneGraph: vi.fn(),
+  renderVideoWithPlan: vi.fn(),
+  imageToTextApi: vi.fn(),
+  generateMusicApi: vi.fn(),
+  textToAudioApi: vi.fn(),
+  audioIsolationApi: vi.fn(),
+  sunoGenerateApi: vi.fn(),
+  sunoCoverApi: vi.fn(),
+  sunoExtendApi: vi.fn(),
+  sunoLyricsApi: vi.fn(),
+  sunoSeparateApi: vi.fn(),
+  sunoMusicVideoApi: vi.fn(),
+  sunoMashupApi: vi.fn(),
+  sunoReplaceSectionApi: vi.fn(),
+  sunoStyleBoostApi: vi.fn(),
+  sunoAddInstrumentalApi: vi.fn(),
+  sunoAddVocalsApi: vi.fn(),
+  sunoConvertWavApi: vi.fn(),
+  sunoUploadExtendApi: vi.fn(),
+  textToDialogueApi: vi.fn(),
+  voiceChangerApi: vi.fn(),
+  dubbingApi: vi.fn(),
+  voiceRemixApi: vi.fn(),
+  voiceDesignApi: vi.fn(),
+  forcedAlignmentApi: vi.fn(),
+  saveToStorageApi: vi.fn(),
+  transcribeApi: vi.fn(),
+  downloadYouTubeAudio: vi.fn(),
+  lipSyncApi: vi.fn(),
+  speechToVideoApi: vi.fn(),
+  motionTransferApi: vi.fn(),
+  videoUpscaleApi: vi.fn(),
+  extendVideo: vi.fn(),
+  faceSwapApi: vi.fn(),
+  generateMask: vi.fn(),
+  mergeVideoAudioApi: vi.fn(),
+  trimAudioApi: vi.fn(),
+  splitMediaApi: vi.fn(),
+  trimVideoApi: vi.fn(),
+  extractFrameApi: vi.fn(),
+  transcodeVideoApi: vi.fn(),
+  speedRampApi: vi.fn(),
+  loopVideoApi: vi.fn(),
+  fadeVideoApi: vi.fn(),
+  resizeVideoApi: vi.fn(),
+  socialMediaFormatApi: vi.fn(),
+  adjustVolumeApi: vi.fn(),
+  addCaptionsApi: vi.fn(),
+  mixAudioApi: vi.fn(),
+  combineAudioApi: vi.fn(),
+  llmChatStream: vi.fn(),
+  qaCheckApi: vi.fn(),
+  webScrape: vi.fn(),
+  setForcePrivate: vi.fn(),
+  setUserPromptTemplate: vi.fn(),
+}))
+
+vi.mock("@/lib/prompt-templates", () => ({
+  resolveTemplate: () => "{{userPrompt}}",
+  applyTemplate: (t: string) => t,
+}))
+
+vi.mock("@/lib/ai-writer-templates", () => ({
+  getAIWriterTemplate: () => null,
+}))
+
+vi.mock("@/lib/prompt-builder", () => ({
+  buildScenePrompt: () => "scene prompt",
+}))
+
+vi.mock("../node-input-resolver", () => ({
+  resolveNodeInputs: (...args: unknown[]) => mockResolveNodeInputs(...args),
+  resolveSeedPromptHint: vi.fn(() => ""),
+  resolveSourceThroughConnectedList: vi.fn((e: unknown) => e),
+  extractNodeOutputAsList: vi.fn(() => undefined),
+}))
+
+vi.mock("../execution-graph", () => ({
+  extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
+  detectPreviewItemType: vi.fn(),
+  collectMediaAssets: vi.fn(),
+  buildAutoComposition: vi.fn(),
+  collectAncestorRefs: vi.fn(() => []),
+  IMAGE_SOURCE_TYPES: new Set<string>(),
+  VIDEO_SOURCE_TYPES_FOR_RENDER: new Set<string>(),
+  AUDIO_SOURCE_TYPES: new Set<string>(),
+}))
+
+vi.mock("../poll-job", () => ({
+  pollJobWithNodeUpdate: vi.fn(),
+  setSuppressToasts: () => {},
+  guardedToast: {
+    info: (...args: unknown[]) => mockToastInfo(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+  },
+}))
+
+vi.mock("../node-executors", () => ({
+  runImageGeneration: vi.fn(),
+  runEditImage: vi.fn(),
+  runImageToImage: vi.fn(),
+  runModifyImage: vi.fn(),
+  runUpscaleImage: vi.fn(),
+  runRemoveBackground: vi.fn(),
+  runVideoGeneration: vi.fn(),
+  runVideoToVideoGeneration: vi.fn(),
+  runTextToVideoGeneration: vi.fn(),
+  runTextToSpeechGeneration: vi.fn(),
+  runScriptGeneration: vi.fn(),
+  runCombineVideos: vi.fn(),
+}))
+
+vi.mock("../asset-executors", () => ({
+  runCharacterGeneration: vi.fn(),
+  runFaceGeneration: vi.fn(),
+  runObjectGeneration: vi.fn(),
+  runLocationGeneration: vi.fn(),
+}))
+
+vi.mock("../types", () => ({
+  WorkflowStaleError: class extends Error {
+    constructor() {
+      super("stale")
+    }
+  },
+  MAX_CONSECUTIVE_POLL_FAILURES: 3,
+  checkStorageError: () => false,
+}))
+
+// ---------------------------------------------------------------------------
+// Import AFTER all mocks
+// ---------------------------------------------------------------------------
+
+import { executeNode } from "../execute-node"
+
+function makeCtx(overrides: any = {}) {
+  return {
+    userId: "u1",
+    projectId: "p1",
+    trackInterval: (i: any) => i,
+    untrackInterval: vi.fn(),
+    save: vi.fn(),
+    setIsRunning: vi.fn(),
+    isWorkflowStale: () => false,
+    isStorageError: () => false,
+    setShowStorageExceeded: vi.fn(),
+    setStorageExceededData: vi.fn(),
+    setShowInsufficientCredits: vi.fn(),
+    ...overrides,
+  } as any
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockNodes = []
+  mockEdges = []
+})
+
+describe("executeNode: collect", () => {
+  it("calls executeCollect with strategyId + resolved inputs[] and persists result on success", async () => {
+    mockResolveNodeInputs.mockReturnValue({ inputs: ["a", "b"] })
+    mockExecuteCollect.mockResolvedValue({
+      jobId: "j1",
+      output: "a-b",
+      meta: { summary: "joined 2" },
+    })
+
+    const node = {
+      id: "C1",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "collect",
+        strategyId: "concat",
+        strategyConfig: { separator: "-" },
+      },
+    } as any
+
+    const out = await executeNode(node, makeCtx())
+
+    expect(mockExecuteCollect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strategyId: "concat",
+        strategyConfig: { separator: "-" },
+        inputs: ["a", "b"],
+      }),
+    )
+    expect(out).toBe("a-b")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "C1",
+      expect.objectContaining({ executionStatus: "running", __upstreamCount: 2 }),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "C1",
+      expect.objectContaining({
+        executionStatus: "completed",
+        result: "a-b",
+        currentJobId: "j1",
+      }),
+    )
+  })
+
+  it("falls back to empty inputs array when resolver returns nothing", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockExecuteCollect.mockResolvedValue({
+      jobId: "j2",
+      output: "",
+      meta: { summary: "empty" },
+    })
+
+    const node = {
+      id: "C2",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "collect",
+        strategyId: "first-non-empty",
+        strategyConfig: {},
+      },
+    } as any
+
+    await executeNode(node, makeCtx())
+
+    expect(mockExecuteCollect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        strategyId: "first-non-empty",
+        inputs: [],
+      }),
+    )
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "C2",
+      expect.objectContaining({ __upstreamCount: 0 }),
+    )
+  })
+
+  it("marks failed on executeCollect rejection and rethrows", async () => {
+    mockResolveNodeInputs.mockReturnValue({ inputs: ["x"] })
+    mockExecuteCollect.mockRejectedValue(new Error("strategy boom"))
+
+    const node = {
+      id: "C3",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "collect",
+        strategyId: "concat",
+        strategyConfig: {},
+      },
+    } as any
+
+    await expect(executeNode(node, makeCtx())).rejects.toThrow("strategy boom")
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "C3",
+      expect.objectContaining({
+        executionStatus: "failed",
+        errorMessage: "strategy boom",
+      }),
+    )
+  })
+})

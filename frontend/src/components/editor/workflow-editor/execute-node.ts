@@ -64,6 +64,7 @@ import {
   qaCheckApi,
   saveToStorageApi,
   webScrape,
+  executeCollect,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared";
@@ -162,6 +163,7 @@ import type {
   DeduplicateNodeData,
   MergeListsNodeData,
   SortListNodeData,
+  CollectNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -5966,6 +5968,44 @@ export function executeNode(
       errorMessage: undefined,
     });
     return Promise.resolve(sorted[0] ?? "");
+  }
+
+  // Collect (fan-in) — aggregate N upstream branch results into a single value
+  // via a pluggable strategy (concat, pick-best-llm, first-non-empty, vote,
+  // count, merge-json, …). The resolver routes upstream listResults into
+  // `inputs.inputs` via the FAN_IN_NODE_TYPES branch in node-input-resolver.ts.
+  if (node.type === "collect") {
+    const collectData = node.data as CollectNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    const collectInputs = inputs.inputs ?? [];
+
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+      __upstreamCount: collectInputs.length,
+    });
+
+    return executeCollect({
+      strategyId: collectData.strategyId,
+      strategyConfig: collectData.strategyConfig ?? {},
+      inputs: collectInputs,
+    })
+      .then((result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          result: result.output,
+          currentJobId: result.jobId,
+        });
+        return result.output ?? "";
+      })
+      .catch((err: Error) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err.message || "Collect failed",
+        });
+        guardedToast.error(`Collect failed: ${err.message}`);
+        throw err;
+      });
   }
 
   // Preview — collect upstream values and pass through

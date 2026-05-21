@@ -227,6 +227,21 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "sub-workflow", label: "Sub-Workflow", category: "control", description: "Embed another workflow as a node. Selects a route (matched input+output pair) on the referenced workflow; ports become handles on the parent canvas. Expand opens the child for editing with a breadcrumb back to the parent.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-input", label: "Sub-Workflow Input", category: "control", description: "Entry boundary of a callable sub-workflow route. Declares per-port handles consumed by nodes inside the sub-workflow.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", category: "control", description: "Exit boundary of a callable sub-workflow route. Declares per-port handles collected from inner nodes and returned to the caller.", outputType: "none", creditCost: 0 },
+  {
+    type: "collect",
+    label: "Collect",
+    category: "control",
+    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `collect:<strategyId>` composite key.",
+    outputType: "text",
+    creditCost: "0-3",
+    inputSchema: {
+      fields: [
+        { key: "strategyId", type: "select", required: true, options: ["pick-best-llm", "concat", "first-non-empty", "count", "vote", "merge-json"] },
+        { key: "strategyConfig", type: "object" },
+      ],
+    },
+    capabilities: ["fan-in"],
+  },
 
   { type: "character", label: "Character", category: "entity", description: "Reusable character — portrait, expressions, poses, motion clips, voice & personality, edited in the full-screen Character Studio.", outputType: "data" },
   { type: "face", label: "Face", category: "entity", description: "Reusable face reference.", outputType: "data" },

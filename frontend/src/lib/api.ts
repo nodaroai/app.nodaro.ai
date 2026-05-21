@@ -5979,6 +5979,29 @@ export function saveToStorageApi(params: {
   })
 }
 
+// ---------- Collect (fan-in) ----------
+
+/**
+ * Execute a Collect-strategy job. Aggregates a list of upstream iteration
+ * outputs into a single value via the named strategy (concat, vote,
+ * pick-best-llm, first-non-empty, merge-json, count, …).
+ */
+export function executeCollect(input: {
+  strategyId: string
+  strategyConfig: Record<string, unknown>
+  inputs: string[]
+  workflowExecutionId?: string
+}): Promise<{
+  jobId: string
+  output: string
+  meta: { selectedIndex?: number; reasoning?: string; summary: string }
+}> {
+  return apiRequest("/v1/collect", "collect failed", {
+    method: "POST",
+    body: withWorkflowId(input),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Workflow Template Marketplace
 // ---------------------------------------------------------------------------

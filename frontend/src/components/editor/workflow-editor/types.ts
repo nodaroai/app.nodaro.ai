@@ -243,7 +243,12 @@ export const EXECUTABLE_TYPES = new Set([
   "teleport-receive",
   "component",
   "generative-pipeline",
+  "collect",
 ]);
+
+/** Frontend mirror of backend's FAN_IN_NODE_TYPES.
+ * Used to skip fan-out for nodes that consume listResults whole. */
+export const FAN_IN_NODE_TYPES = new Set(["collect"])
 
 export const MAX_CONSECUTIVE_POLL_FAILURES = 20;
 

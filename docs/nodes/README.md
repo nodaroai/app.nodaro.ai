@@ -349,6 +349,7 @@ Helpers for debugging and workflow organization.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
+| [Collect](./utility/collect.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List/Loop fan-out — pick the best variant, count survivors, or merge JSON |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
 
 ---

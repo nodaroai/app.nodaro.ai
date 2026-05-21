@@ -7,7 +7,7 @@ import {
   Upload, Video, Rss, Palette, PaintBucket, Server, Brush, Mountain,
   Hash, Clock, RatioIcon, Mic, ShieldCheck, StickyNote,
   Volume2, Captions, Maximize, AudioLines, Music,
-  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask,
+  SlidersHorizontal, Scissors, Frame, Aperture, Lightbulb, SwatchBook, CloudFog, Globe, HardDrive, Webhook, Clapperboard, UserPlus, SmilePlus, Package, MapPin, Wand2, Layers, Disc3, FastForward, FileText, Users, Waypoints, Sparkles, Repeat, Gauge, SunDim, Box, Shapes, AudioWaveform, ArrowUpFromLine, RefreshCw, Eye, Languages, AlignLeft, Workflow, LogIn, LogOut, Share2, Instagram, Youtube, Linkedin, Twitter, Facebook, UserRound, Send, Download, GitBranch, Puzzle, MessageSquare, ZoomIn, Eraser, ListMusic, Braces, Filter, Funnel, ListFilter, CopyMinus, GitMerge, ArrowUpDown, Smile, PersonStanding, PawPrint, Car, Swords, Armchair, Camera, LayoutDashboard, HandMetal, Hourglass, Cpu, Zap, Activity, Piano, User, MessageCircle, ScanFace, VenetianMask,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -209,6 +209,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Workflow" },
   { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Workflow" },
   { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Workflow" },
+  { type: "collect", label: "Collect", icon: <Funnel className="h-4 w-4" />, category: "Workflow", keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"] },
   { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Workflow" },
   { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
