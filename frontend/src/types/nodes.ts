@@ -3121,7 +3121,25 @@ export interface ObjectAssetItem {
   readonly url: string
 }
 
-export type ObjectAssetType = "angles" | "materials" | "variations" | "custom"
+export type ObjectReferencePhotoKind =
+  | "front"
+  | "side"
+  | "detail"
+  | "context"
+  | "moodBoard"
+  | "other"
+
+export interface ObjectReferencePhoto {
+  readonly kind: ObjectReferencePhotoKind
+  readonly url: string
+}
+
+// Frontend type union INCLUDES "motion" for exhaustive switch handling in
+// the Studio UI. Per spec Pass 4 F-54, the BACKEND's `OBJECT_ASSET_TYPES`
+// const (in `@nodaro/shared` entity-prompts.ts) intentionally OMITS "motion"
+// — motion has its own dedicated route (`/v1/generate-object-motion`) and
+// the asset route rejects "motion" — so the type unions diverge by design.
+export type ObjectAssetType = "angles" | "materials" | "variations" | "motion" | "custom"
 
 export type ObjectNodeData = {
   [key: string]: unknown
@@ -3159,12 +3177,70 @@ export type ObjectNodeData = {
   variationsStatus: "idle" | "running" | "completed" | "failed"
   // Custom variations
   customVariations: Array<{ prompt: string; url: string; createdAt: string }>
+  // Phase A (Object Studio): motion clips + reference photos
+  motionClips: ObjectAssetItem[]
+  motionStatus: AssetStatus
+  referencePhotos: ObjectReferencePhoto[]
+  // LLM-authored ~80-120-word canonical description (form/material/condition).
+  // Set on approve-main-image; coerced from DB null → "" in API response.
+  canonicalDescription: string
+  // When true, every variant gen passes the main image as reference for
+  // shape/material consistency. Default true.
+  styleLock: boolean
+  // ISO-8601 from objects.updated_at; mirrored at save time. Optimistic-
+  // concurrency token for the next save (passed back via expectedUpdatedAt).
+  updatedAt?: string
+  // One-way breadcrumb populated by `loadWorkflow` migration when an old
+  // inline-picker selection (animalId / vehicleId / furnitureId / weaponId)
+  // is detected on a legacy object node. The Studio Appearance tab reads this
+  // to show a "wire a picker node" nudge. Persists in workflow JSON until
+  // the user dismisses (sets to `null`) or wires an upstream picker node.
+  //
+  // Migration is one-way + non-destructive: the original `*Id` fields are
+  // cleared from `data` once migrated, but the breadcrumb stays so the
+  // Studio knows what the legacy selection was. Re-migration is gated on
+  // `legacyPickerSelection === undefined` (not `!legacyPickerSelection`) so
+  // an explicit `null` (user dismissed banner) is preserved across loads.
+  legacyPickerSelection?: {
+    kind: "animal" | "vehicle" | "furniture" | "weapon"
+    id: string
+  } | null
   // Phase 1B.4 — pipeline lifecycle (see CharacterNodeData for full JSDoc).
   readonly pipeline_id?: string
   readonly pipeline_entity_id?: string
   readonly pipeline_owned?: boolean
   readonly pipeline_state?: PipelineState
   readonly is_stale?: boolean
+}
+
+/**
+ * Raw shape of an `objects` row as it arrives from Postgres replication
+ * (snake_case columns from the underlying table). Consumed by E2's
+ * `useObjectRealtimeSync` hook. Permissive about JSONB column types — the
+ * merge layer (E2's `mergeRealtimeObjectRow` helper) narrows via type
+ * guards before appending.
+ *
+ * Only the columns the studio actually reads on a Realtime event are listed;
+ * extra columns in the WAL payload (created_at, project_id, etc.) are ignored.
+ */
+export interface ObjectRealtimeRow {
+  readonly id: string
+  readonly user_id: string | null
+  readonly project_id: string | null
+  readonly node_id: string | null
+  readonly name: string | null
+  readonly description: string | null
+  readonly category: string | null
+  readonly style: string | null
+  readonly source_image_url: string | null
+  readonly canonical_description: string | null
+  readonly style_lock: boolean | null
+  readonly angles: unknown
+  readonly materials: unknown
+  readonly variations: unknown
+  readonly motion_clips: unknown
+  readonly reference_photos: unknown
+  readonly updated_at: string | null
 }
 
 // --- Location Node Data ---
@@ -5856,6 +5932,14 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       materialsStatus: "idle",
       variationsStatus: "idle",
       customVariations: [],
+      // Phase A (Object Studio) defaults — mirror LocationNodeData defaults.
+      motionClips: [],
+      motionStatus: "idle",
+      referencePhotos: [],
+      canonicalDescription: "",
+      styleLock: true,
+      // updatedAt omitted — set on first save
+      // legacyPickerSelection omitted — populated by loadWorkflow migration
     } as ObjectNodeData,
   },
   // Location

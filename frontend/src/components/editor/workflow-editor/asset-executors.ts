@@ -341,7 +341,15 @@ export function runObjectGeneration(
       provider: data.provider,
       userId: ctx.userId,
     })
-      .then(({ jobId }) => {
+      .then((result) => {
+        // generateObject returns { jobId } when count is omitted/=1, and
+        // { jobIds } when count > 1. This caller never sets count, so the
+        // single-job branch is the only one reachable.
+        if (!("jobId" in result)) {
+          reject(new Error("Unexpected multi-candidate result from generateObject"))
+          return
+        }
+        const { jobId } = result
         guardedToast.info("Object generation started", {
           description: `Job ID: ${jobId}`,
         });

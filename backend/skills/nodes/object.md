@@ -1,7 +1,7 @@
 ---
 node_type: object
-generated_at: 2026-05-18T13:23:37.729Z
-generated_from: cb1e786d
+generated_at: 2026-05-21T06:51:07.953Z
+generated_from: a22daa77
 ---
 
 # Object
@@ -35,7 +35,12 @@ generated_from: cb1e786d
   "anglesStatus": "idle",
   "materialsStatus": "idle",
   "variationsStatus": "idle",
-  "customVariations": []
+  "customVariations": [],
+  "motionClips": [],
+  "motionStatus": "idle",
+  "referencePhotos": [],
+  "canonicalDescription": "",
+  "styleLock": true
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -82,7 +87,12 @@ generated_from: cb1e786d
     "anglesStatus": "idle",
     "materialsStatus": "idle",
     "variationsStatus": "idle",
-    "customVariations": []
+    "customVariations": [],
+    "motionClips": [],
+    "motionStatus": "idle",
+    "referencePhotos": [],
+    "canonicalDescription": "",
+    "styleLock": true
   }
 }
 ```

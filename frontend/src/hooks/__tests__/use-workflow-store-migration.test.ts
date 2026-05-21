@@ -301,3 +301,181 @@ describe("useWorkflowStore — locationStudioNodeId state", () => {
     expect(useWorkflowStore.getState().locationStudioNodeId).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Object Studio (Phase E1) — loadWorkflow migration tests.
+// 5-field backfill + legacyPickerSelection breadcrumb per spec Pass 12 F-97
+// + Pass 6 F-74.
+// ---------------------------------------------------------------------------
+
+describe("loadWorkflow — object node migration", () => {
+  it("defaults the 5 new Phase-A object fields on legacy nodes", () => {
+    const nodes = [{
+      id: "obj1", type: "object", position: { x: 0, y: 0 },
+      data: { label: "obj", objectName: "Legacy", fieldMappings: {}, angles: [] },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj1")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.motionClips).toEqual([])
+    expect(data.motionStatus).toBe("idle")
+    expect(data.referencePhotos).toEqual([])
+    expect(data.canonicalDescription).toBe("")
+    expect(data.styleLock).toBe(true)
+  })
+
+  it("preserves existing Phase-A object values when present", () => {
+    const motionClips = [{ name: "spinning", url: "https://x/spin.mp4" }]
+    const referencePhotos = [{ kind: "front", url: "https://x/front.png" }]
+    const nodes = [{
+      id: "obj2", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Full", fieldMappings: {}, angles: [],
+        motionClips, motionStatus: "completed",
+        referencePhotos,
+        canonicalDescription: "Brass compass with worn leather case",
+        styleLock: false,
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj2")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.motionClips).toEqual(motionClips)
+    expect(data.motionStatus).toBe("completed")
+    expect(data.referencePhotos).toEqual(referencePhotos)
+    expect(data.canonicalDescription).toBe("Brass compass with worn leather case")
+    expect(data.styleLock).toBe(false)
+  })
+
+  it("migrates animalId → legacyPickerSelection when category matches and clears *Id", () => {
+    const nodes = [{
+      id: "obj3", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Legacy animal", fieldMappings: {}, angles: [],
+        category: "animal",
+        animalId: "dog-golden-retriever",
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj3")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.legacyPickerSelection).toEqual({ kind: "animal", id: "dog-golden-retriever" })
+    expect(data.animalId).toBeUndefined()
+  })
+
+  it("migrates vehicleId, furnitureId, weaponId on category match", () => {
+    const nodes = [
+      { id: "v", type: "object", position: { x: 0, y: 0 }, data: { label: "v", fieldMappings: {}, category: "vehicle", vehicleId: "sedan" } },
+      { id: "f", type: "object", position: { x: 0, y: 0 }, data: { label: "f", fieldMappings: {}, category: "furniture", furnitureId: "sofa" } },
+      { id: "w", type: "object", position: { x: 0, y: 0 }, data: { label: "w", fieldMappings: {}, category: "weapon", weaponId: "katana" } },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const all = useWorkflowStore.getState().nodes
+    expect((all.find((n) => n.id === "v")?.data as Record<string, unknown>).legacyPickerSelection)
+      .toEqual({ kind: "vehicle", id: "sedan" })
+    expect((all.find((n) => n.id === "v")?.data as Record<string, unknown>).vehicleId).toBeUndefined()
+    expect((all.find((n) => n.id === "f")?.data as Record<string, unknown>).legacyPickerSelection)
+      .toEqual({ kind: "furniture", id: "sofa" })
+    expect((all.find((n) => n.id === "f")?.data as Record<string, unknown>).furnitureId).toBeUndefined()
+    expect((all.find((n) => n.id === "w")?.data as Record<string, unknown>).legacyPickerSelection)
+      .toEqual({ kind: "weapon", id: "katana" })
+    expect((all.find((n) => n.id === "w")?.data as Record<string, unknown>).weaponId).toBeUndefined()
+  })
+
+  it("does NOT migrate when animalId is set but category mismatches", () => {
+    const nodes = [{
+      id: "obj4", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Mismatch", fieldMappings: {}, angles: [],
+        category: "weapon",  // mismatch
+        animalId: "dog-golden-retriever",
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj4")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.legacyPickerSelection).toBeUndefined()
+    // animalId NOT cleared — no migration happened
+    expect(data.animalId).toBe("dog-golden-retriever")
+  })
+
+  it("re-migration prevention: legacyPickerSelection === null (user dismissed) is preserved", () => {
+    const nodes = [{
+      id: "obj5", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Dismissed", fieldMappings: {}, angles: [],
+        category: "animal",
+        animalId: "dog-golden-retriever",  // legacy field still present
+        legacyPickerSelection: null,  // user dismissed the banner
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj5")
+    const data = loaded?.data as Record<string, unknown>
+    // Must remain null, NOT re-migrated to { kind, id }
+    expect(data.legacyPickerSelection).toBeNull()
+    // animalId NOT cleared because no migration happened (guard tripped)
+    expect(data.animalId).toBe("dog-golden-retriever")
+  })
+
+  it("re-migration prevention: pre-set legacyPickerSelection object is preserved", () => {
+    const nodes = [{
+      id: "obj6", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Already-set", fieldMappings: {}, angles: [],
+        category: "animal",
+        animalId: "cat-tabby",
+        legacyPickerSelection: { kind: "animal", id: "dog-golden-retriever" },
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj6")
+    const data = loaded?.data as Record<string, unknown>
+    // Existing breadcrumb preserved, NOT overwritten
+    expect(data.legacyPickerSelection).toEqual({ kind: "animal", id: "dog-golden-retriever" })
+    expect(data.animalId).toBe("cat-tabby")  // not cleared
+  })
+
+  it("multi-field *Id: category determines which wins (animal vs weapon both set)", () => {
+    const nodes = [{
+      id: "obj7", type: "object", position: { x: 0, y: 0 },
+      data: {
+        label: "obj", objectName: "Multi", fieldMappings: {}, angles: [],
+        category: "weapon",  // category drives selection
+        animalId: "dog-golden-retriever",
+        weaponId: "katana",
+      },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "obj7")
+    const data = loaded?.data as Record<string, unknown>
+    // Weapon wins because category === "weapon"
+    expect(data.legacyPickerSelection).toEqual({ kind: "weapon", id: "katana" })
+    // Both *Id fields cleared
+    expect(data.animalId).toBeUndefined()
+    expect(data.weaponId).toBeUndefined()
+  })
+
+  it("leaves non-object nodes untouched", () => {
+    const nodes = [{
+      id: "n1", type: "character", position: { x: 0, y: 0 },
+      data: { label: "char", characterName: "Ada", fieldMappings: {}, expressions: [], customVariations: [] },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "n1")
+    const data = loaded?.data as Record<string, unknown>
+    expect(data.motionClips).toBeUndefined()
+    expect(data.canonicalDescription).toBeUndefined()
+    expect(data.legacyPickerSelection).toBeUndefined()
+  })
+})
+
+describe("useWorkflowStore — objectStudioNodeId state", () => {
+  it("starts null and is updated by setObjectStudioNodeId", () => {
+    expect(useWorkflowStore.getState().objectStudioNodeId).toBeNull()
+    useWorkflowStore.getState().setObjectStudioNodeId("obj1")
+    expect(useWorkflowStore.getState().objectStudioNodeId).toBe("obj1")
+    useWorkflowStore.getState().setObjectStudioNodeId(null)
+    expect(useWorkflowStore.getState().objectStudioNodeId).toBeNull()
+  })
+})
