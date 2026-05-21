@@ -1,4 +1,4 @@
-import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types"
+import { EmptyInputError, type StrategyContext, type StrategyResult } from "./types.js"
 
 export async function execute(
   items: string[],
