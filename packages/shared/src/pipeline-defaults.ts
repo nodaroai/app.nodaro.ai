@@ -116,6 +116,34 @@ export const CHAT_TURN_CAPS = {
   post_merge: 8,
 } as const
 
+/**
+ * Pipeline entity error code emitted by Phase 1D.2c-a image critics
+ * (Stage 2 Characters + Stage 4 Locations) and any future image-level
+ * validators. Constant lets the frontend compare equality (not substring)
+ * and the backend writes a single canonical value.
+ *
+ * Written to `pipeline_entities.metadata.last_error` after the critic retry
+ * cap exhausts. Auto-mode's failure-aggregator (`detectImageCriticFailures`
+ * + `failPipelineForImageCriticUnresolvable`) reads this exact value.
+ */
+export const IMAGE_CRITIC_UNRESOLVABLE = "image_critic_unresolvable"
+
+/**
+ * Maximum critic-feedback retry budget per entity in Phase 1D.2c-a image
+ * critics. Each fail triggers a regeneration with critic suggestions injected
+ * into the prompt; after this many retries the entity is marked failed and
+ * surfaces in EntityCard with recovery buttons.
+ */
+export const IMAGE_CRITIC_MAX_RETRIES = 2
+
+/**
+ * Score threshold below which the critic's verdict is overridden to "fail"
+ * regardless of the verdict field. Defends against an overly lenient critic
+ * that says verdict='pass' on a borderline image. The numeric score (0-10)
+ * is enforced by the schema and the system prompt anchors the meaning.
+ */
+export const IMAGE_CRITIC_MIN_ADHERENCE_SCORE = 5
+
 export type ChatEnabledStage = keyof typeof CHAT_TURN_CAPS
 
 /**

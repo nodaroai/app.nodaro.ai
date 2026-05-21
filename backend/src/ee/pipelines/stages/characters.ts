@@ -7,12 +7,19 @@ import {
 import { pipelineEvents } from "../events.js"
 import { runVoiceMatcher } from "../llms/voice-matcher.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
+import {
+  bulkApproveStageEntities,
+  detectImageCriticFailures,
+  ensureStageRow,
+  failPipelineForImageCriticUnresolvable,
+  failStage,
+} from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
   transitionStageEntityNodesAndEmit,
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
+import { runImageCriticLoop } from "./_image-critic-loop.js"
 
 export interface RunCharactersStageArgs {
   supabase: SupabaseClient
@@ -99,6 +106,46 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
     if (entity.status === "pending" || entity.status === "generating") {
       await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
       anyAwaiting = true
+    }
+  }
+
+  // Phase 1D.2c-a §6 (D1): auto-mode aggregates `image_critic_unresolvable`
+  // failures. By the time we reach this aggregation point, every entity has
+  // reached a terminal state — either `awaiting_approval` (critic passed) or
+  // `failed` (critic cap exhausted). If ANY entity carries
+  // `metadata.last_error === 'image_critic_unresolvable'`, auto-mode can't
+  // safely advance: bulk-approve would push a failed-entity stage into the
+  // next stage, where downstream nodes (Shot List, Scene Images) would fail
+  // referencing missing main assets. Instead, fail the pipeline here with a
+  // typed reason + refund the unspent reservation. Manual/guided modes do
+  // NOT aggregate — the failed entity stays visible on its EntityCard so
+  // the user can Regenerate (handled by E1).
+  if (args.mode === "auto") {
+    const failed = detectImageCriticFailures(entities ?? [])
+    if (failed.length > 0) {
+      // Load pipelines row ONCE to derive userId + refund amount. The helper
+      // used to do this SELECT itself; pulling it here keeps the helper a
+      // pure data-transformer.
+      const { data: pipelineRow } = await supabase
+        .from("pipelines")
+        .select("user_id, reserved_credits, spent_credits")
+        .eq("id", pipelineId)
+        .single()
+      const reserved =
+        (pipelineRow as { reserved_credits?: number } | null)?.reserved_credits ?? 0
+      const spent =
+        (pipelineRow as { spent_credits?: number } | null)?.spent_credits ?? 0
+      const pipelineUserId =
+        (pipelineRow as { user_id?: string } | null)?.user_id ?? userId
+      await failPipelineForImageCriticUnresolvable({
+        supabase,
+        pipelineId,
+        failureReason: "characters_image_critic_unresolvable",
+        stageName: "characters",
+        userId: pipelineUserId,
+        refundCredits: Math.max(0, reserved - spent),
+      })
+      return
     }
   }
 
@@ -264,13 +311,59 @@ async function generateCharacterMain(
   const prompt = `${cast.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, portrait, neutral expression, front-facing`
 
   try {
-    const { assetId, assetUrl } = await pipelineGenerateImage({
+    const initialAsset = await pipelineGenerateImage({
       supabase,
       pipelineId,
       pipelineEntityId: entity.id,
       userId,
       prompt,
     })
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Phase 1D.2c-a §5 (C1): vision-LLM critic gate + feedback-retry loop.
+    // The shared loop helper handles: (1) the fail predicate
+    // (verdict='fail' OR prompt_adherence_score < threshold), (2) the retry
+    // budget (IMAGE_CRITIC_MAX_RETRIES), (3) feedback-prompt construction,
+    // (4) on cap-exhaust → persist failed metadata + emit entity:status
+    // SSE. On `ok: false` we return early; voice-matcher is intentionally
+    // skipped (entity is unrecoverable; user must regenerate via the
+    // EntityCard).
+    // ─────────────────────────────────────────────────────────────────────
+    const { runCharacterImageCritic } = await import("../llms/character-image-critic.js")
+    const loopResult = await runImageCriticLoop({
+      supabase,
+      pipelineId,
+      entity,
+      entityType: "character",
+      basePrompt: prompt,
+      initialAsset,
+      initialRetryCount:
+        ((entity.metadata as { image_critic_retry_count?: number } | null)
+          ?.image_critic_retry_count) ?? 0,
+      generate: (feedbackPrompt) =>
+        pipelineGenerateImage({
+          supabase,
+          pipelineId,
+          pipelineEntityId: entity.id,
+          userId,
+          prompt: feedbackPrompt,
+        }),
+      runCritic: async (imageUrl) => {
+        const result = await runCharacterImageCritic({
+          supabase,
+          pipelineId,
+          stageId,
+          userId,
+          imageUrl,
+          visualDescription: cast.visual_description,
+          globalStyle: plan.global_style,
+        })
+        return result.verdict
+      },
+    })
+    if (!loopResult.ok) return
+    const { assetId, assetUrl, retryCount, finalVerdict } = loopResult
+
     // Voice match if dialogue-bearing. Non-fatal — the actual voice
     // selection isn't consumed until Stage 7 (audio). Failing Stage 2 on a
     // voice-matcher error would lose the just-completed image generation
@@ -307,6 +400,13 @@ async function generateCharacterMain(
           ...(entity.metadata ?? {}),
           voice_match: voiceMatchMeta,
           ...(voiceMatchError ? { voice_match_error: voiceMatchError } : {}),
+          // Phase 1D.2c-a §5 (C1): persist informational findings on the
+          // success path too, so EntityCard can render warning-severity
+          // issues even when verdict='pass'. `undefined` removes the key
+          // from the JSONB; zeros / empty arrays would clutter metadata.
+          critic_findings:
+            finalVerdict.issues.length > 0 ? finalVerdict.issues : undefined,
+          image_critic_retry_count: retryCount > 0 ? retryCount : undefined,
         },
       })
       .eq("id", entity.id)

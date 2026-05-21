@@ -55,6 +55,18 @@ In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual m
 
 Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
 
+### Image-level critics (Phase 1D.2c-a)
+
+Stages 2 (Characters) and 4 (Locations) each run a vision-LLM critic (Sonnet 4.6) against generated main images. The critic validates that the image matches the entity's `visual_description` from the ShowrunnerPlan:
+
+- **Pass** → entity advances to `awaiting_approval` (Manual/Guided) or auto-approves (Auto). Any informational findings (warnings) are still surfaced under the image on the EntityCard.
+- **Fail** → image regenerates with critic feedback (the suggested_fix from each blocking issue is injected into the next prompt) up to 2 times.
+- **Fail after retries** → entity status `failed`; Manual/Guided shows the last attempted image + critic findings on the EntityCard. Auto Mode aggregates the failure to the pipeline level: sets `failure_reason='characters_image_critic_unresolvable'` (or `locations_image_critic_unresolvable`), refunds unspent credits, and stops dispatching new stages.
+
+Variants (angle/expression for characters, wide/ground/etc. for locations) are NOT validated by the critic in 1D.2c-a — only the main image. Storyboard Cohesion + Video Critic ship in Phase 1D.2c-b.
+
+**Score-based defense:** the critic emits `prompt_adherence_score` (0-10 int) in addition to `verdict`. Scores below 5 trigger the fail path even if `verdict='pass'` — guards against an overly lenient critic.
+
 ## Stage 1 — Script
 
 1. **Detection** (Haiku) extracts entities from the prompt.

@@ -3,12 +3,19 @@ import type { ShowrunnerPlan } from "@nodaro/shared"
 import { MAX_LOCATION_VARIANTS } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
-import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
+import {
+  bulkApproveStageEntities,
+  detectImageCriticFailures,
+  ensureStageRow,
+  failPipelineForImageCriticUnresolvable,
+  failStage,
+} from "../stage-utils.js"
 import {
   transitionEntityNodeAndEmit,
   transitionStageEntityNodesAndEmit,
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
+import { runImageCriticLoop } from "./_image-critic-loop.js"
 
 export interface RunLocationsStageArgs {
   supabase: SupabaseClient
@@ -101,8 +108,42 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
       continue
     }
     if (entity.status === "pending" || entity.status === "generating" || entity.status === "rejected") {
-      await generateLocationMain(supabase, pipelineId, userId, entity, plan)
+      await generateLocationMain(supabase, pipelineId, stageId, userId, entity, plan)
       anyAwaiting = true
+    }
+  }
+
+  // Phase 1D.2c-a §6 (D1): auto-mode aggregates `image_critic_unresolvable`
+  // failures. Mirrors the characters-stage check (see characters.ts:105-118
+  // for the rationale). If ANY location entity carries
+  // `metadata.last_error === 'image_critic_unresolvable'`, fail the pipeline
+  // here with a typed reason + refund. Manual/guided modes do NOT aggregate.
+  if (args.mode === "auto") {
+    const failed = detectImageCriticFailures(entities ?? [])
+    if (failed.length > 0) {
+      // Load pipelines row ONCE to derive userId + refund amount. The helper
+      // used to do this SELECT itself; pulling it here keeps the helper a
+      // pure data-transformer.
+      const { data: pipelineRow } = await supabase
+        .from("pipelines")
+        .select("user_id, reserved_credits, spent_credits")
+        .eq("id", pipelineId)
+        .single()
+      const reserved =
+        (pipelineRow as { reserved_credits?: number } | null)?.reserved_credits ?? 0
+      const spent =
+        (pipelineRow as { spent_credits?: number } | null)?.spent_credits ?? 0
+      const pipelineUserId =
+        (pipelineRow as { user_id?: string } | null)?.user_id ?? userId
+      await failPipelineForImageCriticUnresolvable({
+        supabase,
+        pipelineId,
+        failureReason: "locations_image_critic_unresolvable",
+        stageName: "locations",
+        userId: pipelineUserId,
+        refundCredits: Math.max(0, reserved - spent),
+      })
+      return
     }
   }
 
@@ -231,6 +272,7 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
 async function generateLocationMain(
   supabase: SupabaseClient,
   pipelineId: string,
+  stageId: string,
   userId: string,
   entity: { id: string; entity_key: string; metadata: Record<string, unknown> | null },
   plan: ShowrunnerPlan,
@@ -254,16 +296,72 @@ async function generateLocationMain(
   const prompt = `${loc.visual_description}, ${plan.global_style.visual_style}, ${plan.global_style.lighting}, wide establishing shot, no people`
 
   try {
-    const { assetId, assetUrl } = await pipelineGenerateImage({
+    const initialAsset = await pipelineGenerateImage({
       supabase,
       pipelineId,
       pipelineEntityId: entity.id,
       userId,
       prompt,
     })
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Phase 1D.2c-a §5 (C2): vision-LLM critic gate + feedback-retry loop.
+    // Shares the same loop helper used by Stage 2 (characters); see
+    // _image-critic-loop.ts for the canonical implementation. On
+    // `ok: false` the helper has already persisted failed metadata + emitted
+    // the entity:status SSE, so we return early.
+    // ─────────────────────────────────────────────────────────────────────
+    const { runLocationImageCritic } = await import("../llms/location-image-critic.js")
+    const loopResult = await runImageCriticLoop({
+      supabase,
+      pipelineId,
+      entity,
+      entityType: "location",
+      basePrompt: prompt,
+      initialAsset,
+      initialRetryCount:
+        ((entity.metadata as { image_critic_retry_count?: number } | null)
+          ?.image_critic_retry_count) ?? 0,
+      generate: (feedbackPrompt) =>
+        pipelineGenerateImage({
+          supabase,
+          pipelineId,
+          pipelineEntityId: entity.id,
+          userId,
+          prompt: feedbackPrompt,
+        }),
+      runCritic: async (imageUrl) => {
+        const result = await runLocationImageCritic({
+          supabase,
+          pipelineId,
+          stageId,
+          userId,
+          imageUrl,
+          visualDescription: loc.visual_description,
+          globalStyle: plan.global_style,
+        })
+        return result.verdict
+      },
+    })
+    if (!loopResult.ok) return
+    const { assetId, assetUrl, retryCount, finalVerdict } = loopResult
+
     await supabase
       .from("pipeline_entities")
-      .update({ main_asset_id: assetId, status: "awaiting_approval" })
+      .update({
+        main_asset_id: assetId,
+        status: "awaiting_approval",
+        metadata: {
+          ...(entity.metadata ?? {}),
+          // Phase 1D.2c-a §5 (C2): persist informational findings on the
+          // success path so EntityCard can render warning-severity issues
+          // even when verdict='pass'. `undefined` removes the key from the
+          // JSONB; zeros / empty arrays would clutter metadata.
+          critic_findings:
+            finalVerdict.issues.length > 0 ? finalVerdict.issues : undefined,
+          image_critic_retry_count: retryCount > 0 ? retryCount : undefined,
+        },
+      })
       .eq("id", entity.id)
     // Phase 1B.4 (C1): cascade-staleness trigger fires on main_asset_id change.
     await emitDependentStaleEvents(supabase, pipelineId, entity.id)
