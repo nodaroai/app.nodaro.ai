@@ -177,6 +177,30 @@ export const pipelinesApi = {
       `/v1/pipelines/${id}/entities/${entityId}/retry-image-generation`,
       {},
     ),
+  /**
+   * Phase 1D.2c-b-ii §9 (J1) — Skip button on the per-shot video-critic surface
+   * (scene-configs.tsx). Accepts the failed clip AS-IS: backend flips
+   * `video_critic_failed=false` on the target shot inside
+   * `scene_node_data.shots[N]` and emits `shot:status` SSE. Findings stay
+   * for audit. Backend CAS-gates on `shot.video_critic_failed === true`;
+   * any other state returns 409 `shot_not_video_critic_failed`.
+   */
+  skipShotVideoCriticFailure: (pipelineId: string, sceneId: string, shotId: string) =>
+    postJson<{ ok: true }>(
+      `/v1/pipelines/${pipelineId}/shots/${sceneId}/${shotId}/skip-video-critic-failure`,
+      {},
+    ),
+  /**
+   * Phase 1D.2c-b-ii §9 (J1) — Regenerate button on the per-shot video-critic
+   * surface. Backend strips every `video_critic_*` field from the shot and
+   * re-enqueues the orchestrator so Stage 7 re-runs `processShot` for this
+   * shot with a fresh critic retry budget. Same 409 gate as the skip route.
+   */
+  retryShotVideoGeneration: (pipelineId: string, sceneId: string, shotId: string) =>
+    postJson<{ ok: true }>(
+      `/v1/pipelines/${pipelineId}/shots/${sceneId}/${shotId}/retry-video-generation`,
+      {},
+    ),
   getStage: (id: string, stage: PipelineStageName) =>
     getJson<{ status: string; output: unknown; critic_feedback: unknown }>(
       `/v1/pipelines/${id}/stages/${stage}`,

@@ -143,9 +143,16 @@ export function detectImageCriticFailures(
 }
 
 /**
- * Phase 1D.2c-a §6 (D1): fails a pipeline because at least one entity ended
- * up in `image_critic_unresolvable`. Mirrors the failure-aggregation pattern
- * from `runScriptAndPersist` in engine.ts:
+ * Phase 1D.2c-a §6 (D1) — originally introduced for the Stage 2/4 image
+ * critic. Phase 1D.2c-b-ii (E1) generalizes the helper to the Stage 7 video
+ * critic: the body is unchanged, only the `failureReason` literal type
+ * widens to accept any `*_unresolvable` reason emitted by an auto-mode
+ * critic-failure aggregator. The frontend already gates on
+ * `failure_reason.endsWith("_unresolvable")` so no UI changes are needed for
+ * new reasons.
+ *
+ * Mirrors the failure-aggregation pattern from `runScriptAndPersist` in
+ * engine.ts:
  *   1. Refund unspent credits via `refundPipelineCredits` (only when `refundCredits > 0`).
  *   2. Flip the pipeline_stages row to failed with the typed reason (mirrors
  *      engine.ts script-stage failure — without this the stage row stays at
@@ -154,19 +161,20 @@ export function detectImageCriticFailures(
  *   3. Update pipelines.status='failed' + failure_reason=`<reason>`.
  *   4. Emit `pipeline:status failed` + `stage:status failed` SSE.
  *
- * Auto-mode-only — manual/guided keep the failed entity visible on its card
- * so the user can Regenerate.
+ * Auto-mode-only — manual/guided keep the failed entity/shot visible so the
+ * user can Regenerate.
  *
  * Callers supply `userId` + `refundCredits` (typically computed as
  * `reserved - spent` from a pipelines row already loaded for other purposes).
  * This eliminates the helper's own SELECT against `pipelines`.
  */
-export async function failPipelineForImageCriticUnresolvable(args: {
+export async function failPipelineWithCriticReason(args: {
   supabase: SupabaseClient
   pipelineId: string
   failureReason:
     | "characters_image_critic_unresolvable"
     | "locations_image_critic_unresolvable"
+    | "video_critic_unresolvable"
   stageName: PipelineStageName
   userId: string
   refundCredits: number

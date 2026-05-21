@@ -4,6 +4,7 @@ import {
   PIPELINE_MODES,
   PIPELINE_OUTPUT_RESOLUTIONS,
   PIPELINE_TYPES,
+  VIDEO_CRITIC_FRAME_MODES,
 } from "./pipeline-defaults.js"
 import { SceneMetadataSchema } from "./scene-node-types.js"
 
@@ -51,6 +52,7 @@ export const PipelineInputSchema = z.object({
   style_directives: StyleDirectivesSchema.optional(),
   config: PipelineConfigSchema.partial().optional(),
   max_cost_credits: z.number().int().positive().optional(),
+  video_critic_frame_count: z.enum(VIDEO_CRITIC_FRAME_MODES).default("first_last"),
 })
 export type PipelineInput = z.infer<typeof PipelineInputSchema>
 
@@ -415,6 +417,59 @@ export const StoryboardCohesionCriticVerdictSchema = z.object({
   ).max(30),
 })
 export type StoryboardCohesionCriticVerdict = z.infer<typeof StoryboardCohesionCriticVerdictSchema>
+
+// Phase 1D.2c-b-ii — Video Critic (Stage 7)
+
+export const VideoCriticVerdictSchema = z.object({
+  verdict: z.enum(["pass", "fail"]),
+  prompt_adherence_score: z.number().int().min(0).max(10),
+  continuity_score: z.number().int().min(0).max(10).nullable(),
+  identified_action: z.string().min(1).max(300),
+  issues: z.array(
+    z.object({
+      severity: z.enum(["blocking", "warning"]),
+      category: z.enum([
+        "wrong_action",
+        "prompt_mismatch",
+        "continuity_break",
+        "visual_artifacts",
+        "motion_glitch",
+        "style_mismatch",
+        "other",
+      ]),
+      description: z.string().min(1).max(500),
+      suggested_fix: z.string().min(1).max(300),
+    }),
+  ).max(20),
+  approved_summary: z.string().min(1).max(200).optional(),
+})
+export type VideoCriticVerdict = z.infer<typeof VideoCriticVerdictSchema>
+
+/**
+ * Phase 1D.2c-b-ii — Video Critic ShotSpec sibling fields persisted by
+ * Stage 7 (scene-internal-pipeline) directly on each ShotSpec record (NOT
+ * under a nested `metadata` key). Persisting them as siblings lets the shot
+ * recovery routes update them via a JSON-Patch-style path; the shared Zod
+ * `ShotSpec` schema doesn't enumerate these because ShotSpec is an open
+ * object on the persistence path, so this interface is the single source of
+ * truth for backend + frontend consumers that need to read/write them.
+ *
+ * Persisted location:
+ *   `pipeline_entities.metadata.scene_node_data.shots[N].video_critic_*`
+ *
+ * Cleared by `clearVideoCriticMetadata` (see pipeline-defaults.ts) in the
+ * retry-video-generation recovery route + the frontend Regenerate handler.
+ */
+export interface VideoCriticShotFields {
+  video_critic_findings?: VideoCriticVerdict["issues"]
+  video_critic_score?: number
+  video_critic_continuity_score?: number | null
+  video_critic_identified_action?: string
+  video_critic_retry_count?: number
+  video_critic_last_attempted_url?: string
+  video_critic_failed?: boolean
+  video_critic_verdict?: "pass" | "fail"
+}
 
 // ─── Entity metadata (DB pipeline_entities.metadata) ──────────────────────────
 

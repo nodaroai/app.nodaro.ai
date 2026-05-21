@@ -1,7 +1,28 @@
 import { useState } from "react"
 import type { ConfigProps } from "./types"
 import type { SceneNodeFrontendData } from "@/types/nodes"
-import type { MatchCutVerdict, ShotSpec } from "@nodaro/shared"
+import {
+  clearVideoCriticMetadata,
+  VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
+  type MatchCutVerdict,
+  type ShotSpec,
+  type VideoCriticShotFields,
+} from "@nodaro/shared"
+
+/**
+ * /simplify pass-2 — warn-tier threshold for the video-critic score chip.
+ * A score below this but `verdict==='pass'` (or not explicitly failed) is
+ * the "borderline" state — colored amber instead of green. Distinct from
+ * `VIDEO_CRITIC_MIN_ADHERENCE_SCORE`, which is the fail threshold: any score
+ * strictly below `MIN_ADHERENCE_SCORE` already triggered a retry / cap-fail
+ * upstream and surfaces as red (`failed === true`).
+ *
+ * Defined as `MIN_ADHERENCE_SCORE + 2` so the warn-tier band is always at
+ * least 2 wide above the fail threshold — keeps the amber zone meaningful
+ * if MIN_ADHERENCE_SCORE gets retuned upstream. Matches the historical
+ * inline value (7 = 5 + 2) the pre-pass-2 code carried as a magic number.
+ */
+const VIDEO_CRITIC_AMBER_THRESHOLD = VIDEO_CRITIC_MIN_ADHERENCE_SCORE + 2
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -12,6 +33,15 @@ import { useSceneHelper } from "@/hooks/use-scene-helper"
 import { SceneHelperButtons } from "./scene-helper-buttons"
 import { SceneHelperModal } from "./scene-helper-modal"
 import { pipelinesApi } from "@/lib/pipelines-api"
+
+/**
+ * Phase 1D.2c-b-ii — Video Critic per-shot fields, persisted by Stage 7
+ * (scene-internal-pipeline.ts) as direct siblings on the ShotSpec record
+ * (NOT under a nested `metadata` key). The shared `VideoCriticShotFields`
+ * interface is the single source of truth for these field names — see
+ * `packages/shared/src/pipeline-types.ts`.
+ */
+type ShotWithVideoCritic = ShotSpec & VideoCriticShotFields
 
 /**
  * SceneConfig — Phase 1B.2 read-only config panel for the pipeline-managed
@@ -65,6 +95,11 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
 
   // Per-shot loading state for the accept-break action (Phase 1D.1).
   const [acceptBreakLoading, setAcceptBreakLoading] = useState<Record<string, boolean>>({})
+
+  // Per-shot loading state for the video-critic Skip / Regenerate actions
+  // (Phase 1D.2c-b-ii §9 — J1). Keyed by shot_id; disables both buttons
+  // while either action is in flight so a double-click can't race.
+  const [videoCriticLoading, setVideoCriticLoading] = useState<Record<string, boolean>>({})
 
   // Patch a single shot by shot_id, merging `patch` into the existing shot.
   function patchShot(shotId: string, patch: Partial<ShotSpec>) {
@@ -134,19 +169,23 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
         Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
       </div>
 
-      {/* ── Per-shot editors: Phase 1C.3 input-mode fields + Phase 1D.1 match-cut ── */}
+      {/* ── Per-shot editors: Phase 1C.3 input-mode fields + Phase 1D.1 match-cut + Phase 1D.2c-b-ii video-critic ── */}
       {data.shots.map((shot, idx) => {
         const mode = data.shot_input_mode
         const isMatchCutShot = shot.shot_intent?.is_match_cut === true && idx < data.shots.length - 1
+        const shotVC = shot as ShotWithVideoCritic
+        const hasVideoCritic = shotVC.video_critic_findings !== undefined
 
         // Only render the per-shot editor when the scene's input mode has
         // shot-level fields to configure, OR this shot has a match-cut verdict
-        // to surface (Phase 1D.1).
+        // to surface (Phase 1D.1), OR this shot has Video Critic findings to
+        // surface (Phase 1D.2c-b-ii).
         if (
           mode !== "video_continuation" &&
           mode !== "frame_interpolation" &&
           mode !== "camera_path" &&
-          !isMatchCutShot
+          !isMatchCutShot &&
+          !hasVideoCritic
         ) {
           return null
         }
@@ -451,6 +490,189 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                           Break accepted
                         </span>
                       )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* ── Section 5: video-critic findings (Phase 1D.2c-b-ii) ───── */}
+            {hasVideoCritic && (() => {
+              const findings = shotVC.video_critic_findings ?? []
+              const failed = shotVC.video_critic_failed === true
+              const score = shotVC.video_critic_score
+              const continuityScore = shotVC.video_critic_continuity_score
+              const identifiedAction = shotVC.video_critic_identified_action
+              const retryCount = shotVC.video_critic_retry_count
+
+              // Score chip color: failed = red, score < amber-threshold = amber,
+              // else green. The default fallback (10) is above both
+              // thresholds so a missing score renders green (informational
+              // "no concern" state).
+              const scoreChipClass = failed
+                ? "bg-red-500/20 text-red-300"
+                : (score ?? 10) < VIDEO_CRITIC_AMBER_THRESHOLD
+                  ? "bg-amber-500/20 text-amber-300"
+                  : "bg-green-500/20 text-green-300"
+
+              const accentBorder = failed
+                ? "border-red-400"
+                : "border-zinc-300"
+
+              return (
+                <div
+                  className={`border-l-2 ${accentBorder} pl-3 my-2 space-y-2`}
+                  data-testid={`video-critic-${shot.shot_id}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-semibold">Video Critic</Label>
+                    {score !== undefined && (
+                      <span
+                        className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${scoreChipClass}`}
+                      >
+                        {failed ? "Failed" : "Pass"} · {score}/10
+                      </span>
+                    )}
+                    {continuityScore != null && (
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-zinc-500/20 text-zinc-400">
+                        continuity {continuityScore}/10
+                      </span>
+                    )}
+                  </div>
+
+                  {identifiedAction && (
+                    <p className="text-xs text-zinc-500 italic">
+                      Critic sees: {identifiedAction}
+                    </p>
+                  )}
+
+                  {findings.length > 0 && (
+                    <ul className="space-y-1">
+                      {findings.map((finding, fIdx) => {
+                        const severityClass =
+                          finding.severity === "blocking"
+                            ? "bg-red-500/20 text-red-300"
+                            : "bg-amber-500/20 text-amber-300"
+                        return (
+                          <li key={fIdx} className="text-xs space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <span
+                                className={`inline-block text-[10px] px-1.5 py-0 rounded-full font-medium ${severityClass}`}
+                              >
+                                {finding.severity}
+                              </span>
+                              <span className="font-mono text-[10px] text-zinc-400">
+                                {finding.category}
+                              </span>
+                            </div>
+                            <div className="text-zinc-300">{finding.description}</div>
+                            {finding.suggested_fix && (
+                              <div className="text-zinc-500 italic pl-3">
+                                Fix: {finding.suggested_fix}
+                              </div>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+
+                  {retryCount !== undefined && retryCount > 0 && (
+                    <p className="text-[10px] text-zinc-500">
+                      Retries used: {retryCount}
+                    </p>
+                  )}
+
+                  {failed && (
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={
+                          !pipelineId ||
+                          !sceneEntityId ||
+                          videoCriticLoading[shot.shot_id] === true
+                        }
+                        onClick={async () => {
+                          if (!pipelineId || !sceneEntityId) return
+                          setVideoCriticLoading((prev) => ({
+                            ...prev,
+                            [shot.shot_id]: true,
+                          }))
+                          try {
+                            await pipelinesApi.skipShotVideoCriticFailure(
+                              pipelineId,
+                              sceneEntityId,
+                              shot.shot_id,
+                            )
+                            // Mirror the server-side flip so the UI updates
+                            // without waiting for the SSE round-trip. The
+                            // server keeps the findings (audit trail), so we
+                            // only flip the `failed` boolean here.
+                            patchShot(shot.shot_id, {
+                              video_critic_failed: false,
+                            } as Partial<ShotSpec>)
+                          } finally {
+                            setVideoCriticLoading((prev) => ({
+                              ...prev,
+                              [shot.shot_id]: false,
+                            }))
+                          }
+                        }}
+                      >
+                        {videoCriticLoading[shot.shot_id] ? "Skipping…" : "Skip"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        disabled={
+                          !pipelineId ||
+                          !sceneEntityId ||
+                          videoCriticLoading[shot.shot_id] === true
+                        }
+                        onClick={async () => {
+                          if (!pipelineId || !sceneEntityId) return
+                          setVideoCriticLoading((prev) => ({
+                            ...prev,
+                            [shot.shot_id]: true,
+                          }))
+                          try {
+                            await pipelinesApi.retryShotVideoGeneration(
+                              pipelineId,
+                              sceneEntityId,
+                              shot.shot_id,
+                            )
+                            // The server strips every `video_critic_*` field
+                            // and re-enqueues the orchestrator; mirror that
+                            // here by patching the shot to drop the local
+                            // critic fields. The orchestrator will write
+                            // fresh values on the next pass. Uses the shared
+                            // `clearVideoCriticMetadata` helper so the writer
+                            // (Stage 7) + clearers (this + the retry route)
+                            // can't drift.
+                            const stripped = clearVideoCriticMetadata(
+                              shot as unknown as Record<string, unknown>,
+                            )
+                            // patchShot does a shallow merge — to remove the
+                            // critic fields we replace the whole shot.
+                            const updatedShots = data.shots.map((s) =>
+                              s.shot_id === shot.shot_id ? (stripped as ShotSpec) : s,
+                            )
+                            onUpdate({ shots: updatedShots })
+                          } finally {
+                            setVideoCriticLoading((prev) => ({
+                              ...prev,
+                              [shot.shot_id]: false,
+                            }))
+                          }
+                        }}
+                      >
+                        {videoCriticLoading[shot.shot_id]
+                          ? "Regenerating…"
+                          : "Regenerate"}
+                      </Button>
                     </div>
                   )}
                 </div>

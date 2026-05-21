@@ -83,6 +83,32 @@ When the assessment is `incoherent` (severe issues), the banner surfaces a **Bra
 
 Adds ~5 credits to the pipeline budget (1 Sonnet call with N images input).
 
+### Video Critic (Phase 1D.2c-b-ii)
+
+After each shot's clip is rendered at Stage 7, a vision-LLM critic (Sonnet 4.6) validates the generated video. **Blocking** with cap=1 retry-with-feedback per shot (cost-aware — [figures removed]).
+
+The critic checks:
+- **Prompt adherence** — does the action/motion match the shot prompt?
+- **Continuity** — does the first frame match the prior shot's last frame (when continuity_from_prev='match_last_frame')?
+- **Visual quality** — broken anatomy, garbled text, motion glitches?
+
+**Configurable frame extraction** via `video_critic_frame_count` (set per pipeline in the editor's Generative Pipeline config):
+
+| Mode | Frames | Cost/shot |
+|---|---|---|
+| `first_last` (default) | 2 (input keyframe + last-frame) | ~2 credits |
+| `first_middle_last` | 3 | ~3 credits |
+| `five_evenly` | 5 | ~4 credits |
+
+**Failure modes:**
+- **Pass** → shot persists `video_critic_findings` + `video_critic_score` (informational warnings even on success path).
+- **Fail with retry available** → animate regenerates with critic feedback injected into the prompt; cap=1 retry.
+- **Fail after cap** → shot persists `video_critic_failed=true` + findings. **Auto Mode** → pipeline fails with `failure_reason='video_critic_unresolvable'` + refund unspent credits. **Manual/Guided** → per-shot **Skip** (accept clip AS-IS) and **Regenerate** (reset + re-run Stage 7) buttons appear in the scene config panel. A stage-level summary banner in the pipeline panel lists all failing shots.
+
+**Critic infrastructure failure is non-fatal** — network/LLM/frame-extraction errors are logged and the shot keeps its original animate result without being marked failed.
+
+`prompt_adherence_score < 5` OR `continuity_score < 5` (when set) trigger auto-fail regardless of the verdict field — defense against lenient critics.
+
 ## Stage 1 — Script
 
 1. **Detection** (Haiku) extracts entities from the prompt.

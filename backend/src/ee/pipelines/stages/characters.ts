@@ -11,7 +11,7 @@ import {
   bulkApproveStageEntities,
   detectImageCriticFailures,
   ensureStageRow,
-  failPipelineForImageCriticUnresolvable,
+  failPipelineWithCriticReason,
   failStage,
 } from "../stage-utils.js"
 import {
@@ -137,7 +137,7 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
         (pipelineRow as { spent_credits?: number } | null)?.spent_credits ?? 0
       const pipelineUserId =
         (pipelineRow as { user_id?: string } | null)?.user_id ?? userId
-      await failPipelineForImageCriticUnresolvable({
+      await failPipelineWithCriticReason({
         supabase,
         pipelineId,
         failureReason: "characters_image_critic_unresolvable",

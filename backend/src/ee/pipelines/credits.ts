@@ -4,10 +4,48 @@ import {
   TIER_MAX_PIPELINE_COST_CREDITS,
   type PipelineFormat,
   type PipelineMode,
+  type VideoCriticFrameMode,
 } from "@nodaro/shared"
 
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
+
+/**
+ * Phase 1D.2c-b-ii (G1): per-shot Video Critic budget by frame extraction mode.
+ *
+ * Cost scales with how many frames the critic ingests:
+ *   - first_last         (2 frames): ~$0.02 → 2 credits/shot
+ *   - first_middle_last  (3 frames): ~$0.03 → 3 credits/shot
+ *   - five_evenly        (5 frames): ~$0.05 → 4 credits/shot
+ *
+ * Reservations are upfront and worst-case. Unused credits refund on pipeline
+ * completion via the normal credit reconciliation path.
+ */
+const VIDEO_CRITIC_PER_SHOT_CREDITS: Record<VideoCriticFrameMode, number> = {
+  first_last: 2,
+  first_middle_last: 3,
+  five_evenly: 4,
+}
+
+/**
+ * Floor on `estimatedShots` so very short reels still budget for a few
+ * shots' worth of video-critic calls. ceil(5/4) = 2 alone would be too
+ * tight — 5 is the conservative minimum we've seen in practice for
+ * <20s clips.
+ */
+const VIDEO_CRITIC_SHOT_FLOOR = 5
+
+/**
+ * Shot-count derivation for the upfront credit estimate. No pre-existing
+ * scene/shot inventory exists at pipeline-creation time (the showrunner
+ * runs in Stage 1), so we approximate from `target_duration_seconds`
+ * assuming ~4s/shot. The floor keeps reservations safe for short reels.
+ *
+ * Exported for testability of the formula across frame-mode budgets.
+ */
+export function estimateShotCount(targetDurationSeconds: number): number {
+  return Math.max(VIDEO_CRITIC_SHOT_FLOOR, Math.ceil(targetDurationSeconds / 4))
+}
 
 export interface EstimateUpfrontArgs {
   targetDurationSeconds: number
@@ -16,6 +54,12 @@ export interface EstimateUpfrontArgs {
   musicEnabled: boolean
   narrationEnabled: boolean
   lipsyncEnabled: boolean
+  /**
+   * Phase 1D.2c-b-ii (G1): per-shot Video Critic frame extraction mode.
+   * Defaults to "first_last" when absent so callers from older code paths
+   * still get a correct (worst-case-cheap) reservation.
+   */
+  videoCriticFrameCount?: VideoCriticFrameMode
 }
 
 /**
@@ -49,6 +93,14 @@ export interface EstimateUpfrontArgs {
  * modes (manual / auto / guided) — warn-only, never blocks — so it's
  * added unconditionally outside the `mode === "guided"` branch.
  *
+ * Phase 1D.2c-b-ii (G1) adds the per-shot Video Critic budget. Cost scales
+ * with both the frame extraction mode (2/3/4 cr per shot for
+ * first_last/first_middle_last/five_evenly) and the estimated shot count
+ * `max(5, ceil(targetDuration/4))`. The shot-count formula is upfront
+ * worst-case; the Showrunner's actual `shots` arrays only land after
+ * Stage 5, by which point the reservation already needs to be in place.
+ * Unused credits refund on completion via normal reconciliation.
+ *
  * 1 credit = $0.02.
  */
 export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
@@ -57,6 +109,12 @@ export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
   credits += 3 // 7h Editor LLM
   credits += 3 // 7j final merge (or FreeCut export — 0 cr, but reserve for worst case)
   credits += STORYBOARD_COHESION_CREDITS // Phase 1D.2c-b-i: Storyboard Cohesion critic (all modes)
+  // Phase 1D.2c-b-ii (G1): per-shot Video Critic budget. Default frame mode
+  // is "first_last" so older call-sites that don't thread the field through
+  // still reserve a sensible worst-case amount.
+  const frameMode: VideoCriticFrameMode = args.videoCriticFrameCount ?? "first_last"
+  const estimatedShots = estimateShotCount(args.targetDurationSeconds)
+  credits += VIDEO_CRITIC_PER_SHOT_CREDITS[frameMode] * estimatedShots
   if (args.mode === "guided") {
     // Reserve chat-refine budget for the Script stage only (1D.2b ships
     // script-only chat). CHAT_TURN_CAPS.script = 20 → 40 credits worst-case.

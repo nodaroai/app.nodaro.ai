@@ -134,7 +134,7 @@ function makeSupabase(opts: {
           update: (patch: Record<string, unknown>) => {
             stageUpdates.push(patch)
             // The chain may be terminated at any depth by an awaited Promise.
-            // Phase 1D.2c-a (D1) `failPipelineForImageCriticUnresolvable`
+            // Phase 1D.2c-a (D1) `failPipelineWithCriticReason`
             // chains `.eq(pipeline_id, ...).eq(stage_name, ...)` — return a
             // thenable node at every depth so both 1- and 2-level chains work.
             const node: {

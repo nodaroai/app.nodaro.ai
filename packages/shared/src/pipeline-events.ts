@@ -136,3 +136,14 @@ export type PipelineEvent =
       turnId: string
       attemptId: string
     }
+  // Phase 1D.2c-b-ii — per-shot status emitted by the Stage 7 Video Critic
+  // retry loop. Fires once per shot after the critic finalises (pass or
+  // cap-exhausted fail). The frontend per-shot UI subscribes to update each
+  // shot's badge/banner without re-reading the scene entity.
+  | {
+      type: "shot:status"
+      pipelineId: string
+      sceneId: string
+      shotId: string
+      status: "approved" | "failed"
+    }

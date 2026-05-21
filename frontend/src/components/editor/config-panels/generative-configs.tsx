@@ -6,9 +6,11 @@ import {
   PIPELINE_FORMATS,
   PIPELINE_MODES,
   PIPELINE_OUTPUT_RESOLUTIONS,
+  VIDEO_CRITIC_FRAME_MODES,
   validateDurationForFormat,
   type PipelineFormat,
   type PipelineMode,
+  type VideoCriticFrameMode,
 } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,6 +37,21 @@ const MODE_DESCRIPTIONS: Record<PipelineMode, string> = {
   manual: "Approve every stage. Full control.",
   auto: "Generate the whole film unattended. Critics gate each stage.",
   guided: "Approve every stage AND chat with the Showrunner Refinement Director at the Script stage to refine in natural language.",
+}
+
+const VIDEO_CRITIC_FRAME_LABELS: Record<VideoCriticFrameMode, string> = {
+  first_last: "First + Last (default, cheapest)",
+  first_middle_last: "First + Middle + Last (3 frames)",
+  five_evenly: "5 Evenly Spaced (highest coverage)",
+}
+
+const VIDEO_CRITIC_FRAME_DESCRIPTIONS: Record<VideoCriticFrameMode, string> = {
+  first_last:
+    "2 frames per shot. Reuses input keyframe + existing last-frame extraction. ~2 credits per shot.",
+  first_middle_last:
+    "3 frames per shot. Adds midpoint extract. ~3 credits per shot.",
+  five_evenly:
+    "5 frames per shot at 0%/25%/50%/75%/100%. Best motion-glitch coverage. ~4 credits per shot.",
 }
 
 export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<GenerativePipelineNodeData>) {
@@ -71,6 +88,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
         output_resolution: data.output_resolution ?? "1080p",
         language: "en",
         mode: data.mode ?? "manual",
+        video_critic_frame_count: data.video_critic_frame_count ?? "first_last",
       })
       onUpdate({ pipeline_id: id, status: "queued" })
     } catch (e) {
@@ -162,6 +180,31 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
         </Select>
         <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
           {MODE_DESCRIPTIONS[data.mode ?? "manual"]}
+        </div>
+      </div>
+      <div>
+        <Label>Video Critic Frames</Label>
+        <Select
+          value={data.video_critic_frame_count ?? "first_last"}
+          onValueChange={(v) =>
+            onUpdate({ video_critic_frame_count: v as VideoCriticFrameMode })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {VIDEO_CRITIC_FRAME_MODES.map((m) => (
+              <SelectItem key={m} value={m}>
+                {VIDEO_CRITIC_FRAME_LABELS[m]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {VIDEO_CRITIC_FRAME_DESCRIPTIONS[
+            data.video_critic_frame_count ?? "first_last"
+          ]}
         </div>
       </div>
       <Button onClick={handleRun} disabled={running || !validation.ok}>

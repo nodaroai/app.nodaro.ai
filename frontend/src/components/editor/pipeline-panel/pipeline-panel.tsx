@@ -1,16 +1,18 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type {
   PipelineStageStatus,
   ShowrunnerPlan,
   StoryboardCohesionCriticVerdict,
   SubGateName,
+  VideoCriticShotFields,
 } from "@nodaro/shared"
 import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
 import { toast } from "sonner"
 import { ArrowLeft } from "lucide-react"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
+import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { StageRow } from "./stage-row"
 import { EntityGrid } from "./entity-grid"
@@ -20,6 +22,10 @@ import { ForkButton } from "./fork-button"
 import { ModeSwitchButton } from "./mode-switch-button"
 import { SilentCutPreview } from "./silent-cut-preview"
 import { StoryboardCohesionBanner } from "./storyboard-cohesion-banner"
+import {
+  VideoCriticSummaryBanner,
+  type FailingShot,
+} from "./video-critic-summary-banner"
 import {
   DialogueRecheckBanner,
   type DialogueRecheckResult,
@@ -84,6 +90,12 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   // re-opened panel re-shows it. The verdict itself is persisted on the
   // stage output, so the banner re-mounts with the same data either way.
   const [cohesionDismissed, setCohesionDismissed] = useState(false)
+  // Phase 1D.2c-b-ii — same dismiss pattern for the Video Critic summary
+  // banner. The failing-shots list is derived from scene-entity metadata
+  // (persisted by scene-internal-pipeline.ts in Stage 7), so dismissing
+  // is purely local UI state — the underlying data stays put and the
+  // banner re-appears on a fresh panel open.
+  const [videoCriticDismissed, setVideoCriticDismissed] = useState(false)
   // Phase 1D.3 — track which stage (if any) is currently branching so the
   // button shows a loading state and the user can't double-click.
   const [branchingStage, setBranchingStage] = useState<PipelineStageName | null>(null)
@@ -217,6 +229,16 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     if (lastEvent.type === "stage:awaiting_sub_gate") {
       void animateStageQuery.refetch()
     }
+    // /simplify pass-2 — Phase 1D.2c-b-ii Video Critic surface uses
+    // scene-entity metadata as the source of truth for the per-shot
+    // `video_critic_failed` flag (which drives the VideoCriticSummaryBanner
+    // rollup + per-shot Skip/Regenerate buttons). Backend emits
+    // `shot:status` on every critic verdict + after Skip/Retry recovery; the
+    // panel's polling-only refresh left the banner stale up to 5s. Refetch
+    // immediately on the event.
+    if (lastEvent.type === "shot:status") {
+      void sceneEntitiesQuery.refetch()
+    }
   }, [lastEvent])
 
   // Phase 1B.4 — re-show the drift banner whenever a fresh drift summary
@@ -233,6 +255,8 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   // persist and the new pipeline's verdict would be silently suppressed.
   useEffect(() => {
     setCohesionDismissed(false)
+    // Phase 1D.2c-b-ii — same reset for the Video Critic summary banner.
+    setVideoCriticDismissed(false)
   }, [pipelineId])
 
   async function handleApprove() {
@@ -339,6 +363,51 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     cohesionAssessment !== undefined &&
     cohesionScore !== undefined &&
     cohesionSummary !== undefined
+
+  // Phase 1D.2c-b-ii — Video Critic per-shot failure rollup.
+  // Stage 7 (scene-internal-pipeline) persists `video_critic_failed` and
+  // friends onto each scene's `metadata.scene_node_data.shots[N]`. We pull
+  // the scene entities here (the same data the SceneGrid uses) and walk
+  // them to build the failing-shots list. The query is auto-disabled by
+  // `usePipelineEntities` when `pipelineId` is falsy, and only polls while
+  // at least one row is still mid-flight — so the cost is bounded.
+  const sceneEntitiesQuery = usePipelineEntities(pipelineId, "scene")
+  const failingShots = useMemo<FailingShot[]>(() => {
+    const out: FailingShot[] = []
+    for (const entity of sceneEntitiesQuery.data ?? []) {
+      const metadata = (entity.metadata ?? {}) as Record<string, unknown>
+      const sceneNodeData = (metadata.scene_node_data ?? {}) as {
+        scene_index?: number
+        shots?: Array<{ shot_id?: string } & VideoCriticShotFields>
+      }
+      const sceneIndex = sceneNodeData.scene_index ?? 0
+      const shots = sceneNodeData.shots ?? []
+      shots.forEach((shot, shotIdx) => {
+        if (shot.video_critic_failed === true && shot.shot_id) {
+          out.push({
+            sceneId: entity.id,
+            sceneIndex,
+            shotId: shot.shot_id,
+            shotIndex: shotIdx + 1,
+            findingCount: shot.video_critic_findings?.length ?? 0,
+            identified_action: shot.video_critic_identified_action,
+          })
+        }
+      })
+    }
+    return out
+  }, [sceneEntitiesQuery.data])
+  // Banner mounts when Stage 7 is awaiting_approval (the user is reviewing
+  // the animated output) OR the pipeline failed (so the user can see what
+  // blocked completion). Hidden during normal Stage 7 progression so it
+  // doesn't flash before the retries finish.
+  const stage7AwaitingApproval =
+    animateStageQuery.data?.status === "awaiting_approval"
+  const pipelineFailed = pipeline?.status === "failed"
+  const showVideoCriticBanner =
+    !videoCriticDismissed &&
+    failingShots.length > 0 &&
+    (stage7AwaitingApproval || pipelineFailed)
   // Status the ForkButton uses to decide visibility. SSE-driven
   // `activePipelineStatus` (set by `usePipelineEvents` on `pipeline:forked`)
   // wins over the polled pipelines.get value so the button hides immediately
@@ -460,6 +529,21 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
               void handleBranch("shot_list")
             }}
             onDismiss={() => setCohesionDismissed(true)}
+          />
+        </div>
+      )}
+
+      {/* Phase 1D.2c-b-ii — Video Critic per-shot failure rollup banner.
+          Mounts when Stage 7 reaches awaiting_approval OR the pipeline failed
+          AND ≥1 shot retains `video_critic_failed=true` after the retry
+          budget exhausted. Jump-to-shot wiring is left to a future canvas
+          integration (J1 will land the recovery routes; the per-shot Skip /
+          Regenerate buttons in scene-configs read the same data). */}
+      {showVideoCriticBanner && (
+        <div className="mb-4">
+          <VideoCriticSummaryBanner
+            failingShots={failingShots}
+            onDismiss={() => setVideoCriticDismissed(true)}
           />
         </div>
       )}

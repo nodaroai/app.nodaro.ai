@@ -1,7 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { isSeedance2Provider, type SceneNodeData, type ShotSpec } from "@nodaro/shared"
+import {
+  isSeedance2Provider,
+  VIDEO_CRITIC_MAX_RETRIES,
+  VIDEO_CRITIC_METADATA_KEYS,
+  VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
+  type SceneNodeData,
+  type ShotSpec,
+  type VideoCriticFrameMode,
+  type VideoCriticShotFields,
+  type VideoCriticVerdict,
+} from "@nodaro/shared"
 import {
   allocateReferenceSlots,
+  extractFramesForCritic,
   extractLastFrame,
   prepareSceneRefContext,
   type SceneRefContext,
@@ -11,6 +22,8 @@ import { pipelineGenerateSpeech } from "./services/pipeline-generate-speech.js"
 import { pipelineLipSync } from "./services/pipeline-lip-sync.js"
 import { pipelineCombineVideos } from "./services/pipeline-combine-videos.js"
 import { runImageCritic } from "./llms/image-critic.js"
+import { runVideoCritic } from "./llms/video-critic.js"
+import { pipelineEvents } from "./events.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 
 /**
@@ -27,6 +40,14 @@ export interface SceneInternalPipelineContext {
    *  auto-mode fallback inside `pipelineAnimateShot`. Defaults to "manual"
    *  in the per-shot animate call when omitted. */
   pipelineMode?: "manual" | "auto" | "guided"
+  /** Phase 1D.2c-b-ii — Stage 7 row id. Threaded into `runVideoCritic` for
+   *  LLM-call attribution. When omitted the Video Critic gate is skipped
+   *  entirely (used by older callers + tests that don't need critic). */
+  stageId?: string
+  /** Phase 1D.2c-b-ii — frame-extraction grid for the Video Critic. Defaults
+   *  to "first_last" in the critic loop when omitted. Read from
+   *  `PipelineInput.video_critic_frame_count` by the Stage 7 dispatcher. */
+  videoCriticFrameMode?: VideoCriticFrameMode
 }
 
 export interface SceneInternalPipelineOptions {
@@ -49,7 +70,7 @@ export interface SceneInternalPipelineOptions {
   runImageCritic: boolean
 }
 
-export interface SceneInternalPipelineShotResult {
+export interface SceneInternalPipelineShotResult extends VideoCriticShotFields {
   shot_id: string
   /** Asset id of the shot's video — either the raw animate output OR the
    *  lipsynced replacement when lipsync ran. */
@@ -77,6 +98,10 @@ export interface SceneInternalPipelineShotResult {
    *  to `ShotSpec.actual_audio_duration_sec` for the Editor LLM's
    *  no-cut-zone computation. */
   actual_audio_duration_sec?: number | null
+  // Phase 1D.2c-b-ii — Video Critic verdict fields are inherited from
+  // `VideoCriticShotFields`. Present only when the Video Critic actually ran
+  // (i.e. ctx.stageId + videoCriticFrameMode were provided AND frame
+  // extraction + critic call succeeded).
 }
 
 export type SceneInternalPipelineFailure =
@@ -366,6 +391,16 @@ export async function runSceneInternalPipeline(
       ...(r.actual_audio_duration_sec != null
         ? { actual_audio_duration_sec: r.actual_audio_duration_sec }
         : {}),
+      // Phase 1D.2c-b-ii — Video Critic per-shot metadata. Always surface
+      // `video_critic_failed` once the critic ran so the per-shot UI can
+      // render a pass / fail badge; the score + findings fields are
+      // populated on both pass (informational) and fail (diagnostic). On
+      // critic-infrastructure failure none of these are present and the
+      // shot looks the same as a pre-1D.2c-b-ii run. The /simplify pass-2
+      // `pickDefinedVideoCriticFields` helper drives the spread off
+      // `VIDEO_CRITIC_METADATA_KEYS` so the writer + the
+      // `clearVideoCriticMetadata` clearer share a single key list.
+      ...pickDefinedVideoCriticFields(r),
     }
   })
   const nextSceneNodeData = {
@@ -554,23 +589,27 @@ async function animateSequential(
             .interpolation_keyframe_urls
         : undefined
 
+    // Build the animate args once so the Video Critic regenerate closure
+    // (below) can mirror the same shape with a feedback-augmented prompt.
+    const buildAnimateArgs = (shotOverride: ShotSpec) => ({
+      supabase: ctx.supabase,
+      pipelineId: ctx.pipelineId,
+      pipelineEntityId: sceneEntity.id,
+      userId: ctx.userId,
+      shot: shotOverride,
+      sceneNodeData: sceneData,
+      startFrameUrl,
+      referenceUrls,
+      priorClipKieTaskId,
+      priorClipUrl: resolvedPriorClipUrl,
+      priorLastFrameUrl: resolvedPriorLastFrameUrl,
+      interpolationKeyframeUrls,
+      pipelineMode: ctx.pipelineMode,
+    })
+
     let animateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
     try {
-      animateResult = await pipelineAnimateShot({
-        supabase: ctx.supabase,
-        pipelineId: ctx.pipelineId,
-        pipelineEntityId: sceneEntity.id,
-        userId: ctx.userId,
-        shot,
-        sceneNodeData: sceneData,
-        startFrameUrl,
-        referenceUrls,
-        priorClipKieTaskId,
-        priorClipUrl: resolvedPriorClipUrl,
-        priorLastFrameUrl: resolvedPriorLastFrameUrl,
-        interpolationKeyframeUrls,
-        pipelineMode: ctx.pipelineMode,
-      })
+      animateResult = await pipelineAnimateShot(buildAnimateArgs(shot))
     } catch (err) {
       console.error(
         `[scene-internal-pipeline] animate failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
@@ -583,6 +622,31 @@ async function animateSequential(
         shotVideoUrls,
       }
     }
+
+    // Phase 1D.2c-b-ii — Video Critic per-shot gate. Cap=1 retry; on critic
+    // infrastructure failure (LLM 5xx, ffmpeg OOM) the loop logs + returns
+    // the original animate result with `video_critic_failed=false`. The
+    // critic emits a `shot:status` SSE event on finalised verdicts (pass or
+    // cap-exhausted fail) — infrastructure failures emit nothing so the
+    // caller's flow proceeds as if the gate didn't exist.
+    //
+    // priorLastFrameUrl below is the prior shot's last_frame (still the
+    // pre-extract value at this point in the loop — extract for THIS shot's
+    // next-shot chain happens further down).
+    const criticOutcome = await runVideoCriticLoopForShot({
+      ctx,
+      sceneEntity,
+      sceneData,
+      shot,
+      shotIndex: i + 1,
+      initialAnimateResult: animateResult,
+      priorLastFrameUrl,
+      regenerate: async (feedbackPrompt: string) =>
+        pipelineAnimateShot(
+          buildAnimateArgs({ ...shot, visual_keyframe_prompt: feedbackPrompt }),
+        ),
+    })
+    animateResult = criticOutcome.finalAnimateResult
 
     // Phase 1C.3 Method 3 — cache this shot's kieTaskId for later
     // video_continuation shots in the same scene. Only relevant when the
@@ -599,35 +663,76 @@ async function animateSequential(
 
     // Best-effort last_frame extraction for the next shot's chain. Skip on
     // the final shot (nothing consumes its last_frame inside this scene).
+    //
+    // /simplify pass-2 — when the Video Critic ran (ctx.stageId present), it
+    // already extracted the t=duration-0.1s frame inside
+    // `extractFramesForCritic`. Surfaced via `criticOutcome.lastFrameAsset`
+    // we reuse it instead of firing a SECOND extract job on the SAME video
+    // at the SAME timestamp (cuts one BullMQ extract-frame + poll per shot
+    // in the critic-enabled path). The `pipeline_entities.last_frame_asset_id`
+    // side-write that `extractLastFrame` does is replayed here when reusing
+    // so the entity-level chain stays in sync.
     let lastFrameAssetId: string | null = null
     let lastFrameUrl: string | null = null
     if (i < sceneData.shots.length - 1) {
-      try {
-        const extracted = await extractLastFrame({
-          supabase: ctx.supabase,
-          pipelineId: ctx.pipelineId,
-          sceneEntityId: sceneEntity.id,
-          userId: ctx.userId,
-          videoUrl: animateResult.assetUrl,
-          durationSec: shot.duration_seconds,
-        })
-        priorLastFrameUrl = extracted.url
-        priorLastFrameAssetId = extracted.assetId
-        lastFrameAssetId = extracted.assetId
-        lastFrameUrl = extracted.url
-        // Phase 1C.3 Method 3 (Seedance 2 path) — cache by shot_id so a
-        // later video_continuation shot can resolve `priorLastFrameUrl`
-        // from its `extends_shot_id`.
-        shotLastFrameUrlById[shot.shot_id] = extracted.url
-      } catch (err) {
-        // Extract failure breaks the chain but doesn't block the rest of
-        // the scene — fall back to the next shot's own keyframe.
-        console.warn(
-          `[scene-internal-pipeline] extract_frame failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
-          err instanceof Error ? err.message : err,
-        )
-        priorLastFrameUrl = null
-        priorLastFrameAssetId = null
+      if (criticOutcome.lastFrameAsset) {
+        // Reuse path — the critic's extracted last-frame is already on R2.
+        // Mirror `extractLastFrame`'s side-write to pipeline_entities so the
+        // entity-level chain (next-scene linkage) sees the same value. The
+        // side-write is best-effort: a transient DB error here breaks
+        // ONLY the next-scene-linkage convenience field — the per-shot
+        // last_frame_asset_id is the authoritative chain anchor and is
+        // already populated below.
+        const reused = criticOutcome.lastFrameAsset
+        priorLastFrameUrl = reused.url
+        priorLastFrameAssetId = reused.id
+        lastFrameAssetId = reused.id
+        lastFrameUrl = reused.url
+        shotLastFrameUrlById[shot.shot_id] = reused.url
+        if (reused.id) {
+          try {
+            await ctx.supabase
+              .from("pipeline_entities")
+              .update({ last_frame_asset_id: reused.id })
+              .eq("id", sceneEntity.id)
+          } catch (err) {
+            console.warn(
+              `[scene-internal-pipeline] pipeline_entities.last_frame_asset_id side-write failed for scene=${sceneEntity.id}:`,
+              err instanceof Error ? err.message : err,
+            )
+          }
+        }
+      } else {
+        // Fallback path — critic disabled (no ctx.stageId) OR threw before
+        // the first extract completed. `extractLastFrame` does the same
+        // extract + persists `last_frame_asset_id` itself.
+        try {
+          const extracted = await extractLastFrame({
+            supabase: ctx.supabase,
+            pipelineId: ctx.pipelineId,
+            sceneEntityId: sceneEntity.id,
+            userId: ctx.userId,
+            videoUrl: animateResult.assetUrl,
+            durationSec: shot.duration_seconds,
+          })
+          priorLastFrameUrl = extracted.url
+          priorLastFrameAssetId = extracted.assetId
+          lastFrameAssetId = extracted.assetId
+          lastFrameUrl = extracted.url
+          // Phase 1C.3 Method 3 (Seedance 2 path) — cache by shot_id so a
+          // later video_continuation shot can resolve `priorLastFrameUrl`
+          // from its `extends_shot_id`.
+          shotLastFrameUrlById[shot.shot_id] = extracted.url
+        } catch (err) {
+          // Extract failure breaks the chain but doesn't block the rest of
+          // the scene — fall back to the next shot's own keyframe.
+          console.warn(
+            `[scene-internal-pipeline] extract_frame failed for scene=${sceneEntity.id} shot=${shot.shot_id}:`,
+            err instanceof Error ? err.message : err,
+          )
+          priorLastFrameUrl = null
+          priorLastFrameAssetId = null
+        }
       }
     }
 
@@ -648,6 +753,7 @@ async function animateSequential(
       video_url: animateResult.assetUrl,
       last_frame_asset_id: lastFrameAssetId,
       last_frame_url: lastFrameUrl,
+      ...criticOutcome.critic,
     })
     shotVideoUrls[shot.shot_id] = animateResult.assetUrl
   }
@@ -669,8 +775,9 @@ async function animateParallel(
   // J2a — fetch pipeline_entities + assets ONCE for the whole scene.
   const sceneRefCtx = await prepareSceneRefContext(ctx.supabase, ctx.pipelineId, sceneData)
 
-  const tasks = sceneData.shots.map((shot) => async () => {
-    const startFrameUrl = (shot as ShotSpec).keyframe_url ?? null
+  const tasks = sceneData.shots.map((shot, i) => async () => {
+    const typedShot = shot as ShotSpec
+    const startFrameUrl = typedShot.keyframe_url ?? null
     // F1 — parallel mode has no continuity chain across shots, so the
     // continuity anchor slot is empty. Cast / location / object slots
     // still fan out per §5.13.3.
@@ -678,7 +785,7 @@ async function animateParallel(
       ctx,
       sceneEntity,
       sceneData,
-      shot as ShotSpec,
+      typedShot,
       { priorLastFrameUrl: null, priorLastFrameAssetId: null },
       sceneRefCtx,
     )
@@ -687,22 +794,42 @@ async function animateParallel(
     // Shot List Critic gates it) so we don't plumb priorClipKieTaskId here.
     const interpolationKeyframeUrls =
       sceneData.shot_input_mode === "frame_interpolation"
-        ? (shot as ShotSpec & { interpolation_keyframe_urls?: string[] })
+        ? (typedShot as ShotSpec & { interpolation_keyframe_urls?: string[] })
             .interpolation_keyframe_urls
         : undefined
-    const animateResult = await pipelineAnimateShot({
+    const buildAnimateArgs = (shotOverride: ShotSpec) => ({
       supabase: ctx.supabase,
       pipelineId: ctx.pipelineId,
       pipelineEntityId: sceneEntity.id,
       userId: ctx.userId,
-      shot: shot as ShotSpec,
+      shot: shotOverride,
       sceneNodeData: sceneData,
       startFrameUrl,
       referenceUrls,
       interpolationKeyframeUrls,
       pipelineMode: ctx.pipelineMode,
     })
-    return { shot: shot as ShotSpec, animateResult }
+    const animateResult = await pipelineAnimateShot(buildAnimateArgs(typedShot))
+
+    // Phase 1D.2c-b-ii — per-shot Video Critic gate. Parallel mode has no
+    // continuity chain (priorLastFrameUrl=null for every shot) — the critic
+    // only validates prompt adherence + visual quality. Continuity_score
+    // returned by the LLM is ignored when priorLastFrameUrl=null (treated as
+    // first-shot semantics).
+    const criticOutcome = await runVideoCriticLoopForShot({
+      ctx,
+      sceneEntity,
+      sceneData,
+      shot: typedShot,
+      shotIndex: i + 1,
+      initialAnimateResult: animateResult,
+      priorLastFrameUrl: null,
+      regenerate: async (feedbackPrompt: string) =>
+        pipelineAnimateShot(
+          buildAnimateArgs({ ...typedShot, visual_keyframe_prompt: feedbackPrompt }),
+        ),
+    })
+    return { shot: typedShot, animateResult: criticOutcome.finalAnimateResult, critic: criticOutcome.critic }
   })
 
   const results = await settledWithLimit(tasks, SHOT_PARALLEL_CONCURRENCY, undefined, false)
@@ -722,7 +849,7 @@ async function animateParallel(
         shotVideoUrls,
       }
     }
-    const { shot, animateResult } = r.value
+    const { shot, animateResult, critic } = r.value
     if (!animateResult.assetId) {
       return {
         ok: false,
@@ -737,6 +864,7 @@ async function animateParallel(
       video_url: animateResult.assetUrl,
       last_frame_asset_id: null, // not needed in parallel mode
       last_frame_url: null,
+      ...critic,
     })
     shotVideoUrls[shot.shot_id] = animateResult.assetUrl
   }
@@ -786,6 +914,339 @@ async function safelyAllocateRefs(
       err instanceof Error ? err.message : err,
     )
     return undefined
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Phase 1D.2c-b-ii — Video Critic retry loop (Stage 7 per-shot gate)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true when the verdict should be treated as a blocking fail and
+ * trigger a regen-with-feedback retry (when budget remains).
+ *
+ * Three independent triggers per spec §5:
+ *   1. `verdict === "fail"` — the LLM explicitly flagged it
+ *   2. `prompt_adherence_score < MIN` — overly lenient verdict='pass' on a
+ *      clearly off-prompt clip
+ *   3. `continuity_score < MIN` (when non-null) — visible discontinuity even
+ *      if the prompt was nominally hit. Null continuity_score means "first
+ *      shot, no prior to compare against" and is NOT a fail.
+ */
+function isBlockingVideoCriticFail(verdict: VideoCriticVerdict): boolean {
+  if (verdict.verdict === "fail") return true
+  if (verdict.prompt_adherence_score < VIDEO_CRITIC_MIN_ADHERENCE_SCORE) return true
+  if (
+    verdict.continuity_score !== null &&
+    verdict.continuity_score < VIDEO_CRITIC_MIN_ADHERENCE_SCORE
+  ) {
+    return true
+  }
+  return false
+}
+
+/**
+ * Build the feedback-augmented prompt for the next regen attempt. Mirrors the
+ * Image Critic loop pattern: the original prompt is kept verbatim and a short
+ * "PRIOR ATTEMPT IDENTIFIED AS:" + "ADJUSTMENTS NEEDED:" appendix is added,
+ * surfacing blocking-issue suggested_fix lines back into the LLM model prompt.
+ */
+function buildVideoCriticFeedbackPrompt(
+  basePrompt: string,
+  verdict: VideoCriticVerdict,
+): string {
+  const blockingIssues = verdict.issues.filter((i) => i.severity === "blocking")
+  const issuesText =
+    blockingIssues.length > 0
+      ? blockingIssues.map((i) => `- ${i.category}: ${i.suggested_fix}`).join("\n")
+      : "Improve overall adherence to the shot prompt."
+  return (
+    `${basePrompt}\n\nPRIOR ATTEMPT IDENTIFIED AS: ${verdict.identified_action}` +
+    `\nADJUSTMENTS NEEDED:\n${issuesText}`
+  )
+}
+
+/**
+ * /simplify pass-2 — collapses the verdict→VideoCriticShotFields fan-out
+ * (was duplicated in 2 sites in `runVideoCriticLoopForShot`). The catch path
+ * omits `failed` so the field stays absent in the persisted shot — the gate
+ * didn't decide the shot's fate (infrastructure failure), so neither pass
+ * nor fail is appropriate.
+ *
+ * `failed` is `false` for the pass-on-first-try & retry-passed paths,
+ * `true` for cap-exhausted-fail. `verdict_outcome` mirrors the LLM's verdict
+ * field so consumers can distinguish "explicit pass" from "implicit pass on
+ * cap exhaustion" — pass-2's new `video_critic_verdict` field on the
+ * `VideoCriticShotFields` interface.
+ */
+function verdictToCriticFields(
+  verdict: VideoCriticVerdict,
+  retryCount: number,
+  lastAttemptedUrl: string,
+  failed?: boolean,
+): VideoCriticShotFields {
+  const base: VideoCriticShotFields = {
+    video_critic_findings: verdict.issues,
+    video_critic_score: verdict.prompt_adherence_score,
+    video_critic_continuity_score: verdict.continuity_score,
+    video_critic_identified_action: verdict.identified_action,
+    video_critic_retry_count: retryCount,
+    video_critic_last_attempted_url: lastAttemptedUrl,
+  }
+  if (failed !== undefined) base.video_critic_failed = failed
+  return base
+}
+
+/**
+ * /simplify pass-2 — replaces the 21-line `...(r.video_critic_X !== undefined
+ * ? { video_critic_X: r.video_critic_X } : {})` chain at the post-shot
+ * metadata fan-in with a key-driven loop. `VIDEO_CRITIC_METADATA_KEYS` is the
+ * single source of truth for which fields qualify — same set the
+ * `clearVideoCriticMetadata` clearer reads, so writer + clearer can't drift.
+ */
+function pickDefinedVideoCriticFields(
+  source: VideoCriticShotFields,
+): Partial<VideoCriticShotFields> {
+  const out: Partial<VideoCriticShotFields> = {}
+  for (const key of VIDEO_CRITIC_METADATA_KEYS) {
+    const value = source[key]
+    if (value !== undefined) {
+      // The key-set is the metadata-keys union and TypeScript can't narrow
+      // value's type across that loop, so an inner cast is required.
+      ;(out as Record<string, unknown>)[key] = value
+    }
+  }
+  return out
+}
+
+interface VideoCriticLoopArgs {
+  ctx: SceneInternalPipelineContext
+  sceneEntity: { id: string }
+  sceneData: SceneNodeData
+  shot: ShotSpec
+  shotIndex: number
+  initialAnimateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
+  priorLastFrameUrl: string | null
+  /**
+   * Closure that re-runs `pipelineAnimateShot` for the current shot with a
+   * feedback-augmented prompt. The loop captures all the shot-specific args
+   * (startFrameUrl, referenceUrls, etc.) once at call site so the loop body
+   * stays generic across sequential / parallel modes + Method 3/8/10 branches.
+   */
+  regenerate: (feedbackPrompt: string) => Promise<Awaited<ReturnType<typeof pipelineAnimateShot>>>
+}
+
+interface VideoCriticLoopResult {
+  /** Final animate result — either the initial one (on pass) or the last
+   *  successful regeneration (on retry-pass / cap-exhausted-fail). */
+  finalAnimateResult: Awaited<ReturnType<typeof pipelineAnimateShot>>
+  /** Critic verdict fields to merge into `SceneInternalPipelineShotResult`.
+   *  All fields are optional — none are set when the critic is disabled (no
+   *  ctx.stageId). On critic-infrastructure failure `video_critic_failed`
+   *  stays absent (the gate didn't decide the shot's fate), but partial
+   *  findings from a pre-throw LLM verdict are preserved when present. */
+  critic: VideoCriticShotFields
+  /**
+   * /simplify pass-2 — last-frame asset extracted by the critic's
+   * `extractFramesForCritic` call (always the `duration - 0.1s` sample).
+   * Sequential animate reuses this as the continuity anchor for the next
+   * shot — without this surface, the caller had to fire a SECOND extract
+   * for the same timestamp on the same video right after the critic.
+   *
+   * Null when the critic was disabled (`!ctx.stageId`) OR threw before the
+   * extraction completed (frame extract OOM, etc.) — the caller falls
+   * through to the legacy `extractLastFrame` path in that case.
+   *
+   * After regen, this reflects the LAST critic-pass's video (so the chain
+   * matches the `finalAnimateResult` clip, not the original failed attempt).
+   */
+  lastFrameAsset: { id: string | null; url: string } | null
+}
+
+/**
+ * Phase 1D.2c-b-ii Stage 7 per-shot Video Critic gate. Runs AFTER
+ * `pipelineAnimateShot` succeeds for one shot. Cap=1 retry — videos are
+ * expensive enough that a 2-retry budget per shot is over-spend.
+ *
+ * Non-fatal failure modes (catch → log → return original animate result
+ * with `video_critic_failed=false`):
+ *   - Frame extraction throws (e.g. ffmpeg OOM)
+ *   - `runVideoCritic` throws (e.g. LLM 5xx)
+ *
+ * Blocking failure modes (regen-with-feedback, then if cap exhausted persist
+ * `video_critic_failed=true`):
+ *   - `verdict='fail'`
+ *   - `prompt_adherence_score < VIDEO_CRITIC_MIN_ADHERENCE_SCORE`
+ *   - `continuity_score < VIDEO_CRITIC_MIN_ADHERENCE_SCORE` (when non-null)
+ *
+ * Emits a `shot:status` SSE event after critic finalises (pass → 'approved',
+ * cap-exhausted fail → 'failed'). Infrastructure failures emit NO event —
+ * the caller's flow proceeds as if the critic gate didn't exist.
+ */
+async function runVideoCriticLoopForShot(
+  args: VideoCriticLoopArgs,
+): Promise<VideoCriticLoopResult> {
+  const { ctx, sceneEntity, sceneData, shot, shotIndex } = args
+  // Guard: when the caller didn't supply a `stageId`, the Video Critic is
+  // disabled entirely (no extract, no LLM call, no SSE event, no metadata
+  // fields written). This preserves compatibility with pre-1D.2c-b-ii callers
+  // + scene-internal-pipeline tests whose fixtures don't mock the new
+  // continuity / video-critic exports.
+  if (!ctx.stageId) {
+    return {
+      finalAnimateResult: args.initialAnimateResult,
+      critic: {},
+      lastFrameAsset: null,
+    }
+  }
+  // Local narrowing — the guard above proves ctx.stageId is non-nullable from
+  // here on. Re-binding lets us avoid the `?? ""` defensive falls-through
+  // below (which were unreachable + masked the contract).
+  const stageId = ctx.stageId
+  const frameMode: VideoCriticFrameMode = ctx.videoCriticFrameMode ?? "first_last"
+  // continuityFromPrev maps the scene-level enum into the runVideoCritic
+  // type. We treat 'dissolve' as null (no hard continuity expectation), and
+  // first-shot (priorLastFrameUrl=null) → null regardless.
+  const continuityFromPrev: "match_last_frame" | "hard_cut" | null =
+    args.priorLastFrameUrl === null
+      ? null
+      : sceneData.continuity_from_prev === "match_last_frame"
+        ? "match_last_frame"
+        : sceneData.continuity_from_prev === "hard_cut"
+          ? "hard_cut"
+          : null
+
+  let currentResult = args.initialAnimateResult
+  let retryCount = 0
+  let lastVerdict: VideoCriticVerdict | null = null
+  // /simplify pass-2 — track the last-frame asset extracted by the critic
+  // across retries. After regen, this snaps to the regen's last-frame so the
+  // caller's continuity-chain reuse matches `finalAnimateResult`. Null until
+  // the FIRST extract completes (caller falls through to extractLastFrame).
+  let lastFrameAsset: { id: string | null; url: string } | null = null
+
+  try {
+    // Initial frame extraction + critic call.
+    const firstFrameUrl = shot.keyframe_url
+    if (!firstFrameUrl) {
+      // Without a known input keyframe we can't run the critic — silently
+      // skip. The scene still completes; the shot just has no critic
+      // verdict. (text-mode shots are the only realistic path here in 1C.1
+      // but Stage 5 always synthesises a keyframe upstream.)
+      return { finalAnimateResult: currentResult, critic: {}, lastFrameAsset: null }
+    }
+    const initialFrames = await extractFramesForCritic({
+      supabase: ctx.supabase,
+      pipelineId: ctx.pipelineId,
+      pipelineEntityId: sceneEntity.id,
+      userId: ctx.userId,
+      videoUrl: currentResult.assetUrl,
+      durationSeconds: shot.duration_seconds,
+      mode: frameMode,
+      firstFrameUrl,
+    })
+    const initialFrameUrls = initialFrames.frameUrls
+    // The last entry in frameUrls is ALWAYS the t=duration-0.1s sample —
+    // see `extractFramesForCritic`. Snapshot the (id,url) pair so the
+    // sequential animate caller can reuse it as the next-shot anchor.
+    lastFrameAsset = {
+      id: initialFrames.lastFrameAssetId,
+      url: initialFrameUrls[initialFrameUrls.length - 1]!,
+    }
+    let { verdict } = await runVideoCritic({
+      supabase: ctx.supabase,
+      pipelineId: ctx.pipelineId,
+      stageId,
+      userId: ctx.userId,
+      shotPrompt: shot.visual_keyframe_prompt,
+      shotIndex,
+      sceneIndex: sceneData.scene_index,
+      priorLastFrameUrl: args.priorLastFrameUrl,
+      continuityFromPrev,
+      frameUrls: initialFrameUrls,
+    })
+    lastVerdict = verdict
+
+    while (
+      isBlockingVideoCriticFail(verdict) &&
+      retryCount < VIDEO_CRITIC_MAX_RETRIES
+    ) {
+      retryCount += 1
+      const feedbackPrompt = buildVideoCriticFeedbackPrompt(
+        shot.visual_keyframe_prompt,
+        verdict,
+      )
+      const regen = await args.regenerate(feedbackPrompt)
+      currentResult = regen
+      const regenFrames = await extractFramesForCritic({
+        supabase: ctx.supabase,
+        pipelineId: ctx.pipelineId,
+        pipelineEntityId: sceneEntity.id,
+        userId: ctx.userId,
+        videoUrl: regen.assetUrl,
+        durationSeconds: shot.duration_seconds,
+        mode: frameMode,
+        firstFrameUrl,
+      })
+      const regenFrameUrls = regenFrames.frameUrls
+      // Snap last-frame to the REGEN's extracted sample so the caller's
+      // continuity anchor matches the finalAnimateResult clip.
+      lastFrameAsset = {
+        id: regenFrames.lastFrameAssetId,
+        url: regenFrameUrls[regenFrameUrls.length - 1]!,
+      }
+      const next = await runVideoCritic({
+        supabase: ctx.supabase,
+        pipelineId: ctx.pipelineId,
+        stageId,
+        userId: ctx.userId,
+        shotPrompt: shot.visual_keyframe_prompt,
+        shotIndex,
+        sceneIndex: sceneData.scene_index,
+        priorLastFrameUrl: args.priorLastFrameUrl,
+        continuityFromPrev,
+        frameUrls: regenFrameUrls,
+      })
+      verdict = next.verdict
+      lastVerdict = verdict
+    }
+
+    const failed = isBlockingVideoCriticFail(verdict)
+    // Emit SSE so the per-shot UI updates without re-reading the scene entity.
+    pipelineEvents.publish({
+      type: "shot:status",
+      pipelineId: ctx.pipelineId,
+      sceneId: sceneEntity.id,
+      shotId: shot.shot_id,
+      status: failed ? "failed" : "approved",
+    })
+
+    return {
+      finalAnimateResult: currentResult,
+      critic: verdictToCriticFields(verdict, retryCount, currentResult.assetUrl, failed),
+      lastFrameAsset,
+    }
+  } catch (err) {
+    // Critic infrastructure failure (frame extraction, LLM 5xx, etc.) — log
+    // and proceed with the original animate result. We do NOT mark the shot
+    // failed because the FAILURE was on the gate, not the clip.
+    console.warn(
+      `[video-critic] non-fatal failure for shot=${shot.shot_id} (pipeline=${ctx.pipelineId}):`,
+      err instanceof Error ? err.message : String(err),
+    )
+    // Surface partial findings when the LAST critic call returned a verdict
+    // before a downstream throw — preserves diagnostic visibility on a
+    // mid-loop extract failure. `video_critic_failed` stays absent: the gate
+    // didn't decide the shot's fate (infrastructure failure), so neither
+    // pass nor fail is appropriate.
+    const partial: VideoCriticShotFields = lastVerdict
+      ? verdictToCriticFields(lastVerdict, retryCount, currentResult.assetUrl)
+      : {}
+    // On infrastructure failure we surface whatever `lastFrameAsset` we
+    // managed to extract before the throw. If the FIRST extract is what
+    // threw, lastFrameAsset is still null and the caller falls through to
+    // `extractLastFrame` exactly as if the critic were disabled.
+    return { finalAnimateResult: currentResult, critic: partial, lastFrameAsset }
   }
 }
 

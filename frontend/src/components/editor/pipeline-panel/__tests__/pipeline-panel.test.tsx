@@ -558,4 +558,199 @@ describe("PipelinePanel", () => {
       screen.queryByTestId("storyboard-cohesion-banner"),
     ).not.toBeInTheDocument()
   })
+
+  // ── Phase 1D.2c-b-ii I1: VideoCriticSummaryBanner mount ─────────────────────
+
+  it("mounts VideoCriticSummaryBanner when Stage 7 is awaiting_approval and a shot is video_critic_failed", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "animate_audio_edit",
+      mode: "manual",
+      spent_credits: 120,
+      reserved_credits: 240,
+      upfront_credit_estimate: 240,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    // Stage 7 is paused at awaiting_approval — the trigger for the banner.
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_pipelineId: string, stage: string) => {
+        if (stage === "animate_audio_edit") {
+          return { status: "awaiting_approval", output: {}, critic_feedback: {} }
+        }
+        return { status: "approved", output: {}, critic_feedback: {} }
+      },
+    )
+    // Scene-entities endpoint: one scene with one failed shot + one passing.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "scene_uuid_01",
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "awaiting_approval",
+          main_asset_id: null,
+          main_asset_url: null,
+          metadata: {
+            scene_node_data: {
+              scene_index: 1,
+              shots: [
+                {
+                  shot_id: "shot_01",
+                  video_critic_failed: false,
+                  video_critic_findings: [],
+                },
+                {
+                  shot_id: "shot_02",
+                  video_critic_failed: true,
+                  video_critic_findings: [
+                    {
+                      severity: "blocking",
+                      category: "wrong_action",
+                      description: "Hero stands still",
+                      suggested_fix: "Re-render with sprint prompt",
+                    },
+                  ],
+                  video_critic_identified_action:
+                    "Hero stands still — but the prompt asked for a sprint",
+                },
+              ],
+            },
+          },
+          variants: [],
+        },
+      ],
+    } as never)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("video-critic-summary-banner"),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByText("Video Critic")).toBeInTheDocument()
+    expect(
+      screen.getByTestId("video-critic-summary-count"),
+    ).toHaveTextContent("1 shot need review")
+    expect(screen.getByText(/Scene 1, Shot 2/)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Hero stands still — but the prompt asked for a sprint/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("does NOT mount VideoCriticSummaryBanner when no shot is video_critic_failed", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "animate_audio_edit",
+      mode: "manual",
+      spent_credits: 120,
+      reserved_credits: 240,
+      upfront_credit_estimate: 240,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "awaiting_approval",
+      output: {},
+      critic_feedback: {},
+    })
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "scene_uuid_01",
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "approved",
+          main_asset_id: null,
+          main_asset_url: null,
+          metadata: {
+            scene_node_data: {
+              scene_index: 1,
+              shots: [
+                { shot_id: "shot_01", video_critic_failed: false },
+                { shot_id: "shot_02", video_critic_failed: false },
+              ],
+            },
+          },
+          variants: [],
+        },
+      ],
+    } as never)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    // Give the entities fetch + derive a tick to settle, then assert no banner.
+    expect(
+      screen.queryByTestId("video-critic-summary-banner"),
+    ).not.toBeInTheDocument()
+  })
+
+  it("does NOT mount VideoCriticSummaryBanner when failing shots exist but Stage 7 is still running (not awaiting_approval)", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "animate_audio_edit",
+      mode: "manual",
+      spent_credits: 120,
+      reserved_credits: 240,
+      upfront_credit_estimate: 240,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    // Stage 7 still running — the banner should stay hidden so it doesn't
+    // flash before retries finish.
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running",
+      output: {},
+      critic_feedback: {},
+    })
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: "scene_uuid_01",
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "generating",
+          main_asset_id: null,
+          main_asset_url: null,
+          metadata: {
+            scene_node_data: {
+              scene_index: 1,
+              shots: [
+                {
+                  shot_id: "shot_02",
+                  video_critic_failed: true,
+                  video_critic_findings: [
+                    {
+                      severity: "blocking",
+                      category: "wrong_action",
+                      description: "Hero stands still",
+                      suggested_fix: "Re-render",
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          variants: [],
+        },
+      ],
+    } as never)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(
+      screen.queryByTestId("video-critic-summary-banner"),
+    ).not.toBeInTheDocument()
+  })
 })
