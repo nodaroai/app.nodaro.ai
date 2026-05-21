@@ -8,6 +8,7 @@ import { appsCommand } from "./commands/apps.js"
 import { nodesCommand } from "./commands/nodes.js"
 import { charactersCommand } from "./commands/characters.js"
 import { registerLocationsCommands } from "./commands/locations.js"
+import { registerObjectsCommands } from "./commands/objects.js"
 
 // Resolve the package version at runtime so we don't need to bake it in.
 // Falls back to "0.0.0-dev" when running from source via tsx.
@@ -34,6 +35,7 @@ program.addCommand(jobsCommand())
 program.addCommand(executionsCommand())
 program.addCommand(charactersCommand())
 registerLocationsCommands(program)
+registerObjectsCommands(program)
 
 program.parseAsync().catch((err: unknown) => {
   // commander surfaces argparse failures with exit codes already; this catch

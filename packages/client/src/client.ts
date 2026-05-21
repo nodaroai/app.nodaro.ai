@@ -10,6 +10,7 @@ import { OAuthResource } from "./resources/oauth.js"
 import { AppsResource } from "./resources/apps.js"
 import { CharactersResource } from "./resources/characters.js"
 import { LocationsResource } from "./resources/locations.js"
+import { ObjectsResource } from "./resources/objects.js"
 import { PipelinesResource } from "./resources/pipelines.js"
 
 export interface ClientOptions {
@@ -56,6 +57,7 @@ export class NodaroClient {
   readonly apps: AppsResource
   readonly characters: CharactersResource
   readonly locations: LocationsResource
+  readonly objects: ObjectsResource
   readonly pipelines: PipelinesResource
 
   constructor(opts: ClientOptions) {
@@ -74,6 +76,7 @@ export class NodaroClient {
     this.apps = new AppsResource(this)
     this.characters = new CharactersResource(this)
     this.locations = new LocationsResource(this)
+    this.objects = new ObjectsResource(this)
     this.pipelines = new PipelinesResource(this)
   }
 

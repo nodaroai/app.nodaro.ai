@@ -29,6 +29,7 @@ import { APP_CATEGORIES, OUTPUT_TYPES } from "@/lib/app-categories"
 import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro/shared"
 import type { ExposedSetting } from "@nodaro/shared"
 import type { PresentationItem } from "@nodaro/shared"
+import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
 
 /** Extract unique node IDs from a PresentationItem list (recursive for groups). */
 function extractItemNodeIds(items: readonly PresentationItem[]): Set<string> {
@@ -128,6 +129,17 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     }
     if (handlesInitialized.current || !nodes) return
     handlesInitialized.current = true
+
+    // Sub-workflow contract takes precedence: if the workflow has any
+    // sub-workflow-input / sub-workflow-output nodes, those ports ARE the
+    // component's published interface — auto-derive handles per port and skip
+    // the presentation-flag-based path entirely.  Lets a sub-workflow publish
+    // as a component without flagging anything in Present mode.
+    const subHandles = deriveSubWorkflowHandles(nodes)
+    if (subHandles) {
+      setComponentHandles(subHandles)
+      return
+    }
 
     // Derive from curated presentation settings (outputItems/inputItems) to match
     // what the user sees in Present mode.  Falls back to raw flags when no curated

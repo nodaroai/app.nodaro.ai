@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { executeComponent as executeComponentApi, getJobStatus } from "@/lib/api"
-import { mergeExposedSettings } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
@@ -34,7 +34,10 @@ export async function executeComponent(
 
   const exposedSettings = (data.exposedSettings as Record<string, unknown>) ?? {}
 
-  // Build inputOverrides from resolved upstream inputs (handle-aware)
+  // Build inputOverrides from resolved upstream inputs (handle-aware).
+  // applyHandleInputOverride routes compound handles (`nodeId::portId`) into
+  // the sub-workflow-input node's __injectedPortValues slot; plain handles
+  // land on `inputOverrides[nodeId][fieldKey]` as before.
   const inputOverrides: Record<string, Record<string, unknown>> = {}
 
   for (const handle of metadata.inputs) {
@@ -47,18 +50,18 @@ export async function executeComponent(
       (handle.type === "text" ? inputs.prompt : undefined)
 
     if (value !== undefined) {
-      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: value }
+      applyHandleInputOverride(inputOverrides, handle, value)
     }
   }
 
   // Pick up config-panel input values (stored in exposedSettings as "nodeId:fieldKey")
   // for input handles that weren't supplied by wired connections above.
   for (const handle of metadata.inputs) {
-    if (inputOverrides[handle.id]?.[handle.fieldKey] !== undefined) continue // already wired
+    if (isHandleInputWired(inputOverrides, handle)) continue
     const settingKey = `${handle.id}:${handle.fieldKey}`
     const settingVal = exposedSettings[settingKey]
     if (settingVal !== undefined && settingVal !== "") {
-      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: settingVal }
+      applyHandleInputOverride(inputOverrides, handle, settingVal)
     }
   }
 

@@ -505,7 +505,11 @@ export {
 export {
   INPUT_FIELD_MAP,
   OUTPUT_FIELD_MAP,
+  HANDLE_PORT_SEPARATOR,
   mergeExposedSettings,
+  parseHandleId,
+  applyHandleInputOverride,
+  isHandleInputWired,
   type ComponentMetadata,
   type ComponentHandle,
   type ExposedSetting,

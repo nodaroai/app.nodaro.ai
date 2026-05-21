@@ -2,8 +2,8 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { executeAppRun } from "../services/app-execution.js"
-import { OUTPUT_FIELD_MAP } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
+import { collectComponentOutputs } from "./_collect-component-outputs.js"
 import { JOB_POLL_INTERVAL_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../services/workflow-engine/types.js"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
@@ -36,10 +36,13 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     const { appSlug, inputOverrides, pinnedVersion, workflowId, componentDepth, executingComponentIds } = parsed.data
 
-    // Look up published app by slug
+    // Look up published app by slug. snapshot_nodes + snapshot_edges are
+    // needed for compound output handles (sub-workflow-output ports) — they
+    // get resolved by tracing the snapshot edge into the port and reading the
+    // upstream node's output from nodeStates.
     let appQuery = supabase
       .from("published_apps")
-      .select("id, workflow_id, name, component_metadata, estimated_credits")
+      .select("id, workflow_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -135,16 +138,14 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
             if (fullExec?.status === "completed") {
               const nodeStates = (fullExec.node_states ?? {}) as Record<string, { output?: Record<string, unknown> }>
-              const outputData: Record<string, string> = {}
-
-              for (const handle of componentMetadata.outputs) {
-                const nodeState = nodeStates[handle.id]
-                const fieldKey = handle.fieldKey || OUTPUT_FIELD_MAP[handle.type] || handle.type
-                const value = nodeState?.output?.[fieldKey]
-                if (value && typeof value === "string") {
-                  outputData[handle.id] = value
-                }
-              }
+              const snapshotNodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type?: string }>
+              const snapshotEdges = (appRow.snapshot_edges ?? []) as Array<{
+                source: string
+                target: string
+                sourceHandle?: string | null
+                targetHandle?: string | null
+              }>
+              const outputData = collectComponentOutputs(componentMetadata, nodeStates, snapshotNodes, snapshotEdges)
 
               await updateWrapperJob(wrapperJob.id, {
                 status: "completed",
