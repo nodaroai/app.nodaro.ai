@@ -50,6 +50,26 @@ describe("estimateUpfrontCredits", () => {
       }),
     ).toBe(40)
   })
+
+  it("adds 40 credits for mode='guided' vs mode='manual' baseline", () => {
+    const baseline = estimateUpfrontCredits({
+      targetDurationSeconds: 30,
+      format: "short_film",
+      mode: "manual",
+      musicEnabled: true,
+      narrationEnabled: true,
+      lipsyncEnabled: true,
+    })
+    const guided = estimateUpfrontCredits({
+      targetDurationSeconds: 30,
+      format: "short_film",
+      mode: "guided",
+      musicEnabled: true,
+      narrationEnabled: true,
+      lipsyncEnabled: true,
+    })
+    expect(guided - baseline).toBe(40) // CHAT_TURN_CAPS.script (20) × 2 credits/turn
+  })
 })
 
 describe("resolveMaxCostCredits", () => {

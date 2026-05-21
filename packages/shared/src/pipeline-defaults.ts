@@ -101,3 +101,30 @@ export const DEFAULT_CHARACTER_EXPRESSION_COUNT = 2 // baseline expression varia
  * Max location variants generated even if Showrunner suggests more — cost guard.
  */
 export const MAX_LOCATION_VARIANTS = 4
+
+/**
+ * Maximum user-turn count per stage for the chat refine flow. Enforced by
+ * the chat POST route (counts existing `role='user'` rows and rejects when
+ * the cap is reached). 1D.2b ships **Script chat only** per the LLM Spec
+ * v4.0 narrowing — `shot_list` + `post_merge` caps are pre-declared so
+ * adding their chat surfaces in 1D.2d only needs route+UI wiring, not a
+ * type/constant change.
+ */
+export const CHAT_TURN_CAPS = {
+  script: 20,
+  shot_list: 15,
+  post_merge: 8,
+} as const
+
+export type ChatEnabledStage = keyof typeof CHAT_TURN_CAPS
+
+/**
+ * Ordered list of stages with chat enabled. **In 1D.2b only `script`
+ * actually has chat code paths wired** — the others are pre-declared for
+ * 1D.2d. Route-level guards filter on `script` until then.
+ */
+export const CHAT_ENABLED_STAGES: readonly ChatEnabledStage[] = [
+  "script",
+  "shot_list",
+  "post_merge",
+]

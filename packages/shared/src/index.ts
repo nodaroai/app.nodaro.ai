@@ -972,6 +972,7 @@ export type {
   ResolveCharacterAspectOptions,
 } from "./character-aspect-defaults.js"
 
+export * from "./pipeline-chat.js"
 export * from "./pipeline-defaults.js"
 export * from "./pipeline-events.js"
 export * from "./pipeline-state-types.js"

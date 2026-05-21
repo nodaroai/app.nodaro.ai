@@ -16,7 +16,12 @@
   "publishConfig": {
     "access": "public"
   },
-  "files": ["dist", "README.md", "src", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "src",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -25,13 +30,17 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "fast-json-patch": "^3.1.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.2",
     "tsup": "^8.5.0",
     "typescript": "^5.7.3",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "zod-to-json-schema": "^3.25.2"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

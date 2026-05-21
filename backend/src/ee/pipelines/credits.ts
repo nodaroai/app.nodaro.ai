@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { TIER_MAX_PIPELINE_COST_CREDITS, type PipelineFormat, type PipelineMode } from "@nodaro/shared"
+import {
+  CHAT_TURN_CAPS,
+  TIER_MAX_PIPELINE_COST_CREDITS,
+  type PipelineFormat,
+  type PipelineMode,
+} from "@nodaro/shared"
+
+***REDACTED-OSS-SCRUB***
 
 export interface EstimateUpfrontArgs {
   targetDurationSeconds: number
@@ -43,7 +50,13 @@ export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
   if (args.musicEnabled) credits += 4 // 7f music timeline
   credits += 3 // 7h Editor LLM
   credits += 3 // 7j final merge (or FreeCut export — 0 cr, but reserve for worst case)
-  if (args.mode !== "manual") credits += 0 // future: auto/guided pass premiums
+  if (args.mode === "guided") {
+    // Reserve chat-refine budget for the Script stage only (1D.2b ships
+    // script-only chat). CHAT_TURN_CAPS.script = 20 → 40 credits worst-case.
+    // Unused turns refund automatically via the pipeline's normal credit
+    // reconciliation at completion.
+    credits += CHAT_TURN_CAPS.script * PER_TURN_ESTIMATE_CREDITS
+  }
   return credits
 }
 

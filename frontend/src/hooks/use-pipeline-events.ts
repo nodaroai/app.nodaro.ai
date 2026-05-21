@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import type {
   PipelineEvent,
   PipelineDriftSummary,
   SubGateName,
 } from "@nodaro/shared"
+import type { ChatTurn } from "@nodaro/client"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { getAuthHeaders } from "@/lib/api"
 import { streamGet } from "@/lib/sse-client"
@@ -64,6 +66,11 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
   const updateNodeDataByEntityId = useWorkflowStore((s) => s.updateNodeDataByEntityId)
   const setStoreLastAddedNodeId = useWorkflowStore((s) => s.setLastAddedPipelineNodeId)
   const setStoreActiveStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
+
+  // React Query cache — Phase 1D.2b chat events update the chat-history cache
+  // in place without an extra GET roundtrip. `queryClient` is referentially
+  // stable across renders so it's safe to include in the effect deps.
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (!pipelineId) return
@@ -133,6 +140,52 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
           } else if (evt.type === "pipeline:editor_decisions_ready") {
             // eslint-disable-next-line no-console
             console.info("[pipeline] editor_decisions_ready", evt.pipelineId)
+          } else if (evt.type === "chat:turn") {
+            // Phase 1D.2b — Append the new turn to the chat-history cache
+            // without refetching. Idempotent on turn.id collision (handles
+            // double-publish of the same SSE event during reconnect).
+            queryClient.setQueryData<{ turns: ChatTurn[] }>(
+              ["pipelines", evt.pipelineId, "stages", evt.stageName, "chat"],
+              (prev) => {
+                const turns = prev?.turns ?? []
+                if (turns.some((t) => t.id === evt.turn.id)) return prev
+                // SSE payload omits llm_call_id / applied_to_attempt_id /
+                // created_at — they exist on the DB row but aren't load-
+                // bearing for chat-history rendering. Fill defaults so the
+                // cache row shape matches `ChatTurn`.
+                const turn: ChatTurn = {
+                  id: evt.turn.id,
+                  turn_n: evt.turn.turn_n,
+                  role: evt.turn.role,
+                  content: evt.turn.content,
+                  proposed_change: evt.turn.proposed_change,
+                  llm_call_id: null,
+                  applied_to_attempt_id: null,
+                  created_at: new Date().toISOString(),
+                }
+                return { turns: [...turns, turn] }
+              },
+            )
+          } else if (evt.type === "chat:proposal_applied") {
+            // Phase 1D.2b — Mark the source turn as applied + force a refetch
+            // of the pipeline / stages so the panel sees the new attempt and
+            // the stage's status=approved transition.
+            queryClient.setQueryData<{ turns: ChatTurn[] }>(
+              ["pipelines", evt.pipelineId, "stages", evt.stageName, "chat"],
+              (prev) =>
+                prev
+                  ? {
+                      turns: prev.turns.map((t) =>
+                        t.id === evt.turnId
+                          ? { ...t, applied_to_attempt_id: evt.attemptId }
+                          : t,
+                      ),
+                    }
+                  : prev,
+            )
+            queryClient.invalidateQueries({
+              queryKey: ["pipelines", evt.pipelineId],
+            })
           }
         }
       } catch (err) {
@@ -153,7 +206,13 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
       setStoreLastAddedNodeId(null)
       setStoreActiveStatus(null)
     }
-  }, [pipelineId, updateNodeDataByEntityId, setStoreLastAddedNodeId, setStoreActiveStatus])
+  }, [
+    pipelineId,
+    updateNodeDataByEntityId,
+    setStoreLastAddedNodeId,
+    setStoreActiveStatus,
+    queryClient,
+  ])
 
   return { lastEvent, connected, drift, currentSubGate }
 }
