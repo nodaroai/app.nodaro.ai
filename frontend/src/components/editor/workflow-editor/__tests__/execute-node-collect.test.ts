@@ -216,6 +216,7 @@ describe("executeNode: collect", () => {
       jobId: "j1",
       output: "a-b",
       meta: { summary: "joined 2" },
+      inputs: ["a", "b"],
     })
 
     const node = {
@@ -249,8 +250,73 @@ describe("executeNode: collect", () => {
         executionStatus: "completed",
         result: "a-b",
         currentJobId: "j1",
+        lastInputs: ["a", "b"],
+        lastMeta: { summary: "joined 2" },
       }),
     )
+  })
+
+  it("persists lastInputs and lastMeta with selectedIndex/reasoning for pick-best-llm", async () => {
+    mockResolveNodeInputs.mockReturnValue({ inputs: ["x", "y", "z"] })
+    mockExecuteCollect.mockResolvedValue({
+      jobId: "j10",
+      output: "y",
+      meta: { summary: "picked 1 of 3", selectedIndex: 1, reasoning: "y wins" },
+      inputs: ["x", "y", "z"],
+    })
+
+    const node = {
+      id: "C10",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: {
+        label: "collect",
+        strategyId: "pick-best-llm",
+        strategyConfig: { criteria: "best", inputKind: "text" },
+      },
+    } as any
+
+    await executeNode(node, makeCtx())
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "C10",
+      expect.objectContaining({
+        lastInputs: ["x", "y", "z"],
+        lastMeta: { summary: "picked 1 of 3", selectedIndex: 1, reasoning: "y wins" },
+      }),
+    )
+  })
+
+  it("truncates persisted lastInputs to 50 items and caps each string at 500 chars", async () => {
+    const big = Array.from({ length: 100 }, (_, i) =>
+      i === 0 ? "x".repeat(900) : `item-${i}`,
+    )
+    mockResolveNodeInputs.mockReturnValue({ inputs: big })
+    mockExecuteCollect.mockResolvedValue({
+      jobId: "j11",
+      output: "ok",
+      meta: { summary: "ok" },
+      inputs: big,
+    })
+
+    const node = {
+      id: "C11",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: { label: "collect", strategyId: "concat", strategyConfig: {} },
+    } as any
+
+    await executeNode(node, makeCtx())
+
+    const persistCall = mockUpdateNodeData.mock.calls.find(
+      ([, payload]) => (payload as Record<string, unknown>).lastInputs !== undefined,
+    )
+    expect(persistCall).toBeTruthy()
+    const persisted = (persistCall![1] as { lastInputs: string[] }).lastInputs
+    expect(persisted.length).toBe(50)
+    // First item was 900 chars — should be truncated to 500 chars + ellipsis (501)
+    expect(persisted[0].length).toBe(501)
+    expect(persisted[0].endsWith("…")).toBe(true)
   })
 
   it("falls back to empty inputs array when resolver returns nothing", async () => {

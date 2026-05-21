@@ -5993,10 +5993,18 @@ export function executeNode(
       inputs: collectInputs,
     })
       .then((result) => {
+        // Truncate persisted snapshot so a 1000-item × long-URL run doesn't
+        // bloat the workflow JSON. 50 items × 500 chars each is plenty for
+        // the Inputs-tab UI but bounded at ~25KB worst case.
+        const persistedInputs = (result.inputs ?? collectInputs)
+          .slice(0, 50)
+          .map((s) => (typeof s === "string" && s.length > 500 ? s.slice(0, 500) + "…" : s));
         updateNodeData(node.id, {
           executionStatus: "completed",
           result: result.output,
           currentJobId: result.jobId,
+          lastInputs: persistedInputs,
+          lastMeta: result.meta,
         });
         return result.output ?? "";
       })

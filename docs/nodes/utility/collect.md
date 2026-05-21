@@ -58,3 +58,7 @@ Single value, type depends on strategy. Downstream nodes can consume it as text 
 - **Single source supported.** Multi-source merging happens by concatenation (multiple incoming edges' results are appended).
 - **No nested fan-out.** A Collect cannot itself drive a new fan-out chain unless downstream uses a Split-Text or List node.
 - **Sequential fan-out.** Upstream nodes still run sequentially per item. Parallel fan-out is a separate Phase 2 feature.
+
+## Re-running the workflow
+
+Each workflow run creates a fresh Collect job — even if the upstream produces identical outputs across runs. The route bypasses the standard 10-second dedup-fingerprint guard via `{ dedup: false }`, so re-running the same workflow twice will spend credits twice on `pick-best-llm` (the other strategies are 0 cr).

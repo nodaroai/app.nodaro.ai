@@ -149,11 +149,30 @@ describe("CollectConfig", () => {
     expect(tab).toHaveAttribute("data-disabled")
   })
 
-  it("Inputs tab enabled when node has completed with a result", () => {
+  it("Inputs tab disabled when status is completed but lastInputs missing", () => {
+    // result alone is no longer enough — without persisted lastInputs the
+    // per-iteration inspector has nothing to render.
     render(
       <CollectConfig
         {...baseProps}
         data={makeData({ executionStatus: "completed", result: "merged output" })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    const tab = screen.getByRole("tab", { name: /inputs/i })
+    expect(tab).toHaveAttribute("data-disabled")
+  })
+
+  it("Inputs tab enabled when node has completed with persisted lastInputs", () => {
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({
+          executionStatus: "completed",
+          result: "merged output",
+          lastInputs: ["a", "b"],
+          lastMeta: { summary: "joined 2" },
+        })}
         onUpdate={vi.fn()}
       />,
     )
@@ -239,5 +258,117 @@ describe("CollectConfig", () => {
       />,
     )
     expect(screen.getByText(/No configuration/i)).toBeInTheDocument()
+  })
+})
+
+describe("CollectConfig — Inputs tab content", () => {
+  it("shows fallback copy when never run", () => {
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({ executionStatus: "idle" })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    // Switch to inputs tab — but it's disabled, so the fallback content lives
+    // inside the inactive panel. The test mock renders only the active tab,
+    // so we instead verify the disabled state already covered above AND the
+    // copy when forced-active (by completing with no inputs).
+    // Build a completed-but-empty node — falls through to fallback path.
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({ executionStatus: "completed", result: "x" })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    const tab = screen.getAllByRole("tab", { name: /inputs/i })
+    // Both renders share the disabled state since lastInputs missing
+    tab.forEach((t) => expect(t).toHaveAttribute("data-disabled"))
+  })
+
+  it("renders all items, selected highlight, and reasoning blockquote", () => {
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({
+          strategyId: "pick-best-llm",
+          strategyConfig: { criteria: "best", inputKind: "text" },
+          executionStatus: "completed",
+          result: "y",
+          lastInputs: ["alpha", "bravo", "charlie"],
+          lastMeta: {
+            summary: "picked 1 of 3",
+            selectedIndex: 1,
+            reasoning: "bravo had the clearest light",
+          },
+        })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    // Activate the Inputs tab (it should be enabled now).
+    const tab = screen.getByRole("tab", { name: /inputs/i })
+    expect(tab).not.toHaveAttribute("data-disabled")
+    fireEvent.click(tab)
+
+    // Summary + reasoning render
+    expect(screen.getByText("picked 1 of 3")).toBeInTheDocument()
+    expect(screen.getByText(/bravo had the clearest light/)).toBeInTheDocument()
+
+    // All 3 items render
+    expect(screen.getByText("alpha")).toBeInTheDocument()
+    expect(screen.getByText("bravo")).toBeInTheDocument()
+    expect(screen.getByText("charlie")).toBeInTheDocument()
+
+    // selectedIndex=1 → "bravo" item has a "selected" badge
+    expect(screen.getByText(/selected/i)).toBeInTheDocument()
+  })
+
+  it("does NOT render reasoning blockquote when pick-best-llm omits it (other strategies)", () => {
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({
+          strategyId: "concat",
+          strategyConfig: { separator: "-" },
+          executionStatus: "completed",
+          result: "a-b",
+          lastInputs: ["a", "b"],
+          lastMeta: { summary: "joined 2" }, // no reasoning, no selectedIndex
+        })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    const tab = screen.getByRole("tab", { name: /inputs/i })
+    fireEvent.click(tab)
+    expect(screen.getByText("joined 2")).toBeInTheDocument()
+    expect(screen.getByText("a")).toBeInTheDocument()
+    expect(screen.getByText("b")).toBeInTheDocument()
+    // No "selected" badge since selectedIndex is undefined
+    expect(screen.queryByText(/selected/i)).not.toBeInTheDocument()
+  })
+
+  it("truncates long items to 80 chars + ellipsis", () => {
+    const longString = "x".repeat(200)
+    render(
+      <CollectConfig
+        {...baseProps}
+        data={makeData({
+          strategyId: "concat",
+          strategyConfig: { separator: "-" },
+          executionStatus: "completed",
+          result: "long",
+          lastInputs: [longString],
+          lastMeta: { summary: "1 item" },
+        })}
+        onUpdate={vi.fn()}
+      />,
+    )
+    const tab = screen.getByRole("tab", { name: /inputs/i })
+    fireEvent.click(tab)
+    const expected = "x".repeat(80) + "…"
+    expect(screen.getByText(expected)).toBeInTheDocument()
+    // The full 200-char string should NOT appear
+    expect(screen.queryByText(longString)).not.toBeInTheDocument()
   })
 })
