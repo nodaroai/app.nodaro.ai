@@ -392,6 +392,68 @@ archive flow, the upstream picker integration, and how to wire object
 assets into downstream prompts) see the dedicated
 [Object Platform](./object-platform.md) guide.
 
+### Pick the best of N generations (Collect / fan-in)
+
+`client.collect.execute()` runs the [Collect node](./nodes/utility/collect.md)
+programmatically. Useful when you've generated several candidates and want
+to pick the best, concatenate them, vote, or merge as JSON — without
+building a workflow on the canvas.
+
+```ts
+// Pick the best of 5 generated images
+const result = await client.collect.execute({
+  strategyId: "pick-best-llm",
+  strategyConfig: {
+    criteria: "sharpest image with no artifacts",
+    inputKind: "image-url",
+  },
+  inputs: [
+    "https://r2.nodaro.ai/.../1.jpg",
+    "https://r2.nodaro.ai/.../2.jpg",
+    "https://r2.nodaro.ai/.../3.jpg",
+    "https://r2.nodaro.ai/.../4.jpg",
+    "https://r2.nodaro.ai/.../5.jpg",
+  ],
+})
+console.log(result.output)             // chosen URL
+console.log(result.meta.selectedIndex) // 0-4
+console.log(result.meta.reasoning)     // LLM rationale
+```
+
+Other strategies don't need an LLM:
+
+```ts
+// Concatenate survivors with a custom separator
+const joined = await client.collect.execute({
+  strategyId: "concat",
+  strategyConfig: { separator: "\n---\n" },
+  inputs: ["A", "B", "C"],
+})
+
+// Majority vote (ties → first)
+const winner = await client.collect.execute({
+  strategyId: "vote",
+  inputs: ["red", "blue", "red", "red", "blue"],
+})
+
+// Deep-merge JSON fragments into one object
+const merged = await client.collect.execute({
+  strategyId: "merge-json",
+  strategyConfig: { strategy: "deep" },
+  inputs: [
+    JSON.stringify({ a: 1, nested: { x: 1 } }),
+    JSON.stringify({ b: 2, nested: { y: 2 } }),
+  ],
+})
+console.log(JSON.parse(merged.output))
+// { a: 1, b: 2, nested: { x: 1, y: 2 } }
+```
+
+The full set of strategies is: `pick-best-llm`, `concat`, `first-non-empty`,
+`count`, `vote`, `merge-json`. If every input is empty / whitespace the
+server returns a 400 (`code: "no_valid_inputs"`) which surfaces as a
+`NodaroError` subclass.
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,
