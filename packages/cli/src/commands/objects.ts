@@ -1,9 +1,39 @@
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import {
   OBJECT_ASSET_TYPES,
   OBJECT_ATTACH_COLUMNS,
   type ObjectAspectRatio,
+  type ObjectAssetType,
+  type ObjectAttachColumn,
+  type ObjectCategory,
 } from "@nodaro/client"
+
+const OBJECT_CATEGORIES = [
+  "furniture",
+  "vehicle",
+  "weapon",
+  "food",
+  "clothing",
+  "electronics",
+  "nature",
+  "tool",
+  "animal",
+  "other",
+] as const
+
+const OBJECT_STYLES = ["realistic", "anime", "3d-pixar", "illustration"] as const
+const ASPECT_RATIOS = ["1:1", "3:4", "16:9", "9:16", "4:3"] as const
+
+const MOTION_PROVIDERS = [
+  "kling-turbo",
+  "kling",
+  "kling-3.0",
+  "minimax",
+  "hailuo-2.3",
+  "wan-i2v",
+  "seedance",
+  "bytedance-lite",
+] as const
 import { buildClient, handleError } from "../client.js"
 import { emit, success, table, dim, type OutputOpts } from "../output.js"
 import { watchUntilTerminal } from "../util.js"
@@ -99,8 +129,8 @@ export function objectsCommand(): Command {
     .description("create a new object row (no main image yet — call `generate` next)")
     .requiredOption("--node-id <id>", "canvas node id to bind to")
     .option("--description <desc>", "freeform identity notes")
-    .option("--category <category>", "furniture | vehicle | weapon | food | clothing | electronics | nature | tool | animal | other")
-    .option("--style <style>", "realistic | anime | 3d-pixar | illustration")
+    .addOption(new Option("--category <category>", "object category").choices([...OBJECT_CATEGORIES]))
+    .addOption(new Option("--style <style>", "object visual style").choices([...OBJECT_STYLES]))
     .option("--project <projectId>", "drop the row into this project")
     .option("--profile <name>")
     .option("--json")
@@ -110,8 +140,8 @@ export function objectsCommand(): Command {
         opts: {
           nodeId: string
           description?: string
-          category?: string
-          style?: string
+          category?: ObjectCategory
+          style?: (typeof OBJECT_STYLES)[number]
           project?: string
         } & GlobalOpts,
       ) => {
@@ -122,18 +152,7 @@ export function objectsCommand(): Command {
             projectId: opts.project,
             name,
             description: opts.description,
-            category: opts.category as
-              | "furniture"
-              | "vehicle"
-              | "weapon"
-              | "food"
-              | "clothing"
-              | "electronics"
-              | "nature"
-              | "tool"
-              | "animal"
-              | "other"
-              | undefined,
+            category: opts.category,
             style: opts.style,
           })
           if (opts.json) {
@@ -152,8 +171,8 @@ export function objectsCommand(): Command {
     .description("update identity fields on an existing object")
     .option("--name <name>")
     .option("--description <desc>")
-    .option("--category <category>")
-    .option("--style <style>")
+    .addOption(new Option("--category <category>", "object category").choices([...OBJECT_CATEGORIES]))
+    .addOption(new Option("--style <style>", "object visual style").choices([...OBJECT_STYLES]))
     .option("--style-lock <bool>", "lock asset gens to the canonical style (true/false)")
     .option("--canonical-description <desc>", "manually set the LLM-style caption (skips recaption)")
     .option("--expected-updated-at <iso>", "optimistic-concurrency token — fail with 409 on mismatch")
@@ -165,8 +184,8 @@ export function objectsCommand(): Command {
         opts: {
           name?: string
           description?: string
-          category?: string
-          style?: string
+          category?: ObjectCategory
+          style?: (typeof OBJECT_STYLES)[number]
           styleLock?: string
           canonicalDescription?: string
           expectedUpdatedAt?: string
@@ -193,19 +212,7 @@ export function objectsCommand(): Command {
           const patch: Parameters<typeof client.objects.update>[1] = {}
           if (opts.name !== undefined) patch.name = opts.name
           if (opts.description !== undefined) patch.description = opts.description
-          if (opts.category !== undefined) {
-            patch.category = opts.category as
-              | "furniture"
-              | "vehicle"
-              | "weapon"
-              | "food"
-              | "clothing"
-              | "electronics"
-              | "nature"
-              | "tool"
-              | "animal"
-              | "other"
-          }
+          if (opts.category !== undefined) patch.category = opts.category
           if (opts.style !== undefined) patch.style = opts.style
           if (opts.styleLock !== undefined) {
             // Commander gives us the raw string — coerce to a bool. Anything
@@ -287,23 +294,23 @@ export function objectsCommand(): Command {
     .requiredOption("--name <name>", "the object's display name (used in the prompt)")
     .option("--description <desc>")
     .option("--user-prompt <prompt>", "additional free-text prompt")
-    .option("--category <category>")
-    .option("--style <style>")
+    .addOption(new Option("--category <category>", "object category").choices([...OBJECT_CATEGORIES]))
+    .addOption(new Option("--style <style>", "object visual style").choices([...OBJECT_STYLES]))
     .option("--provider <provider>", "image provider (defaults to nano-banana)")
     .option("--count <n>", "1, 2, or 4 candidate main images", "1")
     .option("--attach-to-object-id <id>", "auto-attach result to this object row (count=1 only)")
     .option("--seed-prompt-hint <hint>", "parameter-picker prompt-fragment pass-through")
     .option("--profile <name>")
     .option("--json")
-    .option("--watch", "poll the first job until it completes")
+    .option("--watch", "poll all jobs until they complete (parallel)")
     .action(
       async (
         opts: {
           name: string
           description?: string
           userPrompt?: string
-          category?: string
-          style?: string
+          category?: ObjectCategory
+          style?: (typeof OBJECT_STYLES)[number]
           provider?: string
           count: string
           attachToObjectId?: string
@@ -317,24 +324,8 @@ export function objectsCommand(): Command {
             name: opts.name,
             description: opts.description,
             userPrompt: opts.userPrompt,
-            category: opts.category as
-              | "furniture"
-              | "vehicle"
-              | "weapon"
-              | "food"
-              | "clothing"
-              | "electronics"
-              | "nature"
-              | "tool"
-              | "animal"
-              | "other"
-              | undefined,
-            style: opts.style as
-              | "realistic"
-              | "anime"
-              | "3d-pixar"
-              | "illustration"
-              | undefined,
+            category: opts.category,
+            style: opts.style,
             provider: opts.provider,
             count: parseCount(opts.count),
             attachToObjectId: opts.attachToObjectId,
@@ -356,11 +347,18 @@ export function objectsCommand(): Command {
             dim(`follow: nodaro jobs get ${jobIds[0]}`)
             return
           }
-          await watchUntilTerminal({
-            fetch: () => client.jobs.get(jobIds[0]),
-            label: jobIds[0],
-            ...opts,
-          })
+          // Watch ALL jobs in parallel — `--count 2/4` returns multiple jobIds
+          // and `watchUntilTerminal` on just `jobIds[0]` would leave the others
+          // unmonitored.
+          await Promise.all(
+            jobIds.map((id) =>
+              watchUntilTerminal({
+                fetch: () => client.jobs.get(id),
+                label: id,
+                ...opts,
+              }),
+            ),
+          )
         } catch (err) {
           handleError(err)
         }
@@ -370,16 +368,18 @@ export function objectsCommand(): Command {
   cmd
     .command("generate-asset")
     .description("trigger a single angles / materials / variations / motion / custom asset generation")
-    .requiredOption(
-      "--asset-type <type>",
-      `one of ${OBJECT_ASSET_TYPES.join(" | ")}`,
+    .addOption(
+      new Option("--asset-type <type>", "asset bucket to generate into").choices([...OBJECT_ASSET_TYPES]),
     )
     .requiredOption("--variant <name>", "the named variant (e.g. 'front', 'wood', 'weathered')")
     .requiredOption("--attach-to-object-id <id>", "object row to append the result to")
-    .option(
-      "--attach-to-column <col>",
-      `override the attach column (required for --asset-type custom): ${OBJECT_ATTACH_COLUMNS.join(" | ")}`,
+    .addOption(
+      new Option("--attach-to-column <col>", "override the attach column (required for --asset-type custom)").choices([
+        ...OBJECT_ATTACH_COLUMNS,
+      ]),
     )
+    .option("--name <name>", "object's display name (avoids an extra GET to fetch it)")
+    .option("--description <desc>", "object's description (avoids an extra GET to fetch it)")
     .option("--seed-prompt-hint <hint>", "parameter-picker prompt-fragment pass-through")
     .option("--profile <name>")
     .option("--json")
@@ -387,17 +387,29 @@ export function objectsCommand(): Command {
     .action(
       async (
         opts: {
-          assetType: string
+          assetType: ObjectAssetType
           variant: string
           attachToObjectId: string
-          attachToColumn?: string
+          attachToColumn?: ObjectAttachColumn
+          name?: string
+          description?: string
           seedPromptHint?: string
           watch?: boolean
         } & GlobalOpts,
       ) => {
         try {
+          if (!opts.assetType) {
+            throw new Error("--asset-type is required")
+          }
           const client = buildClient(opts.profile)
-          const obj = await client.objects.get(opts.attachToObjectId)
+          // Lazy fetch — only round-trip when the caller didn't supply name/desc.
+          let name = opts.name
+          let description = opts.description
+          if (name === undefined || description === undefined) {
+            const obj = await client.objects.get(opts.attachToObjectId)
+            name ??= obj.name
+            description ??= obj.description ?? undefined
+          }
           const inferredColumn = ASSET_TYPE_TO_COLUMN[opts.assetType]
           const resolvedColumn = opts.attachToColumn ?? inferredColumn
           if (!resolvedColumn) {
@@ -406,12 +418,12 @@ export function objectsCommand(): Command {
             )
           }
           const result = await client.objects.generateAsset({
-            assetType: opts.assetType as (typeof OBJECT_ASSET_TYPES)[number],
+            assetType: opts.assetType,
             variant: opts.variant,
-            name: obj.name,
-            description: obj.description ?? undefined,
+            name,
+            description,
             attachToObjectId: opts.attachToObjectId,
-            attachToColumn: resolvedColumn as (typeof OBJECT_ATTACH_COLUMNS)[number],
+            attachToColumn: resolvedColumn,
             attachName: opts.variant,
             seedPromptHint: opts.seedPromptHint,
           })
@@ -446,12 +458,16 @@ export function objectsCommand(): Command {
       "--source-image-url <url>",
       "URL of the product-shot to animate",
     )
-    .option(
-      "--provider <provider>",
-      "i2v provider — one of kling | kling-turbo | kling-3.0 | wan-i2v | wan-2.7-i2v | seedance-2",
-      "kling-turbo",
+    .addOption(
+      new Option("--provider <provider>", "i2v provider")
+        .choices([...MOTION_PROVIDERS])
+        .default("kling-turbo"),
     )
-    .option("--style <style>", "realistic | anime | 3d-pixar | illustration", "realistic")
+    .addOption(
+      new Option("--style <style>", "object visual style")
+        .choices([...OBJECT_STYLES])
+        .default("realistic"),
+    )
     .option("--canonical-description <desc>", "LLM caption to anchor the prompt with")
     .option(
       "--attach-to-object-id <id>",
@@ -461,10 +477,10 @@ export function objectsCommand(): Command {
       "--attach-name <name>",
       "display name for the motion_clips entry (paired with --attach-to-object-id)",
     )
-    .option(
-      "--aspect-ratio <ratio>",
-      "override default 1:1 — one of 1:1 | 3:4 | 16:9 | 9:16 | 4:3",
-      "1:1",
+    .addOption(
+      new Option("--aspect-ratio <ratio>", "aspect ratio (default 1:1 product-showcase)")
+        .choices([...ASPECT_RATIOS])
+        .default("1:1"),
     )
     .option("--seed-prompt-hint <hint>", "parameter-picker prompt-fragment pass-through")
     .option("--profile <name>")
@@ -476,12 +492,12 @@ export function objectsCommand(): Command {
           name: string
           motionPrompt: string
           sourceImageUrl: string
-          provider: string
-          style: string
+          provider: (typeof MOTION_PROVIDERS)[number]
+          style: (typeof OBJECT_STYLES)[number]
           canonicalDescription?: string
           attachToObjectId?: string
           attachName?: string
-          aspectRatio?: string
+          aspectRatio?: ObjectAspectRatio
           seedPromptHint?: string
           watch?: boolean
         } & GlobalOpts,
@@ -493,26 +509,12 @@ export function objectsCommand(): Command {
             motionPrompt: opts.motionPrompt,
             sourceImageUrl: opts.sourceImageUrl,
             provider: opts.provider,
-            // Commander hands us a raw string; the SDK's union is the
-            // canonical 4-value style set. We narrow here so a typo (e.g.
-            // `--style anim`) doesn't silently send a value the route's Zod
-            // would reject — surface a clear CLI error instead.
-            style: opts.style as
-              | "realistic"
-              | "anime"
-              | "3d-pixar"
-              | "illustration",
+            style: opts.style,
             canonicalDescription: opts.canonicalDescription,
             attachToObjectId: opts.attachToObjectId,
             attachName: opts.attachName,
             seedPromptHint: opts.seedPromptHint,
-            // `aspectRatio` is a 5-value object union (1:1 / 3:4 / 16:9 /
-            // 9:16 / 4:3 — includes 4:3 for product-showcase framing, distinct
-            // from the character/location set). We pass commander's raw string
-            // through with a narrowing cast; the route's Zod enum is the
-            // source of truth on rejection — keeping the CLI thin avoids
-            // drift if we ever extend the option set.
-            aspectRatio: opts.aspectRatio as ObjectAspectRatio | undefined,
+            aspectRatio: opts.aspectRatio,
           })
           if (opts.json && !opts.watch) {
             emit(result, opts)

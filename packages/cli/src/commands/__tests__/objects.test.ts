@@ -223,6 +223,17 @@ describe("objects command", () => {
     expect(mocks.generate.mock.calls[0][0]).toMatchObject({ count: 4 })
   })
 
+  it("generate --count 4 --watch polls all jobIds in parallel (not just jobIds[0])", async () => {
+    mocks.generate.mockResolvedValueOnce({ jobIds: ["j1", "j2", "j3", "j4"] })
+    const getCalls: string[] = []
+    mocks.jobsGet.mockImplementation(async (id: string) => {
+      getCalls.push(id)
+      return { data: { id, status: "completed", outputData: {} } }
+    })
+    await runCmd("objects", "generate", "--name", "Lantern", "--count", "4", "--watch")
+    expect(new Set(getCalls)).toEqual(new Set(["j1", "j2", "j3", "j4"]))
+  })
+
   it("generate forwards --seed-prompt-hint to the SDK", async () => {
     mocks.generate.mockResolvedValueOnce({ jobId: "j1" })
     await runCmd(
@@ -389,7 +400,7 @@ describe("objects command", () => {
       "--source-image-url",
       "https://r2.example/lantern.png",
       "--provider",
-      "seedance-2",
+      "seedance",
       "--style",
       "anime",
       "--canonical-description",
@@ -408,7 +419,7 @@ describe("objects command", () => {
       name: "Lantern",
       motionPrompt: "orbit pan",
       sourceImageUrl: "https://r2.example/lantern.png",
-      provider: "seedance-2",
+      provider: "seedance",
       style: "anime",
       canonicalDescription: "weathered brass lantern hanging by chain",
       attachToObjectId: "obj-77",
