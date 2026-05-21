@@ -77,6 +77,95 @@ function isImageUrl(url: string): boolean {
   return lower.includes(".png") || lower.includes(".jpg") || lower.includes(".jpeg") || lower.includes(".webp") || lower.includes(".gif") || lower.includes(".avif") || lower.includes(".heic") || lower.includes(".heif")
 }
 
+function hasCriticOutput(outputData: Job["output_data"]): boolean {
+  if (!outputData) return false
+  return (
+    typeof outputData.score === "number" ||
+    typeof outputData.approved === "boolean" ||
+    typeof outputData.feedback === "string" ||
+    typeof outputData.reason === "string"
+  )
+}
+
+type CriticPerModeEntry = { score: number; feedback: string }
+type CriticIssue = { category: string; severity: "blocking" | "warning" | "info"; description: string }
+
+function CriticOutputPreview({ outputData }: { outputData: Record<string, unknown> }) {
+  const score = typeof outputData.score === "number" ? outputData.score : undefined
+  const approved = typeof outputData.approved === "boolean" ? outputData.approved : undefined
+  const feedback = (outputData.feedback as string | undefined) ?? (outputData.reason as string | undefined) ?? ""
+  const details = outputData.details as { perMode?: Record<string, CriticPerModeEntry | undefined>; issues?: CriticIssue[] } | undefined
+  const mode = outputData.mode as string | undefined
+  const perModeEntries = details?.perMode
+    ? (Object.entries(details.perMode).filter(([, v]) => v != null) as Array<[string, CriticPerModeEntry]>)
+    : []
+  const issues = details?.issues ?? []
+
+  return (
+    <div className="rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D] p-4 space-y-4">
+      <div className="flex items-baseline gap-3">
+        {score !== undefined && (
+          <span className={`text-3xl font-bold ${approved ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            {score.toFixed(2)}
+          </span>
+        )}
+        {approved !== undefined && (
+          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+            approved
+              ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400"
+              : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
+          }`}>
+            {approved ? "approved" : "rejected"}
+          </span>
+        )}
+        {mode && (
+          <span className="text-xs text-gray-500 dark:text-[#94A3B8]">
+            mode: {mode}
+          </span>
+        )}
+      </div>
+      {feedback && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Feedback</div>
+          <p className="text-sm text-gray-700 dark:text-[#E2E8F0] whitespace-pre-wrap break-words">{feedback}</p>
+        </div>
+      )}
+      {perModeEntries.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Per-mode breakdown</div>
+          <ul className="space-y-1">
+            {perModeEntries.map(([m, r]) => (
+              <li key={m} className="text-xs text-gray-700 dark:text-[#E2E8F0]">
+                <span className="font-mono font-semibold">{m}</span>
+                <span className="mx-2 text-gray-400 dark:text-[#64748B]">{r.score.toFixed(2)}</span>
+                <span>{r.feedback}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {issues.length > 0 && (
+        <div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-[#94A3B8] uppercase tracking-wider mb-1">Issues</div>
+          <ul className="space-y-1">
+            {issues.map((i, idx) => (
+              <li key={idx} className="text-xs">
+                <span className={
+                  i.severity === "blocking" ? "text-red-500 dark:text-red-400" :
+                  i.severity === "warning" ? "text-orange-500 dark:text-orange-400" :
+                  "text-gray-500 dark:text-[#94A3B8]"
+                }>[{i.severity}]</span>
+                <span className="ml-1 font-mono text-gray-700 dark:text-[#E2E8F0]">{i.category}:</span>
+                <span className="ml-1 text-gray-700 dark:text-[#E2E8F0]">{i.description}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function isAudioUrl(url: string): boolean {
   const lower = url.toLowerCase()
   return lower.includes(".mp3") || lower.includes(".wav") || lower.includes(".ogg") || lower.includes(".aac") || lower.includes(".m4a") || lower.includes("audio")
@@ -758,6 +847,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           <p className="text-xs text-red-500 dark:text-red-300/70 text-center">{job.error_message}</p>
                         )}
                       </div>
+                    ) : hasCriticOutput(job.output_data) ? (
+                      <CriticOutputPreview outputData={job.output_data!} />
                     ) : (
                       <div className="flex items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                         <p className="text-sm text-gray-400 dark:text-[#64748B]">No output available</p>

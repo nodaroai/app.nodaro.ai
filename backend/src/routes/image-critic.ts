@@ -91,6 +91,33 @@ function escapeXml(s: string): string {
   )
 }
 
+// LLMs often wrap JSON in ```json fences or prose ("Here's my evaluation: { ... }").
+// Strip fences first, then take the slice from the first { to the matching closing }.
+// Returns the original string when no `{` is found; JSON.parse will then fail loudly.
+function extractJsonObject(raw: string): string {
+  let s = raw.trim()
+  const fence = s.match(/^```(?:json|JSON)?\s*([\s\S]*?)\s*```\s*$/)
+  if (fence) s = fence[1].trim()
+  const start = s.indexOf("{")
+  if (start < 0) return s
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (escape) { escape = false; continue }
+    if (c === "\\") { escape = true; continue }
+    if (c === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (c === "{") depth++
+    else if (c === "}") {
+      depth--
+      if (depth === 0) return s.slice(start, i + 1)
+    }
+  }
+  return s.slice(start)
+}
+
 export async function imageCriticRoutes(app: FastifyInstance) {
   app.post(
     "/v1/image-critic",
@@ -188,9 +215,11 @@ export async function imageCriticRoutes(app: FastifyInstance) {
 
         let parsedResult: ImageCriticResult
         try {
-          parsedResult = ImageCriticResultSchema.parse(JSON.parse(response.text))
+          parsedResult = ImageCriticResultSchema.parse(JSON.parse(extractJsonObject(response.text)))
         } catch {
-          throw new Error("invalid_llm_output")
+          // Surface the raw LLM text via the message so the catch block can persist it for debugging.
+          const preview = response.text.slice(0, 2000)
+          throw new Error(`invalid_llm_output: ${preview}`)
         }
 
         let finalScore = parsedResult.score
@@ -227,13 +256,23 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         })
       } catch (err) {
         const message = err instanceof Error ? err.message : "image-critic failed"
+        const isParseFail = message.startsWith("invalid_llm_output")
+        const rawLlmText = isParseFail ? message.slice("invalid_llm_output: ".length) : undefined
         await supabase
           .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request
-          .update({ status: "failed", output_data: { error: message } })
+          .update({
+            status: "failed",
+            output_data: isParseFail
+              ? { error: "invalid_llm_output", rawLlmText }
+              : { error: message },
+          })
           .eq("id", job.id)
         await refundReservedCreditsForJob(job.id)
         return reply.status(502).send({
-          error: { code: message === "invalid_llm_output" ? "invalid_llm_output" : "llm_error", message },
+          error: {
+            code: isParseFail ? "invalid_llm_output" : "llm_error",
+            message: isParseFail ? "LLM returned invalid JSON; see job.output_data.rawLlmText" : message,
+          },
         })
       }
     },

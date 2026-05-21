@@ -188,4 +188,28 @@ describe("POST /v1/image-critic", () => {
     })
     expect(res.json().score).toBe(0.65)
   })
+
+  it("strips ```json markdown fences before parsing", async () => {
+    ;(llmComplete as any).mockResolvedValue({
+      text: "```json\n" + JSON.stringify({ score: 0.91, feedback: "All good." }) + "\n```",
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: "x",
+    })
+    const app = await setupApp()
+    const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().score).toBe(0.91)
+  })
+
+  it("extracts first {...} block when prose surrounds the JSON", async () => {
+    ;(llmComplete as any).mockResolvedValue({
+      text: `Here's my evaluation: ${JSON.stringify({ score: 0.5, feedback: "Mid." })}. Hope that helps!`,
+      usage: { inputTokens: 1, outputTokens: 1 },
+      model: "x",
+    })
+    const app = await setupApp()
+    const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().score).toBe(0.5)
+  })
 })
