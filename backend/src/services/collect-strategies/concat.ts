@@ -1,5 +1,5 @@
-import { filterSurvivors } from "./_normalize"
-import type { StrategyContext, StrategyResult } from "./types"
+import { filterSurvivors } from "./_normalize.js"
+import type { StrategyContext, StrategyResult } from "./types.js"
 
 type Config = { separator: string }
 
