@@ -173,7 +173,6 @@ jobs:
       CLOUDFLARE_R2_BUCKET: stub
       R2_PUBLIC_URL: https://stub.example.com
       EDITION: cloud
-      NODE_ENV: production
       PORT: 9000
     steps:
       - uses: actions/checkout@v5
@@ -192,6 +191,11 @@ jobs:
         run: npx tsc -p tsconfig.build.json
         working-directory: backend
       - name: Boot backend and probe /health
+        # NODE_ENV=production only on the actual boot — mirrors prod runtime
+        # without breaking the upstream `npm ci` (which prunes devDependencies
+        # if NODE_ENV=production is set at job level, leaving tsup missing).
+        env:
+          NODE_ENV: production
         run: |
           set -e
           cd backend
