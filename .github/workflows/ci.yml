@@ -161,16 +161,18 @@ jobs:
     runs-on: ubuntu-latest
     needs: [typecheck]
     env:
+      # Backend env-schema lives in `backend/src/lib/config.ts`. Keep these
+      # names in sync — Zod will reject the boot otherwise. SUPABASE_ANON_KEY
+      # is NOT in the schema, so we don't set it.
       SUPABASE_URL: https://stub.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
-      SUPABASE_ANON_KEY: stub-anon-key
       INTERNAL_ORCHESTRATOR_SECRET: stub-stub-stub-stub-stub-stub-stub-stub-stub
       KIE_API_KEY: stub
       ANTHROPIC_API_KEY: stub
-      CLOUDFLARE_R2_ACCOUNT_ID: stub
-      CLOUDFLARE_R2_ACCESS_KEY_ID: stub
-      CLOUDFLARE_R2_SECRET_ACCESS_KEY: stub
-      CLOUDFLARE_R2_BUCKET: stub
+      R2_ACCOUNT_ID: stub
+      R2_ACCESS_KEY_ID: stub
+      R2_SECRET_ACCESS_KEY: stub
+      R2_BUCKET_NAME: stub
       R2_PUBLIC_URL: https://stub.example.com
       EDITION: cloud
       PORT: 9000

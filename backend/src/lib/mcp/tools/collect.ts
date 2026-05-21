@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify"
 import { COLLECT_STRATEGY_IDS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
+import { errorResult, parseFailure } from "./_verb-helpers.js"
 import { config } from "../../config.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
@@ -86,10 +87,7 @@ export function registerCollect({ server, session, fastify }: RegisterCollectOpt
         payload,
       })
       if (res.statusCode >= 400) {
-        return {
-          content: [{ type: "text", text: `Error from Nodaro: ${res.statusCode} ${res.body}` }],
-          isError: true,
-        }
+        return errorResult(res.statusCode, res.body)
       }
       let parsed:
         | { jobId?: string; output?: string; meta?: Record<string, unknown> }
@@ -97,16 +95,13 @@ export function registerCollect({ server, session, fastify }: RegisterCollectOpt
       try {
         parsed = JSON.parse(res.body) as typeof parsed
       } catch {
-        return {
-          content: [{ type: "text", text: `Could not parse response: ${res.body}` }],
-          isError: true,
-        }
+        return parseFailure(res.body)
       }
-      if (!parsed?.output) {
-        return {
-          content: [{ type: "text", text: `Unexpected response shape: ${res.body}` }],
-          isError: true,
-        }
+      // `output` is a string. `concat` with an all-empty input legitimately
+      // returns `output: ""` — truthiness check would wrongly classify that
+      // as an error. Type-check is the right gate here.
+      if (typeof parsed?.output !== "string") {
+        return errorResult(res.statusCode, res.body)
       }
       return {
         content: [

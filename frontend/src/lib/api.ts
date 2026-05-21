@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { ImageCriticMode, WorkflowExport } from "@nodaro/shared"
+import type { CollectMeta, ImageCriticMode, WorkflowExport } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
@@ -6014,12 +6014,10 @@ export function executeCollect(input: {
   strategyId: string
   strategyConfig: Record<string, unknown>
   inputs: string[]
-  workflowExecutionId?: string
 }): Promise<{
   jobId: string
   output: string
-  meta: { selectedIndex?: number; reasoning?: string; summary: string }
-  inputs: string[]
+  meta: CollectMeta
 }> {
   return apiRequest("/v1/collect", "collect failed", {
     method: "POST",

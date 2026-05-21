@@ -1,34 +1,11 @@
 import type { NodaroClient } from "../client.js"
+import type { CollectStrategyId, CollectMeta } from "@nodaro/shared"
 
-/**
- * Strategy id for the Collect (fan-in) node. The six built-in strategies:
- *   - `pick-best-llm` — Sonnet picks the best item against your criteria.
- *   - `concat` — Join all survivors with a separator.
- *   - `first-non-empty` — Return the first survivor (empty strings filtered).
- *   - `count` — Return how many survivors came through.
- *   - `vote` — Return the most common survivor (ties → first).
- *   - `merge-json` — Parse each survivor as JSON and merge into one object.
- *
- * Kept as a string union so consumers don't have to import from
- * `@nodaro/shared` separately; the canonical registry lives at
- * `packages/shared/src/collect-strategy-registry.ts`.
- */
-export type CollectStrategyId =
-  | "pick-best-llm"
-  | "concat"
-  | "first-non-empty"
-  | "count"
-  | "vote"
-  | "merge-json"
-
-export interface CollectMeta {
-  /** Set by `pick-best-llm` and `vote`: zero-based index of the picked input. */
-  selectedIndex?: number
-  /** Set by `pick-best-llm`: the LLM's plain-language rationale. */
-  reasoning?: string
-  /** Always set — a human-readable summary of what the strategy did. */
-  summary: string
-}
+// Re-export the canonical types from `@nodaro/shared` (single source of
+// truth — the registry lives at `packages/shared/src/collect-strategy-registry.ts`).
+// `@nodaro/shared` is already a hard dep of this package, so there's no
+// bundle-size cost to importing from it.
+export type { CollectStrategyId, CollectMeta }
 
 export interface CollectInput {
   /** Which fan-in strategy to run. */
@@ -50,7 +27,7 @@ export interface CollectInput {
    * server reads this from the body before Zod strips it (same path as
    * other job-creating routes).
    */
-  workflowExecutionId?: string
+  workflowId?: string
 }
 
 export interface CollectResult {
@@ -72,18 +49,18 @@ export class CollectResource {
    * scoring, picking the best of N generations outside a workflow, or
    * one-shot programmatic merges.
    *
-   * Throws `BadRequestError` (code: `no_valid_inputs`) when every input is
-   * empty / whitespace; the underlying `EmptyInputError` is mapped to a
-   * 400 server-side.
+   * Throws `NodaroError` on 4xx/5xx responses (e.g. `code: "no_valid_inputs"`
+   * with status 400 when every input is empty / whitespace; the underlying
+   * `EmptyInputError` is mapped to a 400 server-side).
    */
-  execute(input: CollectInput): Promise<CollectResult> {
+  run(input: CollectInput): Promise<CollectResult> {
     return this.client.request("POST", "/v1/collect", {
       body: {
         strategyId: input.strategyId,
         strategyConfig: input.strategyConfig ?? {},
         inputs: input.inputs,
-        ...(input.workflowExecutionId !== undefined
-          ? { workflowExecutionId: input.workflowExecutionId }
+        ...(input.workflowId !== undefined
+          ? { workflowId: input.workflowId }
           : {}),
       },
     })

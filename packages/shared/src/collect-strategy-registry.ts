@@ -82,6 +82,19 @@ const MERGE_JSON_STRATEGY = {
   creditCostKey: "collect:merge-json",
 } as const satisfies CollectStrategy<{ strategy: "deep" | "shallow" }>
 
+/**
+ * Result-meta shape returned by every collect strategy. Shared between the
+ * backend route, the SDK client, and the frontend node so all three layers
+ * agree on field names. `selectedIndex` + `reasoning` are set by the
+ * `pick-best-llm` and `vote` strategies (the former also fills `reasoning`);
+ * `summary` is always populated.
+ */
+export type CollectMeta = {
+  readonly selectedIndex?: number
+  readonly reasoning?: string
+  readonly summary: string
+}
+
 export const COLLECT_STRATEGIES = [
   PICK_BEST_LLM_STRATEGY,
   CONCAT_STRATEGY,

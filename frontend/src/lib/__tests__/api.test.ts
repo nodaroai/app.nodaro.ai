@@ -811,7 +811,6 @@ describe("executeCollect", () => {
       jobId: "j1",
       output: "a-b",
       meta: { summary: "Joined 2 of 2 inputs" },
-      inputs: ["a", "b"],
     })
     vi.stubGlobal("fetch", mock)
 
@@ -841,29 +840,6 @@ describe("executeCollect", () => {
     expect(res.output).toBe("a-b")
     expect(res.jobId).toBe("j1")
     expect(res.meta.summary).toBe("Joined 2 of 2 inputs")
-    // The route echoes inputs back so the frontend can persist a per-iteration
-    // snapshot for the Inputs tab inspector.
-    expect(res.inputs).toEqual(["a", "b"])
-  })
-
-  it("forwards workflowExecutionId when provided", async () => {
-    noSession()
-    const mock = mockFetchJson({
-      jobId: "j2",
-      output: "x",
-      meta: { summary: "ok" },
-    })
-    vi.stubGlobal("fetch", mock)
-
-    await executeCollect({
-      strategyId: "vote",
-      strategyConfig: {},
-      inputs: ["x", "x", "y"],
-      workflowExecutionId: "exec-1",
-    })
-
-    const body = JSON.parse(mock.mock.calls[0][1].body as string)
-    expect(body.workflowExecutionId).toBe("exec-1")
   })
 
   it("throws on non-ok response", async () => {

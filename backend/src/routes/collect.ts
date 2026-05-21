@@ -96,7 +96,7 @@ export async function collectRoutes(app: FastifyInstance) {
 
         if (reservation?.usageLogId) await commitReservedCreditsForJob(job.id)
 
-        return reply.send({ jobId: job.id, output, meta, inputs })
+        return reply.send({ jobId: job.id, output, meta })
       } catch (err) {
         const message = err instanceof Error ? err.message : "Strategy failed"
         await supabase

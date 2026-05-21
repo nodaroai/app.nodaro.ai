@@ -124,7 +124,7 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
   })
 
   describe("collect (fan-in)", () => {
-    it("constructs body { strategyId, strategyConfig, inputs, workflowExecutionId, userId }", () => {
+    it("constructs body { strategyId, strategyConfig, inputs, workflowId, userId }", () => {
       const body = buildSyncHttpBody(
         node("collect", { strategyId: "concat", strategyConfig: { separator: "-" } }),
         { inputs: ["a", "b", "c"] },
@@ -133,7 +133,10 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
       expect(body.strategyId).toBe("concat")
       expect(body.strategyConfig).toEqual({ separator: "-" })
       expect(body.inputs).toEqual(["a", "b", "c"])
-      expect(body.workflowExecutionId).toBe("exec-1")
+      // The route reads `body.workflowId` via `extractWorkflowId` — sending
+      // `workflowExecutionId` would be silently dropped (was a bug pre-#2693).
+      expect(body.workflowId).toBe("wf-1")
+      expect(body.workflowExecutionId).toBeUndefined()
       expect(body.userId).toBe("user-1")
     })
 

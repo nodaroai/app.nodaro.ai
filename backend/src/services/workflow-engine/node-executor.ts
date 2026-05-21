@@ -741,14 +741,14 @@ export function buildSyncHttpBody(
       // FAN_IN_NODE_TYPES branch with the upstream listResults (or a single
       // upstream output wrapped as `[output]`). The strategy + its config come
       // straight from node data; strategyConfig falls back to {} so the route's
-      // Zod default applies cleanly. workflowExecutionId is informational —
-      // forwarded so the route can attribute the job to the current execution
-      // for future history / observability work.
+      // Zod default applies cleanly. workflowId is informational — forwarded
+      // so the route's `extractWorkflowId` can attribute the standalone job to
+      // the parent workflow for execution-history display.
       return {
         strategyId: (data.strategyId as string | undefined) ?? "concat",
         strategyConfig: (data.strategyConfig as Record<string, unknown> | undefined) ?? {},
         inputs: resolvedInputs.inputs ?? [],
-        workflowExecutionId: ctx.executionId,
+        workflowId: ctx.workflowId,
         userId: ctx.userId,
       }
     }

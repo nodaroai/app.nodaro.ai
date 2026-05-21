@@ -394,14 +394,14 @@ assets into downstream prompts) see the dedicated
 
 ### Pick the best of N generations (Collect / fan-in)
 
-`client.collect.execute()` runs the [Collect node](./nodes/utility/collect.md)
+`client.collect.run()` runs the [Collect node](./nodes/utility/collect.md)
 programmatically. Useful when you've generated several candidates and want
 to pick the best, concatenate them, vote, or merge as JSON — without
 building a workflow on the canvas.
 
 ```ts
 // Pick the best of 5 generated images
-const result = await client.collect.execute({
+const result = await client.collect.run({
   strategyId: "pick-best-llm",
   strategyConfig: {
     criteria: "sharpest image with no artifacts",
@@ -424,20 +424,20 @@ Other strategies don't need an LLM:
 
 ```ts
 // Concatenate survivors with a custom separator
-const joined = await client.collect.execute({
+const joined = await client.collect.run({
   strategyId: "concat",
   strategyConfig: { separator: "\n---\n" },
   inputs: ["A", "B", "C"],
 })
 
 // Majority vote (ties → first)
-const winner = await client.collect.execute({
+const winner = await client.collect.run({
   strategyId: "vote",
   inputs: ["red", "blue", "red", "red", "blue"],
 })
 
 // Deep-merge JSON fragments into one object
-const merged = await client.collect.execute({
+const merged = await client.collect.run({
   strategyId: "merge-json",
   strategyConfig: { strategy: "deep" },
   inputs: [

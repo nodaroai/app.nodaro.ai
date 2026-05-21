@@ -7,6 +7,7 @@ import type {
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
+  CollectStrategyId, CollectMeta,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
@@ -3711,8 +3712,8 @@ export type RouterNodeData = {
 export interface CollectNodeData {
   [key: string]: unknown
   label: string
-  /** Strategy id from the shared registry. See @nodaro/shared CollectStrategyId. */
-  strategyId: "pick-best-llm" | "concat" | "first-non-empty" | "count" | "vote" | "merge-json"
+  /** Strategy id from the shared registry. */
+  strategyId: CollectStrategyId
   /** Strategy-specific config (e.g. `{ separator: "\n\n" }` for concat). */
   strategyConfig: Record<string, unknown>
   // Execution result fields
@@ -3720,11 +3721,7 @@ export interface CollectNodeData {
   /** Snapshot of the most recent execution's inputs (truncated — see executor). */
   lastInputs?: string[]
   /** Snapshot of the most recent execution's meta payload. */
-  lastMeta?: {
-    selectedIndex?: number
-    reasoning?: string
-    summary: string
-  }
+  lastMeta?: CollectMeta
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string

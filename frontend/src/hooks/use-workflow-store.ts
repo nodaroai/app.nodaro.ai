@@ -93,6 +93,16 @@ export const EXECUTION_DATA_KEYS = new Set([
   "loraReplicateVersion",
   "loraTriggerWord",
   "loraTrainingStatus",
+  // Collect (fan-in) execution snapshot — `lastInputs` is a 50-item / 500-char
+  // bounded slice but can still be ~25KB; `lastMeta` is small but written on
+  // every Collect completion; `__upstreamCount` is set on the running edge of
+  // the same lifecycle. Without these here, every Collect run flipped
+  // isDirty, captured an undo snapshot, and broadcast a 25KB payload over
+  // Realtime + autosave. Mirrors the `__listResults` / `result` exemption
+  // above.
+  "lastInputs",
+  "lastMeta",
+  "__upstreamCount",
 ])
 
 /** Detect loop column type from upstream node's output handle. */
