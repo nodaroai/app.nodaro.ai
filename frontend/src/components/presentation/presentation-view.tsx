@@ -1725,7 +1725,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 workflowId={workflowId}
                 presentationSettings={settings}
                 updatePresentationSettings={updatePresentationSettings}
-                nodes={allPresentationNodes}
+                // Full canvas nodes — NOT allPresentationNodes — because
+                // PublishDialog auto-derives component handles from
+                // sub-workflow-input / sub-workflow-output nodes, and those
+                // types live in ALWAYS_EXCLUDED_TYPES (filtered out of the
+                // presentation node list). ShareDialog above stays on the
+                // curated list.
+                nodes={nodes}
               />
               <Button
                 variant="outline"
