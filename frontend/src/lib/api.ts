@@ -1137,6 +1137,13 @@ export async function generateObjectAsset(data: {
   variant: string
   name: string
   description?: string
+  // Free-form override prompt for assetType === "custom" — backend builds
+  // its prompt from `userPrompt` when set, otherwise falls back to a
+  // template seeded by `variant`. Mirrors the location route's contract
+  // (see backend/src/routes/generate-object-asset.ts schema). Required
+  // when the Material catalog browser fires a pick (the variant becomes
+  // the catalog label and userPrompt carries the descriptive override).
+  userPrompt?: string
   category?: string
   style?: string
   sourceImageUrl: string
