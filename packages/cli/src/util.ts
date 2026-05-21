@@ -70,8 +70,8 @@ export async function watchUntilTerminal<T extends PollableResult>(opts: WatchOp
     try {
       result = await opts.fetch()
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      info(`[${elapsed(start)}s] poll failed (will retry): ${detail}`)
+      const errMsg = err instanceof Error ? err.message : String(err)
+      info(`[${elapsed(start)}s] poll failed (will retry): ${errMsg}`)
       await sleep(intervalMs)
       continue
     }
