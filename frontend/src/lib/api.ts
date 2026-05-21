@@ -6019,6 +6019,7 @@ export function executeCollect(input: {
   jobId: string
   output: string
   meta: { selectedIndex?: number; reasoning?: string; summary: string }
+  inputs: string[]
 }> {
   return apiRequest("/v1/collect", "collect failed", {
     method: "POST",

@@ -3717,6 +3717,14 @@ export interface CollectNodeData {
   strategyConfig: Record<string, unknown>
   // Execution result fields
   result?: string
+  /** Snapshot of the most recent execution's inputs (truncated — see executor). */
+  lastInputs?: string[]
+  /** Snapshot of the most recent execution's meta payload. */
+  lastMeta?: {
+    selectedIndex?: number
+    reasoning?: string
+    summary: string
+  }
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string

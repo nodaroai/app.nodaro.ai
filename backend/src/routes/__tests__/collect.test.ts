@@ -96,7 +96,7 @@ describe("POST /v1/collect", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("happy path: returns { jobId, output, meta }", async () => {
+  it("happy path: returns { jobId, output, meta, inputs }", async () => {
     const { dispatchStrategy } = await import("../../services/collect-strategies/index.js")
     vi.mocked(dispatchStrategy).mockResolvedValue({
       result: "a-b",
@@ -113,6 +113,9 @@ describe("POST /v1/collect", () => {
     expect(body.output).toBe("a-b")
     expect(body.meta.summary).toBe("joined 2")
     expect(body.jobId).toBeTruthy()
+    // Inputs are echoed back so the frontend can persist a per-iteration
+    // snapshot on the node (Inputs tab inspector).
+    expect(body.inputs).toEqual(["a", "b"])
   })
 
   it("does NOT dedup identical bodies within 10s (dedup: false)", async () => {

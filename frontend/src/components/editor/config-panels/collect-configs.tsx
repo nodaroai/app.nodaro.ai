@@ -19,9 +19,11 @@ import { CollectStrategyForms } from "./collect-strategy-forms"
  *
  * Layout: two tabs.
  *   • Config  — strategy picker + per-strategy form.
- *   • Inputs  — read-only summary of the most recent run (the merged result
- *               and the upstream branch count). Disabled until the node has
- *               completed at least once.
+ *   • Inputs  — per-iteration inspector for the most recent run: the meta
+ *               summary, the LLM reasoning blockquote (when present), and a
+ *               vertical list of every upstream item with `selectedIndex`
+ *               highlighted in brand pink. Disabled until the node has
+ *               completed at least once with persisted inputs.
  *
  * The strategy registry lives in `@nodaro/shared/collect-strategy-registry`
  * — single source of truth for ids, labels, and default configs. Changing
@@ -29,16 +31,10 @@ import { CollectStrategyForms } from "./collect-strategy-forms"
  */
 export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) {
   const status = data.executionStatus ?? "idle"
-  const hasResult = status === "completed" && typeof data.result === "string"
-  const inputsTabEnabled = hasResult
-
-  // Upstream branch count is set by the workflow executor on data.__upstreamCount
-  // (see collect-node.tsx). It's only meaningful after a run.
-  const upstreamCountRaw = (data as unknown as Record<string, unknown>).__upstreamCount
-  const upstreamCount = typeof upstreamCountRaw === "number" ? upstreamCountRaw : undefined
+  const hasLastInputs = Array.isArray(data.lastInputs) && data.lastInputs.length > 0
+  const inputsTabEnabled = status === "completed" && hasLastInputs
 
   const strategy = COLLECT_STRATEGIES.find((s) => s.id === data.strategyId)
-  const strategyLabel = strategy?.label ?? data.strategyId
 
   return (
     <Tabs defaultValue="config" className="w-full">
@@ -89,28 +85,7 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
 
       <TabsContent value="inputs" className="flex flex-col gap-3">
         {inputsTabEnabled ? (
-          <>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Strategy</Label>
-              <p className="text-sm">{strategyLabel}</p>
-            </div>
-            {upstreamCount !== undefined && (
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Upstream branches
-                </Label>
-                <p className="text-sm">
-                  {upstreamCount} &rarr; 1
-                </p>
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs font-medium text-muted-foreground">Result</Label>
-              <pre className="text-xs bg-muted/40 p-2 rounded whitespace-pre-wrap break-words max-h-64 overflow-auto">
-                {data.result}
-              </pre>
-            </div>
-          </>
+          <CollectInputsTab inputs={data.lastInputs ?? []} meta={data.lastMeta} />
         ) : (
           <p className="text-sm text-muted-foreground">
             Run the workflow to inspect inputs.
@@ -118,5 +93,72 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
         )}
       </TabsContent>
     </Tabs>
+  )
+}
+
+/** Per-iteration inspector. */
+function CollectInputsTab({
+  inputs,
+  meta,
+}: {
+  inputs: readonly string[]
+  meta: CollectNodeData["lastMeta"]
+}) {
+  const summary = meta?.summary ?? ""
+  const reasoning = meta?.reasoning
+  const selectedIndex = typeof meta?.selectedIndex === "number" ? meta.selectedIndex : undefined
+
+  return (
+    <>
+      {summary && (
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs font-medium text-muted-foreground">Summary</Label>
+          <p className="text-sm">{summary}</p>
+        </div>
+      )}
+
+      {reasoning && (
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs font-medium text-muted-foreground">Reasoning</Label>
+          <blockquote className="text-xs italic border-l-2 border-muted-foreground/40 pl-2 text-muted-foreground">
+            {reasoning}
+          </blockquote>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-1">
+        <Label className="text-xs font-medium text-muted-foreground">
+          Items ({inputs.length})
+        </Label>
+        <ul className="flex flex-col gap-1.5">
+          {inputs.map((item, i) => {
+            const isSelected = selectedIndex === i
+            const truncated = item.length > 80 ? item.slice(0, 80) + "…" : item
+            return (
+              <li
+                key={i}
+                data-selected={isSelected ? "" : undefined}
+                className={
+                  "rounded text-xs px-2 py-1.5 break-words " +
+                  (isSelected
+                    ? "ring-2 ring-[#ff0073] bg-[#ff0073]/5"
+                    : "bg-muted/40")
+                }
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-muted-foreground font-mono shrink-0">[{i}]</span>
+                  <span className="flex-1 min-w-0">{truncated}</span>
+                  {isSelected && (
+                    <span className="shrink-0 text-[10px] uppercase font-medium tracking-wide text-[#ff0073]">
+                      selected
+                    </span>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </>
   )
 }

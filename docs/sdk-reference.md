@@ -18,6 +18,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.locations`](#clientlocations)
   - [`client.objects`](#clientobjects)
   - [`client.pipelines`](#clientpipelines)
+  - [`client.collect`](#clientcollect)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -1283,6 +1284,67 @@ console.log(`New pipeline: ${result.pipelineId}`)
 Returns `{ pipelineId, clonedStages, clonedEntities }`. The original pipeline
 remains in `status='completed'`. Throws on the same errors as the underlying
 route (see api-integration.md `POST /v1/pipelines/:id/branch`).
+
+---
+
+### `client.collect`
+
+Run the Collect (fan-in) node directly — pick the best of N inputs,
+concatenate, vote, or merge JSON. Mirrors the MCP `collect` tool.
+
+#### `execute(input)`
+
+```ts
+execute(input: CollectInput): Promise<CollectResult>
+```
+
+**`CollectInput`:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `strategyId` | `CollectStrategyId` | yes | `pick-best-llm` \| `concat` \| `first-non-empty` \| `count` \| `vote` \| `merge-json` |
+| `strategyConfig` | `Record<string, unknown>` | no | Strategy-specific config (see below). Defaults to `{}` (each strategy's defaults). |
+| `inputs` | `string[]` | yes | Up to 1000 input strings. |
+| `workflowExecutionId` | `string` | no | Associates this collect run with a workflow execution. |
+
+**`strategyConfig` per strategy:**
+
+| Strategy | Config shape |
+|----------|--------------|
+| `pick-best-llm` | `{ criteria: string, inputKind?: "text" \| "image-url" }` |
+| `concat` | `{ separator?: string }` (default `"\n\n"`) |
+| `first-non-empty` | `{}` |
+| `count` | `{}` |
+| `vote` | `{ caseSensitive?: boolean }` (default `false`) |
+| `merge-json` | `{ strategy?: "deep" \| "shallow" }` (default `"deep"`) |
+
+**`CollectResult`:**
+
+```ts
+{
+  jobId: string
+  output: string         // chosen / joined value (stringified)
+  meta: {
+    selectedIndex?: number  // set by pick-best-llm, vote
+    reasoning?: string      // set by pick-best-llm
+    summary: string         // always present
+  }
+}
+```
+
+```ts
+const result = await client.collect.execute({
+  strategyId: "pick-best-llm",
+  strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
+  inputs: [url1, url2, url3, url4, url5],
+})
+console.log(result.output, result.meta.reasoning)
+```
+
+Throws a `NodaroError` (status 400, `code: "no_valid_inputs"`) when every
+input is empty / whitespace. Credits are reserved by the same
+`creditGuard` middleware used by all generation routes, so insufficient
+credits surface as `InsufficientCreditsError`.
 
 ---
 
