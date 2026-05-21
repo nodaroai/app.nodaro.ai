@@ -58,6 +58,7 @@ const SYNC_HTTP_NODES = new Set([
   "qa-check",
   "save-to-storage",
   "web-scrape",
+  "collect",
 ])
 
 // Maps node type to internal route path.
@@ -84,6 +85,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "x-post": "/v1/social/publish",
   "facebook-post": "/v1/social/publish",
   "telegram-post": "/v1/social/publish",
+  "collect": "/v1/collect",
 }
 
 // Maps social node type to platform name
@@ -716,6 +718,23 @@ export function buildSyncHttpBody(
         body.resultsLimit = data.resultsLimit
       }
       return withUserPrompt(body)
+    }
+
+    case "collect": {
+      // Fan-in node — `resolvedInputs.inputs` is populated by the input-resolver's
+      // FAN_IN_NODE_TYPES branch with the upstream listResults (or a single
+      // upstream output wrapped as `[output]`). The strategy + its config come
+      // straight from node data; strategyConfig falls back to {} so the route's
+      // Zod default applies cleanly. workflowExecutionId is informational —
+      // forwarded so the route can attribute the job to the current execution
+      // for future history / observability work.
+      return {
+        strategyId: (data.strategyId as string | undefined) ?? "concat",
+        strategyConfig: (data.strategyConfig as Record<string, unknown> | undefined) ?? {},
+        inputs: resolvedInputs.inputs ?? [],
+        workflowExecutionId: ctx.executionId,
+        userId: ctx.userId,
+      }
     }
 
     default:

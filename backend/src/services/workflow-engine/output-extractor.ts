@@ -206,6 +206,20 @@ export function extractSourceNodeOutput(
       return Object.keys(output).length > 0 ? output : { text: JSON.stringify(td) }
     }
 
+    case "sub-workflow-input": {
+      // Source node when this workflow is invoked as a sub-workflow OR
+      // published as a component — inputOverrides set data.__injectedPortValues
+      // upstream and getPrimaryOutput(..., sourceHandle) then routes the right
+      // port value to each downstream edge.  Without this case, getNodeOutput
+      // returns undefined and downstream nodes execute with no inputs.
+      const injected = data.__injectedPortValues as Record<string, string> | undefined
+      if (!injected) return undefined
+      const output: NodeOutput = { _injectedPortValues: injected }
+      const firstValue = Object.values(injected)[0]
+      if (firstValue) output.text = firstValue
+      return output
+    }
+
     default:
       return undefined
   }
@@ -360,6 +374,14 @@ export function getPrimaryOutput(
   }
   if (sourceType === "router") {
     return output.text
+  }
+
+  // Collect (fan-in): returns the single aggregated `result` string.
+  // Without this case the fallback below would return undefined (collect
+  // doesn't populate any of imageUrl/videoUrl/audioUrl/text), so downstream
+  // text consumers would silently see no value from a fan-in node.
+  if (sourceType === "collect") {
+    return output.result
   }
 
   // Adjust-volume can output either audio or video — respect lastInputType (matches frontend)
@@ -788,7 +810,7 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
  */
 export function buildNodeOutputFromJobData(
   outputData: Record<string, unknown>,
-  _nodeType: string,
+  nodeType: string,
 ): NodeOutput {
   const output: NodeOutput = {}
 
@@ -802,6 +824,15 @@ export function buildNodeOutputFromJobData(
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)
   if (!output.text && outputData.generatedText) {
     output.text = outputData.generatedText as string
+  }
+
+  // Collect (fan-in): the route stores its aggregated string under `output`
+  // in jobs.output_data (Task 13's response shape: `{ jobId, output, meta }`),
+  // and getPrimaryOutput("collect") reads NodeOutput.result. Map the two.
+  // Narrowly scoped to nodeType === "collect" because `output` is too generic
+  // a key name to safely promote into DIRECT_OUTPUT_KEYS.
+  if (nodeType === "collect" && !output.result && typeof outputData.output === "string") {
+    output.result = outputData.output
   }
 
   // Normalize suno-lyrics: worker stores { lyrics: [{text, title}, ...] }

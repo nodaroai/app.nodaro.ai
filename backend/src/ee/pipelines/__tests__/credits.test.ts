@@ -9,9 +9,10 @@ import {
 beforeEach(() => vi.clearAllMocks())
 
 describe("estimateUpfrontCredits", () => {
-  it("includes Stage 1 baseline (30) + music (4) + editor (3) + final-merge (3) when music is enabled", () => {
+  it("includes Stage 1 baseline (30) + music (4) + editor (3) + final-merge (3) + storyboard cohesion (5) when music is enabled", () => {
     // Phase 1C.2: pipeline-level Stage 7 sub-steps add to the Stage 1 baseline.
-    //   30 (Stage 1) + 4 (music) + 3 (editor) + 3 (final merge) = 40
+    // Phase 1D.2c-b-i: Storyboard Cohesion critic adds 5 credits to the baseline (all modes).
+    //   30 (Stage 1) + 4 (music) + 3 (editor) + 3 (final merge) + 5 (storyboard cohesion) = 45
     expect(
       estimateUpfrontCredits({
         targetDurationSeconds: 60,
@@ -21,11 +22,11 @@ describe("estimateUpfrontCredits", () => {
         narrationEnabled: true,
         lipsyncEnabled: true,
       }),
-    ).toBe(40)
+    ).toBe(45)
   })
 
   it("excludes the 4 cr music allocation when music is disabled", () => {
-    // 30 (Stage 1) + 0 (music disabled) + 3 (editor) + 3 (final merge) = 36
+    // 30 (Stage 1) + 0 (music disabled) + 3 (editor) + 3 (final merge) + 5 (storyboard cohesion) = 41
     expect(
       estimateUpfrontCredits({
         targetDurationSeconds: 60,
@@ -35,7 +36,7 @@ describe("estimateUpfrontCredits", () => {
         narrationEnabled: true,
         lipsyncEnabled: true,
       }),
-    ).toBe(36)
+    ).toBe(41)
   })
 
   it("auto mode currently costs the same as manual (no premium yet)", () => {
@@ -48,7 +49,7 @@ describe("estimateUpfrontCredits", () => {
         narrationEnabled: true,
         lipsyncEnabled: true,
       }),
-    ).toBe(40)
+    ).toBe(45)
   })
 
   it("adds 40 credits for mode='guided' vs mode='manual' baseline", () => {
@@ -69,6 +70,24 @@ describe("estimateUpfrontCredits", () => {
       lipsyncEnabled: true,
     })
     expect(guided - baseline).toBe(40) // CHAT_TURN_CAPS.script (20) × 2 credits/turn
+  })
+
+  it("adds 5 credits for the Storyboard Cohesion critic to the baseline in all 3 modes", () => {
+    // Phase 1D.2c-b-i: critic runs once during Stage 6 (scene_images) in manual/auto/guided.
+    const args = {
+      targetDurationSeconds: 30,
+      format: "short_film" as const,
+      musicEnabled: true,
+      narrationEnabled: true,
+      lipsyncEnabled: true,
+    }
+    const manual = estimateUpfrontCredits({ ...args, mode: "manual" })
+    const auto = estimateUpfrontCredits({ ...args, mode: "auto" })
+    const guided = estimateUpfrontCredits({ ...args, mode: "guided" })
+    // Manual + 5 cohesion = 45; auto same; guided adds 40 chat-refine on top = 85.
+    expect(manual).toBe(45)
+    expect(auto).toBe(45)
+    expect(guided).toBe(85)
   })
 })
 

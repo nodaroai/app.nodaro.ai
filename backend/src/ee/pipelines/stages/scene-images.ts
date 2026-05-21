@@ -7,6 +7,7 @@ import { allocateReferenceSlots } from "../continuity.js"
 import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
 import { runMatchCutOrchestrator } from "../match-cut-orchestrator.js"
+import { runStoryboardCohesionCritic } from "../llms/storyboard-cohesion-critic.js"
 
 export interface RunSceneImagesStageArgs {
   supabase: SupabaseClient
@@ -269,17 +270,118 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   //    (no user pause for keyframe review). The critic already ran and
   //    cleared with zero breaks — auto-advance only kicks in on the clean
   //    path. Manual/guided keep the existing `awaiting_approval` pause.
-  const sharedOutput = {
+  const sharedOutput: Record<string, unknown> = {
     ...existingOutput,
     keyframes_generated: true,
     match_cut_verdicts: allMatchCutVerdicts,
     match_cut_break_pending: [],
   }
+
+  // Phase 1D.2c-b-i §4: Storyboard Cohesion Critic (warn-only).
+  // Runs AFTER the Match Cut Critic (Phase 1D.1) so any per-shot match-cut
+  // breaks are resolved first. Reviews the keyframes IN ORDER and emits
+  // cross-scene cohesion findings (character/location/lighting/style drift,
+  // missing establishing shots, plot jumps).
+  //
+  // Failure mode: warn-only. The critic's findings surface to the user via
+  // a panel banner but never block stage advance. Any error path (LLM
+  // timeout, schema parse fail, etc.) is caught and logged — the stage still
+  // advances and no `storyboard_cohesion_*` fields land on the output.
+  //
+  // Early-return guard: when ANY scene's first shot lacks a keyframe_url
+  // (partial retry mid-flight or persist-failure), skip the critic — it
+  // needs the full keyframe sequence to make sense of cross-scene drift.
+  try {
+    const cohesionInputs = loadStoryboardCohesionInputs(scenesWithKeyframes ?? [])
+    if (cohesionInputs.length > 0) {
+      const cohesionResult = await runStoryboardCohesionCritic({
+        supabase,
+        pipelineId,
+        stageId,
+        userId,
+        scenes: cohesionInputs,
+        globalStyle: plan.global_style,
+      })
+      Object.assign(sharedOutput, {
+        storyboard_cohesion_findings: cohesionResult.verdict.findings,
+        storyboard_cohesion_assessment: cohesionResult.verdict.overall_assessment,
+        storyboard_cohesion_score: cohesionResult.verdict.coherence_score,
+        storyboard_cohesion_summary: cohesionResult.verdict.summary,
+      })
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[storyboard-cohesion] critic failed for pipeline=${pipelineId} (non-fatal):`,
+      err instanceof Error ? err.message : String(err),
+    )
+  }
+
   if (mode === "auto") {
     await advanceToApproved(supabase, pipelineId, stageId, userId, sharedOutput)
   } else {
     await advanceToAwaitingApproval(supabase, pipelineId, stageId, sharedOutput)
   }
+}
+
+/**
+ * Phase 1D.2c-b-i §4 — extract the StoryboardCohesionCritic input array from
+ * scene entity rows (post Stage-6 keyframe persistence).
+ *
+ * Per spec, the keyframe used for cross-scene cohesion is the first shot's
+ * `keyframe_url` (the scene's primary visual anchor — Stage 6 writes it onto
+ * `pipeline_entities.metadata.scene_node_data.shots[0].keyframe_url`).
+ *
+ * Returns an empty array when any scene's first shot lacks a keyframe URL, so
+ * the caller can treat the critic as "not ready yet" rather than crashing
+ * mid-stage. This guards partial-retry windows where some scenes have
+ * keyframes persisted and others don't.
+ */
+function loadStoryboardCohesionInputs(
+  scenes: Array<{ id: string; entity_key: string; metadata: Record<string, unknown> | null }>,
+): Array<{
+  scene_index: number
+  description: string
+  keyframe_url: string
+  location_key: string
+  cast_keys: string[]
+}> {
+  const inputs: Array<{
+    scene_index: number
+    description: string
+    keyframe_url: string
+    location_key: string
+    cast_keys: string[]
+  }> = []
+  for (const scene of scenes) {
+    const sceneNodeData = (scene.metadata as Record<string, unknown> | null)
+      ?.scene_node_data as SceneNodeData | undefined
+    if (!sceneNodeData) {
+      // Without scene_node_data we can't surface this scene to the critic.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[storyboard-cohesion] missing scene_node_data on entity=${scene.entity_key}; skipping critic`,
+      )
+      return []
+    }
+    const firstShot = (sceneNodeData.shots as ShotSpec[] | undefined)?.[0]
+    const keyframeUrl = firstShot?.keyframe_url
+    if (!keyframeUrl) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[storyboard-cohesion] missing first-shot keyframe_url on scene=${scene.entity_key}; skipping critic`,
+      )
+      return []
+    }
+    inputs.push({
+      scene_index: sceneNodeData.scene_index,
+      description: sceneNodeData.description,
+      keyframe_url: keyframeUrl,
+      location_key: sceneNodeData.location_key,
+      cast_keys: sceneNodeData.cast_keys,
+    })
+  }
+  return inputs
 }
 
 /**

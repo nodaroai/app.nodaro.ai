@@ -85,6 +85,32 @@ export function resolveNodeInputs(
     const effectiveListResults = state?.output?.listResults
       ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
       ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
+
+    // Fan-in targets (collect): consume the entire upstream list as a single
+    // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
+    // fold the list into one value, they are never fanned out per-item. When
+    // upstream has no list (no fan-out happened), wrap its single output as
+    // `[output]` so the strategy still has something to fold.
+    if (FAN_IN_NODE_TYPES.has(targetNode.type)) {
+      const filtered: string[] = effectiveListResults && effectiveListResults.length > 0
+        ? selectListItems(effectiveListResults, edgeData as SelectorFields | undefined)
+        : []
+      const collected: string[] = []
+      for (const item of filtered) {
+        if (typeof item === "string" && item.length > 0) collected.push(item)
+      }
+      if (collected.length > 0) {
+        inputs.inputs = [...(inputs.inputs ?? []), ...collected]
+        continue
+      }
+      // Single-result fallback — upstream wasn't fanned out.
+      const single = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData)
+      if (single) {
+        inputs.inputs = [...(inputs.inputs ?? []), single]
+      }
+      continue
+    }
+
     if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
@@ -373,6 +399,11 @@ export function getListInputForNode(
   allNodes: SimpleNode[],
   triggerData?: Record<string, unknown>,
 ): string[] | undefined {
+  // Fan-in targets consume the upstream list — they are NOT fanned out themselves.
+  // Returning undefined here keeps the orchestrator from creating one execution
+  // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
+  if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
+
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
 
   for (const edge of incomingEdges) {
@@ -659,6 +690,11 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
 
 /** Target node types that accumulate inputs into arrays (videoUrls, audioUrls). */
 const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combine-audio"])
+
+/** Target node types that consume an upstream list as a single fan-in input.
+ *  The resolver collects all upstream items into `inputs.inputs` and skips
+ *  per-item routing entirely — the strategy folds the list into one value. */
+const FAN_IN_NODE_TYPES = new Set(["collect"])
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",

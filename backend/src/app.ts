@@ -95,6 +95,7 @@ import { characterPortraitApprovalRoutes } from "./routes/character-portrait-app
 import { characterTrainingRoutes } from "./routes/character-training.js"
 import { replicateTrainingWebhookRoutes } from "./routes/replicate-training-webhook.js"
 import { webScrapeRoutes } from "./routes/web-scrape.js"
+import { collectRoutes } from "./routes/collect.js"
 import { downloadRoutes } from "./routes/download.js"
 import { renderVideoRoutes } from "./routes/render-video.js"
 import { sceneGraphAIRoutes } from "./routes/scene-graph-ai.js"
@@ -318,6 +319,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(characterTrainingRoutes)
   if (hasCredits()) await app.register(replicateTrainingWebhookRoutes)
   await app.register(webScrapeRoutes)
+  await app.register(collectRoutes)
   await app.register(downloadRoutes)
   await app.register(renderVideoRoutes)
   await app.register(sceneGraphAIRoutes)
