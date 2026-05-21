@@ -14,6 +14,9 @@ vi.mock("@/lib/pipelines-api", () => ({
     eventsUrl: vi.fn(() => "/events"),
     branch: vi.fn(),
     patchMode: vi.fn(),
+    fetchChat: vi.fn().mockResolvedValue({ turns: [] }),
+    postChat: vi.fn(),
+    applyChat: vi.fn(),
   },
 }))
 
@@ -347,6 +350,74 @@ describe("PipelinePanel", () => {
 
     await waitFor(() => expect(screen.queryByText("failed")).toBeInTheDocument())
     expect(screen.queryByTestId("critic-failure-surface")).not.toBeInTheDocument()
+  })
+
+  // ── Phase 1D.2b M1: ChatPanel mount conditional ──────────────────────────
+  it("mounts ChatPanel when mode='guided' AND script stage is awaiting_approval", async () => {
+    // ChatPanel auto-collapses below 1280px viewport; force a wide one so
+    // it renders in expanded form for this assertion.
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1600,
+    })
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "awaiting_approval", current_stage: "script", mode: "guided",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue(fakeAwaiting)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByTestId("chat-panel")).toBeInTheDocument())
+  })
+
+  it("does NOT mount ChatPanel when mode='manual'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "awaiting_approval", current_stage: "script", mode: "manual",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue(fakeAwaiting)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.getByText("Mock Title")).toBeInTheDocument())
+    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
+  })
+
+  it("does NOT mount ChatPanel when mode='auto' (auto-mode has its own critic loop)", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "awaiting_approval", current_stage: "script", mode: "auto",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue(fakeAwaiting)
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.getByText("Mock Title")).toBeInTheDocument())
+    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
+  })
+
+  it("does NOT mount ChatPanel when guided but stage status is 'running'", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1", status: "running", current_stage: "script", mode: "guided",
+      spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
+      branched_from_pipeline_id: null, branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running", output: {}, critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
   })
 
   it("renders SceneGrid when current_stage is shot_list", async () => {

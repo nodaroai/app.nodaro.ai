@@ -23,6 +23,7 @@ vi.mock("../../ee/pipelines/credits.js", () => ({
 }))
 
 vi.mock("../../ee/pipelines/engine.js", () => ({
+  approveStage: vi.fn(async () => ({ ok: true })),
   approveScriptStage: vi.fn(async () => ({ ok: true })),
   rejectScriptStage: vi.fn(async () => ({ ok: true })),
 }))
@@ -251,9 +252,32 @@ describe("GET /v1/pipelines/:id", () => {
 })
 
 describe("POST /v1/pipelines/:id/stages/:stage_name/approve", () => {
-  it("rejects non-script stage with stage_not_implemented", async () => {
+  it("rejects an unknown stage_name with invalid_stage_name (Phase 1D.2b E1)", async () => {
     const app = await makeApp()
-    // First create a pipeline so the id exists in the mock.
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/not_a_real_stage/approve`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_stage_name")
+    await app.close()
+  })
+
+  it("approves a non-script stage by routing to approveStage (Phase 1D.2b E1)", async () => {
+    const { approveStage } = await import("../../ee/pipelines/engine.js")
+    ;(approveStage as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
+    const app = await makeApp()
     await app.inject({
       method: "POST",
       url: "/v1/pipelines",
@@ -269,8 +293,68 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/approve", () => {
       url: `/v1/pipelines/${PIPELINE_ID}/stages/characters/approve`,
       payload: {},
     })
+    expect(res.statusCode).toBe(200)
+    expect(approveStage).toHaveBeenCalledWith(
+      expect.anything(),
+      PIPELINE_ID,
+      "characters",
+      TEST_USER_ID,
+      undefined,
+    )
+    await app.close()
+  })
+
+  it("approves script stage with edits — body Zod accepts JSON Patch (Phase 1D.2b E1)", async () => {
+    const { approveStage } = await import("../../ee/pipelines/engine.js")
+    ;(approveStage as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
+    const app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    const patch = [{ op: "replace", path: "/title", value: "Refined" }]
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/script/approve`,
+      payload: { edits: patch },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(approveStage).toHaveBeenCalledWith(
+      expect.anything(),
+      PIPELINE_ID,
+      "script",
+      TEST_USER_ID,
+      patch,
+    )
+    await app.close()
+  })
+
+  it("rejects a malformed edits body with validation_error", async () => {
+    const app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "x",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+    // op="bogus" is not in the {add, remove, replace} enum.
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/script/approve`,
+      payload: { edits: [{ op: "bogus", path: "/title", value: "x" }] },
+    })
     expect(res.statusCode).toBe(400)
-    expect(res.json().error.code).toBe("stage_not_implemented")
+    expect(res.json().error.code).toBe("validation_error")
     await app.close()
   })
 })

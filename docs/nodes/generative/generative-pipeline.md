@@ -41,6 +41,20 @@ mode-selection prompt.
 
 **Recovery from auto-mode failures:** failed pipelines surface a critic-failure banner in the pipeline panel and the existing "Re-run from here" branch buttons (1D.3) let you create a new pipeline from a prior approved stage. Switching mid-flight to manual is available via the Switch-to-Manual button on running auto/guided pipelines (not on failed pipelines — use Branch instead).
 
+### Guided Mode — Script-stage chat
+
+In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual mode, but an adjacent chat panel mounts next to the pipeline panel. You can refine the generated `ShowrunnerPlan` in natural language:
+
+- **Send a message** (max 8000 chars). The Showrunner Refinement Director (Sonnet 4.6) returns a one-sentence reply + optionally a **proposed change** card.
+- **Two proposal types:**
+  - **Edit Artifact** — JSON Patch (RFC 6902) on the plan: title, logline, scene descriptions/duration, cast roster, locations, objects, etc. Click **Apply** to commit.
+  - **Suggest Branch** — when the change is structural (genre swap, protagonist replacement, removing a scene with many dependent dialogue lines), the director recommends using the Branch flow instead of inline patching.
+- **Reference integrity is enforced**: a patch that removes a cast/location/object key while it's still referenced in a scene is rejected, and a follow-up assistant turn explains what to fix. The user can iterate.
+- **Cap**: 20 user turns per pipeline. Reached the cap? Approve, branch, or switch to Manual Mode.
+- **Cost**: ~2 credits per chat turn (cached Sonnet 4.6). Reserved upfront for `mode='guided'` (40 credits over manual baseline). Unused credits refund automatically.
+
+Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
+
 ## Stage 1 — Script
 
 1. **Detection** (Haiku) extracts entities from the prompt.

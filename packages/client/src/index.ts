@@ -155,5 +155,8 @@ export {
 export type {
   BranchPipelineInput,
   BranchPipelineResult,
+  ChatTurn,
+  ChatStageResult,
+  ApplyChatProposalResult,
 } from "./resources/pipelines.js"
 export type { PipelineStageName } from "./resources/pipelines.js"

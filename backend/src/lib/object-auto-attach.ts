@@ -89,3 +89,46 @@ export async function autoAttachObjectAsset(args: {
     { name, url },
   )
 }
+
+/**
+ * Single-candidate auto-attach: write the generated URL to
+ * `objects.source_image_url` for the user's row, ownership + soft-delete
+ * guarded. Used by `makeEntityImageHandler` when `logPrefix === "generate-object"`
+ * AND `attachToObjectId` is set in the queue payload (route only forwards
+ * `attachToObjectId` for count === 1; multi-candidate flows leave it
+ * undefined so the user approves via approve_object_main_image).
+ *
+ * Errors are swallowed by design (the result URL is already on jobs.output_data;
+ * throwing here would orphan a successful generation). Mirrors
+ * setCharacterPortrait in lib/character-auto-attach.ts:95.
+ *
+ * Explicit `updated_at = new Date().toISOString()` is belt-and-braces
+ * alongside the trigger (matches the location-main-image-approval pattern).
+ */
+export async function setObjectMainImage(args: {
+  objectId: string
+  userId: string
+  url: string
+}): Promise<boolean> {
+  const { objectId, userId, url } = args
+  try {
+    const { error } = await supabase
+      .from("objects")
+      .update({ source_image_url: url, updated_at: new Date().toISOString() })
+      .eq("id", objectId)
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+    if (error) {
+      console.warn(
+        `[object-attach] set source_image_url failed (object=${objectId}): ${error.message}`,
+      )
+      return false
+    }
+    return true
+  } catch (e) {
+    console.warn(
+      `[object-attach] set source_image_url threw (object=${objectId}): ${String(e)}`,
+    )
+    return false
+  }
+}

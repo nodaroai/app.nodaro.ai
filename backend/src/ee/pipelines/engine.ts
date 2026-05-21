@@ -1,10 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
+import {
+  PIPELINE_STAGE_NAMES,
+  type JsonPatch,
+  type PipelineStageName,
+} from "@nodaro/shared"
 import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
 import { refundPipelineCredits } from "./credits.js"
 import { incrementCriticRetry } from "./stage-utils.js"
 import { validateCanvasAgainstPlan, getStageExpectedEntityIds } from "./drift.js"
+import { applyStageEdit } from "./chat/apply-stage-edit.js"
 
 export interface DriveArgs {
   supabase: SupabaseClient
@@ -342,41 +347,107 @@ async function runScriptAndPersist(
 }
 
 /**
- * Phase 1B.1: after Script approval, re-enqueue the orchestrator to drive
- * Stage 2 (Characters). The pipeline is marked `completed` only once
- * `drivePipeline` reaches the end of the canonical stage sequence.
+ * Phase 1D.2b E1 — generalized stage approval.
+ *
+ * Approve a stage. If `edits` is a non-empty JSON Patch, routes through
+ * `applyStageEdit` (which patches the artifact, inserts an attempt row,
+ * CAS-flips status, and writes back to pipeline_stages.output). Otherwise
+ * the no-edits path runs (CAS-flip status='approved' from 'awaiting_approval',
+ * enqueue stage_advance).
+ *
+ * Generalized from the original Phase 1A `approveScriptStage`; the old name
+ * remains as a deprecation shim so call sites can migrate incrementally.
  */
-export async function approveScriptStage(
+export async function approveStage(
   supabase: SupabaseClient,
   pipelineId: string,
-  edits?: unknown,
+  stageName: PipelineStageName,
+  userId: string,
+  edits?: JsonPatch,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { data: stage } = await supabase
+    .from("pipeline_stages")
+    .select("id, status")
+    .eq("pipeline_id", pipelineId)
+    .eq("stage_name", stageName)
+    .maybeSingle()
+  if (!stage) return { ok: false, reason: "stage_not_found" }
+
+  if (edits && edits.length > 0) {
+    const result = await applyStageEdit({
+      supabase,
+      pipelineId,
+      stageName,
+      stageId: stage.id as string,
+      userId,
+      jsonPatch: edits,
+      source: "approve_edits",
+    })
+    return result.ok ? { ok: true } : { ok: false, reason: result.reason }
+  }
+
+  // No-edits path — extracted from the original approveScriptStage body.
+  return approveStageNoEdits(supabase, pipelineId, stageName, userId)
+}
+
+/**
+ * No-edits approval path: CAS-flip status='approved' from 'awaiting_approval',
+ * publish stage:status SSE, and enqueue the next pipeline drive.
+ */
+async function approveStageNoEdits(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  stageName: PipelineStageName,
+  userId: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   // Optimistic concurrency: only flip from awaiting_approval to approved.
   const { data, error } = await supabase
     .from("pipeline_stages")
     .update({
       status: "approved",
-      user_edits: edits as Record<string, unknown> | undefined,
+      completed_at: new Date().toISOString(),
     })
     .eq("pipeline_id", pipelineId)
-    .eq("stage_name", "script")
+    .eq("stage_name", stageName)
     .eq("status", "awaiting_approval")
     .select("id")
   if (error) return { ok: false, reason: error.message }
   if (!data || data.length === 0) return { ok: false, reason: "stage_already_advanced" }
 
-  // Phase 1B.1: after Script approval, advance to Characters stage.
-  pipelineEvents.publish({ type: "stage:status", pipelineId, stageName: "script", status: "approved" })
+  pipelineEvents.publish({ type: "stage:status", pipelineId, stageName, status: "approved" })
 
-  // Re-enqueue the orchestrator to drive Stage 2. Lazy-loaded to avoid circular
-  // module imports (queue.ts imports config which can pull in supabase setup).
+  // Re-enqueue the orchestrator to drive the next stage. Lazy-loaded to avoid
+  // circular module imports (queue.ts imports config which can pull in
+  // supabase setup).
   const { enqueuePipelineRun } = await import("./queue.js")
   await enqueuePipelineRun({
     pipelineId,
-    userId: await resolveUserId(supabase, pipelineId),
+    userId,
     reason: "stage_advance",
   })
   return { ok: true }
+}
+
+/**
+ * @deprecated — call `approveStage(supabase, pipelineId, 'script', userId, edits)` instead.
+ *
+ * Preserves the original 3-arg signature for call sites that haven't migrated
+ * yet. Internally resolves `userId` via `resolveUserId(supabase, pipelineId)`
+ * — matching the original behavior — and delegates to the new helper.
+ */
+export async function approveScriptStage(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  edits?: unknown,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const userId = await resolveUserId(supabase, pipelineId)
+  return approveStage(
+    supabase,
+    pipelineId,
+    "script",
+    userId,
+    edits as JsonPatch | undefined,
+  )
 }
 
 export async function rejectScriptStage(

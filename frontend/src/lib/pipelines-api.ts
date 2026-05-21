@@ -5,6 +5,7 @@ import type {
   PipelineStatus,
   PipelineStageName,
   SubGateName,
+  ChatEnabledStage,
   AuditPromptResult,
   ImprovePromptResult,
   ImprovePromptInput,
@@ -19,6 +20,11 @@ import type {
   ValidateMatchCutInput,
   ValidateMatchCutResult,
 } from "@nodaro/shared"
+import type {
+  ChatTurn,
+  ChatStageResult,
+  ApplyChatProposalResult,
+} from "@nodaro/client"
 import { getAuthHeaders } from "@/lib/api"
 
 // Pipelines API uses the same proxy convention as the rest of the frontend:
@@ -251,6 +257,48 @@ export const pipelinesApi = {
     mode: "manual",
   ): Promise<{ ok: true; mode: "manual" }> =>
     patchJson(`/v1/pipelines/${pipelineId}`, { mode }),
+
+  /**
+   * Phase 1D.2b — Guided-mode chat. Fetch the chat history for a stage.
+   * Returns `{ turns: [] }` when the stage has no turns yet. The frontend
+   * panel calls this on initial mount; subsequent updates arrive via the
+   * `chat:turn` SSE event (handled in `use-pipeline-events.ts`).
+   */
+  fetchChat: (
+    pipelineId: string,
+    stage: ChatEnabledStage,
+  ): Promise<{ turns: ChatTurn[] }> =>
+    getJson(`/v1/pipelines/${pipelineId}/stages/${stage}/chat`),
+
+  /**
+   * Phase 1D.2b — Send a chat message to the Showrunner Refinement Director.
+   * Persists user + assistant turns and returns the assistant's reply plus
+   * an optional `proposed_change` the user can accept via `applyChat`.
+   */
+  postChat: (
+    pipelineId: string,
+    stage: ChatEnabledStage,
+    message: string,
+  ): Promise<ChatStageResult> =>
+    postJson(`/v1/pipelines/${pipelineId}/stages/${stage}/chat`, { message }),
+
+  /**
+   * Phase 1D.2b — Accept a proposed_change from a prior assistant turn.
+   * Validates the JSON Patch + stage schema + reference integrity, then
+   * persists a new pipeline_stage_attempts row and CAS-flips the stage to
+   * approved. On recoverable failures (schema_invalid /
+   * reference_integrity_failed) the backend inserts a follow-up assistant
+   * turn with a hint and returns `{ applied: false, error }`.
+   */
+  applyChat: (
+    pipelineId: string,
+    stage: ChatEnabledStage,
+    turnId: string,
+  ): Promise<ApplyChatProposalResult> =>
+    postJson(
+      `/v1/pipelines/${pipelineId}/stages/${stage}/chat/turns/${turnId}/apply`,
+      {},
+    ),
 }
 
 export type { PipelineEvent }

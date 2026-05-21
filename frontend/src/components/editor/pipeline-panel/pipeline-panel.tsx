@@ -18,6 +18,7 @@ import {
   DialogueRecheckBanner,
   type DialogueRecheckResult,
 } from "./dialogue-recheck-banner"
+import { ChatPanel } from "./chat/chat-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 
@@ -192,6 +193,16 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const plan = (stage?.output as { plan?: ShowrunnerPlan } | undefined)?.plan ?? null
   const status = (stage?.status as PipelineStageStatus | undefined) ?? "queued"
 
+  // Phase 1D.2b — Guided-mode chat panel mount conditional.
+  // Three gates: mode==='guided' AND the script stage exists AND it's
+  // currently awaiting_approval (the only point where chat refinement is
+  // active). 1D.2b ships Script chat only — the other entries in
+  // CHAT_ENABLED_STAGES (shot_list, post_merge) land in 1D.2d.
+  const chatStage: "script" | null =
+    pipeline?.mode === "guided" && status === "awaiting_approval"
+      ? "script"
+      : null
+
   // Phase 1C.2 — derive the active sub-gate. SSE-driven `currentSubGate`
   // is the fast path (fires before any poll round-trips); the persisted
   // `animate_audio_edit.output.current_sub_gate` is the safety net when
@@ -214,6 +225,17 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const effectiveStatus = activePipelineStatus ?? pipeline?.status ?? "queued"
 
   return (
+    <>
+      {chatStage && (
+        <ChatPanel
+          pipelineId={pipelineId}
+          stage={chatStage}
+          onApplied={() => {
+            void pipelineQuery.refetch()
+            void stageQuery.refetch()
+          }}
+        />
+      )}
     <aside className="fixed right-0 top-0 h-full w-[420px] border-l border-zinc-200 dark:border-[#2D2D2D] bg-zinc-50 dark:bg-[#121212] p-4 overflow-y-auto z-40">
       <div className="flex items-center justify-between mb-4 gap-2">
         <div className="min-w-0">
@@ -439,5 +461,6 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
         </Button>
       </div>
     </aside>
+    </>
   )
 }

@@ -4,9 +4,11 @@ import { useState } from "react"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
 import {
   PIPELINE_FORMATS,
+  PIPELINE_MODES,
   PIPELINE_OUTPUT_RESOLUTIONS,
   validateDurationForFormat,
   type PipelineFormat,
+  type PipelineMode,
 } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -22,6 +24,18 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import type { ConfigProps } from "./types"
+
+const MODE_LABELS: Record<PipelineMode, string> = {
+  manual: "Manual",
+  auto: "Auto",
+  guided: "Guided",
+}
+
+const MODE_DESCRIPTIONS: Record<PipelineMode, string> = {
+  manual: "Approve every stage. Full control.",
+  auto: "Generate the whole film unattended. Critics gate each stage.",
+  guided: "Approve every stage AND chat with the Showrunner Refinement Director at the Script stage to refine in natural language.",
+}
 
 export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<GenerativePipelineNodeData>) {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -128,6 +142,27 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div>
+        <Label>Mode</Label>
+        <Select
+          value={data.mode ?? "manual"}
+          onValueChange={(v) => onUpdate({ mode: v as PipelineMode })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PIPELINE_MODES.map((m) => (
+              <SelectItem key={m} value={m}>
+                {MODE_LABELS[m]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          {MODE_DESCRIPTIONS[data.mode ?? "manual"]}
+        </div>
       </div>
       <Button onClick={handleRun} disabled={running || !validation.ok}>
         {running ? "Starting..." : data.pipeline_id ? "Re-run" : "Run pipeline"}

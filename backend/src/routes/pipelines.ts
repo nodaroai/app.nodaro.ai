@@ -1,13 +1,19 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import {
+  CHAT_ENABLED_STAGES,
+  CHAT_TURN_CAPS,
   ENTITY_TYPES,
   EntityRejectInputSchema,
+  PIPELINE_STAGE_NAMES,
   PipelineInputSchema,
   SubGateNameSchema,
   validateDurationForFormat,
   validateModeActivation,
+  type ChatEnabledStage,
+  type JsonPatch,
   type PipelineStageName,
+  type ProposedChange,
 } from "@nodaro/shared"
 import { hasCredits } from "../lib/config.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
@@ -24,6 +30,25 @@ const STAGE_NAMES: PipelineStageName[] = [
   "animate_audio_edit",
   "post_merge",
 ]
+
+/**
+ * Phase 1D.2b E1: body schema for the stage-approve route. `edits` is an
+ * optional RFC 6902 JSON Patch — when present and non-empty, the route
+ * routes through `applyStageEdit` (audit-trail + per-stage Zod validation
+ * + reference-integrity check). When absent or empty, the no-edits path
+ * runs (CAS-flip approval).
+ */
+const ApproveStageBodySchema = z.object({
+  edits: z
+    .array(
+      z.object({
+        op: z.enum(["add", "remove", "replace"]),
+        path: z.string().min(1),
+        value: z.unknown().optional(),
+      }),
+    )
+    .optional(),
+})
 
 function gateEdition(reply: FastifyReply): boolean {
   if (!hasCredits()) {
@@ -430,6 +455,11 @@ export async function pipelinesRoutes(app: FastifyInstance) {
   )
 
   // ── POST /v1/pipelines/:id/stages/:stage/approve ─────────────────────────
+  //
+  // Phase 1D.2b E1: generalized to call `approveStage(stageName, edits?)` for
+  // any stage. `edits` is a JSON Patch — when present, routes through
+  // `applyStageEdit` for validation + audit-trail attempt row; otherwise
+  // performs the no-edits CAS-flip approval.
   app.post<{
     Params: { id: string; stage_name: string }
     Body: { edits?: unknown }
@@ -441,12 +471,12 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       const userId = gateAuth(req, reply)
       if (!userId) return
 
-      if (req.params.stage_name !== "script") {
+      // Validate stage_name against the canonical tuple. Cast to
+      // PipelineStageName below is safe ONLY because we narrow here.
+      const stageName = req.params.stage_name as PipelineStageName
+      if (!(PIPELINE_STAGE_NAMES as readonly string[]).includes(stageName)) {
         return reply.status(400).send({
-          error: {
-            code: "stage_not_implemented",
-            message: "Only Stage 1 (script) is implemented in Phase 1A",
-          },
+          error: { code: "invalid_stage_name", stage: req.params.stage_name },
         })
       }
 
@@ -460,8 +490,22 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: { code: "not_found" } })
       }
 
-      const { approveScriptStage } = await import("../ee/pipelines/engine.js")
-      const result = await approveScriptStage(supabase, req.params.id, req.body?.edits)
+      // Validate body — `edits` is an optional RFC 6902 JSON Patch.
+      const body = ApproveStageBodySchema.safeParse(req.body ?? {})
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      const { approveStage } = await import("../ee/pipelines/engine.js")
+      const result = await approveStage(
+        supabase,
+        req.params.id,
+        stageName,
+        userId,
+        body.data.edits as JsonPatch | undefined,
+      )
       if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
       return reply.send({ ok: true })
     },
@@ -512,6 +556,456 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         reason: "user_reject",
       })
       return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/stages/:stage_name/chat ───────────────────────
+  //
+  // Phase 1D.2b H1 — Guided-mode chat. User sends a chat message; the
+  // chat-refine-showrunner specialist is invoked; both turns persist; SSE
+  // emits the assistant turn. Only the Script stage actually ships in 1D.2b
+  // — the other chat-enabled stages return 501 until 1D.2d wires their
+  // specialists.
+  app.post<{
+    Params: { id: string; stage_name: string }
+    Body: { message: string }
+  }>(
+    "/v1/pipelines/:id/stages/:stage_name/chat",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const params = z
+        .object({
+          id: z.string().uuid(),
+          stage_name: z.enum(
+            CHAT_ENABLED_STAGES as unknown as [string, ...string[]],
+          ),
+        })
+        .safeParse(req.params)
+      if (!params.success) {
+        return reply.status(400).send({
+          error: { code: "invalid_stage", issues: params.error.issues },
+        })
+      }
+      const stageName = params.data.stage_name as ChatEnabledStage
+
+      // Only Script chat ships in 1D.2b. shot_list + post_merge are pre-
+      // declared in CHAT_ENABLED_STAGES for 1D.2d but the specialist isn't
+      // wired yet — return 501 so callers get a clear "not implemented" rather
+      // than a silent fallback.
+      if (stageName !== "script") {
+        return reply.status(501).send({
+          error: { code: "chat_specialist_not_implemented", stage: stageName },
+        })
+      }
+
+      const body = z
+        .object({ message: z.string().min(1).max(8000) })
+        .safeParse(req.body)
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Look up pipeline. Ownership + mode='guided' + stage awaiting_approval
+      // are all required for chat to be available.
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id, mode")
+        .eq("id", params.data.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+      if (pipeline.mode !== "guided") {
+        return reply.status(409).send({
+          error: { code: "chat_unavailable", reason: "pipeline_not_guided" },
+        })
+      }
+
+      // Look up the stage row.
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id, status, output")
+        .eq("pipeline_id", params.data.id)
+        .eq("stage_name", stageName)
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(409).send({
+          error: { code: "chat_unavailable", reason: "stage_not_started" },
+        })
+      }
+      if (stageRow.status !== "awaiting_approval") {
+        return reply.status(409).send({
+          error: {
+            code: "chat_unavailable",
+            reason: "stage_not_awaiting_approval",
+            status: stageRow.status,
+          },
+        })
+      }
+
+      // Cap check — count existing role='user' turns.
+      const { count: userTurnCount } = await supabase
+        .from("pipeline_chat_turns")
+        .select("id", { count: "exact", head: true })
+        .eq("pipeline_stage_id", stageRow.id)
+        .eq("role", "user")
+      if ((userTurnCount ?? 0) >= CHAT_TURN_CAPS[stageName]) {
+        return reply.status(409).send({
+          error: {
+            code: "chat_turn_cap_reached",
+            cap: CHAT_TURN_CAPS[stageName],
+          },
+        })
+      }
+
+      // Compute next turn_n. Defaults to 1 when no rows exist yet.
+      const { data: maxRow } = await supabase
+        .from("pipeline_chat_turns")
+        .select("turn_n")
+        .eq("pipeline_stage_id", stageRow.id)
+        .order("turn_n", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const nextTurnN = (maxRow?.turn_n ?? 0) + 1
+
+      // INSERT user turn.
+      const { data: userTurn, error: userInsertErr } = await supabase
+        .from("pipeline_chat_turns")
+        .insert({
+          pipeline_stage_id: stageRow.id,
+          turn_n: nextTurnN,
+          role: "user",
+          content: body.data.message,
+        })
+        .select("id")
+        .single()
+      if (userInsertErr || !userTurn) {
+        return reply.status(500).send({
+          error: { code: "db_error", detail: userInsertErr?.message },
+        })
+      }
+
+      // Load prior turns + current plan.
+      const { data: priorTurns } = await supabase
+        .from("pipeline_chat_turns")
+        .select("role, content, turn_n")
+        .eq("pipeline_stage_id", stageRow.id)
+        .order("turn_n", { ascending: true })
+      // Exclude the just-inserted user turn from the prior-turns list; the
+      // specialist receives the latest message as `userMessage` separately.
+      const historyTurns = (priorTurns ?? [])
+        .filter((t) => t.turn_n < nextTurnN)
+        .map((t) => ({
+          role: t.role as "user" | "assistant",
+          content: t.content as string,
+        }))
+
+      const stageOutput = (stageRow.output as { plan?: unknown } | null) ?? {}
+      const currentPlan = (stageOutput as { plan?: unknown }).plan
+
+      // Call the specialist. Failure leaves the user turn persistent so the
+      // user can retry without losing their input.
+      const { runChatRefineShowrunner } = await import(
+        "../ee/pipelines/llms/chat-refine-showrunner.js"
+      )
+      let result: Awaited<ReturnType<typeof runChatRefineShowrunner>>
+      try {
+        result = await runChatRefineShowrunner({
+          supabase,
+          pipelineId: params.data.id,
+          stageId: stageRow.id as string,
+          userId,
+          // currentPlan is typed as ShowrunnerPlan — at this point we've
+          // validated stageRow.status='awaiting_approval' so a plan must
+          // exist; the route's promised invariant is "we don't call the LLM
+          // unless we have a plan to refine".
+          currentPlan: currentPlan as never,
+          priorTurns: historyTurns,
+          userMessage: body.data.message,
+        })
+      } catch {
+        return reply.status(502).send({ error: { code: "llm_unavailable" } })
+      }
+
+      // INSERT assistant turn.
+      const assistantTurnN = nextTurnN + 1
+      const proposedChange = result.response.proposed_change ?? null
+      const { data: assistantTurn, error: assistantInsertErr } = await supabase
+        .from("pipeline_chat_turns")
+        .insert({
+          pipeline_stage_id: stageRow.id,
+          turn_n: assistantTurnN,
+          role: "assistant",
+          content: result.response.reply,
+          proposed_change: proposedChange,
+          llm_call_id: result.llmCallId,
+        })
+        .select("id")
+        .single()
+      if (assistantInsertErr || !assistantTurn) {
+        return reply.status(500).send({
+          error: { code: "db_error", detail: assistantInsertErr?.message },
+        })
+      }
+
+      // SSE — publish the full assistant turn so clients can render without
+      // an extra GET roundtrip.
+      const { pipelineEvents } = await import("../ee/pipelines/events.js")
+      pipelineEvents.publish({
+        type: "chat:turn",
+        pipelineId: params.data.id,
+        stageName,
+        turn: {
+          id: assistantTurn.id as string,
+          turn_n: assistantTurnN,
+          role: "assistant",
+          content: result.response.reply,
+          proposed_change: proposedChange as ProposedChange | null,
+        },
+      })
+
+      return reply.send({
+        turnId: assistantTurn.id,
+        role: "assistant",
+        content: result.response.reply,
+        proposed_change: proposedChange,
+      })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply ──
+  //
+  // Phase 1D.2b H2 — user accepts a proposed edit_artifact change. Routes
+  // through `applyStageEdit` which validates the JSON Patch, inserts a new
+  // pipeline_stage_attempts row, CAS-flips stage status, and emits
+  // chat:proposal_applied SSE.
+  //
+  // Recoverable failures (schema_invalid / reference_integrity_failed) insert
+  // a follow-up assistant turn so the user sees the error in-chat and can ask
+  // the specialist for a retry. Hard failures (patch_invalid /
+  // stage_not_awaiting) return 409 — no follow-up turn because the chat is
+  // no longer in a state where retry makes sense.
+  app.post<{
+    Params: { id: string; stage_name: string; turnId: string }
+  }>(
+    "/v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const params = z
+        .object({
+          id: z.string().uuid(),
+          stage_name: z.enum(
+            CHAT_ENABLED_STAGES as unknown as [string, ...string[]],
+          ),
+          turnId: z.string().uuid(),
+        })
+        .safeParse(req.params)
+      if (!params.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: params.error.issues },
+        })
+      }
+      const stageName = params.data.stage_name as ChatEnabledStage
+
+      if (stageName !== "script") {
+        return reply.status(501).send({
+          error: { code: "chat_specialist_not_implemented", stage: stageName },
+        })
+      }
+
+      // Ownership check.
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", params.data.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Look up the turn — must be assistant + edit_artifact + not already applied.
+      const { data: turn } = await supabase
+        .from("pipeline_chat_turns")
+        .select(
+          "id, pipeline_stage_id, role, proposed_change, applied_to_attempt_id, llm_call_id",
+        )
+        .eq("id", params.data.turnId)
+        .maybeSingle()
+      if (!turn) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+      if (turn.applied_to_attempt_id) {
+        return reply.status(409).send({ error: { code: "already_applied" } })
+      }
+      const proposedChange = turn.proposed_change as ProposedChange | null
+      if (
+        turn.role !== "assistant" ||
+        !proposedChange ||
+        proposedChange.change_type !== "edit_artifact"
+      ) {
+        return reply.status(400).send({ error: { code: "turn_not_applyable" } })
+      }
+
+      const { applyStageEdit } = await import(
+        "../ee/pipelines/chat/apply-stage-edit.js"
+      )
+      const result = await applyStageEdit({
+        supabase,
+        pipelineId: params.data.id,
+        stageName,
+        stageId: turn.pipeline_stage_id as string,
+        userId,
+        jsonPatch: proposedChange.json_patch as JsonPatch,
+        source: "chat_apply",
+        chatTurnId: turn.id as string,
+        llmCallId: (turn.llm_call_id as string | null) ?? undefined,
+      })
+
+      if (result.ok) {
+        return reply.send({
+          applied: true,
+          attemptId: result.newAttemptId,
+          newOutput: result.newOutput,
+        })
+      }
+
+      // Recoverable failures — insert a follow-up assistant turn with a
+      // human-readable error so the user can iterate via chat.
+      if (
+        result.reason === "schema_invalid" ||
+        result.reason === "reference_integrity_failed"
+      ) {
+        // Compute next turn_n for the follow-up turn.
+        const { data: maxRow } = await supabase
+          .from("pipeline_chat_turns")
+          .select("turn_n")
+          .eq("pipeline_stage_id", turn.pipeline_stage_id)
+          .order("turn_n", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const nextTurnN = (maxRow?.turn_n ?? 0) + 1
+
+        const hint =
+          result.reason === "schema_invalid"
+            ? `The proposed change failed schema validation. Detail: ${JSON.stringify(result.detail)}`
+            : `The proposed change failed reference integrity: removing a cast/location/object entry that is still referenced. Detail: ${JSON.stringify(result.detail)}`
+
+        const { data: followUpTurn } = await supabase
+          .from("pipeline_chat_turns")
+          .insert({
+            pipeline_stage_id: turn.pipeline_stage_id,
+            turn_n: nextTurnN,
+            role: "assistant",
+            content: hint,
+            proposed_change: null,
+            // Reuse the original llm_call_id to satisfy the
+            // chat_turns_llm_call_required_for_assistant CHECK constraint —
+            // we don't have a new LLM call to attribute this synthetic
+            // error-recovery turn to.
+            llm_call_id: turn.llm_call_id,
+          })
+          .select("id, turn_n")
+          .single()
+
+        if (followUpTurn) {
+          const { pipelineEvents } = await import("../ee/pipelines/events.js")
+          pipelineEvents.publish({
+            type: "chat:turn",
+            pipelineId: params.data.id,
+            stageName,
+            turn: {
+              id: followUpTurn.id as string,
+              turn_n: followUpTurn.turn_n as number,
+              role: "assistant",
+              content: hint,
+              proposed_change: null,
+            },
+          })
+        }
+
+        return reply.send({
+          applied: false,
+          error: { code: result.reason, detail: result.detail },
+        })
+      }
+
+      // Hard failures — 409.
+      return reply.status(409).send({ error: { code: result.reason } })
+    },
+  )
+
+  // ── GET /v1/pipelines/:id/stages/:stage_name/chat ────────────────────────
+  //
+  // Phase 1D.2b H3 — list chat turns for a stage. Returns empty array when
+  // no turns exist yet. Used by the frontend chat panel on initial mount
+  // (subsequent updates come via SSE).
+  app.get<{ Params: { id: string; stage_name: string } }>(
+    "/v1/pipelines/:id/stages/:stage_name/chat",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:read")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const params = z
+        .object({
+          id: z.string().uuid(),
+          stage_name: z.enum(
+            CHAT_ENABLED_STAGES as unknown as [string, ...string[]],
+          ),
+        })
+        .safeParse(req.params)
+      if (!params.success) {
+        return reply.status(400).send({
+          error: { code: "invalid_stage", issues: params.error.issues },
+        })
+      }
+      const stageName = params.data.stage_name as ChatEnabledStage
+
+      // Ownership check.
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", params.data.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Look up the stage row.
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", params.data.id)
+        .eq("stage_name", stageName)
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.send({ turns: [] })
+      }
+
+      const { data: turns, error } = await supabase
+        .from("pipeline_chat_turns")
+        .select(
+          "id, turn_n, role, content, proposed_change, applied_to_attempt_id, llm_call_id, created_at",
+        )
+        .eq("pipeline_stage_id", stageRow.id)
+        .order("turn_n", { ascending: true })
+      if (error) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: error.message } })
+      }
+      return reply.send({ turns: turns ?? [] })
     },
   )
 
