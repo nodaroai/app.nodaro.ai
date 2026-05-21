@@ -19,6 +19,11 @@ import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
 
+/** Empty picker-type set — reused for location/character branches until they
+ *  ship their own *_PICKER_NODE_TYPES exports. Hoisted to avoid allocating
+ *  a fresh Set on every resolveSeedPromptHint call. */
+const EMPTY_PICKER_SET: ReadonlySet<string> = new Set<string>();
+
 /**
  * Resolve the composed prompt-hint fragment from wired picker nodes for an
  * entity. Walks upstream connections on the entity node's `type` input handle,
@@ -56,13 +61,15 @@ export function resolveSeedPromptHint(
     case "character":
       // Reserved for future LOCATION_PICKER_NODE_TYPES +
       // CHARACTER_PICKER_NODE_TYPES — currently no pickers in either family.
-      pickerNodeTypes = new Set<string>();
+      pickerNodeTypes = EMPTY_PICKER_SET;
       break;
   }
 
+  // O(1) source lookup vs O(N) find-per-connection. Cheap when connections > 1.
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
   const hints: string[] = [];
   for (const conn of typeConnections) {
-    const source = nodes.find((n) => n.id === conn.source);
+    const source = nodesById.get(conn.source);
     if (!source || !source.type || !pickerNodeTypes.has(source.type)) continue;
     // getParameterPromptHint accepts a HintNodeLike — { type, data, id? }.
     // The optional graph context (for camera-motion / transition) is not
@@ -933,7 +940,6 @@ export function resolveNodeInputs(
       const chunkIndex = (srcData.outputChunkIndex as number | undefined) ?? 0;
       const audioUrls = (srcData.generatedAudioUrls as string[] | undefined) ?? [];
       const videoUrls = (srcData.generatedVideoUrls as string[] | undefined) ?? [];
-      console.log('[resolver] split-media: chunkIndex=', chunkIndex, 'audioUrls=', audioUrls.length, 'sourceHandle=', srcEdge.sourceHandle);
       if (audioUrls.length > 0) {
         const selectedUrl = audioUrls[chunkIndex];
         if (selectedUrl) inputs.audioUrl = selectedUrl;
