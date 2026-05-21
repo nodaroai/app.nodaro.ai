@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useMemo, useEffect } from "react"
-import { Play, Loader2, Sparkles, Upload, UserCircle, ChevronDown, Check } from "lucide-react"
+import { Play, Loader2, Upload, UserCircle, ChevronDown, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,12 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useMediaEditor, MediaEditorModal } from "@/components/editor/media-editor"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -35,8 +29,6 @@ import type {
   GeneratedScriptResult,
 } from "@/types/nodes"
 import {
-  ObjectAssetButton,
-  ObjectAssetGrid,
   LocationAssetButton,
   LocationAssetGrid,
 } from "./entity-shared"
@@ -45,14 +37,6 @@ import { ModelSelectOption } from "./model-select-option"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/ee/hooks/use-model-credits"
-import { AnimalPicker } from "./animal-picker"
-import { getAnimal } from "@nodaro/shared"
-import { VehiclePicker } from "./vehicle-picker"
-import { getVehicle } from "@nodaro/shared"
-import { FurniturePicker } from "./furniture-picker"
-import { getFurniture } from "@nodaro/shared"
-import { WeaponPicker } from "./weapon-picker"
-import { getWeapon } from "@nodaro/shared"
 import type { ConfigProps } from "./types"
 
 type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
@@ -426,311 +410,75 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
   )
 }
 
-export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<ObjectNodeData>) {
-  const generateAsset = useWorkflowStore((s) => s.generateObjectAssetFn)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const objMediaEditor = useMediaEditor({
-    onComplete: async (results) => {
-      const result = results[0]
-      if (!result) return
-      const url = result.processedUrl ?? result.uploadResult.url
-      onUpdate({ sourceImageUrl: url })
-      setUploading(false)
-    },
-    onCancel: () => setUploading(false),
-  })
+type ObjectConfigProps = ConfigProps<ObjectNodeData> & { nodeId?: string }
 
-  useEffect(() => {
-    prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
-  }, [])
-  const creditCost = useModelCredits(data.provider || "nano-banana")
+export function ObjectConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeId }: ObjectConfigProps) {
+  const setObjectStudioNodeId = useWorkflowStore((s) => s.setObjectStudioNodeId)
 
-  const hasImage = Boolean(((data.generatedResults ?? [])[data.activeResultIndex ?? 0]?.url) || data.sourceImageUrl)
-  const isRunning = data.executionStatus === "running"
-
-  const existingNames = useMemo(() => {
-    const names: string[] = []
-    for (const n of nodes) {
-      if (n.type === "object" && n.id !== selectedNodeId) {
-        const nd = n.data as ObjectNodeData
-        if (nd.objectName) names.push(nd.objectName)
-      }
-    }
-    return names
-  }, [nodes, selectedNodeId])
-
-  function handleNameChange(newName: string) {
-    if (!newName) { onUpdate({ objectName: newName }); return }
-    const baseName = newName
-    let finalName = baseName
-    let version = 2
-    const wasVersioned = existingNames.includes(baseName)
-    while (existingNames.includes(finalName)) { finalName = `${baseName} (${version})`; version++ }
-    if (wasVersioned) {
-      onUpdate({ objectName: finalName, sourceImageUrl: "", generatedResults: [], activeResultIndex: 0, executionStatus: "idle" })
-    } else {
-      onUpdate({ objectName: finalName })
-    }
-  }
-
-  const duplicateWarning = useMemo(() => {
-    if (!data.objectName) return null
-    if (data.objectDbId) return null
-    const exactMatch = existingNames.includes(data.objectName)
-    if (exactMatch) return `An object named "${data.objectName}" already exists. It will be auto-versioned on blur.`
-    return null
-  }, [data.objectName, data.objectDbId, existingNames])
-
-  function handleUploadImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true)
-    objMediaEditor.openEditor([file])
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  function handleGenerateAsset(assetType: "angles" | "materials" | "variations") {
-    if (!selectedNodeId || !generateAsset) return
-    generateAsset(selectedNodeId, assetType)
-  }
-
-  const selectedAnimal = getAnimal(data.animalId)
-  const selectedVehicle = getVehicle(data.vehicleId)
-  const selectedFurniture = getFurniture(data.furnitureId)
-  const selectedWeapon = getWeapon(data.weaponId)
-
-  function handlePickAnimal(animalId: string, animal: { label: string; description: string }) {
-    onUpdate({
-      animalId,
-      objectName: animal.label,
-      description: animal.description,
-    })
-  }
-
-  function handlePickVehicle(vehicleId: string, vehicle: { label: string; description: string }) {
-    onUpdate({
-      vehicleId,
-      objectName: vehicle.label,
-      description: vehicle.description,
-    })
-  }
-
-  function handlePickFurniture(furnitureId: string, furniture: { label: string; description: string }) {
-    onUpdate({
-      furnitureId,
-      objectName: furniture.label,
-      description: furniture.description,
-    })
-  }
-
-  function handlePickWeapon(weaponId: string, weapon: { label: string; description: string }) {
-    onUpdate({
-      weaponId,
-      objectName: weapon.label,
-      description: weapon.description,
-    })
-  }
-
-  function handleCategoryChange(next: ObjectNodeData["category"]) {
-    // Clear sibling picker IDs when leaving their category so stale selections
-    // don't silently travel with unrelated objects.
-    const patch: Partial<ObjectNodeData> = { category: next }
-    if (next !== "animal" && data.animalId) patch.animalId = undefined
-    if (next !== "vehicle" && data.vehicleId) patch.vehicleId = undefined
-    if (next !== "furniture" && data.furnitureId) patch.furnitureId = undefined
-    if (next !== "weapon" && data.weaponId) patch.weaponId = undefined
-    onUpdate(patch)
-  }
+  const anglesCount = (data.angles ?? []).length
+  const materialsCount = (data.materials ?? []).length
+  const variationsCount = (data.variations ?? []).length
+  const motionCount = (data.motionClips ?? []).length
+  const refsCount = (data.referencePhotos ?? []).length
 
   return (
-    <div className="flex flex-col gap-3">
-      <MappableField field="objectName" label="Object Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Input id="obj-name" value={data.objectName} onChange={(e) => onUpdate({ objectName: e.target.value })} onBlur={(e) => handleNameChange(e.target.value)} placeholder="e.g. Magic Sword (use {} to inject input)" />
-        {duplicateWarning && (<p className="text-[10px] text-amber-500 mt-0.5">{duplicateWarning}</p>)}
-      </MappableField>
-      <MappableField field="description" label="Description" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Textarea id="obj-desc" value={data.description} onChange={(e) => onUpdate({ description: e.target.value })} placeholder="A glowing sword with ancient runes... (use {} to inject input)" rows={3} />
-      </MappableField>
+    <div className="flex flex-col gap-4">
       <div>
-        <Label htmlFor="obj-category">Category</Label>
-        <Select value={data.category} onValueChange={(v) => handleCategoryChange(v as ObjectNodeData["category"])}>
-          <SelectTrigger id="obj-category"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="furniture">Furniture</SelectItem>
-            <SelectItem value="vehicle">Vehicle</SelectItem>
-            <SelectItem value="weapon">Weapon</SelectItem>
-            <SelectItem value="food">Food</SelectItem>
-            <SelectItem value="clothing">Clothing</SelectItem>
-            <SelectItem value="electronics">Electronics</SelectItem>
-            <SelectItem value="nature">Nature</SelectItem>
-            <SelectItem value="tool">Tool</SelectItem>
-            <SelectItem value="animal">Animal</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {data.category === "animal" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Pick an animal</Label>
-            {selectedAnimal && (
-              <span className="text-[10px] text-muted-foreground">
-                Selected: <span className="text-foreground font-medium">{selectedAnimal.label}</span>
-              </span>
-            )}
-          </div>
-          <AnimalPicker value={data.animalId ?? ""} onValueChange={handlePickAnimal} />
-          <p className="text-[10px] text-muted-foreground">
-            Picking auto-fills the name and description. Edit above to fine-tune.
-          </p>
-        </div>
-      )}
-
-      {data.category === "vehicle" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Pick a vehicle</Label>
-            {selectedVehicle && (
-              <span className="text-[10px] text-muted-foreground">
-                Selected: <span className="text-foreground font-medium">{selectedVehicle.label}</span>
-              </span>
-            )}
-          </div>
-          <VehiclePicker value={data.vehicleId ?? ""} onValueChange={handlePickVehicle} />
-          <p className="text-[10px] text-muted-foreground">
-            Picking auto-fills the name and description. Edit above to fine-tune.
-          </p>
-        </div>
-      )}
-
-      {data.category === "furniture" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Pick a furniture piece</Label>
-            {selectedFurniture && (
-              <span className="text-[10px] text-muted-foreground">
-                Selected: <span className="text-foreground font-medium">{selectedFurniture.label}</span>
-              </span>
-            )}
-          </div>
-          <FurniturePicker value={data.furnitureId ?? ""} onValueChange={handlePickFurniture} />
-          <p className="text-[10px] text-muted-foreground">
-            Picking auto-fills the name and description. Edit above to fine-tune.
-          </p>
-        </div>
-      )}
-
-      {data.category === "weapon" && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Pick a weapon</Label>
-            {selectedWeapon && (
-              <span className="text-[10px] text-muted-foreground">
-                Selected: <span className="text-foreground font-medium">{selectedWeapon.label}</span>
-              </span>
-            )}
-          </div>
-          <WeaponPicker value={data.weaponId ?? ""} onValueChange={handlePickWeapon} />
-          <p className="text-[10px] text-muted-foreground">
-            Picking auto-fills the name and description. Edit above to fine-tune.
-          </p>
-        </div>
-      )}
-      <div>
-        <Label htmlFor="obj-style">Style</Label>
-        <Select value={data.style} onValueChange={(v) => onUpdate({ style: v as ObjectNodeData["style"] })}>
-          <SelectTrigger id="obj-style"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="realistic">Realistic</SelectItem>
-            <SelectItem value="anime">Anime</SelectItem>
-            <SelectItem value="3d-pixar">3D Pixar</SelectItem>
-            <SelectItem value="illustration">Illustration</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <Label htmlFor="obj-image">Reference Image</Label>
-        <div className="flex gap-1.5">
-          <Input id="obj-image" value={data.sourceImageUrl} onChange={(e) => onUpdate({ sourceImageUrl: e.target.value })} placeholder="https://... or upload" className="flex-1" />
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif" className="hidden" onChange={handleUploadImage} />
-          <Button variant="outline" size="icon" className="shrink-0 h-9 w-9" disabled={uploading} onClick={() => fileInputRef.current?.click()} title="Upload image from computer" aria-label="Upload image from computer">
-            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          </Button>
+        <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">Object</div>
+        <div className="text-[13px] font-semibold text-foreground">{data.objectName || "(unnamed object)"}</div>
+        <div className="text-[10px] text-muted-foreground">
+          {data.style} · {data.category} · {anglesCount} angles · {materialsCount} materials · {variationsCount} variations · {motionCount} motion · {refsCount} refs
         </div>
       </div>
 
-      <div>
-        <Label className="text-xs">Image Model</Label>
-        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
-          <SelectTrigger className="h-8 text-xs mt-1" aria-label="Image model"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999] max-h-72">
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <ModelDescriptionHint modelId={data.provider} />
-
-      <Separator />
-
-      <Button
-        size="sm"
-        className="w-full text-xs h-8 text-white hover:opacity-90"
-        style={{ backgroundColor: '#ff0073' }}
-        disabled={isRunning || !data.objectName}
-        onClick={() => { if (selectedNodeId && runSingleNode) runSingleNode(selectedNodeId) }}
+      <button
+        type="button"
+        onClick={() => nodeId && setObjectStudioNodeId(nodeId)}
+        className="w-full text-left bg-[#0e3a2e] border border-[#34D39944] rounded-md px-3.5 py-2.5 flex items-center gap-2 hover:bg-[#114b3b] transition-colors disabled:opacity-50"
+        disabled={!nodeId}
+        aria-label="Open Object Studio"
       >
-        {isRunning ? (<><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Generating...</>) : (<><Play className="w-3 h-3 mr-1.5" />Generate Image{creditCost > 0 ? ` (${creditCost} CR)` : ""}</>)}
-      </Button>
+        <span className="text-base leading-none">⬡</span>
+        <span>
+          <span className="block text-[11px] font-semibold text-[#6ee7b7]">Open Object Studio</span>
+          <span className="block text-[9px] text-muted-foreground">Edit appearance, assets, motion &amp; reference photos</span>
+        </span>
+        <span className="ml-auto text-[#34D399]">→</span>
+      </button>
 
-      <Separator />
+      <div className="border-t border-border pt-3 flex flex-col gap-3">
+        {/* Style Lock — when enabled, downstream image/video nodes wired to
+            this object will use the canonical caption + style lock for better
+            visual consistency. Default ON. */}
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="obj-style-lock"
+              checked={data.styleLock ?? true}
+              onChange={(e) => onUpdate({ styleLock: e.target.checked })}
+            />
+            <Label htmlFor="obj-style-lock" className="text-xs">
+              Style Lock
+            </Label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            When enabled, downstream image/video nodes wired to this object will use the canonical caption for better consistency.
+          </p>
+        </div>
 
-      <div className="flex flex-col gap-2">
-        <Label className="text-xs font-semibold uppercase text-muted-foreground">Object Assets</Label>
-        {!hasImage && (<p className="text-[10px] text-muted-foreground">Generate or upload a main image first, then generate assets below.</p>)}
-
-        <Accordion type="multiple" className="w-full">
-          <AccordionItem value="angles">
-            <AccordionTrigger className="text-xs py-1.5">Angles ({(data.angles ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <ObjectAssetButton label="Generate Angles" status={data.anglesStatus ?? "idle"} itemCount={(data.angles ?? []).length} onClick={() => handleGenerateAsset("angles")} disabled={!hasImage} />
-              <ObjectAssetGrid items={data.angles ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="materials">
-            <AccordionTrigger className="text-xs py-1.5">Materials ({(data.materials ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <ObjectAssetButton label="Generate Materials" status={data.materialsStatus ?? "idle"} itemCount={(data.materials ?? []).length} onClick={() => handleGenerateAsset("materials")} disabled={!hasImage} />
-              <ObjectAssetGrid items={data.materials ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="variations">
-            <AccordionTrigger className="text-xs py-1.5">Variations ({(data.variations ?? []).length})</AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1.5 pb-2">
-              <ObjectAssetButton label="Generate Variations" status={data.variationsStatus ?? "idle"} itemCount={(data.variations ?? []).length} onClick={() => handleGenerateAsset("variations")} disabled={!hasImage} />
-              <ObjectAssetGrid items={data.variations ?? []} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        <Button
-          variant="outline" size="sm" className="w-full text-xs h-8 mt-1"
-          disabled={!hasImage || data.anglesStatus === "running" || data.materialsStatus === "running" || data.variationsStatus === "running" || !data.objectName}
-          onClick={() => { handleGenerateAsset("angles"); setTimeout(() => handleGenerateAsset("materials"), 500); setTimeout(() => handleGenerateAsset("variations"), 1000) }}
-        >
-          <Sparkles className="w-3 h-3 mr-1.5" />
-          Generate All Assets
-        </Button>
+        {/* Field Mappings — keep the {} input-injection mapping for the
+            Object Name, the one referenceable field that survives the move
+            to the studio. */}
+        <MappableField field="objectName" label="Object Name" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            id="obj-name"
+            value={data.objectName}
+            onChange={(e) => onUpdate({ objectName: e.target.value })}
+            placeholder="e.g. Magic Sword (use {} to inject input)"
+          />
+        </MappableField>
       </div>
-
-      <MediaEditorModal editor={objMediaEditor} />
     </div>
   )
 }

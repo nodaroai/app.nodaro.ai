@@ -579,7 +579,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "component": return <ComponentConfig {...configProps} nodeId={selectedNodeId} />
     case "character": return <CharacterConfig {...configProps} nodeId={selectedNodeId} />
     case "face": return <FaceConfig {...configProps} />
-    case "object": return <ObjectConfig {...configProps} />
+    case "object": return <ObjectConfig {...configProps} nodeId={selectedNodeId!} />
     case "location": return <LocationConfig {...configProps} nodeId={selectedNodeId!} />
     case "scene": return (
       <SceneConfig

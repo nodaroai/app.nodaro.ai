@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Package, Loader2, AlertCircle, X, ImageIcon, Maximize2, ChevronDown, ChevronRight, Type, Download, Link, Pencil } from "lucide-react"
+import { Package, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, Link, Pencil } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -47,7 +47,12 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
+  const setObjectStudioNodeId = useWorkflowStore((s) => s.setObjectStudioNodeId)
   const inConnectionCount = useConnectionCount(id)
+  // Count of edges wired to the `type` input handle. When this transitions
+  // from 0 → ≥1, an upstream picker has just been wired and we auto-clear the
+  // legacyPickerSelection breadcrumb per spec Pass 6 F-74 + Pass 12 F-98.
+  const typeConnectionCount = useConnectionCount(id, "type")
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -55,13 +60,30 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.sourceImageUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-  const [assetsExpanded, setAssetsExpanded] = useState(false)
 
-  const anglesCount = (nodeData.angles ?? []).length
-  const materialsCount = (nodeData.materials ?? []).length
-  const variationsCount = (nodeData.variations ?? []).length
-  const totalAssets = anglesCount + materialsCount + variationsCount
-  const anyAssetRunning = nodeData.anglesStatus === "running" || nodeData.materialsStatus === "running" || nodeData.variationsStatus === "running"
+  const counts = {
+    angles: (nodeData.angles ?? []).length,
+    materials: (nodeData.materials ?? []).length,
+    variations: (nodeData.variations ?? []).length,
+    motionClips: (nodeData.motionClips ?? []).length,
+    referencePhotos: (nodeData.referencePhotos ?? []).length,
+  }
+  const anyAssetRunning =
+    nodeData.anglesStatus === "running" ||
+    nodeData.materialsStatus === "running" ||
+    nodeData.variationsStatus === "running" ||
+    nodeData.motionStatus === "running"
+
+  // Spec Pass 6 F-74 + Pass 12 F-98 — auto-clear `legacyPickerSelection` on
+  // first wire to the `type` input handle. Re-migration is prevented by E1's
+  // `=== undefined` guard in `loadWorkflow`, so an explicit `null` here
+  // survives next load. Only fires when the breadcrumb is set (non-null +
+  // non-undefined) so we don't churn updateNodeData on every render.
+  useEffect(() => {
+    if (typeConnectionCount > 0 && nodeData.legacyPickerSelection != null) {
+      updateNodeData(id, { legacyPickerSelection: null })
+    }
+  }, [typeConnectionCount, nodeData.legacyPickerSelection, id, updateNodeData])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete))
@@ -92,6 +114,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
       }
       handles={[
         { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
+        { id: "type", type: "target", position: Position.Left, customStyle: { top: '20px', left: '-29px' }, hideHandle: true },
         { id: "objectRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
       ]}
     >
@@ -259,28 +282,31 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
 
-        {/* Collapsible asset summary */}
-        {(totalAssets > 0 || anyAssetRunning) && (
-          <button
-            type="button"
-            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => {
-              e.stopPropagation()
-              setAssetsExpanded((v) => !v)
-            }}
-          >
-            {assetsExpanded ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
-            <span>Assets ({totalAssets})</span>
-          </button>
-        )}
+        {/* Compact 5-bucket asset grid (4 image buckets + 1 video bucket for
+            motion clips). referencePhotos has no async status (manual upload
+            only) so renders with the same neutral idle state as a 0-count
+            badge. */}
+        <div className="grid grid-cols-5 gap-1 text-[9px]">
+          <AssetBadge icon="📐" label="Angles" count={counts.angles} status={nodeData.anglesStatus ?? "idle"} />
+          <AssetBadge icon="🧱" label="Materials" count={counts.materials} status={nodeData.materialsStatus ?? "idle"} />
+          <AssetBadge icon="✨" label="Variations" count={counts.variations} status={nodeData.variationsStatus ?? "idle"} />
+          <AssetBadge icon="🎬" label="Motion" count={counts.motionClips} status={nodeData.motionStatus ?? "idle"} variant="video" />
+          <AssetBadge icon="📷" label="Refs" count={counts.referencePhotos} status="idle" />
+        </div>
 
-        {assetsExpanded && (
-          <div className="flex flex-col gap-1 text-[9px] text-muted-foreground">
-            <AssetBadge label="Angles" count={anglesCount} status={nodeData.anglesStatus ?? "idle"} />
-            <AssetBadge label="Materials" count={materialsCount} status={nodeData.materialsStatus ?? "idle"} />
-            <AssetBadge label="Variations" count={variationsCount} status={nodeData.variationsStatus ?? "idle"} />
-          </div>
-        )}
+        {/* Open Studio button */}
+        <button
+          type="button"
+          aria-label="Open Object Studio"
+          className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-medium bg-[#0e3a2e] border border-[#34D39944] text-[#6ee7b7] rounded hover:bg-[#114b3b] transition-colors"
+          onClick={(e) => {
+            e.stopPropagation()
+            setObjectStudioNodeId(id)
+          }}
+        >
+          <span>⬡</span>
+          <span>Open Studio</span>
+        </button>
 
         {/* Metadata */}
         <div className="flex justify-between text-muted-foreground text-[10px]">
@@ -290,7 +316,7 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icon */}
+    {/* Input handle icon — bottom "in" handle for generic upstream wires */}
     <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)">
       <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
       {inConnectionCount >= 2 && (
@@ -299,8 +325,12 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       )}
     </HandleIcon>
+    {/* Type input handle icon — accepts upstream picker nodes (animal /
+        vehicle / furniture / weapon / material) as the object's identity
+        provider. Wiring one auto-clears the legacy picker breadcrumb. */}
+    <HandleIcon icon={<Package />} color="emerald" side="left" top="20px" label="Type" />
     {/* Output handle icon */}
-    <HandleIcon icon={<Package />} color="pink" side="right" top="20px" />
+    <HandleIcon icon={<Package />} color="emerald" side="right" top="20px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
@@ -319,19 +349,46 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-function AssetBadge({ label, count, status }: { readonly label: string; readonly count: number; readonly status: string }) {
+function AssetBadge({
+  icon,
+  label,
+  count,
+  status,
+  variant = "image",
+}: {
+  readonly icon: string
+  readonly label: string
+  readonly count: number
+  readonly status: string
+  readonly variant?: "image" | "video"
+}) {
   if (status === "running") {
     return (
-      <span className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-muted/50">
+      <span
+        title={`${label} — generating`}
+        className="flex flex-col items-center gap-0 px-0.5 py-0.5 rounded bg-muted/40"
+      >
         <Loader2 className="w-2.5 h-2.5 animate-spin" />
-        {label}
+        <span className="text-[8px] text-muted-foreground">{label}</span>
       </span>
     )
   }
-  if (count === 0) return null
+  const hasItems = count > 0
+  // Cap counts > 99 at "99+" so a single rogue source doesn't blow out the
+  // 5-col grid. Spec §Canvas asset badges.
+  const display = count > 99 ? "99+" : `${count}`
+  // Image buckets use emerald (matching the object node accent); video buckets
+  // use amber to visually distinguish motion clips from still images.
+  const filledClass = variant === "video" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"
   return (
-    <span className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600">
-      {label} {count}
+    <span
+      title={`${label}${hasItems ? ` — ${count}` : ""}`}
+      className={`flex flex-col items-center gap-0 px-0.5 py-0.5 rounded ${
+        hasItems ? filledClass : "bg-muted/30 text-muted-foreground/40"
+      }`}
+    >
+      <span className="leading-none">{icon}</span>
+      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
     </span>
   )
 }

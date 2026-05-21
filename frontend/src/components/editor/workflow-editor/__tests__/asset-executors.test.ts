@@ -222,7 +222,7 @@ describe("runObjectGeneration", () => {
     expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ executionStatus: "running" }))
   })
 
-  it("calls generateObject with correct params", () => {
+  it("calls generateObject with correct params (Phase E3/3 — defaults count=1 with no extras)", () => {
     mockGenerateObject.mockReturnValue(new Promise(() => {}))
     runObjectGeneration(
       "n1",
@@ -243,7 +243,54 @@ describe("runObjectGeneration", () => {
       style: "medieval",
       sourceImageUrl: "http://shield.png",
       userId: "u4",
+      // Phase E3/3 default extras — count=1, the rest undefined when no
+      // extras object is passed.
+      count: 1,
+      attachToObjectId: undefined,
+      attachName: undefined,
+      seedPromptHint: undefined,
+      expectedUpdatedAt: undefined,
     })
+  })
+
+  it("forwards Phase E3/3 extras (attachToObjectId / attachName / seedPromptHint / expectedUpdatedAt) to generateObject", () => {
+    mockGenerateObject.mockReturnValue(new Promise(() => {}))
+    runObjectGeneration(
+      "n1",
+      {
+        objectName: "Excalibur",
+        category: "weapon",
+        style: "realistic",
+        label: "Obj",
+      } as any,
+      makeCtx({ userId: "u5" }),
+      {
+        attachToObjectId: "obj-uuid-abc",
+        attachName: "Excalibur",
+        seedPromptHint: "a legendary sword",
+        expectedUpdatedAt: "2026-05-21T11:00:00.000Z",
+        count: 1,
+      },
+    )
+    expect(mockGenerateObject).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Excalibur",
+      attachToObjectId: "obj-uuid-abc",
+      attachName: "Excalibur",
+      seedPromptHint: "a legendary sword",
+      expectedUpdatedAt: "2026-05-21T11:00:00.000Z",
+      count: 1,
+    }))
+  })
+
+  it("normalizes a { jobIds: [...] } multi-candidate response to the first jobId", async () => {
+    mockGenerateObject.mockResolvedValue({ jobIds: ["job-a", "job-b"] })
+    // Suppress unhandled rejection — we never resolve the poll loop in
+    // this test; the assertion only checks the first updateNodeData call
+    // captured the right currentJobId.
+    runObjectGeneration("n1", { objectName: "Shield", label: "Obj" } as any, makeCtx()).catch(() => {})
+    // Yield to the .then() handler so currentJobId is committed
+    await new Promise((r) => setTimeout(r, 10))
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", expect.objectContaining({ currentJobId: "job-a" }))
   })
 
   it("rejects when API fails", async () => {

@@ -10,7 +10,7 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
-import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
+import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
@@ -18,6 +18,62 @@ import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
 import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
 export { resolveSourceThroughConnectedList };
+
+/**
+ * Resolve the composed prompt-hint fragment from wired picker nodes for an
+ * entity. Walks upstream connections on the entity node's `type` input handle,
+ * filters to entity-specific picker types (currently only the object family:
+ * animal / vehicle / furniture / weapon / material), and concatenates their
+ * `getParameterPromptHint` outputs as a comma-joined string.
+ *
+ * Returns `""` when no picker is wired — the route's Studio-gated LLM draft
+ * then falls back to the entity's `canonical_description` per spec Pass 7
+ * F-77 + F-78.
+ *
+ * The function is generic on `entityType`: today only `"object"` has a
+ * picker set; `"location"` and `"character"` are accepted parameters but
+ * currently resolve to an empty hint set. Once
+ * LOCATION_PICKER_NODE_TYPES / CHARACTER_PICKER_NODE_TYPES ship, the
+ * switch fills in automatically.
+ */
+export function resolveSeedPromptHint(
+  entityNode: { id: string },
+  edges: ReadonlyArray<{ source: string; target: string; targetHandle?: string | null }>,
+  nodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+  entityType: "object" | "location" | "character",
+): string {
+  const typeConnections = edges.filter(
+    (e) => e.target === entityNode.id && e.targetHandle === "type",
+  );
+  if (typeConnections.length === 0) return "";
+
+  let pickerNodeTypes: ReadonlySet<string>;
+  switch (entityType) {
+    case "object":
+      pickerNodeTypes = OBJECT_PICKER_NODE_TYPES;
+      break;
+    case "location":
+    case "character":
+      // Reserved for future LOCATION_PICKER_NODE_TYPES +
+      // CHARACTER_PICKER_NODE_TYPES — currently no pickers in either family.
+      pickerNodeTypes = new Set<string>();
+      break;
+  }
+
+  const hints: string[] = [];
+  for (const conn of typeConnections) {
+    const source = nodes.find((n) => n.id === conn.source);
+    if (!source || !source.type || !pickerNodeTypes.has(source.type)) continue;
+    // getParameterPromptHint accepts a HintNodeLike — { type, data, id? }.
+    // The optional graph context (for camera-motion / transition) is not
+    // needed here: object pickers (animal/vehicle/material/etc.) are
+    // single-dim and resolve purely from their own `data`.
+    const hint = getParameterPromptHint({ type: source.type, data: source.data ?? {}, id: source.id });
+    if (hint && hint.trim()) hints.push(hint.trim());
+  }
+
+  return hints.join(", ");
+}
 
 /** Follow teleport chain to find the original non-teleport source node. */
 function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {

@@ -171,6 +171,10 @@ vi.mock("@/lib/prompt-builder", () => ({
 
 vi.mock("../node-input-resolver", () => ({
   resolveNodeInputs: (...args: unknown[]) => mockResolveNodeInputs(...args),
+  // Phase E3/3 — object branch calls this to compose seedPromptHint from
+  // upstream picker nodes wired to the `type` handle. Default to "" so the
+  // generic object test path (no picker wired) still passes.
+  resolveSeedPromptHint: vi.fn(() => ""),
 }))
 
 vi.mock("../execution-graph", () => ({
@@ -1684,7 +1688,7 @@ describe("object", () => {
     expect(mockToastError).toHaveBeenCalled()
   })
 
-  it("calls runObjectGeneration with data", async () => {
+  it("calls runObjectGeneration with data + Phase E3/3 extras", async () => {
     mockResolveNodeInputs.mockReturnValue({})
     mockRunObjectGeneration.mockResolvedValue(undefined)
     await executeNode(
@@ -1695,6 +1699,39 @@ describe("object", () => {
       "n1",
       expect.objectContaining({ objectName: "Sword" }),
       expect.anything(),
+      expect.objectContaining({
+        attachName: "Sword",
+        count: 1,
+        // attachToObjectId / seedPromptHint / expectedUpdatedAt are
+        // undefined when the canvas has no prior bind + no upstream
+        // picker — the route's Zod schema accepts undefined.
+        attachToObjectId: undefined,
+        seedPromptHint: undefined,
+      }),
+    )
+  })
+
+  it("passes attachToObjectId + expectedUpdatedAt when set on the node", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunObjectGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("object", {
+        objectName: "Excalibur",
+        objectDbId: "obj-uuid-123",
+        updatedAt: "2026-05-21T10:00:00.000Z",
+      }),
+      makeCtx(),
+    )
+    expect(mockRunObjectGeneration).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ objectName: "Excalibur" }),
+      expect.anything(),
+      expect.objectContaining({
+        attachToObjectId: "obj-uuid-123",
+        attachName: "Excalibur",
+        expectedUpdatedAt: "2026-05-21T10:00:00.000Z",
+        count: 1,
+      }),
     )
   })
 })
