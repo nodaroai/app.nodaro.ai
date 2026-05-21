@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import type { EntityType } from "@nodaro/shared"
 import { pipelineEvents } from "./events.js"
 import { transitionEntityNodeAndEmit } from "./depends-on.js"
 
@@ -73,6 +74,118 @@ export async function emitDependentStaleEvents(
 }
 
 /**
+ * Side-effects every approval path runs after a successful CAS UPDATE that
+ * lands an entity in `status='approved'`.
+ *
+ * Extracted so both the general `approveEntity` (which CAS-gates against
+ * `status='awaiting_approval'`) and the narrow image-critic recovery route
+ * `force-approve-image-critic-failure` (which CAS-gates against
+ * `status='failed'`) share the same post-update behavior:
+ *   1. Publish `entity:status` SSE so the EntityCard updates instantly.
+ *   2. Flip the canvas node's `pipeline_state` to `pipeline_owned_approved`.
+ *   3. Materialize / refresh the canvas node row (for entity types that
+ *      get a canvas reflection).
+ *
+ * Each side effect is failure-tolerant: the DB row is already updated, so
+ * a missing SSE or canvas update is a UX gap, not a correctness issue.
+ */
+export async function approveEntityCore(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  entity: { id: string; entity_type: EntityType; entity_key: string },
+): Promise<void> {
+  pipelineEvents.publish({
+    type: "entity:status",
+    pipelineId,
+    entityId: entity.id,
+    entityType: entity.entity_type,
+    entityKey: entity.entity_key,
+    status: "approved",
+  })
+
+  // Phase 1B.4 (D1): flip the canvas node's pipeline_state to `approved`.
+  // No-op when the entity has no `pipeline_entity_nodes` row yet (the canvas
+  // materializer runs immediately after this update in `materializeForApprovedEntity`
+  // below, and the materializer's INSERT path writes the same state directly —
+  // the explicit transition here covers the case where the row already exists
+  // from a prior approve / earlier Phase 1B.4 materialize-on-running pass).
+  await transitionEntityNodeAndEmit(
+    supabase,
+    pipelineId,
+    entity.id,
+    "pipeline_owned_approved",
+    "pipelines/entity-approval",
+  )
+
+  // Materialize the approved entity as a canvas node (Phase 1B.1: static
+  // create, no animations). Idempotent and a no-op when the pipeline has no
+  // bound workflow (programmatic activation mode). Failures here MUST NOT
+  // unwind the approve — the DB row is already approved and the route will
+  // still re-enqueue the engine; missing canvas reflection is a UX gap, not
+  // a correctness issue. Phase 1B.4 will add ELK auto-layout + reconciliation.
+  //
+  // Phase 1B.2 extends this to scenes (entity_type='scene'): scenes have no
+  // main_asset at planning time (assets land in Stage 6 / Phase 1C), so the
+  // materialize path treats main_asset_id as optional.
+  // Every EntityType in the union is materializable today, but keep the
+  // explicit narrowing so a future EntityType addition (e.g. "shot") doesn't
+  // silently materialize without thinking through the canvas semantics.
+  const entityType = entity.entity_type
+  if (
+    entityType === "character" ||
+    entityType === "object" ||
+    entityType === "location" ||
+    entityType === "scene"
+  ) {
+    try {
+      await materializeForApprovedEntity(supabase, pipelineId, entity.id, entityType)
+    } catch (err) {
+      console.error("[pipelines/entity-approval] Failed to materialize entity on canvas:", err)
+    }
+  }
+}
+
+/**
+ * Post-CAS side effects for resetting a critic-failed entity back to
+ * `pending` so the stage handler picks it up on the next dispatch.
+ *
+ * Mirrors the `approveEntityCore` extraction pattern (Phase 1D.2c-a recovery
+ * work) — keeps the SSE publish + canvas transition consistent between
+ * `rejectEntity`-style flows and the image-critic retry route in
+ * `routes/pipelines.ts`. Without this helper the two sites drift on which
+ * `entity:status` event shape they publish and which canvas state they
+ * transition to.
+ *
+ * Caller is responsible for:
+ *   - The CAS UPDATE that flipped status from `failed` to `pending`
+ *   - Re-enqueueing the pipeline orchestrator
+ */
+export async function resetEntityForRetry(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  entity: { id: string; entity_type: EntityType; entity_key: string },
+): Promise<void> {
+  pipelineEvents.publish({
+    type: "entity:status",
+    pipelineId,
+    entityId: entity.id,
+    entityType: entity.entity_type,
+    entityKey: entity.entity_key,
+    status: "pending",
+  })
+
+  // Phase 1B.4 (D1): drop the canvas node back to `running` while the engine
+  // re-generates. Idempotent + no-ops when no canvas node exists.
+  await transitionEntityNodeAndEmit(
+    supabase,
+    pipelineId,
+    entity.id,
+    "pipeline_owned_running",
+    "pipelines/entity-approval",
+  )
+}
+
+/**
  * Approves a single pipeline_entity row, optimistic-concurrency-guarded against
  * status='awaiting_approval'. Mirrors Section I's stage-level approve pattern.
  *
@@ -98,53 +211,11 @@ export async function approveEntity(
   if (error) return { ok: false, reason: error.message }
   if (!data || data.length === 0) return { ok: false, reason: "entity_already_advanced" }
   const row = data[0]
-  pipelineEvents.publish({
-    type: "entity:status",
-    pipelineId,
-    entityId,
-    entityType: row.entity_type,
-    entityKey: row.entity_key,
-    status: "approved",
+  await approveEntityCore(supabase, pipelineId, {
+    id: entityId,
+    entity_type: row.entity_type as EntityType,
+    entity_key: row.entity_key as string,
   })
-
-  // Phase 1B.4 (D1): flip the canvas node's pipeline_state to `approved`.
-  // No-op when the entity has no `pipeline_entity_nodes` row yet (the canvas
-  // materializer runs immediately after this update in `materializeForApprovedEntity`
-  // below, and the materializer's INSERT path writes the same state directly —
-  // the explicit transition here covers the case where the row already exists
-  // from a prior approve / earlier Phase 1B.4 materialize-on-running pass).
-  await transitionEntityNodeAndEmit(
-    supabase,
-    pipelineId,
-    entityId,
-    "pipeline_owned_approved",
-    "pipelines/entity-approval",
-  )
-
-  // Materialize the approved entity as a canvas node (Phase 1B.1: static
-  // create, no animations). Idempotent and a no-op when the pipeline has no
-  // bound workflow (programmatic activation mode). Failures here MUST NOT
-  // unwind the approve — the DB row is already approved and the route will
-  // still re-enqueue the engine; missing canvas reflection is a UX gap, not
-  // a correctness issue. Phase 1B.4 will add ELK auto-layout + reconciliation.
-  //
-  // Phase 1B.2 extends this to scenes (entity_type='scene'): scenes have no
-  // main_asset at planning time (assets land in Stage 6 / Phase 1C), so the
-  // materialize path treats main_asset_id as optional.
-  const entityType = row.entity_type as string
-  if (
-    entityType === "character" ||
-    entityType === "object" ||
-    entityType === "location" ||
-    entityType === "scene"
-  ) {
-    try {
-      await materializeForApprovedEntity(supabase, pipelineId, entityId, entityType)
-    } catch (err) {
-      console.error("[pipelines/entity-approval] Failed to materialize entity on canvas:", err)
-    }
-  }
-
   return { ok: true }
 }
 

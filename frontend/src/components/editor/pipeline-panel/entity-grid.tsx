@@ -60,8 +60,10 @@ export function EntityGrid({ pipelineId, entityType, title, mode }: Props) {
             <EntityCard
               key={entity.id}
               entity={entity}
+              pipelineId={pipelineId}
               onApprove={() => handleApprove(entity.id)}
               onReject={() => setRejectingId(entity.id)}
+              onRecovered={() => refetch()}
               disabled={busyId === entity.id}
               mode={mode}
             />

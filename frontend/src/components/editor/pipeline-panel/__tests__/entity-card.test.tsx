@@ -1,8 +1,23 @@
-import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import type { ReactNode } from "react"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { EntityCard } from "../entity-card"
+
+// The Skip/Regenerate recovery actions are React Query useMutation calls
+// (see entity-card.tsx) — wrap every render in a QueryClientProvider with
+// retries off so a mocked rejection doesn't loop.
+function renderWithClient(ui: ReactNode) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
+}
 
 /**
  * Phase 1D.2c-a §7 (E1) — EntityCard rendering tests.
@@ -23,9 +38,22 @@ import { EntityCard } from "../entity-card"
  *   - When `image_critic_unresolvable`: display the FAILED image
  *     (`last_attempted_image_url`) instead of `main_asset_url` and surface
  *     Skip/Regenerate actions.
+ *   - Skip and Regenerate call the dedicated recovery routes directly via
+ *     pipelinesApi (NOT the parent's generic onApprove/onReject — those map
+ *     to /approve and /reject which CAS-gate on status='awaiting_approval').
  *   - Hide ALL action buttons when `mode === 'auto'` (the orchestrator owns
  *     gating).
  */
+
+// Mock pipelinesApi so Skip/Regenerate clicks don't try to hit the network.
+vi.mock("@/lib/pipelines-api", () => ({
+  pipelinesApi: {
+    forceApproveImageCriticFailure: vi.fn(async () => ({ ok: true })),
+    retryImageGeneration: vi.fn(async () => ({ ok: true })),
+  },
+}))
+
+const PIPELINE_ID = "pipe-1"
 
 function buildEntity(overrides: Partial<PipelineEntity> = {}): PipelineEntity {
   return {
@@ -41,13 +69,18 @@ function buildEntity(overrides: Partial<PipelineEntity> = {}): PipelineEntity {
   }
 }
 
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
 describe("EntityCard", () => {
   it("renders image + Approve/Reject when status=awaiting_approval, mode=manual, no findings", () => {
     const onApprove = vi.fn()
     const onReject = vi.fn()
-    render(
+    renderWithClient(
       <EntityCard
         entity={buildEntity()}
+        pipelineId={PIPELINE_ID}
         onApprove={onApprove}
         onReject={onReject}
         mode="manual"
@@ -76,9 +109,10 @@ describe("EntityCard", () => {
         ],
       },
     })
-    render(
+    renderWithClient(
       <EntityCard
         entity={entity}
+        pipelineId={PIPELINE_ID}
         onApprove={vi.fn()}
         onReject={vi.fn()}
         mode="manual"
@@ -113,9 +147,10 @@ describe("EntityCard", () => {
     })
     const onApprove = vi.fn()
     const onReject = vi.fn()
-    render(
+    renderWithClient(
       <EntityCard
         entity={entity}
+        pipelineId={PIPELINE_ID}
         onApprove={onApprove}
         onReject={onReject}
         mode="manual"
@@ -138,13 +173,84 @@ describe("EntityCard", () => {
     expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument()
+  })
 
-    // Clicking Skip routes to the parent's onApprove handler.
+  it("Skip click calls forceApproveImageCriticFailure with the entity id (NOT onApprove)", async () => {
+    const { pipelinesApi } = await import("@/lib/pipelines-api")
+    const entity = buildEntity({
+      status: "failed",
+      main_asset_id: null,
+      main_asset_url: null,
+      metadata: {
+        name: "Alice",
+        last_error: "image_critic_unresolvable",
+        last_attempted_image_url: "https://example.com/alice-failed.jpg",
+      },
+    })
+    const onApprove = vi.fn()
+    const onReject = vi.fn()
+    const onRecovered = vi.fn()
+    renderWithClient(
+      <EntityCard
+        entity={entity}
+        pipelineId={PIPELINE_ID}
+        onApprove={onApprove}
+        onReject={onReject}
+        onRecovered={onRecovered}
+        mode="manual"
+      />,
+    )
     await userEvent.click(screen.getByRole("button", { name: "Skip" }))
-    expect(onApprove).toHaveBeenCalledTimes(1)
-    // Clicking Regenerate routes to the parent's onReject handler.
+    await waitFor(() => {
+      expect(pipelinesApi.forceApproveImageCriticFailure).toHaveBeenCalledWith(
+        PIPELINE_ID,
+        "e1",
+      )
+    })
+    // The new wiring does NOT route through the parent's onApprove/onReject
+    // for recovery actions — those map to /approve and /reject which CAS-gate
+    // on status='awaiting_approval' server-side.
+    expect(onApprove).not.toHaveBeenCalled()
+    expect(onReject).not.toHaveBeenCalled()
+    // Parent gets onRecovered so it can refetch the entity list.
+    await waitFor(() => expect(onRecovered).toHaveBeenCalledTimes(1))
+  })
+
+  it("Regenerate click calls retryImageGeneration with the entity id (NOT onReject)", async () => {
+    const { pipelinesApi } = await import("@/lib/pipelines-api")
+    const entity = buildEntity({
+      status: "failed",
+      main_asset_id: null,
+      main_asset_url: null,
+      metadata: {
+        name: "Alice",
+        last_error: "image_critic_unresolvable",
+        last_attempted_image_url: "https://example.com/alice-failed.jpg",
+      },
+    })
+    const onApprove = vi.fn()
+    const onReject = vi.fn()
+    const onRecovered = vi.fn()
+    renderWithClient(
+      <EntityCard
+        entity={entity}
+        pipelineId={PIPELINE_ID}
+        onApprove={onApprove}
+        onReject={onReject}
+        onRecovered={onRecovered}
+        mode="manual"
+      />,
+    )
     await userEvent.click(screen.getByRole("button", { name: "Regenerate" }))
-    expect(onReject).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(pipelinesApi.retryImageGeneration).toHaveBeenCalledWith(
+        PIPELINE_ID,
+        "e1",
+      )
+    })
+    expect(onApprove).not.toHaveBeenCalled()
+    expect(onReject).not.toHaveBeenCalled()
+    await waitFor(() => expect(onRecovered).toHaveBeenCalledTimes(1))
   })
 
   it("hides Skip/Regenerate when image_critic failed AND mode=auto", () => {
@@ -166,9 +272,10 @@ describe("EntityCard", () => {
         ],
       },
     })
-    render(
+    renderWithClient(
       <EntityCard
         entity={entity}
+        pipelineId={PIPELINE_ID}
         onApprove={vi.fn()}
         onReject={vi.fn()}
         mode="auto"
@@ -185,9 +292,10 @@ describe("EntityCard", () => {
   })
 
   it("hides Approve/Reject in auto mode for awaiting_approval entities (existing behavior)", () => {
-    render(
+    renderWithClient(
       <EntityCard
         entity={buildEntity({ status: "awaiting_approval" })}
+        pipelineId={PIPELINE_ID}
         onApprove={vi.fn()}
         onReject={vi.fn()}
         mode="auto"
@@ -198,9 +306,10 @@ describe("EntityCard", () => {
   })
 
   it("applies dark-mode utility classes on the wrapper", () => {
-    const { container } = render(
+    const { container } = renderWithClient(
       <EntityCard
         entity={buildEntity()}
+        pipelineId={PIPELINE_ID}
         onApprove={vi.fn()}
         onReject={vi.fn()}
         mode="manual"
@@ -211,7 +320,7 @@ describe("EntityCard", () => {
     expect(wrapper.className).toMatch(/dark:border-\[#2D2D2D\]/)
   })
 
-  it("renders Approve/Reject (no recovery buttons) when status=failed but last_error is NOT image_critic", () => {
+  it("renders no buttons when status=failed but last_error is NOT image_critic", () => {
     const entity = buildEntity({
       status: "failed",
       metadata: {
@@ -219,9 +328,10 @@ describe("EntityCard", () => {
         last_error: "provider_timeout",
       },
     })
-    render(
+    renderWithClient(
       <EntityCard
         entity={entity}
+        pipelineId={PIPELINE_ID}
         onApprove={vi.fn()}
         onReject={vi.fn()}
         mode="manual"
