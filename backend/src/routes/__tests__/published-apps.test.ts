@@ -410,6 +410,181 @@ describe("POST /v1/apps/publish", () => {
 })
 
 // ---------------------------------------------------------------------------
+// POST /v1/apps/publish — component-metadata validation
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/apps/publish — component metadata", () => {
+  /** Wire `workflows.select().eq().single()` to return a workflow snapshot. */
+  function mockWorkflowFetch(workflowNodes: Array<Record<string, unknown>>) {
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "workflows") {
+        const mockSingle = vi.fn().mockResolvedValue({
+          data: { ...DB_WORKFLOW, nodes: workflowNodes },
+          error: null,
+        })
+        const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+        return { select: mockSelect } as never
+      }
+      return {} as never
+    })
+  }
+
+  const baseComponentPayload = {
+    workflowId: TEST_WORKFLOW_ID,
+    name: "My Component",
+    publishType: "component" as const,
+  }
+
+  /** Full mock chain that mirrors the happy-path test up top — covers the
+   *  workflows select+update + published_apps version-check + insert flow. */
+  function mockFullPublishChain(workflowNodes: Array<Record<string, unknown>>, returnApp: Record<string, unknown> = DB_PUBLISHED_APP) {
+    let workflowCallCount = 0
+    let appsCallCount = 0
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "workflows") {
+        workflowCallCount++
+        if (workflowCallCount === 1) {
+          const mockSingle = vi.fn().mockResolvedValue({
+            data: { ...DB_WORKFLOW, nodes: workflowNodes },
+            error: null,
+          })
+          const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+          return { select: mockSelect } as never
+        }
+        const mockEq = vi.fn().mockResolvedValue({ error: null })
+        const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
+        return { update: mockUpdate } as never
+      }
+      if (table === "profiles") return mockProfilesQuery()
+      if (table === "published_apps") {
+        appsCallCount++
+        if (appsCallCount === 1) {
+          const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
+          const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
+          const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockEq = vi.fn().mockReturnValue({ is: mockIs })
+          const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+          return { select: mockSelect } as never
+        }
+        const mockSingle = vi.fn().mockResolvedValue({ data: returnApp, error: null })
+        const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+        const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
+        return { insert: mockInsert } as never
+      }
+      return {} as never
+    })
+  }
+
+  it("accepts componentMetadata with zero inputs (no .min(1))", async () => {
+    mockFullPublishChain([{ id: "n1", type: "generate-image" }])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        ...baseComponentPayload,
+        componentMetadata: {
+          inputs: [],
+          outputs: [{ id: "n1", name: "Out", type: "image", required: true, mediaPreview: true, fieldKey: "imageUrl" }],
+          exposedSettings: [],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects componentMetadata with zero outputs (outputs.min(1) still enforced)", async () => {
+    mockWorkflowFetch([{ id: "n1", type: "generate-image" }])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        ...baseComponentPayload,
+        componentMetadata: { inputs: [], outputs: [], exposedSettings: [] },
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("accepts compound handle ids (nodeId::portId) when port exists on sub-workflow node", async () => {
+    mockFullPublishChain([
+      { id: "in1", type: "sub-workflow-input", data: { ports: [{ id: "pA", name: "Subject", mediaType: "text" }] } },
+      { id: "out1", type: "sub-workflow-output", data: { ports: [{ id: "pZ", name: "Result", mediaType: "image" }] } },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        ...baseComponentPayload,
+        componentMetadata: {
+          inputs: [{ id: "in1::pA", name: "Subject", type: "text", required: true, fieldKey: "pA" }],
+          outputs: [{ id: "out1::pZ", name: "Result", type: "image", required: true, mediaPreview: true, fieldKey: "pZ" }],
+          exposedSettings: [],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+  })
+
+  it("rejects compound handle id when the port doesn't exist on the sub-workflow node", async () => {
+    mockWorkflowFetch([
+      { id: "in1", type: "sub-workflow-input", data: { ports: [{ id: "pA", name: "Subject", mediaType: "text" }] } },
+      { id: "out1", type: "sub-workflow-output", data: { ports: [{ id: "pZ", name: "Result", mediaType: "image" }] } },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        ...baseComponentPayload,
+        componentMetadata: {
+          inputs: [{ id: "in1::nonexistent", name: "Bad", type: "text", required: true, fieldKey: "nonexistent" }],
+          outputs: [{ id: "out1::pZ", name: "Result", type: "image", required: true, mediaPreview: true, fieldKey: "pZ" }],
+          exposedSettings: [],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("unknown port")
+  })
+
+  it("rejects compound handle id when the target node is not a sub-workflow node", async () => {
+    mockWorkflowFetch([
+      { id: "n1", type: "generate-image", data: {} },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        ...baseComponentPayload,
+        componentMetadata: {
+          inputs: [{ id: "n1::pA", name: "Bad", type: "text", required: true, fieldKey: "pA" }],
+          outputs: [{ id: "n1", name: "Out", type: "image", required: true, mediaPreview: true, fieldKey: "imageUrl" }],
+          exposedSettings: [],
+        },
+      },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toContain("expects a sub-workflow-input")
+  })
+})
+
+// ---------------------------------------------------------------------------
 // GET /v1/apps/mine
 // ---------------------------------------------------------------------------
 

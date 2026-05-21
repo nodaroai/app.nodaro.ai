@@ -3,7 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowCredits } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
-import { getNodeResult, getOutputType } from "@nodaro/shared"
+import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
 import { calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
@@ -120,7 +120,10 @@ const componentIOSchema = z.object({
 })
 
 const componentMetadataSchema = z.object({
-  inputs: z.array(componentIOSchema).min(1),
+  // No .min on inputs: zero-input components are valid (e.g. a sub-workflow
+  // with ports only on the output side, or a "press to generate" app whose
+  // only knobs are exposed settings).
+  inputs: z.array(componentIOSchema),
   outputs: z.array(componentIOSchema).min(1),
   exposedSettings: z.array(z.object({
     nodeId: z.string(),
@@ -454,17 +457,38 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     if (publishType === "component" && componentMetadata) {
       const snapshotNodes = (workflow.nodes || []) as Array<Record<string, unknown>>
       const nodeIds = new Set(snapshotNodes.map((n) => n.id as string))
+      const nodeById = new Map(snapshotNodes.map((n) => [n.id as string, n] as const))
 
-      // Validate input/output handle IDs reference real nodes
-      for (const input of componentMetadata.inputs) {
-        if (!nodeIds.has(input.id)) {
-          return reply.status(400).send({ error: { code: "bad_request", message: `Input handle references unknown node: ${input.id}` } })
+      const validateHandle = (label: "Input" | "Output", handleId: string): { ok: true } | { ok: false; message: string } => {
+        const { nodeId, portId } = parseHandleId(handleId)
+        if (!nodeIds.has(nodeId)) {
+          return { ok: false, message: `${label} handle references unknown node: ${nodeId}` }
         }
+        if (portId) {
+          // Compound id — must point at a real port on a sub-workflow node.
+          const node = nodeById.get(nodeId)!
+          const type = node.type as string | undefined
+          if (label === "Input" && type !== "sub-workflow-input") {
+            return { ok: false, message: `Input handle ${handleId} expects a sub-workflow-input node, got ${type ?? "unknown"}` }
+          }
+          if (label === "Output" && type !== "sub-workflow-output") {
+            return { ok: false, message: `Output handle ${handleId} expects a sub-workflow-output node, got ${type ?? "unknown"}` }
+          }
+          const ports = ((node.data as Record<string, unknown> | undefined)?.ports as Array<{ id?: string }> | undefined) ?? []
+          if (!ports.some((p) => p.id === portId)) {
+            return { ok: false, message: `${label} handle references unknown port: ${nodeId}::${portId}` }
+          }
+        }
+        return { ok: true }
+      }
+
+      for (const input of componentMetadata.inputs) {
+        const v = validateHandle("Input", input.id)
+        if (!v.ok) return reply.status(400).send({ error: { code: "bad_request", message: v.message } })
       }
       for (const output of componentMetadata.outputs) {
-        if (!nodeIds.has(output.id)) {
-          return reply.status(400).send({ error: { code: "bad_request", message: `Output handle references unknown node: ${output.id}` } })
-        }
+        const v = validateHandle("Output", output.id)
+        if (!v.ok) return reply.status(400).send({ error: { code: "bad_request", message: v.message } })
       }
 
       // Validate exposed setting nodeIds reference real nodes

@@ -21,7 +21,7 @@ import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mapp
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
-import { mergeExposedSettings } from "@nodaro/shared"
+import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type {
   SimpleNode,
@@ -996,7 +996,9 @@ async function executeComponentNode(
     throw new Error(`Component nesting depth exceeded (max 5). Current depth: ${depth}`)
   }
 
-  // Build inputOverrides (handle-aware)
+  // Build inputOverrides (handle-aware). Compound handle ids (nodeId::portId)
+  // get routed to the sub-workflow-input node's __injectedPortValues slot via
+  // applyHandleInputOverride — mirrors the frontend component-executor.
   const inputOverrides: Record<string, Record<string, unknown>> = {}
 
   for (const handle of componentMetadata.inputs) {
@@ -1008,17 +1010,17 @@ async function executeComponentNode(
       (handle.type === "audio" ? resolvedInputs.audioUrl : undefined) ??
       (handle.type === "text" ? resolvedInputs.prompt : undefined)
     if (value !== undefined) {
-      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: value }
+      applyHandleInputOverride(inputOverrides, handle, value)
     }
   }
 
   // Pick up config-panel input values (stored in exposedSettings as "nodeId:fieldKey")
   for (const handle of componentMetadata.inputs) {
-    if (inputOverrides[handle.id]?.[handle.fieldKey] !== undefined) continue
+    if (isHandleInputWired(inputOverrides, handle)) continue
     const settingKey = `${handle.id}:${handle.fieldKey}`
     const settingVal = exposedSettings[settingKey]
     if (settingVal !== undefined && settingVal !== "") {
-      inputOverrides[handle.id] = { ...inputOverrides[handle.id], [handle.fieldKey]: settingVal }
+      applyHandleInputOverride(inputOverrides, handle, settingVal)
     }
   }
 
