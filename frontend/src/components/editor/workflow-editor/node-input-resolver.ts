@@ -64,6 +64,10 @@ export function resolveSeedPromptHint(
       pickerNodeTypes = EMPTY_PICKER_SET;
       break;
   }
+  // No picker types for this entity → no hint can resolve. Short-circuit
+  // BEFORE the nodesById Map allocation so location/character branches don't
+  // pay the unconditional nodes.map() cost.
+  if (pickerNodeTypes.size === 0) return "";
 
   // O(1) source lookup vs O(N) find-per-connection. Cheap when connections > 1.
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
