@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
+import { detail, emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic } from "../util.js"
 import { watchExecution } from "./workflows.js"
@@ -95,7 +95,7 @@ export function appsCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.apps.get(slug)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }
@@ -178,7 +178,7 @@ Tip: \`nodaro apps get <slug>\` shows the input schema for that app.`)
         const client = buildClient(opts.profile)
         const result = await client.apps.getRun(slug, runId)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }

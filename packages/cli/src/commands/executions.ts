@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, type OutputOpts } from "../output.js"
+import { detail, emit, success, type OutputOpts } from "../output.js"
 import { watchExecution } from "./workflows.js"
 
 interface GlobalOpts extends OutputOpts {
@@ -25,7 +25,7 @@ export function executionsCommand(): Command {
         }
         const result = await client.executions.get(id)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }

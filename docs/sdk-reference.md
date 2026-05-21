@@ -16,6 +16,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.nodes`](#clientnodes)
   - [`client.characters`](#clientcharacters)
   - [`client.locations`](#clientlocations)
+  - [`client.objects`](#clientobjects)
   - [`client.pipelines`](#clientpipelines)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
@@ -948,6 +949,321 @@ const { canonicalDescription } = await client.locations.recaption(locationId)
 
 ---
 
+### `client.objects`
+
+Script the full object (prop / product / vehicle / etc.) lifecycle —
+identity edits, main-image + variant generation, motion clips, and
+LLM-captioned approval.
+
+An "object" is the canonical product / prop row that Object Studio
+drives (`objects` table). Each row carries the main image URL, four asset
+buckets (`angles`, `materials`, `variations`, `motionClips`), reference
+photos, and the LLM caption that anchors the prop in downstream prompts.
+See [Object Platform](object-platform.md) for the full data-model
+walkthrough.
+
+#### `list(params?)`
+
+```ts
+list(params?: ListObjectsParams): Promise<{ objects: Object[] }>
+```
+
+Lists the caller's objects. By default returns active objects only; pass
+`archived: true` for an "archive" view. Optional `projectId` scopes the
+result to a single project.
+
+```ts
+const { objects } = await client.objects.list()
+const { objects: archived } = await client.objects.list({ archived: true })
+```
+
+> `Object` shadows the JS global, which TypeScript handles cleanly via
+> local-scope resolution. Callers who need both can alias as
+> `import type { Object as NodaroObject } from "@nodaro/client"`.
+
+#### `listArchived(params?)`
+
+```ts
+listArchived(params?: ListObjectsParams): Promise<{ objects: Object[] }>
+```
+
+Convenience wrapper for `list({ archived: true })`. Returns soft-deleted
+rows so callers can drive a UI "Archived" tab without re-encoding the
+query param.
+
+```ts
+const { objects } = await client.objects.listArchived()
+```
+
+#### `get(id)`
+
+```ts
+get(id: string): Promise<ObjectDetail>
+```
+
+Fetches a single object including `pendingJobs` (in-flight asset
+generations the studio uses to rehydrate spinners after a reload).
+
+Soft-deleted (archived) objects are NOT returned by id — the route
+enforces `deleted_at IS NULL` and surfaces archived rows as a uniform 404
+`not_found`. The SDK throws `NotFoundError`.
+
+```ts
+const object = await client.objects.get(objectId)
+```
+
+#### `create(input)` / `update(id, input)`
+
+```ts
+create(input: CreateObjectInput): Promise<{ id: string }>
+update(id: string, input: UpdateObjectInput): Promise<UpdateObjectResult>
+```
+
+`create()` requires `name` + `nodeId` (the route 400s otherwise). For MCP /
+SDK callers without a canvas node, use the `"mcp-managed"` sentinel.
+
+`update()` is a partial — only the fields you pass get written. Worker-
+owned asset buckets are intentionally NOT exposed on this surface (a stale
+snapshot save would clobber `append_object_asset` writes from a worker).
+
+Optimistic-concurrency: pass `expectedUpdatedAt` to require the row's
+`updated_at` still matches; on mismatch the route returns 409
+`concurrent_modification`. The SDK surfaces that as a generic `NodaroError`
+with the same code — catch it, re-fetch, merge, and retry.
+
+> Objects do **not** carry a `piiConsentAt` field. Reference photos on
+> object rows attach without a dedicated consent gate (unlike locations
+> Phase 2 #7, objects are inanimate by definition).
+
+```ts
+const { id } = await client.objects.create({
+  nodeId: "mcp-managed",
+  name: "Antique Lantern",
+  description: "Weathered brass lantern with hand-engraved filigree",
+  category: "tool",
+  style: "realistic",
+})
+
+await client.objects.update(id, {
+  canonicalDescription: "...",
+  styleLock: false,
+  expectedUpdatedAt: object.updatedAt,
+})
+```
+
+#### `delete(id)` / `restore(id)`
+
+```ts
+delete(id: string): Promise<{ success: true; archived: true }>
+restore(id: string): Promise<{ id: string; name: string }>
+```
+
+Soft-delete + un-archive. `delete()` is the idempotent soft path —
+repeating it on an already-archived row is a no-op. If a restored name
+collides (case-insensitive) with an active row, the server auto-suffixes
+`(restored)` and returns the effective name.
+
+```ts
+await client.objects.delete(objectId)
+const { name } = await client.objects.restore(objectId)
+```
+
+#### `permanentDelete(id)`
+
+```ts
+permanentDelete(id: string): Promise<{ success: true; permanent: true }>
+```
+
+Hard-delete (permanent) an object — the row + every R2 asset it
+references. Archived rows ONLY: active objects return 400 `not_archived`.
+Call `delete()` first to archive, then `permanentDelete()` to destroy.
+
+Mirrors the `app_runs` permanent-delete pattern (archive-first) so a
+stray SDK / curl caller cannot bypass the studio's archive-first UI flow.
+
+```ts
+await client.objects.delete(objectId)
+await client.objects.permanentDelete(objectId)
+```
+
+The MCP surface intentionally omits this operation — destructive ops
+driven by an LLM are unsafe to expose.
+
+#### `generate(input)`
+
+```ts
+generate(input: GenerateObjectInput): Promise<GenerateObjectResult>
+```
+
+Fires `POST /v1/generate-object` to produce one or more candidate main
+images. With `count > 1`, all jobs are reserved up-front before any is
+enqueued — mid-batch failures roll back atomically.
+
+When `attachToObjectId` is set AND `count === 1`, the worker writes the
+result directly to the row's `source_image_url`; otherwise call
+`approveMainImage()` after picking a candidate.
+
+`GenerateObjectResult` is a **discriminated union**: `{ jobId }` for
+`count: 1` (default) and `{ jobIds: string[] }` for `count: 2 | 4`. SDK
+consumers should type-guard via `"jobIds" in result`:
+
+```ts
+// Single candidate — auto-attaches on completion
+const result = await client.objects.generate({
+  name: "Antique Lantern",
+  description: "Weathered brass lantern",
+  attachToObjectId: objectId,
+})
+
+if ("jobIds" in result) {
+  for (const jobId of result.jobIds) {
+    // poll each candidate
+  }
+} else {
+  // single jobId — worker auto-attaches on completion
+  console.log(result.jobId)
+}
+```
+
+`seedPromptHint` (parameter-picker pass-through) is a top-level field —
+pass it to compose a catalog selection (e.g. "antique brass lantern" from
+the Material picker) into the generated prompt.
+
+#### `generateAsset(input)`
+
+```ts
+generateAsset(input: GenerateObjectAssetInput): Promise<{ jobId: string }>
+```
+
+Fires `POST /v1/generate-object-asset` to produce a single variant.
+`assetType` is one of `angles` / `materials` / `variations` / `motion` /
+`custom`. When the studio path is set (`attachToObjectId` +
+`attachToColumn` + `attachName`), the worker appends
+`{ name: attachName, url: <result> }` to the named JSONB bucket on
+completion.
+
+**Studio-gated LLM draft:** when `attachToObjectId` is set and
+`description` is omitted, the route first invokes an LLM to draft a
+per-variant prompt fragment off the parent object's
+`canonical_description` + the new variant name. Without `attachToObjectId`,
+the route trusts the caller-supplied prompt as-is.
+
+> `attachToColumn` is REQUIRED for `assetType === "custom"` — the worker
+> can't infer the bucket from the asset type. For canonical asset types
+> (`angles` / `materials` / `variations` / `motion`), the column is
+> derived automatically by the route.
+
+```ts
+const { jobId } = await client.objects.generateAsset({
+  name: "Antique Lantern",
+  assetType: "materials",
+  variant: "gold",
+  attachToObjectId: objectId,
+  attachToColumn: "materials",
+  attachName: "gold",
+})
+```
+
+#### `generateMotion(input)`
+
+```ts
+generateMotion(input: GenerateObjectMotionInput): Promise<{ jobId: string }>
+```
+
+Fires `POST /v1/generate-object-motion` to animate the object's main
+image into a motion clip (image-to-video). The attach column is hardcoded
+server-side to `motion_clips` (objects have a single motion bucket so
+callers don't supply `attachToColumn`).
+
+Object-specific defaults vs location:
+
+- `provider` defaults to `"kling-turbo"` (not location's `"kling"`).
+- `aspectRatio` defaults to `"1:1"` server-side via
+  `resolveObjectAspectRatio({ assetType: "motion" })` — objects are
+  product-showcase framing, not cinematic establishing shots. Objects
+  have their own 5-value `ObjectAspectRatio` enum
+  (`1:1` / `3:4` / `16:9` / `9:16` / `4:3`) with `4:3` added vs. the
+  character set to support classic product-catalogue aspect ratios.
+
+Pass `refineFromVideoUrl` to route through video-to-video using that clip
+as the source instead of running image-to-video from `sourceImageUrl` —
+use to iterate an existing clip with a new prompt without shifting
+composition.
+
+> `sourceImageUrl` is REQUIRED. Image-to-video needs a source frame and
+> the route has no fallback — supply the canonical product-shot URL
+> explicitly.
+
+```ts
+// New motion clip from the approved main image
+const { jobId } = await client.objects.generateMotion({
+  name: "Antique Lantern",
+  motionPrompt: "slow 360 rotation, soft golden rim light",
+  sourceImageUrl: mainImageUrl,
+  provider: "kling-turbo",
+  attachToObjectId: objectId,
+  attachName: "rotate-360",
+})
+
+// Refine an existing clip (video-to-video)
+const { jobId: refineJobId } = await client.objects.generateMotion({
+  name: "Antique Lantern",
+  motionPrompt: "same shot but slow hover instead of rotation",
+  sourceImageUrl: mainImageUrl,
+  refineFromVideoUrl: existingRotationClipUrl,
+  provider: "wan-i2v",
+  attachToObjectId: objectId,
+})
+```
+
+#### `approveMainImage(id, candidateJobId, expectedUpdatedAt?)`
+
+```ts
+approveMainImage(
+  id: string,
+  candidateJobId: string,
+  expectedUpdatedAt?: string,
+): Promise<ApproveObjectMainImageResult>
+```
+
+Approves a completed `generate()` candidate as the object's main image.
+Sets `source_image_url` + fires the LLM caption (Claude Sonnet vision)
+inline. Returns the new main-image URL plus the caption.
+
+Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
+`null`) when the LLM sub-call failed — the main image is still set; call
+`recaption()` to retry.
+
+Optimistic-concurrency: pass `expectedUpdatedAt` to gate the update on
+the row's current `updated_at`; on mismatch the route returns 409
+`concurrent_modification` carrying the fresh token.
+
+```ts
+const { sourceImageUrl, canonicalDescription } =
+  await client.objects.approveMainImage(objectId, candidateJobId)
+```
+
+#### `recaption(id)`
+
+```ts
+recaption(id: string): Promise<RecaptionObjectResult>
+```
+
+Re-fires the LLM caption against the object's current main image. 502s
+on LLM failure (unlike `approveMainImage` which preserves the side-effect
+and returns `""`); 400 `main_image_required` if no main image is set yet.
+
+The route is a **pure idempotent retry** — it does NOT accept an
+`expectedUpdatedAt` parameter (per Phase E1 calibration finding: backend
+route is idempotent retry, not gated on optimistic-concurrency). The
+method signature is therefore `recaption(id)` with no second argument.
+
+```ts
+const { canonicalDescription } = await client.objects.recaption(objectId)
+```
+
+---
+
 ### `client.pipelines`
 
 Story-to-Video pipeline operations. Pipelines orchestrate multi-stage AI production
@@ -1169,6 +1485,24 @@ Every type used in a public method signature is re-exported from
 - `GenerateAssetInput`, `GenerateMotionInput` — bodies for asset / motion generation
 - `ApprovePortraitResult` — `{ portraitUrl, canonicalDescription: string | null }`
 - `RecaptionResult` — `{ canonicalDescription }`
+
+### Objects
+
+- `Object` — full object record (camelCase). Re-exportable as `NodaroObject` to avoid shadowing the JS global.
+- `ObjectDetail` — `Object` plus in-flight `pendingJobs` bucket.
+- `ObjectCategory` — 10-value enum: `"furniture" | "vehicle" | "weapon" | "food" | "clothing" | "electronics" | "nature" | "tool" | "animal" | "other"`. Distinct from location's geography-based set.
+- `ObjectReferencePhoto`, `ObjectReferencePhotoKind` — `kind` is one of `"front" | "side" | "detail" | "context" | "moodBoard" | "other"` (6 values; no PII consent unlike locations).
+- `ObjectAssetType` — 5-value enum from `@nodaro/shared`: `"angles" | "materials" | "variations" | "motion" | "custom"`. Re-exported from `@nodaro/client` so consumers don't need a second dep.
+- `ObjectAttachColumn` — 4-value enum from `@nodaro/shared`: `"angles" | "materials" | "variations" | "motion_clips"`. Re-exported alongside `OBJECT_ATTACH_COLUMNS` runtime tuple.
+- `ObjectAspectRatio` — 5-value enum: `"1:1" | "3:4" | "16:9" | "9:16" | "4:3"`. Re-exported alongside `OBJECT_ASPECT_OPTIONS` / `OBJECT_ASPECT_DEFAULTS` runtime tuples. Distinct from `CharacterAspectRatio` because objects support an extra `4:3` framing for product-showcase shots.
+- `CreateObjectInput`, `UpdateObjectInput`, `UpsertObjectInput` — bodies for `create()` / `update()` / `upsert()`. `expectedUpdatedAt` lives on `UpdateObjectInput` + `UpsertObjectInput`.
+- `UpdateObjectResult`, `UpsertObjectResult` — `{ id }` (create) or `{ id, updatedAt }` (update).
+- `ListObjectsParams` — `{ archived?, projectId? }`.
+- `GenerateObjectInput`, `GenerateObjectResult` — body + discriminated-union response (`{ jobId } | { jobIds: string[] }`).
+- `GenerateObjectAssetInput`, `GenerateObjectAssetResult` — `{ jobId }`.
+- `GenerateObjectMotionInput`, `GenerateObjectMotionResult` — `{ jobId }`. `aspectRatio` field is `ObjectAspectRatio` (5-value union).
+- `ApproveObjectMainImageResult` — `{ sourceImageUrl, canonicalDescription }` (caption coerced to `""` on LLM sub-failure).
+- `RecaptionObjectResult` — `{ canonicalDescription }`.
 
 ### Developer apps
 

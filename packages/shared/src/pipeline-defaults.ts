@@ -144,6 +144,44 @@ export const IMAGE_CRITIC_MAX_RETRIES = 2
  */
 export const IMAGE_CRITIC_MIN_ADHERENCE_SCORE = 5
 
+/**
+ * Metadata keys written by the image-critic retry loop (Phase 1D.2c-a)
+ * onto `pipeline_entities.metadata` when an entity's critic budget is
+ * exhausted. The retry-image-generation route clears these to reset the
+ * entity to a fresh attempt; EntityCard reads them to render findings +
+ * the failed image.
+ *
+ * Single source of truth so the writer (`_image-critic-loop.ts`) and the
+ * clearer (`routes/pipelines.ts:retry-image-generation`) can't drift.
+ */
+export const IMAGE_CRITIC_METADATA_KEYS = [
+  "last_error",
+  "last_error_at",
+  "critic_findings",
+  "last_attempted_image_url",
+  "last_attempted_asset_id",
+  "image_critic_retry_count",
+] as const
+
+export type ImageCriticMetadataKey = (typeof IMAGE_CRITIC_METADATA_KEYS)[number]
+
+/**
+ * Removes every {@link IMAGE_CRITIC_METADATA_KEYS} entry from a metadata
+ * blob, returning a shallow copy. Used by the retry-image-generation route
+ * to wipe critic-only state while preserving everything else (`name`,
+ * `voice_match`, `reject_count`, etc.).
+ */
+export function clearImageCriticMetadata(
+  meta: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!meta) return {}
+  const next: Record<string, unknown> = { ...meta }
+  for (const key of IMAGE_CRITIC_METADATA_KEYS) {
+    delete next[key]
+  }
+  return next
+}
+
 export type ChatEnabledStage = keyof typeof CHAT_TURN_CAPS
 
 /**

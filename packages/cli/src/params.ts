@@ -1,6 +1,19 @@
 import { readFileSync } from "node:fs"
 
 /**
+ * Strict "true"/"false" → boolean coercion for CLI flags whose value commander
+ * hands us as a raw string. Throws on anything else so users don't silently
+ * pass `--style-lock yes` and get `false`.
+ *
+ * Shared across update commands that accept tristate-ish toggles.
+ */
+export function parseBoolFlag(raw: string, flagName: string): boolean {
+  if (raw === "true") return true
+  if (raw === "false") return false
+  throw new Error(`--${flagName} must be "true" or "false" (got "${raw}")`)
+}
+
+/**
  * Parse `--param key=value` (and `--input key=value` for apps) into an object.
  * Coerces obvious primitives (`true`/`false`/numbers) — leaves everything else
  * as strings. Supports multiple `=` in the value (only the first splits the

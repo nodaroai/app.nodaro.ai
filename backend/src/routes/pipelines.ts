@@ -5,12 +5,15 @@ import {
   CHAT_TURN_CAPS,
   ENTITY_TYPES,
   EntityRejectInputSchema,
+  IMAGE_CRITIC_UNRESOLVABLE,
   PIPELINE_STAGE_NAMES,
   PipelineInputSchema,
   SubGateNameSchema,
+  clearImageCriticMetadata,
   validateDurationForFormat,
   validateModeActivation,
   type ChatEnabledStage,
+  type EntityType,
   type JsonPatch,
   type PipelineStageName,
   type ProposedChange,
@@ -1173,6 +1176,220 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         pipelineId: req.params.id,
         userId,
         reason: "user_reject",
+      })
+      return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/force-approve-image-critic-failure ─
+  // Phase 1D.2c-a §7 (E1) follow-up — Skip button on the EntityCard.
+  //
+  // The Stage 2 / Stage 4 image-critic chain may terminally fail an entity
+  // after `IMAGE_CRITIC_MAX_RETRIES`. The general approve route CAS-gates on
+  // `status='awaiting_approval'` (safe-by-default for the common path); this
+  // narrow recovery route accepts the failed image AS-IS and lets the
+  // pipeline advance.
+  //
+  // Gate: entity.status='failed' AND metadata.last_error=IMAGE_CRITIC_UNRESOLVABLE.
+  // Side-effects: status→'approved', main_asset_id→latest assets row for the
+  // entity (mirrors what the success path would have written had the critic
+  // passed). Re-enqueues the orchestrator so downstream stages run.
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/force-approve-image-critic-failure",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      // Ownership check on the parent pipeline row (existence-leak prevention —
+      // cross-user lookups return 404, not 403).
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Load the entity + verify it's in the image-critic-failed state.
+      const { data: entity } = await supabase
+        .from("pipeline_entities")
+        .select("id, entity_type, entity_key, status, metadata")
+        .eq("id", req.params.entity_id)
+        .eq("pipeline_id", req.params.id)
+        .maybeSingle()
+      if (!entity) return reply.status(404).send({ error: { code: "not_found" } })
+      const metadata = (entity.metadata ?? {}) as Record<string, unknown>
+      if (
+        entity.status !== "failed" ||
+        metadata.last_error !== IMAGE_CRITIC_UNRESOLVABLE
+      ) {
+        return reply
+          .status(409)
+          .send({ error: { code: "entity_not_image_critic_failed" } })
+      }
+
+      // Pick the asset row to adopt. Fix 2 — when the critic loop wrote
+      // `last_attempted_asset_id` we use it directly. Older failures (before
+      // the writer was updated) fall back to the latest-by-created_at query.
+      const lastAttemptedAssetId =
+        typeof metadata.last_attempted_asset_id === "string"
+          ? (metadata.last_attempted_asset_id as string)
+          : null
+      let mainAssetId: string | null = lastAttemptedAssetId
+      if (!mainAssetId) {
+        const { data: latestAsset } = await supabase
+          .from("assets")
+          .select("id")
+          .eq("pipeline_entity_id", req.params.entity_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        mainAssetId = (latestAsset?.id as string | undefined) ?? null
+      }
+      if (!mainAssetId) {
+        return reply.status(409).send({ error: { code: "no_asset_to_approve" } })
+      }
+
+      const { data: updated } = await supabase
+        .from("pipeline_entities")
+        .update({
+          status: "approved",
+          main_asset_id: mainAssetId,
+        })
+        .eq("id", req.params.entity_id)
+        .eq("pipeline_id", req.params.id)
+        .eq("status", "failed")
+        .select("id")
+      if (!updated || (Array.isArray(updated) && updated.length === 0)) {
+        // CAS lost — the row was in `failed` at SELECT time but moved out of
+        // it before the UPDATE landed (concurrent click / orchestrator action).
+        // Surface as `entity_already_advanced` per the sibling convention in
+        // `entity-approval.ts:approveEntity` so the client distinguishes
+        // "stale UI, refetch" from "wrong state to begin with".
+        return reply
+          .status(409)
+          .send({ error: { code: "entity_already_advanced" } })
+      }
+
+      // Fix 1 — run the same post-approve side effects the general
+      // approveEntity flow runs: publish entity:status SSE + flip the canvas
+      // node's pipeline_state to approved + (re-)materialize the canvas node
+      // row. Without this the EntityCard waits ~5s for the React Query poll
+      // to flip and the canvas node stays stuck in `running`.
+      const { approveEntityCore } = await import("../ee/pipelines/entity-approval.js")
+      await approveEntityCore(supabase, req.params.id, {
+        id: entity.id as string,
+        entity_type: entity.entity_type as EntityType,
+        entity_key: entity.entity_key as string,
+      })
+
+      // Drive the engine forward — same reason as the general approve route.
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+      return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/retry-image-generation ────
+  // Phase 1D.2c-a §7 (E1) follow-up — Regenerate button on the EntityCard.
+  //
+  // Resets a critic-failed entity back to `pending` and clears the
+  // image-critic-only metadata, leaving the rest of the row intact (name,
+  // voice_match, role, etc.). Re-enqueuing the orchestrator drives the stage
+  // handler back through `generateCharacterMain` / `generateLocationMain`
+  // with a fresh retry budget.
+  //
+  // Gate is identical to force-approve: only critic-failed rows recover here.
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/retry-image-generation",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: entity } = await supabase
+        .from("pipeline_entities")
+        .select("id, entity_type, entity_key, status, metadata")
+        .eq("id", req.params.entity_id)
+        .eq("pipeline_id", req.params.id)
+        .maybeSingle()
+      if (!entity) return reply.status(404).send({ error: { code: "not_found" } })
+      const metadata = (entity.metadata ?? {}) as Record<string, unknown>
+      if (
+        entity.status !== "failed" ||
+        metadata.last_error !== IMAGE_CRITIC_UNRESOLVABLE
+      ) {
+        return reply
+          .status(409)
+          .send({ error: { code: "entity_not_image_critic_failed" } })
+      }
+
+      // Strip image-critic-only metadata keys. Anything else (name, role,
+      // voice_match, reject_count, …) survives intact so the next attempt
+      // doesn't lose context. Fix 5 — the key set is the single source of
+      // truth in `@nodaro/shared/pipeline-defaults` so the writer
+      // (`_image-critic-loop.ts`) and this clearer can't drift.
+      const preservedMetadata = clearImageCriticMetadata(metadata)
+
+      const { data: updated } = await supabase
+        .from("pipeline_entities")
+        .update({
+          status: "pending",
+          metadata: preservedMetadata,
+        })
+        .eq("id", req.params.entity_id)
+        .eq("pipeline_id", req.params.id)
+        .eq("status", "failed")
+        .select("id")
+      if (!updated || (Array.isArray(updated) && updated.length === 0)) {
+        // Fix 4 — CAS lost (entity moved out of `failed` between SELECT and
+        // UPDATE). Same convention as the force-approve route + sibling
+        // approveEntity helper.
+        return reply
+          .status(409)
+          .send({ error: { code: "entity_already_advanced" } })
+      }
+
+      // Fix 1 — publish entity:status SSE + drop the canvas node back to
+      // `running`. Mirrors the rejectEntity path (which transitions to
+      // `generating` + `pipeline_owned_running`). UI updates instantly
+      // instead of waiting for the React Query 5s poll.
+      //
+      // Symmetry with the sibling force-approve route — both recovery routes
+      // delegate their post-CAS side effects to dedicated helpers in
+      // `entity-approval.ts` (here: `resetEntityForRetry`; there:
+      // `approveEntityCore`).
+      const { resetEntityForRetry } = await import(
+        "../ee/pipelines/entity-approval.js"
+      )
+      await resetEntityForRetry(supabase, req.params.id, {
+        id: entity.id as string,
+        entity_type: entity.entity_type as EntityType,
+        entity_key: entity.entity_key as string,
+      })
+
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
       })
       return reply.send({ ok: true })
     },

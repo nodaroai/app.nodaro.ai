@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, dim, warn, table, type OutputOpts } from "../output.js"
+import { detail, emit, success, dim, warn, table, type OutputOpts } from "../output.js"
 import { resolveParams } from "../params.js"
 import { collectVariadic, watchUntilTerminal } from "../util.js"
 import { pickFromList, isInteractive } from "../interactive.js"
@@ -96,7 +96,7 @@ export function nodesCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.nodes.get(type)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }
@@ -141,7 +141,7 @@ Tip: \`nodaro nodes get <type>\` shows the full input schema (required fields, p
           if (!jobId) {
             // Inline node (combine-text/split-text/composite) — synchronous result body.
             success(`${resolvedType} completed (inline)`)
-            console.log(JSON.stringify(result, null, 2))
+            detail(result)
             return
           }
 

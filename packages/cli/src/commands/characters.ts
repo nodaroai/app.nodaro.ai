@@ -1,23 +1,13 @@
 import { Command } from "commander"
 import { CHARACTER_STYLES, type EntityStyle } from "@nodaro/shared"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, dim, type OutputOpts } from "../output.js"
-import { watchUntilTerminal } from "../util.js"
+import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
+import { parseCount, watchUntilTerminal } from "../util.js"
 
 const STYLE_DESCRIPTION = `one of ${CHARACTER_STYLES.join("|")}`
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
-}
-
-/**
- * Coerce the --count flag value into the union the SDK expects.
- * Defaults to 1 on any other value; the SDK will further validate.
- */
-function parseCount(raw: string | undefined): 1 | 2 | 4 {
-  if (raw === "2") return 2
-  if (raw === "4") return 4
-  return 1
 }
 
 export function charactersCommand(): Command {
@@ -78,7 +68,7 @@ export function charactersCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.characters.get(id)
         if (opts.json) emit(result, opts)
-        else console.log(JSON.stringify(result, null, 2))
+        else detail(result)
       } catch (err) {
         handleError(err)
       }

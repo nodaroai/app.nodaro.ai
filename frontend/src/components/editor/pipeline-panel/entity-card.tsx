@@ -1,3 +1,4 @@
+import { useMutation } from "@tanstack/react-query"
 import type {
   CharacterImageCriticVerdict,
   EntityStatus,
@@ -5,13 +6,30 @@ import type {
 } from "@nodaro/shared"
 import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
+import { pipelinesApi } from "@/lib/pipelines-api"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
 interface Props {
   entity: PipelineEntity
+  /**
+   * Phase 1D.2c-a §7 (E1) follow-up — the recovery surface
+   * (Skip/Regenerate) makes specialized POSTs to /force-approve-image-critic-failure
+   * and /retry-image-generation; it needs the parent pipeline id directly
+   * instead of routing through the generic onApprove/onReject callbacks
+   * (which CAS-gate on status='awaiting_approval' server-side and would
+   * 409 here).
+   */
+  pipelineId: string
   onApprove: () => void
   onReject: () => void
+  /**
+   * Phase 1D.2c-a §7 (E1) follow-up — called after a successful Skip or
+   * Regenerate so the parent EntityGrid can refetch the entity list. The
+   * recovery POSTs don't return the new entity row, so the parent owns the
+   * cache-invalidation step.
+   */
+  onRecovered?: () => void
   disabled?: boolean
   /**
    * Phase 1D.2a §4.5 — in auto mode the orchestrator bulk-approves entities
@@ -79,10 +97,33 @@ function readCriticState(
   return { findings, isFailed, displayUrl }
 }
 
-export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Props) {
+export function EntityCard({
+  entity,
+  pipelineId,
+  onApprove,
+  onReject,
+  onRecovered,
+  disabled,
+  mode,
+}: Props) {
   const status = entity.status
   const metadata = entity.metadata as Record<string, unknown> | null
   const name = String(metadata?.name ?? entity.entity_key)
+
+  // Recovery POSTs go through React Query mutations — `isPending` blocks a
+  // double-click, the mutations surface their loading state directly, and
+  // the pattern matches sibling `mode-switch-button.tsx`. The parent owns
+  // the entity-list cache invalidation via `onRecovered`.
+  const skipMutation = useMutation({
+    mutationFn: () =>
+      pipelinesApi.forceApproveImageCriticFailure(pipelineId, entity.id),
+    onSuccess: () => onRecovered?.(),
+  })
+  const regenerateMutation = useMutation({
+    mutationFn: () => pipelinesApi.retryImageGeneration(pipelineId, entity.id),
+    onSuccess: () => onRecovered?.(),
+  })
+  const recovering = skipMutation.isPending || regenerateMutation.isPending
 
   // Phase 1D.2c-a §7 — image-critic surface.
   const { findings, isFailed, displayUrl } = readCriticState(
@@ -178,30 +219,29 @@ export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Prop
       {/* Phase 1D.2c-a §7 — image-critic recovery buttons. Visible ONLY when
        * the image-critic chain terminally failed AND we're not in auto mode
        * (auto-mode pipelines are already on the failure path; surfacing
-       * recovery here would race the orchestrator's own gating). Reuses the
-       * parent EntityGrid's onApprove/onReject callbacks — see implementation
-       * report for the backend gap (both routes currently CAS on
-       * status='awaiting_approval', so these clicks may 409 against a failed
-       * entity row until the routes are loosened or a force_approve variant
-       * is added). */}
+       * recovery here would race the orchestrator's own gating). These call
+       * the dedicated POST routes directly (force-approve-image-critic-failure
+       * / retry-image-generation) — the general approveEntity/rejectEntity
+       * routes can't handle this case because they CAS-gate on
+       * status='awaiting_approval' server-side. */}
       {isFailed && mode !== "auto" && (
         <div className="flex gap-1">
           <Button
             size="sm"
-            onClick={onApprove}
-            disabled={disabled}
+            onClick={() => skipMutation.mutate()}
+            disabled={disabled || recovering}
             className="flex-1"
           >
-            Skip
+            {skipMutation.isPending ? "Skipping…" : "Skip"}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={onReject}
-            disabled={disabled}
+            onClick={() => regenerateMutation.mutate()}
+            disabled={disabled || recovering}
             className="flex-1"
           >
-            Regenerate
+            {regenerateMutation.isPending ? "Regenerating…" : "Regenerate"}
           </Button>
         </div>
       )}

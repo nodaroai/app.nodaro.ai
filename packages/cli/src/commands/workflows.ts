@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { Command } from "commander"
 import type { WorkflowExport } from "@nodaro/shared"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, dim, type OutputOpts } from "../output.js"
+import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
 import { watchUntilTerminal } from "../util.js"
 
 interface GlobalOpts extends OutputOpts {
@@ -69,7 +69,7 @@ export function workflowsCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.workflows.get(id)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }
@@ -169,7 +169,7 @@ export function workflowsCommand(): Command {
           return
         }
         // No --output: print the bundle to stdout (also covers --json).
-        console.log(JSON.stringify(result.data, null, 2))
+        detail(result.data)
       } catch (err) {
         handleError(err)
       }

@@ -48,6 +48,18 @@ describe("locations resource", () => {
     expect(url).not.toContain("archived")
   })
 
+  it("listArchived delegates to list with archived=true", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ locations: [] }))
+    const c = createClient({
+      baseUrl: "https://api.example.com",
+      auth: new StaticTokenAuth("t"),
+      fetch: fetchMock,
+    })
+    await c.locations.listArchived()
+    const url = fetchMock.mock.calls[0][0] as string
+    expect(url).toContain("archived=true")
+  })
+
   it("get GETs /v1/locations/:id and url-encodes the id", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ id: "x" }))
     const c = createClient({

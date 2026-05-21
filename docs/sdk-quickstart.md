@@ -309,6 +309,89 @@ For the full surface (including the soft-delete + archive flow, character
 duplication, and how to wire character assets into downstream prompts) see
 the dedicated [Character Platform](./character-platform.md) guide.
 
+### Create an object end-to-end
+
+Object Studio's full pipeline is scriptable through `client.objects`. The
+typical flow: create the row, generate main-image candidates, pick one,
+then layer angle / material / variation / motion assets on top.
+
+```ts
+import { createClient, StaticTokenAuth } from "@nodaro/client"
+
+const client = createClient({
+  baseUrl: "https://nodaro.example.com",
+  auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
+})
+
+// 1. Create the object row.
+const { id: objectId } = await client.objects.create({
+  nodeId: "scripted",
+  name: "Antique Lantern",
+  description: "Weathered brass lantern with hand-engraved filigree",
+  category: "tool",
+  style: "realistic",
+})
+
+// 2. Generate 4 candidate main images (deferred attach — we pick after).
+const result = await client.objects.generate({
+  name: "Antique Lantern",
+  count: 4,
+})
+
+// `generate()` returns a discriminated union — type-guard for count > 1.
+if (!("jobIds" in result)) throw new Error("expected jobIds (count: 4)")
+const { jobIds } = result
+
+// 3. Wait for all 4 to complete, then pick a candidate.
+for (const jobId of jobIds) {
+  while (true) {
+    const { data: job } = await client.jobs.get(jobId)
+    if (job.status === "completed" || job.status === "failed") break
+    await new Promise(r => setTimeout(r, 3_000))
+  }
+}
+
+// 4. Approve the first candidate (the LLM caption fires inline).
+const { sourceImageUrl, canonicalDescription } =
+  await client.objects.approveMainImage(objectId, jobIds[0])
+
+// 5. Layer a "gold" materials variant on top — auto-attaches on completion.
+await client.objects.generateAsset({
+  name: "Antique Lantern",
+  assetType: "materials",
+  variant: "gold",
+  attachToObjectId: objectId,
+  attachToColumn: "materials",
+  attachName: "gold",
+})
+
+// 6. Animate the main image into a motion clip.
+//    Defaults: provider="kling-turbo", aspectRatio="1:1" (product-showcase).
+await client.objects.generateMotion({
+  name: "Antique Lantern",
+  motionPrompt: "slow 360 rotation, soft golden rim light",
+  sourceImageUrl,
+  attachToObjectId: objectId,
+  attachName: "rotate-360",
+})
+
+// 7. Re-fetch — the object now has a main image, a gold materials
+//    variant, and a motion clip ready to use as a reference in any
+//    subsequent generate-image / generate-video call.
+const object = await client.objects.get(objectId)
+console.log({
+  mainImage: object.sourceImageUrl,
+  canonicalDescription: object.canonicalDescription,
+  materials: object.materials,
+  motionClips: object.motionClips,
+})
+```
+
+For the full surface (including the 13-method SDK, the soft-delete +
+archive flow, the upstream picker integration, and how to wire object
+assets into downstream prompts) see the dedicated
+[Object Platform](./object-platform.md) guide.
+
 ### Discover available nodes
 
 `nodes.list()` enumerates every node type the server supports, with category,

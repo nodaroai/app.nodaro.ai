@@ -110,11 +110,19 @@ export async function runImageCriticLoop<TVerdict extends ImageCriticVerdictLike
         status: "failed",
         metadata: {
           ...(args.entity.metadata ?? {}),
+          // Keys mirrored in IMAGE_CRITIC_METADATA_KEYS — see
+          // `@nodaro/shared/pipeline-defaults`. Update both writer + clearer
+          // (retry-image-generation route) together if you add a key here.
           last_error: IMAGE_CRITIC_UNRESOLVABLE,
           last_error_at: new Date().toISOString(),
           image_critic_retry_count: retryCount,
           critic_findings: verdict.issues,
           last_attempted_image_url: assetUrl,
+          // Phase 1D.2c-a /simplify Fix 2 — persist the failed-attempt
+          // asset id so the force-approve route can adopt it without an
+          // extra `assets`-by-created_at lookup. Older entities (pre-fix)
+          // won't have this; the route's fallback handles that case.
+          last_attempted_asset_id: assetId,
         },
       })
       .eq("id", args.entity.id)

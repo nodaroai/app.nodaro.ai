@@ -151,6 +151,32 @@ export const pipelinesApi = {
     postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/approve`, {}),
   rejectEntity: (id: string, entityId: string, feedback: string) =>
     postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/reject`, { feedback }),
+  /**
+   * Phase 1D.2c-a §7 (E1) follow-up — Skip button on the failed-entity surface.
+   * Accept the image-critic-failed image AS-IS. Backend CAS-gates on
+   * `status='failed' AND metadata.last_error='image_critic_unresolvable'`;
+   * any other state returns 409 `entity_not_image_critic_failed`. The general
+   * approveEntity route can't handle this because it CAS-gates on
+   * `status='awaiting_approval'`.
+   */
+  forceApproveImageCriticFailure: (id: string, entityId: string) =>
+    postJson<{ ok: true }>(
+      `/v1/pipelines/${id}/entities/${entityId}/force-approve-image-critic-failure`,
+      {},
+    ),
+  /**
+   * Phase 1D.2c-a §7 (E1) follow-up — Regenerate button on the failed-entity
+   * surface. Resets the entity to `status='pending'`, clears the
+   * image-critic-only metadata (last_error / critic_findings / etc.), and
+   * re-enqueues the orchestrator so the stage handler runs again with a fresh
+   * retry budget. Other metadata fields (voice_match, name, role) survive.
+   * Same 409 gate as forceApproveImageCriticFailure.
+   */
+  retryImageGeneration: (id: string, entityId: string) =>
+    postJson<{ ok: true }>(
+      `/v1/pipelines/${id}/entities/${entityId}/retry-image-generation`,
+      {},
+    ),
   getStage: (id: string, stage: PipelineStageName) =>
     getJson<{ status: string; output: unknown; critic_feedback: unknown }>(
       `/v1/pipelines/${id}/stages/${stage}`,

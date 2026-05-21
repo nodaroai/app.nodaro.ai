@@ -350,7 +350,126 @@ A complete walkthrough — including motion generation and using character
 assets as references in downstream image/video calls — is in
 [Character Platform](./character-platform.md).
 
-## 10. Pipelines
+## 10. Objects
+
+Object routes let you fully script object (prop / product / vehicle / etc.)
+creation, identity edits, asset generation, and the main-image approval
+pipeline that drives Object Studio. All routes require an authenticated
+bearer token (`ndr_…` / `ndr_app_…` / Supabase JWT) and are scoped to the
+calling user.
+
+### Lifecycle
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/v1/objects` | List objects. Query: `projectId`, `archived=true`. |
+| `GET` | `/v1/objects/:id` | Get full object + in-flight asset jobs. Archived rows return uniform 404 `not_found`. |
+| `POST` | `/v1/objects` | Upsert (create if no `id`, update otherwise). Optimistic-concurrency via `expectedUpdatedAt`. |
+| `POST` | `/v1/objects/:id/restore` | Un-archive a soft-deleted object. |
+| `DELETE` | `/v1/objects/:id` | Soft-delete (archive). Restorable. |
+| `DELETE` | `/v1/objects/:id?permanent=true` | Permanent destroy. Row must already be archived (400 `not_archived` otherwise). |
+
+The upsert body is documented in `backend/src/routes/objects.ts`. On
+UPDATE, only the fields you supply are written; omitted keys are left alone
+so partial saves don't clobber asset arrays a worker is concurrently
+appending to. Worker-owned asset buckets (`angles` / `materials` /
+`variations` / `motion_clips`) are intentionally dropped on UPDATE — a
+stale-snapshot save would clobber the worker's atomic
+`append_object_asset()` writes.
+
+### Generation
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/generate-object` | Generate 1 / 2 / 4 candidate main images. |
+| `POST` | `/v1/generate-object-asset` | Generate one angles / materials / variations / custom variant. Studio-gated LLM draft when `attachToObjectId` set + `description` omitted. |
+| `POST` | `/v1/generate-object-motion` | Animate the object's main image into a motion clip (i2v). Defaults: provider `kling-turbo`, aspect ratio `1:1`. |
+
+`/v1/generate-object` returns a discriminated union: `{ jobId }` for
+`count: 1` (default) and `{ jobIds: string[] }` for `count: 2 | 4` — branch
+on `"jobIds" in response`. The asset / motion routes always return
+`{ jobId }`. Pass `attachToObjectId` to auto-attach the result to the
+object row when the job completes — no separate approval step needed for
+single-candidate runs.
+
+### Main-image approval
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/objects/:id/approve-main-image` | Set the row's `source_image_url` from a completed candidate job AND fire the LLM caption. Accepts `expectedUpdatedAt` for optimistic-concurrency. |
+| `POST` | `/v1/objects/:id/llm-caption` | Re-run the LLM caption against the current main image. Idempotent retry — does NOT accept `expectedUpdatedAt`. |
+
+`approve-main-image` body: `{ candidateJobId: <uuid>, expectedUpdatedAt? }`.
+The candidate must be `status="completed"` and belong to the caller. The
+route returns `{ sourceImageUrl, canonicalDescription }` —
+`canonicalDescription` is `""` (not null) when the LLM caption sub-failed
+(main image still set; retry via `llm-caption`). The `llm-caption` route
+502s on LLM failure and 400 `main_image_required` when no main image is
+set yet.
+
+### Worked example: create → generate → approve
+
+```bash
+TOKEN="ndr_..."
+BASE="https://nodaro.example.com"
+
+# 1. Create the object row.
+OBJ=$(curl -s -X POST "$BASE/v1/objects" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "nodeId": "scripted",
+        "name": "Antique Lantern",
+        "description": "Weathered brass lantern with hand-engraved filigree",
+        "category": "tool",
+        "style": "realistic"
+      }' | jq -r .id)
+
+# 2. Generate 4 main-image candidates, deferring auto-attach.
+JOB_IDS=$(curl -s -X POST "$BASE/v1/generate-object" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+        \"name\": \"Antique Lantern\",
+        \"count\": 4
+      }" | jq -r '.jobIds | join(" ")')
+
+# 3. Poll each job until done, then approve your favorite.
+for JOB in $JOB_IDS; do
+  while true; do
+    STATUS=$(curl -s -H "Authorization: Bearer $TOKEN" \
+      "$BASE/v1/jobs/$JOB" | jq -r .status)
+    [[ "$STATUS" == "completed" || "$STATUS" == "failed" ]] && break
+    sleep 3
+  done
+done
+
+PICK=$(echo "$JOB_IDS" | awk '{print $1}')
+curl -s -X POST "$BASE/v1/objects/$OBJ/approve-main-image" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"candidateJobId\": \"$PICK\"}" | jq .
+
+# 4. Generate a "gold" materials variant off the approved main image.
+curl -s -X POST "$BASE/v1/generate-object-asset" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+        \"name\": \"Antique Lantern\",
+        \"assetType\": \"materials\",
+        \"variant\": \"gold\",
+        \"attachToObjectId\": \"$OBJ\",
+        \"attachToColumn\": \"materials\",
+        \"attachName\": \"gold\"
+      }"
+```
+
+A complete walkthrough — including motion generation, the Studio-gated LLM
+draft on `generate-object-asset`, the 5-tab Studio surface, and using
+object assets as references in downstream image/video calls — is in
+[Object Platform](./object-platform.md).
+
+## 11. Pipelines
 
 Story-to-Video pipelines orchestrate multi-stage AI production: script → characters
 → objects → locations → shot list → scene images → animate + audio + edit → post merge.
@@ -377,7 +496,7 @@ Asset rows are NOT duplicated — pipeline entities reference the same asset_ids
 Chat turns (Guided Mode, Phase 1D.2) explicitly do NOT clone — the branched
 pipeline starts with empty chat history per chat-enabled stage.
 
-## 11. SDK alternative (TypeScript)
+## 12. SDK alternative (TypeScript)
 
 The same backend is fronted by a typed TypeScript client:
 
