@@ -1,5 +1,28 @@
 # Backend — Claude Code Reference
 
+## ESM Imports — Use Explicit `.js` Extensions (CRITICAL)
+
+Every relative import in `backend/src/` MUST end in `.js`, even when importing a `.ts` file:
+
+```typescript
+// ✅ Correct
+import { foo } from "./bar.js"
+import { baz } from "../lib/baz.js"
+export { Thing } from "./types.js"
+
+// ❌ Wrong — crashes production
+import { foo } from "./bar"
+import { baz } from "../lib/baz"
+```
+
+**Why it matters:** the backend ships compiled JS (`tsc -p tsconfig.build.json` → `dist/`) and runs via `node dist/server.js`. Node ESM (`"type": "module"` in `backend/package.json`) requires explicit `.js` extensions on relative imports and throws `ERR_MODULE_NOT_FOUND` on extensionless paths, crashing the entire process at startup.
+
+**Why CI does not catch it on its own:** `tsconfig.json` uses `"moduleResolution": "bundler"`, which tells tsc to pass extensionless imports through verbatim (it assumes a bundler will resolve them later — but there is no bundler in this pipeline). Vitest uses its own tolerant resolver against the `.ts` source, so unit tests never see the broken compiled JS. The dedicated `backend-boot-smoke` job in `.github/workflows/ci.yml` does catch it by actually starting `node dist/server.js` against stub env vars and probing `/health`.
+
+***REDACTED-OSS-SCRUB***
+
+---
+
 ## Edition Architecture (`backend/src/ee/`)
 
 The `backend/src/ee/` directory holds enterprise code (admin routes, billing/credit infrastructure, Stripe integration). It is governed by the Nodaro Enterprise License (`backend/src/ee/LICENSE`) — production use requires a Nodaro Cloud or Enterprise subscription.
