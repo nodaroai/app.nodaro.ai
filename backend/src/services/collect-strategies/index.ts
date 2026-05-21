@@ -29,5 +29,5 @@ export async function dispatchStrategy(
   return handler(items, config, ctx)
 }
 
-export type { StrategyResult, ResultMeta } from "./types"
-export { EmptyInputError } from "./types"
+export type { StrategyResult, ResultMeta } from "./types.js"
+export { EmptyInputError } from "./types.js"
