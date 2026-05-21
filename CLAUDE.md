@@ -84,6 +84,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 
 ### Coding Standards
 - Backend: Fastify plugin pattern (NOT Express Router). Zod schemas on every endpoint.
+- Backend imports: every relative import in `backend/src/` MUST end in `.js` (Node ESM requirement; `tsconfig.json` `moduleResolution: "bundler"` passes extensionless paths through verbatim and the compiled `dist/` then crashes with `ERR_MODULE_NOT_FOUND` — see `backend/CLAUDE.md`). The `backend-boot-smoke` CI job catches violations.
 - Frontend state: React Query (server) + Zustand (UI) + React Flow (canvas).
 - Never mutate objects/arrays — always copy.
 - File size: 200–400 lines typical, 800 max.
