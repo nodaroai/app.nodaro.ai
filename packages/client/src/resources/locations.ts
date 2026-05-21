@@ -272,6 +272,15 @@ export class LocationsResource {
   }
 
   /**
+   * Convenience wrapper for `list({ archived: true })`. Returns soft-deleted
+   * rows so callers can drive a UI "Archived" tab without re-encoding the
+   * query param. Mirrors `ObjectsResource.listArchived`.
+   */
+  listArchived(params: ListLocationsParams = {}): Promise<{ locations: Location[] }> {
+    return this.list({ ...params, archived: true })
+  }
+
+  /**
    * Fetch a single location including in-flight asset job state. Soft-deleted
    * (archived) rows are returned by id intentionally so canvas nodes that
    * hold a stale `locationDbId` keep loading.

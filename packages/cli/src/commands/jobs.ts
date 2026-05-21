@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, type OutputOpts } from "../output.js"
+import { detail, emit, success, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -19,7 +19,7 @@ export function jobsCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.jobs.get(id)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }

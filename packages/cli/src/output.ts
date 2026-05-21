@@ -10,8 +10,25 @@ export interface OutputOpts {
 
 export function emit(value: unknown, opts: OutputOpts = {}): void {
   if (opts.json) {
-    process.stdout.write(JSON.stringify(value, null, 2) + "\n")
+    // Pretty-print only when stdout is a TTY. When piped to `jq`, a file, or
+    // another process, we emit compact JSON to avoid wasted bytes (~30%
+    // smaller for large payloads) + cheaper JSON.stringify.
+    const indent = process.stdout.isTTY ? 2 : undefined
+    process.stdout.write(JSON.stringify(value, null, indent) + "\n")
   }
+}
+
+/**
+ * Pretty-print a detail record for human consumption. Used by `get`-style
+ * commands that don't fit the tabular `table()` shape. Always pretty-prints
+ * (the human path doesn't care about pipe-friendly compactness — that's what
+ * `--json` is for).
+ *
+ * Shared across get commands in objects / locations / characters / jobs /
+ * workflows / apps / nodes / projects.
+ */
+export function detail(value: unknown): void {
+  console.log(JSON.stringify(value, null, 2))
 }
 
 export function success(line: string): void {

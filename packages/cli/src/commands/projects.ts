@@ -1,6 +1,6 @@
 import { Command } from "commander"
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, type OutputOpts } from "../output.js"
+import { detail, emit, success, table, type OutputOpts } from "../output.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -45,7 +45,7 @@ export function projectsCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.projects.get(id)
         if (opts.json) emit(result.data, opts)
-        else console.log(JSON.stringify(result.data, null, 2))
+        else detail(result.data)
       } catch (err) {
         handleError(err)
       }
@@ -70,7 +70,7 @@ export function projectsCommand(): Command {
           return
         }
         success(`created project ${result.data.id}`)
-        console.log(JSON.stringify(result.data, null, 2))
+        detail(result.data)
       } catch (err) {
         handleError(err)
       }
@@ -98,7 +98,7 @@ export function projectsCommand(): Command {
           return
         }
         success(`updated project ${result.data.id}`)
-        console.log(JSON.stringify(result.data, null, 2))
+        detail(result.data)
       } catch (err) {
         handleError(err)
       }

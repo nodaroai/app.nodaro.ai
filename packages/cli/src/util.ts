@@ -10,6 +10,19 @@ export function collectVariadic(value: string, previous: string[] | undefined): 
   return [...(previous ?? []), value]
 }
 
+/**
+ * Coerce the `--count` flag value into the 1 | 2 | 4 union the entity-generate
+ * routes accept. Defaults to 1 on absent / unrecognized input; the SDK further
+ * validates downstream.
+ *
+ * Shared across objects, locations, characters command groups.
+ */
+export function parseCount(raw: string | undefined): 1 | 2 | 4 {
+  if (raw === "2") return 2
+  if (raw === "4") return 4
+  return 1
+}
+
 /** Statuses at which a job or execution stops moving — same set for both. */
 const TERMINAL: ReadonlySet<ExecutionStatus | JobStatus> = new Set([
   "completed",

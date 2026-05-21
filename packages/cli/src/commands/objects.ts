@@ -35,21 +35,12 @@ const MOTION_PROVIDERS = [
   "bytedance-lite",
 ] as const
 import { buildClient, handleError } from "../client.js"
-import { emit, success, table, dim, type OutputOpts } from "../output.js"
-import { watchUntilTerminal } from "../util.js"
+import { detail, emit, success, table, dim, type OutputOpts } from "../output.js"
+import { parseCount, watchUntilTerminal } from "../util.js"
+import { parseBoolFlag } from "../params.js"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
-}
-
-/**
- * Coerce the --count flag value into the union the SDK expects. Defaults to 1
- * on any other value; the SDK will further validate downstream.
- */
-function parseCount(raw: string | undefined): 1 | 2 | 4 {
-  if (raw === "2") return 2
-  if (raw === "4") return 4
-  return 1
 }
 
 /**
@@ -118,7 +109,7 @@ export function objectsCommand(): Command {
         const client = buildClient(opts.profile)
         const result = await client.objects.get(id)
         if (opts.json) emit(result, opts)
-        else console.log(JSON.stringify(result, null, 2))
+        else detail(result)
       } catch (err) {
         handleError(err)
       }
@@ -215,12 +206,7 @@ export function objectsCommand(): Command {
           if (opts.category !== undefined) patch.category = opts.category
           if (opts.style !== undefined) patch.style = opts.style
           if (opts.styleLock !== undefined) {
-            // Commander gives us the raw string — coerce to a bool. Anything
-            // other than "true" / "false" becomes a hard error so users don't
-            // accidentally pass `--style-lock yes` and silently get `false`.
-            if (opts.styleLock === "true") patch.styleLock = true
-            else if (opts.styleLock === "false") patch.styleLock = false
-            else throw new Error(`--style-lock must be "true" or "false" (got "${opts.styleLock}")`)
+            patch.styleLock = parseBoolFlag(opts.styleLock, "style-lock")
           }
           if (opts.canonicalDescription !== undefined) {
             patch.canonicalDescription = opts.canonicalDescription
