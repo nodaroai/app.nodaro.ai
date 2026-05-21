@@ -983,3 +983,145 @@ generate_location_motion({
   name: "Rainy Tokyo Alley"
 })
 ```
+
+---
+
+## Object tools
+
+Three tools for the object (prop / product / vehicle / etc.) lifecycle —
+main-image approval, LLM recaption, and i2v motion clips. Scope-gated and
+mirrored on the SDK at [`client.objects`](../sdk-reference.md#clientobjects).
+For the full data model + worked examples on all four surfaces, see
+[Object Platform](../object-platform.md).
+
+The MCP surface intentionally exposes a **smaller subset** than the SDK:
+generation (main image + variants) and identity edits flow through the
+shared `generate_object` / `create_object` / `update_object` tools
+registered alongside the other verb-style entries; the 3 tools below
+cover the Studio-grade operations (approve, recaption, motion-animate)
+that need their own input shape.
+
+### Destructive operations — intentionally NOT exposed via MCP
+
+`delete_object`, `restore_object`, and `permanent_delete_object` are
+deliberately omitted from MCP. Soft-delete is destructive-adjacent and
+recovery requires context an LLM doesn't have; users (and SDK / CLI
+integrations on their behalf) can still archive + restore through REST.
+
+### `approve_object_main_image`
+
+**Scope:** `assets:write`
+
+Approve a completed `generate_object` candidate as the object's main
+image. Fires the LLM caption (Claude Sonnet vision) inline. Returns the
+new main-image URL plus the caption.
+
+Caption-failure semantics: `canonicalDescription` is coerced to `""` (not
+`null`) when the LLM sub-call failed — the main image is still set; call
+`recaption_object` to retry.
+
+Optimistic-concurrency via `expected_updated_at` — on mismatch the route
+returns 409 `concurrent_modification` carrying the fresh token. Re-fetch
++ merge + retry.
+
+```jsonc
+approve_object_main_image({
+  object_id: "obj-uuid",
+  candidate_job_id: "job-uuid"
+})
+// → { sourceImageUrl, canonicalDescription }
+
+// With optimistic-concurrency
+approve_object_main_image({
+  object_id: "obj-uuid",
+  candidate_job_id: "job-uuid",
+  expected_updated_at: "2026-05-20T01:23:45.678Z"
+})
+```
+
+---
+
+### `recaption_object`
+
+**Scope:** `assets:write`
+
+Re-run the LLM caption against the current main image. Errors with 502
+on LLM failure (unlike `approve_object_main_image` which preserves the
+side-effect and returns `""`); 400 `main_image_required` if no main
+image is set yet.
+
+The route is a **pure idempotent retry** — it does NOT accept an
+`expected_updated_at` parameter (per Phase E1 calibration finding: the
+backend `object-llm-caption.ts` route is an idempotent retry rather than
+gated on optimistic-concurrency).
+
+```jsonc
+recaption_object({ id: "obj-uuid" })
+// → { canonicalDescription }
+```
+
+---
+
+### `generate_object_motion`
+
+**Scope:** `workflows:execute`
+
+Animate the object's main image into a motion clip (image-to-video). The
+attach column is hardcoded server-side to `motion_clips` so callers
+DON'T supply `attach_to_column`.
+
+**Object-specific defaults vs. location:**
+
+- `provider` defaults to `"kling-turbo"` (not location's `"kling"`) — the
+  fastest variant in the object set, favouring product-showcase
+  turnarounds over cinematic atmospheres.
+- `aspect_ratio` defaults to `"1:1"` server-side via
+  `resolveObjectAspectRatio({ assetType: "motion" })` — product-showcase
+  framing favours square. Objects have their own 5-value enum
+  (`1:1` / `3:4` / `16:9` / `9:16` / `4:3`) with `4:3` added vs. the
+  character set to support classic product-catalogue framing.
+
+**Refinement:** pass `refine_from_video_url` to route the worker through
+video-to-video using THAT clip as the source instead of running image-to-
+video from `source_image_url`. Use to iterate on an existing motion clip
+with a new prompt without shifting composition. Routes through providers
+with `video-to-video` capability (currently Wan 2.6 via KIE).
+
+Supported i2v providers (8 total, from `OBJECT_MOTION_PROVIDERS` in
+`@nodaro/shared/model-constants.ts`): `kling-turbo`, `kling`, `kling-3.0`,
+`minimax`, `hailuo-2.3`, `wan-i2v`, `seedance`, `bytedance-lite`.
+
+> `source_image_url` is REQUIRED. The route has no fallback — typically
+> the object's approved main image URL.
+
+```jsonc
+// New motion clip from the approved main image
+generate_object_motion({
+  motion_prompt: "slow 360 rotation, soft golden rim light",
+  source_image_url: "https://r2/obj-main.png",
+  provider: "kling-turbo",
+  name: "Antique Lantern",
+  attach_to_object_id: "obj-uuid",
+  attach_name: "rotate-360"
+})
+
+// Refine an existing clip (video-to-video)
+generate_object_motion({
+  motion_prompt: "same shot but slow hover instead of rotation",
+  source_image_url: "https://r2/obj-main.png",
+  refine_from_video_url: "https://r2/obj-rotation.mp4",
+  provider: "wan-i2v",
+  name: "Antique Lantern"
+})
+
+// Aspect override (product-catalogue 4:3 framing)
+generate_object_motion({
+  motion_prompt: "slow drone orbit, glossy product reflection",
+  source_image_url: "https://r2/obj-main.png",
+  provider: "kling-turbo",
+  aspect_ratio: "4:3",
+  name: "Antique Lantern",
+  attach_to_object_id: "obj-uuid",
+  attach_name: "drone-orbit"
+})
+```
