@@ -346,8 +346,10 @@ export class ObjectsResource {
    * Convenience wrapper for `list({ archived: true })`. Returns soft-deleted
    * rows so callers can drive a UI "Archived" tab without re-encoding the
    * query param.
+   *
+   * `archived` is omitted from the param type — it's always set to `true` here.
    */
-  listArchived(params: ListObjectsParams = {}): Promise<{ objects: Object[] }> {
+  listArchived(params: Omit<ListObjectsParams, "archived"> = {}): Promise<{ objects: Object[] }> {
     return this.list({ ...params, archived: true })
   }
 

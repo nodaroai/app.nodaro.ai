@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { parseParamPairs, loadParamsFile, mergeParams, resolveParams } from "../params.js"
+import { parseParamPairs, loadParamsFile, mergeParams, resolveParams, parseBoolFlag } from "../params.js"
 
 describe("parseParamPairs", () => {
   it("returns empty object when no pairs given", () => {
@@ -128,5 +128,41 @@ describe("resolveParams", () => {
     const path = join(dir, "g.json")
     writeFileSync(path, JSON.stringify({ a: 1, b: 2 }))
     expect(resolveParams(["a=9"], path)).toEqual({ a: 9, b: 2 })
+  })
+})
+
+describe("parseBoolFlag", () => {
+  it("returns true for the literal 'true'", () => {
+    expect(parseBoolFlag("true", "style-lock")).toBe(true)
+  })
+
+  it("returns false for the literal 'false'", () => {
+    expect(parseBoolFlag("false", "style-lock")).toBe(false)
+  })
+
+  it("throws on case variants ('True', 'TRUE', 'False', 'FALSE')", () => {
+    expect(() => parseBoolFlag("True", "style-lock")).toThrow(/--style-lock must be "true" or "false"/)
+    expect(() => parseBoolFlag("TRUE", "style-lock")).toThrow(/got "TRUE"/)
+    expect(() => parseBoolFlag("False", "style-lock")).toThrow(/got "False"/)
+  })
+
+  it("throws on whitespace-padded values", () => {
+    expect(() => parseBoolFlag(" true", "style-lock")).toThrow(/got " true"/)
+    expect(() => parseBoolFlag("true ", "style-lock")).toThrow()
+  })
+
+  it("throws on empty string", () => {
+    expect(() => parseBoolFlag("", "style-lock")).toThrow(/got ""/)
+  })
+
+  it("throws on common typos ('yes', 'no', '1', '0')", () => {
+    expect(() => parseBoolFlag("yes", "style-lock")).toThrow(/got "yes"/)
+    expect(() => parseBoolFlag("no", "style-lock")).toThrow(/got "no"/)
+    expect(() => parseBoolFlag("1", "style-lock")).toThrow(/got "1"/)
+    expect(() => parseBoolFlag("0", "style-lock")).toThrow(/got "0"/)
+  })
+
+  it("includes the flagName in error messages so users know which flag failed", () => {
+    expect(() => parseBoolFlag("yes", "my-flag")).toThrow(/--my-flag must be/)
   })
 })
