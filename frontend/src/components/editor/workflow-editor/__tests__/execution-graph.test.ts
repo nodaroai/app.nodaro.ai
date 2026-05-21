@@ -544,3 +544,37 @@ describe("detectPreviewItemType", () => {
     expect(detectPreviewItemType("voice-design", "voice_123", "voiceId")).toBe("text")
   })
 })
+
+// ---------------------------------------------------------------------------
+// extractNodeOutput — image-critic two-handle dispatch
+// ---------------------------------------------------------------------------
+//
+// image-critic exposes two output handles ("approved" + "rejected") that fire
+// mutually exclusively based on the LLM verdict. The wrong-side edge MUST
+// return undefined so downstream nodes on that branch don't execute. Empty
+// feedback returns "" (not a placeholder) — downstream consumers treat empty
+// strings as "no notes" but still distinguish from undefined ("not ready").
+
+describe("extractNodeOutput — image-critic dispatch", () => {
+  const makeCritic = (approved: boolean | null, feedback?: string) =>
+    makeNode("n1", "image-critic", { approved, feedback })
+
+  it("approved handle returns feedback when approved=true", () => {
+    expect(extractNodeOutput(makeCritic(true, "Good."), "approved")).toBe("Good.")
+  })
+  it("approved handle returns undefined when approved=false", () => {
+    expect(extractNodeOutput(makeCritic(false, "Bad."), "approved")).toBeUndefined()
+  })
+  it("rejected handle returns feedback when approved=false", () => {
+    expect(extractNodeOutput(makeCritic(false, "Bad."), "rejected")).toBe("Bad.")
+  })
+  it("rejected handle returns undefined when approved=true", () => {
+    expect(extractNodeOutput(makeCritic(true, "Good."), "rejected")).toBeUndefined()
+  })
+  it("returns undefined when not yet executed (approved=null)", () => {
+    expect(extractNodeOutput(makeCritic(null), "approved")).toBeUndefined()
+  })
+  it("empty feedback emits '' (not 'approved'/'rejected' placeholder)", () => {
+    expect(extractNodeOutput(makeCritic(true), "approved")).toBe("")
+  })
+})

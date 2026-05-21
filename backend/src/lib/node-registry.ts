@@ -201,6 +201,25 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
 
+  {
+    type: "image-critic",
+    label: "Image Critic",
+    category: "processing",
+    description: "Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style match via VLM. Two output handles (approved/rejected) for self-correction loops.",
+    outputType: "data",
+    creditCost: "3-15",
+    inputSchema: {
+      fields: [
+        { key: "imageUrl", type: "image-url", required: true },
+        { key: "mode", type: "select", required: true, options: ["character-consistency", "realism", "prompt-adherence", "anatomy", "aesthetic", "style-match", "all"] },
+        { key: "threshold", type: "number" },
+        { key: "prompt", type: "text" },
+        { key: "referenceImageUrl", type: "image-url" },
+      ],
+    },
+    capabilities: ["dual-output-handles", "vlm-based"],
+  },
+
   { type: "combine-videos", label: "Combine Videos", category: "processing", description: "Concatenate multiple videos.", outputType: "video" },
   { type: "merge-video-audio", label: "Merge Video + Audio", category: "processing", description: "Mux a video and an audio track.", outputType: "video" },
   { type: "trim-video", label: "Trim Video", category: "processing", description: "Trim a video by start/end seconds.", outputType: "video" },

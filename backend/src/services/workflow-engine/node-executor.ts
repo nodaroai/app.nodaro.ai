@@ -56,6 +56,7 @@ const SYNC_HTTP_NODES = new Set([
   "facebook-post",
   "telegram-post",
   "qa-check",
+  "image-critic",
   "save-to-storage",
   "web-scrape",
   "collect",
@@ -76,6 +77,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "image-to-text": "/v1/image-to-text/describe",
   "suno-style-boost": "/v1/suno/style-boost",
   "qa-check": "/v1/qa-check",
+  "image-critic": "/v1/image-critic",
   "save-to-storage": "/v1/save-to-storage",
   "web-scrape": "/v1/web-scrape",
   "instagram-post": "/v1/social/publish",
@@ -215,6 +217,8 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
       return pick("content", "prompt")
     case "qa-check":
       return pick("content")
+    case "image-critic":
+      return pick("prompt")
     case "web-scrape":
       return pick("query", "url", "target")
 
@@ -638,6 +642,18 @@ export function buildSyncHttpBody(
         provider: data.provider || "claude",
         threshold: data.threshold ?? 0.7,
         llmModel: data.llmModel,
+        userId: ctx.userId,
+      })
+
+    case "image-critic":
+      return withUserPrompt({
+        imageUrl: resolvedInputs.imageUrl,
+        referenceImageUrl: resolvedInputs.referenceImageUrl,
+        prompt: resolvedInputs.prompt ?? (data.prompt as string | undefined),
+        mode: data.mode,
+        threshold: data.threshold,
+        llmModel: data.llmModel,
+        workflowId: ctx.workflowId,
         userId: ctx.userId,
       })
 

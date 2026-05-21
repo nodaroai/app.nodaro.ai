@@ -83,6 +83,7 @@ import {
   CharacterFxConfig,
   GenerateScriptConfig,
   QACheckConfig,
+  ImageCriticConfig,
   GenerateImageConfig,
   ModifyImageConfig,
   UpscaleImageConfig,
@@ -259,6 +260,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-to-video": "Text to Video",
   "text-to-speech": "Text to Speech",
   "qa-check": "QA Check",
+  "image-critic": "Image Critic",
   "generate-music": "Generate Music",
   "text-to-audio": "Text to Audio",
   "audio-isolation": "Voice Extractor",
@@ -497,6 +499,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     )
     case "text-to-speech": return <TextToSpeechConfig {...configProps} />
     case "qa-check": return <QACheckConfig {...configProps} />
+    case "image-critic": return <ImageCriticConfig {...configProps} />
     case "generate-music": return <GenerateMusicConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-audio": return <TextToAudioConfig {...configProps} nodeId={selectedNodeId} />
     case "audio-isolation": return <AudioIsolationConfig {...configProps} />

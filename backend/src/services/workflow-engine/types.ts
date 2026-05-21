@@ -62,6 +62,13 @@ export interface NodeOutput {
   reason?: string
   /** QA-check: quality score 0.0-1.0 */
   score?: number
+  /** Image-critic: 1-3 imperative sentences. */
+  feedback?: string
+  /** Image-critic: per-mode breakdown + issues array. */
+  details?: {
+    perMode?: Record<string, { score: number; feedback: string }>
+    issues?: Array<{ category: string; severity: "blocking" | "warning" | "info"; description: string }>
+  }
   /** Router: list of active route IDs */
   activeRoutes?: string[]
   /** Router: route ID -> output value (undefined for inactive routes) */
@@ -186,6 +193,10 @@ export interface ResolvedInputs {
     sourceType?: "audio" | "video"
   }>
   referenceImageUrls?: string[]
+  /** Singular reference image for nodes that take exactly one (image-critic).
+   *  Distinct from referenceImageUrls (array) — wired by the "reference"
+   *  target handle in input-resolver. */
+  referenceImageUrl?: string
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
   /** Media items for multi-media social posts (Instagram carousel, etc.).

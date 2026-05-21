@@ -151,6 +151,7 @@ export type LlmFeature =
   | "qa-check"
   | "generate-script"
   | "translate"
+  | "image-critic"
 
 /** Feature → default model when user hasn't selected one */
 export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
@@ -166,6 +167,7 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   "qa-check": "claude-sonnet-4.6",
   "generate-script": "gemini-3-flash",
   "translate": "gemini-3-flash",
+  "image-critic": "claude-sonnet-4.6",
 }
 
 /**

@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { WorkflowExport } from "@nodaro/shared"
+import type { ImageCriticMode, WorkflowExport } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
@@ -5961,6 +5961,30 @@ export function qaCheckApi(params: {
   llmModel?: string
 }): Promise<{ jobId: string; score: number; approved: boolean; reason: string }> {
   return apiRequest("/v1/qa-check", "QA check failed", {
+    method: "POST",
+    body: withWorkflowId(params),
+  })
+}
+
+export function imageCriticApi(params: {
+  imageUrl: string
+  referenceImageUrl?: string
+  prompt?: string
+  mode: ImageCriticMode
+  threshold?: number
+  llmModel?: string
+}): Promise<{
+  jobId: string
+  score: number
+  approved: boolean
+  feedback: string
+  details: {
+    perMode?: Partial<Record<Exclude<ImageCriticMode, "all">, { score: number; feedback: string }>>
+    issues?: Array<{ category: string; severity: "blocking" | "warning" | "info"; description: string }>
+  }
+  deduped?: true
+}> {
+  return apiRequest("/v1/image-critic", "Image critic failed", {
     method: "POST",
     body: withWorkflowId(params),
   })

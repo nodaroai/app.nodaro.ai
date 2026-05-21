@@ -6,7 +6,7 @@ import type {
   VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
-  SunoModel, VoiceDesignModel, CaptionStyle,
+  SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
@@ -1899,6 +1899,27 @@ export type QACheckData = {
   score?: number
   approved?: boolean
   reason?: string
+}
+
+export type ImageCriticData = {
+  [key: string]: unknown
+  label: string
+  mode: ImageCriticMode
+  threshold: number
+  prompt?: string
+  llmModel?: string
+  fieldMappings: FieldMappings
+  // runtime
+  currentJobId?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  score?: number
+  approved?: boolean
+  feedback?: string
+  details?: {
+    perMode?: Partial<Record<Exclude<ImageCriticMode, "all">, { score: number; feedback: string }>>
+    issues?: Array<{ category: string; severity: "blocking" | "warning" | "info"; description: string }>
+  }
 }
 
 export type GenerateMusicData = {
@@ -4016,6 +4037,7 @@ export type SceneNodeData =
   | TextToVideoData
   | TextToSpeechData
   | QACheckData
+  | ImageCriticData
   | GenerateMusicData
   | TextToAudioData
   | SunoVoiceData
@@ -4175,6 +4197,7 @@ export type SceneNodeType =
   | "text-to-video"
   | "text-to-speech"
   | "qa-check"
+  | "image-critic"
   | "generate-music"
   | "text-to-audio"
   | "suno-voice"
@@ -5073,6 +5096,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["approved", "rejected"],
     defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8, fieldMappings: {} },
+  },
+  {
+    type: "image-critic",
+    label: "Image Critic",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["image", "reference", "prompt"],
+    outputs: ["approved", "rejected"],
+    defaultData: {
+      label: "Image Critic",
+      mode: "realism",
+      threshold: 0.7,
+      prompt: "",
+      fieldMappings: {},
+    },
   },
   {
     type: "generate-music",

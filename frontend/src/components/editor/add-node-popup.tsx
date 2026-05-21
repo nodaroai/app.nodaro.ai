@@ -866,6 +866,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Quality",
     adminOnly: true,
   },
+  {
+    type: "image-critic",
+    label: "Image Critic",
+    icon: <Eye className="h-4 w-4" />,
+    category: "AI",
+    group: "Quality",
+    // adminOnly NOT set — image-critic is user-facing (qa-check is admin-only; we deliberately differ)
+  },
   // Processing — Video
   {
     type: "combine-videos",

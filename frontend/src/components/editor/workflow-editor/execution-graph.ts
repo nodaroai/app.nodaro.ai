@@ -471,6 +471,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (!sourceHandle) return qaReason;
     return undefined;
   }
+  if (type === "image-critic") {
+    if (data.approved == null) return undefined; // not yet executed — downstream waits
+    const isApproved = data.approved as boolean;
+    const feedback = (data.feedback as string | undefined) ?? ""; // empty string, not placeholder
+    if (sourceHandle === "approved" && isApproved) return feedback;
+    if (sourceHandle === "rejected" && !isApproved) return feedback;
+    if (!sourceHandle) return feedback; // legacy / FieldMappings fallback
+    return undefined; // wrong-side edge — downstream doesn't fire
+  }
   if (type === "save-to-storage") {
     return (data.savedUrl as string) || undefined;
   }

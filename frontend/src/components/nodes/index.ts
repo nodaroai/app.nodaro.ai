@@ -64,6 +64,7 @@ import { VideoToVideoNode } from "./video-to-video-node";
 import { TextToVideoNode } from "./text-to-video-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
+import { ImageCriticNode } from "./image-critic-node";
 import { GenerateMusicNode } from "./generate-music-node";
 import { TextToAudioNode } from "./text-to-audio-node";
 import { SunoVoiceNode } from "./suno-voice-node";
@@ -224,6 +225,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-video": TextToVideoNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
+  "image-critic": ImageCriticNode,
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
   "suno-voice": SunoVoiceNode,

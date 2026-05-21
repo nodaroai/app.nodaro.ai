@@ -205,6 +205,7 @@ const LLM_NODE_FEATURE_MAP: Record<string, LlmFeature> = {
   "generate-script": "generate-script",
   "qa-check": "qa-check",
   "image-to-text": "image-to-text",
+  "image-critic": "image-critic",
 }
 
 export function getModelIdentifier(node: WorkflowNode): string {

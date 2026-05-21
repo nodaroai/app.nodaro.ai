@@ -26,6 +26,7 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "image-to-text": "backend/src/routes/image-to-text.ts",
   "suno-style-boost": "backend/src/routes/suno.ts",
   "qa-check": "backend/src/routes/qa-check.ts",
+  "image-critic": "backend/src/routes/image-critic.ts",
   "save-to-storage": "backend/src/routes/save-to-storage.ts",
   "web-scrape": "backend/src/routes/web-scrape.ts",
   "instagram-post": "backend/src/routes/social-publish.ts",

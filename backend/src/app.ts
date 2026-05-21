@@ -136,6 +136,7 @@ import { appAnalyticsRoutes } from "./routes/app-analytics.js"
 import { monetizationRoutes } from "./ee/routes/monetization.js"
 import { embedRoutes } from "./routes/embed.js"
 import { qaCheckRoutes } from "./routes/qa-check.js"
+import { imageCriticRoutes } from "./routes/image-critic.js"
 import { saveToStorageRoutes } from "./routes/save-to-storage.js"
 import { promptHelperRoutes } from "./routes/prompt-helper.js"
 import { adminLlmModelsRoutes } from "./ee/routes/admin-llm-models.js"
@@ -360,6 +361,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(monetizationRoutes)
   await app.register(embedRoutes)
   await app.register(qaCheckRoutes)
+  await app.register(imageCriticRoutes)
   await app.register(saveToStorageRoutes)
   await app.register(promptHelperRoutes)
   if (hasAdmin()) await app.register(adminLlmModelsRoutes)

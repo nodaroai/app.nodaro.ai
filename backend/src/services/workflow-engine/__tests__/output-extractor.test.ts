@@ -360,6 +360,30 @@ describe("getPrimaryOutput", () => {
   })
 })
 
+// getPrimaryOutput — image-critic sourceHandle dispatch
+// ---------------------------------------------------------------------------
+
+describe("getPrimaryOutput — image-critic", () => {
+  const approvedOutput: NodeOutput = { approved: true, feedback: "Looks good." }
+  const rejectedOutput: NodeOutput = { approved: false, feedback: "Fix the hands." }
+
+  it("approved handle returns feedback when approved=true", () => {
+    expect(getPrimaryOutput(approvedOutput, "image-critic", "approved")).toBe("Looks good.")
+  })
+
+  it("approved handle returns undefined when approved=false", () => {
+    expect(getPrimaryOutput(rejectedOutput, "image-critic", "approved")).toBeUndefined()
+  })
+
+  it("rejected handle returns feedback when approved=false", () => {
+    expect(getPrimaryOutput(rejectedOutput, "image-critic", "rejected")).toBe("Fix the hands.")
+  })
+
+  it("rejected handle returns undefined when approved=true", () => {
+    expect(getPrimaryOutput(approvedOutput, "image-critic", "rejected")).toBeUndefined()
+  })
+})
+
 // ---------------------------------------------------------------------------
 // getPrimaryOutput: collect (fan-in)
 // ---------------------------------------------------------------------------

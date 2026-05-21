@@ -230,6 +230,12 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
             newData.approved = outputData.approved
             newData.reason = outputData.reason
             break
+          case "image-critic":
+            newData.score = outputData.score
+            newData.approved = outputData.approved
+            newData.feedback = outputData.feedback
+            newData.details = outputData.details
+            break
           case "save-to-storage":
             // Backend stores `url`, frontend uses `savedUrl`
             newData.savedUrl = outputData.url

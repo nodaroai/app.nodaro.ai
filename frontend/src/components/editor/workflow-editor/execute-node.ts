@@ -62,6 +62,7 @@ import {
   setForcePrivate,
   setUserPromptTemplate,
   qaCheckApi,
+  imageCriticApi,
   saveToStorageApi,
   webScrape,
   executeCollect,
@@ -153,6 +154,7 @@ import type {
   SocialPostData,
   SaveToStorageData,
   QACheckData,
+  ImageCriticData,
   GeneratedResult,
   WebScrapeNodeData,
   ExtractFieldNodeData,
@@ -6254,6 +6256,83 @@ export function executeNode(
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "QA check failed",
+        });
+        return "";
+      },
+    );
+  }
+
+  if (node.type === "image-critic") {
+    const { updateNodeData } = useWorkflowStore.getState();
+    const d = node.data as ImageCriticData;
+
+    const imageUrl = inputs.imageUrl;
+    if (!imageUrl) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No image input connected" });
+      return Promise.resolve("");
+    }
+
+    const usesPrompt = d.mode === "prompt-adherence" || d.mode === "all";
+    const resolvedPrompt = inputs.prompt ?? d.prompt;
+
+    if (usesPrompt && resolvedPrompt && resolvedPrompt.trim().length > 0) {
+      setUserPromptTemplate(resolvedPrompt);
+    } else {
+      setUserPromptTemplate(undefined);
+    }
+
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    return imageCriticApi({
+      imageUrl,
+      referenceImageUrl: inputs.referenceImageUrl,
+      prompt: resolvedPrompt,
+      mode: d.mode,
+      threshold: d.threshold ?? 0.7,
+      llmModel: d.llmModel,
+    }).then(
+      async (result) => {
+        // Dedup short-circuit: credit-guard may return { jobId, deduped: true } within 10s.
+        let payload: {
+          jobId: string;
+          score: number;
+          approved: boolean;
+          feedback: string;
+          details: ImageCriticData["details"];
+        };
+        if ((result as { deduped?: true }).deduped === true) {
+          const job = await getJobStatus(result.jobId);
+          const od = (job?.output_data ?? {}) as Record<string, unknown>;
+          payload = {
+            jobId: result.jobId,
+            score: (od.score as number | undefined) ?? 0,
+            approved: (od.approved as boolean | undefined) ?? false,
+            feedback: (od.feedback as string | undefined) ?? "",
+            details: (od.details as ImageCriticData["details"]) ?? {},
+          };
+        } else {
+          payload = {
+            jobId: result.jobId,
+            score: result.score,
+            approved: result.approved,
+            feedback: result.feedback,
+            details: result.details as ImageCriticData["details"],
+          };
+        }
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          currentJobId: payload.jobId,
+          score: payload.score,
+          approved: payload.approved,
+          feedback: payload.feedback,
+          details: payload.details,
+        });
+        return payload.feedback ?? "";
+      },
+      (err) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "Image critic failed",
         });
         return "";
       },

@@ -392,6 +392,10 @@ export interface FrontendResolvedInputs {
   referenceImageUrls?: string[];
   referenceVideoUrls?: string[];
   referenceAudioUrls?: string[];
+  /** Singular reference image, used by image-critic which takes a single
+   *  reference via the "reference" target handle (distinct from the
+   *  multi-reference array used by image-to-image, etc.). */
+  referenceImageUrl?: string;
   /** Multi-media payload for social carousel posts — accumulated by
    *  resolveNodeInputs when target.data.action === "post-carousel". */
   mediaItems?: Array<{ type: "photo" | "video"; url: string }>;
@@ -947,6 +951,14 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "mask") {
       inputs.maskUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "image" && node.type === "image-critic") {
+      inputs.imageUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "reference" && node.type === "image-critic") {
+      inputs.referenceImageUrl = output;
       continue;
     }
     const refHandleKey = REFERENCE_HANDLE_MAP[srcEdge.targetHandle ?? ""];
@@ -1619,7 +1631,7 @@ export function resolveNodeInputs(
           if (activeResult?.sunoTaskId && !taskId) inputs.sunoTaskId = activeResult.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check" || src.type === "image-critic") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer" || src.type === "llm-chat") {
       inputs.prompt = output;

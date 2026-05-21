@@ -96,6 +96,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "telegram-post": 1,
   "save-to-storage": 0,
   "qa-check": 5,
+  "image-critic": 5,
   "web-scrape": 5,
 };
 
@@ -237,6 +238,7 @@ export const EXECUTABLE_TYPES = new Set([
   "telegram-post",
   "save-to-storage",
   "qa-check",
+  "image-critic",
   "web-scrape",
   "router",
   "teleport-send",

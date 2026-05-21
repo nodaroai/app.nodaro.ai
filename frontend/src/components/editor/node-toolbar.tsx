@@ -150,6 +150,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "suno-upload-extend", label: "Suno Upload Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   // AI — Quality
   { type: "qa-check", label: "QA Check", icon: <ShieldCheck className="h-4 w-4" />, category: "AI", group: "Quality", adminOnly: true },
+  { type: "image-critic", label: "Image Critic", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Quality" },
   // Processing — Video
   { type: "combine-videos", label: "Combine Videos", icon: <Merge className="h-4 w-4" />, category: "Processing", group: "Video" },
   { type: "resize-video", label: "Resize Video", icon: <Maximize className="h-4 w-4" />, category: "Processing", group: "Video" },
