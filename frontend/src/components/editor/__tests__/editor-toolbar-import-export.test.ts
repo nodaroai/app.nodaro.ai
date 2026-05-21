@@ -178,6 +178,10 @@ describe("buildSaveObjectPayloadFromExport", () => {
       angles: [{ name: "front", url: "https://r2.example.com/front.png" }],
       materials: [{ name: "bakelite", url: "https://r2.example.com/bake.png" }],
       variations: [{ name: "red", url: "https://r2.example.com/red.png" }],
+      motionClips: [],
+      referencePhotos: [],
+      canonicalDescription: "",
+      styleLock: true,
       createdAt: "2026-05-18T10:00:00Z",
       updatedAt: "2026-05-18T10:00:00Z",
     }

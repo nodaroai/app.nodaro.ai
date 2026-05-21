@@ -172,7 +172,7 @@ import {
 } from "./types";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
-import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, type FrontendResolvedInputs } from "./node-input-resolver";
+import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, type FrontendResolvedInputs } from "./node-input-resolver";
 import { collectPreviewItems } from "./preview-items";
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings";
@@ -5487,7 +5487,33 @@ export function executeNode(
       toast.error(`Node "${objData.label}": no object name set`);
       return Promise.reject(new Error("No object name"));
     }
-    return runObjectGeneration(node.id, objData, ctx);
+    // Phase E3/3 — Object Studio auto-attach + seed-prompt context:
+    //   attachToObjectId  ← canvas objectDbId (when set, worker appends to
+    //                       the existing object's main_image_url / canonical
+    //                       description without creating a sibling row)
+    //   attachName        ← single-candidate name fed to the worker (so the
+    //                       attach path doesn't have to look it up from
+    //                       generatedResults later)
+    //   seedPromptHint    ← composed from upstream picker(s) wired to the
+    //                       `type` handle (animal/vehicle/furniture/weapon/
+    //                       material). "" when none wired → the route's
+    //                       Studio-gated LLM draft falls back to
+    //                       canonical_description per spec Pass 7 F-78.
+    //   expectedUpdatedAt ← optimistic-concurrency token from the canvas
+    //                       node; the route rejects with 409 if the row
+    //                       changed under us (e.g. Studio updated assets
+    //                       on another tab between the user clicking Run
+    //                       and the row INSERT).
+    //   count: 1          ← canvas always generates one candidate; Studio
+    //                       multi-candidate UX is a Phase-2 follow-up.
+    const seedPromptHint = resolveSeedPromptHint(node, edges, nodes, "object");
+    return runObjectGeneration(node.id, objData, ctx, {
+      attachToObjectId: objData.objectDbId || undefined,
+      attachName: objData.objectName,
+      seedPromptHint: seedPromptHint || undefined,
+      expectedUpdatedAt: objData.updatedAt,
+      count: 1,
+    });
   }
 
   if (node.type === "location") {

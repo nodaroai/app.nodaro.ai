@@ -476,6 +476,9 @@ interface WorkflowState {
   /** Node ID whose Location Studio modal is open (null = closed). UI-only. */
   readonly locationStudioNodeId: string | null
   readonly setLocationStudioNodeId: (id: string | null) => void
+  /** Node ID whose Object Studio modal is open (null = closed). UI-only. */
+  readonly objectStudioNodeId: string | null
+  readonly setObjectStudioNodeId: (id: string | null) => void
   readonly createSceneNodeFromScript: ((scriptNodeId: string, sceneIndex: number) => void) | null
   readonly setCreateSceneNodeFromScript: (fn: ((scriptNodeId: string, sceneIndex: number) => void) | null) => void
   readonly generateCharacterAssetFn: ((nodeId: string, assetType: "expressions" | "poses" | "lighting" | "angles") => Promise<void>) | null
@@ -1471,6 +1474,58 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       return { ...n, data: newData as typeof n.data }
     })
 
+    // Migrate legacy ObjectNodeData (spec Pass 12 F-97 + Pass 6 F-74):
+    //  - Backfill the Phase-A Object Studio fields (motionClips / motionStatus
+    //    / referencePhotos / canonicalDescription / styleLock) on object
+    //    nodes saved before they existed.
+    //  - One-way breadcrumb of the deprecated *Id picker fields (animalId /
+    //    vehicleId / furnitureId / weaponId) into legacyPickerSelection.
+    //    Original *Id fields cleared from data once migrated. Studio
+    //    Appearance tab shows a banner until the user wires a picker node OR
+    //    dismisses (sets legacyPickerSelection to null).
+    //  - Re-migration prevention: the breadcrumb check uses
+    //    `legacyPickerSelection === undefined` (NOT `!legacyPickerSelection`)
+    //    so an explicit null (user dismissed the banner) is preserved across
+    //    loads. A `null` value means "user opted out"; re-migrating would
+    //    resurrect a dismissed banner.
+    //  - In-store only — workflow JSON carries legacyPickerSelection forward;
+    //    the objects DB table has its own canonical columns (DB schema
+    //    unaffected by this migration).
+    migratedNodes = migratedNodes.map((n) => {
+      if (n.type !== "object") return n
+      const data = n.data as Record<string, unknown>
+      const newData = { ...data } as Record<string, unknown>
+      // Field backfill — mirror location's 9-field pattern, scoped to the
+      // 5 fields Phase A added to ObjectNodeData.
+      newData.motionClips = (data.motionClips as unknown[] | undefined) ?? []
+      newData.motionStatus = (data.motionStatus as string | undefined) ?? "idle"
+      newData.referencePhotos = (data.referencePhotos as unknown[] | undefined) ?? []
+      newData.canonicalDescription = (data.canonicalDescription as string | undefined) ?? ""
+      newData.styleLock = (data.styleLock as boolean | undefined) ?? true
+      // legacyPickerSelection breadcrumb — first-pass-only, gated on:
+      //   1. Field not already set (undefined). `null` is "user dismissed".
+      //   2. *Id field non-empty AND matching category.
+      if (newData.legacyPickerSelection === undefined) {
+        if (data.animalId && data.category === "animal") {
+          newData.legacyPickerSelection = { kind: "animal", id: data.animalId as string }
+        } else if (data.vehicleId && data.category === "vehicle") {
+          newData.legacyPickerSelection = { kind: "vehicle", id: data.vehicleId as string }
+        } else if (data.furnitureId && data.category === "furniture") {
+          newData.legacyPickerSelection = { kind: "furniture", id: data.furnitureId as string }
+        } else if (data.weaponId && data.category === "weapon") {
+          newData.legacyPickerSelection = { kind: "weapon", id: data.weaponId as string }
+        }
+        // Clear *Id fields once migrated so they don't get re-detected later.
+        if (newData.legacyPickerSelection !== undefined) {
+          newData.animalId = undefined
+          newData.vehicleId = undefined
+          newData.furnitureId = undefined
+          newData.weaponId = undefined
+        }
+      }
+      return { ...n, data: newData as typeof n.data }
+    })
+
     // Strip fixed width from teleport nodes so they auto-size
     migratedNodes = migratedNodes.map((n) =>
       (n.type === "teleport-send" || n.type === "teleport-receive") && n.width
@@ -1650,6 +1705,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setCharacterStudioNodeId: (id) => set({ characterStudioNodeId: id }),
   locationStudioNodeId: null,
   setLocationStudioNodeId: (id) => set({ locationStudioNodeId: id }),
+  objectStudioNodeId: null,
+  setObjectStudioNodeId: (id) => set({ objectStudioNodeId: id }),
   createSceneNodeFromScript: null,
   setCreateSceneNodeFromScript: (fn) => set({ createSceneNodeFromScript: fn }),
   generateCharacterAssetFn: null,

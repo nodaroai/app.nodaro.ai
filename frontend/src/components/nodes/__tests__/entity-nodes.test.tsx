@@ -58,13 +58,21 @@ vi.mock("../run-node-button", () => ({
 }))
 
 const setCharacterStudioNodeIdMock = vi.fn()
+const setObjectStudioNodeIdMock = vi.fn()
+const setLocationStudioNodeIdMock = vi.fn()
+const updateNodeDataMock = vi.fn()
+// Mutable edges for tests that flip the type-handle wire on/off so the
+// useConnectionCount selector picks them up.
+let mockEdges: Array<{ source: string; target: string; targetHandle?: string }> = []
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({
-    updateNodeData: () => {},
+    updateNodeData: updateNodeDataMock,
     runSingleNode: () => {},
     setCharacterStudioNodeId: setCharacterStudioNodeIdMock,
+    setObjectStudioNodeId: setObjectStudioNodeIdMock,
+    setLocationStudioNodeId: setLocationStudioNodeIdMock,
     nodes: [],
-    edges: [],
+    edges: mockEdges,
   }),
 }))
 
@@ -309,6 +317,12 @@ describe("FaceNode", () => {
 // ---------------------------------------------------------------------------
 
 describe("ObjectNode", () => {
+  beforeEach(() => {
+    setObjectStudioNodeIdMock.mockClear()
+    updateNodeDataMock.mockClear()
+    mockEdges = []
+  })
+
   it("renders without crashing in idle state", () => {
     renderObjectNode()
     expect(screen.getByTestId("base-node")).toBeInTheDocument()
@@ -324,11 +338,15 @@ describe("ObjectNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-category", "object")
   })
 
-  it("has correct handles (in + objectRef)", () => {
+  it("has correct handles (in + type + objectRef)", () => {
     renderObjectNode()
     const inHandle = screen.getByTestId("handle-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
+
+    const typeHandle = screen.getByTestId("handle-type")
+    expect(typeHandle).toHaveAttribute("data-type", "target")
+    expect(typeHandle).toHaveAttribute("data-position", "left")
 
     const refHandle = screen.getByTestId("handle-objectRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
@@ -359,6 +377,144 @@ describe("ObjectNode", () => {
   it("shows objectName text", () => {
     renderObjectNode()
     expect(screen.getByText("Sword")).toBeInTheDocument()
+  })
+
+  // ---- Phase E3 — Studio integration -------------------------------------
+  it("renders the Studio button and opens the studio for this node on click", () => {
+    renderObjectNode()
+    const btn = screen.getByRole("button", { name: "Open Object Studio" })
+    expect(btn).toBeInTheDocument()
+    fireEvent.click(btn)
+    expect(setObjectStudioNodeIdMock).toHaveBeenCalledWith("node-1")
+  })
+
+  it("shows all 5 asset badges with correct counts (Angles/Materials/Variations/Motion/Refs)", () => {
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        angles: [{ name: "front", url: "a" }, { name: "side", url: "b" }],
+        materials: [{ name: "gold", url: "c" }],
+        variations: [{ name: "v1", url: "d" }, { name: "v2", url: "e" }, { name: "v3", url: "f" }],
+        motionClips: [{ name: "spin", url: "g" }, { name: "swing", url: "h" }, { name: "rotate", url: "i" }, { name: "drop", url: "j" }],
+        referencePhotos: [{ url: "x", kind: "front" }],
+      },
+    })
+    expect(screen.getByText("Angles 2")).toBeInTheDocument()
+    expect(screen.getByText("Materials 1")).toBeInTheDocument()
+    expect(screen.getByText("Variations 3")).toBeInTheDocument()
+    expect(screen.getByText("Motion 4")).toBeInTheDocument()
+    expect(screen.getByText("Refs 1")).toBeInTheDocument()
+  })
+
+  it("Motion badge uses amber tint (video variant) when populated", () => {
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        motionClips: [{ name: "spin", url: "g" }],
+      },
+    })
+    const motionBadge = screen.getByText("Motion 1").parentElement as HTMLElement
+    expect(motionBadge).toBeTruthy()
+    expect(motionBadge.className).toMatch(/bg-amber/)
+    expect(motionBadge.className).toMatch(/text-amber/)
+  })
+
+  it("image badges use emerald tint (default image variant) when populated", () => {
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        angles: [{ name: "front", url: "a" }],
+      },
+    })
+    const anglesBadge = screen.getByText("Angles 1").parentElement as HTMLElement
+    expect(anglesBadge).toBeTruthy()
+    expect(anglesBadge.className).toMatch(/bg-emerald/)
+    expect(anglesBadge.className).toMatch(/text-emerald/)
+  })
+
+  it("caps badge counts at '99+' when count exceeds 99", () => {
+    const manyAngles = Array.from({ length: 100 }, (_, i) => ({ name: `a${i}`, url: `u${i}` }))
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        angles: manyAngles,
+      },
+    })
+    expect(screen.getByText("Angles 99+")).toBeInTheDocument()
+  })
+
+  it("shows spinner when motionStatus is running (asset-level)", () => {
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        motionStatus: "running",
+      },
+    })
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-is-running", "true")
+  })
+
+  it("auto-clears legacyPickerSelection when a type-handle edge wires for the first time", () => {
+    // Set the edge BEFORE render so the selector picks up typeConnectionCount=1
+    // on the initial commit, then the useEffect fires once.
+    mockEdges = [{ source: "picker-1", target: "node-1", targetHandle: "type" }]
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        legacyPickerSelection: { kind: "animal", id: "wolf" },
+      },
+    })
+    expect(updateNodeDataMock).toHaveBeenCalledWith("node-1", { legacyPickerSelection: null })
+  })
+
+  it("does NOT auto-clear when type handle has no connection (typeConnectionCount=0)", () => {
+    mockEdges = []
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        legacyPickerSelection: { kind: "animal", id: "wolf" },
+      },
+    })
+    expect(updateNodeDataMock).not.toHaveBeenCalled()
+  })
+
+  it("does NOT re-trigger auto-clear when legacyPickerSelection is already null (user dismissed)", () => {
+    mockEdges = [{ source: "picker-1", target: "node-1", targetHandle: "type" }]
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        legacyPickerSelection: null,
+      },
+    })
+    expect(updateNodeDataMock).not.toHaveBeenCalled()
+  })
+
+  it("does NOT auto-clear when legacyPickerSelection is undefined (no migration breadcrumb)", () => {
+    mockEdges = [{ source: "picker-1", target: "node-1", targetHandle: "type" }]
+    renderObjectNode({
+      data: {
+        label: "Object",
+        style: "realistic",
+        objectName: "Sword",
+        // legacyPickerSelection intentionally omitted (undefined)
+      },
+    })
+    expect(updateNodeDataMock).not.toHaveBeenCalled()
   })
 })
 

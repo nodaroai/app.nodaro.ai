@@ -1,4 +1,9 @@
-import type { EntityStatus, PipelineMode } from "@nodaro/shared"
+import type {
+  CharacterImageCriticVerdict,
+  EntityStatus,
+  PipelineMode,
+} from "@nodaro/shared"
+import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -27,18 +32,70 @@ const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
   failed: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
 }
 
+/**
+ * Phase 1D.2c-a §7 (E1) — shape of one critic issue, as written by the Stage
+ * 2 / Stage 4 image-critic chain into `pipeline_entities.metadata.critic_findings`.
+ * Derived from `CharacterImageCriticVerdictSchema.issues[*]`; the Location
+ * verdict shares the same shape modulo the `category` enum — both inferred
+ * types render the same way in the UI.
+ */
+type CriticFinding = CharacterImageCriticVerdict["issues"][number]
+
+interface CriticState {
+  findings: CriticFinding[] | undefined
+  isFailed: boolean
+  displayUrl: string | undefined
+}
+
+/**
+ * Pure helper — derives the critic-related surface state from the metadata
+ * blob written by the Stage 2/4 image-critic chain.
+ *
+ * The chain writes:
+ *   metadata.last_error = IMAGE_CRITIC_UNRESOLVABLE  (on terminal fail)
+ *   metadata.last_attempted_image_url = <URL of the FAILED image>
+ *   metadata.critic_findings = [...issues]  (also written on success retries
+ *     when the critic flagged warnings that the next attempt addressed)
+ *
+ * On terminal fail we surface the FAILED image (the main_asset_url may be
+ * null because the cap-exhausted run never committed). On success paths we
+ * keep the existing main-asset preview.
+ */
+function readCriticState(
+  metadata: Record<string, unknown> | null,
+  mainAssetUrl: string | undefined,
+): CriticState {
+  const findings = Array.isArray(metadata?.critic_findings)
+    ? (metadata?.critic_findings as CriticFinding[])
+    : undefined
+  const lastError =
+    typeof metadata?.last_error === "string" ? metadata?.last_error : undefined
+  const lastAttemptedUrl =
+    typeof metadata?.last_attempted_image_url === "string"
+      ? metadata?.last_attempted_image_url
+      : undefined
+  const isFailed = lastError === IMAGE_CRITIC_UNRESOLVABLE
+  const displayUrl = isFailed ? lastAttemptedUrl ?? mainAssetUrl : mainAssetUrl
+  return { findings, isFailed, displayUrl }
+}
+
 export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Props) {
   const status = entity.status
-  const name = String(
-    (entity.metadata as Record<string, unknown> | null)?.name ?? entity.entity_key,
+  const metadata = entity.metadata as Record<string, unknown> | null
+  const name = String(metadata?.name ?? entity.entity_key)
+
+  // Phase 1D.2c-a §7 — image-critic surface.
+  const { findings, isFailed, displayUrl } = readCriticState(
+    metadata,
+    entity.main_asset_url ?? undefined,
   )
 
   return (
     <div className="rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 flex flex-col gap-2">
       <div className="aspect-square bg-zinc-100 dark:bg-[#2D2D2D] overflow-hidden rounded relative">
-        {entity.main_asset_url ? (
+        {displayUrl ? (
           <img
-            src={entity.main_asset_url}
+            src={displayUrl}
             alt={name}
             className="w-full h-full object-cover"
           />
@@ -76,6 +133,32 @@ export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Prop
           ))}
         </div>
       )}
+      {/* Phase 1D.2c-a §7 — critic findings list. Rendered whenever non-empty,
+       * regardless of status. Red tint when the image-critic terminally failed
+       * (so the warnings read as the blocking reason); muted zinc otherwise
+       * (informational warnings the user can accept and move on from). */}
+      {findings && findings.length > 0 && (
+        <ul
+          data-testid="critic-findings"
+          className={cn(
+            "text-xs space-y-1",
+            isFailed
+              ? "text-red-700 dark:text-red-300"
+              : "text-zinc-600 dark:text-zinc-300",
+          )}
+        >
+          {findings.map((f, i) => (
+            <li key={i}>
+              <span className="font-semibold">{f.category}:</span> {f.description}
+              {f.suggested_fix && (
+                <div className="ml-3 text-zinc-500 dark:text-zinc-400">
+                  Try: {f.suggested_fix}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       {status === "awaiting_approval" && mode !== "auto" && (
         <div className="flex gap-1">
           <Button size="sm" onClick={onApprove} disabled={disabled} className="flex-1">
@@ -89,6 +172,36 @@ export function EntityCard({ entity, onApprove, onReject, disabled, mode }: Prop
             className="flex-1"
           >
             Reject
+          </Button>
+        </div>
+      )}
+      {/* Phase 1D.2c-a §7 — image-critic recovery buttons. Visible ONLY when
+       * the image-critic chain terminally failed AND we're not in auto mode
+       * (auto-mode pipelines are already on the failure path; surfacing
+       * recovery here would race the orchestrator's own gating). Reuses the
+       * parent EntityGrid's onApprove/onReject callbacks — see implementation
+       * report for the backend gap (both routes currently CAS on
+       * status='awaiting_approval', so these clicks may 409 against a failed
+       * entity row until the routes are loosened or a force_approve variant
+       * is added). */}
+      {isFailed && mode !== "auto" && (
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            onClick={onApprove}
+            disabled={disabled}
+            className="flex-1"
+          >
+            Skip
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onReject}
+            disabled={disabled}
+            className="flex-1"
+          >
+            Regenerate
           </Button>
         </div>
       )}

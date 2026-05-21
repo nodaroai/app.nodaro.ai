@@ -1111,7 +1111,15 @@ export async function generateObject(data: {
   sourceImageUrl?: string
   provider?: string
   userId?: string
-}): Promise<{ jobId: string }> {
+  // Phase A (Object Studio) — multi-candidate generation + studio auto-
+  // attach + seed-prompt context. Backend returns `{ jobIds: string[] }`
+  // when count > 1, `{ jobId }` otherwise.
+  count?: 1 | 2 | 4
+  attachToObjectId?: string
+  attachName?: string
+  seedPromptHint?: string
+  expectedUpdatedAt?: string
+}): Promise<{ jobId: string } | { jobIds: string[] }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1129,11 +1137,26 @@ export async function generateObjectAsset(data: {
   variant: string
   name: string
   description?: string
+  // Free-form override prompt for assetType === "custom" — backend builds
+  // its prompt from `userPrompt` when set, otherwise falls back to a
+  // template seeded by `variant`. Mirrors the location route's contract
+  // (see backend/src/routes/generate-object-asset.ts schema). Required
+  // when the Material catalog browser fires a pick (the variant becomes
+  // the catalog label and userPrompt carries the descriptive override).
+  userPrompt?: string
   category?: string
   style?: string
   sourceImageUrl: string
   provider?: string
   userId?: string
+  // Phase A (Object Studio) — studio auto-attach + seed-prompt context.
+  // Worker payload pass-through: when set, the worker appends the
+  // generated `{name, url}` to the matching JSONB column on the object
+  // row via `append_object_asset` RPC.
+  attachToObjectId?: string
+  attachToColumn?: "angles" | "materials" | "variations" | "motion_clips"
+  attachName?: string
+  seedPromptHint?: string
 }): Promise<{ jobId: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/generate-object-asset`, {
     method: "POST",
@@ -1143,6 +1166,45 @@ export async function generateObjectAsset(data: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start object asset generation")
+  }
+  return res.json()
+}
+
+/**
+ * Kicks off the Object Studio motion (image-to-video) generation. Mirrors
+ * `generateLocationMotion` but for the object motion tab. `sourceImageUrl`
+ * is REQUIRED — image-to-video needs a source frame.
+ *
+ * Backend route: `POST /v1/generate-object-motion` — Zod schema in
+ * `backend/src/routes/generate-object-motion.ts`. `provider` defaults to
+ * `"kling-turbo"` server-side. When `attachToObjectId` is set the worker
+ * appends to the object row's `motion_clips` JSONB column (single attach
+ * column; the route sets it implicitly so callers don't supply it). Default
+ * aspect-ratio is `1:1` (product-showcase) — resolved server-side via
+ * `resolveObjectAspectRatio({ assetType: "motion" })`.
+ */
+export async function generateObjectMotion(data: {
+  motionPrompt: string
+  sourceImageUrl: string
+  provider?: string
+  name: string
+  category?: string
+  style?: string
+  canonicalDescription?: string
+  seedPromptHint?: string
+  userId?: string
+  attachToObjectId?: string
+  attachName?: string
+  aspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/generate-object-motion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(data)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start object motion generation")
   }
   return res.json()
 }
@@ -1160,7 +1222,24 @@ export async function saveObject(data: {
   angles?: { name: string; url: string }[]
   materials?: { name: string; url: string }[]
   variations?: { name: string; url: string }[]
-}): Promise<{ id: string }> {
+  // Phase A (Object Studio) additions — per spec Pass 13 F-100, frontend
+  // stays a dumb pass-through; the backend route owns the INSERT-vs-UPDATE
+  // distinction (silently ignores worker-owned async-write columns on
+  // UPDATE so a stale studio snapshot can't clobber atomic append-RPC
+  // writes).
+  motionClips?: { name: string; url: string }[]
+  referencePhotos?: { kind: string; url: string }[]
+  canonicalDescription?: string
+  styleLock?: boolean
+  /**
+   * Optimistic-concurrency token. When present, the backend gates the
+   * UPDATE on the row's current `updated_at` and returns 409 on mismatch
+   * → surfaced here as `ConcurrentModificationError` (via the central
+   * `throwApiError` helper, which inspects `error.code === "concurrent_modification"`).
+   * Mirrors the saveLocation pattern.
+   */
+  expectedUpdatedAt?: string
+}): Promise<{ id: string; updatedAt?: string }> {
   const res = await fetch(`${API_BASE_URL}/v1/objects`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
@@ -1173,17 +1252,145 @@ export async function saveObject(data: {
   return res.json()
 }
 
-export async function deleteObject(objectId: string): Promise<{ success: boolean }> {
+/**
+ * Approve a candidate-generation job as the object's permanent
+ * `source_image_url`. Also fires the Claude Sonnet vision caption inline
+ * to populate `canonical_description`. Returns 200 with
+ * `canonicalDescription: ""` on caption sub-failure (frontend retries
+ * via `recaptionObject`).
+ *
+ * `expectedUpdatedAt` is the studio's optimistic-concurrency token. When
+ * passed, the backend gates the UPDATE on the row's current `updated_at`
+ * and returns 409 on mismatch — surfaced here as
+ * `ConcurrentModificationError` via the central `throwApiError` helper
+ * (matches the location precedent at api.ts:1395).
+ *
+ * Per spec Pass 10 F-90b, the object route uses a uniform `"not_found"`
+ * 404 code for missing/cross-user/archived rows.
+ */
+export async function approveObjectMainImage(
+  objectId: string,
+  candidateJobId: string,
+  expectedUpdatedAt?: string,
+): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
+  const body: Record<string, unknown> = { candidateJobId }
+  if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
+  const res = await fetch(
+    `${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}/approve-main-image`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+      body: JSON.stringify(body),
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to approve object main image")
+  }
+  return res.json()
+}
+
+/**
+ * Re-runs the Claude Sonnet vision caption against the object's existing
+ * `source_image_url` and persists the result. Used by the studio's "retry
+ * caption" affordance when `approveObjectMainImage` returned an empty
+ * canonicalDescription. Mirrors `recaptionLocation` at api.ts:1424.
+ *
+ * Backend route does NOT accept `expectedUpdatedAt` — it's a pure
+ * idempotent retry against the current row state. Throws on 502
+ * `caption_failed` so the caller can surface a retry.
+ */
+export async function recaptionObject(
+  objectId: string,
+): Promise<{ readonly canonicalDescription: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}/llm-caption`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to caption object")
+  }
+  return res.json()
+}
+
+/**
+ * Archives the object (soft delete). The row stays in the DB and any canvas
+ * node pointing at it keeps loading; the library list hides it. Restore via
+ * `restoreObject(id)`.
+ *
+ * `opts.permanent === true` flips the route into hard-delete mode. The row
+ * MUST already be archived — active rows return 400 `not_archived` (per
+ * Phase C2b — guards against curl/SDK callers bypassing the UI archive-
+ * first flow). Permanent-delete is intentionally NOT mirrored on the SDK
+ * (`@nodaro/client`) so programmatic callers can only soft-delete.
+ */
+export async function deleteObject(
+  objectId: string,
+  opts?: { permanent?: boolean },
+): Promise<{ success: boolean; archived?: boolean; permanent?: boolean }> {
   const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`, {
+  const url = opts?.permanent
+    ? `${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}?permanent=true`
+    : `${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}`
+  const res = await fetch(url, {
     method: "DELETE",
     headers: authHeaders,
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete object")
+    throwApiError(err, opts?.permanent ? "Failed to permanently delete object" : "Failed to archive object")
   }
   return res.json()
+}
+
+/**
+ * Un-archive a soft-deleted object (mirror of `restoreLocation` at
+ * api.ts:1446). On name collision with an active row, the backend
+ * auto-suffixes "(restored)" so the returned name may differ from the
+ * original.
+ *
+ * Per spec Pass 10 F-90b, all failure paths return uniform `"not_found"`
+ * 404 (object deliberately diverges from location's per-path codes /
+ * idempotent-200-on-already-active so the failure surface doesn't leak
+ * which IDs are already-active vs which don't exist).
+ */
+export async function restoreObject(objectId: string): Promise<{ id: string; name: string }> {
+  const res = await fetch(
+    `${API_BASE_URL}/v1/objects/${encodeURIComponent(objectId)}/restore`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    },
+  )
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to restore object")
+  }
+  return res.json()
+}
+
+/**
+ * Permanent (hard) delete a soft-deleted object row. UI-only — backed by
+ * the existing DELETE route with `?permanent=true`. Mirrors
+ * `permanentDeleteLocation` at api.ts:1513.
+ *
+ * Intentionally NOT mirrored on the SDK surface (`@nodaro/client`) — the
+ * SDK's `delete()` always soft-deletes so programmatic callers cannot
+ * accidentally destroy data. Permanent-delete is reachable only from the
+ * `/library/objects` archive view.
+ */
+export async function permanentDeleteObject(
+  objectId: string,
+): Promise<{ success: boolean; permanent: boolean }> {
+  const res = (await deleteObject(objectId, { permanent: true })) as {
+    success: boolean
+    permanent: boolean
+  }
+  return res
 }
 
 export interface DbObject {
@@ -1199,14 +1406,32 @@ export interface DbObject {
   angles: { name: string; url: string }[]
   materials: { name: string; url: string }[]
   variations: { name: string; url: string }[]
+  // Phase A (Object Studio) additions — populated by the backend's
+  // mapDbObject helper. JSONB columns are non-null in the DB layer
+  // (defaults to `[]`/`""`); the frontend type matches.
+  motionClips: { name: string; url: string }[]
+  referencePhotos: { kind: string; url: string }[]
+  canonicalDescription: string
+  styleLock: boolean
+  deletedAt?: string | null
   createdAt: string
   updatedAt: string
+  // Only populated by `getObjectById` (the GET single-row route); the
+  // list route omits this. In-flight generation jobs targeting this object
+  // so the Studio can re-attach spinners on reopen + the canvas can clear
+  // stale running-status badges when no jobs remain.
+  pendingJobs?: { jobId: string; assetType: string; name: string; status: string }[]
 }
 
-export async function getObjects(projectId?: string, userId?: string): Promise<{ objects: DbObject[] }> {
+export async function getObjects(
+  projectId?: string,
+  userId?: string,
+  opts?: { archived?: boolean },
+): Promise<{ objects: DbObject[] }> {
   const params = new URLSearchParams()
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
+  if (opts?.archived) params.set("archived", "true")
   const qs = params.toString()
   const res = await fetch(`${API_BASE_URL}/v1/objects${qs ? `?${qs}` : ""}`, {
     method: "GET",
@@ -1217,6 +1442,18 @@ export async function getObjects(projectId?: string, userId?: string): Promise<{
     throwApiError(err, "Failed to fetch objects")
   }
   return res.json()
+}
+
+/**
+ * List of archived (soft-deleted) objects for the library's "Archived"
+ * tab. Backed by `GET /v1/objects?archived=true` (extended in Phase C2b).
+ * Mirrors `listArchivedLocations` at api.ts:1535.
+ */
+export async function listArchivedObjects(
+  projectId?: string,
+  userId?: string,
+): Promise<{ objects: DbObject[] }> {
+  return getObjects(projectId, userId, { archived: true })
 }
 
 export async function getObjectById(objectId: string): Promise<DbObject | null> {

@@ -1,0 +1,135 @@
+import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  IMAGE_CRITIC_MAX_RETRIES,
+  IMAGE_CRITIC_UNRESOLVABLE,
+} from "@nodaro/shared"
+import { isBlockingImageCriticFail } from "../llms/_image-critic-shared.js"
+import { pipelineEvents } from "../events.js"
+
+export type ImageCriticEntityType = "character" | "location"
+
+/**
+ * Minimum shape the loop needs to read from any image-critic verdict.
+ * Both `CharacterImageCriticVerdict` and `LocationImageCriticVerdict`
+ * satisfy this: same field names, same primitives. The `category` enum
+ * narrows differently per verdict — kept as `string` here since the loop
+ * only uses it for prompt-text interpolation, not branching.
+ */
+export interface ImageCriticVerdictLike {
+  verdict: "pass" | "fail"
+  prompt_adherence_score: number
+  identified_subject: string
+  issues: ReadonlyArray<{
+    severity: "blocking" | "warning"
+    category: string
+    description: string
+    suggested_fix: string
+  }>
+}
+
+export interface RunImageCriticLoopArgs<TVerdict extends ImageCriticVerdictLike> {
+  supabase: SupabaseClient
+  pipelineId: string
+  entity: {
+    id: string
+    entity_key: string
+    metadata: Record<string, unknown> | null
+  }
+  entityType: ImageCriticEntityType
+  basePrompt: string
+  initialAsset: { assetId: string | null; assetUrl: string }
+  generate: (prompt: string) => Promise<{ assetId: string | null; assetUrl: string }>
+  runCritic: (imageUrl: string) => Promise<TVerdict>
+  /**
+   * Starting retry count. When the orchestrator re-enters
+   * `generate{Character,Location}Main` for a rejected entity, the prior
+   * `image_critic_retry_count` from metadata flows in so the budget is
+   * effectively shared across regeneration attempts. Defaults to 0.
+   */
+  initialRetryCount?: number
+}
+
+export type RunImageCriticLoopResult<TVerdict extends ImageCriticVerdictLike> =
+  | {
+      ok: true
+      assetId: string | null
+      assetUrl: string
+      retryCount: number
+      finalVerdict: TVerdict
+    }
+  | { ok: false }
+
+/**
+ * Shared retry loop for Phase 1D.2c-a image critics. Used by both Stage 2
+ * (characters) and Stage 4 (locations). Encapsulates:
+ *   - The fail predicate (verdict='fail' OR prompt_adherence_score below threshold)
+ *   - The retry budget (IMAGE_CRITIC_MAX_RETRIES)
+ *   - The feedback-prompt construction
+ *   - The cap-exhausted entity-failure metadata write + SSE
+ *
+ * Caller responsibilities:
+ *   - First image gen (the initial assetUrl is the input; loop starts at iter 1)
+ *   - The `generate(prompt)` closure that regenerates on retry
+ *   - The `runCritic(imageUrl)` closure that calls the appropriate critic
+ *   - On success (`ok: true`): caller proceeds with voice-matcher / metadata write
+ *   - On failure (`ok: false`): caller MUST return early; entity is already failed
+ */
+export async function runImageCriticLoop<TVerdict extends ImageCriticVerdictLike>(
+  args: RunImageCriticLoopArgs<TVerdict>,
+): Promise<RunImageCriticLoopResult<TVerdict>> {
+  let { assetId, assetUrl } = args.initialAsset
+  let retryCount = args.initialRetryCount ?? 0
+  let verdict = await args.runCritic(assetUrl)
+
+  while (isBlockingImageCriticFail(verdict) && retryCount < IMAGE_CRITIC_MAX_RETRIES) {
+    retryCount += 1
+    const blockingIssues = verdict.issues.filter((i) => i.severity === "blocking")
+    const issuesText =
+      blockingIssues.length > 0
+        ? blockingIssues.map((i) => `- ${i.category}: ${i.suggested_fix}`).join("\n")
+        : "Improve overall adherence to the visual_description."
+    const feedbackPrompt =
+      `${args.basePrompt}\n\nPRIOR ATTEMPT WAS IDENTIFIED AS: ${verdict.identified_subject}` +
+      `\nADJUSTMENTS NEEDED:\n${issuesText}`
+
+    const regen = await args.generate(feedbackPrompt)
+    assetId = regen.assetId
+    assetUrl = regen.assetUrl
+
+    verdict = await args.runCritic(assetUrl)
+  }
+
+  if (isBlockingImageCriticFail(verdict)) {
+    // Cap exhausted — persist failure metadata + emit SSE. Voice-matcher
+    // (characters) and the success-path metadata write (both) are
+    // intentionally skipped: the entity is unrecoverable for this pass and
+    // the user must Regenerate via the EntityCard.
+    await args.supabase
+      .from("pipeline_entities")
+      .update({
+        status: "failed",
+        metadata: {
+          ...(args.entity.metadata ?? {}),
+          last_error: IMAGE_CRITIC_UNRESOLVABLE,
+          last_error_at: new Date().toISOString(),
+          image_critic_retry_count: retryCount,
+          critic_findings: verdict.issues,
+          last_attempted_image_url: assetUrl,
+        },
+      })
+      .eq("id", args.entity.id)
+
+    pipelineEvents.publish({
+      type: "entity:status",
+      pipelineId: args.pipelineId,
+      entityId: args.entity.id,
+      entityType: args.entityType,
+      entityKey: args.entity.entity_key,
+      status: "failed",
+    })
+
+    return { ok: false }
+  }
+
+  return { ok: true, assetId, assetUrl, retryCount, finalVerdict: verdict }
+}

@@ -343,6 +343,53 @@ export const LocationsCoverageCriticVerdictSchema = z.object({
 })
 export type LocationsCoverageCriticVerdict = z.infer<typeof LocationsCoverageCriticVerdictSchema>
 
+// Phase 1D.2c-a — image-level vision critics
+
+export const CharacterImageCriticVerdictSchema = z.object({
+  verdict: z.enum(["pass", "fail"]),
+  prompt_adherence_score: z.number().int().min(0).max(10),
+  identified_subject: z.string().min(1).max(200),
+  issues: z.array(
+    z.object({
+      severity: z.enum(["blocking", "warning"]),
+      category: z.enum([
+        "wrong_subject",
+        "wrong_attributes",
+        "visual_artifacts",
+        "style_mismatch",
+        "other",
+      ]),
+      description: z.string().min(1).max(500),
+      suggested_fix: z.string().min(1).max(300),
+    }),
+  ),
+  approved_summary: z.string().min(1).max(200).optional(),
+})
+export type CharacterImageCriticVerdict = z.infer<typeof CharacterImageCriticVerdictSchema>
+
+export const LocationImageCriticVerdictSchema = z.object({
+  verdict: z.enum(["pass", "fail"]),
+  prompt_adherence_score: z.number().int().min(0).max(10),
+  identified_subject: z.string().min(1).max(200),
+  issues: z.array(
+    z.object({
+      severity: z.enum(["blocking", "warning"]),
+      category: z.enum([
+        "wrong_location_type",
+        "wrong_time_of_day",
+        "wrong_attributes",
+        "visual_artifacts",
+        "style_mismatch",
+        "other",
+      ]),
+      description: z.string().min(1).max(500),
+      suggested_fix: z.string().min(1).max(300),
+    }),
+  ),
+  approved_summary: z.string().min(1).max(200).optional(),
+})
+export type LocationImageCriticVerdict = z.infer<typeof LocationImageCriticVerdictSchema>
+
 // ─── Entity metadata (DB pipeline_entities.metadata) ──────────────────────────
 
 export const CharacterMetadataSchema = z.object({

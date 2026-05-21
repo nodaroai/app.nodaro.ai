@@ -323,10 +323,25 @@ export function runFaceGeneration(
   });
 }
 
+/**
+ * Phase E3/3 (Object Studio) — auto-attach + seed-prompt payload passed
+ * through to `generateObject`. All fields are optional; omitting them
+ * preserves the pre-Studio single-shot behavior. `count` defaults to 1
+ * (canvas-side multi-candidate is a Phase-2 follow-up).
+ */
+export interface ObjectGenerationExtras {
+  readonly seedPromptHint?: string;
+  readonly attachToObjectId?: string;
+  readonly attachName?: string;
+  readonly expectedUpdatedAt?: string;
+  readonly count?: 1 | 2 | 4;
+}
+
 export function runObjectGeneration(
   nodeId: string,
   data: ObjectNodeData,
   ctx: ExecutionContext,
+  extras: ObjectGenerationExtras = {},
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, { executionStatus: "running" });
@@ -340,8 +355,28 @@ export function runObjectGeneration(
       sourceImageUrl: data.sourceImageUrl || undefined,
       provider: data.provider,
       userId: ctx.userId,
+      // Auto-attach + seed-hint pass-through. Backend ignores undefined
+      // keys via Zod's `.optional()`, so leaving them off pre-Studio is a
+      // no-op.
+      count: extras.count ?? 1,
+      attachToObjectId: extras.attachToObjectId,
+      attachName: extras.attachName,
+      seedPromptHint: extras.seedPromptHint,
+      expectedUpdatedAt: extras.expectedUpdatedAt,
     })
-      .then(({ jobId }) => {
+      .then((result) => {
+        // generateObject returns { jobId } when count omitted/=1, and
+        // { jobIds } when count > 1. Canvas executor defaults count=1
+        // (multi-candidate is the Studio's job, not the DAG), but the
+        // return type is a union — normalize defensively here (E1
+        // calibration finding) so a future `count: 2` from the DAG
+        // doesn't crash this branch. We follow the first job's
+        // lifecycle and ignore the rest.
+        const jobId = "jobId" in result ? result.jobId : result.jobIds[0]
+        if (!jobId) {
+          reject(new Error("Backend returned no job id"))
+          return
+        }
         guardedToast.info("Object generation started", {
           description: `Job ID: ${jobId}`,
         });

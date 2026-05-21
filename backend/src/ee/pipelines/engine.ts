@@ -274,9 +274,9 @@ async function runScriptAndPersist(
     pipelineEvents.publish({
       type: "stage:status", pipelineId, stageName: "script", status: "failed",
     })
-    pipelineEvents.publish({
-      type: "pipeline:warning", pipelineId, code: outcome.reason, message: outcome.reason,
-    })
+    // `pipeline:warning` publish dropped here — no frontend consumer subscribes
+    // to it, and `pipeline:status failed` + the stage row's `failure_reason`
+    // already cover the failure surface.
     // Refund the upfront reservation.
     if (pipeline.reserved_credits > pipeline.spent_credits) {
       await refundPipelineCredits({

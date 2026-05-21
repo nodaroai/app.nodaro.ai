@@ -369,6 +369,7 @@ function AssetBadge({
     )
   }
   const hasItems = count > 0
+  const display = count > 99 ? "99+" : String(count)
   // Image buckets use cyan (matching the location node accent); video buckets
   // use amber to visually distinguish motion clips from still images.
   const filledClass = variant === "video" ? "bg-amber-500/10 text-amber-600" : "bg-cyan-500/10 text-cyan-600"
@@ -380,7 +381,7 @@ function AssetBadge({
       }`}
     >
       <span className="leading-none">{icon}</span>
-      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${count}` : label}</span>
+      <span className="text-[8px] leading-tight">{hasItems ? `${label} ${display}` : label}</span>
     </span>
   )
 }
