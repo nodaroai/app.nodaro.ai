@@ -27,7 +27,9 @@ import type {
   ScriptScene,
   QACheckData,
   ImageToTextData,
+  ImageCriticData,
 } from "@/types/nodes"
+import { IMAGE_CRITIC_MODES, type ImageCriticMode } from "@nodaro/shared"
 import { LlmModelSelect } from "./llm-model-select"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
@@ -256,6 +258,80 @@ export function QACheckConfig({ data, onUpdate }: ConfigProps<QACheckData>) {
           onChange={(e) => onUpdate({ threshold: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
         />
       </div>
+    </div>
+  )
+}
+
+export function ImageCriticConfig({ data, onUpdate }: ConfigProps<ImageCriticData>) {
+  const mode = data.mode ?? "realism"
+  const usesPrompt = mode === "prompt-adherence" || mode === "all"
+
+  const handleModeChange = (newMode: ImageCriticMode) => {
+    // Stale-result guard: clear runtime fields when mode changes.
+    onUpdate({
+      mode: newMode,
+      score: undefined,
+      approved: undefined,
+      feedback: undefined,
+      details: undefined,
+      currentJobId: undefined,
+      executionStatus: "idle",
+    })
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <Label>Mode</Label>
+        <Select value={mode} onValueChange={(v) => handleModeChange(v as ImageCriticMode)}>
+          <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {IMAGE_CRITIC_MODES.map((m) => (
+              <SelectItem key={m} value={m}>{m}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="image-critic-threshold">Threshold ({data.threshold ?? 0.7})</Label>
+        <Input
+          id="image-critic-threshold"
+          type="number"
+          min={0}
+          max={1}
+          step={0.05}
+          value={data.threshold ?? 0.7}
+          onChange={(e) => {
+            const t = e.target.value === "" ? undefined : parseFloat(e.target.value)
+            const patch: Partial<ImageCriticData> = { threshold: t }
+            if (typeof data.score === "number" && typeof t === "number") {
+              patch.approved = data.score >= t
+            }
+            onUpdate(patch)
+          }}
+        />
+      </div>
+
+      {usesPrompt && (
+        <div>
+          <Label htmlFor="image-critic-prompt">Prompt (or wire via input edge)</Label>
+          <textarea
+            id="image-critic-prompt"
+            className="w-full rounded-md border bg-background p-2 text-sm"
+            rows={3}
+            value={data.prompt ?? ""}
+            onChange={(e) => onUpdate({ prompt: e.target.value })}
+            maxLength={8000}
+          />
+        </div>
+      )}
+
+      <LlmModelSelect
+        feature="image-critic"
+        value={data.llmModel}
+        onChange={(v) => onUpdate({ llmModel: v })}
+      />
     </div>
   )
 }

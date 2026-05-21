@@ -62,8 +62,10 @@ import {
   setForcePrivate,
   setUserPromptTemplate,
   qaCheckApi,
+  imageCriticApi,
   saveToStorageApi,
   webScrape,
+  executeCollect,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared";
@@ -152,6 +154,7 @@ import type {
   SocialPostData,
   SaveToStorageData,
   QACheckData,
+  ImageCriticData,
   GeneratedResult,
   WebScrapeNodeData,
   ExtractFieldNodeData,
@@ -162,6 +165,7 @@ import type {
   DeduplicateNodeData,
   MergeListsNodeData,
   SortListNodeData,
+  CollectNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -5968,6 +5972,44 @@ export function executeNode(
     return Promise.resolve(sorted[0] ?? "");
   }
 
+  // Collect (fan-in) — aggregate N upstream branch results into a single value
+  // via a pluggable strategy (concat, pick-best-llm, first-non-empty, vote,
+  // count, merge-json, …). The resolver routes upstream listResults into
+  // `inputs.inputs` via the FAN_IN_NODE_TYPES branch in node-input-resolver.ts.
+  if (node.type === "collect") {
+    const collectData = node.data as CollectNodeData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    const collectInputs = inputs.inputs ?? [];
+
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      errorMessage: undefined,
+      __upstreamCount: collectInputs.length,
+    });
+
+    return executeCollect({
+      strategyId: collectData.strategyId,
+      strategyConfig: collectData.strategyConfig ?? {},
+      inputs: collectInputs,
+    })
+      .then((result) => {
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          result: result.output,
+          currentJobId: result.jobId,
+        });
+        return result.output ?? "";
+      })
+      .catch((err: Error) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err.message || "Collect failed",
+        });
+        guardedToast.error(`Collect failed: ${err.message}`);
+        throw err;
+      });
+  }
+
   // Preview — collect upstream values and pass through
   if (node.type === "preview") {
     const {
@@ -6214,6 +6256,83 @@ export function executeNode(
         updateNodeData(node.id, {
           executionStatus: "failed",
           errorMessage: err instanceof Error ? err.message : "QA check failed",
+        });
+        return "";
+      },
+    );
+  }
+
+  if (node.type === "image-critic") {
+    const { updateNodeData } = useWorkflowStore.getState();
+    const d = node.data as ImageCriticData;
+
+    const imageUrl = inputs.imageUrl;
+    if (!imageUrl) {
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: "No image input connected" });
+      return Promise.resolve("");
+    }
+
+    const usesPrompt = d.mode === "prompt-adherence" || d.mode === "all";
+    const resolvedPrompt = inputs.prompt ?? d.prompt;
+
+    if (usesPrompt && resolvedPrompt && resolvedPrompt.trim().length > 0) {
+      setUserPromptTemplate(resolvedPrompt);
+    } else {
+      setUserPromptTemplate(undefined);
+    }
+
+    updateNodeData(node.id, { executionStatus: "running", errorMessage: undefined });
+
+    return imageCriticApi({
+      imageUrl,
+      referenceImageUrl: inputs.referenceImageUrl,
+      prompt: resolvedPrompt,
+      mode: d.mode,
+      threshold: d.threshold ?? 0.7,
+      llmModel: d.llmModel,
+    }).then(
+      async (result) => {
+        // Dedup short-circuit: credit-guard may return { jobId, deduped: true } within 10s.
+        let payload: {
+          jobId: string;
+          score: number;
+          approved: boolean;
+          feedback: string;
+          details: ImageCriticData["details"];
+        };
+        if ((result as { deduped?: true }).deduped === true) {
+          const job = await getJobStatus(result.jobId);
+          const od = (job?.output_data ?? {}) as Record<string, unknown>;
+          payload = {
+            jobId: result.jobId,
+            score: (od.score as number | undefined) ?? 0,
+            approved: (od.approved as boolean | undefined) ?? false,
+            feedback: (od.feedback as string | undefined) ?? "",
+            details: (od.details as ImageCriticData["details"]) ?? {},
+          };
+        } else {
+          payload = {
+            jobId: result.jobId,
+            score: result.score,
+            approved: result.approved,
+            feedback: result.feedback,
+            details: result.details as ImageCriticData["details"],
+          };
+        }
+        updateNodeData(node.id, {
+          executionStatus: "completed",
+          currentJobId: payload.jobId,
+          score: payload.score,
+          approved: payload.approved,
+          feedback: payload.feedback,
+          details: payload.details,
+        });
+        return payload.feedback ?? "";
+      },
+      (err) => {
+        updateNodeData(node.id, {
+          executionStatus: "failed",
+          errorMessage: err instanceof Error ? err.message : "Image critic failed",
         });
         return "";
       },

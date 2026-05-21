@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { WorkflowExport } from "@nodaro/shared"
+import type { ImageCriticMode, WorkflowExport } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
@@ -5966,6 +5966,30 @@ export function qaCheckApi(params: {
   })
 }
 
+export function imageCriticApi(params: {
+  imageUrl: string
+  referenceImageUrl?: string
+  prompt?: string
+  mode: ImageCriticMode
+  threshold?: number
+  llmModel?: string
+}): Promise<{
+  jobId: string
+  score: number
+  approved: boolean
+  feedback: string
+  details: {
+    perMode?: Partial<Record<Exclude<ImageCriticMode, "all">, { score: number; feedback: string }>>
+    issues?: Array<{ category: string; severity: "blocking" | "warning" | "info"; description: string }>
+  }
+  deduped?: true
+}> {
+  return apiRequest("/v1/image-critic", "Image critic failed", {
+    method: "POST",
+    body: withWorkflowId(params),
+  })
+}
+
 // ---------- Save to Storage ----------
 
 export function saveToStorageApi(params: {
@@ -5976,6 +6000,29 @@ export function saveToStorageApi(params: {
   return apiRequest("/v1/save-to-storage", "Failed to save to storage", {
     method: "POST",
     body: withWorkflowId(params),
+  })
+}
+
+// ---------- Collect (fan-in) ----------
+
+/**
+ * Execute a Collect-strategy job. Aggregates a list of upstream iteration
+ * outputs into a single value via the named strategy (concat, vote,
+ * pick-best-llm, first-non-empty, merge-json, count, …).
+ */
+export function executeCollect(input: {
+  strategyId: string
+  strategyConfig: Record<string, unknown>
+  inputs: string[]
+  workflowExecutionId?: string
+}): Promise<{
+  jobId: string
+  output: string
+  meta: { selectedIndex?: number; reasoning?: string; summary: string }
+}> {
+  return apiRequest("/v1/collect", "collect failed", {
+    method: "POST",
+    body: withWorkflowId(input),
   })
 }
 

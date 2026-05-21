@@ -59,6 +59,8 @@ const DIRECT_OUTPUT_KEYS: Array<keyof NodeOutput> = [
   "approved",
   "reason",
   "score",
+  "feedback",
+  "details",
 ]
 
 // Job output_data keys that all map to NodeOutput.plan — derived from COMPOSER_PLAN_MAP + generic "plan"
@@ -365,6 +367,14 @@ export function getPrimaryOutput(
     if (output.approved === undefined) return undefined
     if (sourceHandle === "approved" && output.approved === true) return output.reason
     if (sourceHandle === "rejected" && output.approved === false) return output.reason
+    return undefined
+  }
+
+  if (sourceType === "image-critic") {
+    if (output.approved === undefined) return undefined
+    if (sourceHandle === "approved" && output.approved === true) return output.feedback ?? ""
+    if (sourceHandle === "rejected" && output.approved === false) return output.feedback ?? ""
+    if (!sourceHandle) return output.feedback ?? ""
     return undefined
   }
 
@@ -759,6 +769,16 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     const approved = data.approved as boolean
     const reason = (data.reason as string | undefined) ?? (approved ? "approved" : "rejected")
     return { approved, reason }
+  }
+
+  if (type === "image-critic") {
+    if (data.approved == null) return undefined
+    return {
+      approved: data.approved as boolean,
+      score: data.score as number | undefined,
+      feedback: data.feedback as string | undefined,
+      details: data.details as NodeOutput["details"],
+    }
   }
 
   // Plan nodes — use COMPOSER_PLAN_MAP to find the correct data field

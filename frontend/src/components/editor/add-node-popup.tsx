@@ -84,6 +84,7 @@ import {
   ListMusic,
   Braces,
   Filter,
+  Funnel,
   ListFilter,
   CopyMinus,
   GitMerge,
@@ -865,6 +866,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Quality",
     adminOnly: true,
   },
+  {
+    type: "image-critic",
+    label: "Image Critic",
+    icon: <Eye className="h-4 w-4" />,
+    category: "AI",
+    group: "Quality",
+    // adminOnly NOT set — image-critic is user-facing (qa-check is admin-only; we deliberately differ)
+  },
   // Processing — Video
   {
     type: "combine-videos",
@@ -1191,6 +1200,13 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     label: "Router",
     icon: <GitBranch className="h-4 w-4" />,
     category: "Workflow",
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    icon: <Funnel className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"],
   },
   {
     type: "sticky-note",

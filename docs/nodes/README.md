@@ -164,6 +164,7 @@ Generate, edit, and transform images using 20+ AI providers.
 | [Edit Image](./ai-image/edit-image.md) | Upscale, remove background, or AI-edit images | Enhance, upscale, or modify existing images |
 | [Image to Image](./ai-image/image-to-image.md) | Transform image with AI prompt (15 providers) | Style transfer, inpainting, reframing, or prompt-guided transformation |
 | [Generate Mask](./ai-image/generate-mask.md) | Text-prompted segmentation mask (Grounded SAM) | Create a mask for inpainting from a description; passes image through for chaining |
+| [Image Critic](./ai-image/image-critic.md) | Score an image on realism / character consistency / prompt adherence / anatomy / aesthetic / style-match via VLM | QC pipeline gates, automated regeneration loops with modify-image, batch quality scoring |
 | [Describe Image](./ai-image/image-to-text.md) | Extract text description from image | Auto-caption images, extract prompts from art, accessibility |
 
 ---
@@ -349,6 +350,7 @@ Helpers for debugging and workflow organization.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
+| [Collect](./utility/collect.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List/Loop fan-out — pick the best variant, count survivors, or merge JSON |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
 
 ---

@@ -471,6 +471,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (!sourceHandle) return qaReason;
     return undefined;
   }
+  if (type === "image-critic") {
+    if (data.approved == null) return undefined; // not yet executed — downstream waits
+    const isApproved = data.approved as boolean;
+    const feedback = (data.feedback as string | undefined) ?? ""; // empty string, not placeholder
+    if (sourceHandle === "approved" && isApproved) return feedback;
+    if (sourceHandle === "rejected" && !isApproved) return feedback;
+    if (!sourceHandle) return feedback; // legacy / FieldMappings fallback
+    return undefined; // wrong-side edge — downstream doesn't fire
+  }
   if (type === "save-to-storage") {
     return (data.savedUrl as string) || undefined;
   }
@@ -511,6 +520,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       ((data as { __listResults?: string[] }).__listResults) ??
       ((data as { listResults?: string[] }).listResults);
     return listResults && listResults.length > 0 ? listResults[0] : undefined;
+  }
+  // Collect (fan-in) — folds N upstream branch results into a single string.
+  // The primary output is `data.result` (set by the collect executor after the
+  // strategy runs). Mirrors backend output-extractor.ts case "collect".
+  if (type === "collect") {
+    return (data as { result?: string }).result;
   }
   if (type === "preview") {
     // Pass through the first visible upstream value

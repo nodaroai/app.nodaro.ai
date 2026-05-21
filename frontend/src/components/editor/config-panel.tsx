@@ -83,6 +83,7 @@ import {
   CharacterFxConfig,
   GenerateScriptConfig,
   QACheckConfig,
+  ImageCriticConfig,
   GenerateImageConfig,
   ModifyImageConfig,
   UpscaleImageConfig,
@@ -188,6 +189,7 @@ import {
   VoiceDeliveryConfig,
   GenerativePipelineConfig,
   SceneConfig,
+  CollectConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -258,6 +260,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "text-to-video": "Text to Video",
   "text-to-speech": "Text to Speech",
   "qa-check": "QA Check",
+  "image-critic": "Image Critic",
   "generate-music": "Generate Music",
   "text-to-audio": "Text to Audio",
   "audio-isolation": "Voice Extractor",
@@ -339,6 +342,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "teleport-send": "Teleport Send",
   "teleport-receive": "Teleport Receive",
   "router": "Router",
+  "collect": "Collect",
   "generative-pipeline": "Story → Video",
 }
 
@@ -367,7 +371,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
 
 export const RUN_BUTTON_TYPES = new Set([
   "manual-edit", "composite",
-  "sub-workflow", "router",
+  "sub-workflow", "router", "collect",
 ])
 
 /** Nodes that show "Run from here" as primary action instead of "Run". */
@@ -495,6 +499,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     )
     case "text-to-speech": return <TextToSpeechConfig {...configProps} />
     case "qa-check": return <QACheckConfig {...configProps} />
+    case "image-critic": return <ImageCriticConfig {...configProps} />
     case "generate-music": return <GenerateMusicConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-audio": return <TextToAudioConfig {...configProps} nodeId={selectedNodeId} />
     case "audio-isolation": return <AudioIsolationConfig {...configProps} />
@@ -563,6 +568,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />
+    case "collect": return <CollectConfig {...configProps} />
     case "save-to-storage": return <SaveToStorageConfig {...configProps} />
     case "webhook-output": return <WebhookOutputConfig {...configProps} />
     case "instagram-post": return <InstagramPostConfig {...configProps} />

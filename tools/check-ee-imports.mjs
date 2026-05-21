@@ -115,6 +115,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/nodes/generate-mask-node.tsx",
   "frontend/src/components/nodes/generate-music-node.tsx",
   "frontend/src/components/nodes/generate-script-node.tsx",
+  "frontend/src/components/nodes/image-critic-node.tsx",
   "frontend/src/components/nodes/image-to-image-node.tsx",
   "frontend/src/components/nodes/image-to-text-node.tsx",
   "frontend/src/components/nodes/image-to-video-node.tsx",

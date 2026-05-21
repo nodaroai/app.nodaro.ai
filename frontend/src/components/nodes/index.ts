@@ -64,6 +64,7 @@ import { VideoToVideoNode } from "./video-to-video-node";
 import { TextToVideoNode } from "./text-to-video-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
+import { ImageCriticNode } from "./image-critic-node";
 import { GenerateMusicNode } from "./generate-music-node";
 import { TextToAudioNode } from "./text-to-audio-node";
 import { SunoVoiceNode } from "./suno-voice-node";
@@ -139,6 +140,7 @@ import { SplitTextNode } from "./split-text-node";
 import { PreviewNode } from "./preview-node";
 import { StickyNoteNode } from "./sticky-note-node";
 import { RouterNode } from "./router-node";
+import { CollectNode } from "./collect-node";
 import { TeleportSendNode, TeleportReceiveNode } from "./teleport-node-shell";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
@@ -223,6 +225,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "text-to-video": TextToVideoNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
+  "image-critic": ImageCriticNode,
   "generate-music": GenerateMusicNode,
   "text-to-audio": TextToAudioNode,
   "suno-voice": SunoVoiceNode,
@@ -306,6 +309,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,
+  "collect": CollectNode,
   "teleport-send": TeleportSendNode,
   "teleport-receive": TeleportReceiveNode,
   // Sub-Workflow

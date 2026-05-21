@@ -10,6 +10,7 @@ import type {
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
 import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
+import { FAN_IN_NODE_TYPES } from "./types";
 import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
@@ -391,6 +392,10 @@ export interface FrontendResolvedInputs {
   referenceImageUrls?: string[];
   referenceVideoUrls?: string[];
   referenceAudioUrls?: string[];
+  /** Singular reference image, used by image-critic which takes a single
+   *  reference via the "reference" target handle (distinct from the
+   *  multi-reference array used by image-to-image, etc.). */
+  referenceImageUrl?: string;
   /** Multi-media payload for social carousel posts — accumulated by
    *  resolveNodeInputs when target.data.action === "post-carousel". */
   mediaItems?: Array<{ type: "photo" | "video"; url: string }>;
@@ -420,6 +425,11 @@ export interface FrontendResolvedInputs {
    *  image-to-video targets. */
   injectCharacterContext?: boolean;
   attachToCharacterId?: string;
+  /** Fan-in input list — populated by the resolver for collect-style targets.
+   *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
+   *  fanned out) so the collect strategy can fold it into a single value.
+   *  Mirror of backend FrontendResolvedInputs.inputs. */
+  inputs?: string[];
 }
 
 /** Append an asset to the manual-edit inputAssets accumulator. */
@@ -592,6 +602,13 @@ export function getListInputForNode(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): string[] | undefined {
+  // Fan-in targets (collect) consume the upstream list — they are NOT fanned
+  // out themselves. Returning undefined here prevents executeNodeForList from
+  // running N redundant POST /v1/collect calls (each charging credits) when a
+  // user wires List → Collect directly without an intermediate fanned-out
+  // node. Mirrors backend input-resolver.ts FAN_IN_NODE_TYPES early-return.
+  if (FAN_IN_NODE_TYPES.has(node.type ?? "")) return undefined;
+
   const incomingEdges = edges.filter((e) => e.target === node.id && e.targetHandle !== VARIABLES_HANDLE_ID);
   let maxLen = 0;
   /** The longest concrete item list (used when only one source contributes). */
@@ -766,6 +783,34 @@ export function resolveNodeInputs(
     const srcListResults = src.type === "split-media"
       ? undefined
       : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+
+    // Fan-in targets (collect): consume the entire upstream list as a single
+    // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
+    // fold the list into one value, they are never fanned out per-item. When
+    // upstream has no list (no fan-out happened), wrap its single output as
+    // `[output]` so the strategy still has something to fold. Mirrors backend
+    // input-resolver.ts FAN_IN_NODE_TYPES branch.
+    if (node.type && FAN_IN_NODE_TYPES.has(node.type)) {
+      const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+      const filtered: string[] = srcListResults && srcListResults.length > 0
+        ? selectListItems(srcListResults, edgeData as SelectorFields | undefined)
+        : [];
+      const collected: string[] = [];
+      for (const item of filtered) {
+        if (typeof item === "string" && item.length > 0) collected.push(item);
+      }
+      if (collected.length > 0) {
+        inputs.inputs = [...(inputs.inputs ?? []), ...collected];
+        continue;
+      }
+      // Single-result fallback — upstream wasn't fanned out.
+      const single = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
+      if (single) {
+        inputs.inputs = [...(inputs.inputs ?? []), single];
+      }
+      continue;
+    }
+
     let output: string | undefined;
     if (edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode === "item") {
@@ -906,6 +951,14 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "mask") {
       inputs.maskUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "image" && node.type === "image-critic") {
+      inputs.imageUrl = output;
+      continue;
+    }
+    if (srcEdge.targetHandle === "reference" && node.type === "image-critic") {
+      inputs.referenceImageUrl = output;
       continue;
     }
     const refHandleKey = REFERENCE_HANDLE_MAP[srcEdge.targetHandle ?? ""];
@@ -1578,7 +1631,7 @@ export function resolveNodeInputs(
           if (activeResult?.sunoTaskId && !taskId) inputs.sunoTaskId = activeResult.sunoTaskId as string;
         }
       }
-    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check") {
+    } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check" || src.type === "image-critic") {
       inputs.prompt = output;
     } else if (src.type === "ai-writer" || src.type === "llm-chat") {
       inputs.prompt = output;

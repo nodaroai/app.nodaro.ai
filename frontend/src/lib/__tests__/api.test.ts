@@ -43,6 +43,7 @@ import {
   recaptionLocation,
   restoreLocation,
   getJobStatusBatch,
+  executeCollect,
 } from "../api"
 
 // ---------------------------------------------------------------------------
@@ -798,5 +799,77 @@ describe("getJobStatusBatch", () => {
       mockFetchError(400, { error: { message: "Bad ids" } }),
     )
     await expect(getJobStatusBatch(["j1"])).rejects.toThrow("Bad ids")
+  })
+})
+
+// ---- executeCollect -------------------------------------------------------
+
+describe("executeCollect", () => {
+  it("POSTs to /v1/collect with the right body and headers", async () => {
+    sessionWith("tok-collect")
+    const mock = mockFetchJson({
+      jobId: "j1",
+      output: "a-b",
+      meta: { summary: "Joined 2 of 2 inputs" },
+    })
+    vi.stubGlobal("fetch", mock)
+
+    const res = await executeCollect({
+      strategyId: "concat",
+      strategyConfig: { separator: "-" },
+      inputs: ["a", "b"],
+    })
+
+    expect(mock).toHaveBeenCalledWith(
+      "/v1/collect",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer tok-collect",
+        },
+        body: expect.stringContaining(`"strategyId":"concat"`),
+      }),
+    )
+    const callBody = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(callBody).toEqual({
+      strategyId: "concat",
+      strategyConfig: { separator: "-" },
+      inputs: ["a", "b"],
+    })
+    expect(res.output).toBe("a-b")
+    expect(res.jobId).toBe("j1")
+    expect(res.meta.summary).toBe("Joined 2 of 2 inputs")
+  })
+
+  it("forwards workflowExecutionId when provided", async () => {
+    noSession()
+    const mock = mockFetchJson({
+      jobId: "j2",
+      output: "x",
+      meta: { summary: "ok" },
+    })
+    vi.stubGlobal("fetch", mock)
+
+    await executeCollect({
+      strategyId: "vote",
+      strategyConfig: {},
+      inputs: ["x", "x", "y"],
+      workflowExecutionId: "exec-1",
+    })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.workflowExecutionId).toBe("exec-1")
+  })
+
+  it("throws on non-ok response", async () => {
+    noSession()
+    vi.stubGlobal(
+      "fetch",
+      mockFetchError(400, { error: { code: "no_valid_inputs", message: "All upstream iterations failed; nothing to collect." } }),
+    )
+    await expect(
+      executeCollect({ strategyId: "concat", strategyConfig: {}, inputs: [] }),
+    ).rejects.toThrow("All upstream iterations failed; nothing to collect.")
   })
 })

@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-20T13:30:18.566Z
-generated_from: a183bc77
+generated_at: 2026-05-21T13:21:20.596Z
+generated_from: 0ba3fb26
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -79,6 +79,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `camera-motion` — Camera Motion
 - `character` — Character
 - `character-fx` — Character FX
+- `collect` — Collect
 - `color-look` — Color / Look
 - `combine-audio` — Combine Audio
 - `combine-text` — Combine Text
@@ -108,6 +109,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `generate-script` — Generate Script
 - `generative-pipeline` — Story → Video
 - `held-prop` — Held Prop
+- `image-critic` — Image Critic
 - `image-to-text` — Describe Image
 - `image-to-video` — Image to Video
 - `instagram-post` — Instagram Post

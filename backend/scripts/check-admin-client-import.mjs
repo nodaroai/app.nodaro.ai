@@ -180,6 +180,14 @@ const ALLOWED_PATHS = [
   // client with the BullMQ pipeline worker.
   /^src\/routes\/scene-helpers\.ts$/,
 
+  // Image Critic: same shape as qa-check + image-to-text (both baselined) —
+  // creates a jobs row tagged with req.userId, then later updates that row
+  // by the server-generated job.id (covered by tenant-scope-ignore comments
+  // inline). Service-role required because reserveCreditsForJob +
+  // commitReservedCreditsForJob run under the same client. No cross-user
+  // reads or writes possible.
+  /^src\/routes\/image-critic\.ts$/,
+
   // Collect: inline-HTTP route — needs service-role to insert the jobs row +
   // reserve credits before strategy dispatch, then commit/refund on completion.
   // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`

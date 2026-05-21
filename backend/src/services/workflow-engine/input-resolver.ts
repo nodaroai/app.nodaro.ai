@@ -683,6 +683,7 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "suno-style-boost",
   "forced-alignment",
   "qa-check",
+  "image-critic",
 ])
 
 // Preview routes by actual media type, not always to text (handled in routeOutput)
@@ -880,6 +881,14 @@ function routeOutput(
   }
   if (edge.targetHandle === "system-prompt") {
     inputs.systemPrompt = output
+    return
+  }
+  if (edge.targetHandle === "image") {
+    inputs.imageUrl = output
+    return
+  }
+  if (edge.targetHandle === "reference") {
+    inputs.referenceImageUrl = output
     return
   }
 

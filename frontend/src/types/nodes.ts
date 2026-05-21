@@ -6,7 +6,7 @@ import type {
   VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
-  SunoModel, VoiceDesignModel, CaptionStyle,
+  SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
@@ -1901,6 +1901,27 @@ export type QACheckData = {
   reason?: string
 }
 
+export type ImageCriticData = {
+  [key: string]: unknown
+  label: string
+  mode: ImageCriticMode
+  threshold: number
+  prompt?: string
+  llmModel?: string
+  fieldMappings: FieldMappings
+  // runtime
+  currentJobId?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  score?: number
+  approved?: boolean
+  feedback?: string
+  details?: {
+    perMode?: Partial<Record<Exclude<ImageCriticMode, "all">, { score: number; feedback: string }>>
+    issues?: Array<{ category: string; severity: "blocking" | "warning" | "info"; description: string }>
+  }
+}
+
 export type GenerateMusicData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -3680,6 +3701,28 @@ export type RouterNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
+// --- Collect Node Data ---
+
+/** Fan-in node that reduces N upstream branch results into a single output
+ *  via a pluggable strategy. The strategy registry lives in
+ *  `@nodaro/shared/collect-strategy-registry`; v1 strategies: pick-best-llm,
+ *  concat, first-non-empty, count, vote, merge-json. `strategyConfig` shape
+ *  is strategy-specific (e.g. `{ separator: "\n\n" }` for concat). */
+export interface CollectNodeData {
+  [key: string]: unknown
+  label: string
+  /** Strategy id from the shared registry. See @nodaro/shared CollectStrategyId. */
+  strategyId: "pick-best-llm" | "concat" | "first-non-empty" | "count" | "vote" | "merge-json"
+  /** Strategy-specific config (e.g. `{ separator: "\n\n" }` for concat). */
+  strategyConfig: Record<string, unknown>
+  // Execution result fields
+  result?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+}
+
 // --- Scene Node Data ---
 
 export interface SceneCharacterEntry {
@@ -3994,6 +4037,7 @@ export type SceneNodeData =
   | TextToVideoData
   | TextToSpeechData
   | QACheckData
+  | ImageCriticData
   | GenerateMusicData
   | TextToAudioData
   | SunoVoiceData
@@ -4075,6 +4119,7 @@ export type SceneNodeData =
   | TeleportSendData
   | TeleportReceiveData
   | RouterNodeData
+  | CollectNodeData
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
@@ -4152,6 +4197,7 @@ export type SceneNodeType =
   | "text-to-video"
   | "text-to-speech"
   | "qa-check"
+  | "image-critic"
   | "generate-music"
   | "text-to-audio"
   | "suno-voice"
@@ -4230,6 +4276,7 @@ export type SceneNodeType =
   | "teleport-send"
   | "teleport-receive"
   | "router"
+  | "collect"
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
@@ -5049,6 +5096,21 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["approved", "rejected"],
     defaultData: { label: "QA Check", provider: "claude", checkType: "quality", threshold: 0.8, fieldMappings: {} },
+  },
+  {
+    type: "image-critic",
+    label: "Image Critic",
+    category: "ai",
+    creditCost: 5,
+    inputs: ["image", "reference", "prompt"],
+    outputs: ["approved", "rejected"],
+    defaultData: {
+      label: "Image Critic",
+      mode: "realism",
+      threshold: 0.7,
+      prompt: "",
+      fieldMappings: {},
+    },
   },
   {
     type: "generate-music",
@@ -6214,6 +6276,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         { id: "default_b", name: "Route B", active: false },
       ],
     } as RouterNodeData,
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: {
+      label: "Collect",
+      strategyId: "concat",
+      strategyConfig: { separator: "\n\n" },
+    } as CollectNodeData,
   },
   {
     type: "sticky-note",
