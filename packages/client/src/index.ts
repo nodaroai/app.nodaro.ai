@@ -40,6 +40,7 @@ export { OAuthResource } from "./resources/oauth.js"
 export { AppsResource } from "./resources/apps.js"
 export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
+export { ObjectsResource } from "./resources/objects.js"
 export { PipelinesResource } from "./resources/pipelines.js"
 
 // --- Resource type definitions ---
@@ -151,6 +152,37 @@ export {
   LOCATION_ASSET_TYPES,
   LOCATION_ATTACH_COLUMNS,
 } from "./resources/locations.js"
+
+export type {
+  Object,
+  ObjectDetail,
+  ObjectReferencePhoto,
+  ObjectReferencePhotoKind,
+  ObjectCategory,
+  CreateObjectInput,
+  UpdateObjectInput,
+  UpdateObjectResult,
+  UpsertObjectInput,
+  UpsertObjectResult,
+  ListObjectsParams,
+  GenerateObjectInput,
+  GenerateObjectResult,
+  GenerateObjectAssetInput,
+  GenerateObjectAssetResult,
+  GenerateObjectMotionInput,
+  GenerateObjectMotionResult,
+  ApproveObjectMainImageResult,
+  RecaptionObjectResult,
+  ObjectAssetType,
+  ObjectAttachColumn,
+  ObjectAspectRatio,
+} from "./resources/objects.js"
+export {
+  OBJECT_ASSET_TYPES,
+  OBJECT_ATTACH_COLUMNS,
+  OBJECT_ASPECT_OPTIONS,
+  OBJECT_ASPECT_DEFAULTS,
+} from "./resources/objects.js"
 
 export type {
   BranchPipelineInput,
