@@ -1,6 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { PipelineConfig, SubGateName } from "@nodaro/shared"
-import { ensureStageRow, failStage } from "../stage-utils.js"
+import type {
+  PipelineConfig,
+  SceneNodeData,
+  SubGateName,
+  VideoCriticFrameMode,
+  VideoCriticShotFields,
+} from "@nodaro/shared"
+import {
+  ensureStageRow,
+  failPipelineWithCriticReason,
+  failStage,
+} from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
@@ -65,22 +75,47 @@ export async function runAnimateAudioEditStage(
     return
   }
 
-  const { data: pipelineRow } = await supabase
+  // Phase 1D.2c-b-ii (E1): the SELECT widened to also pull
+  // `user_id` + `reserved_credits` + `spent_credits`. The auto-mode video-critic
+  // aggregator below needs these to call `failPipelineWithCriticReason` with the
+  // right refund delta — pulling them inline here avoids a second round-trip
+  // (the existing call already touches the same row).
+  //
+  // /simplify pass-2: single typed selection row replaces 5 inline
+  // `(pipelineRow as { X?: Y } | null)` casts that the original PR scattered
+  // through this handler. The DB layer still returns `unknown`, so the cast
+  // happens exactly once at the boundary.
+  type PipelineRowSelection = {
+    config: PipelineConfig | null
+    mode: "manual" | "auto" | "guided" | null
+    target_duration_seconds: number | null
+    user_id: string | null
+    reserved_credits: number | null
+    spent_credits: number | null
+  }
+  const { data: pipelineRowRaw } = await supabase
     .from("pipelines")
-    .select("config, mode, target_duration_seconds")
+    .select(
+      "config, mode, target_duration_seconds, user_id, reserved_credits, spent_credits",
+    )
     .eq("id", pipelineId)
     .single()
-  const config = (pipelineRow?.config ?? {}) as Partial<PipelineConfig>
+  const pipelineRow = pipelineRowRaw as PipelineRowSelection | null
+  const config = (pipelineRow?.config ?? {}) as Partial<PipelineConfig> & {
+    video_critic_frame_count?: VideoCriticFrameMode
+  }
   const mode: "parallel" | "sequential" = config.shot_generation_mode ?? "parallel"
   const lipSyncEnabled = config.lipsync_enabled ?? true
   const runImageCritic = mode === "sequential"
-  const pipelineMode = ((pipelineRow as { mode?: string } | null)?.mode ?? "manual") as
-    | "manual"
-    | "auto"
-    | "guided"
-  const targetDurationSec =
-    ((pipelineRow as { target_duration_seconds?: number } | null)
-      ?.target_duration_seconds) ?? 60
+  const pipelineMode = pipelineRow?.mode ?? "manual"
+  const targetDurationSec = pipelineRow?.target_duration_seconds ?? 60
+  // Phase 1D.2c-b-ii — Video Critic frame-extraction grid. Persisted in
+  // `pipelines.config.video_critic_frame_count` by the create-pipeline route
+  // (top-level `PipelineInputSchema.video_critic_frame_count` flows into the
+  // config jsonb at insert time). Defaults to "first_last" when absent for
+  // back-compat with pre-1D.2c-b-ii pipelines.
+  const videoCriticFrameMode: VideoCriticFrameMode =
+    config.video_critic_frame_count ?? "first_last"
 
   const loadResult = await loadScenes(supabase, pipelineId)
   if (loadResult.error) {
@@ -106,7 +141,16 @@ export async function runAnimateAudioEditStage(
   // Phase 1C.3 — plumb pipelineMode into the SceneNode internal pipeline so
   // `pipelineAnimateShot` can apply the Method 8 auto-mode fallback (skip
   // frame_interpolation on auto runs to keep cost in check).
-  const ctx = { supabase, pipelineId, userId, pipelineMode }
+  // Phase 1D.2c-b-ii — stageId + videoCriticFrameMode wire into the per-shot
+  // Video Critic loop inside `runSceneInternalPipeline`.
+  const ctx = {
+    supabase,
+    pipelineId,
+    userId,
+    pipelineMode,
+    stageId,
+    videoCriticFrameMode,
+  }
   // Persist per-scene metadata updates into a Map keyed by scene id so we can
   // reassign into `scenes` (the locally-cached `SceneRow[]`) after the fan-out
   // settles WITHOUT mutating the input rows in place. Mirrors the
@@ -161,6 +205,32 @@ export async function runAnimateAudioEditStage(
   if (failed.length > 0) {
     await failStage(supabase, stageId, `${failed.length} scenes failed`)
     return
+  }
+
+  // Phase 1D.2c-b-ii (E1): auto-mode Video Critic failure aggregation.
+  // After the per-scene loop succeeds at the orchestration level, scan every
+  // shot for `video_critic_failed=true` (set by `runSceneInternalPipeline`
+  // when the per-shot critic cap exhausted). On auto-mode, ANY failing shot
+  // fails the whole pipeline with the typed reason and refunds the unspent
+  // reservation — mirrors the Stage 2/4 image-critic aggregation pattern.
+  // Manual/guided modes do NOT aggregate; the failed shot stays visible on
+  // its per-shot UI surface so the user can Regenerate (J1 recovery routes).
+  if (pipelineMode === "auto") {
+    const failedShots = collectFailedShots(scenes)
+    if (failedShots.length > 0) {
+      const reserved = pipelineRow?.reserved_credits ?? 0
+      const spent = pipelineRow?.spent_credits ?? 0
+      const pipelineUserId = pipelineRow?.user_id ?? userId
+      await failPipelineWithCriticReason({
+        supabase,
+        pipelineId,
+        failureReason: "video_critic_unresolvable",
+        stageName: "animate_audio_edit",
+        userId: pipelineUserId,
+        refundCredits: Math.max(0, reserved - spent),
+      })
+      return
+    }
   }
 
   // Phase 1C.3 Task A1 — table-driven sub-step loop. The handler walks the
@@ -299,6 +369,42 @@ export async function runAnimateAudioEditStage(
 }
 
 /* --- Helpers ----------------------------------------------------------- */
+
+/**
+ * Phase 1D.2c-b-ii (E1): walks every scene's `scene_node_data.shots` looking
+ * for `shot.video_critic_failed === true`. Returns a flat list of
+ * `{ sceneId, shotId, sceneEntityKey }` for each failing shot, ordered by
+ * scene_index then shot_index. The auto-mode aggregator uses this to decide
+ * whether to fail the pipeline (`length > 0` → fail with
+ * `video_critic_unresolvable`).
+ *
+ * The `video_critic_failed` field is set directly on the ShotSpec (NOT
+ * nested under `shot.metadata`) — `runSceneInternalPipeline` hoists it from
+ * the per-shot critic result onto the ShotSpec before returning.
+ *
+ * Exported for testability of the aggregation logic; runtime callers go
+ * through the aggregator block in `runAnimateAudioEditStage`.
+ */
+export function collectFailedShots(
+  scenes: ReadonlyArray<SubStepSceneRow>,
+): Array<{ sceneId: string; shotId: string; sceneEntityKey: string }> {
+  const out: Array<{ sceneId: string; shotId: string; sceneEntityKey: string }> = []
+  for (const scene of scenes) {
+    const sceneData = (scene.metadata as Record<string, unknown> | null)
+      ?.scene_node_data as SceneNodeData | undefined
+    if (!sceneData?.shots) continue
+    for (const shot of sceneData.shots) {
+      if ((shot as VideoCriticShotFields).video_critic_failed === true) {
+        out.push({
+          sceneId: scene.id,
+          shotId: shot.shot_id,
+          sceneEntityKey: scene.entity_key,
+        })
+      }
+    }
+  }
+  return out
+}
 
 /**
  * Load every scene entity for a pipeline. The result is handed to the

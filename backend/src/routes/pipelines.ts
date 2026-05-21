@@ -10,6 +10,7 @@ import {
   PipelineInputSchema,
   SubGateNameSchema,
   clearImageCriticMetadata,
+  clearVideoCriticMetadata,
   validateDurationForFormat,
   validateModeActivation,
   type ChatEnabledStage,
@@ -141,6 +142,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       musicEnabled: config.music_enabled ?? true,
       narrationEnabled: config.narration_enabled ?? true,
       lipsyncEnabled: config.lipsync_enabled ?? true,
+      // Phase 1D.2c-b-ii (G1): per-shot Video Critic budget. Zod default is
+      // "first_last" so this is always present.
+      videoCriticFrameCount: input.video_critic_frame_count,
     })
     const maxCost = resolveMaxCostCredits({
       requested: input.max_cost_credits,
@@ -1392,6 +1396,132 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         reason: "stage_advance",
       })
       return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/shots/:scene_id/:shot_id/skip-video-critic-failure ─
+  // Phase 1D.2c-b-ii §9 (J1) — Skip button on the per-shot video-critic surface.
+  //
+  // The Stage 7 video-critic retry loop (`scene-internal-pipeline.ts`) may
+  // terminally mark a shot as `video_critic_failed=true` after the attempt
+  // cap is exhausted. The flag lives inside
+  // `pipeline_entities.metadata.scene_node_data.shots[N]`, NOT directly on
+  // the entity row — so the entity-level recovery routes can't reach it.
+  //
+  // This route accepts the failed clip AS-IS: it flips `video_critic_failed`
+  // back to `false` (keeping the rest of the `video_critic_*` findings for
+  // audit trail) and emits a `shot:status` SSE so the per-shot UI updates
+  // without a refetch.
+  //
+  // Gate: shot exists AND `shot.video_critic_failed === true`. Any other
+  // state returns 409 `shot_not_video_critic_failed`. Auto-mode pipelines
+  // are already on the failure path (aggregator in `animate-audio-edit.ts`),
+  // so callers in auto-mode shouldn't reach this route — the route doesn't
+  // gate on mode (idempotent + safe regardless).
+  app.post<{ Params: { id: string; scene_id: string; shot_id: string } }>(
+    "/v1/pipelines/:id/shots/:scene_id/:shot_id/skip-video-critic-failure",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { loadFailedShotOrError, applyShotMutationAndEmit } = await import(
+        "../ee/pipelines/shot-recovery.js"
+      )
+      const loaded = await loadFailedShotOrError(supabase, reply, {
+        pipelineId: req.params.id,
+        sceneId: req.params.scene_id,
+        shotId: req.params.shot_id,
+        userId,
+      })
+      if (!loaded) return // helper already sent the error response
+      const { sceneEntity, sceneData, shotIndex } = loaded
+
+      // Flip the flag — keep `video_critic_findings` / score / continuity /
+      // retry_count for audit trail. The per-shot UI uses `video_critic_failed`
+      // as the gate for the Skip/Regenerate buttons; the rest of the fields
+      // continue rendering as informational (warning chip color). The helper
+      // handles UPDATE + SSE + reply.
+      await applyShotMutationAndEmit({
+        supabase,
+        reply,
+        pipelineId: req.params.id,
+        sceneEntity,
+        sceneData,
+        shotIndex,
+        shotId: req.params.shot_id,
+        sceneId: req.params.scene_id,
+        shotMutator: (s) => ({ ...s, video_critic_failed: false }),
+      })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/shots/:scene_id/:shot_id/retry-video-generation ─
+  // Phase 1D.2c-b-ii §9 (J1) — Regenerate button on the per-shot video-critic
+  // surface.
+  //
+  // Strips every `video_critic_*` field from the failed shot (findings, score,
+  // continuity_score, identified_action, retry_count, last_attempted_url,
+  // failed) and re-enqueues the orchestrator so the Stage 7 inner loop
+  // (`runSceneInternalPipeline`) re-runs `processShot` for this shot. The
+  // critic budget resets to fresh, the prior verdict is gone from the audit
+  // trail, and the next clip generation is the user's intent.
+  //
+  // Gate is identical to skip-video-critic-failure: only shots flagged
+  // `video_critic_failed=true` can be recovered here.
+  app.post<{ Params: { id: string; scene_id: string; shot_id: string } }>(
+    "/v1/pipelines/:id/shots/:scene_id/:shot_id/retry-video-generation",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { loadFailedShotOrError, applyShotMutationAndEmit } = await import(
+        "../ee/pipelines/shot-recovery.js"
+      )
+      const loaded = await loadFailedShotOrError(supabase, reply, {
+        pipelineId: req.params.id,
+        sceneId: req.params.scene_id,
+        shotId: req.params.shot_id,
+        userId,
+      })
+      if (!loaded) return // helper already sent the error response
+      const { sceneEntity, sceneData, shotIndex } = loaded
+
+      // Strip every `video_critic_*` key from the shot — clears the entire
+      // critic verdict block so the next Stage 7 pass starts with a clean
+      // slate. Non-critic fields (camera, action, motion_prompt, …) survive.
+      // The shared `clearVideoCriticMetadata` helper is the single source of
+      // truth for the key set so the writer (Stage 7) + this clearer + the
+      // frontend Regenerate handler can't drift.
+      //
+      // The helper runs `onAfterUpdate` (re-enqueue orchestrator) between
+      // UPDATE and SSE so the orchestrator is already queued before clients
+      // are nudged to refetch. `reason: "stage_advance"` mirrors the sibling
+      // entity-level retry-image-generation route — the engine handles the rest.
+      await applyShotMutationAndEmit({
+        supabase,
+        reply,
+        pipelineId: req.params.id,
+        sceneEntity,
+        sceneData,
+        shotIndex,
+        shotId: req.params.shot_id,
+        sceneId: req.params.scene_id,
+        shotMutator: (s) => clearVideoCriticMetadata(s),
+        onAfterUpdate: async () => {
+          const { enqueuePipelineRun } = await import(
+            "../ee/pipelines/queue.js"
+          )
+          await enqueuePipelineRun({
+            pipelineId: req.params.id,
+            userId,
+            reason: "stage_advance",
+          })
+        },
+      })
     },
   )
 

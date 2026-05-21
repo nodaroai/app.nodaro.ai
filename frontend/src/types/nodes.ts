@@ -10,7 +10,7 @@ import type {
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
-import type { PipelineFormat, PipelineMode } from "@nodaro/shared"
+import type { PipelineFormat, PipelineMode, VideoCriticFrameMode } from "@nodaro/shared"
 import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import type { PipelineState } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
@@ -3942,6 +3942,12 @@ export interface GenerativePipelineNodeData {
   format?: PipelineFormat
   output_resolution?: "720p" | "1080p" | "4K"
   mode?: PipelineMode
+  /**
+   * Phase 1D.2c-b-ii §3 — chooses how many frames the Video Critic samples from
+   * each generated shot. Higher coverage = more credits per shot but better
+   * motion-glitch detection. Defaults to "first_last" (2 frames per shot).
+   */
+  video_critic_frame_count?: VideoCriticFrameMode
   // Server-side runtime fields (read-only on the canvas):
   pipeline_id?: string
   status?: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"

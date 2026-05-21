@@ -1,7 +1,23 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { VIDEO_MODEL_CAPS, type SceneNodeData, type ShotSpec } from "@nodaro/shared"
+import {
+  VIDEO_MODEL_CAPS,
+  type SceneNodeData,
+  type ShotSpec,
+  type VideoCriticFrameMode,
+} from "@nodaro/shared"
 import { pipelineExtractFrame } from "./services/pipeline-extract-frame.js"
 import { pipelineEvents } from "./events.js"
+
+/**
+ * Offset (in seconds) before EOF when extracting the "last meaningful frame"
+ * of a clip. Used by both {@link extractLastFrame} (continuity-chain anchor)
+ * and {@link extractFramesForCritic} (Video Critic samples) so the same
+ * canonical timestamp is sampled — keeps the critic's last-frame URL
+ * comparable to the continuity-chain last-frame URL when downstream tooling
+ * compares them. 0.1s is far enough past any trailing dissolve and ahead of
+ * EOF rounding error in ffmpeg.
+ */
+const LAST_FRAME_OFFSET_SEC = 0.1
 
 /**
  * Origin tag for an allocated reference slot. Used for telemetry +
@@ -58,9 +74,8 @@ export async function extractLastFrame(
   args: ExtractLastFrameArgs,
 ): Promise<ExtractLastFrameResult> {
   const { supabase, pipelineId, sceneEntityId, userId, videoUrl, durationSec } = args
-  // 0.1s before the end is the canonical "last meaningful frame" — past any
-  // trailing dissolve and before EOF rounding error in ffmpeg.
-  const timestamp = Math.max(0, durationSec - 0.1)
+  // Canonical "last meaningful frame" timestamp — see {@link LAST_FRAME_OFFSET_SEC}.
+  const timestamp = Math.max(0, durationSec - LAST_FRAME_OFFSET_SEC)
   const result = await pipelineExtractFrame({
     supabase,
     pipelineId,
@@ -350,5 +365,169 @@ export async function allocateReferenceSlots(
 
   if (slots.length <= budget) return slots
   return slots.slice(0, budget)
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1D.2c-b-ii — Video Critic frame extraction
+// ---------------------------------------------------------------------------
+
+export interface ExtractFrameAtTimestampArgs {
+  supabase: SupabaseClient
+  pipelineId: string
+  /** Optional — attribute the asset to a scene entity for telemetry. */
+  pipelineEntityId?: string
+  userId: string
+  videoUrl: string
+  /** Seconds into the clip. Pipeline callers compute this (e.g. duration*0.5). */
+  timestamp: number
+}
+
+export interface ExtractFrameAtTimestampResult {
+  assetId: string | null
+  url: string
+}
+
+/**
+ * Extracts a single frame at the given timestamp from a video URL. A thin
+ * wrapper around `pipelineExtractFrame` that ONLY surfaces the
+ * `(assetId, url)` shape — does NOT write `pipeline_entities.last_frame_asset_id`
+ * (that field is reserved for the continuity-anchor flow in `extractLastFrame`;
+ * Video-Critic frames are mid-clip samples, not continuity anchors).
+ *
+ * Throws when the underlying extract-frame job returns no URL.
+ */
+export async function extractFrameAtTimestamp(
+  args: ExtractFrameAtTimestampArgs,
+): Promise<ExtractFrameAtTimestampResult> {
+  const { supabase, pipelineId, pipelineEntityId, userId, videoUrl, timestamp } = args
+  const result = await pipelineExtractFrame({
+    supabase,
+    pipelineId,
+    pipelineEntityId,
+    userId,
+    videoUrl,
+    mode: "timestamp",
+    timestamp,
+  })
+  if (!result.assetUrl) {
+    throw new Error(
+      `extractFrameAtTimestamp: extract-frame job completed without output URL (jobId=${result.jobId}, timestamp=${timestamp}s)`,
+    )
+  }
+  return { assetId: result.assetId, url: result.assetUrl }
+}
+
+export interface ExtractFramesForCriticArgs {
+  supabase: SupabaseClient
+  pipelineId: string
+  /** Scene entity owning the shot, optional (used to tag extracted assets). */
+  pipelineEntityId?: string
+  userId: string
+  videoUrl: string
+  /** Shot duration in seconds — drives the timestamp grid. */
+  durationSeconds: number
+  /** Which frame grid to extract (see `VIDEO_CRITIC_FRAME_MODES`). */
+  mode: VideoCriticFrameMode
+  /**
+   * Caller-supplied first-frame URL (the input keyframe). Reused as the t=0
+   * frame so we never re-extract a frame we already have.
+   */
+  firstFrameUrl: string
+}
+
+export interface FrameExtractionResult {
+  /** Frame URLs in chronological order (length 2/3/5 depending on mode). */
+  frameUrls: string[]
+  /**
+   * /simplify pass-2 — asset id of the LAST frame extracted (always the
+   * `duration - 0.1s` sample at the end of `frameUrls`). The critic itself
+   * doesn't use the id, but the caller (`runSceneInternalPipeline`'s
+   * sequential animate loop) can reuse it as the continuity anchor for the
+   * next shot — without this, the caller had to fire a SECOND
+   * `extractLastFrame` for the SAME timestamp on the SAME video right after
+   * the critic finished. Null when `result.assetId` was null in the extract
+   * job (the URL is still good — only the persistence write loses).
+   */
+  lastFrameAssetId: string | null
+}
+
+/**
+ * Phase 1D.2c-b-ii §3 — Builds the frame-URL array the Video Critic
+ * (Stage 7) needs to score a just-animated shot. Mode picks the grid:
+ *
+ *   - "first_last":         [t=0,  t=last]                                  (length 2)
+ *   - "first_middle_last":  [t=0,  t=duration*0.5,  t=last]                 (length 3)
+ *   - "five_evenly":        [t=0,  t=d*0.25, t=d*0.5, t=d*0.75, t=last]     (length 5)
+ *
+ * The t=0 frame is always reused from `firstFrameUrl` (the input keyframe
+ * the shot was animated from — no re-extraction). The "last" frame is
+ * extracted at `duration - 0.1s` to match the canonical offset the
+ * continuity chain uses (past any trailing dissolve, before EOF rounding).
+ * All non-t=0 frames go through `extractFrameAtTimestamp`, which does NOT
+ * touch `pipeline_entities.last_frame_asset_id` — that field is owned by
+ * `extractLastFrame` in the continuity-chain flow and the critic must not
+ * race with it.
+ *
+ * Errors from any single extraction propagate — the Video Critic cannot
+ * run on a partial frame grid. Callers should wrap in try/catch and
+ * degrade gracefully (skip the critic for this shot) where appropriate.
+ */
+export async function extractFramesForCritic(
+  args: ExtractFramesForCriticArgs,
+): Promise<FrameExtractionResult> {
+  const {
+    supabase,
+    pipelineId,
+    pipelineEntityId,
+    userId,
+    videoUrl,
+    durationSeconds,
+    mode,
+    firstFrameUrl,
+  } = args
+
+  // Canonical "last meaningful frame" offset — see {@link LAST_FRAME_OFFSET_SEC}.
+  // Matches extractLastFrame so any downstream tooling that compares the
+  // critic's last-frame URL to the continuity-chain last-frame URL gets the
+  // same ffmpeg timestamp.
+  const lastTimestamp = Math.max(0, durationSeconds - LAST_FRAME_OFFSET_SEC)
+
+  // Pick the non-t=0 timestamps (the t=0 frame is always firstFrameUrl).
+  const nonZeroTimestamps: number[] =
+    mode === "first_last"
+      ? [lastTimestamp]
+      : mode === "first_middle_last"
+        ? [durationSeconds * 0.5, lastTimestamp]
+        : [
+            durationSeconds * 0.25,
+            durationSeconds * 0.5,
+            durationSeconds * 0.75,
+            lastTimestamp,
+          ]
+
+  // Extractions are independent (each at a different timestamp); run them in
+  // parallel. Each call enqueues a BullMQ extract-frame job, reserves credits,
+  // and polls — so sequencing them adds 4× round-trips on `five_evenly`.
+  // `Promise.all` preserves array order so the t=middle / t=last orderings
+  // downstream callers depend on are unchanged.
+  const extracted = await Promise.all(
+    nonZeroTimestamps.map((ts) =>
+      extractFrameAtTimestamp({
+        supabase,
+        pipelineId,
+        pipelineEntityId,
+        userId,
+        videoUrl,
+        timestamp: ts,
+      }),
+    ),
+  )
+  const frameUrls: string[] = [firstFrameUrl, ...extracted.map((e) => e.url)]
+  // The last non-t=0 extraction is ALWAYS the `lastTimestamp` sample
+  // (sequenced last in `nonZeroTimestamps` for every mode). Surface its
+  // asset id so the caller can reuse it as the continuity anchor for the
+  // next shot — see {@link FrameExtractionResult.lastFrameAssetId}.
+  const lastFrameAssetId = extracted[extracted.length - 1]?.assetId ?? null
+  return { frameUrls, lastFrameAssetId }
 }
 

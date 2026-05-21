@@ -182,6 +182,60 @@ export function clearImageCriticMetadata(
   return next
 }
 
+/**
+ * Phase 1D.2c-b-ii — Video Critic frame extraction modes.
+ * Each pipeline picks one via PipelineInput.video_critic_frame_count.
+ * Default 'first_last' uses the input keyframe + extractLastFrame output
+ * (both already produced by Stage 6 + extractLastFrame call), so no new
+ * frame extractions are needed in the default case.
+ */
+export const VIDEO_CRITIC_FRAME_MODES = ["first_last", "first_middle_last", "five_evenly"] as const
+export type VideoCriticFrameMode = (typeof VIDEO_CRITIC_FRAME_MODES)[number]
+
+/** Cap=1 retry per shot — cost-aware [figures removed]. */
+export const VIDEO_CRITIC_MAX_RETRIES = 1
+
+/** Auto-fail threshold for both prompt_adherence_score and continuity_score. */
+export const VIDEO_CRITIC_MIN_ADHERENCE_SCORE = 5
+
+/**
+ * Phase 1D.2c-b-ii — Video Critic ShotSpec sibling field names that get
+ * persisted by the per-shot retry loop (`runVideoCriticLoopForShot` in
+ * `scene-internal-pipeline.ts`) and stripped by the retry-video-generation
+ * recovery route + the frontend Regenerate button.
+ *
+ * Single source of truth so the writer + clearer can't drift. Mirror of
+ * {@link IMAGE_CRITIC_METADATA_KEYS} for the entity-level image critic.
+ */
+export const VIDEO_CRITIC_METADATA_KEYS = [
+  "video_critic_findings",
+  "video_critic_score",
+  "video_critic_continuity_score",
+  "video_critic_identified_action",
+  "video_critic_retry_count",
+  "video_critic_last_attempted_url",
+  "video_critic_failed",
+  "video_critic_verdict",
+] as const
+
+export type VideoCriticMetadataKey = (typeof VIDEO_CRITIC_METADATA_KEYS)[number]
+
+/**
+ * Returns a shallow copy of `shot` with all `video_critic_*` keys stripped.
+ * Used by the retry-video-generation route + frontend Regenerate handler to
+ * reset a shot to a fresh critic attempt while preserving everything else
+ * (camera, action, motion_prompt, …).
+ */
+export function clearVideoCriticMetadata<T extends Record<string, unknown>>(
+  shot: T,
+): Omit<T, VideoCriticMetadataKey> {
+  const cleaned = { ...shot } as Record<string, unknown>
+  for (const key of VIDEO_CRITIC_METADATA_KEYS) {
+    delete cleaned[key]
+  }
+  return cleaned as Omit<T, VideoCriticMetadataKey>
+}
+
 export type ChatEnabledStage = keyof typeof CHAT_TURN_CAPS
 
 /**
