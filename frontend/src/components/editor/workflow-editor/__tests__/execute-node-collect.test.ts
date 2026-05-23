@@ -216,7 +216,6 @@ describe("executeNode: collect", () => {
       jobId: "j1",
       output: "a-b",
       meta: { summary: "joined 2" },
-      inputs: ["a", "b"],
     })
 
     const node = {
@@ -248,6 +247,7 @@ describe("executeNode: collect", () => {
       "C1",
       expect.objectContaining({
         executionStatus: "completed",
+        errorMessage: undefined,
         result: "a-b",
         currentJobId: "j1",
         lastInputs: ["a", "b"],
@@ -262,7 +262,6 @@ describe("executeNode: collect", () => {
       jobId: "j10",
       output: "y",
       meta: { summary: "picked 1 of 3", selectedIndex: 1, reasoning: "y wins" },
-      inputs: ["x", "y", "z"],
     })
 
     const node = {
@@ -296,7 +295,6 @@ describe("executeNode: collect", () => {
       jobId: "j11",
       output: "ok",
       meta: { summary: "ok" },
-      inputs: big,
     })
 
     const node = {
@@ -317,6 +315,35 @@ describe("executeNode: collect", () => {
     // First item was 900 chars — should be truncated to 500 chars + ellipsis (501)
     expect(persisted[0].length).toBe(501)
     expect(persisted[0].endsWith("…")).toBe(true)
+  })
+
+  it("clears selectedIndex on persisted meta when index falls outside the 50-item truncation window", async () => {
+    const big = Array.from({ length: 100 }, (_, i) => `item-${i}`)
+    mockResolveNodeInputs.mockReturnValue({ inputs: big })
+    mockExecuteCollect.mockResolvedValue({
+      jobId: "j12",
+      output: "item-75",
+      // The LLM picked index 75 — past the persisted-window upper bound of 49.
+      meta: { summary: "picked", selectedIndex: 75, reasoning: "best" },
+    })
+
+    const node = {
+      id: "C12",
+      type: "collect",
+      position: { x: 0, y: 0 },
+      data: { label: "collect", strategyId: "pick-best-llm", strategyConfig: { criteria: "x" } },
+    } as any
+
+    await executeNode(node, makeCtx())
+
+    const persistCall = mockUpdateNodeData.mock.calls.find(
+      ([, payload]) => (payload as Record<string, unknown>).lastMeta !== undefined,
+    )
+    expect(persistCall).toBeTruthy()
+    const persistedMeta = (persistCall![1] as { lastMeta: Record<string, unknown> }).lastMeta
+    expect(persistedMeta.selectedIndex).toBeUndefined()
+    expect(persistedMeta.reasoning).toBe("best")
+    expect(persistedMeta.summary).toBe("picked")
   })
 
   it("falls back to empty inputs array when resolver returns nothing", async () => {

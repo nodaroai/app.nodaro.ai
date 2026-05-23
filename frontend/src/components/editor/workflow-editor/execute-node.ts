@@ -5996,15 +5996,23 @@ export function executeNode(
         // Truncate persisted snapshot so a 1000-item × long-URL run doesn't
         // bloat the workflow JSON. 50 items × 500 chars each is plenty for
         // the Inputs-tab UI but bounded at ~25KB worst case.
-        const persistedInputs = (result.inputs ?? collectInputs)
+        const persistedInputs = collectInputs
           .slice(0, 50)
           .map((s) => (typeof s === "string" && s.length > 500 ? s.slice(0, 500) + "…" : s));
+        // If the chosen index falls outside the truncation window, drop it so
+        // the UI doesn't silently fail to highlight any item (zero-based,
+        // window = [0, 49]).
+        const persistedMeta =
+          result.meta?.selectedIndex !== undefined && result.meta.selectedIndex >= persistedInputs.length
+            ? { ...result.meta, selectedIndex: undefined }
+            : result.meta;
         updateNodeData(node.id, {
           executionStatus: "completed",
+          errorMessage: undefined,
           result: result.output,
           currentJobId: result.jobId,
           lastInputs: persistedInputs,
-          lastMeta: result.meta,
+          lastMeta: persistedMeta,
         });
         return result.output ?? "";
       })

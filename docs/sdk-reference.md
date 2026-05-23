@@ -1292,10 +1292,10 @@ route (see api-integration.md `POST /v1/pipelines/:id/branch`).
 Run the Collect (fan-in) node directly — pick the best of N inputs,
 concatenate, vote, or merge JSON. Mirrors the MCP `collect` tool.
 
-#### `execute(input)`
+#### `run(input)`
 
 ```ts
-execute(input: CollectInput): Promise<CollectResult>
+run(input: CollectInput): Promise<CollectResult>
 ```
 
 **`CollectInput`:**
@@ -1305,7 +1305,7 @@ execute(input: CollectInput): Promise<CollectResult>
 | `strategyId` | `CollectStrategyId` | yes | `pick-best-llm` \| `concat` \| `first-non-empty` \| `count` \| `vote` \| `merge-json` |
 | `strategyConfig` | `Record<string, unknown>` | no | Strategy-specific config (see below). Defaults to `{}` (each strategy's defaults). |
 | `inputs` | `string[]` | yes | Up to 1000 input strings. |
-| `workflowExecutionId` | `string` | no | Associates this collect run with a workflow execution. |
+| `workflowId` | `string` | no | Associates this collect run with a workflow (for execution-history display). |
 
 **`strategyConfig` per strategy:**
 
@@ -1333,7 +1333,7 @@ execute(input: CollectInput): Promise<CollectResult>
 ```
 
 ```ts
-const result = await client.collect.execute({
+const result = await client.collect.run({
   strategyId: "pick-best-llm",
   strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
   inputs: [url1, url2, url3, url4, url5],

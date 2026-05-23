@@ -22,7 +22,7 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    const result = await c.collect.execute({
+    const result = await c.collect.run({
       strategyId: "pick-best-llm",
       strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
       inputs: [
@@ -52,13 +52,13 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    await c.collect.execute({ strategyId: "concat", inputs: ["a", "b"] })
+    await c.collect.run({ strategyId: "concat", inputs: ["a", "b"] })
     const init = fetchMock.mock.calls[0][1] as { body: string }
     const sent = JSON.parse(init.body) as Record<string, unknown>
     expect(sent.strategyConfig).toEqual({})
   })
 
-  it("threads workflowExecutionId when provided", async () => {
+  it("threads workflowId when provided", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockOk({ jobId: "j", output: "1", meta: { summary: "counted" } }),
     )
@@ -67,14 +67,14 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    await c.collect.execute({
+    await c.collect.run({
       strategyId: "count",
       inputs: ["a"],
-      workflowExecutionId: "exec-1",
+      workflowId: "wf-1",
     })
     const init = fetchMock.mock.calls[0][1] as { body: string }
     const sent = JSON.parse(init.body) as Record<string, unknown>
-    expect(sent.workflowExecutionId).toBe("exec-1")
+    expect(sent.workflowId).toBe("wf-1")
   })
 
   it("throws a typed NodaroError on a 400 no_valid_inputs response", async () => {
@@ -87,7 +87,7 @@ describe("collect resource", () => {
       fetch: fetchMock,
     })
     await expect(
-      c.collect.execute({ strategyId: "first-non-empty", inputs: [""] }),
+      c.collect.run({ strategyId: "first-non-empty", inputs: [""] }),
     ).rejects.toBeInstanceOf(NodaroError)
   })
 })

@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from "fastify"
+import type { CollectMeta } from "@nodaro/shared"
 
 export type StrategyContext = {
   readonly userId: string
@@ -6,15 +7,18 @@ export type StrategyContext = {
   readonly logger: FastifyBaseLogger
 }
 
-export type ResultMeta = {
-  readonly selectedIndex?: number
-  readonly reasoning?: string
-  readonly summary: string
-}
+/**
+ * Per-strategy result-meta shape — re-exported from `@nodaro/shared` so the
+ * backend, the SDK client, and the frontend node share a single source of
+ * truth. Backward-compat alias `ResultMeta` left in for any in-flight code
+ * still importing it from this file or `./index.js`.
+ */
+export type { CollectMeta }
+export type ResultMeta = CollectMeta
 
 export type StrategyResult<T = string | number> = {
   readonly result: T
-  readonly meta: ResultMeta
+  readonly meta: CollectMeta
 }
 
 export class EmptyInputError extends Error {

@@ -45,9 +45,18 @@ These are pure functions (0 cr). All strategies first filter empty strings from 
 
 ## Behavior on failures
 
-If upstream fails on all N iterations:
-- `concat`, `count`, `first-non-empty`, `vote`: return empty/0 silently with `summary: "No valid inputs"`.
-- `pick-best-llm`, `merge-json`: the Collect node itself fails with HTTP 400 `no_valid_inputs`.
+If upstream fails on all N iterations (every survivor is empty / whitespace), the strategy decides what happens:
+
+| Strategy | All-empty behavior |
+|----------|--------------------|
+| `concat` | Returns `""` with `summary: "Joined 0 of N inputs"`. No error. |
+| `count` | Returns `0` with `summary: "Counted 0 of N inputs"`. No error. |
+| `first-non-empty` | Fails with HTTP 400 `no_valid_inputs`. |
+| `vote` | Fails with HTTP 400 `no_valid_inputs`. |
+| `merge-json` | Fails with HTTP 400 `no_valid_inputs`. |
+| `pick-best-llm` | Fails with HTTP 400 `no_valid_inputs`. |
+
+The error message is `"All upstream iterations failed; nothing to collect."` Configure upstream nodes to default to a placeholder if you want the workflow to keep running on empty fan-in.
 
 ## Output
 
@@ -59,6 +68,8 @@ Single value, type depends on strategy. Downstream nodes can consume it as text 
 - **No nested fan-out.** A Collect cannot itself drive a new fan-out chain unless downstream uses a Split-Text or List node.
 - **Sequential fan-out.** Upstream nodes still run sequentially per item. Parallel fan-out is a separate Phase 2 feature.
 
-## Re-running the workflow
+## Dedup-bypass within a workflow run
 
-Each workflow run creates a fresh Collect job — even if the upstream produces identical outputs across runs. The route bypasses the standard 10-second dedup-fingerprint guard via `{ dedup: false }`, so re-running the same workflow twice will spend credits twice on `pick-best-llm` (the other strategies are 0 cr).
+Collect routes opt out of the standard 10-second input-fingerprint dedup guard (`{ dedup: false }`). This is what protects loop-iteration / retry collisions within ONE workflow run from silently collapsing into a single job — when an upstream fan-out runs Collect N times in quick succession with identical bodies (same strategy, same inputs), each iteration gets its own Collect job and its own credit reservation.
+
+(Human-paced re-runs — clicking Run again a minute later — wouldn't hit the dedup window anyway. The opt-out only matters for fast intra-run repetition.)
