@@ -56,6 +56,7 @@ vi.mock("@/hooks/use-auth", () => ({
 // Import the exports under test
 // ---------------------------------------------------------------------------
 import { NODE_OPTIONS, CATEGORIES, VIRTUAL_CATEGORY_IDS } from "../add-node-popup"
+import { clusterByGroup } from "@/lib/cluster-by-group"
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -160,15 +161,28 @@ describe("NODE_OPTIONS", () => {
     expect(assetTypes).not.toContain("scene")
   })
 
-  it("contains expected Sound nodes", () => {
-    const soundTypes = NODE_OPTIONS
-      .filter((o) => o.category === "Sound")
+  it("sound pickers live under the Pickers category, Sound section", () => {
+    const soundPickers = NODE_OPTIONS
+      .filter((o) => o.category === "Pickers" && o.group === "Sound")
       .map((o) => o.type)
-    expect(soundTypes).toContain("music-genre")
-    expect(soundTypes).toContain("music-mood")
-    expect(soundTypes).toContain("instrumentation")
-    expect(soundTypes).toContain("voice-character")
-    expect(soundTypes).toContain("voice-delivery")
+    expect(soundPickers).toContain("music-genre")
+    expect(soundPickers).toContain("music-mood")
+    expect(soundPickers).toContain("instrumentation")
+    expect(soundPickers).toContain("voice-character")
+    expect(soundPickers).toContain("voice-delivery")
+  })
+
+  it("Pickers is a single root category with the 5 picker sections", () => {
+    // The old Camera/Look/Subject/Object/Sound root categories were collapsed
+    // into one "Pickers" root, each becoming a `group` section.
+    expect(CATEGORIES.map((c) => c.id)).toContain("Pickers")
+    expect(CATEGORIES.map((c) => c.id)).not.toContain("Camera")
+    const pickerGroups = new Set(
+      NODE_OPTIONS.filter((o) => o.category === "Pickers").map((o) => o.group),
+    )
+    expect(pickerGroups).toEqual(
+      new Set(["Camera", "Look", "Subject", "Object", "Sound"]),
+    )
   })
 
   it("every label is non-empty and under 30 characters", () => {
@@ -176,6 +190,40 @@ describe("NODE_OPTIONS", () => {
       expect(opt.label.length).toBeGreaterThan(0)
       expect(opt.label.length).toBeLessThanOrEqual(30)
     }
+  })
+
+  // Regression: the sidebar + popup render group sub-headers sequentially (header
+  // shown when group != previous). If a category's nodes interleave groups (e.g.
+  // AI had Video…Pipeline…Video, Processing had Video…Video Production…Video) the
+  // same header rendered twice. clusterByGroup() must collapse each group into one
+  // contiguous block so every section header renders exactly once.
+  it("clusterByGroup makes every category's group sections contiguous", () => {
+    for (const cat of new Set(NODE_OPTIONS.map((o) => o.category))) {
+      const ordered = clusterByGroup(NODE_OPTIONS.filter((o) => o.category === cat))
+      const seen = new Set<string>()
+      let prev: string | undefined
+      for (const node of ordered) {
+        const g = node.group ?? ""
+        if (g !== prev) {
+          expect(
+            seen.has(g),
+            `group "${g}" renders twice (non-contiguous) in category "${cat}"`,
+          ).toBe(false)
+          seen.add(g)
+          prev = g
+        }
+      }
+    }
+  })
+
+  it("clusterByGroup gathers interleaved groups, preserving first-appearance order", () => {
+    const input: { type: string; group?: string }[] = [
+      { type: "a", group: "X" },
+      { type: "b", group: "Y" },
+      { type: "c", group: "X" },
+      { type: "d" },
+    ]
+    expect(clusterByGroup(input).map((n) => n.type)).toEqual(["a", "c", "b", "d"])
   })
 
   it("every type is lowercase with hyphens (kebab-case) or has digits", () => {
@@ -202,7 +250,9 @@ describe("CATEGORIES", () => {
     expect(ids).toContain("Processing")
     expect(ids).toContain("Assets")
     expect(ids).toContain("Output")
-    expect(ids).toContain("Sound")
+    // Camera/Look/Subject/Object/Sound collapsed into one "Pickers" root.
+    expect(ids).toContain("Pickers")
+    expect(ids).not.toContain("Sound")
   })
 
   it("every category has id, label, icon, and description", () => {
