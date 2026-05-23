@@ -5,6 +5,7 @@ import {
 } from "@nodaro/shared"
 import { isBlockingImageCriticFail } from "../llms/_image-critic-shared.js"
 import { pipelineEvents } from "../events.js"
+import { buildCriticFeedbackPrompt, runCriticRetryLoop } from "../_critic-retry.js"
 
 export type ImageCriticEntityType = "character" | "location"
 
@@ -77,29 +78,40 @@ export type RunImageCriticLoopResult<TVerdict extends ImageCriticVerdictLike> =
 export async function runImageCriticLoop<TVerdict extends ImageCriticVerdictLike>(
   args: RunImageCriticLoopArgs<TVerdict>,
 ): Promise<RunImageCriticLoopResult<TVerdict>> {
-  let { assetId, assetUrl } = args.initialAsset
-  let retryCount = args.initialRetryCount ?? 0
-  let verdict = await args.runCritic(assetUrl)
+  // Closure-captured asset refs — the helper's `runAttempt` callback updates
+  // these on each retry so the post-loop persistence sees the final pair.
+  let assetId = args.initialAsset.assetId
+  let assetUrl = args.initialAsset.assetUrl
+  const initialVerdict = await args.runCritic(assetUrl)
 
-  while (isBlockingImageCriticFail(verdict) && retryCount < IMAGE_CRITIC_MAX_RETRIES) {
-    retryCount += 1
-    const blockingIssues = verdict.issues.filter((i) => i.severity === "blocking")
-    const issuesText =
-      blockingIssues.length > 0
-        ? blockingIssues.map((i) => `- ${i.category}: ${i.suggested_fix}`).join("\n")
-        : "Improve overall adherence to the visual_description."
-    const feedbackPrompt =
-      `${args.basePrompt}\n\nPRIOR ATTEMPT WAS IDENTIFIED AS: ${verdict.identified_subject}` +
-      `\nADJUSTMENTS NEEDED:\n${issuesText}`
+  const loopResult = await runCriticRetryLoop<TVerdict>({
+    initial: initialVerdict,
+    maxRetries: IMAGE_CRITIC_MAX_RETRIES,
+    isBlockingFail: isBlockingImageCriticFail,
+    runAttempt: async (prevVerdict, _attemptNumber) => {
+      const blockingIssues = prevVerdict.issues.filter(
+        (i) => i.severity === "blocking",
+      )
+      const feedbackPrompt = buildCriticFeedbackPrompt({
+        basePrompt: args.basePrompt,
+        identifiedAs: prevVerdict.identified_subject,
+        blockingIssues,
+        fallbackAdvice: "Improve overall adherence to the visual_description.",
+      })
+      const regen = await args.generate(feedbackPrompt)
+      assetId = regen.assetId
+      assetUrl = regen.assetUrl
+      return await args.runCritic(assetUrl)
+    },
+  })
 
-    const regen = await args.generate(feedbackPrompt)
-    assetId = regen.assetId
-    assetUrl = regen.assetUrl
+  // The image loop's `initialRetryCount` carries the entity's prior
+  // `image_critic_retry_count` from metadata across Regenerate cycles — the
+  // shared helper only knows about retries it ran THIS call. Add the delta.
+  const retryCount = (args.initialRetryCount ?? 0) + loopResult.retryCount
+  const verdict = loopResult.finalVerdict
 
-    verdict = await args.runCritic(assetUrl)
-  }
-
-  if (isBlockingImageCriticFail(verdict)) {
+  if (loopResult.failed) {
     // Cap exhausted — persist failure metadata + emit SSE. Voice-matcher
     // (characters) and the success-path metadata write (both) are
     // intentionally skipped: the entity is unrecoverable for this pass and
