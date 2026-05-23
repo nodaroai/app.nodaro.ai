@@ -6,8 +6,7 @@ import {
 } from "@nodaro/shared"
 import { runScriptStage } from "./stages/script.js"
 import { pipelineEvents } from "./events.js"
-import { refundPipelineCredits } from "./credits.js"
-import { incrementCriticRetry } from "./stage-utils.js"
+import { incrementCriticRetry, failPipelineWithCriticReason } from "./stage-utils.js"
 import { validateCanvasAgainstPlan, getStageExpectedEntityIds } from "./drift.js"
 import { applyStageEdit } from "./chat/apply-stage-edit.js"
 
@@ -255,36 +254,28 @@ async function runScriptAndPersist(
   })
 
   if (outcome.status === "failed") {
-    await supabase
-      .from("pipeline_stages")
-      .update({
-        status: "failed",
-        critic_feedback: {
-          failure_detail: outcome.failure_detail,
-        } as unknown as Record<string, unknown>,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("pipeline_id", pipelineId)
-      .eq("stage_name", "script")
-    await supabase
-      .from("pipelines")
-      .update({ status: "failed", failure_reason: outcome.reason })
-      .eq("id", pipelineId)
-    pipelineEvents.publish({ type: "pipeline:status", pipelineId, status: "failed" })
-    pipelineEvents.publish({
-      type: "stage:status", pipelineId, stageName: "script", status: "failed",
+    // Phase 1D.2c follow-up: delegate to `failPipelineWithCriticReason` — the
+    // same shared helper used by Stage 2/4/7 auto-mode aggregators (extended
+    // to also accept Stage 1's `critic_feedback` blob). The previous inline
+    // body did the same triple-update (pipeline_stages + pipelines + SSE) +
+    // refund; consolidating into the helper preserves behavior bit-for-bit
+    // and removes the last duplicate site.
+    //
+    // /simplify pass-2: the helper now derives `userId` + `refundCredits`
+    // from `pipelineRow` directly. `outputPatch: null` opts Stage 1 out of
+    // the default `output: { failure_reason }` write — Stage 1's failure
+    // surface is the `critic_feedback` blob, not the `output` column.
+    await failPipelineWithCriticReason({
+      supabase,
+      pipelineId,
+      failureReason: outcome.reason,
+      stageName: "script",
+      pipelineRow: pipeline,
+      criticFeedback: {
+        failure_detail: outcome.failure_detail,
+      },
+      outputPatch: null,
     })
-    // `pipeline:warning` publish dropped here — no frontend consumer subscribes
-    // to it, and `pipeline:status failed` + the stage row's `failure_reason`
-    // already cover the failure surface.
-    // Refund the upfront reservation.
-    if (pipeline.reserved_credits > pipeline.spent_credits) {
-      await refundPipelineCredits({
-        supabase, userId: pipeline.user_id, pipelineId,
-        credits: pipeline.reserved_credits - pipeline.spent_credits,
-        reason: `pipeline_failed:${outcome.reason}`,
-      })
-    }
     return
   }
 

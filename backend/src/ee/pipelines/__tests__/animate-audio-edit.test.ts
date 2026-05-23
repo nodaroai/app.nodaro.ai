@@ -11,6 +11,7 @@ vi.mock("../depends-on.js", () => ({
 vi.mock("../stage-utils.js", () => ({
   ensureStageRow: vi.fn().mockResolvedValue("stage-7"),
   failStage: vi.fn(),
+  failPipelineWithCriticReason: vi.fn(async () => undefined),
 }))
 vi.mock("../events.js", () => ({
   pipelineEvents: { publish: vi.fn() },

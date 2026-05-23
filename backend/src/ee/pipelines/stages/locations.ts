@@ -5,6 +5,7 @@ import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import {
   bulkApproveStageEntities,
+  type CriticRefundFields,
   detectImageCriticFailures,
   ensureStageRow,
   failPipelineWithCriticReason,
@@ -55,6 +56,17 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
   const { supabase, pipelineId, userId } = args
 
   const stageId = await ensureStageRow(supabase, pipelineId, "locations", 4)
+
+  // Widened SELECT uses the shared `CriticRefundFields` shape from stage-utils:
+  // pulling `user_id` + `reserved_credits` + `spent_credits` inline here lets
+  // the auto-mode image-critic aggregator below call
+  // `failPipelineWithCriticReason` without a second round-trip to `pipelines`.
+  const { data: pipelineRowRaw } = await supabase
+    .from("pipelines")
+    .select("user_id, reserved_credits, spent_credits")
+    .eq("id", pipelineId)
+    .single()
+  const pipelineRow = pipelineRowRaw as CriticRefundFields | null
 
   const { data: scriptStage } = await supabase
     .from("pipeline_stages")
@@ -121,27 +133,15 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
   if (args.mode === "auto") {
     const failed = detectImageCriticFailures(entities ?? [])
     if (failed.length > 0) {
-      // Load pipelines row ONCE to derive userId + refund amount. The helper
-      // used to do this SELECT itself; pulling it here keeps the helper a
-      // pure data-transformer.
-      const { data: pipelineRow } = await supabase
-        .from("pipelines")
-        .select("user_id, reserved_credits, spent_credits")
-        .eq("id", pipelineId)
-        .single()
-      const reserved =
-        (pipelineRow as { reserved_credits?: number } | null)?.reserved_credits ?? 0
-      const spent =
-        (pipelineRow as { spent_credits?: number } | null)?.spent_credits ?? 0
-      const pipelineUserId =
-        (pipelineRow as { user_id?: string } | null)?.user_id ?? userId
+      // The helper derives userId + refundCredits from `pipelineRow` itself
+      // (loaded at the top of the handler) and defaults `outputPatch` to
+      // `{ failure_reason }` — no per-caller boilerplate needed.
       await failPipelineWithCriticReason({
         supabase,
         pipelineId,
         failureReason: "locations_image_critic_unresolvable",
         stageName: "locations",
-        userId: pipelineUserId,
-        refundCredits: Math.max(0, reserved - spent),
+        pipelineRow,
       })
       return
     }

@@ -7,6 +7,7 @@ import type {
   VideoCriticShotFields,
 } from "@nodaro/shared"
 import {
+  type CriticRefundFields,
   ensureStageRow,
   failPipelineWithCriticReason,
   failStage,
@@ -85,13 +86,15 @@ export async function runAnimateAudioEditStage(
   // `(pipelineRow as { X?: Y } | null)` casts that the original PR scattered
   // through this handler. The DB layer still returns `unknown`, so the cast
   // happens exactly once at the boundary.
-  type PipelineRowSelection = {
+  //
+  // /simplify pass-1 follow-up: extends `CriticRefundFields` so the
+  // refund-side fields share the shape used by Stage 2/4. Renamed from
+  // `PipelineRowSelection` to `Stage7PipelineRow` to avoid the name collision
+  // those two stages used to have when each declared its own inline type.
+  type Stage7PipelineRow = CriticRefundFields & {
     config: PipelineConfig | null
     mode: "manual" | "auto" | "guided" | null
     target_duration_seconds: number | null
-    user_id: string | null
-    reserved_credits: number | null
-    spent_credits: number | null
   }
   const { data: pipelineRowRaw } = await supabase
     .from("pipelines")
@@ -100,7 +103,7 @@ export async function runAnimateAudioEditStage(
     )
     .eq("id", pipelineId)
     .single()
-  const pipelineRow = pipelineRowRaw as PipelineRowSelection | null
+  const pipelineRow = pipelineRowRaw as Stage7PipelineRow | null
   const config = (pipelineRow?.config ?? {}) as Partial<PipelineConfig> & {
     video_critic_frame_count?: VideoCriticFrameMode
   }
@@ -218,16 +221,15 @@ export async function runAnimateAudioEditStage(
   if (pipelineMode === "auto") {
     const failedShots = collectFailedShots(scenes)
     if (failedShots.length > 0) {
-      const reserved = pipelineRow?.reserved_credits ?? 0
-      const spent = pipelineRow?.spent_credits ?? 0
-      const pipelineUserId = pipelineRow?.user_id ?? userId
+      // The helper derives userId + refundCredits from `pipelineRow` itself
+      // (loaded at the top of the handler) and defaults `outputPatch` to
+      // `{ failure_reason }` — no per-caller boilerplate needed.
       await failPipelineWithCriticReason({
         supabase,
         pipelineId,
         failureReason: "video_critic_unresolvable",
         stageName: "animate_audio_edit",
-        userId: pipelineUserId,
-        refundCredits: Math.max(0, reserved - spent),
+        pipelineRow,
       })
       return
     }

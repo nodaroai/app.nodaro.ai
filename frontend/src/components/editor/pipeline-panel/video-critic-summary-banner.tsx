@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { CriticBanner } from "./_critic-banner"
 
 /**
  * Phase 1D.2c-b-ii — VideoCriticSummaryBanner.
@@ -26,6 +27,8 @@ import { cn } from "@/lib/utils"
  * Mounting policy: the parent PipelinePanel mounts this when the failing
  * list is non-empty AND the user hasn't dismissed it. Dismiss is local UI
  * state and resets on a fresh `pipelineId` (banner re-appears on re-open).
+ *
+ * Phase 1D.2c follow-up: outer shell + dismiss × extracted to `CriticBanner`.
  */
 
 export interface FailingShot {
@@ -57,16 +60,13 @@ export function VideoCriticSummaryBanner({
   if (failingShots.length === 0) return null
 
   return (
-    <div
-      className={cn(
-        "rounded border px-3 py-2 text-sm space-y-2",
-        "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800",
-      )}
-      data-testid="video-critic-summary-banner"
-      role="alert"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+    <CriticBanner
+      tone="red"
+      testId="video-critic-summary-banner"
+      onDismiss={onDismiss}
+      dismissTestId="video-critic-summary-dismiss"
+      header={
+        <>
           <div className="font-medium text-red-700 dark:text-red-300">
             Video Critic
           </div>
@@ -80,18 +80,9 @@ export function VideoCriticSummaryBanner({
             {failingShots.length} {failingShots.length === 1 ? "shot" : "shots"}{" "}
             need review
           </span>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          data-testid="video-critic-summary-dismiss"
-        >
-          ×
-        </Button>
-      </div>
-
+        </>
+      }
+    >
       <ul
         className="space-y-1 text-xs"
         data-testid="video-critic-summary-list"
@@ -130,6 +121,6 @@ export function VideoCriticSummaryBanner({
           </li>
         ))}
       </ul>
-    </div>
+    </CriticBanner>
   )
 }

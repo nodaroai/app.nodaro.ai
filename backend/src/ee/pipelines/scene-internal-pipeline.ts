@@ -25,6 +25,7 @@ import { runImageCritic } from "./llms/image-critic.js"
 import { runVideoCritic } from "./llms/video-critic.js"
 import { pipelineEvents } from "./events.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
+import { buildCriticFeedbackPrompt, runCriticRetryLoop } from "./_critic-retry.js"
 
 /**
  * Shared context for the scene-internal pipeline. Mirrors the
@@ -946,27 +947,6 @@ function isBlockingVideoCriticFail(verdict: VideoCriticVerdict): boolean {
 }
 
 /**
- * Build the feedback-augmented prompt for the next regen attempt. Mirrors the
- * Image Critic loop pattern: the original prompt is kept verbatim and a short
- * "PRIOR ATTEMPT IDENTIFIED AS:" + "ADJUSTMENTS NEEDED:" appendix is added,
- * surfacing blocking-issue suggested_fix lines back into the LLM model prompt.
- */
-function buildVideoCriticFeedbackPrompt(
-  basePrompt: string,
-  verdict: VideoCriticVerdict,
-): string {
-  const blockingIssues = verdict.issues.filter((i) => i.severity === "blocking")
-  const issuesText =
-    blockingIssues.length > 0
-      ? blockingIssues.map((i) => `- ${i.category}: ${i.suggested_fix}`).join("\n")
-      : "Improve overall adherence to the shot prompt."
-  return (
-    `${basePrompt}\n\nPRIOR ATTEMPT IDENTIFIED AS: ${verdict.identified_action}` +
-    `\nADJUSTMENTS NEEDED:\n${issuesText}`
-  )
-}
-
-/**
  * /simplify pass-2 — collapses the verdict→VideoCriticShotFields fan-out
  * (was duplicated in 2 sites in `runVideoCriticLoopForShot`). The catch path
  * omits `failed` so the field stays absent in the persisted shot — the gate
@@ -1153,7 +1133,7 @@ async function runVideoCriticLoopForShot(
       id: initialFrames.lastFrameAssetId,
       url: initialFrameUrls[initialFrameUrls.length - 1]!,
     }
-    let { verdict } = await runVideoCritic({
+    const initialCritic = await runVideoCritic({
       supabase: ctx.supabase,
       pipelineId: ctx.pipelineId,
       stageId,
@@ -1165,53 +1145,64 @@ async function runVideoCriticLoopForShot(
       continuityFromPrev,
       frameUrls: initialFrameUrls,
     })
-    lastVerdict = verdict
+    lastVerdict = initialCritic.verdict
 
-    while (
-      isBlockingVideoCriticFail(verdict) &&
-      retryCount < VIDEO_CRITIC_MAX_RETRIES
-    ) {
-      retryCount += 1
-      const feedbackPrompt = buildVideoCriticFeedbackPrompt(
-        shot.visual_keyframe_prompt,
-        verdict,
-      )
-      const regen = await args.regenerate(feedbackPrompt)
-      currentResult = regen
-      const regenFrames = await extractFramesForCritic({
-        supabase: ctx.supabase,
-        pipelineId: ctx.pipelineId,
-        pipelineEntityId: sceneEntity.id,
-        userId: ctx.userId,
-        videoUrl: regen.assetUrl,
-        durationSeconds: shot.duration_seconds,
-        mode: frameMode,
-        firstFrameUrl,
-      })
-      const regenFrameUrls = regenFrames.frameUrls
-      // Snap last-frame to the REGEN's extracted sample so the caller's
-      // continuity anchor matches the finalAnimateResult clip.
-      lastFrameAsset = {
-        id: regenFrames.lastFrameAssetId,
-        url: regenFrameUrls[regenFrameUrls.length - 1]!,
-      }
-      const next = await runVideoCritic({
-        supabase: ctx.supabase,
-        pipelineId: ctx.pipelineId,
-        stageId,
-        userId: ctx.userId,
-        shotPrompt: shot.visual_keyframe_prompt,
-        shotIndex,
-        sceneIndex: sceneData.scene_index,
-        priorLastFrameUrl: args.priorLastFrameUrl,
-        continuityFromPrev,
-        frameUrls: regenFrameUrls,
-      })
-      verdict = next.verdict
-      lastVerdict = verdict
-    }
+    // The closure mutates `currentResult` / `lastFrameAsset` / `lastVerdict`
+    // / `retryCount` on each retry so the surrounding catch block can read
+    // the latest state on a mid-loop throw (e.g. frame-extract OOM after one
+    // successful retry). Mirrors the pre-refactor manual while-loop exactly.
+    const loopResult = await runCriticRetryLoop<VideoCriticVerdict>({
+      initial: initialCritic.verdict,
+      maxRetries: VIDEO_CRITIC_MAX_RETRIES,
+      isBlockingFail: isBlockingVideoCriticFail,
+      runAttempt: async (prevVerdict, attemptNumber) => {
+        retryCount = attemptNumber
+        const feedbackPrompt = buildCriticFeedbackPrompt({
+          basePrompt: shot.visual_keyframe_prompt,
+          identifiedAs: prevVerdict.identified_action,
+          blockingIssues: prevVerdict.issues.filter(
+            (i) => i.severity === "blocking",
+          ),
+          fallbackAdvice: "Improve overall adherence to the shot prompt.",
+        })
+        const regen = await args.regenerate(feedbackPrompt)
+        currentResult = regen
+        const regenFrames = await extractFramesForCritic({
+          supabase: ctx.supabase,
+          pipelineId: ctx.pipelineId,
+          pipelineEntityId: sceneEntity.id,
+          userId: ctx.userId,
+          videoUrl: regen.assetUrl,
+          durationSeconds: shot.duration_seconds,
+          mode: frameMode,
+          firstFrameUrl,
+        })
+        const regenFrameUrls = regenFrames.frameUrls
+        // Snap last-frame to the REGEN's extracted sample so the caller's
+        // continuity anchor matches the finalAnimateResult clip.
+        lastFrameAsset = {
+          id: regenFrames.lastFrameAssetId,
+          url: regenFrameUrls[regenFrameUrls.length - 1]!,
+        }
+        const next = await runVideoCritic({
+          supabase: ctx.supabase,
+          pipelineId: ctx.pipelineId,
+          stageId,
+          userId: ctx.userId,
+          shotPrompt: shot.visual_keyframe_prompt,
+          shotIndex,
+          sceneIndex: sceneData.scene_index,
+          priorLastFrameUrl: args.priorLastFrameUrl,
+          continuityFromPrev,
+          frameUrls: regenFrameUrls,
+        })
+        lastVerdict = next.verdict
+        return next.verdict
+      },
+    })
 
-    const failed = isBlockingVideoCriticFail(verdict)
+    const verdict = loopResult.finalVerdict
+    const failed = loopResult.failed
     // Emit SSE so the per-shot UI updates without re-reading the scene entity.
     pipelineEvents.publish({
       type: "shot:status",

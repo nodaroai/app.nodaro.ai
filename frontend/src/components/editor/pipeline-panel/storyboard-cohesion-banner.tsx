@@ -3,6 +3,7 @@
 import type { StoryboardCohesionCriticVerdict } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { CriticBanner, type CriticBannerTone } from "./_critic-banner"
 
 interface Props {
   readonly assessment: StoryboardCohesionCriticVerdict["overall_assessment"]
@@ -33,17 +34,17 @@ interface Props {
  * the incoherent case where re-running the shot list is actually warranted.
  * Dismiss is local UI state in PipelinePanel; the verdict stays in the stage
  * output JSONB so the banner re-appears on a fresh panel open.
+ *
+ * Phase 1D.2c follow-up: outer shell + dismiss × extracted to `CriticBanner`.
  */
 
-const ASSESSMENT_CLASSES: Record<
+const ASSESSMENT_TONE: Record<
   StoryboardCohesionCriticVerdict["overall_assessment"],
-  string
+  CriticBannerTone
 > = {
-  coherent:
-    "bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800",
-  minor_issues:
-    "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800",
-  incoherent: "bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800",
+  coherent: "green",
+  minor_issues: "amber",
+  incoherent: "red",
 }
 
 const ASSESSMENT_LABELS: Record<
@@ -93,16 +94,13 @@ export function StoryboardCohesionBanner({
   onDismiss,
 }: Props) {
   return (
-    <div
-      className={cn(
-        "rounded border px-3 py-2 text-sm space-y-2",
-        ASSESSMENT_CLASSES[assessment],
-      )}
-      data-testid="storyboard-cohesion-banner"
-      role="alert"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+    <CriticBanner
+      tone={ASSESSMENT_TONE[assessment]}
+      testId="storyboard-cohesion-banner"
+      onDismiss={onDismiss}
+      dismissTestId="storyboard-cohesion-dismiss"
+      header={
+        <>
           <div className="font-medium">Storyboard Cohesion</div>
           <span
             className={cn(
@@ -122,18 +120,21 @@ export function StoryboardCohesionBanner({
           >
             {score}/10
           </span>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          data-testid="storyboard-cohesion-dismiss"
-        >
-          ×
-        </Button>
-      </div>
-
+        </>
+      }
+      actions={
+        assessment === "incoherent" && onBranchFromShotList ? (
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={onBranchFromShotList}
+            data-testid="storyboard-cohesion-branch-btn"
+          >
+            Branch from Shot List
+          </Button>
+        ) : undefined
+      }
+    >
       <div className="text-xs whitespace-pre-line text-zinc-700 dark:text-zinc-300">
         {summary}
       </div>
@@ -183,19 +184,6 @@ export function StoryboardCohesionBanner({
           ))}
         </ul>
       )}
-
-      {assessment === "incoherent" && onBranchFromShotList && (
-        <div className="flex gap-2 pt-1">
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={onBranchFromShotList}
-            data-testid="storyboard-cohesion-branch-btn"
-          >
-            Branch from Shot List
-          </Button>
-        </div>
-      )}
-    </div>
+    </CriticBanner>
   )
 }
