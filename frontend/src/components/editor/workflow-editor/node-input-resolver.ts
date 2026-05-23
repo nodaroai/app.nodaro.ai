@@ -425,9 +425,9 @@ export interface FrontendResolvedInputs {
    *  image-to-video targets. */
   injectCharacterContext?: boolean;
   attachToCharacterId?: string;
-  /** Fan-in input list — populated by the resolver for collect-style targets.
+  /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
-   *  fanned out) so the collect strategy can fold it into a single value.
+   *  fanned out) so the reduce strategy can fold it into a single value.
    *  Mirror of backend FrontendResolvedInputs.inputs. */
   inputs?: string[];
 }
@@ -602,10 +602,10 @@ export function getListInputForNode(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): string[] | undefined {
-  // Fan-in targets (collect) consume the upstream list — they are NOT fanned
+  // Fan-in targets (reduce) consume the upstream list — they are NOT fanned
   // out themselves. Returning undefined here prevents executeNodeForList from
-  // running N redundant POST /v1/collect calls (each charging credits) when a
-  // user wires List → Collect directly without an intermediate fanned-out
+  // running N redundant POST /v1/reduce calls (each charging credits) when a
+  // user wires List → Reduce directly without an intermediate fanned-out
   // node. Mirrors backend input-resolver.ts FAN_IN_NODE_TYPES early-return.
   if (FAN_IN_NODE_TYPES.has(node.type ?? "")) return undefined;
 
@@ -784,8 +784,8 @@ export function resolveNodeInputs(
       ? undefined
       : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
 
-    // Fan-in targets (collect): consume the entire upstream list as a single
-    // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
+    // Fan-in targets (reduce): consume the entire upstream list as a single
+    // `inputs.inputs` array regardless of edgeOutputMode — reduce strategies
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
     // `[output]` so the strategy still has something to fold. Mirrors backend

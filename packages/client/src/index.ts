@@ -42,7 +42,7 @@ export { CharactersResource } from "./resources/characters.js"
 export { LocationsResource } from "./resources/locations.js"
 export { ObjectsResource } from "./resources/objects.js"
 export { PipelinesResource } from "./resources/pipelines.js"
-export { CollectResource } from "./resources/collect.js"
+export { ReduceResource } from "./resources/reduce.js"
 
 // --- Resource type definitions ---
 export type {
@@ -195,8 +195,8 @@ export type {
 export type { PipelineStageName } from "./resources/pipelines.js"
 
 export type {
-  CollectStrategyId,
-  CollectMeta,
-  CollectInput,
-  CollectResult,
-} from "./resources/collect.js"
+  ReduceStrategyId,
+  ReduceMeta,
+  ReduceInput,
+  ReduceResult,
+} from "./resources/reduce.js"

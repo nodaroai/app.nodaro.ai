@@ -1,13 +1,13 @@
 ---
-node_type: collect
+node_type: reduce
 generated_at: 2026-05-21T13:11:05.755Z
 generated_from: 1f6ec624
 ---
 
-# Collect
+# Reduce
 
 <!-- AUTO-GEN:START node-data-shape -->
-**Type:** `collect`
+**Type:** `reduce`
 **Category:** utility
 **Credit cost:** 0
 **Inputs (target handles):** `in`
@@ -16,7 +16,7 @@ generated_from: 1f6ec624
 **Default data:**
 ```json
 {
-  "label": "Collect",
+  "label": "Reduce",
   "strategyId": "concat",
   "strategyConfig": {
     "separator": "\n\n"
@@ -41,14 +41,14 @@ generated_from: 1f6ec624
 
 ```json
 {
-  "id": "collect-1",
-  "type": "collect",
+  "id": "reduce-1",
+  "type": "reduce",
   "position": {
     "x": 0,
     "y": 0
   },
   "data": {
-    "label": "Collect",
+    "label": "Reduce",
     "strategyId": "concat",
     "strategyConfig": {
       "separator": "\n\n"

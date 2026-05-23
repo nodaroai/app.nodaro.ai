@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from "fastify"
-import type { CollectMeta } from "@nodaro/shared"
+import type { ReduceMeta } from "@nodaro/shared"
 
 export type StrategyContext = {
   readonly userId: string
@@ -13,14 +13,14 @@ export type StrategyContext = {
  * truth. Backward-compat alias `ResultMeta` left in for any in-flight code
  * still importing it from this file or `./index.js`.
  */
-export type { CollectMeta }
-export type ResultMeta = CollectMeta
+export type { ReduceMeta }
+export type ResultMeta = ReduceMeta
 
 export type StrategyResult<T = string | number> = {
   readonly result: T
-  readonly meta: CollectMeta
+  readonly meta: ReduceMeta
 }
 
 export class EmptyInputError extends Error {
-  constructor() { super("All upstream iterations failed; nothing to collect.") }
+  constructor() { super("All upstream iterations failed; nothing to reduce.") }
 }

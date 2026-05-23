@@ -521,10 +521,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       ((data as { listResults?: string[] }).listResults);
     return listResults && listResults.length > 0 ? listResults[0] : undefined;
   }
-  // Collect (fan-in) — folds N upstream branch results into a single string.
-  // The primary output is `data.result` (set by the collect executor after the
-  // strategy runs). Mirrors backend output-extractor.ts case "collect".
-  if (type === "collect") {
+  // Reduce (fan-in) — folds N upstream branch results into a single string.
+  // The primary output is `data.result` (set by the reduce executor after the
+  // strategy runs). Mirrors backend output-extractor.ts case "reduce".
+  if (type === "reduce") {
     return (data as { result?: string }).result;
   }
   if (type === "preview") {

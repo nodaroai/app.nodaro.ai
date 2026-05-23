@@ -8,7 +8,7 @@ import type { OutputType } from "./presentation-utils.js"
 // like `z.object({ x: z.string().default("") })` where the parsed output is
 // `{ x: string }` but the input is `{ x?: string }`. Pinning Input to TConfig
 // would force input === output and reject `.default()` schemas.
-export type CollectStrategy<TConfig = unknown> = {
+export type ReduceStrategy<TConfig = unknown> = {
   readonly id: string
   readonly label: string
   readonly description: string
@@ -29,8 +29,8 @@ const PICK_BEST_LLM_STRATEGY = {
   }),
   defaultConfig: { criteria: "Pick the highest-quality result.", inputKind: "text" as const },
   outputType: "text" as OutputType,
-  creditCostKey: "collect:pick-best-llm",
-} as const satisfies CollectStrategy<{ criteria: string; inputKind: "text" | "image-url" }>
+  creditCostKey: "reduce:pick-best-llm",
+} as const satisfies ReduceStrategy<{ criteria: string; inputKind: "text" | "image-url" }>
 
 const CONCAT_STRATEGY = {
   id: "concat",
@@ -39,8 +39,8 @@ const CONCAT_STRATEGY = {
   configSchema: z.object({ separator: z.string().default("\n\n") }),
   defaultConfig: { separator: "\n\n" },
   outputType: "text" as OutputType,
-  creditCostKey: "collect:concat",
-} as const satisfies CollectStrategy<{ separator: string }>
+  creditCostKey: "reduce:concat",
+} as const satisfies ReduceStrategy<{ separator: string }>
 
 const FIRST_NON_EMPTY_STRATEGY = {
   id: "first-non-empty",
@@ -49,8 +49,8 @@ const FIRST_NON_EMPTY_STRATEGY = {
   configSchema: z.object({}),
   defaultConfig: {},
   outputType: "text" as OutputType,
-  creditCostKey: "collect:first-non-empty",
-} as const satisfies CollectStrategy<Record<string, never>>
+  creditCostKey: "reduce:first-non-empty",
+} as const satisfies ReduceStrategy<Record<string, never>>
 
 const COUNT_STRATEGY = {
   id: "count",
@@ -59,8 +59,8 @@ const COUNT_STRATEGY = {
   configSchema: z.object({}),
   defaultConfig: {},
   outputType: "data" as OutputType,
-  creditCostKey: "collect:count",
-} as const satisfies CollectStrategy<Record<string, never>>
+  creditCostKey: "reduce:count",
+} as const satisfies ReduceStrategy<Record<string, never>>
 
 const VOTE_STRATEGY = {
   id: "vote",
@@ -69,8 +69,8 @@ const VOTE_STRATEGY = {
   configSchema: z.object({ caseSensitive: z.boolean().default(false) }),
   defaultConfig: { caseSensitive: false },
   outputType: "text" as OutputType,
-  creditCostKey: "collect:vote",
-} as const satisfies CollectStrategy<{ caseSensitive: boolean }>
+  creditCostKey: "reduce:vote",
+} as const satisfies ReduceStrategy<{ caseSensitive: boolean }>
 
 const MERGE_JSON_STRATEGY = {
   id: "merge-json",
@@ -79,23 +79,23 @@ const MERGE_JSON_STRATEGY = {
   configSchema: z.object({ strategy: z.enum(["deep", "shallow"]).default("deep") }),
   defaultConfig: { strategy: "deep" as const },
   outputType: "data" as OutputType,
-  creditCostKey: "collect:merge-json",
-} as const satisfies CollectStrategy<{ strategy: "deep" | "shallow" }>
+  creditCostKey: "reduce:merge-json",
+} as const satisfies ReduceStrategy<{ strategy: "deep" | "shallow" }>
 
 /**
- * Result-meta shape returned by every collect strategy. Shared between the
+ * Result-meta shape returned by every reduce strategy. Shared between the
  * backend route, the SDK client, and the frontend node so all three layers
  * agree on field names. `selectedIndex` + `reasoning` are set by the
  * `pick-best-llm` and `vote` strategies (the former also fills `reasoning`);
  * `summary` is always populated.
  */
-export type CollectMeta = {
+export type ReduceMeta = {
   readonly selectedIndex?: number
   readonly reasoning?: string
   readonly summary: string
 }
 
-export const COLLECT_STRATEGIES = [
+export const REDUCE_STRATEGIES = [
   PICK_BEST_LLM_STRATEGY,
   CONCAT_STRATEGY,
   FIRST_NON_EMPTY_STRATEGY,
@@ -104,14 +104,14 @@ export const COLLECT_STRATEGIES = [
   MERGE_JSON_STRATEGY,
 ] as const
 
-export const COLLECT_STRATEGY_IDS = COLLECT_STRATEGIES.map((s) => s.id) as readonly CollectStrategyId[]
+export const REDUCE_STRATEGY_IDS = REDUCE_STRATEGIES.map((s) => s.id) as readonly ReduceStrategyId[]
 
-export type CollectStrategyId = typeof COLLECT_STRATEGIES[number]["id"]
+export type ReduceStrategyId = typeof REDUCE_STRATEGIES[number]["id"]
 
-const BY_ID = new Map<string, CollectStrategy>(COLLECT_STRATEGIES.map((s) => [s.id, s]))
+const BY_ID = new Map<string, ReduceStrategy>(REDUCE_STRATEGIES.map((s) => [s.id, s]))
 
-export function getStrategy(id: CollectStrategyId): CollectStrategy {
+export function getStrategy(id: ReduceStrategyId): ReduceStrategy {
   const s = BY_ID.get(id)
-  if (!s) throw new Error(`unknown collect strategy: ${id}`)
+  if (!s) throw new Error(`unknown reduce strategy: ${id}`)
   return s
 }

@@ -283,14 +283,14 @@ describe("MAX_CONSECUTIVE_POLL_FAILURES", () => {
 })
 
 // ---------------------------------------------------------------------------
-// collect node type sets
+// reduce node type sets
 // ---------------------------------------------------------------------------
 
-describe("collect node type sets", () => {
-  it("collect IS executable", () => {
-    expect(isExecutableNode({ type: "collect" } as any)).toBe(true)
+describe("reduce node type sets", () => {
+  it("reduce IS executable", () => {
+    expect(isExecutableNode({ type: "reduce" } as any)).toBe(true)
   })
-  it("FAN_IN_NODE_TYPES exports 'collect'", () => {
-    expect(FAN_IN_NODE_TYPES.has("collect")).toBe(true)
+  it("FAN_IN_NODE_TYPES exports 'reduce'", () => {
+    expect(FAN_IN_NODE_TYPES.has("reduce")).toBe(true)
   })
 })

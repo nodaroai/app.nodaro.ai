@@ -193,7 +193,7 @@ const ALLOWED_PATHS = [
   // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`
   // against jobs (tenant-scope lint enforces). Mirrors sibling inline-HTTP
   // routes (ai-writer, qa-check, web-scrape) which are baselined as legacy.
-  /^src\/routes\/collect\.ts$/,
+  /^src\/routes\/reduce\.ts$/,
 
   // Test fixtures mock the supabase module.
   /^src\/routes\/__tests__\//,

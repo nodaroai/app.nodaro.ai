@@ -79,7 +79,6 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `camera-motion` — Camera Motion
 - `character` — Character
 - `character-fx` — Character FX
-- `collect` — Collect
 - `color-look` — Color / Look
 - `combine-audio` — Combine Audio
 - `combine-text` — Combine Text
@@ -147,6 +146,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `preview` — Preview
 - `provider` — Provider
 - `qa-check` — QA Check
+- `reduce` — Reduce
 - `reference-audio` — Reference Audio
 - `remove-background` — Remove Background
 - `render-quality` — Render Quality

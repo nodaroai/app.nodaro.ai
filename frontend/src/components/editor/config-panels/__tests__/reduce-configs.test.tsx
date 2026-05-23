@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
-import { CollectConfig } from "../collect-configs"
-import type { CollectNodeData } from "@/types/nodes"
+import { ReduceConfig } from "../reduce-configs"
+import type { ReduceNodeData } from "@/types/nodes"
 
 // ── Shadcn mocks ─────────────────────────────────────────────────────────────
 
@@ -108,13 +108,13 @@ vi.mock("@/components/ui/tabs", () => {
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
-function makeData(overrides: Partial<CollectNodeData> = {}): CollectNodeData {
+function makeData(overrides: Partial<ReduceNodeData> = {}): ReduceNodeData {
   return {
-    label: "Collect",
+    label: "Reduce",
     strategyId: "concat",
     strategyConfig: { separator: "\n\n" },
     ...overrides,
-  } as CollectNodeData
+  } as ReduceNodeData
 }
 
 const baseProps = {
@@ -126,9 +126,9 @@ const baseProps = {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("CollectConfig", () => {
+describe("ReduceConfig", () => {
   it("renders strategy picker with all 6 strategies", () => {
-    render(<CollectConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
+    render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
     expect(screen.getByText(/Pick best/i)).toBeInTheDocument()
     expect(screen.getByText(/Concatenate/i)).toBeInTheDocument()
     expect(screen.getByText(/First non-empty/i)).toBeInTheDocument()
@@ -138,13 +138,13 @@ describe("CollectConfig", () => {
   })
 
   it("renders Tabs with Config + Inputs", () => {
-    render(<CollectConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
+    render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={vi.fn()} />)
     expect(screen.getByRole("tab", { name: /config/i })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: /inputs/i })).toBeInTheDocument()
   })
 
   it("Inputs tab disabled when node hasn't run", () => {
-    render(<CollectConfig {...baseProps} data={makeData({ executionStatus: "idle" })} onUpdate={vi.fn()} />)
+    render(<ReduceConfig {...baseProps} data={makeData({ executionStatus: "idle" })} onUpdate={vi.fn()} />)
     const tab = screen.getByRole("tab", { name: /inputs/i })
     expect(tab).toHaveAttribute("data-disabled")
   })
@@ -153,7 +153,7 @@ describe("CollectConfig", () => {
     // result alone is no longer enough — without persisted lastInputs the
     // per-iteration inspector has nothing to render.
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ executionStatus: "completed", result: "merged output" })}
         onUpdate={vi.fn()}
@@ -165,7 +165,7 @@ describe("CollectConfig", () => {
 
   it("Inputs tab enabled when node has completed with persisted lastInputs", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({
           executionStatus: "completed",
@@ -182,7 +182,7 @@ describe("CollectConfig", () => {
 
   it("calls onUpdate with default config when strategy changes", () => {
     const onUpdate = vi.fn()
-    render(<CollectConfig {...baseProps} data={makeData()} onUpdate={onUpdate} />)
+    render(<ReduceConfig {...baseProps} data={makeData()} onUpdate={onUpdate} />)
     const select = screen.getByRole("combobox")
     fireEvent.change(select, { target: { value: "vote" } })
     expect(onUpdate).toHaveBeenCalledWith(
@@ -194,14 +194,14 @@ describe("CollectConfig", () => {
   })
 
   it("renders Separator input for concat strategy", () => {
-    render(<CollectConfig {...baseProps} data={makeData({ strategyId: "concat", strategyConfig: { separator: "-" } })} onUpdate={vi.fn()} />)
+    render(<ReduceConfig {...baseProps} data={makeData({ strategyId: "concat", strategyConfig: { separator: "-" } })} onUpdate={vi.fn()} />)
     const input = screen.getByDisplayValue("-")
     expect(input).toBeInTheDocument()
   })
 
   it("renders Criteria textarea for pick-best-llm strategy", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({
           strategyId: "pick-best-llm",
@@ -215,7 +215,7 @@ describe("CollectConfig", () => {
 
   it("renders Case-sensitive switch for vote strategy", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ strategyId: "vote", strategyConfig: { caseSensitive: false } })}
         onUpdate={vi.fn()}
@@ -226,7 +226,7 @@ describe("CollectConfig", () => {
 
   it("renders deep/shallow select for merge-json strategy", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ strategyId: "merge-json", strategyConfig: { strategy: "deep" } })}
         onUpdate={vi.fn()}
@@ -240,7 +240,7 @@ describe("CollectConfig", () => {
 
   it("renders 'No configuration' for first-non-empty strategy", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ strategyId: "first-non-empty", strategyConfig: {} })}
         onUpdate={vi.fn()}
@@ -251,7 +251,7 @@ describe("CollectConfig", () => {
 
   it("renders 'No configuration' for count strategy", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ strategyId: "count", strategyConfig: {} })}
         onUpdate={vi.fn()}
@@ -261,10 +261,10 @@ describe("CollectConfig", () => {
   })
 })
 
-describe("CollectConfig — Inputs tab content", () => {
+describe("ReduceConfig — Inputs tab content", () => {
   it("shows fallback copy when never run", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ executionStatus: "idle" })}
         onUpdate={vi.fn()}
@@ -276,7 +276,7 @@ describe("CollectConfig — Inputs tab content", () => {
     // copy when forced-active (by completing with no inputs).
     // Build a completed-but-empty node — falls through to fallback path.
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({ executionStatus: "completed", result: "x" })}
         onUpdate={vi.fn()}
@@ -289,7 +289,7 @@ describe("CollectConfig — Inputs tab content", () => {
 
   it("renders all items, selected highlight, and reasoning blockquote", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({
           strategyId: "pick-best-llm",
@@ -326,7 +326,7 @@ describe("CollectConfig — Inputs tab content", () => {
 
   it("does NOT render reasoning blockquote when pick-best-llm omits it (other strategies)", () => {
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({
           strategyId: "concat",
@@ -351,7 +351,7 @@ describe("CollectConfig — Inputs tab content", () => {
   it("truncates long items to 80 chars + ellipsis", () => {
     const longString = "x".repeat(200)
     render(
-      <CollectConfig
+      <ReduceConfig
         {...baseProps}
         data={makeData({
           strategyId: "concat",

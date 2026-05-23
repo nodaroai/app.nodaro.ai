@@ -31,4 +31,4 @@ export {
 } from "./sound-configs"
 export { GenerativePipelineConfig } from "./generative-configs"
 export { SceneConfig } from "./scene-configs"
-export { CollectConfig } from "./collect-configs"
+export { ReduceConfig } from "./reduce-configs"

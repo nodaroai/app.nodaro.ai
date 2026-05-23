@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { CollectNode } from "../collect-node"
+import { ReduceNode } from "../reduce-node"
 
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
@@ -65,17 +65,17 @@ function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
     id: "C1",
     data: {
-      label: "Collect",
+      label: "Reduce",
       strategyId: "concat",
       strategyConfig: {},
     },
     selected: false,
     ...overrides,
   } as any
-  return render(<CollectNode {...defaultProps} />)
+  return render(<ReduceNode {...defaultProps} />)
 }
 
-describe("CollectNode", () => {
+describe("ReduceNode", () => {
   it("renders without crashing", () => {
     renderNode()
     expect(screen.getByTestId("base-node")).toBeInTheDocument()
@@ -93,7 +93,7 @@ describe("CollectNode", () => {
 
   it("renders the strategy label as subtitle", () => {
     renderNode({
-      data: { label: "Collect", strategyId: "pick-best-llm", strategyConfig: {} },
+      data: { label: "Reduce", strategyId: "pick-best-llm", strategyConfig: {} },
     })
     expect(screen.getByText(/pick best/i)).toBeInTheDocument()
   })
@@ -101,7 +101,7 @@ describe("CollectNode", () => {
   it("renders 'N → 1' pill when upstream listResults are available", () => {
     renderNode({
       data: {
-        label: "Collect",
+        label: "Reduce",
         strategyId: "concat",
         strategyConfig: {},
         __upstreamCount: 5,
@@ -112,19 +112,19 @@ describe("CollectNode", () => {
 
   it("renders idle pill (no count) when upstream has not run", () => {
     renderNode({
-      data: { label: "Collect", strategyId: "concat", strategyConfig: {} },
+      data: { label: "Reduce", strategyId: "concat", strategyConfig: {} },
     })
     const pill = screen.queryByText(/→\s*1/)
     expect(pill).toBeNull()
   })
 
-  it("falls back to 'Collect' when the strategyId is unknown", () => {
+  it("falls back to 'Reduce' when the strategyId is unknown", () => {
     renderNode({
-      data: { label: "Collect", strategyId: "nonexistent-strategy", strategyConfig: {} },
+      data: { label: "Reduce", strategyId: "nonexistent-strategy", strategyConfig: {} },
     })
-    // Strategy subtitle should fall back to "Collect"
+    // Strategy subtitle should fall back to "Reduce"
     const baseNode = screen.getByTestId("base-node")
-    expect(baseNode.textContent ?? "").toContain("Collect")
+    expect(baseNode.textContent ?? "").toContain("Reduce")
   })
 
   it("declares target input and source output handles via BaseNode", () => {

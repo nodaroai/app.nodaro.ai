@@ -18,7 +18,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.locations`](#clientlocations)
   - [`client.objects`](#clientobjects)
   - [`client.pipelines`](#clientpipelines)
-  - [`client.collect`](#clientcollect)
+  - [`client.reduce`](#clientreduce)
   - [`client.developerApps`](#clientdeveloperapps)
   - [`client.oauth`](#clientoauth)
 - [Type re-exports](#type-re-exports)
@@ -1287,25 +1287,25 @@ route (see api-integration.md `POST /v1/pipelines/:id/branch`).
 
 ---
 
-### `client.collect`
+### `client.reduce`
 
-Run the Collect (fan-in) node directly — pick the best of N inputs,
-concatenate, vote, or merge JSON. Mirrors the MCP `collect` tool.
+Run the Reduce (fan-in) node directly — pick the best of N inputs,
+concatenate, vote, or merge JSON. Mirrors the MCP `reduce` tool.
 
 #### `run(input)`
 
 ```ts
-run(input: CollectInput): Promise<CollectResult>
+run(input: ReduceInput): Promise<ReduceResult>
 ```
 
-**`CollectInput`:**
+**`ReduceInput`:**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `strategyId` | `CollectStrategyId` | yes | `pick-best-llm` \| `concat` \| `first-non-empty` \| `count` \| `vote` \| `merge-json` |
+| `strategyId` | `ReduceStrategyId` | yes | `pick-best-llm` \| `concat` \| `first-non-empty` \| `count` \| `vote` \| `merge-json` |
 | `strategyConfig` | `Record<string, unknown>` | no | Strategy-specific config (see below). Defaults to `{}` (each strategy's defaults). |
 | `inputs` | `string[]` | yes | Up to 1000 input strings. |
-| `workflowId` | `string` | no | Associates this collect run with a workflow (for execution-history display). |
+| `workflowId` | `string` | no | Associates this reduce run with a workflow (for execution-history display). |
 
 **`strategyConfig` per strategy:**
 
@@ -1318,7 +1318,7 @@ run(input: CollectInput): Promise<CollectResult>
 | `vote` | `{ caseSensitive?: boolean }` (default `false`) |
 | `merge-json` | `{ strategy?: "deep" \| "shallow" }` (default `"deep"`) |
 
-**`CollectResult`:**
+**`ReduceResult`:**
 
 ```ts
 {
@@ -1333,7 +1333,7 @@ run(input: CollectInput): Promise<CollectResult>
 ```
 
 ```ts
-const result = await client.collect.run({
+const result = await client.reduce.run({
   strategyId: "pick-best-llm",
   strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
   inputs: [url1, url2, url3, url4, url5],

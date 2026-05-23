@@ -43,7 +43,7 @@ import {
   recaptionLocation,
   restoreLocation,
   getJobStatusBatch,
-  executeCollect,
+  executeReduce,
 } from "../api"
 
 // ---------------------------------------------------------------------------
@@ -802,11 +802,11 @@ describe("getJobStatusBatch", () => {
   })
 })
 
-// ---- executeCollect -------------------------------------------------------
+// ---- executeReduce --------------------------------------------------------
 
-describe("executeCollect", () => {
-  it("POSTs to /v1/collect with the right body and headers", async () => {
-    sessionWith("tok-collect")
+describe("executeReduce", () => {
+  it("POSTs to /v1/reduce with the right body and headers", async () => {
+    sessionWith("tok-reduce")
     const mock = mockFetchJson({
       jobId: "j1",
       output: "a-b",
@@ -814,19 +814,19 @@ describe("executeCollect", () => {
     })
     vi.stubGlobal("fetch", mock)
 
-    const res = await executeCollect({
+    const res = await executeReduce({
       strategyId: "concat",
       strategyConfig: { separator: "-" },
       inputs: ["a", "b"],
     })
 
     expect(mock).toHaveBeenCalledWith(
-      "/v1/collect",
+      "/v1/reduce",
       expect.objectContaining({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer tok-collect",
+          Authorization: "Bearer tok-reduce",
         },
         body: expect.stringContaining(`"strategyId":"concat"`),
       }),
@@ -846,10 +846,10 @@ describe("executeCollect", () => {
     noSession()
     vi.stubGlobal(
       "fetch",
-      mockFetchError(400, { error: { code: "no_valid_inputs", message: "All upstream iterations failed; nothing to collect." } }),
+      mockFetchError(400, { error: { code: "no_valid_inputs", message: "All upstream iterations failed; nothing to reduce." } }),
     )
     await expect(
-      executeCollect({ strategyId: "concat", strategyConfig: {}, inputs: [] }),
-    ).rejects.toThrow("All upstream iterations failed; nothing to collect.")
+      executeReduce({ strategyId: "concat", strategyConfig: {}, inputs: [] }),
+    ).rejects.toThrow("All upstream iterations failed; nothing to reduce.")
   })
 })

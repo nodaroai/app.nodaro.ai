@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // ---------------------------------------------------------------------------
 
 const mockUpdateNodeData = vi.fn()
-const mockExecuteCollect = vi.fn()
+const mockExecuteReduce = vi.fn()
 const mockResolveNodeInputs = vi.fn()
 const mockExtractNodeOutput = vi.fn()
 const mockToastError = vi.fn()
@@ -40,7 +40,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 vi.mock("@/lib/api", () => ({
-  executeCollect: (...args: unknown[]) => mockExecuteCollect(...args),
+  executeReduce: (...args: unknown[]) => mockExecuteReduce(...args),
   // unrelated stubs needed for import
   generateImage: vi.fn(),
   getJobStatus: vi.fn(),
@@ -209,10 +209,10 @@ beforeEach(() => {
   mockEdges = []
 })
 
-describe("executeNode: collect", () => {
-  it("calls executeCollect with strategyId + resolved inputs[] and persists result on success", async () => {
+describe("executeNode: reduce", () => {
+  it("calls executeReduce with strategyId + resolved inputs[] and persists result on success", async () => {
     mockResolveNodeInputs.mockReturnValue({ inputs: ["a", "b"] })
-    mockExecuteCollect.mockResolvedValue({
+    mockExecuteReduce.mockResolvedValue({
       jobId: "j1",
       output: "a-b",
       meta: { summary: "joined 2" },
@@ -220,10 +220,10 @@ describe("executeNode: collect", () => {
 
     const node = {
       id: "C1",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
       data: {
-        label: "collect",
+        label: "reduce",
         strategyId: "concat",
         strategyConfig: { separator: "-" },
       },
@@ -231,7 +231,7 @@ describe("executeNode: collect", () => {
 
     const out = await executeNode(node, makeCtx())
 
-    expect(mockExecuteCollect).toHaveBeenCalledWith(
+    expect(mockExecuteReduce).toHaveBeenCalledWith(
       expect.objectContaining({
         strategyId: "concat",
         strategyConfig: { separator: "-" },
@@ -258,7 +258,7 @@ describe("executeNode: collect", () => {
 
   it("persists lastInputs and lastMeta with selectedIndex/reasoning for pick-best-llm", async () => {
     mockResolveNodeInputs.mockReturnValue({ inputs: ["x", "y", "z"] })
-    mockExecuteCollect.mockResolvedValue({
+    mockExecuteReduce.mockResolvedValue({
       jobId: "j10",
       output: "y",
       meta: { summary: "picked 1 of 3", selectedIndex: 1, reasoning: "y wins" },
@@ -266,10 +266,10 @@ describe("executeNode: collect", () => {
 
     const node = {
       id: "C10",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
       data: {
-        label: "collect",
+        label: "reduce",
         strategyId: "pick-best-llm",
         strategyConfig: { criteria: "best", inputKind: "text" },
       },
@@ -291,7 +291,7 @@ describe("executeNode: collect", () => {
       i === 0 ? "x".repeat(900) : `item-${i}`,
     )
     mockResolveNodeInputs.mockReturnValue({ inputs: big })
-    mockExecuteCollect.mockResolvedValue({
+    mockExecuteReduce.mockResolvedValue({
       jobId: "j11",
       output: "ok",
       meta: { summary: "ok" },
@@ -299,9 +299,9 @@ describe("executeNode: collect", () => {
 
     const node = {
       id: "C11",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
-      data: { label: "collect", strategyId: "concat", strategyConfig: {} },
+      data: { label: "reduce", strategyId: "concat", strategyConfig: {} },
     } as any
 
     await executeNode(node, makeCtx())
@@ -320,7 +320,7 @@ describe("executeNode: collect", () => {
   it("clears selectedIndex on persisted meta when index falls outside the 50-item truncation window", async () => {
     const big = Array.from({ length: 100 }, (_, i) => `item-${i}`)
     mockResolveNodeInputs.mockReturnValue({ inputs: big })
-    mockExecuteCollect.mockResolvedValue({
+    mockExecuteReduce.mockResolvedValue({
       jobId: "j12",
       output: "item-75",
       // The LLM picked index 75 — past the persisted-window upper bound of 49.
@@ -329,9 +329,9 @@ describe("executeNode: collect", () => {
 
     const node = {
       id: "C12",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
-      data: { label: "collect", strategyId: "pick-best-llm", strategyConfig: { criteria: "x" } },
+      data: { label: "reduce", strategyId: "pick-best-llm", strategyConfig: { criteria: "x" } },
     } as any
 
     await executeNode(node, makeCtx())
@@ -348,7 +348,7 @@ describe("executeNode: collect", () => {
 
   it("falls back to empty inputs array when resolver returns nothing", async () => {
     mockResolveNodeInputs.mockReturnValue({})
-    mockExecuteCollect.mockResolvedValue({
+    mockExecuteReduce.mockResolvedValue({
       jobId: "j2",
       output: "",
       meta: { summary: "empty" },
@@ -356,10 +356,10 @@ describe("executeNode: collect", () => {
 
     const node = {
       id: "C2",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
       data: {
-        label: "collect",
+        label: "reduce",
         strategyId: "first-non-empty",
         strategyConfig: {},
       },
@@ -367,7 +367,7 @@ describe("executeNode: collect", () => {
 
     await executeNode(node, makeCtx())
 
-    expect(mockExecuteCollect).toHaveBeenCalledWith(
+    expect(mockExecuteReduce).toHaveBeenCalledWith(
       expect.objectContaining({
         strategyId: "first-non-empty",
         inputs: [],
@@ -379,16 +379,16 @@ describe("executeNode: collect", () => {
     )
   })
 
-  it("marks failed on executeCollect rejection and rethrows", async () => {
+  it("marks failed on executeReduce rejection and rethrows", async () => {
     mockResolveNodeInputs.mockReturnValue({ inputs: ["x"] })
-    mockExecuteCollect.mockRejectedValue(new Error("strategy boom"))
+    mockExecuteReduce.mockRejectedValue(new Error("strategy boom"))
 
     const node = {
       id: "C3",
-      type: "collect",
+      type: "reduce",
       position: { x: 0, y: 0 },
       data: {
-        label: "collect",
+        label: "reduce",
         strategyId: "concat",
         strategyConfig: {},
       },

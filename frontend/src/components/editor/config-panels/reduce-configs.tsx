@@ -9,13 +9,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { COLLECT_STRATEGIES } from "@nodaro/shared"
-import type { CollectNodeData } from "@/types/nodes"
+import { REDUCE_STRATEGIES } from "@nodaro/shared"
+import type { ReduceNodeData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
-import { CollectStrategyForms } from "./collect-strategy-forms"
+import { ReduceStrategyForms } from "./reduce-strategy-forms"
 
 /**
- * Config panel for the Collect (fan-in) node.
+ * Config panel for the Reduce (fan-in) node.
  *
  * Layout: two tabs.
  *   • Config  — strategy picker + per-strategy form.
@@ -25,16 +25,16 @@ import { CollectStrategyForms } from "./collect-strategy-forms"
  *               highlighted in brand pink. Disabled until the node has
  *               completed at least once with persisted inputs.
  *
- * The strategy registry lives in `@nodaro/shared/collect-strategy-registry`
+ * The strategy registry lives in `@nodaro/shared/reduce-strategy-registry`
  * — single source of truth for ids, labels, and default configs. Changing
  * a strategy snaps `strategyConfig` to that strategy's `defaultConfig`.
  */
-export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) {
+export function ReduceConfig({ data, onUpdate }: ConfigProps<ReduceNodeData>) {
   const status = data.executionStatus ?? "idle"
   const hasLastInputs = Array.isArray(data.lastInputs) && data.lastInputs.length > 0
   const inputsTabEnabled = status === "completed" && hasLastInputs
 
-  const strategy = COLLECT_STRATEGIES.find((s) => s.id === data.strategyId)
+  const strategy = REDUCE_STRATEGIES.find((s) => s.id === data.strategyId)
 
   return (
     <Tabs defaultValue="config" className="w-full">
@@ -51,7 +51,7 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
           <Select
             value={data.strategyId}
             onValueChange={(strategyId) => {
-              const next = COLLECT_STRATEGIES.find((s) => s.id === strategyId)
+              const next = REDUCE_STRATEGIES.find((s) => s.id === strategyId)
               // Snap config to the new strategy's defaults — keeps the per-form
               // contract clean (no stale fields from the prior strategy).
               onUpdate({
@@ -64,7 +64,7 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {COLLECT_STRATEGIES.map((s) => (
+              {REDUCE_STRATEGIES.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.label}
                 </SelectItem>
@@ -76,7 +76,7 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
           )}
         </div>
 
-        <CollectStrategyForms
+        <ReduceStrategyForms
           strategyId={data.strategyId}
           config={data.strategyConfig ?? {}}
           onChange={(cfg) => onUpdate({ strategyConfig: cfg })}
@@ -85,7 +85,7 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
 
       <TabsContent value="inputs" className="flex flex-col gap-3">
         {inputsTabEnabled ? (
-          <CollectInputsTab inputs={data.lastInputs ?? []} meta={data.lastMeta} />
+          <ReduceInputsTab inputs={data.lastInputs ?? []} meta={data.lastMeta} />
         ) : (
           <p className="text-sm text-muted-foreground">
             Run the workflow to inspect inputs.
@@ -97,12 +97,12 @@ export function CollectConfig({ data, onUpdate }: ConfigProps<CollectNodeData>) 
 }
 
 /** Per-iteration inspector. */
-function CollectInputsTab({
+function ReduceInputsTab({
   inputs,
   meta,
 }: {
   inputs: readonly string[]
-  meta: CollectNodeData["lastMeta"]
+  meta: ReduceNodeData["lastMeta"]
 }) {
   const summary = meta?.summary ?? ""
   const reasoning = meta?.reasoning

@@ -145,6 +145,17 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "incredibly-fast-whisper",
   // ── Old node-type aliases ──
   "extract-audio",
+  // ── Collect → Reduce rename (migration 151). The collect:* rows are
+  //    inserted by migration 149 and then REPLACE()d to reduce:* by 151.
+  //    Both migrations stay on disk forever (Supabase append-only), so the
+  //    migration scanner still sees the literal collect:* INSERTs even
+  //    though no row with those keys exists at runtime. ──
+  "collect:pick-best-llm",
+  "collect:concat",
+  "collect:first-non-empty",
+  "collect:count",
+  "collect:vote",
+  "collect:merge-json",
 ])
 
 describe("model_pricing migrations have no undocumented ghosts", () => {

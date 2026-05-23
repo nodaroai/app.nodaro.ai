@@ -1,13 +1,13 @@
-# Collect
+# Reduce
 
-The **Collect** node aggregates the output of an upstream fanned-out node (a Generate Image, Generate Video, etc. driven by a List/Loop) into a single value.
+The **Reduce** node aggregates the output of an upstream fanned-out node (a Generate Image, Generate Video, etc. driven by a List/Loop) into a single value.
 
-Without Collect, the pattern "generate N variants, pick the best, continue" requires custom downstream logic. Collect closes the loop in one node.
+Without Reduce, the pattern "generate N variants, pick the best, continue" requires custom downstream logic. Reduce closes the loop in one node.
 
 ## Position in the canvas
 
 ```
-List ──▶ Generate Image ──▶ Collect ──▶ DownstreamNode
+List ──▶ Generate Image ──▶ Reduce ──▶ DownstreamNode
         (fanned out N×)     (runs 1×)
 ```
 
@@ -33,7 +33,7 @@ Sends survivors to Claude Sonnet with your criteria. Sonnet replies with `chosen
 - **Input kind** — `text` (default) or `image-url` (Sonnet sees the images via URL).
 
 **Worked example:**
-- Upstream: List of 5 prompts → Generate Image → Collect(pick-best-llm, criteria="brightest colors", inputKind="image-url")
+- Upstream: List of 5 prompts → Generate Image → Reduce(pick-best-llm, criteria="brightest colors", inputKind="image-url")
 - Cost: 5 image generations + 3 cr for pick-best = e.g. 5×2 + 3 = 13 cr.
 
 ### Concatenate, First non-empty, Count, Majority vote, Merge JSON
@@ -41,7 +41,7 @@ Sends survivors to Claude Sonnet with your criteria. Sonnet replies with `chosen
 These are pure functions (0 cr). All strategies first filter empty strings from the dense input array — empty strings are how upstream failures appear in `listResults`. `Count` and `Concat` operate on **survivors only**, not attempts.
 
 **Worked example (count):**
-- Upstream: List of 10 → Generate Image (3 fail) → Collect(count) returns `7`, not `10`.
+- Upstream: List of 10 → Generate Image (3 fail) → Reduce(count) returns `7`, not `10`.
 
 ## Behavior on failures
 
@@ -56,7 +56,7 @@ If upstream fails on all N iterations (every survivor is empty / whitespace), th
 | `merge-json` | Fails with HTTP 400 `no_valid_inputs`. |
 | `pick-best-llm` | Fails with HTTP 400 `no_valid_inputs`. |
 
-The error message is `"All upstream iterations failed; nothing to collect."` Configure upstream nodes to default to a placeholder if you want the workflow to keep running on empty fan-in.
+The error message is `"All upstream iterations failed; nothing to reduce."` Configure upstream nodes to default to a placeholder if you want the workflow to keep running on empty fan-in.
 
 ## Output
 
@@ -65,11 +65,15 @@ Single value, type depends on strategy. Downstream nodes can consume it as text 
 ## Limits (v1)
 
 - **Single source supported.** Multi-source merging happens by concatenation (multiple incoming edges' results are appended).
-- **No nested fan-out.** A Collect cannot itself drive a new fan-out chain unless downstream uses a Split-Text or List node.
+- **No nested fan-out.** A Reduce cannot itself drive a new fan-out chain unless downstream uses a Split-Text or List node.
 - **Sequential fan-out.** Upstream nodes still run sequentially per item. Parallel fan-out is a separate Phase 2 feature.
 
 ## Dedup-bypass within a workflow run
 
-Collect routes opt out of the standard 10-second input-fingerprint dedup guard (`{ dedup: false }`). This is what protects loop-iteration / retry collisions within ONE workflow run from silently collapsing into a single job — when an upstream fan-out runs Collect N times in quick succession with identical bodies (same strategy, same inputs), each iteration gets its own Collect job and its own credit reservation.
+Reduce routes opt out of the standard 10-second input-fingerprint dedup guard (`{ dedup: false }`). This is what protects loop-iteration / retry collisions within ONE workflow run from silently collapsing into a single job — when an upstream fan-out runs Reduce N times in quick succession with identical bodies (same strategy, same inputs), each iteration gets its own Reduce job and its own credit reservation.
 
 (Human-paced re-runs — clicking Run again a minute later — wouldn't hit the dedup window anyway. The opt-out only matters for fast intra-run repetition.)
+
+## Renamed from "Collect"
+
+This node was previously called **Collect**. The name was changed because "Collect" semantically suggests gathering / aggregating items, but the node actually *reduces* N values into one — which fits the canonical functional-programming term. Saved workflows referencing the old `"collect"` type are auto-migrated on load (via migration 151 + a one-line backward-compat shim in the orchestrator); the public API now exposes `POST /v1/reduce`, MCP tool `reduce`, and SDK `client.reduce`.

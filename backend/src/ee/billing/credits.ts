@@ -493,17 +493,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics:premium": 30,
   "composite": 0,
   "sub-workflow": 0,
-  // ── Collect (fan-in) — strategy-tiered pricing ──
+  // ── Reduce (fan-in) — strategy-tiered pricing ──
   // Pure logic strategies are free; pick-best-llm pays for an LLM ranking call.
   // The composite key is built from the node's `data.strategyId` via the
-  // CREDIT_COSTS["collect"] resolver below. There is no base "collect" entry —
+  // CREDIT_COSTS["reduce"] resolver below. There is no base "reduce" entry —
   // the route always reads strategyId and resolves to a composite identifier.
-  "collect:pick-best-llm": 3,
-  "collect:concat": 0,
-  "collect:first-non-empty": 0,
-  "collect:count": 0,
-  "collect:vote": 0,
-  "collect:merge-json": 0,
+  "reduce:pick-best-llm": 3,
+  "reduce:concat": 0,
+  "reduce:first-non-empty": 0,
+  "reduce:count": 0,
+  "reduce:vote": 0,
+  "reduce:merge-json": 0,
   // ── Node types (additional entries for workflow estimation by node.type) ──
   "generate-script": 10,
   "generate-script:economy": 5,
@@ -649,7 +649,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
 //
 // Node-type → resolver(data) → composite identifier string.
 //
-// When a node's credit cost depends on a runtime config field (e.g. Collect's
+// When a node's credit cost depends on a runtime config field (e.g. Reduce's
 // `strategyId`) the route's `creditGuard` resolver calls into this map to
 // build the composite key, which is then looked up in `STATIC_CREDIT_COSTS`
 // (or the `model_pricing` DB table) the same way provider+quality composites
@@ -663,9 +663,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
 // drives the price.
 
 export const CREDIT_COSTS: Record<string, (data: Record<string, unknown>) => string> = {
-  // Collect (fan-in): composite key = `collect:<strategyId>`. Default to
+  // Reduce (fan-in): composite key = `reduce:<strategyId>`. Default to
   // `concat` (the cheapest pure-logic strategy) when strategyId is absent.
-  "collect": (data) => `collect:${(data as { strategyId?: string }).strategyId ?? "concat"}`,
+  "reduce": (data) => `reduce:${(data as { strategyId?: string }).strategyId ?? "concat"}`,
 }
 
 // Tier order for restriction checks

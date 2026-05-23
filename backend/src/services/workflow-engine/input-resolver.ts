@@ -695,7 +695,7 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 /** Target node types that consume an upstream list as a single fan-in input.
  *  The resolver collects all upstream items into `inputs.inputs` and skips
  *  per-item routing entirely — the strategy folds the list into one value. */
-const FAN_IN_NODE_TYPES = new Set(["collect"])
+const FAN_IN_NODE_TYPES = new Set(["reduce"])
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
   "references": "referenceImageUrls",

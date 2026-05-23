@@ -9,29 +9,29 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
-import { COLLECT_STRATEGIES } from "@nodaro/shared"
-import type { CollectNodeData } from "@/types/nodes"
+import { REDUCE_STRATEGIES } from "@nodaro/shared"
+import type { ReduceNodeData } from "@/types/nodes"
 
 /**
- * Collect (fan-in) node — reduces N upstream branch results into a single
+ * Reduce (fan-in) node — reduces N upstream branch results into a single
  * output via a pluggable strategy. The strategy registry is the single
- * source of truth in `@nodaro/shared/collect-strategy-registry`.
+ * source of truth in `@nodaro/shared/reduce-strategy-registry`.
  *
  * The "N → 1" pill surfaces the upstream branch count when known
  * (set by the workflow executor on `data.__upstreamCount`). When the
  * upstream hasn't run yet we hide the count entirely — empty is the
  * idle state, not "0 → 1".
  */
-function CollectNodeComponent({ id, data, selected }: NodeProps) {
-  const nodeData = data as CollectNodeData & { __upstreamCount?: number }
+function ReduceNodeComponent({ id, data, selected }: NodeProps) {
+  const nodeData = data as ReduceNodeData & { __upstreamCount?: number }
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
 
   useAutoExecute(id, data as Record<string, unknown>)
 
-  const strategy = COLLECT_STRATEGIES.find((s) => s.id === nodeData.strategyId)
-  const strategyLabel = strategy?.label ?? "Collect"
+  const strategy = REDUCE_STRATEGIES.find((s) => s.id === nodeData.strategyId)
+  const strategyLabel = strategy?.label ?? "Reduce"
   const upstreamCount = typeof nodeData.__upstreamCount === "number" ? nodeData.__upstreamCount : undefined
   const showPill = upstreamCount !== undefined && upstreamCount > 0
   const hasResult = status === "completed" && typeof nodeData.result === "string"
@@ -64,7 +64,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between px-1 pt-1">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Collect
+              Reduce
             </span>
             {showPill && (
               <span className="text-[9px] bg-[#ff0073]/20 text-[#ff0073] px-1.5 py-0.5 rounded font-medium">
@@ -97,4 +97,4 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
   )
 }
 
-export const CollectNode = memo(CollectNodeComponent)
+export const ReduceNode = memo(ReduceNodeComponent)

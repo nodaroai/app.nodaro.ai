@@ -247,10 +247,10 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "sub-workflow-input", label: "Sub-Workflow Input", category: "control", description: "Entry boundary of a callable sub-workflow route. Declares per-port handles consumed by nodes inside the sub-workflow.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", category: "control", description: "Exit boundary of a callable sub-workflow route. Declares per-port handles collected from inner nodes and returned to the caller.", outputType: "none", creditCost: 0 },
   {
-    type: "collect",
-    label: "Collect",
+    type: "reduce",
+    label: "Reduce",
     category: "control",
-    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `collect:<strategyId>` composite key.",
+    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `reduce:<strategyId>` composite key.",
     outputType: "text",
     creditCost: "0-3",
     inputSchema: {

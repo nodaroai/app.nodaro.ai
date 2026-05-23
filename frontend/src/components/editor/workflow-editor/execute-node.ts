@@ -65,7 +65,7 @@ import {
   imageCriticApi,
   saveToStorageApi,
   webScrape,
-  executeCollect,
+  executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared";
@@ -165,7 +165,7 @@ import type {
   DeduplicateNodeData,
   MergeListsNodeData,
   SortListNodeData,
-  CollectNodeData,
+  ReduceNodeData,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -5972,33 +5972,33 @@ export function executeNode(
     return Promise.resolve(sorted[0] ?? "");
   }
 
-  // Collect (fan-in) — aggregate N upstream branch results into a single value
+  // Reduce (fan-in) — aggregate N upstream branch results into a single value
   // via a pluggable strategy (concat, pick-best-llm, first-non-empty, vote,
   // count, merge-json, …). The resolver routes upstream listResults into
   // `inputs.inputs` via the FAN_IN_NODE_TYPES branch in node-input-resolver.ts.
-  if (node.type === "collect") {
-    const collectData = node.data as CollectNodeData;
+  if (node.type === "reduce") {
+    const reduceData = node.data as ReduceNodeData;
     const { updateNodeData } = useWorkflowStore.getState();
-    const collectInputs = inputs.inputs ?? [];
+    const reduceInputs = inputs.inputs ?? [];
 
     updateNodeData(node.id, {
       executionStatus: "running",
       errorMessage: undefined,
-      __upstreamCount: collectInputs.length,
+      __upstreamCount: reduceInputs.length,
     });
 
-    return executeCollect({
-      strategyId: collectData.strategyId,
-      strategyConfig: collectData.strategyConfig ?? {},
-      inputs: collectInputs,
+    return executeReduce({
+      strategyId: reduceData.strategyId,
+      strategyConfig: reduceData.strategyConfig ?? {},
+      inputs: reduceInputs,
     })
       .then((result) => {
         // Truncate persisted snapshot so a 1000-item × long-URL run doesn't
         // bloat the workflow JSON. 50 items × 500 chars each is plenty for
         // the Inputs-tab UI but bounded at ~25KB worst case.
-        const persistedInputs = collectInputs
+        const persistedInputs = reduceInputs
           .slice(0, 50)
-          .map((s) => (typeof s === "string" && s.length > 500 ? s.slice(0, 500) + "…" : s));
+          .map((s: string) => (typeof s === "string" && s.length > 500 ? s.slice(0, 500) + "…" : s));
         // If the chosen index falls outside the truncation window, drop it so
         // the UI doesn't silently fail to highlight any item (zero-based,
         // window = [0, 49]).
@@ -6019,9 +6019,9 @@ export function executeNode(
       .catch((err: Error) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
-          errorMessage: err.message || "Collect failed",
+          errorMessage: err.message || "Reduce failed",
         });
-        guardedToast.error(`Collect failed: ${err.message}`);
+        guardedToast.error(`Reduce failed: ${err.message}`);
         throw err;
       });
   }

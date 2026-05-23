@@ -1202,11 +1202,11 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Workflow",
   },
   {
-    type: "collect",
-    label: "Collect",
+    type: "reduce",
+    label: "Reduce",
     icon: <Funnel className="h-4 w-4" />,
     category: "Workflow",
-    keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"],
+    keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "collect", "vote", "count"],
   },
   {
     type: "sticky-note",

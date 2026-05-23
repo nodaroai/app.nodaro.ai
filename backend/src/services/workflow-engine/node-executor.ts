@@ -59,7 +59,7 @@ const SYNC_HTTP_NODES = new Set([
   "image-critic",
   "save-to-storage",
   "web-scrape",
-  "collect",
+  "reduce",
 ])
 
 // Maps node type to internal route path.
@@ -87,7 +87,7 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "x-post": "/v1/social/publish",
   "facebook-post": "/v1/social/publish",
   "telegram-post": "/v1/social/publish",
-  "collect": "/v1/collect",
+  "reduce": "/v1/reduce",
 }
 
 // Maps social node type to platform name
@@ -736,7 +736,7 @@ export function buildSyncHttpBody(
       return withUserPrompt(body)
     }
 
-    case "collect": {
+    case "reduce": {
       // Fan-in node — `resolvedInputs.inputs` is populated by the input-resolver's
       // FAN_IN_NODE_TYPES branch with the upstream listResults (or a single
       // upstream output wrapped as `[output]`). The strategy + its config come

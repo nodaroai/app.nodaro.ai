@@ -279,6 +279,9 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         return { ...node, type: "upscale-image" }
       }
       if (node.type === "image-to-image") return { ...node, type: "modify-image" }
+      // Backward-compat shim: "collect" was renamed to "reduce" on 2026-05-23.
+      // Remove after all saved workflows are migrated (see migration 151).
+      if (node.type === "collect") return { ...node, type: "reduce" }
       return node
     })
 

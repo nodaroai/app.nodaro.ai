@@ -386,11 +386,11 @@ export function getPrimaryOutput(
     return output.text
   }
 
-  // Collect (fan-in): returns the single aggregated `result` string.
-  // Without this case the fallback below would return undefined (collect
+  // Reduce (fan-in): returns the single aggregated `result` string.
+  // Without this case the fallback below would return undefined (reduce
   // doesn't populate any of imageUrl/videoUrl/audioUrl/text), so downstream
   // text consumers would silently see no value from a fan-in node.
-  if (sourceType === "collect") {
+  if (sourceType === "reduce") {
     return output.result
   }
 
@@ -846,12 +846,12 @@ export function buildNodeOutputFromJobData(
     output.text = outputData.generatedText as string
   }
 
-  // Collect (fan-in): the route stores its aggregated string under `output`
+  // Reduce (fan-in): the route stores its aggregated string under `output`
   // in jobs.output_data (Task 13's response shape: `{ jobId, output, meta }`),
-  // and getPrimaryOutput("collect") reads NodeOutput.result. Map the two.
-  // Narrowly scoped to nodeType === "collect" because `output` is too generic
+  // and getPrimaryOutput("reduce") reads NodeOutput.result. Map the two.
+  // Narrowly scoped to nodeType === "reduce" because `output` is too generic
   // a key name to safely promote into DIRECT_OUTPUT_KEYS.
-  if (nodeType === "collect" && !output.result && typeof outputData.output === "string") {
+  if (nodeType === "reduce" && !output.result && typeof outputData.output === "string") {
     output.result = outputData.output
   }
 

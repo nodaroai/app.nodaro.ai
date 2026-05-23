@@ -990,7 +990,7 @@ export * from "./scene-node-types.js"
 export * from "./scene-helper-types.js"
 export * from "./provider-directive-defaults.js"
 export * from "./lora-routing.js"
-export * from "./collect-strategy-registry.js"
+export * from "./reduce-strategy-registry.js"
 
 export {
   COMBINE_TRANSITIONS,
