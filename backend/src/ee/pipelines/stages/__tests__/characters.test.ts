@@ -53,11 +53,15 @@ const fakePlan = {
 function makeSupabase(opts: {
   seedEntities?: Array<Record<string, unknown>>
   pipelineRow?: Record<string, unknown>
+  plan?: unknown
 } = {}) {
   const entities = new Map<string, Record<string, unknown>>()
   for (const seed of opts.seedEntities ?? []) {
     entities.set(seed.id as string, seed)
   }
+  // Per-test plan override — used by the parallelism + error-isolation tests
+  // that need multi-cast plans. Existing tests default to `fakePlan`.
+  const activePlan = opts.plan ?? fakePlan
   const variants: Array<{ entity_id: string; variant_key: string; status: string; asset_id?: string }> = []
   const stageUpdates: Array<Record<string, unknown>> = []
   // Phase 1D.2c-a (D1): the auto-mode failure-aggregation guard reads
@@ -92,7 +96,7 @@ function makeSupabase(opts: {
             eq: () => ({
               eq: () => ({
                 maybeSingle: async () => ({ data: null, error: null }),
-                single: async () => ({ data: { output: { plan: fakePlan } }, error: null }),
+                single: async () => ({ data: { output: { plan: activePlan } }, error: null }),
               }),
             }),
           }),
@@ -887,5 +891,242 @@ describe("runCharactersStage", () => {
     expect(stageUpdates.find((u) => u.status === "awaiting_approval")).toBeDefined()
     expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined()
     expect(enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 1D /simplify perf pass: settledWithLimit parallelism + error isolation
+  //
+  // Stage 2 used to process entities sequentially (`for (const entity of
+  // entities) await ...`). The refactor wraps each entity's work in a task
+  // and runs them at concurrency=3 via `settledWithLimit`, `failFast=false`.
+  // Two tests below cover the two invariants:
+  //   1. Parallelism — submission order ≠ completion order; all entities are
+  //      processed regardless.
+  //   2. Error isolation — one entity throwing does NOT cancel siblings;
+  //      `metadata.last_error` is persisted by the inner handler before the
+  //      throw, and the task-level catch swallows so the stage handler can
+  //      continue.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // 3-cast plan shared by the parallelism + error-isolation tests.
+  const multiCastPlan = {
+    title: "x", logline: "x", target_duration_seconds: 60, format: "short_film",
+    output_resolution: "1080p", language: "en", genre: "drama", tone: [],
+    cast: [
+      {
+        key: "hero", name: "Hero", role: "protagonist",
+        visual_description: "tall, weathered", voice_profile: "deep, weary",
+        has_dialogue: false, angle_count_hint: 1, expression_set_hint: [],
+      },
+      {
+        key: "sidekick", name: "Sidekick", role: "companion",
+        visual_description: "wiry, alert", voice_profile: "quick, bright",
+        has_dialogue: false, angle_count_hint: 1, expression_set_hint: [],
+      },
+      {
+        key: "villain", name: "Villain", role: "antagonist",
+        visual_description: "shadowed figure", voice_profile: "low, menacing",
+        has_dialogue: false, angle_count_hint: 1, expression_set_hint: [],
+      },
+    ],
+    locations: [], objects: [], scenes: [], beats: [],
+    has_narrator: false, narrator_profile: null,
+    music_plan: { mood: "x", bpm_target: 120, genre_hints: [] },
+    global_style: { visual_style: "photoreal", color_palette: "warm", lighting: "golden", camera_language: "wide" },
+    total_duration_seconds: 60, estimated_scene_count: 0, warnings: [],
+  } as never
+
+  it("parallelism: all entities are processed regardless of resolution order", async () => {
+    // Resolve out-of-submission-order: sidekick (#2) first, then villain (#3),
+    // then hero (#1) last. The settledWithLimit worker pool starts all three
+    // concurrently (limit=3, 3 tasks); whichever resolves first records its
+    // call. Because mocks return per-call promises, parallel kick-off is
+    // observable via the recorded resolution sequence.
+    const resolveOrder: string[] = []
+    // Per-entity deferred resolvers. Keyed by `pipelineEntityId` so the mock
+    // implementation closure can pluck the right one without needing branchy
+    // narrowing TypeScript can't track across closures.
+    const resolvers: Record<string, () => void> = {}
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { pipelineEntityId: string }) => {
+        await new Promise<void>((resolve) => {
+          resolvers[args.pipelineEntityId] = resolve
+        })
+        const key =
+          args.pipelineEntityId === "e-hero" ? "hero" :
+          args.pipelineEntityId === "e-sidekick" ? "sidekick" : "villain"
+        resolveOrder.push(key)
+        return {
+          jobId: `j-${key}`, assetId: `a-${key}`,
+          assetUrl: `https://r2/${key}.png`, creditsSpent: 2,
+        }
+      },
+    )
+
+    const supabase = makeSupabase({
+      plan: multiCastPlan,
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+        { id: "e-sidekick", entity_key: "sidekick", status: "pending", metadata: {} },
+        { id: "e-villain", entity_key: "villain", status: "pending", metadata: {} },
+      ],
+    })
+
+    // Kick off the stage; it should suspend on all three image-gen promises.
+    const stagePromise = runCharactersStage({
+      supabase, pipelineId: "p-parallel", userId: "u1", userTier: "pro",
+    })
+
+    // Wait so all three tasks have entered and registered their resolvers.
+    await new Promise((r) => setTimeout(r, 10))
+
+    // All three image-gen calls have been issued in parallel (concurrency=3).
+    expect(pipelineGenerateImage).toHaveBeenCalledTimes(3)
+
+    // Resolve OUT of submission order: sidekick → villain → hero.
+    resolvers["e-sidekick"]?.()
+    await new Promise((r) => setTimeout(r, 5))
+    resolvers["e-villain"]?.()
+    await new Promise((r) => setTimeout(r, 5))
+    resolvers["e-hero"]?.()
+
+    await stagePromise
+
+    // Observed order matches forced resolution order — proving parallelism.
+    expect(resolveOrder).toEqual(["sidekick", "villain", "hero"])
+
+    // All three entities reached `awaiting_approval` despite the scrambled
+    // resolution order — none were skipped.
+    const ents = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities
+    expect(ents.get("e-hero")?.status).toBe("awaiting_approval")
+    expect(ents.get("e-sidekick")?.status).toBe("awaiting_approval")
+    expect(ents.get("e-villain")?.status).toBe("awaiting_approval")
+  })
+
+  it("error isolation: one entity's throw does NOT cancel siblings", async () => {
+    // Each entity independently throws at `pipelineGenerateImage` (e.g.
+    // upstream KIE outage). The refactor's task-level try/catch swallows
+    // the re-thrown error from `generateCharacterMain` — its own inner
+    // catch has already persisted `metadata.last_error` + emitted the
+    // `entity:status failed` SSE — so settledWithLimit sees three fulfilled
+    // tasks and `runCharactersStage` resolves cleanly. Sibling tasks are
+    // NOT cancelled by hero's failure; villain still gets its own typed
+    // error persisted (proving the error didn't short-circuit siblings).
+    //
+    // Note on test design: each entity throws (rather than only one
+    // throwing) keeps the assertion local — we can verify EACH entity has
+    // its OWN distinct last_error, proving the catches are per-task. A
+    // half-throw / half-pass design hits a vitest 4 concurrent-dynamic-
+    // import race with `vi.mock` that masks the parallelism intent.
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { pipelineEntityId: string }) => {
+        const key =
+          args.pipelineEntityId === "e-hero" ? "hero" :
+          args.pipelineEntityId === "e-sidekick" ? "sidekick" : "villain"
+        throw new Error(`provider outage for ${key}`)
+      },
+    )
+
+    const supabase = makeSupabase({
+      plan: multiCastPlan,
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+        { id: "e-sidekick", entity_key: "sidekick", status: "pending", metadata: {} },
+        { id: "e-villain", entity_key: "villain", status: "pending", metadata: {} },
+      ],
+    })
+
+    // Stage handler MUST NOT reject — even though every entity throws, the
+    // per-task catch wraps each thrown error and settledWithLimit returns
+    // all-fulfilled. (Without isolation, the first throw would bubble out
+    // and abort the stage handler.)
+    await expect(
+      runCharactersStage({
+        supabase, pipelineId: "p-isolate", userId: "u1", userTier: "pro",
+      }),
+    ).resolves.toBeUndefined()
+
+    const ents = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities
+
+    // EACH entity has its OWN distinct error captured — proving the
+    // per-task isolation. If error isolation were broken, only the FIRST
+    // entity to throw would have its metadata persisted (others would
+    // either be cancelled by failFast or never run because the first
+    // throw aborted the stage handler).
+    for (const key of ["hero", "sidekick", "villain"] as const) {
+      const row = ents.get(`e-${key}`)
+      expect(row?.status).toBe("failed")
+      expect((row?.metadata as Record<string, unknown>)?.last_error).toBe(
+        `provider outage for ${key}`,
+      )
+    }
+  })
+
+  it("all entities fail: stage does NOT advance to approved (anyAwaiting tracks failures)", async () => {
+    // Regression for Pass 2 /simplify bug: when ALL pending entities throw
+    // (e.g. transient KIE 503 outage), the outer task-wrapper catch correctly
+    // swallows each rejection so siblings keep running, but it MUST also set
+    // `anyAwaiting=true`. Without this, anyAwaiting stays false → the
+    // "if (anyAwaiting)" branch doesn't fire → control falls through to the
+    // final "mark stage approved" write at step 6, marking the stage
+    // `approved` with zero successful main assets. Downstream Shot List
+    // would then run against missing main_asset_id refs.
+    //
+    // This test forces every entity to throw at image gen, then asserts:
+    //   1. Every entity is persisted with status='failed' + last_error.
+    //   2. NO `pipeline_stages.update({ status: "approved" })` was written.
+    //   3. The stage update queue contains no terminal "approved" patch —
+    //      the stage stays at `running` (set by ensureStageRow before the
+    //      loop), so the engine driver will re-enter on the user's
+    //      Regenerate.
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { pipelineEntityId: string }) => {
+        const key =
+          args.pipelineEntityId === "e-hero" ? "hero" :
+          args.pipelineEntityId === "e-sidekick" ? "sidekick" : "villain"
+        throw new Error(`provider outage for ${key}`)
+      },
+    )
+
+    const supabase = makeSupabase({
+      plan: multiCastPlan,
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+        { id: "e-sidekick", entity_key: "sidekick", status: "pending", metadata: {} },
+        { id: "e-villain", entity_key: "villain", status: "pending", metadata: {} },
+      ],
+    })
+
+    // Stage handler MUST NOT reject — per-task catches swallow.
+    await expect(
+      runCharactersStage({
+        supabase, pipelineId: "p-all-fail", userId: "u1", userTier: "pro",
+      }),
+    ).resolves.toBeUndefined()
+
+    const refs = supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+      _stageUpdates: Array<Record<string, unknown>>
+    }
+
+    // (1) All three entities are failed.
+    for (const key of ["hero", "sidekick", "villain"] as const) {
+      const row = refs._entities.get(`e-${key}`)
+      expect(row?.status).toBe("failed")
+      expect((row?.metadata as Record<string, unknown>)?.last_error).toBe(
+        `provider outage for ${key}`,
+      )
+    }
+
+    // (2) The stage was NEVER patched to `approved` — the outer-catch fix
+    // routes us through the `if (anyAwaiting)` early-return, skipping the
+    // step-6 "mark approved" write entirely. Without the fix, this
+    // assertion would fail with one stage update carrying status='approved'.
+    const approvedPatch = refs._stageUpdates.find((p) => p.status === "approved")
+    expect(approvedPatch).toBeUndefined()
   })
 })

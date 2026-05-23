@@ -17,6 +17,16 @@ import {
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 import { runImageCriticLoop } from "./_image-critic-loop.js"
+import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+
+/**
+ * Phase 1D /simplify perf pass: cap parallel per-entity work at 3 (matches
+ * the characters-stage + Match Cut Orchestrator precedents — conservative
+ * against provider rate limits + DB FOR UPDATE handles credit reservation
+ * atomicity). Each entity's outer try/catch swallows its own failure, so
+ * siblings never cancel.
+ */
+const ENTITY_CONCURRENCY = 3
 
 export interface RunLocationsStageArgs {
   supabase: SupabaseClient
@@ -109,21 +119,65 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
     .eq("entity_type", "location")
     .order("created_at", { ascending: true })
 
+  // Phase 1D /simplify perf pass: parallelize per-entity work. Each entity
+  // is independent (own image gen, own critic retry loop, own metadata
+  // writes), so concurrency is safe. The `anyAwaiting` flag is
+  // written-only-true from multiple tasks; JS's single-threaded event loop
+  // makes this race-free. Set to true when an entity SUCCEEDS (reaches
+  // awaiting_approval) OR FAILS — both cases require user attention (review
+  // approval OR manual recovery via the EntityCard Regenerate button). If
+  // all pending entities fail (transient KIE outage), without this we'd
+  // fall through to step 6 and mark the stage `approved` with 0 successful
+  // main assets — downstream Shot List would then run against missing
+  // main_asset_id refs.
+  //
+  // Each task wraps its work in try/catch so a thrown error from one entity
+  // (e.g. `pipelineGenerateImage` failure inside `generateLocationMain`)
+  // does NOT cancel siblings — failure metadata has already been persisted
+  // by the inner handler before the throw. `failFast=false` on the wrapper
+  // is belt-and-suspenders.
   let anyAwaiting = false
-  for (const entity of entities ?? []) {
-    if (entity.status === "approved") {
-      await ensureLocationVariants(supabase, pipelineId, userId, entity, plan)
-      continue
-    }
-    if (entity.status === "awaiting_approval") {
+  const tasks = (entities ?? []).map((entity) => async () => {
+    try {
+      if (entity.status === "approved") {
+        await ensureLocationVariants(supabase, pipelineId, userId, entity, plan)
+        return
+      }
+      if (entity.status === "awaiting_approval") {
+        anyAwaiting = true
+        return
+      }
+      if (
+        entity.status === "pending" ||
+        entity.status === "generating" ||
+        entity.status === "rejected"
+      ) {
+        await generateLocationMain(supabase, pipelineId, stageId, userId, entity, plan)
+        anyAwaiting = true
+      }
+    } catch (err) {
+      // Error isolation: `generateLocationMain` already persists
+      // `metadata.last_error` + `last_error_at` + emits the
+      // `entity:status failed` SSE before re-throwing (symmetric with
+      // characters.ts since Pass 1 c52a756d). We log here so the operator
+      // sees per-entity failures in worker logs, then swallow so sibling
+      // entities can still finish.
+      //
+      // Also set `anyAwaiting=true`: a failed entity needs user attention
+      // (Regenerate / Skip from the EntityCard) and must NOT be silently
+      // skipped by the "all approved → mark stage approved" fall-through
+      // below. Without this, an all-fail run (e.g. KIE 503 storm) would
+      // leave anyAwaiting=false → allVariantsAwaiting=false → step 6 marks
+      // the stage `approved` with zero successful main assets, then
+      // downstream Shot List runs against missing refs.
       anyAwaiting = true
-      continue
+      console.error(
+        `[locations] entity processing failed for ${entity.entity_key} (pipeline=${pipelineId}):`,
+        err instanceof Error ? err.message : String(err),
+      )
     }
-    if (entity.status === "pending" || entity.status === "generating" || entity.status === "rejected") {
-      await generateLocationMain(supabase, pipelineId, stageId, userId, entity, plan)
-      anyAwaiting = true
-    }
-  }
+  })
+  await settledWithLimit(tasks, ENTITY_CONCURRENCY, undefined, false)
 
   // Phase 1D.2c-a §6 (D1): auto-mode aggregates `image_critic_unresolvable`
   // failures. Mirrors the characters-stage check (see characters.ts:105-118
@@ -383,9 +437,21 @@ async function generateLocationMain(
       mainAssetUrl: assetUrl,
     })
   } catch (err) {
+    const errMessage = err instanceof Error ? err.message : String(err)
+    console.error(
+      `[locations] generateLocationMain failed for ${entity.entity_key} (pipeline=${pipelineId}):`,
+      errMessage,
+    )
     await supabase
       .from("pipeline_entities")
-      .update({ status: "failed" })
+      .update({
+        status: "failed",
+        metadata: {
+          ...((entity.metadata as Record<string, unknown> | null) ?? {}),
+          last_error: errMessage,
+          last_error_at: new Date().toISOString(),
+        },
+      })
       .eq("id", entity.id)
     pipelineEvents.publish({
       type: "entity:status",
