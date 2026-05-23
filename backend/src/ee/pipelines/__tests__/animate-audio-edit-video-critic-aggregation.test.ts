@@ -328,15 +328,20 @@ describe("runAnimateAudioEditStage — Phase 1D.2c-b-ii E1 video-critic auto-mod
       userTier: "pro",
     })
 
-    // The helper was called with the video-critic reason + correct refund delta.
+    // The helper was called with the video-critic reason + the loaded
+    // pipelineRow (it now derives userId + refundCredits internally —
+    // refundCredits = reserved 200 - spent 50 = 150).
     expect(failPipelineWithCriticReason).toHaveBeenCalledTimes(1)
     expect(failPipelineWithCriticReason).toHaveBeenCalledWith(
       expect.objectContaining({
         pipelineId: "p1-video-critic-fail",
         failureReason: "video_critic_unresolvable",
         stageName: "animate_audio_edit",
-        userId: "u-fail-test",
-        refundCredits: 150, // reserved 200 - spent 50
+        pipelineRow: expect.objectContaining({
+          user_id: "u-fail-test",
+          reserved_credits: 200,
+          spent_credits: 50,
+        }),
       }),
     )
 
@@ -478,11 +483,17 @@ describe("runAnimateAudioEditStage — Phase 1D.2c-b-ii E1 video-critic auto-mod
     })
 
     // Exactly one aggregated failure call, regardless of how many shots fail.
+    // refundCredits = reserved 500 - spent 100 = 400 (derived inside the helper
+    // from `pipelineRow`).
     expect(failPipelineWithCriticReason).toHaveBeenCalledTimes(1)
     expect(failPipelineWithCriticReason).toHaveBeenCalledWith(
       expect.objectContaining({
         failureReason: "video_critic_unresolvable",
-        refundCredits: 400, // 500 - 100
+        pipelineRow: expect.objectContaining({
+          user_id: "u-multi",
+          reserved_credits: 500,
+          spent_credits: 100,
+        }),
       }),
     )
     expect(pipelineFinalMerge).not.toHaveBeenCalled()
@@ -490,9 +501,10 @@ describe("runAnimateAudioEditStage — Phase 1D.2c-b-ii E1 video-critic auto-mod
 
   it("auto + 0 reserved-spent delta → refundCredits=0, helper still called", async () => {
     // Edge case: spent >= reserved (no refund owed). The helper still fires
-    // (we still need to flip pipeline.status='failed' + emit SSE), with
-    // refundCredits clamped to 0 so the helper's internal `if (refundCredits > 0)`
-    // gate skips the refund RPC.
+    // (we still need to flip pipeline.status='failed' + emit SSE); the helper
+    // internally clamps refundCredits to 0 from `pipelineRow` (reserved 50 -
+    // spent 75 = -25 → max(0, -25) = 0), so the helper's internal
+    // `if (refundCredits > 0)` gate skips the refund RPC.
     setupSceneInternalPipelineEcho()
     const supabase = makeSupabase({
       scenes: [
@@ -521,7 +533,11 @@ describe("runAnimateAudioEditStage — Phase 1D.2c-b-ii E1 video-critic auto-mod
     expect(failPipelineWithCriticReason).toHaveBeenCalledTimes(1)
     expect(failPipelineWithCriticReason).toHaveBeenCalledWith(
       expect.objectContaining({
-        refundCredits: 0,
+        pipelineRow: expect.objectContaining({
+          user_id: "u-zero",
+          reserved_credits: 50,
+          spent_credits: 75,
+        }),
       }),
     )
   })
