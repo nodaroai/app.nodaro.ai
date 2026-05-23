@@ -34,6 +34,7 @@ vi.mock("lucide-react", () => {
     Activity: I, Piano: I, User: I, MessageCircle: I,
     ScanFace: I,
     VenetianMask: I,
+    TrendingUp: I, Star: I,
   }
 })
 
@@ -54,7 +55,7 @@ vi.mock("@/hooks/use-auth", () => ({
 // ---------------------------------------------------------------------------
 // Import the exports under test
 // ---------------------------------------------------------------------------
-import { NODE_OPTIONS, CATEGORIES } from "../add-node-popup"
+import { NODE_OPTIONS, CATEGORIES, VIRTUAL_CATEGORY_IDS } from "../add-node-popup"
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -219,7 +220,11 @@ describe("CATEGORIES", () => {
   })
 
   it("every category has at least one node option", () => {
+    // Virtual categories have no NODE_OPTIONS entries — they draw from
+    // selection history or a curated list at render time.
+    const VIRTUAL_CATEGORIES = new Set<string>(Object.values(VIRTUAL_CATEGORY_IDS))
     for (const cat of CATEGORIES) {
+      if (VIRTUAL_CATEGORIES.has(cat.id)) continue
       const nodesInCategory = NODE_OPTIONS.filter(
         (o) => o.category === cat.id,
       )

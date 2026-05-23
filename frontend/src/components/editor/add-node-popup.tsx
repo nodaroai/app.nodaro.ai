@@ -107,6 +107,8 @@ import {
   MessageCircle,
   ScanFace,
   VenetianMask,
+  TrendingUp,
+  Star,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
@@ -114,6 +116,7 @@ import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
+import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -1229,7 +1232,69 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
+export const VIRTUAL_CATEGORY_IDS = {
+  recent: "Recent",
+  mostUsed: "Most Used",
+  common: "Common",
+} as const;
+
+const isNodeOption = (n: NodeOption | undefined): n is NodeOption => Boolean(n);
+
+function mapHistoryToOptions(
+  history: ReadonlyArray<HistoryEntry>,
+  compare: (a: HistoryEntry, b: HistoryEntry) => number,
+  optionByType: Map<SceneNodeType, NodeOption>,
+): NodeOption[] {
+  return history
+    .slice()
+    .sort(compare)
+    .map((h) => optionByType.get(h.nodeType))
+    .filter(isNodeOption);
+}
+
+const COMMON_NODE_TYPES: ReadonlyArray<SceneNodeType> = [
+  "text-prompt",
+  "upload-image",
+  "upload-video",
+  "generate-image",
+  "modify-image",
+  "upscale-image",
+  "image-to-video",
+  "extend-video",
+  "combine-videos",
+  "text-to-speech",
+  "generate-music",
+  "lip-sync",
+  "face-swap",
+  "add-captions",
+  "save-to-storage",
+];
+
 export const CATEGORIES = [
+  {
+    id: VIRTUAL_CATEGORY_IDS.recent,
+    label: "RECENT",
+    icon: <Clock className="h-4 w-4" />,
+    description: "Recently added nodes",
+  },
+  {
+    id: VIRTUAL_CATEGORY_IDS.mostUsed,
+    label: "MOST USED",
+    icon: <TrendingUp className="h-4 w-4" />,
+    description: "Your most-added nodes",
+  },
+  {
+    id: VIRTUAL_CATEGORY_IDS.common,
+    label: "COMMON",
+    icon: <Star className="h-4 w-4" />,
+    description: "Frequently used building blocks",
+  },
+  {
+    id: "AI",
+    label: "AI",
+    icon: <BookOpen className="h-4 w-4" />,
+    description: "Generate Script, Image",
+  },
   {
     id: "Input",
     label: "INPUT",
@@ -1289,12 +1354,6 @@ export const CATEGORIES = [
     description: "Music Genre, Mood, Instrumentation, Voice",
   },
   {
-    id: "AI",
-    label: "AI",
-    icon: <BookOpen className="h-4 w-4" />,
-    description: "Generate Script, Image",
-  },
-  {
     id: "Processing",
     label: "PROCESSING",
     icon: <Merge className="h-4 w-4" />,
@@ -1328,6 +1387,9 @@ export const CATEGORIES = [
 
 // Category icon colors
 const CATEGORY_COLORS: Record<string, string> = {
+  Recent: "text-[#06B6D4]",
+  "Most Used": "text-[#F59E0B]",
+  Common: "text-[#10B981]",
   Input: "text-[#007AFF]",
   Triggers: "text-[#F97316]",
   Data: "text-[#14B8A6]",
@@ -1361,6 +1423,8 @@ export function AddNodePopup({
   storeOnConnect,
 }: AddNodePopupProps) {
   const { isAdmin } = useAuth();
+  const history = useNodeSelectionHistoryStore((s) => s.history);
+  const recordSelection = useNodeSelectionHistoryStore((s) => s.recordSelection);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -1392,6 +1456,7 @@ export function AddNodePopup({
         setComponentBrowserOpen(true);
         return;
       }
+      recordSelection(type);
       if (connectionContext && storeAddNode && storeOnConnect) {
         const newNodeId = storeAddNode(type, connectionContext.dropPosition);
         if (!newNodeId) {
@@ -1420,7 +1485,7 @@ export function AddNodePopup({
         onClose();
       }
     },
-    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose],
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection],
   );
 
   // Handle component selected from marketplace modal
@@ -1442,6 +1507,12 @@ export function AddNodePopup({
     ? compatibilityNodes.directTypes
     : EMPTY_SET;
 
+  const optionByType = useMemo(() => {
+    const map = new Map<SceneNodeType, NodeOption>();
+    for (const node of effectivePool) map.set(node.type, node);
+    return map;
+  }, [effectivePool]);
+
   // Filter nodes based on search query
   const filteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -1455,19 +1526,42 @@ export function AddNodePopup({
     );
   }, [searchQuery, effectivePool]);
 
-  // Get nodes for selected category
-  const categoryNodes = useMemo(() => {
+  const categoryNodes = useMemo<NodeOption[]>(() => {
     if (!selectedCategory) return [];
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.common) {
+      return COMMON_NODE_TYPES.map((t) => optionByType.get(t)).filter(isNodeOption);
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.recent) {
+      return mapHistoryToOptions(history, (a, b) => b.lastUsedAt - a.lastUsedAt, optionByType);
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.mostUsed) {
+      return mapHistoryToOptions(
+        history,
+        (a, b) => b.count - a.count || b.lastUsedAt - a.lastUsedAt,
+        optionByType,
+      );
+    }
     return effectivePool.filter((node) => node.category === selectedCategory);
-  }, [selectedCategory, effectivePool]);
+  }, [selectedCategory, effectivePool, optionByType, history]);
+
+  // Hide Recent + Most Used until the user has history — keeps the first-run
+  // popup compact.
+  const visibleCategories = useMemo(() => {
+    if (history.length > 0) return CATEGORIES;
+    return CATEGORIES.filter(
+      (cat) =>
+        cat.id !== VIRTUAL_CATEGORY_IDS.recent &&
+        cat.id !== VIRTUAL_CATEGORY_IDS.mostUsed,
+    );
+  }, [history.length]);
 
   // Items to display (search results, compatibility tiers, category nodes, or categories)
   const displayItems = useMemo(() => {
     if (searchQuery.trim()) return filteredNodes;
     if (isFiltered && !selectedCategory) return effectivePool;
     if (selectedCategory) return categoryNodes;
-    return CATEGORIES;
-  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes]);
+    return visibleCategories;
+  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes, visibleCategories]);
 
   // Reset state when opening/closing
   useEffect(() => {
@@ -1804,7 +1898,7 @@ export function AddNodePopup({
           })
         ) : (
           // Categories
-          CATEGORIES.map((cat, index) => (
+          visibleCategories.map((cat, index) => (
             <button
               key={cat.id}
               type="button"
