@@ -13,6 +13,7 @@ export { CharacterConfig, FaceConfig, ObjectConfig, LocationConfig } from "./ent
 export { AIWriterConfig } from "./ai-writer-config"
 export { LLMChatConfig } from "./llm-chat-config"
 export { CombineTextConfig, SaveToStorageConfig, WebhookOutputConfig, SplitTextConfig, ExtractFieldConfig, JsonProcessConfig, FilterListConfig, DeduplicateConfig, MergeListsConfig, SortListConfig, PreviewConfig, TeleporterConfig, RouterConfig } from "./utility-configs"
+export { CollectConfig } from "./collect-config"
 export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } from "./sub-workflow-configs"
 export { ComponentConfig } from "./component-config"
 export { WebhookTriggerConfig, ScheduleTriggerConfig, TelegramTriggerConfig } from "./trigger-configs"

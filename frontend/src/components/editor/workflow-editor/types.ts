@@ -146,6 +146,8 @@ export function estimateNodeCredits(node: { type?: string; data?: Record<string,
   return NODE_CREDIT_COSTS[nodeType] ?? 0
 }
 
+// Group/Collect are non-executable aggregators (resolved at field-resolution time, no jobs created).
+// DO NOT add "group" or "collect" to EXECUTABLE_TYPES — they fall through to no-op cases in execute-node.ts.
 export const EXECUTABLE_TYPES = new Set([
   "generate-script",
   "generate-image",

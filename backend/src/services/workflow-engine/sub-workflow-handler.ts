@@ -87,19 +87,27 @@ export async function executeSubWorkflow(
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
   }
 
-  // Migrate legacy image node types before processing
+  // Migrate legacy image node types before processing.
+  // Spread preserves parentId (and any other SimpleNode fields) by design — group
+  // children need parentId to flow into the sub-workflow execution graph.
   let subNodes: SimpleNode[] = ((workflow.nodes as SimpleNode[]) ?? []).map(node => {
+    const parentId = (node as { parentId?: string }).parentId
     if (node.type === "edit-image") {
       const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
-      if (provider === "nano-banana-edit") return { ...node, type: "modify-image" }
-      if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" }
-      return { ...node, type: "upscale-image" }
+      if (provider === "nano-banana-edit") return { ...node, type: "modify-image", parentId }
+      if (provider === "recraft-remove-bg") return { ...node, type: "remove-background", parentId }
+      return { ...node, type: "upscale-image", parentId }
     }
-    if (node.type === "image-to-image") return { ...node, type: "modify-image" }
-    // Backward-compat shim: "collect" was renamed to "reduce" on 2026-05-23.
-    // Remove after all saved workflows are migrated (see migration 151).
-    if (node.type === "collect") return { ...node, type: "reduce" }
-    return node
+    if (node.type === "image-to-image") return { ...node, type: "modify-image", parentId }
+    // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed to
+    // "reduce" on 2026-05-23 to free the "collect" name for the type-aggregator
+    // shipping in this PR. Remove after all saved workflows are migrated (see migration 151).
+    // NOTE: This only catches the OLD pre-rename "collect" — our NEW "collect"
+    // is a different node (non-executable type-aggregator), not affected by this shim.
+    // Discriminate via the NEW shape: NEW Collect always has `order: string[]`.
+    // Anything else with type === "collect" is the OLD pre-rename fan-in reducer.
+    if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce", parentId }
+    return { ...node, parentId }
   })
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 

@@ -279,9 +279,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         return { ...node, type: "upscale-image" }
       }
       if (node.type === "image-to-image") return { ...node, type: "modify-image" }
-      // Backward-compat shim: "collect" was renamed to "reduce" on 2026-05-23.
-      // Remove after all saved workflows are migrated (see migration 151).
-      if (node.type === "collect") return { ...node, type: "reduce" }
+      // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed
+      // to "reduce" on 2026-05-23 to free the "collect" name for the NEW
+      // type-aggregator landing in #2692. Remove after all saved workflows are
+      // migrated (see migration 151).
+      // Discriminate via the NEW shape: NEW Collect always has `order: string[]`.
+      // Anything else with type === "collect" is the OLD pre-rename fan-in reducer.
+      if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce" }
       return node
     })
 
@@ -292,7 +296,14 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
     }))
     const cleaned = filterCloneNodes(allNodes, allEdges)
     // Also filter nodes still marked hidden after clone cleanup
-    const nodes: SimpleNode[] = cleaned.nodes.filter((n) => !(n as { hidden?: boolean }).hidden)
+    const nodes: SimpleNode[] = cleaned.nodes
+      .filter((n) => !(n as { hidden?: boolean }).hidden)
+      .map((n) => ({
+        id: n.id,
+        type: n.type,
+        data: n.data,
+        parentId: (n as { parentId?: string }).parentId,
+      }))
     const nodeIds = new Set(nodes.map((n) => n.id))
     const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
 

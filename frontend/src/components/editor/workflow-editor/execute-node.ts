@@ -6379,5 +6379,12 @@ export function executeNode(
     return Promise.resolve("")
   }
 
+  // Group / Collect — non-executable aggregators.
+  // Their outputs are computed at resolve-time via extractNodeOutput
+  // (computeGroupBuckets / computeCollectBuckets), no jobs created.
+  if (node.type === "group" || node.type === "collect") {
+    return Promise.resolve("")
+  }
+
   return Promise.resolve("");
 }

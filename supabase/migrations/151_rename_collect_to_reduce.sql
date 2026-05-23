@@ -48,17 +48,3 @@ SET data = jsonb_set(
   )
 )
 WHERE data->'nodes' @> '[{"type": "collect"}]'::jsonb;
-
--- Rollback (apply with caution — only if the source-code rename is also reverted):
--- UPDATE model_pricing SET model_identifier = REPLACE(model_identifier, 'reduce:', 'collect:') WHERE model_identifier LIKE 'reduce:%';
--- UPDATE workflows
--- SET data = jsonb_set(data, '{nodes}', (
---   SELECT jsonb_agg(
---     CASE WHEN node->>'type' = 'reduce'
---       THEN jsonb_set(node, '{type}', '"collect"')
---       ELSE node
---     END
---   )
---   FROM jsonb_array_elements(data->'nodes') AS node
--- ))
--- WHERE data->'nodes' @> '[{"type": "reduce"}]'::jsonb;

@@ -3643,6 +3643,19 @@ export type StickyNoteData = {
   alignment: "left" | "center" | "right"
 }
 
+// --- Group + Collect Node Data ---
+
+export interface GroupNodeData {
+  [key: string]: unknown
+  label: string
+}
+
+export interface CollectNodeData {
+  [key: string]: unknown
+  label: string
+  order: string[]
+}
+
 // --- Teleporter Node Data ---
 
 export const TELEPORTER_CHANNEL_COLORS = [
@@ -4127,6 +4140,8 @@ export type SceneNodeData =
   | SortListNodeData
   | PreviewNodeData
   | StickyNoteData
+  | GroupNodeData
+  | CollectNodeData
   | TeleportSendData
   | TeleportReceiveData
   | RouterNodeData
@@ -4284,6 +4299,8 @@ export type SceneNodeType =
   | "sort-list"
   | "preview"
   | "sticky-note"
+  | "group"
+  | "collect"
   | "teleport-send"
   | "teleport-receive"
   | "router"
@@ -6320,6 +6337,26 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       italic: false,
       alignment: "left",
     } as StickyNoteData,
+  },
+  {
+    type: "group",
+    label: "Group",
+    category: "utility",
+    creditCost: 0,
+    inputs: [],
+    outputs: [],
+    width: 500,
+    height: 400,
+    defaultData: { label: "New group" } as GroupNodeData,
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Collect", order: [] } as CollectNodeData,
   },
   {
     type: "teleport-send",

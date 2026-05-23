@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useMemo, useRef, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { buildRangeLabel as buildRangeLabelShared, type SelectorMode } from "@nodaro/shared"
+import { buildRangeLabel as buildRangeLabelShared, isCollectInEdge, type SelectorMode } from "@nodaro/shared"
 import {
   ReactFlow,
   MiniMap,
@@ -36,6 +36,7 @@ import { useElkLayout, elk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
+import { computeOverlap, worldToLocal, localToWorld, GROUP_ATTACH_THRESHOLD } from "./workflow-editor/group-coords"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
@@ -957,11 +958,96 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
     setGuideLines(computeGuides(rect))
   }, [alignmentEnabled, computeGuides])
-  const handleNodeDragStop = useCallback(() => {
+  const handleNodeDragStop = useCallback((_event: React.MouseEvent, draggedNode: { id: string; type?: string; position: { x: number; y: number }; parentId?: string; measured?: { width?: number; height?: number } }) => {
     setDraggingNodeId(null)
     setGuideLines([])
     // Reset wasDragging after a tick so the click handler (which fires after dragStop) can still see it
     requestAnimationFrame(() => { wasDraggingRef.current = false })
+
+    // Group membership (spec §4.2): if a non-group node ends with >=70% overlap
+    // with a group, attach (set parentId + convert to local coords). If a child
+    // ends with <70% overlap with its parent, detach (clear parentId + convert
+    // to world coords). When multiple groups overlap, pick the smallest area.
+    if (draggedNode.type === "group") return
+    const store = useWorkflowStore.getState()
+    const allNodes = store.nodes
+    const current = allNodes.find((n) => n.id === draggedNode.id)
+    if (!current) return
+
+    // React Flow gives us node.position in PARENT-LOCAL coords when parentId is
+    // set. Convert to world for overlap math.
+    const parentNode = current.parentId ? allNodes.find((n) => n.id === current.parentId) : undefined
+    const worldPos = parentNode
+      ? localToWorld(current.position, parentNode.position)
+      : current.position
+    const draggedBbox = {
+      x: worldPos.x,
+      y: worldPos.y,
+      width: current.measured?.width ?? draggedNode.measured?.width ?? 200,
+      height: current.measured?.height ?? draggedNode.measured?.height ?? 100,
+    }
+
+    let bestGroup: typeof current | undefined
+    let bestArea = Infinity
+    for (const g of allNodes) {
+      if (g.type !== "group" || g.id === current.id) continue
+      const gBbox = {
+        x: g.position.x,
+        y: g.position.y,
+        width: g.measured?.width ?? 500,
+        height: g.measured?.height ?? 400,
+      }
+      const overlap = computeOverlap(draggedBbox, gBbox)
+      if (overlap >= GROUP_ATTACH_THRESHOLD) {
+        const area = gBbox.width * gBbox.height
+        if (area < bestArea) {
+          bestGroup = g
+          bestArea = area
+        }
+      }
+    }
+
+    if (bestGroup && current.parentId !== bestGroup.id) {
+      // Attach: convert world coords to local (parent-relative) coords
+      const local = worldToLocal(worldPos, bestGroup.position)
+      store.updateNode(current.id, { parentId: bestGroup.id, position: local })
+    } else if (!bestGroup && current.parentId) {
+      // Detach: convert local (parent-relative) coords back to world
+      store.updateNode(current.id, { parentId: undefined, position: worldPos })
+    }
+  }, [])
+
+  // H3 (spec §5.2.1): when an edge feeding a Collect's "in" handle is removed,
+  // prune that source from the Collect's data.order so the output order stays
+  // consistent with live connections.
+  const handleEdgesDelete = useCallback((deletedEdges: WorkflowEdge[]) => {
+    const { nodes, updateNodeData } = useWorkflowStore.getState()
+    const affected = new Map<string, string[]>()
+    for (const e of deletedEdges) {
+      const target = nodes.find((n) => n.id === e.target)
+      if (target?.type !== "collect") continue
+      if (!isCollectInEdge(e)) continue
+      const existing = affected.get(e.target) ?? ((target.data as { order?: string[] }).order ?? [])
+      affected.set(e.target, existing.filter((sid) => sid !== e.source))
+    }
+    for (const [collectId, nextOrder] of affected) {
+      updateNodeData(collectId, { order: nextOrder })
+    }
+  }, [])
+
+  // H4 (spec §4.4): when a Group is deleted, restore its children's world
+  // coords and clear their parentId so they remain on the canvas at the
+  // visual spot the user last saw them.
+  const handleNodesDelete = useCallback((deletedNodes: WorkflowNode[]) => {
+    const { nodes, updateNode } = useWorkflowStore.getState()
+    for (const deleted of deletedNodes) {
+      if (deleted.type !== "group") continue
+      const children = nodes.filter((n) => n.parentId === deleted.id)
+      for (const child of children) {
+        const world = localToWorld(child.position, deleted.position)
+        updateNode(child.id, { parentId: undefined, position: world })
+      }
+    }
   }, [])
 
   const handleTidyUp = useCallback(async () => {
@@ -1236,6 +1322,34 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             delete data.subWorkflowProgress
             return { ...node, id: newId, data } as WorkflowNode
           })
+
+          // Remap parentId on copied children (spec §4.4).
+          // - If a child's original parent was ALSO in the copied selection,
+          //   point parentId at the new group ID (keep position — local coords).
+          // - If the parent was NOT copied, drop parentId AND convert position
+          //   from parent-local to world coords (look up the parent in the
+          //   ORIGINAL clipboard payload; it has the parent's world position).
+          const clipboardById = new Map(nodesToPaste.map((n) => [n.id, n]))
+          for (let i = 0; i < newNodes.length; i++) {
+            const original = nodesToPaste[i]
+            const originalParentId = original.parentId
+            if (!originalParentId) continue
+            const remapped = idMap[originalParentId]
+            if (remapped) {
+              newNodes[i] = { ...newNodes[i], parentId: remapped }
+            } else {
+              const oldParent = clipboardById.get(originalParentId)
+              const child = newNodes[i] as WorkflowNode & { parentId?: string }
+              const worldPos = oldParent
+                ? {
+                    x: original.position.x + oldParent.position.x,
+                    y: original.position.y + oldParent.position.y,
+                  }
+                : original.position
+              const { parentId: _drop, ...rest } = child
+              newNodes[i] = { ...rest, position: worldPos } as WorkflowNode
+            }
+          }
 
           const newEdges = edgesToPaste.map((edge) => ({
             ...edge,
@@ -1516,15 +1630,23 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     const state = useWorkflowStore.getState()
     const screenTarget = (mousePos.x !== 0 || mousePos.y !== 0) ? mousePos : getViewportCenter()
     const flowPos = screenToFlowPosition(screenTarget)
-    const minX = Math.min(...newNodes.map((n) => n.position.x))
-    const maxX = Math.max(...newNodes.map((n) => n.position.x + (n.measured?.width ?? 200)))
-    const minY = Math.min(...newNodes.map((n) => n.position.y))
-    const maxY = Math.max(...newNodes.map((n) => n.position.y + (n.measured?.height ?? 100)))
+    // Use only top-level (non-child) nodes for bbox/center math — children's
+    // positions are in parent-local coords (spec §4.4) and would skew the
+    // centroid; they will also be shifted via their parent's offset.
+    const topLevel = newNodes.filter((n) => !n.parentId)
+    const bboxNodes = topLevel.length > 0 ? topLevel : newNodes
+    const minX = Math.min(...bboxNodes.map((n) => n.position.x))
+    const maxX = Math.max(...bboxNodes.map((n) => n.position.x + (n.measured?.width ?? 200)))
+    const minY = Math.min(...bboxNodes.map((n) => n.position.y))
+    const maxY = Math.max(...bboxNodes.map((n) => n.position.y + (n.measured?.height ?? 100)))
     const offsetX = flowPos.x - (minX + maxX) / 2
     const offsetY = flowPos.y - (minY + maxY) / 2
     const pastedNodes = newNodes.map((n) => ({
       ...n,
-      position: { x: n.position.x + offsetX, y: n.position.y + offsetY },
+      // Children keep local coords — they move with their parent's shift.
+      position: n.parentId
+        ? n.position
+        : { x: n.position.x + offsetX, y: n.position.y + offsetY },
       selected: true,
     }))
     useWorkflowStore.setState({
@@ -1677,6 +1799,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           onNodeDragStart={handleNodeDragStart}
           onNodeDrag={handleNodeDrag}
           onNodeDragStop={handleNodeDragStop}
+          onEdgesDelete={handleEdgesDelete}
+          onNodesDelete={handleNodesDelete}
           snapToGrid={snapEnabled}
           snapGrid={[16, 16]}
           nodeTypes={nodeTypes}

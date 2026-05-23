@@ -151,6 +151,8 @@ import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
 import { TelegramTriggerNode } from "./telegram-trigger-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
+import { GroupNode } from "./group-node";
+import { CollectNode } from "./collect-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -312,6 +314,9 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "reduce": ReduceNode,
   "teleport-send": TeleportSendNode,
   "teleport-receive": TeleportReceiveNode,
+  // Group / Collect — non-executable aggregators (resolved at field-resolution time)
+  group: GroupNode,
+  collect: CollectNode,
   // Sub-Workflow
   "sub-workflow-input": SubWorkflowInputNode,
   "sub-workflow-output": SubWorkflowOutputNode,

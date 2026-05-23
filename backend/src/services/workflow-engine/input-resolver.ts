@@ -25,19 +25,25 @@ import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
  * Resolve a node's primary output from execution state or source node data.
  * Shared helper — deduplicates the check-state-then-source pattern used in
  * resolveNodeInputs, getListInputForNode, and loop column routing.
+ *
+ * `context` (allNodes + edges) is required when the source is a group or
+ * collect node — they compute their output dynamically from children /
+ * upstream edges, not from static `data`. When omitted, group/collect emit
+ * nothing.
  */
 export function getNodeOutput(
   node: SimpleNode,
   sourceHandle: string | null | undefined,
   nodeStates: Record<string, NodeExecutionState>,
   triggerData?: Record<string, unknown>,
+  context?: { nodes: SimpleNode[]; edges: SimpleEdge[] },
 ): string | undefined {
   const state = nodeStates[node.id]
   if (state?.output) {
     return getPrimaryOutput(state.output, node.type, sourceHandle)
   }
-  if (isSourceNode(node.type)) {
-    const srcOutput = extractSourceNodeOutput(node, triggerData)
+  if (isSourceNode(node.type) || node.type === "group" || node.type === "collect") {
+    const srcOutput = extractSourceNodeOutput(node, triggerData, sourceHandle, context)
     if (srcOutput) return getPrimaryOutput(srcOutput, node.type, sourceHandle)
   }
   return undefined
@@ -56,6 +62,7 @@ export function resolveNodeInputs(
 ): ResolvedInputs {
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
   const inputs: ResolvedInputs = {}
+  const ctx = { nodes: allNodes, edges }
 
   for (const edge of incomingEdges) {
     let sourceNode = allNodes.find((n) => n.id === edge.source)
@@ -207,7 +214,7 @@ export function resolveNodeInputs(
       }
 
       if (!output) {
-        output = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData)
+        output = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData, ctx)
       }
     }
 
@@ -319,15 +326,16 @@ function resolveListLoopColumnItems(
   if (visited.has(sourceNode.id)) return undefined
   visited.add(sourceNode.id)
 
+  const ctx = { nodes: allNodes, edges }
   const columns = sourceNode.data.columns as
     | Array<{ id: string; handleId: string; type?: string; splitDelimiter?: string; connectedSourceId?: string; connectedSourceHandle?: string }>
     | undefined
   if (!columns || !sourceHandle) {
     // No typed column routing — fall back to legacy extraction.
-    return extractSourceNodeOutputAsList(sourceNode, triggerData)
+    return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
   }
   const colIndex = columns.findIndex((c) => c.handleId === sourceHandle)
-  if (colIndex < 0) return extractSourceNodeOutputAsList(sourceNode, triggerData)
+  if (colIndex < 0) return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
   const col = columns[colIndex]
 
   // Per-column connected source: resolve upstream's items, applying this edge's filter.
@@ -370,7 +378,7 @@ function resolveListLoopColumnItems(
 
       // Single-output upstream (or no multi-item accumulation): split the
       // primary text output by this column's delimiter (default newline).
-      const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
+      const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData, ctx)
       if (upstreamText) {
         const lines = splitByLoopDelimiter(upstreamText, columns)
         if (lines.length > 0) return lines
@@ -384,7 +392,7 @@ function resolveListLoopColumnItems(
   if (items.length > 0) return items
 
   // Legacy items-string fallback.
-  return extractSourceNodeOutputAsList(sourceNode, triggerData)
+  return extractSourceNodeOutputAsList(sourceNode, triggerData, sourceHandle, ctx)
 }
 
 /**
@@ -404,6 +412,7 @@ export function getListInputForNode(
   // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
   if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
 
+  const ctx = { nodes: allNodes, edges }
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
 
   for (const edge of incomingEdges) {
@@ -432,7 +441,7 @@ export function getListInputForNode(
         if (colInEdge) {
           const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
           if (upstreamNode) {
-            const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData)
+            const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData, ctx)
             if (upstreamText) {
               const items = splitByLoopDelimiter(upstreamText, columns)
               const filtered = selectListItems(items, selectorArg)
@@ -450,7 +459,7 @@ export function getListInputForNode(
         const upstreamEdge = loopInEdges[0]
         const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
         if (upstreamNode) {
-          const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData)
+          const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData, ctx)
           if (upstreamText) {
             const items = splitByLoopDelimiter(upstreamText, columns)
             const filtered = selectListItems(items, selectorArg)
@@ -561,7 +570,7 @@ export function getListInputForNode(
       // split-text reads its splitResults from execution state.
       let listItems: string[] | undefined
       if (listNode.type === "list" || listNode.type === "loop") {
-        listItems = extractSourceNodeOutputAsList(listNode, triggerData)
+        listItems = extractSourceNodeOutputAsList(listNode, triggerData, srcEdge.sourceHandle, ctx)
       } else if (listNode.type === "split-text") {
         const st = nodeStates[listNode.id]
         if (st?.output?.splitResults && st.output.splitResults.length > 1) {

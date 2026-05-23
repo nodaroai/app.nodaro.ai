@@ -3,6 +3,16 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared
 import { isExpandedClone } from "@nodaro/shared";
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/shared";
+import {
+  aggregateByType,
+  buildChildrenByParent,
+  getOutputType,
+  isAggregateableType,
+  isCollectInEdge,
+  parseGroupHandle,
+  type AggregationBuckets,
+  type Member,
+} from "@nodaro/shared";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -31,6 +41,28 @@ export function buildExecutionLevels(
     if (!nodeMap.has(edge.source) || !nodeMap.has(edge.target)) continue;
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1);
     children.get(edge.source)?.push(edge.target);
+  }
+
+  // Implicit child → group dependency: a Group's output is computed from its
+  // children (computeGroupBuckets), so it must be ordered AFTER all children
+  // have executed. Without this, the topological walk could schedule the
+  // group on the same level as its children and read stale/undefined output.
+  const childrenByGroup = new Map<string, string[]>();
+  for (const n of nodes) {
+    if (n.parentId) {
+      const list = childrenByGroup.get(n.parentId);
+      if (list) list.push(n.id);
+      else childrenByGroup.set(n.parentId, [n.id]);
+    }
+  }
+  for (const g of nodes) {
+    if (g.type !== "group") continue;
+    const childIds = childrenByGroup.get(g.id);
+    if (!childIds) continue;
+    for (const cid of childIds) {
+      inDegree.set(g.id, (inDegree.get(g.id) ?? 0) + 1);
+      children.get(cid)?.push(g.id);
+    }
   }
 
   const levels: WorkflowNode[][] = [];
@@ -68,6 +100,66 @@ export function getEffectivelySkippedIds(
       .filter((n) => !!(n.data as Record<string, unknown>).skipped)
       .map((n) => n.id),
   );
+}
+
+/**
+ * Compute Group output buckets by reading children (parentId === group.id),
+ * classifying each by getOutputType, and reading scalar values via extractNodeOutput.
+ * Skips "data"-typed children (multi-output + parameter pickers).
+ * Sort: top-to-bottom by node.position.y so visual order = array order.
+ */
+export function computeGroupBuckets(
+  group: WorkflowNode,
+  allNodes: WorkflowNode[],
+): AggregationBuckets {
+  const children = allNodes
+    .filter((n) => n.parentId === group.id)
+    .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0));
+  const members: Member[] = [];
+  for (const child of children) {
+    const t = getOutputType(child.type);
+    if (!isAggregateableType(t)) continue;
+    const value = extractNodeOutput(child);
+    if (value === undefined) continue;
+    members.push({ nodeId: child.id, type: t, value });
+  }
+  return aggregateByType(members);
+}
+
+/**
+ * Compute Collect output buckets by reading upstream connections to the "in" handle,
+ * sorted by data.order (with arrival-order fallback for unrecorded entries),
+ * classifying each by getOutputType (sourceHandle aware for multi-output upstream),
+ * and reading values via extractNodeOutput(src, edge.sourceHandle).
+ */
+export function computeCollectBuckets(
+  collect: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): AggregationBuckets {
+  const incomingEdges = edges.filter(
+    (e) => e.target === collect.id && isCollectInEdge(e),
+  );
+  const order = ((collect.data as { order?: string[] })?.order) ?? [];
+  const rank = (sid: string): number => {
+    const i = order.indexOf(sid);
+    return i === -1 ? Infinity : i;
+  };
+  const byOrder = (a: WorkflowEdge, b: WorkflowEdge): number =>
+    rank(a.source) - rank(b.source);
+  const sorted = [...incomingEdges].sort(byOrder);
+  const nodesById = new Map(allNodes.map((n) => [n.id, n]));
+  const members: Member[] = [];
+  for (const edge of sorted) {
+    const src = nodesById.get(edge.source);
+    if (!src) continue;
+    const t = getOutputType(src.type);
+    if (!isAggregateableType(t)) continue;
+    const value = extractNodeOutput(src, edge.sourceHandle ?? undefined);
+    if (value === undefined) continue;
+    members.push({ nodeId: src.id, type: t, value });
+  }
+  return aggregateByType(members);
 }
 
 export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): string | undefined {
@@ -627,6 +719,24 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   if (type === "router") {
     if (!sourceHandle) return (data.result as string | undefined)
     return (data.routeOutputs as Record<string, string | undefined> | undefined)?.[sourceHandle]
+  }
+  // Group node — surfaces the FIRST item of the requested type bucket
+  // (scalar, matches the string | undefined return type). Multi-item access
+  // happens through extractNodeOutputAsList in Task E2.
+  if (type === "group") {
+    const { nodes } = useWorkflowStore.getState();
+    const buckets = computeGroupBuckets(node, nodes);
+    const requestedType = parseGroupHandle(sourceHandle);
+    return requestedType ? buckets[requestedType][0] : undefined;
+  }
+  // Collect node — surfaces the FIRST item of the requested type bucket
+  // (scalar). Inputs are sorted by data.order. Multi-item access happens
+  // through extractNodeOutputAsList in Task E2.
+  if (type === "collect") {
+    const { nodes, edges } = useWorkflowStore.getState();
+    const buckets = computeCollectBuckets(node, nodes, edges);
+    const requestedType = parseGroupHandle(sourceHandle);
+    return requestedType ? buckets[requestedType][0] : undefined;
   }
   // Generative pipeline — leaf node in Phase 1A. Surfaces the final video URL
   // once the pipeline completes, falling back to the pipeline_id for

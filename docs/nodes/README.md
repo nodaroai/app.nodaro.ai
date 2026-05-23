@@ -352,5 +352,7 @@ Helpers for debugging and workflow organization.
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
 | [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List/Loop fan-out — pick the best variant, count survivors, or merge JSON |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
+| [Group](./utility/group.md) | Spatial container that aggregates children's outputs by type | Organize related nodes; fan out per-type arrays into list-aware consumers |
+| [Collect](./utility/collect.md) | Aggregate multiple inputs into per-type arrays | Merge outputs from many nodes into ordered per-type lists |
 
 ---

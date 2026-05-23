@@ -1245,11 +1245,25 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Workflow",
   },
   {
+    type: "group",
+    label: "Group",
+    icon: <Box className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["group", "container", "wrap"],
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["collect", "gather", "bucket", "by-type", "split-by-type"],
+  },
+  {
     type: "reduce",
     label: "Reduce",
     icon: <Funnel className="h-4 w-4" />,
     category: "Workflow",
-    keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "collect", "vote", "count"],
+    keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "vote", "count"],
   },
   {
     type: "sticky-note",
