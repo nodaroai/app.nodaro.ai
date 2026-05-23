@@ -392,16 +392,16 @@ archive flow, the upstream picker integration, and how to wire object
 assets into downstream prompts) see the dedicated
 [Object Platform](./object-platform.md) guide.
 
-### Pick the best of N generations (Collect / fan-in)
+### Pick the best of N generations (Reduce / fan-in)
 
-`client.collect.run()` runs the [Collect node](./nodes/utility/collect.md)
+`client.reduce.run()` runs the [Reduce node](./nodes/utility/reduce.md)
 programmatically. Useful when you've generated several candidates and want
 to pick the best, concatenate them, vote, or merge as JSON — without
 building a workflow on the canvas.
 
 ```ts
 // Pick the best of 5 generated images
-const result = await client.collect.run({
+const result = await client.reduce.run({
   strategyId: "pick-best-llm",
   strategyConfig: {
     criteria: "sharpest image with no artifacts",
@@ -424,20 +424,20 @@ Other strategies don't need an LLM:
 
 ```ts
 // Concatenate survivors with a custom separator
-const joined = await client.collect.run({
+const joined = await client.reduce.run({
   strategyId: "concat",
   strategyConfig: { separator: "\n---\n" },
   inputs: ["A", "B", "C"],
 })
 
 // Majority vote (ties → first)
-const winner = await client.collect.run({
+const winner = await client.reduce.run({
   strategyId: "vote",
   inputs: ["red", "blue", "red", "red", "blue"],
 })
 
 // Deep-merge JSON fragments into one object
-const merged = await client.collect.run({
+const merged = await client.reduce.run({
   strategyId: "merge-json",
   strategyConfig: { strategy: "deep" },
   inputs: [

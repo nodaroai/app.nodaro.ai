@@ -123,10 +123,10 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
     })
   })
 
-  describe("collect (fan-in)", () => {
+  describe("reduce (fan-in)", () => {
     it("constructs body { strategyId, strategyConfig, inputs, workflowId, userId }", () => {
       const body = buildSyncHttpBody(
-        node("collect", { strategyId: "concat", strategyConfig: { separator: "-" } }),
+        node("reduce", { strategyId: "concat", strategyConfig: { separator: "-" } }),
         { inputs: ["a", "b", "c"] },
         CTX,
       )
@@ -142,7 +142,7 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
 
     it("defaults strategyId to 'concat' and strategyConfig to {} when missing", () => {
       const body = buildSyncHttpBody(
-        node("collect"),
+        node("reduce"),
         { inputs: ["x"] },
         CTX,
       )
@@ -153,7 +153,7 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
 
     it("falls back to empty inputs array when resolved input list is missing", () => {
       const body = buildSyncHttpBody(
-        node("collect", { strategyId: "vote", strategyConfig: { caseSensitive: false } }),
+        node("reduce", { strategyId: "vote", strategyConfig: { caseSensitive: false } }),
         {},
         CTX,
       )

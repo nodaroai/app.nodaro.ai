@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import type { CollectMeta, ImageCriticMode, WorkflowExport } from "@nodaro/shared"
+import type { ReduceMeta, ImageCriticMode, WorkflowExport } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 
@@ -6003,23 +6003,23 @@ export function saveToStorageApi(params: {
   })
 }
 
-// ---------- Collect (fan-in) ----------
+// ---------- Reduce (fan-in) ----------
 
 /**
- * Execute a Collect-strategy job. Aggregates a list of upstream iteration
+ * Execute a Reduce-strategy job. Aggregates a list of upstream iteration
  * outputs into a single value via the named strategy (concat, vote,
  * pick-best-llm, first-non-empty, merge-json, count, …).
  */
-export function executeCollect(input: {
+export function executeReduce(input: {
   strategyId: string
   strategyConfig: Record<string, unknown>
   inputs: string[]
 }): Promise<{
   jobId: string
   output: string
-  meta: CollectMeta
+  meta: ReduceMeta
 }> {
-  return apiRequest("/v1/collect", "collect failed", {
+  return apiRequest("/v1/reduce", "reduce failed", {
     method: "POST",
     body: withWorkflowId(input),
   })

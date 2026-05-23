@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
 
-vi.mock("../../services/collect-strategies/index.js", async () => {
-  const actual = await vi.importActual<typeof import("../../services/collect-strategies/index.js")>(
-    "../../services/collect-strategies/index.js",
+vi.mock("../../services/reduce-strategies/index.js", async () => {
+  const actual = await vi.importActual<typeof import("../../services/reduce-strategies/index.js")>(
+    "../../services/reduce-strategies/index.js",
   )
   return {
     ...actual,
@@ -67,7 +67,7 @@ vi.mock("../../lib/supabase.js", () => ({
 }))
 
 async function buildTestApp() {
-  const { collectRoutes } = await import("../collect.js")
+  const { reduceRoutes } = await import("../reduce.js")
   const app = Fastify()
   app.addHook("preHandler", async (req, reply) => {
     // Stub Node socket timeouts that Fastify inject() doesn't populate; matches
@@ -76,7 +76,7 @@ async function buildTestApp() {
     reply.raw.setTimeout = (() => {}) as never
     ;(req as unknown as { userId: string }).userId = "test-user-1"
   })
-  await app.register(collectRoutes)
+  await app.register(reduceRoutes)
   return app
 }
 
@@ -85,19 +85,19 @@ beforeEach(() => {
   nextJobId = 0
 })
 
-describe("POST /v1/collect", () => {
+describe("POST /v1/reduce", () => {
   it("400s on invalid strategyId", async () => {
     const app = await buildTestApp()
     const res = await app.inject({
       method: "POST",
-      url: "/v1/collect",
+      url: "/v1/reduce",
       payload: { strategyId: "not-real", strategyConfig: {}, inputs: ["a"] },
     })
     expect(res.statusCode).toBe(400)
   })
 
   it("happy path: returns { jobId, output, meta }", async () => {
-    const { dispatchStrategy } = await import("../../services/collect-strategies/index.js")
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
     vi.mocked(dispatchStrategy).mockResolvedValue({
       result: "a-b",
       meta: { summary: "joined 2" },
@@ -105,7 +105,7 @@ describe("POST /v1/collect", () => {
     const app = await buildTestApp()
     const res = await app.inject({
       method: "POST",
-      url: "/v1/collect",
+      url: "/v1/reduce",
       payload: { strategyId: "concat", strategyConfig: { separator: "-" }, inputs: ["a", "b"] },
     })
     expect(res.statusCode).toBe(200)
@@ -119,12 +119,12 @@ describe("POST /v1/collect", () => {
   })
 
   it("does NOT dedup identical bodies within 10s (dedup: false)", async () => {
-    const { dispatchStrategy } = await import("../../services/collect-strategies/index.js")
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
     vi.mocked(dispatchStrategy).mockResolvedValue({ result: "x", meta: { summary: "ok" } })
     const app = await buildTestApp()
     const payload = { strategyId: "concat", strategyConfig: { separator: "-" }, inputs: ["a", "b"] }
-    const res1 = await app.inject({ method: "POST", url: "/v1/collect", payload })
-    const res2 = await app.inject({ method: "POST", url: "/v1/collect", payload })
+    const res1 = await app.inject({ method: "POST", url: "/v1/reduce", payload })
+    const res2 = await app.inject({ method: "POST", url: "/v1/reduce", payload })
     expect(res1.statusCode).toBe(200)
     expect(res2.statusCode).toBe(200)
     expect(res2.headers["x-dedup-hit"]).toBeUndefined()
@@ -133,13 +133,13 @@ describe("POST /v1/collect", () => {
 
   it("400 with no_valid_inputs on EmptyInputError", async () => {
     const { dispatchStrategy, EmptyInputError } = await import(
-      "../../services/collect-strategies/index.js"
+      "../../services/reduce-strategies/index.js"
     )
     vi.mocked(dispatchStrategy).mockRejectedValue(new EmptyInputError())
     const app = await buildTestApp()
     const res = await app.inject({
       method: "POST",
-      url: "/v1/collect",
+      url: "/v1/reduce",
       payload: {
         strategyId: "pick-best-llm",
         strategyConfig: { criteria: "x", inputKind: "text" },

@@ -1,4 +1,4 @@
-import { getStrategy, type CollectStrategyId } from "@nodaro/shared"
+import { getStrategy, type ReduceStrategyId } from "@nodaro/shared"
 import * as concat from "./concat.js"
 import * as count from "./count.js"
 import * as firstNonEmpty from "./first-non-empty.js"
@@ -8,7 +8,7 @@ import * as pickBestLlm from "./pick-best-llm.js"
 import type { StrategyContext, StrategyResult } from "./types.js"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const HANDLERS: Record<CollectStrategyId, (items: string[], config: any, ctx: StrategyContext) => Promise<StrategyResult>> = {
+const HANDLERS: Record<ReduceStrategyId, (items: string[], config: any, ctx: StrategyContext) => Promise<StrategyResult>> = {
   "concat": concat.execute,
   "count": count.execute,
   "first-non-empty": firstNonEmpty.execute,
@@ -18,7 +18,7 @@ const HANDLERS: Record<CollectStrategyId, (items: string[], config: any, ctx: St
 }
 
 export async function dispatchStrategy(
-  strategyId: CollectStrategyId,
+  strategyId: ReduceStrategyId,
   items: string[],
   rawConfig: unknown,
   ctx: StrategyContext,
@@ -29,5 +29,5 @@ export async function dispatchStrategy(
   return handler(items, config, ctx)
 }
 
-export type { StrategyResult, ResultMeta, CollectMeta } from "./types.js"
+export type { StrategyResult, ReduceMeta } from "./types.js"
 export { EmptyInputError } from "./types.js"

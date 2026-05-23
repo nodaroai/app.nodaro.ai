@@ -14,7 +14,7 @@ import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
 import { filterCloneNodes } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
-import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems } from "@nodaro/shared"
+import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
@@ -888,6 +888,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
       }
 
+      // Collect node (spec §5.2.1): when a new edge connects to a Collect's
+      // "in" handle, append the source node id to data.order so the Collect's
+      // output preserves connection order (and the config panel reflects it).
+      const collectTarget = newNodes.find((n) => n.id === connection.target && n.type === "collect")
+      if (collectTarget && isCollectInEdge(connection) && connection.source) {
+        const collectData = collectTarget.data as { order?: string[] }
+        const currentOrder = collectData.order ?? []
+        if (!currentOrder.includes(connection.source)) {
+          const nextOrder = [...currentOrder, connection.source]
+          newNodes = newNodes.map((n) =>
+            n.id === collectTarget.id
+              ? { ...n, data: { ...n.data, order: nextOrder } }
+              : n,
+          )
+        }
+      }
+
       return { nodes: newNodes, edges: newEdges, isDirty: true }
     })
 
@@ -1173,12 +1190,31 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // Spread the full source node (preserves measured, style, width, height,
       // className — same as copy+paste) then override id, position, data.
       const newId = generateNodeId()
+
+      // If the source node is a child of a group (has parentId) and the parent
+      // is NOT also being duplicated, drop parentId and convert local→world
+      // coords so the duplicate lands beside the original on the canvas. See
+      // spec §4.4 (copy/paste paragraph).
+      let parentId = source.parentId
+      let sourcePosition = source.position
+      if (parentId) {
+        const parentNode = state.nodes.find((n) => n.id === parentId)
+        if (parentNode) {
+          sourcePosition = {
+            x: source.position.x + parentNode.position.x,
+            y: source.position.y + parentNode.position.y,
+          }
+        }
+        parentId = undefined
+      }
+
       const newNode: WorkflowNode = {
         ...source,
         id: newId,
+        parentId,
         position: position ?? {
-          x: source.position.x + 50,
-          y: source.position.y + 50,
+          x: sourcePosition.x + 50,
+          y: sourcePosition.y + 50,
         },
         data: clonedData,
         selected: false,

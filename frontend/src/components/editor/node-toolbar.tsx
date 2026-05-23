@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
+import { clusterByGroup } from "@/lib/cluster-by-group"
+import { categoryRank } from "@/lib/node-category-order"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
 import type { ComponentSelection } from "./component-marketplace-modal"
@@ -62,44 +64,44 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "duration", label: "Duration", icon: <Clock className="h-4 w-4" />, category: "Parameter" },
   { type: "aspect-ratio", label: "Aspect Ratio", icon: <RatioIcon className="h-4 w-4" />, category: "Parameter" },
   { type: "motion", label: "Motion", icon: <SlidersHorizontal className="h-4 w-4" />, category: "Parameter" },
-  { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Camera", keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"] },
-  { type: "transition", label: "Transition", icon: <GitBranch className="h-4 w-4" />, category: "Camera", keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"] },
-  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Camera", keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"] },
-  { type: "lens", label: "Lens", icon: <Aperture className="h-4 w-4" />, category: "Camera", keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"] },
-  { type: "camera-format", label: "Camera / Film Stock", icon: <Film className="h-4 w-4" />, category: "Camera", keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"] },
-  { type: "lighting", label: "Lighting", icon: <Lightbulb className="h-4 w-4" />, category: "Look", keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"] },
-  { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Look", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
-  { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Look", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
-  { type: "action-fx", label: "Action FX", icon: <Zap className="h-4 w-4" />, category: "Look", keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"] },
-  { type: "character-fx", label: "Character FX", icon: <Sparkles className="h-4 w-4" />, category: "Look", keywords: ["character", "fx", "effect", "expression", "emotion", "gesture", "blink", "wink", "laugh", "cry", "smile", "frown", "shiver", "tremble", "gasp", "reaction"] },
-  { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Look", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
-  { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Look", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
-  { type: "loop-subject", label: "Loop Subject", icon: <Sparkles className="h-4 w-4" />, category: "Look", keywords: ["loop", "loopable", "seamless", "tunnel", "kaleidoscope", "fractal", "aurora", "particle", "vj", "background", "perfect loop", "veo loop"] },
-  { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Subject", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },
-  { type: "mood", label: "Mood", icon: <Smile className="h-4 w-4" />, category: "Subject", keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"] },
-  { type: "photographer", label: "Photographer / Artist Style", icon: <Camera className="h-4 w-4" />, category: "Camera", keywords: ["photographer", "artist", "style", "tim walker", "deakins", "lubezki", "fashion", "editorial", "cinematographer", "illustrator", "painter", "ghibli", "rutkowski", "leibovitz", "cartier-bresson"] },
-  { type: "aesthetic", label: "Aesthetic / Microtrend", icon: <Sparkles className="h-4 w-4" />, category: "Look", keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"] },
-  { type: "era", label: "Era / Period", icon: <Hourglass className="h-4 w-4" />, category: "Look", keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"] },
-  { type: "pose", label: "Pose", icon: <PersonStanding className="h-4 w-4" />, category: "Subject", keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"] },
-  { type: "material", label: "Material", icon: <Layers className="h-4 w-4" />, category: "Object", keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"] },
-  { type: "animal", label: "Animal", icon: <PawPrint className="h-4 w-4" />, category: "Object", keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"] },
-  { type: "vehicle", label: "Vehicle", icon: <Car className="h-4 w-4" />, category: "Object", keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"] },
-  { type: "weapon", label: "Weapon", icon: <Swords className="h-4 w-4" />, category: "Object", keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"] },
-  { type: "furniture", label: "Furniture", icon: <Armchair className="h-4 w-4" />, category: "Object", keywords: ["furniture", "chair", "sofa", "couch", "table", "desk", "bed", "lamp", "cabinet", "shelf", "wardrobe", "stool"] },
-  { type: "photo-genre", label: "Photo Genre", icon: <Camera className="h-4 w-4" />, category: "Subject", keywords: ["photo", "genre", "intent", "paparazzi", "editorial", "vogue", "lookbook", "selfie", "mirror selfie", "gym selfie", "headshot", "mugshot", "passport", "yearbook", "wedding", "movie poster", "album cover", "advertising", "documentary", "snapshot", "noir"] },
-  { type: "backdrop", label: "Backdrop", icon: <LayoutDashboard className="h-4 w-4" />, category: "Camera", keywords: ["backdrop", "background", "studio", "seamless", "wall", "gradient", "muslin", "velvet", "halo", "bokeh", "vignette", "white seamless", "black seamless", "brick wall", "concrete"] },
-  { type: "held-prop", label: "Held Prop", icon: <HandMetal className="h-4 w-4" />, category: "Subject", keywords: ["prop", "hand", "holding", "phone", "cigarette", "coffee", "wine", "microphone", "book", "umbrella", "bouquet", "guitar", "katana", "drink", "smoking", "instrument", "bag"] },
-  { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Camera", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
-  { type: "exposure-settings", label: "Exposure Settings", icon: <Aperture className="h-4 w-4" />, category: "Camera", keywords: ["exposure", "aperture", "f-stop", "shutter", "iso", "depth of field", "bokeh", "grain", "long exposure", "freeze"] },
-  { type: "render-quality", label: "Render Quality", icon: <Cpu className="h-4 w-4" />, category: "Look", keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"] },
-  { type: "composition-effects", label: "Composition Effects", icon: <Wand2 className="h-4 w-4" />, category: "Look", keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"] },
-  { type: "post-process-effects", label: "Post-Process Effects", icon: <Sparkles className="h-4 w-4" />, category: "Look", keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"] },
+  { type: "camera-motion", label: "Camera Motion", icon: <Video className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"] },
+  { type: "transition", label: "Transition", icon: <GitBranch className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"] },
+  { type: "framing", label: "Framing", icon: <Frame className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"] },
+  { type: "lens", label: "Lens", icon: <Aperture className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"] },
+  { type: "camera-format", label: "Camera / Film Stock", icon: <Film className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"] },
+  { type: "lighting", label: "Lighting", icon: <Lightbulb className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"] },
+  { type: "color-look", label: "Color / Look", icon: <SwatchBook className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"] },
+  { type: "atmosphere", label: "Atmosphere", icon: <CloudFog className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"] },
+  { type: "action-fx", label: "Action FX", icon: <Zap className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"] },
+  { type: "character-fx", label: "Character FX", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["character", "fx", "effect", "expression", "emotion", "gesture", "blink", "wink", "laugh", "cry", "smile", "frown", "shiver", "tremble", "gasp", "reaction"] },
+  { type: "style", label: "Style", icon: <Brush className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"] },
+  { type: "setting", label: "Setting", icon: <Mountain className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"] },
+  { type: "loop-subject", label: "Loop Subject", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["loop", "loopable", "seamless", "tunnel", "kaleidoscope", "fractal", "aurora", "particle", "vj", "background", "perfect loop", "veo loop"] },
+  { type: "person", label: "Person", icon: <UserRound className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"] },
+  { type: "mood", label: "Mood", icon: <Smile className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"] },
+  { type: "photographer", label: "Photographer / Artist Style", icon: <Camera className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["photographer", "artist", "style", "tim walker", "deakins", "lubezki", "fashion", "editorial", "cinematographer", "illustrator", "painter", "ghibli", "rutkowski", "leibovitz", "cartier-bresson"] },
+  { type: "aesthetic", label: "Aesthetic / Microtrend", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"] },
+  { type: "era", label: "Era / Period", icon: <Hourglass className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"] },
+  { type: "pose", label: "Pose", icon: <PersonStanding className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"] },
+  { type: "material", label: "Material", icon: <Layers className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"] },
+  { type: "animal", label: "Animal", icon: <PawPrint className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"] },
+  { type: "vehicle", label: "Vehicle", icon: <Car className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"] },
+  { type: "weapon", label: "Weapon", icon: <Swords className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"] },
+  { type: "furniture", label: "Furniture", icon: <Armchair className="h-4 w-4" />, category: "Pickers", group: "Object", keywords: ["furniture", "chair", "sofa", "couch", "table", "desk", "bed", "lamp", "cabinet", "shelf", "wardrobe", "stool"] },
+  { type: "photo-genre", label: "Photo Genre", icon: <Camera className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["photo", "genre", "intent", "paparazzi", "editorial", "vogue", "lookbook", "selfie", "mirror selfie", "gym selfie", "headshot", "mugshot", "passport", "yearbook", "wedding", "movie poster", "album cover", "advertising", "documentary", "snapshot", "noir"] },
+  { type: "backdrop", label: "Backdrop", icon: <LayoutDashboard className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["backdrop", "background", "studio", "seamless", "wall", "gradient", "muslin", "velvet", "halo", "bokeh", "vignette", "white seamless", "black seamless", "brick wall", "concrete"] },
+  { type: "held-prop", label: "Held Prop", icon: <HandMetal className="h-4 w-4" />, category: "Pickers", group: "Subject", keywords: ["prop", "hand", "holding", "phone", "cigarette", "coffee", "wine", "microphone", "book", "umbrella", "bouquet", "guitar", "katana", "drink", "smoking", "instrument", "bag"] },
+  { type: "temporal", label: "Temporal", icon: <Clock className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"] },
+  { type: "exposure-settings", label: "Exposure Settings", icon: <Aperture className="h-4 w-4" />, category: "Pickers", group: "Camera", keywords: ["exposure", "aperture", "f-stop", "shutter", "iso", "depth of field", "bokeh", "grain", "long exposure", "freeze"] },
+  { type: "render-quality", label: "Render Quality", icon: <Cpu className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"] },
+  { type: "composition-effects", label: "Composition Effects", icon: <Wand2 className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"] },
+  { type: "post-process-effects", label: "Post-Process Effects", icon: <Sparkles className="h-4 w-4" />, category: "Pickers", group: "Look", keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"] },
   // Sound
-  { type: "music-genre", label: "Music Genre", icon: <Music className="h-4 w-4" />, category: "Sound", keywords: ["music", "genre"] },
-  { type: "music-mood", label: "Music Mood", icon: <Activity className="h-4 w-4" />, category: "Sound", keywords: ["music", "mood"] },
-  { type: "instrumentation", label: "Instrumentation", icon: <Piano className="h-4 w-4" />, category: "Sound", keywords: ["instruments"] },
-  { type: "voice-character", label: "Voice Character", icon: <User className="h-4 w-4" />, category: "Sound", keywords: ["voice", "character"] },
-  { type: "voice-delivery", label: "Voice Delivery", icon: <MessageCircle className="h-4 w-4" />, category: "Sound", keywords: ["voice", "delivery"] },
+  { type: "music-genre", label: "Music Genre", icon: <Music className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["music", "genre"] },
+  { type: "music-mood", label: "Music Mood", icon: <Activity className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["music", "mood"] },
+  { type: "instrumentation", label: "Instrumentation", icon: <Piano className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["instruments"] },
+  { type: "voice-character", label: "Voice Character", icon: <User className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["voice", "character"] },
+  { type: "voice-delivery", label: "Voice Delivery", icon: <MessageCircle className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["voice", "delivery"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "llm-chat", label: "LLM Chat", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
@@ -182,14 +184,11 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "motion-graphics", label: "Motion Graphics", icon: <Shapes className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "composite", label: "Composite", icon: <Layers className="h-4 w-4" />, category: "Processing", group: "Video Production" },
   { type: "render-video", label: "Render Video", icon: <Film className="h-4 w-4" />, category: "Processing", group: "Video Production" },
-  // Character
-  { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Character" },
-  // Face
-  { type: "face", label: "Create Face", icon: <SmilePlus className="h-4 w-4" />, category: "Face" },
-  // Object
-  { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Object" },
-  // Location
-  { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Location" },
+  // Assets
+  { type: "character", label: "Create Character", icon: <UserPlus className="h-4 w-4" />, category: "Assets" },
+  { type: "face", label: "Create Face", icon: <SmilePlus className="h-4 w-4" />, category: "Assets" },
+  { type: "object", label: "Create Object", icon: <Package className="h-4 w-4" />, category: "Assets" },
+  { type: "location", label: "Create Location", icon: <MapPin className="h-4 w-4" />, category: "Assets" },
   // Scene (Phase 1B.2 pipeline-managed SceneNode — replaces legacy scene)
   { type: "scene", label: "Scene", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["scene", "shot list", "storyboard", "camera", "pipeline"] },
   // Output
@@ -210,7 +209,9 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "teleport-send", label: "Teleport Send", icon: <Send className="h-4 w-4" />, category: "Workflow" },
   { type: "teleport-receive", label: "Teleport Receive", icon: <Download className="h-4 w-4" />, category: "Workflow" },
   { type: "router", label: "Router", icon: <GitBranch className="h-4 w-4" />, category: "Workflow" },
-  { type: "collect", label: "Collect", icon: <Funnel className="h-4 w-4" />, category: "Workflow", keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"] },
+  { type: "group", label: "Group", icon: <Box className="h-4 w-4" />, category: "Workflow", keywords: ["group", "container", "wrap"] },
+  { type: "collect", label: "Collect", icon: <Layers className="h-4 w-4" />, category: "Workflow", keywords: ["collect", "gather", "bucket", "by-type", "split-by-type"] },
+  { type: "reduce", label: "Reduce", icon: <Funnel className="h-4 w-4" />, category: "Workflow", keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "vote", "count"] },
   { type: "sticky-note", label: "Sticky Note", icon: <StickyNote className="h-4 w-4" />, category: "Workflow" },
   { type: "component" as SceneNodeType, label: "Component", icon: <Puzzle className="h-4 w-4" />, category: "Component" },
   { type: "preview", label: "Preview", icon: <Eye className="h-4 w-4" />, category: "Processing", group: "Text" },
@@ -224,14 +225,11 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
   Triggers: "group-hover:text-[#F97316]",
   Data: "group-hover:text-[#14B8A6]",
   Parameter: "group-hover:text-[#6366F1]",
+  Pickers: "group-hover:text-[#6366F1]",
   Sound: "group-hover:text-[#a78bfa]",
   AI: "group-hover:text-[#ff0073]",
   Processing: "group-hover:text-[#475569]",
-  Character: "group-hover:text-[#EC4899]",
-  Face: "group-hover:text-[#F97316]",
-  Object: "group-hover:text-[#10B981]",
-  Location: "group-hover:text-[#06B6D4]",
-  Scene: "group-hover:text-[#8B5CF6]",
+  Assets: "group-hover:text-[#EC4899]",
   Output: "group-hover:text-[#22C55E]",
   Workflow: "group-hover:text-[#F59E0B]",
   Component: "group-hover:text-[#A855F7]",
@@ -243,6 +241,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
   // by dropping the `n.category !== "Parameter"` clause below.
   const visibleNodes = NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter")
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
+    .sort((a, b) => categoryRank(a) - categoryRank(b))
   return (
     <>
       {/* Unified My Library - quick access to all assets */}
@@ -253,7 +252,7 @@ function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) 
         <Suspense fallback={null}><UnifiedAssetLibraryButton /></Suspense>
       </div>
       {categories.map((cat) => {
-        const catNodes = visibleNodes.filter((n) => n.category === cat)
+        const catNodes = clusterByGroup(visibleNodes.filter((n) => n.category === cat))
         return (
           <div key={cat} className="flex flex-col gap-0.5 mb-4">
             <span className="font-sans text-[10px] font-semibold uppercase tracking-wider text-[#94A3B8] dark:text-[#ff0073] mb-1.5">

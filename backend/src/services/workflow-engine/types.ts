@@ -18,7 +18,7 @@ export interface NodeOutput {
   imageUrls?: readonly string[]
   audioUrls?: readonly string[]
   text?: string
-  /** Single aggregated output value (used by fan-in nodes like collect). */
+  /** Single aggregated output value (used by fan-in nodes like reduce). */
   result?: string
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
@@ -154,6 +154,7 @@ export interface SimpleNode {
   id: string
   type: string
   data: WorkflowNodeData
+  parentId?: string
 }
 
 export interface SimpleEdge {
@@ -225,9 +226,9 @@ export interface ResolvedInputs {
   lottieAssets?: Array<{ id?: string; url: string; name?: string }>
   /** Word-timed captions wired from upstream transcribe.words for kinetic captions. */
   captions?: Caption[]
-  /** Fan-in input list — populated by the resolver for collect-style targets.
+  /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
-   *  fanned out) so the collect strategy can fold it into a single value. */
+   *  fanned out) so the reduce strategy can fold it into a single value. */
   inputs?: string[]
 }
 

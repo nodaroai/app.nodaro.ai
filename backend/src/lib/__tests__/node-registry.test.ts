@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 
-describe("NODE_REGISTRY: collect", () => {
-  it("has a 'collect' entry with label, category=control, outputType=text", () => {
-    const entry = NODE_REGISTRY.find((n) => n.type === "collect")
+describe("NODE_REGISTRY: reduce", () => {
+  it("has a 'reduce' entry with label, category=control, outputType=text", () => {
+    const entry = NODE_REGISTRY.find((n) => n.type === "reduce")
     expect(entry).toBeDefined()
-    expect(entry!.label).toMatch(/collect/i)
+    expect(entry!.label).toMatch(/reduce/i)
     // Fan-in collapses N values into one — closest existing NodeCategory is
     // "control" (alongside list/loop/combine-text/split-text). The plan
     // suggested category "workflow" but no such category exists in the
@@ -15,7 +15,7 @@ describe("NODE_REGISTRY: collect", () => {
   })
 
   it("exposes strategyId as a required enum-style input with all 6 strategies", () => {
-    const entry = NODE_REGISTRY.find((n) => n.type === "collect")
+    const entry = NODE_REGISTRY.find((n) => n.type === "reduce")
     expect(entry).toBeDefined()
     const strategyField = entry!.inputSchema?.fields.find((f) => f.key === "strategyId")
     expect(strategyField).toBeDefined()
@@ -31,10 +31,10 @@ describe("NODE_REGISTRY: collect", () => {
   })
 
   it("declares a dynamic per-strategy credit cost", () => {
-    const entry = NODE_REGISTRY.find((n) => n.type === "collect")
+    const entry = NODE_REGISTRY.find((n) => n.type === "reduce")
     // Range string "0-3" reflects the spread across strategies — concat /
     // first-non-empty / count / vote / merge-json are 0cr; pick-best-llm is
-    // 3cr. The composite key `collect:<strategyId>` does the real lookup at
+    // 3cr. The composite key `reduce:<strategyId>` does the real lookup at
     // runtime (see backend/src/ee/billing/credits.ts).
     expect(entry!.creditCost).toBe("0-3")
   })

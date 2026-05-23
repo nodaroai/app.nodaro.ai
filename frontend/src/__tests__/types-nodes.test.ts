@@ -1,30 +1,30 @@
 import { describe, expect, it } from "vitest"
-import type { CollectNodeData, SceneNodeData, SceneNodeType } from "../types/nodes"
+import type { ReduceNodeData, SceneNodeData, SceneNodeType } from "../types/nodes"
 import { NODE_DEFINITIONS } from "../types/nodes"
 
-describe("CollectNodeData", () => {
-  it("CollectNodeData is part of SceneNodeData union", () => {
+describe("ReduceNodeData", () => {
+  it("ReduceNodeData is part of SceneNodeData union", () => {
     const data: SceneNodeData = {
-      label: "Collect",
+      label: "Reduce",
       strategyId: "concat",
       strategyConfig: { separator: "-" },
-    } as CollectNodeData
-    expect((data as CollectNodeData).strategyId).toBe("concat")
+    } as ReduceNodeData
+    expect((data as ReduceNodeData).strategyId).toBe("concat")
   })
 
-  it("'collect' is in SceneNodeType", () => {
-    const t: SceneNodeType = "collect"
-    expect(t).toBe("collect")
+  it("'reduce' is in SceneNodeType", () => {
+    const t: SceneNodeType = "reduce"
+    expect(t).toBe("reduce")
   })
 
-  it("NODE_DEFINITIONS has an entry for 'collect'", () => {
-    expect(NODE_DEFINITIONS.find((n) => n.type === "collect")).toBeTruthy()
+  it("NODE_DEFINITIONS has an entry for 'reduce'", () => {
+    expect(NODE_DEFINITIONS.find((n) => n.type === "reduce")).toBeTruthy()
   })
 
-  it("NODE_DEFINITIONS 'collect' entry has the expected default strategy", () => {
-    const def = NODE_DEFINITIONS.find((n) => n.type === "collect")
+  it("NODE_DEFINITIONS 'reduce' entry has the expected default strategy", () => {
+    const def = NODE_DEFINITIONS.find((n) => n.type === "reduce")
     expect(def).toBeDefined()
-    const data = def!.defaultData as CollectNodeData
+    const data = def!.defaultData as ReduceNodeData
     expect(data.strategyId).toBe("concat")
     expect(data.strategyConfig).toBeDefined()
     expect((data.strategyConfig as { separator?: string }).separator).toBe("\n\n")

@@ -140,7 +140,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 | 12 | `frontend/src/components/editor/config-panels/index.ts` | Export |
 | 13 | `frontend/src/components/editor/config-panel.tsx` | Import, display name, button type set, render conditional |
 | 14 | `frontend/src/lib/api.ts` | API client function |
-| 15 | `frontend/src/components/editor/workflow-editor/types.ts` | `EXECUTABLE_NODE_TYPES` set ⚠️ **Without this, Run button fails** |
+| 15 | `frontend/src/components/editor/workflow-editor/types.ts` | `EXECUTABLE_TYPES` set ⚠️ **Without this, Run button fails** |
 | 16 | `frontend/src/components/editor/workflow-editor/execute-node.ts` | DAG execution block |
 | 17 | `frontend/src/components/editor/workflow-editor/execution-graph.ts` | `extractNodeOutput()` |
 | 18 | `frontend/src/components/editor/workflow-editor/node-input-resolver.ts` | Input source mapping |

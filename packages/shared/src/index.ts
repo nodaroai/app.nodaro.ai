@@ -189,6 +189,22 @@ export {
 } from "./clone-utils.js"
 
 export {
+  aggregateByType,
+  presentTypes,
+  isAggregateableType,
+  AGGREGATEABLE_TYPES,
+  GROUP_HANDLE_PREFIX,
+  COLLECT_IN_HANDLE,
+  groupHandleId,
+  parseGroupHandle,
+  isCollectInEdge,
+  buildChildrenByParent,
+  type AggregateableType,
+  type Member,
+  type AggregationBuckets,
+} from "./group-aggregation.js"
+
+export {
   LLM_MODELS,
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
@@ -990,7 +1006,7 @@ export * from "./scene-node-types.js"
 export * from "./scene-helper-types.js"
 export * from "./provider-directive-defaults.js"
 export * from "./lora-routing.js"
-export * from "./collect-strategy-registry.js"
+export * from "./reduce-strategy-registry.js"
 
 export {
   COMBINE_TRANSITIONS,

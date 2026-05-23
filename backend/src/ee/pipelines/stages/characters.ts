@@ -21,6 +21,16 @@ import {
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 import { runImageCriticLoop } from "./_image-critic-loop.js"
+import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+
+/**
+ * Phase 1D /simplify perf pass: cap parallel per-entity work at 3 (matches
+ * the Match Cut Orchestrator precedent — conservative against provider
+ * rate limits + DB FOR UPDATE handles credit reservation atomicity). Each
+ * entity's outer try/catch swallows its own failure (metadata.last_error
+ * persisted independently), so siblings never cancel.
+ */
+const ENTITY_CONCURRENCY = 3
 
 export interface RunCharactersStageArgs {
   supabase: SupabaseClient
@@ -97,28 +107,67 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
     .eq("entity_type", "character")
     .order("created_at", { ascending: true })
 
+  // Phase 1D /simplify perf pass: parallelize per-entity work. Each entity is
+  // independent (own image gen, own critic retry loop, own metadata writes),
+  // so concurrency is safe. The `anyAwaiting` flag is written-only-true from
+  // multiple tasks; JS's single-threaded event loop makes this race-free.
+  // Set to true when an entity SUCCEEDS (reaches awaiting_approval) OR FAILS —
+  // both cases require user attention (review approval OR manual recovery via
+  // the EntityCard Regenerate button). If all pending entities fail (transient
+  // KIE outage), without this we'd fall through to step 6 and mark the stage
+  // `approved` with 0 successful main assets — downstream Shot List would
+  // then run against missing main_asset_id refs.
+  //
+  // Each task wraps its work in try/catch so a thrown error from one entity
+  // (e.g. `pipelineGenerateImage` failure inside `generateCharacterMain`)
+  // does NOT cancel siblings — failure metadata has already been persisted
+  // by the inner handler before the throw. `failFast=false` on the wrapper
+  // is belt-and-suspenders: even if a task escaped its catch, sibling tasks
+  // continue. The settled wrapper returns all-fulfilled results because
+  // catches consume rejections.
   let anyAwaiting = false
-  for (const entity of entities ?? []) {
-    if (entity.status === "approved") {
-      // Ensure variants are generated.
-      await ensureCharacterVariants(supabase, pipelineId, userId, entity, plan)
-      continue
-    }
-    if (entity.status === "awaiting_approval") {
+  const tasks = (entities ?? []).map((entity) => async () => {
+    try {
+      if (entity.status === "approved") {
+        // Ensure variants are generated.
+        await ensureCharacterVariants(supabase, pipelineId, userId, entity, plan)
+        return
+      }
+      if (entity.status === "awaiting_approval") {
+        anyAwaiting = true
+        return
+      }
+      if (entity.status === "rejected") {
+        // Rejected with feedback — regenerate main.
+        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
+        anyAwaiting = true
+        return
+      }
+      if (entity.status === "pending" || entity.status === "generating") {
+        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
+        anyAwaiting = true
+      }
+    } catch (err) {
+      // Error isolation: `generateCharacterMain` already persists
+      // `metadata.last_error` + emits the `entity:status failed` SSE before
+      // re-throwing. We log here so the operator sees per-entity failures
+      // in worker logs, then swallow so sibling entities can still finish.
+      //
+      // Also set `anyAwaiting=true`: a failed entity needs user attention
+      // (Regenerate / Skip from the EntityCard) and must NOT be silently
+      // skipped by the "all approved → mark stage approved" fall-through
+      // below. Without this, an all-fail run (e.g. KIE 503 storm) would
+      // leave anyAwaiting=false → allVariantsAwaiting=false → step 6 marks
+      // the stage `approved` with zero successful main assets, then
+      // downstream Shot List runs against missing refs.
       anyAwaiting = true
-      continue
+      console.error(
+        `[characters] entity processing failed for ${entity.entity_key} (pipeline=${pipelineId}):`,
+        err instanceof Error ? err.message : String(err),
+      )
     }
-    if (entity.status === "rejected") {
-      // Rejected with feedback — regenerate main.
-      await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
-      anyAwaiting = true
-      continue
-    }
-    if (entity.status === "pending" || entity.status === "generating") {
-      await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
-      anyAwaiting = true
-    }
-  }
+  })
+  await settledWithLimit(tasks, ENTITY_CONCURRENCY, undefined, false)
 
   // Phase 1D.2c-a §6 (D1): auto-mode aggregates `image_critic_unresolvable`
   // failures. By the time we reach this aggregation point, every entity has

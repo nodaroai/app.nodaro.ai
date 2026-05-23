@@ -3,30 +3,30 @@ import Fastify from "fastify"
 import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
-import { registerCollect } from "../collect.js"
+import { registerReduce } from "../reduce.js"
 
 /**
- * Spin up a minimal Fastify with a stub `POST /v1/collect` route so we
+ * Spin up a minimal Fastify with a stub `POST /v1/reduce` route so we
  * can exercise the MCP→route bridge end-to-end without touching the real
  * credit guard / Supabase. Same pattern as `apps.test.ts`.
  */
-function fastifyWithCollect(
+function fastifyWithReduce(
   handler: (
     body: Record<string, unknown>,
   ) => { status: number; body: Record<string, unknown> },
 ) {
   const app = Fastify()
-  app.post("/v1/collect", async (req, reply) => {
+  app.post("/v1/reduce", async (req, reply) => {
     const r = handler(req.body as Record<string, unknown>)
     return reply.status(r.status).send(r.body)
   })
   return app
 }
 
-describe("collect MCP tool", () => {
-  it("delegates to POST /v1/collect with userId forwarded from session", async () => {
+describe("reduce MCP tool", () => {
+  it("delegates to POST /v1/reduce with userId forwarded from session", async () => {
     let received: Record<string, unknown> | undefined
-    const fastify = fastifyWithCollect((body) => {
+    const fastify = fastifyWithReduce((body) => {
       received = body
       return {
         status: 200,
@@ -38,7 +38,7 @@ describe("collect MCP tool", () => {
       }
     })
     const server = buildServer()
-    registerCollect({
+    registerReduce({
       server,
       session: newSession({
         userId: "u1",
@@ -47,7 +47,7 @@ describe("collect MCP tool", () => {
       }),
       fastify,
     })
-    const result = await callTool(server, "collect", {
+    const result = await callTool(server, "reduce", {
       strategyId: "pick-best-llm",
       strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
       inputs: ["https://r2/a.jpg", "https://r2/b.jpg"],
@@ -63,7 +63,7 @@ describe("collect MCP tool", () => {
 
   it("defaults strategyConfig to {} when omitted", async () => {
     let received: Record<string, unknown> | undefined
-    const fastify = fastifyWithCollect((body) => {
+    const fastify = fastifyWithReduce((body) => {
       received = body
       return {
         status: 200,
@@ -75,7 +75,7 @@ describe("collect MCP tool", () => {
       }
     })
     const server = buildServer()
-    registerCollect({
+    registerReduce({
       server,
       session: newSession({
         userId: "u1",
@@ -84,7 +84,7 @@ describe("collect MCP tool", () => {
       }),
       fastify,
     })
-    const result = await callTool(server, "collect", {
+    const result = await callTool(server, "reduce", {
       strategyId: "concat",
       inputs: ["a", "b"],
     })
@@ -93,9 +93,9 @@ describe("collect MCP tool", () => {
   })
 
   it("rejects an unknown strategyId at the Zod boundary", async () => {
-    const fastify = fastifyWithCollect(() => ({ status: 200, body: {} }))
+    const fastify = fastifyWithReduce(() => ({ status: 200, body: {} }))
     const server = buildServer()
-    registerCollect({
+    registerReduce({
       server,
       session: newSession({
         userId: "u1",
@@ -107,7 +107,7 @@ describe("collect MCP tool", () => {
     // Invalid `strategyId` — z.enum should reject at the MCP SDK input
     // validation boundary. The SDK returns `{ isError: true }` with the
     // Zod issues in `content[0].text` (not a throw).
-    const result = await callTool(server, "collect", {
+    const result = await callTool(server, "reduce", {
       strategyId: "not-a-real-strategy",
       inputs: ["x"],
     })
@@ -117,12 +117,12 @@ describe("collect MCP tool", () => {
   })
 
   it("surfaces EmptyInputError as a typed isError result", async () => {
-    const fastify = fastifyWithCollect(() => ({
+    const fastify = fastifyWithReduce(() => ({
       status: 400,
-      body: { error: { code: "no_valid_inputs", message: "All upstream iterations failed; nothing to collect." } },
+      body: { error: { code: "no_valid_inputs", message: "All upstream iterations failed; nothing to reduce." } },
     }))
     const server = buildServer()
-    registerCollect({
+    registerReduce({
       server,
       session: newSession({
         userId: "u1",
@@ -131,7 +131,7 @@ describe("collect MCP tool", () => {
       }),
       fastify,
     })
-    const result = await callTool(server, "collect", {
+    const result = await callTool(server, "reduce", {
       strategyId: "first-non-empty",
       inputs: ["", " "],
     })
@@ -141,7 +141,7 @@ describe("collect MCP tool", () => {
 
   it("does NOT register without workflows:execute scope", async () => {
     const server = buildServer()
-    registerCollect({
+    registerReduce({
       server,
       session: newSession({
         userId: "u1",
@@ -151,6 +151,6 @@ describe("collect MCP tool", () => {
       fastify: Fastify(),
     })
     const tools = await listTools(server)
-    expect(tools.map((t) => t.name)).not.toContain("collect")
+    expect(tools.map((t) => t.name)).not.toContain("reduce")
   })
 })

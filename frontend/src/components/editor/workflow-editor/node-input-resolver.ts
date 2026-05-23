@@ -9,9 +9,9 @@ import type {
   LoopNodeData,
 } from "@/types/nodes";
 import { loopColInputHandle } from "@/types/nodes";
-import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./execution-graph";
+import { extractNodeOutput, IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE, computeGroupBuckets, computeCollectBuckets } from "./execution-graph";
 import { FAN_IN_NODE_TYPES } from "./types";
-import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared";
+import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint, parseGroupHandle } from "@nodaro/shared";
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
@@ -124,6 +124,8 @@ const STRUCTURED_LIST_TYPES = new Set([
   "deduplicate",
   "merge-lists",
   "sort-list",
+  "group",
+  "collect",
 ])
 
 function isStructuredListNode(node: { type?: string; data: Record<string, unknown> }): boolean {
@@ -425,9 +427,9 @@ export interface FrontendResolvedInputs {
    *  image-to-video targets. */
   injectCharacterContext?: boolean;
   attachToCharacterId?: string;
-  /** Fan-in input list — populated by the resolver for collect-style targets.
+  /** Fan-in input list — populated by the resolver for reduce-style targets.
    *  Carries the full upstream list (or `[singleOutput]` when upstream wasn't
-   *  fanned out) so the collect strategy can fold it into a single value.
+   *  fanned out) so the reduce strategy can fold it into a single value.
    *  Mirror of backend FrontendResolvedInputs.inputs. */
   inputs?: string[];
 }
@@ -556,7 +558,17 @@ function nodeOutputKind(nodeType: string | undefined): "image" | "video" | "audi
 
 export function extractNodeOutputAsList(
   node: WorkflowNode,
+  sourceHandle?: string,
 ): string[] | undefined {
+  // Group + Collect: lazy bucket computation, handle-aware.
+  if (node.type === "group" || node.type === "collect") {
+    const { nodes, edges } = useWorkflowStore.getState();
+    const buckets = node.type === "group"
+      ? computeGroupBuckets(node, nodes)
+      : computeCollectBuckets(node, nodes, edges);
+    const requestedType = parseGroupHandle(sourceHandle);
+    return requestedType ? buckets[requestedType] : undefined;
+  }
   const data = node.data as Record<string, unknown>;
   if (node.type === "split-text") {
     const splitResults = data.splitResults as string[] | undefined;
@@ -602,10 +614,10 @@ export function getListInputForNode(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
 ): string[] | undefined {
-  // Fan-in targets (collect) consume the upstream list — they are NOT fanned
+  // Fan-in targets (reduce) consume the upstream list — they are NOT fanned
   // out themselves. Returning undefined here prevents executeNodeForList from
-  // running N redundant POST /v1/collect calls (each charging credits) when a
-  // user wires List → Collect directly without an intermediate fanned-out
+  // running N redundant POST /v1/reduce calls (each charging credits) when a
+  // user wires List → Reduce directly without an intermediate fanned-out
   // node. Mirrors backend input-resolver.ts FAN_IN_NODE_TYPES early-return.
   if (FAN_IN_NODE_TYPES.has(node.type ?? "")) return undefined;
 
@@ -779,13 +791,16 @@ export function resolveNodeInputs(
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
     const srcData = src.data as Record<string, unknown>;
-    // split-media uses outputChunkIndex routing, skip __listResults
-    const srcListResults = src.type === "split-media"
-      ? undefined
-      : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+    // split-media uses outputChunkIndex routing, skip __listResults.
+    // Group + Collect: route through extractNodeOutputAsList (no __listResults on data).
+    const srcListResults = src.type === "group" || src.type === "collect"
+      ? extractNodeOutputAsList(src, srcEdge.sourceHandle ?? undefined)
+      : src.type === "split-media"
+        ? undefined
+        : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
 
-    // Fan-in targets (collect): consume the entire upstream list as a single
-    // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
+    // Fan-in targets (reduce): consume the entire upstream list as a single
+    // `inputs.inputs` array regardless of edgeOutputMode — reduce strategies
     // fold the list into one value, they are never fanned out per-item. When
     // upstream has no list (no fan-out happened), wrap its single output as
     // `[output]` so the strategy still has something to fold. Mirrors backend

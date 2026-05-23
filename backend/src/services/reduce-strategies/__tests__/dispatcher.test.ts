@@ -18,6 +18,6 @@ describe("dispatchStrategy", () => {
   it("throws on unknown strategyId", async () => {
     await expect(
       dispatchStrategy("nope" as never, ["a"], {}, ctx),
-    ).rejects.toThrow(/unknown collect strategy/i)
+    ).rejects.toThrow(/unknown reduce strategy/i)
   })
 })

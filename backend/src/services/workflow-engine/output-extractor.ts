@@ -7,7 +7,7 @@
  * 2. Node `data` fields (for source nodes like text-prompt, upload-*)
  */
 
-import type { SimpleNode, NodeOutput } from "./types.js"
+import type { SimpleNode, SimpleEdge, NodeOutput } from "./types.js"
 import {
   IMAGE_SOURCE_TYPES,
   VIDEO_SOURCE_TYPES,
@@ -18,8 +18,108 @@ import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
 import { extractAllGeneratedResults } from "@nodaro/shared"
+import {
+  aggregateByType,
+  getOutputType,
+  isAggregateableType,
+  isCollectInEdge,
+  parseGroupHandle,
+  type AggregationBuckets,
+  type Member,
+} from "@nodaro/shared"
 
 export { extractAllGeneratedResults }
+
+/**
+ * Workflow context required by extractors to compute group/collect bucket
+ * outputs. Group buckets read members from `nodes` filtered by `parentId`;
+ * Collect buckets read members from incoming `edges` (sorted by data.order).
+ *
+ * Always optional — callers that don't have access pass `undefined`, in
+ * which case the group/collect cases return `undefined` / `[]`.
+ */
+export interface ExtractContext {
+  nodes: SimpleNode[]
+  edges: SimpleEdge[]
+}
+
+/**
+ * Compute backend Group output buckets by reading children (parentId ===
+ * group.id), classifying each by getOutputType, and reading values via the
+ * child's primary NodeOutput field. Skips "data"-typed children (multi-output
+ * + parameter pickers) — mirrors the frontend `computeGroupBuckets`.
+ *
+ * Sort order: index in `allNodes`. The backend has no `position.y` to mirror
+ * the frontend's top-to-bottom rule, so we use array order as a stable
+ * approximation — the frontend persists nodes in the order the user added /
+ * arranged them, which is the same order that ends up here.
+ */
+function computeBackendGroupBuckets(
+  group: SimpleNode,
+  allNodes: SimpleNode[],
+): AggregationBuckets {
+  const children = allNodes.filter((n) => n.parentId === group.id)
+  const members: Member[] = []
+  for (const child of children) {
+    const t = getOutputType(child.type)
+    if (!isAggregateableType(t)) continue
+    const out = extractPrimaryNodeOutput(child)
+    if (!out) continue
+    const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
+    if (!val) continue
+    members.push({ nodeId: child.id, type: t, value: val })
+  }
+  return aggregateByType(members)
+}
+
+/**
+ * Compute backend Collect output buckets by reading upstream connections to
+ * the "in" handle, sorted by `data.order` (with arrival-order fallback for
+ * unrecorded entries), classifying each by getOutputType, and reading values
+ * via the source's primary NodeOutput field.
+ */
+function computeBackendCollectBuckets(
+  collect: SimpleNode,
+  allNodes: SimpleNode[],
+  edges: SimpleEdge[],
+): AggregationBuckets {
+  const incoming = edges.filter(
+    (e) => e.target === collect.id && isCollectInEdge(e),
+  )
+  const order = ((collect.data as { order?: string[] })?.order) ?? []
+  const rankMap = new Map(order.map((id, i) => [id, i]))
+  const rank = (sid: string): number => rankMap.get(sid) ?? Infinity
+  const sorted = [...incoming].sort((a, b) => rank(a.source) - rank(b.source))
+  const nodesById = new Map(allNodes.map((n) => [n.id, n]))
+  const members: Member[] = []
+  for (const e of sorted) {
+    const src = nodesById.get(e.source)
+    if (!src) continue
+    const t = getOutputType(src.type)
+    if (!isAggregateableType(t)) continue
+    const out = extractPrimaryNodeOutput(src)
+    if (!out) continue
+    const val = out.text ?? out.imageUrl ?? out.videoUrl ?? out.audioUrl
+    if (!val) continue
+    members.push({ nodeId: src.id, type: t, value: val })
+  }
+  return aggregateByType(members)
+}
+
+/**
+ * Read a node's primary output from its static data. Tries source-node data
+ * first (text-prompt, upload-*, list, loop, etc.), then falls back to saved
+ * job-output data (generatedResults, generatedImageUrl, etc.). Used by the
+ * backend group/collect bucket helpers to resolve member values without
+ * needing a nodeStates map. Group/collect themselves are not resolved here
+ * (they require a context) — the bucket helpers skip them via getOutputType
+ * returning "data" for group, and Collect's recursive case is handled by the
+ * surrounding execution wiring (a Collect inside a Group is rare and not a
+ * v1 requirement).
+ */
+function extractPrimaryNodeOutput(node: SimpleNode): NodeOutput | undefined {
+  return extractSourceNodeOutput(node) ?? extractSavedNodeOutput(node)
+}
 
 function processedResultToText(r: unknown): string | undefined {
   if (r === null || r === undefined) return undefined
@@ -71,13 +171,43 @@ const PLAN_OUTPUT_KEYS = [
 
 /**
  * Extract output from a source node's static data (no execution needed).
+ *
+ * `sourceHandle` is honoured for nodes whose output varies by handle (group /
+ * collect — `out-text` / `out-image` / `out-video` / `out-audio`). For other
+ * source types the handle is ignored at this extraction level — handle-based
+ * routing happens downstream in `getPrimaryOutput`.
+ *
+ * `context` is required for group/collect to read children / incoming
+ * upstreams. When omitted, group/collect return `undefined` — the caller
+ * accepts the gap (e.g., single-node Run with no graph access).
+ *
+ * Both new params are appended (sourceHandle, context) so existing callers
+ * that pass only `(node, triggerData?)` continue to typecheck unchanged.
  */
 export function extractSourceNodeOutput(
   node: SimpleNode,
   triggerData?: Record<string, unknown>,
+  sourceHandle?: string | null,
+  context?: ExtractContext,
 ): NodeOutput | undefined {
   const data = node.data
   const type = node.type
+
+  if (type === "group" || type === "collect") {
+    if (!context) return undefined
+    const buckets = type === "group"
+      ? computeBackendGroupBuckets(node, context.nodes)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+    const requestedType = parseGroupHandle(sourceHandle)
+    if (!requestedType) return undefined
+    const firstItem = buckets[requestedType][0]
+    if (!firstItem) return undefined
+    if (requestedType === "text") return { text: firstItem }
+    if (requestedType === "image") return { imageUrl: firstItem }
+    if (requestedType === "video") return { videoUrl: firstItem }
+    if (requestedType === "audio") return { audioUrl: firstItem }
+    return undefined
+  }
 
   switch (type) {
     case "text-prompt": {
@@ -231,13 +361,34 @@ export function extractSourceNodeOutput(
  * Extract the full list of items from a list-producing source node.
  * Returns string[] if the node produces multiple items, undefined otherwise.
  * Used by the orchestrator to detect fan-out scenarios.
+ *
+ * `sourceHandle` is required for group/collect — selects which type bucket
+ * (`out-text` / `out-image` / `out-video` / `out-audio`) to read. `context`
+ * is required for group/collect to read children / incoming upstreams.
+ * Both new params are appended after `triggerData` so existing callers that
+ * pass only `(node, triggerData?)` continue to typecheck unchanged.
  */
 export function extractSourceNodeOutputAsList(
   node: SimpleNode,
   triggerData?: Record<string, unknown>,
+  sourceHandle?: string | null,
+  context?: ExtractContext,
 ): string[] | undefined {
   const data = node.data
   const type = node.type
+
+  if (type === "group" || type === "collect") {
+    if (!context) return undefined
+    const buckets = type === "group"
+      ? computeBackendGroupBuckets(node, context.nodes)
+      : computeBackendCollectBuckets(node, context.nodes, context.edges)
+    const requestedType = parseGroupHandle(sourceHandle)
+    if (!requestedType) return undefined
+    const items = buckets[requestedType]
+    // Mirror existing semantics: only return when there's more than one item
+    // (single-item lists are scalar; fan-out detectors filter on length > 1).
+    return items.length > 1 ? [...items] : undefined
+  }
 
   switch (type) {
     case "list": {
@@ -285,6 +436,21 @@ export function getPrimaryOutput(
   sourceType: string,
   sourceHandle?: string | null,
 ): string | undefined {
+  // Group / Collect: aggregation is dynamic — getPrimaryOutput operates on a
+  // pre-built NodeOutput and cannot recompute buckets without nodes/edges.
+  // Callers that need the value go through extractSourceNodeOutput with a
+  // context, which builds a NodeOutput populated for the requested handle
+  // (e.g., { text: firstItem } for `out-text`). When that NodeOutput is
+  // passed back in here, fall through to the standard text/url routing.
+  if (sourceType === "group" || sourceType === "collect") {
+    const requestedType = parseGroupHandle(sourceHandle)
+    if (requestedType === "text") return output.text
+    if (requestedType === "image") return output.imageUrl
+    if (requestedType === "video") return output.videoUrl
+    if (requestedType === "audio") return output.audioUrl
+    return output.text || output.imageUrl || output.videoUrl || output.audioUrl
+  }
+
   // Sub-workflow / component output routing by handle (matches frontend)
   if (sourceType === "sub-workflow" || sourceType === "component") {
     const outputResults = output._outputResults
@@ -386,11 +552,11 @@ export function getPrimaryOutput(
     return output.text
   }
 
-  // Collect (fan-in): returns the single aggregated `result` string.
-  // Without this case the fallback below would return undefined (collect
+  // Reduce (fan-in): returns the single aggregated `result` string.
+  // Without this case the fallback below would return undefined (reduce
   // doesn't populate any of imageUrl/videoUrl/audioUrl/text), so downstream
   // text consumers would silently see no value from a fan-in node.
-  if (sourceType === "collect") {
+  if (sourceType === "reduce") {
     return output.result
   }
 
@@ -846,12 +1012,12 @@ export function buildNodeOutputFromJobData(
     output.text = outputData.generatedText as string
   }
 
-  // Collect (fan-in): the route stores its aggregated string under `output`
+  // Reduce (fan-in): the route stores its aggregated string under `output`
   // in jobs.output_data (Task 13's response shape: `{ jobId, output, meta }`),
-  // and getPrimaryOutput("collect") reads NodeOutput.result. Map the two.
-  // Narrowly scoped to nodeType === "collect" because `output` is too generic
+  // and getPrimaryOutput("reduce") reads NodeOutput.result. Map the two.
+  // Narrowly scoped to nodeType === "reduce" because `output` is too generic
   // a key name to safely promote into DIRECT_OUTPUT_KEYS.
-  if (nodeType === "collect" && !output.result && typeof outputData.output === "string") {
+  if (nodeType === "reduce" && !output.result && typeof outputData.output === "string") {
     output.result = outputData.output
   }
 

@@ -13,12 +13,12 @@ import {
 } from "@/components/ui/select"
 
 /**
- * Per-strategy config form for the Collect (fan-in) node.
+ * Per-strategy config form for the Reduce (fan-in) node.
  *
- * Strategy ids are declared in `@nodaro/shared/collect-strategy-registry`.
+ * Strategy ids are declared in `@nodaro/shared/reduce-strategy-registry`.
  * Each branch here mirrors a strategy's `configSchema` field-by-field. When
  * the registry adds a new strategy or field, this switch is the local point
- * of change — the dispatching `CollectConfig` stays untouched.
+ * of change — the dispatching `ReduceConfig` stays untouched.
  */
 type Props = {
   readonly strategyId: string
@@ -26,7 +26,7 @@ type Props = {
   readonly onChange: (cfg: Record<string, unknown>) => void
 }
 
-export function CollectStrategyForms({ strategyId, config, onChange }: Props) {
+export function ReduceStrategyForms({ strategyId, config, onChange }: Props) {
   switch (strategyId) {
     case "pick-best-llm":
       return (

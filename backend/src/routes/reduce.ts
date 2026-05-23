@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { COLLECT_STRATEGY_IDS, type CollectStrategyId } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS, type ReduceStrategyId } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import {
   commitReservedCreditsForJob,
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
-import { dispatchStrategy, EmptyInputError } from "../services/collect-strategies/index.js"
+import { dispatchStrategy, EmptyInputError } from "../services/reduce-strategies/index.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -15,15 +15,15 @@ import { formatZodError } from "../lib/zod-error.js"
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
 // JSON object here.
-const collectBody = z.object({
-  strategyId: z.enum(COLLECT_STRATEGY_IDS as [string, ...string[]]),
+const reduceBody = z.object({
+  strategyId: z.enum(REDUCE_STRATEGY_IDS as [string, ...string[]]),
   strategyConfig: z.record(z.unknown()).default({}),
   inputs: z.array(z.string()).max(1000),
 })
 
-export async function collectRoutes(app: FastifyInstance) {
+export async function reduceRoutes(app: FastifyInstance) {
   app.post(
-    "/v1/collect",
+    "/v1/reduce",
     {
       // dedup: false — the same upstream fan-in run may legitimately be invoked
       // multiple times in quick succession (loop iterations, retries) and we
@@ -32,13 +32,13 @@ export async function collectRoutes(app: FastifyInstance) {
         (req) => {
           const body = req.body as Record<string, unknown> | undefined
           const strategyId = String(body?.strategyId ?? "concat")
-          return `collect:${strategyId}`
+          return `reduce:${strategyId}`
         },
         { dedup: false },
       ),
     },
     async (req, reply) => {
-      const parsed = collectBody.safeParse(req.body)
+      const parsed = reduceBody.safeParse(req.body)
       if (!parsed.success) {
         return reply.status(400).send({
           error: { code: "validation_error", ...formatZodError(parsed.error) },
@@ -53,7 +53,7 @@ export async function collectRoutes(app: FastifyInstance) {
       }
 
       const { strategyId, strategyConfig, inputs } = parsed.data
-      const modelIdentifier = `collect:${strategyId}`
+      const modelIdentifier = `reduce:${strategyId}`
 
       const { data: job, error: jobError } = await supabase
         .from("jobs")
@@ -64,7 +64,7 @@ export async function collectRoutes(app: FastifyInstance) {
           status: "pending",
           input_data: buildJobInputData(
             { strategyId, strategyConfig, inputs_count: inputs.length },
-            "collect",
+            "reduce",
           ),
         })
         .select("id")
@@ -81,7 +81,7 @@ export async function collectRoutes(app: FastifyInstance) {
 
       try {
         const { result, meta } = await dispatchStrategy(
-          strategyId as CollectStrategyId,
+          strategyId as ReduceStrategyId,
           inputs,
           strategyConfig,
           { userId, jobId: job.id, logger: req.log },

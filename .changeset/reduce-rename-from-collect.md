@@ -1,0 +1,5 @@
+---
+"@nodaro/client": minor
+---
+
+Rename `client.collect` → `client.reduce` (BREAKING for dev). The existing fan-in reducer node was misnamed "Collect" — its function is to reduce N upstream values into one (Pick best LLM, Concat, First-non-empty, Count, Vote, Merge JSON). Renamed to "Reduce" both to fit the canonical functional-programming term AND to free the "Collect" name for a true type-bucketing aggregator landing in a parallel PR. The route is now `POST /v1/reduce`, the MCP tool is `reduce`, and the SDK exposes `client.reduce.run(...)`. Saved workflows referencing the old `"collect"` node type are auto-migrated on load via a backward-compat shim in the orchestrator (removable once all workflows are migrated; companion DB migration 151 rewrites `workflows.data` JSON + `model_pricing` rows in one pass). Type renames: `CollectStrategyId` → `ReduceStrategyId`, `CollectMeta` → `ReduceMeta`, `CollectInput` → `ReduceInput`, `CollectResult` → `ReduceResult`, `CollectResource` → `ReduceResource`.

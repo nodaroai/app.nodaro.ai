@@ -17,7 +17,7 @@ import { registerUploadTools } from "./tools/upload.js"
 import { registerFilmDirectorTool } from "./tools/film-director.js"
 import { registerSkillLoaders } from "./tools/skill-loaders.js"
 import { registerPipelineTools } from "./tools/pipelines.js"
-import { registerCollect } from "./tools/collect.js"
+import { registerReduce } from "./tools/reduce.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
 // favor of the pure-discovery model (list_* / get_*_inputs / run_*).
 // They didn't scale past ~15 saved apps and the prefer-verbs nudge in
@@ -120,7 +120,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerFilmDirectorTool(server, session)
   registerSkillLoaders(server, session)
   registerPipelineTools({ server, session })
-  registerCollect({ server, session, fastify: opts.fastify })
+  registerReduce({ server, session, fastify: opts.fastify })
 
   // v3.0: dynamic per-user tools dropped — see import comment above.
 

@@ -140,7 +140,7 @@ import { SplitTextNode } from "./split-text-node";
 import { PreviewNode } from "./preview-node";
 import { StickyNoteNode } from "./sticky-note-node";
 import { RouterNode } from "./router-node";
-import { CollectNode } from "./collect-node";
+import { ReduceNode } from "./reduce-node";
 import { TeleportSendNode, TeleportReceiveNode } from "./teleport-node-shell";
 import { SubWorkflowInputNode } from "./sub-workflow-input-node";
 import { SubWorkflowOutputNode } from "./sub-workflow-output-node";
@@ -151,6 +151,8 @@ import { ScheduleTriggerNode } from "./schedule-trigger-node";
 import { SocialNode } from "./social-node";
 import { TelegramTriggerNode } from "./telegram-trigger-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
+import { GroupNode } from "./group-node";
+import { CollectNode } from "./collect-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -309,9 +311,12 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,
-  "collect": CollectNode,
+  "reduce": ReduceNode,
   "teleport-send": TeleportSendNode,
   "teleport-receive": TeleportReceiveNode,
+  // Group / Collect — non-executable aggregators (resolved at field-resolution time)
+  group: GroupNode,
+  collect: CollectNode,
   // Sub-Workflow
   "sub-workflow-input": SubWorkflowInputNode,
   "sub-workflow-output": SubWorkflowOutputNode,

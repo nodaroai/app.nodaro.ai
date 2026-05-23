@@ -1,7 +1,7 @@
 ---
 node_type: collect
-generated_at: 2026-05-21T13:11:05.755Z
-generated_from: 1f6ec624
+generated_at: 2026-05-23T20:50:46.922Z
+generated_from: ad581d77
 ---
 
 # Collect
@@ -17,10 +17,7 @@ generated_from: 1f6ec624
 ```json
 {
   "label": "Collect",
-  "strategyId": "concat",
-  "strategyConfig": {
-    "separator": "\n\n"
-  }
+  "order": []
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -49,10 +46,7 @@ generated_from: 1f6ec624
   },
   "data": {
     "label": "Collect",
-    "strategyId": "concat",
-    "strategyConfig": {
-      "separator": "\n\n"
-    }
+    "order": []
   }
 }
 ```

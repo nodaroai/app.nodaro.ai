@@ -3,6 +3,7 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
+import { buildChildrenByParent } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
 /**
@@ -37,6 +38,28 @@ export function buildExecutionLevels(
     if (preResolvedNodeIds?.has(edge.source)) continue
     inDegree.set(edge.target, (inDegree.get(edge.target) ?? 0) + 1)
     children.get(edge.source)?.push(edge.target)
+  }
+
+  // Implicit child → group dependency: a Group's output is computed from its
+  // children (computeGroupBuckets), so it must be ordered AFTER all children
+  // have executed. Without this, the topological walk could schedule the
+  // group on the same level as its children and read stale/undefined output.
+  const childrenByGroup = new Map<string, string[]>()
+  for (const n of nodes) {
+    if (n.parentId) {
+      const list = childrenByGroup.get(n.parentId)
+      if (list) list.push(n.id)
+      else childrenByGroup.set(n.parentId, [n.id])
+    }
+  }
+  for (const g of nodes) {
+    if (g.type !== "group") continue
+    const childIds = childrenByGroup.get(g.id)
+    if (!childIds) continue
+    for (const cid of childIds) {
+      inDegree.set(g.id, (inDegree.get(g.id) ?? 0) + 1)
+      children.get(cid)?.push(g.id)
+    }
   }
 
   const levels: SimpleNode[][] = []
@@ -149,6 +172,10 @@ export function computeRouterGatedIds(
 // ---------------------------------------------------------------------------
 
 /** Node types that are source nodes — they produce output from their data, not from execution */
+// Group and Collect are deliberately EXCLUDED from this set: they are non-executable
+// aggregators resolved at field-resolution time, not orchestrator-queued jobs. Adding
+// them would cause `isSourceNode()` to return true and the orchestrator would try to
+// enqueue jobs for them (would throw "Unknown node type" in payload-builder.ts).
 const SOURCE_NODE_TYPES = new Set([
   "text-prompt",
   "upload-image",
@@ -173,9 +200,15 @@ export function isSourceNode(nodeType: string): boolean {
 }
 
 /** Node types that should be skipped during backend execution */
+// Group and Collect: non-executable aggregators resolved at field-resolution time.
+// The orchestrator skips them entirely; downstream extractor cases
+// (output-extractor.ts) materialize their structured-list output from upstream
+// member nodes (Group via parentId membership, Collect via order[] array).
 const SKIP_NODE_TYPES = new Set([
   "manual-edit",
   "sub-workflow-output",
+  "group",
+  "collect",
 ])
 
 export function isSkipNode(nodeType: string): boolean {

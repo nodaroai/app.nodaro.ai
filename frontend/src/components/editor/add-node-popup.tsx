@@ -107,13 +107,18 @@ import {
   MessageCircle,
   ScanFace,
   VenetianMask,
+  TrendingUp,
+  Star,
 } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import { cn } from "@/lib/utils";
+import { clusterByGroup } from "@/lib/cluster-by-group";
+import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
+import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -287,231 +292,264 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "camera-motion",
     label: "Camera Motion",
     icon: <Video className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["camera", "shot", "movement", "orbit", "pan", "tilt", "dolly", "crane", "zoom"],
   },
   {
     type: "transition",
     label: "Transition",
     icon: <GitBranch className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["transition", "cut", "dissolve", "fade", "wipe", "morph", "blend", "cross", "scene change"],
   },
   {
     type: "framing",
     label: "Framing",
     icon: <Frame className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["camera", "shot", "composition", "close-up", "wide", "angle", "vantage"],
   },
   {
     type: "lens",
     label: "Lens",
     icon: <Aperture className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["camera", "optics", "focal length", "bokeh", "depth of field", "anamorphic", "fisheye"],
   },
   {
     type: "camera-format",
     label: "Camera / Film Stock",
     icon: <Film className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["camera", "film", "35mm", "super 8", "vhs", "imax", "stock", "format"],
   },
   {
     type: "lighting",
     label: "Lighting",
     icon: <Lightbulb className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["light", "rembrandt", "chiaroscuro", "golden hour", "key", "rim", "shot"],
   },
   {
     type: "color-look",
     label: "Color / Look",
     icon: <SwatchBook className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["color", "grade", "palette", "lut", "kodak", "fuji", "teal orange", "shot"],
   },
   {
     type: "atmosphere",
     label: "Atmosphere",
     icon: <CloudFog className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["weather", "fog", "rain", "snow", "smoke", "god rays", "particles", "shot"],
   },
   {
     type: "action-fx",
     label: "Action FX",
     icon: <Zap className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["explosion", "lightning", "storm", "earthquake", "fire", "laser", "magic", "blast", "fx", "vfx", "action", "shockwave", "force field", "sci-fi"],
   },
   {
     type: "character-fx",
     label: "Character FX",
     icon: <Sparkles className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["character", "fx", "effect", "expression", "emotion", "gesture", "blink", "wink", "laugh", "cry", "smile", "frown", "shiver", "tremble", "gasp", "reaction"],
   },
   {
     type: "style",
     label: "Style",
     icon: <Brush className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["anime", "oil painting", "watercolor", "cinematic", "photorealistic", "comic", "pixel art", "pop art", "noir", "illustration", "rendering"],
   },
   {
     type: "setting",
     label: "Setting",
     icon: <Mountain className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["place", "environment", "location", "scene", "forest", "cafe", "alley", "cathedral", "desert", "cyberpunk", "fantasy", "indoor", "urban", "nature"],
   },
   {
     type: "loop-subject",
     label: "Loop Subject",
     icon: <Sparkles className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["loop", "loopable", "seamless", "tunnel", "kaleidoscope", "fractal", "aurora", "particle", "vj", "background", "perfect loop", "veo loop"],
   },
   {
     type: "person",
     label: "Person",
     icon: <UserRound className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["subject", "character", "people", "human", "gender", "age", "ethnicity", "hair", "skin", "eyes", "build", "man", "woman", "child", "beard", "mustache"],
   },
   {
     type: "mood",
     label: "Mood",
     icon: <Smile className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["emotion", "expression", "feeling", "happy", "sad", "angry", "serene", "fierce", "brooding", "confident", "melancholy", "mysterious"],
   },
   {
     type: "photographer",
     label: "Photographer / Artist Style",
     icon: <Camera className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["photographer", "artist", "style", "tim walker", "deakins", "lubezki", "fashion", "editorial", "cinematographer", "illustrator", "painter", "ghibli", "rutkowski", "leibovitz", "cartier-bresson"],
   },
   {
     type: "aesthetic",
     label: "Aesthetic / Microtrend",
     icon: <Sparkles className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["aesthetic", "microtrend", "core", "y2k", "cottagecore", "dark academia", "techwear", "gorpcore", "old money", "preppy", "streetwear", "coquette", "indie sleaze", "balletcore", "goblincore", "minimalism", "maximalism", "vibe"],
   },
   {
     type: "era",
     label: "Era / Period",
     icon: <Hourglass className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["era", "period", "decade", "1920s", "1950s", "1970s", "1980s", "1990s", "2000s", "victorian", "medieval", "renaissance", "wild west", "feudal japan", "cyberpunk", "post-apocalyptic", "retrofuturism", "dieselpunk", "atompunk", "vintage", "future"],
   },
   {
     type: "pose",
     label: "Pose",
     icon: <PersonStanding className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["pose", "posture", "action", "stance", "standing", "sitting", "running", "walking", "dancing", "jumping", "fighting", "body", "position"],
   },
   {
     type: "styling",
     label: "Styling",
     icon: <Gem className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["beauty", "makeup", "glamour", "smoky eye", "lipstick", "eyewear", "sunglasses", "aviators", "headwear", "hat", "beanie", "fedora", "jewelry", "necklace", "earrings", "nails", "manicure", "face paint", "fabric", "silk", "leather", "denim", "velvet", "satin", "lace"],
   },
   {
     type: "material",
     label: "Material",
     icon: <Layers className="h-4 w-4" />,
-    category: "Object",
+    category: "Pickers",
+    group: "Object",
     keywords: ["material", "fabric", "metal", "stone", "wood", "glass", "silk", "leather", "chrome", "marble", "gold", "silver", "bronze", "velvet", "porcelain", "crystal", "holographic", "iridescent", "neon", "made of"],
   },
   {
     type: "animal",
     label: "Animal",
     icon: <PawPrint className="h-4 w-4" />,
-    category: "Object",
+    category: "Pickers",
+    group: "Object",
     keywords: ["animal", "cat", "dog", "bird", "fish", "horse", "lion", "tiger", "bear", "wolf", "fox", "elephant", "pet", "wildlife", "dinosaur", "dragon"],
   },
   {
     type: "vehicle",
     label: "Vehicle",
     icon: <Car className="h-4 w-4" />,
-    category: "Object",
+    category: "Pickers",
+    group: "Object",
     keywords: ["vehicle", "car", "truck", "motorcycle", "bike", "boat", "plane", "helicopter", "tank", "spaceship", "muscle", "classic", "sports", "transport"],
   },
   {
     type: "weapon",
     label: "Weapon",
     icon: <Swords className="h-4 w-4" />,
-    category: "Object",
+    category: "Pickers",
+    group: "Object",
     keywords: ["weapon", "sword", "katana", "gun", "rifle", "pistol", "bow", "dagger", "axe", "spear", "mace", "crossbow", "firearm", "blade"],
   },
   {
     type: "furniture",
     label: "Furniture",
     icon: <Armchair className="h-4 w-4" />,
-    category: "Object",
+    category: "Pickers",
+    group: "Object",
     keywords: ["furniture", "chair", "sofa", "couch", "table", "desk", "bed", "lamp", "cabinet", "shelf", "wardrobe", "stool"],
   },
   {
     type: "photo-genre",
     label: "Photo Genre",
     icon: <Camera className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["photo", "genre", "intent", "paparazzi", "editorial", "vogue", "lookbook", "selfie", "mirror selfie", "gym selfie", "headshot", "mugshot", "passport", "yearbook", "wedding", "movie poster", "album cover", "advertising", "documentary", "snapshot", "noir"],
   },
   {
     type: "backdrop",
     label: "Backdrop",
     icon: <LayoutDashboard className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["backdrop", "background", "studio", "seamless", "wall", "gradient", "muslin", "velvet", "halo", "bokeh", "vignette", "white seamless", "black seamless", "brick wall", "concrete"],
   },
   {
     type: "held-prop",
     label: "Held Prop",
     icon: <HandMetal className="h-4 w-4" />,
-    category: "Subject",
+    category: "Pickers",
+    group: "Subject",
     keywords: ["prop", "hand", "holding", "phone", "cigarette", "coffee", "wine", "microphone", "book", "umbrella", "bouquet", "guitar", "katana", "drink", "smoking", "instrument", "bag"],
   },
   {
     type: "temporal",
     label: "Temporal",
     icon: <Clock className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["time", "speed", "slow motion", "freeze", "bullet time", "shutter", "shot"],
   },
   {
     type: "exposure-settings",
     label: "Exposure Settings",
     icon: <Aperture className="h-4 w-4" />,
-    category: "Camera",
+    category: "Pickers",
+    group: "Camera",
     keywords: ["exposure", "aperture", "f-stop", "shutter", "iso", "depth of field", "bokeh", "grain", "long exposure", "freeze"],
   },
   {
     type: "render-quality",
     label: "Render Quality",
     icon: <Cpu className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["render", "engine", "unreal", "octane", "cycles", "raytracing", "pbr", "8k", "4k", "masterpiece", "raw", "award-winning", "lumen", "global illumination"],
   },
   {
     type: "composition-effects",
     label: "Composition Effects",
     icon: <Wand2 className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["composition", "frame", "burst", "shatter", "smoke", "liquid", "pixel", "particles", "glitch", "mosaic", "silhouette", "exploding", "fragment", "glass", "trick"],
   },
   {
     type: "post-process-effects",
     label: "Post-Process Effects",
     icon: <Sparkles className="h-4 w-4" />,
-    category: "Look",
+    category: "Pickers",
+    group: "Look",
     keywords: ["post", "grade", "vignette", "grain", "halation", "bloom", "chromatic aberration", "light leak", "film burn", "scratched", "diffusion", "contrast", "glow"],
   },
   // Sound
@@ -519,35 +557,40 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "music-genre",
     label: "Music Genre",
     icon: <Music className="h-4 w-4" />,
-    category: "Sound",
+    category: "Pickers",
+    group: "Sound",
     keywords: ["music", "genre", "rock", "pop", "electronic"],
   },
   {
     type: "music-mood",
     label: "Music Mood",
     icon: <Activity className="h-4 w-4" />,
-    category: "Sound",
+    category: "Pickers",
+    group: "Sound",
     keywords: ["music", "mood", "energy", "emotion", "vibe"],
   },
   {
     type: "instrumentation",
     label: "Instrumentation",
     icon: <Piano className="h-4 w-4" />,
-    category: "Sound",
+    category: "Pickers",
+    group: "Sound",
     keywords: ["instruments", "guitar", "piano", "drums"],
   },
   {
     type: "voice-character",
     label: "Voice Character",
     icon: <User className="h-4 w-4" />,
-    category: "Sound",
+    category: "Pickers",
+    group: "Sound",
     keywords: ["voice", "age", "gender", "accent", "timbre"],
   },
   {
     type: "voice-delivery",
     label: "Voice Delivery",
     icon: <MessageCircle className="h-4 w-4" />,
-    category: "Sound",
+    category: "Pickers",
+    group: "Sound",
     keywords: ["voice", "pace", "emotion", "narrator"],
   },
   // AI — Script & Text
@@ -1202,11 +1245,25 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Workflow",
   },
   {
+    type: "group",
+    label: "Group",
+    icon: <Box className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["group", "container", "wrap"],
+  },
+  {
     type: "collect",
     label: "Collect",
+    icon: <Layers className="h-4 w-4" />,
+    category: "Workflow",
+    keywords: ["collect", "gather", "bucket", "by-type", "split-by-type"],
+  },
+  {
+    type: "reduce",
+    label: "Reduce",
     icon: <Funnel className="h-4 w-4" />,
     category: "Workflow",
-    keywords: ["collect", "fan-in", "merge", "pick best", "join", "aggregate", "reduce", "vote", "count"],
+    keywords: ["reduce", "fan-in", "merge", "pick best", "join", "aggregate", "vote", "count"],
   },
   {
     type: "sticky-note",
@@ -1229,7 +1286,69 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
 ];
 
+export const VIRTUAL_CATEGORY_IDS = {
+  recent: "Recent",
+  mostUsed: "Most Used",
+  common: "Common",
+} as const;
+
+const isNodeOption = (n: NodeOption | undefined): n is NodeOption => Boolean(n);
+
+function mapHistoryToOptions(
+  history: ReadonlyArray<HistoryEntry>,
+  compare: (a: HistoryEntry, b: HistoryEntry) => number,
+  optionByType: Map<SceneNodeType, NodeOption>,
+): NodeOption[] {
+  return history
+    .slice()
+    .sort(compare)
+    .map((h) => optionByType.get(h.nodeType))
+    .filter(isNodeOption);
+}
+
+const COMMON_NODE_TYPES: ReadonlyArray<SceneNodeType> = [
+  "text-prompt",
+  "upload-image",
+  "upload-video",
+  "generate-image",
+  "modify-image",
+  "upscale-image",
+  "image-to-video",
+  "extend-video",
+  "combine-videos",
+  "text-to-speech",
+  "generate-music",
+  "lip-sync",
+  "face-swap",
+  "add-captions",
+  "save-to-storage",
+];
+
 export const CATEGORIES = [
+  {
+    id: VIRTUAL_CATEGORY_IDS.recent,
+    label: "RECENT",
+    icon: <Clock className="h-4 w-4" />,
+    description: "Recently added nodes",
+  },
+  {
+    id: VIRTUAL_CATEGORY_IDS.mostUsed,
+    label: "MOST USED",
+    icon: <TrendingUp className="h-4 w-4" />,
+    description: "Your most-added nodes",
+  },
+  {
+    id: VIRTUAL_CATEGORY_IDS.common,
+    label: "COMMON",
+    icon: <Star className="h-4 w-4" />,
+    description: "Frequently used building blocks",
+  },
+  {
+    id: "AI",
+    label: "AI",
+    icon: <BookOpen className="h-4 w-4" />,
+    description: "Generate Script, Image",
+  },
   {
     id: "Input",
     label: "INPUT",
@@ -1259,40 +1378,10 @@ export const CATEGORIES = [
   //   description: "Tone, Style, Duration",
   // },
   {
-    id: "Camera",
-    label: "CAMERA",
-    icon: <Aperture className="h-4 w-4" />,
-    description: "Camera Motion, Framing, Lens, Film Stock, Temporal",
-  },
-  {
-    id: "Look",
-    label: "LOOK",
-    icon: <SwatchBook className="h-4 w-4" />,
-    description: "Lighting, Color, Atmosphere, Style, Setting",
-  },
-  {
-    id: "Subject",
-    label: "SUBJECT",
-    icon: <UserRound className="h-4 w-4" />,
-    description: "Person, Mood, Pose, Styling",
-  },
-  {
-    id: "Object",
-    label: "OBJECT",
-    icon: <Package className="h-4 w-4" />,
-    description: "Material, Animal, Vehicle, Weapon",
-  },
-  {
-    id: "Sound",
-    label: "SOUND",
-    icon: <Music className="h-4 w-4" />,
-    description: "Music Genre, Mood, Instrumentation, Voice",
-  },
-  {
-    id: "AI",
-    label: "AI",
-    icon: <BookOpen className="h-4 w-4" />,
-    description: "Generate Script, Image",
+    id: "Pickers",
+    label: "PICKERS",
+    icon: <SlidersHorizontal className="h-4 w-4" />,
+    description: "Camera, Look, Subject, Object, Sound",
   },
   {
     id: "Processing",
@@ -1324,14 +1413,18 @@ export const CATEGORIES = [
     icon: <Puzzle className="h-4 w-4" />,
     description: "Reusable Components",
   },
-];
+].sort((a, b) => categoryRank(a.id) - categoryRank(b.id));
 
 // Category icon colors
 const CATEGORY_COLORS: Record<string, string> = {
+  Recent: "text-[#06B6D4]",
+  "Most Used": "text-[#F59E0B]",
+  Common: "text-[#10B981]",
   Input: "text-[#007AFF]",
   Triggers: "text-[#F97316]",
   Data: "text-[#14B8A6]",
   Parameter: "text-[#6366F1]",
+  Pickers: "text-[#6366F1]",
   Sound: "text-[#a78bfa]",
   AI: "text-[#ff0073]",
   Processing: "text-[#475569]",
@@ -1361,12 +1454,15 @@ export function AddNodePopup({
   storeOnConnect,
 }: AddNodePopupProps) {
   const { isAdmin } = useAuth();
+  const history = useNodeSelectionHistoryStore((s) => s.history);
+  const recordSelection = useNodeSelectionHistoryStore((s) => s.recordSelection);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // The "Parameter" category is currently hidden from the UI. Re-enable by
   // dropping the `n.category !== "Parameter"` clause below.
@@ -1392,6 +1488,7 @@ export function AddNodePopup({
         setComponentBrowserOpen(true);
         return;
       }
+      recordSelection(type);
       if (connectionContext && storeAddNode && storeOnConnect) {
         const newNodeId = storeAddNode(type, connectionContext.dropPosition);
         if (!newNodeId) {
@@ -1420,7 +1517,7 @@ export function AddNodePopup({
         onClose();
       }
     },
-    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose],
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection],
   );
 
   // Handle component selected from marketplace modal
@@ -1442,6 +1539,12 @@ export function AddNodePopup({
     ? compatibilityNodes.directTypes
     : EMPTY_SET;
 
+  const optionByType = useMemo(() => {
+    const map = new Map<SceneNodeType, NodeOption>();
+    for (const node of effectivePool) map.set(node.type, node);
+    return map;
+  }, [effectivePool]);
+
   // Filter nodes based on search query
   const filteredNodes = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -1455,19 +1558,44 @@ export function AddNodePopup({
     );
   }, [searchQuery, effectivePool]);
 
-  // Get nodes for selected category
-  const categoryNodes = useMemo(() => {
+  const categoryNodes = useMemo<NodeOption[]>(() => {
     if (!selectedCategory) return [];
-    return effectivePool.filter((node) => node.category === selectedCategory);
-  }, [selectedCategory, effectivePool]);
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.common) {
+      return COMMON_NODE_TYPES.map((t) => optionByType.get(t)).filter(isNodeOption);
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.recent) {
+      return mapHistoryToOptions(history, (a, b) => b.lastUsedAt - a.lastUsedAt, optionByType);
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.mostUsed) {
+      return mapHistoryToOptions(
+        history,
+        (a, b) => b.count - a.count || b.lastUsedAt - a.lastUsedAt,
+        optionByType,
+      );
+    }
+    // Real categories: cluster nodes by group so each section header renders
+    // once (the virtual categories above keep their curated/history order).
+    return clusterByGroup(effectivePool.filter((node) => node.category === selectedCategory));
+  }, [selectedCategory, effectivePool, optionByType, history]);
+
+  // Hide Recent + Most Used until the user has history — keeps the first-run
+  // popup compact.
+  const visibleCategories = useMemo(() => {
+    if (history.length > 0) return CATEGORIES;
+    return CATEGORIES.filter(
+      (cat) =>
+        cat.id !== VIRTUAL_CATEGORY_IDS.recent &&
+        cat.id !== VIRTUAL_CATEGORY_IDS.mostUsed,
+    );
+  }, [history.length]);
 
   // Items to display (search results, compatibility tiers, category nodes, or categories)
   const displayItems = useMemo(() => {
     if (searchQuery.trim()) return filteredNodes;
     if (isFiltered && !selectedCategory) return effectivePool;
     if (selectedCategory) return categoryNodes;
-    return CATEGORIES;
-  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes]);
+    return visibleCategories;
+  }, [searchQuery, filteredNodes, isFiltered, selectedCategory, effectivePool, categoryNodes, visibleCategories]);
 
   // Reset state when opening/closing
   useEffect(() => {
@@ -1550,6 +1678,13 @@ export function AddNodePopup({
   useEffect(() => {
     setHighlightedIndex(0);
   }, [searchQuery, selectedCategory]);
+
+  // Keep the keyboard-highlighted item scrolled into view (arrow up/down).
+  useEffect(() => {
+    scrollContainerRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex, displayItems]);
 
   if (!open && !componentBrowserOpen) return null;
 
@@ -1636,7 +1771,7 @@ export function AddNodePopup({
 
       {/* Content — flex-1 so it fills whatever space remains within the
           viewport-clamped outer popup (header + search above are fixed). */}
-      <div className="flex-1 min-h-0 overflow-y-auto py-2">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto py-2">
         {searchQuery.trim() ? (
           // Search results
           filteredNodes.length > 0 ? (
@@ -1653,6 +1788,7 @@ export function AddNodePopup({
                     : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
                 )}
                 onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
               >
                 <span
                   className={cn(
@@ -1702,6 +1838,7 @@ export function AddNodePopup({
                         : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
                     )}
                     onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
                   >
                     <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
                       {node.icon}
@@ -1737,6 +1874,7 @@ export function AddNodePopup({
                           : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
                       )}
                       onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
                     >
                       <span className={cn("text-[#64748B] dark:text-[#94A3B8]", CATEGORY_COLORS[node.category])}>
                         {node.icon}
@@ -1780,6 +1918,7 @@ export function AddNodePopup({
                       : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
                   )}
                   onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
                 >
                   <span
                     className={cn(
@@ -1804,7 +1943,7 @@ export function AddNodePopup({
           })
         ) : (
           // Categories
-          CATEGORIES.map((cat, index) => (
+          visibleCategories.map((cat, index) => (
             <button
               key={cat.id}
               type="button"
@@ -1820,6 +1959,7 @@ export function AddNodePopup({
                   : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
               )}
               onMouseEnter={() => setHighlightedIndex(index)}
+                data-active={index === highlightedIndex ? "true" : undefined}
             >
               <span
                 className={cn(

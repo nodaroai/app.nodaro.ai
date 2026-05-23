@@ -8,8 +8,8 @@ function mockErr(status: number, body: unknown) {
   return Promise.resolve({ ok: false, status, json: async () => body } as unknown as Response)
 }
 
-describe("collect resource", () => {
-  it("POSTs to /v1/collect with strategyId / strategyConfig / inputs", async () => {
+describe("reduce resource", () => {
+  it("POSTs to /v1/reduce with strategyId / strategyConfig / inputs", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockOk({
         jobId: "job-1",
@@ -22,7 +22,7 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    const result = await c.collect.run({
+    const result = await c.reduce.run({
       strategyId: "pick-best-llm",
       strategyConfig: { criteria: "sharpest", inputKind: "image-url" },
       inputs: [
@@ -31,7 +31,7 @@ describe("collect resource", () => {
         "https://r2/c.jpg",
       ],
     })
-    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/collect")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/reduce")
     const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
     expect(init.method).toBe("POST")
     const sent = JSON.parse(init.body) as Record<string, unknown>
@@ -52,7 +52,7 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    await c.collect.run({ strategyId: "concat", inputs: ["a", "b"] })
+    await c.reduce.run({ strategyId: "concat", inputs: ["a", "b"] })
     const init = fetchMock.mock.calls[0][1] as { body: string }
     const sent = JSON.parse(init.body) as Record<string, unknown>
     expect(sent.strategyConfig).toEqual({})
@@ -67,7 +67,7 @@ describe("collect resource", () => {
       auth: new StaticTokenAuth("t"),
       fetch: fetchMock,
     })
-    await c.collect.run({
+    await c.reduce.run({
       strategyId: "count",
       inputs: ["a"],
       workflowId: "wf-1",
@@ -79,7 +79,7 @@ describe("collect resource", () => {
 
   it("throws a typed NodaroError on a 400 no_valid_inputs response", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
-      mockErr(400, { error: { code: "no_valid_inputs", message: "nothing to collect" } }),
+      mockErr(400, { error: { code: "no_valid_inputs", message: "nothing to reduce" } }),
     )
     const c = createClient({
       baseUrl: "https://api.example.com",
@@ -87,7 +87,7 @@ describe("collect resource", () => {
       fetch: fetchMock,
     })
     await expect(
-      c.collect.run({ strategyId: "first-non-empty", inputs: [""] }),
+      c.reduce.run({ strategyId: "first-non-empty", inputs: [""] }),
     ).rejects.toBeInstanceOf(NodaroError)
   })
 })

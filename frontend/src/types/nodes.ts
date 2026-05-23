@@ -7,7 +7,7 @@ import type {
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
-  CollectStrategyId, CollectMeta,
+  ReduceStrategyId, ReduceMeta,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
@@ -3643,6 +3643,19 @@ export type StickyNoteData = {
   alignment: "left" | "center" | "right"
 }
 
+// --- Group + Collect Node Data ---
+
+export interface GroupNodeData {
+  [key: string]: unknown
+  label: string
+}
+
+export interface CollectNodeData {
+  [key: string]: unknown
+  label: string
+  order: string[]
+}
+
 // --- Teleporter Node Data ---
 
 export const TELEPORTER_CHANNEL_COLORS = [
@@ -3702,18 +3715,18 @@ export type RouterNodeData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
 }
 
-// --- Collect Node Data ---
+// --- Reduce Node Data ---
 
 /** Fan-in node that reduces N upstream branch results into a single output
  *  via a pluggable strategy. The strategy registry lives in
- *  `@nodaro/shared/collect-strategy-registry`; v1 strategies: pick-best-llm,
+ *  `@nodaro/shared/reduce-strategy-registry`; v1 strategies: pick-best-llm,
  *  concat, first-non-empty, count, vote, merge-json. `strategyConfig` shape
  *  is strategy-specific (e.g. `{ separator: "\n\n" }` for concat). */
-export interface CollectNodeData {
+export interface ReduceNodeData {
   [key: string]: unknown
   label: string
   /** Strategy id from the shared registry. */
-  strategyId: CollectStrategyId
+  strategyId: ReduceStrategyId
   /** Strategy-specific config (e.g. `{ separator: "\n\n" }` for concat). */
   strategyConfig: Record<string, unknown>
   // Execution result fields
@@ -3721,7 +3734,7 @@ export interface CollectNodeData {
   /** Snapshot of the most recent execution's inputs (truncated — see executor). */
   lastInputs?: string[]
   /** Snapshot of the most recent execution's meta payload. */
-  lastMeta?: CollectMeta
+  lastMeta?: ReduceMeta
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string
@@ -4127,10 +4140,12 @@ export type SceneNodeData =
   | SortListNodeData
   | PreviewNodeData
   | StickyNoteData
+  | GroupNodeData
+  | CollectNodeData
   | TeleportSendData
   | TeleportReceiveData
   | RouterNodeData
-  | CollectNodeData
+  | ReduceNodeData
   | SubWorkflowInputData
   | SubWorkflowOutputData
   | SubWorkflowData
@@ -4284,10 +4299,12 @@ export type SceneNodeType =
   | "sort-list"
   | "preview"
   | "sticky-note"
+  | "group"
+  | "collect"
   | "teleport-send"
   | "teleport-receive"
   | "router"
-  | "collect"
+  | "reduce"
   | "sub-workflow-input"
   | "sub-workflow-output"
   | "sub-workflow"
@@ -6289,17 +6306,17 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     } as RouterNodeData,
   },
   {
-    type: "collect",
-    label: "Collect",
+    type: "reduce",
+    label: "Reduce",
     category: "utility",
     creditCost: 0,
     inputs: ["in"],
     outputs: ["out"],
     defaultData: {
-      label: "Collect",
+      label: "Reduce",
       strategyId: "concat",
       strategyConfig: { separator: "\n\n" },
-    } as CollectNodeData,
+    } as ReduceNodeData,
   },
   {
     type: "sticky-note",
@@ -6320,6 +6337,26 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       italic: false,
       alignment: "left",
     } as StickyNoteData,
+  },
+  {
+    type: "group",
+    label: "Group",
+    category: "utility",
+    creditCost: 0,
+    inputs: [],
+    outputs: [],
+    width: 500,
+    height: 400,
+    defaultData: { label: "New group" } as GroupNodeData,
+  },
+  {
+    type: "collect",
+    label: "Collect",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["out"],
+    defaultData: { label: "Collect", order: [] } as CollectNodeData,
   },
   {
     type: "teleport-send",

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
-import { COLLECT_STRATEGY_IDS } from "@nodaro/shared"
+import { REDUCE_STRATEGY_IDS } from "@nodaro/shared"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { errorResult, parseFailure } from "./_verb-helpers.js"
@@ -9,16 +9,16 @@ import { config } from "../../config.js"
 
 const executeGate: ToolGate = { required: ["workflows:execute"] }
 
-export interface RegisterCollectOpts {
+export interface RegisterReduceOpts {
   server: McpServer
   session: McpSession
   fastify: FastifyInstance
 }
 
 /**
- * Collect (fan-in) tool.
+ * Reduce (fan-in) tool.
  *
- * The Collect node merges N upstream results into one — picking the best of
+ * The Reduce node merges N upstream results into one — picking the best of
  * a batch, concatenating, voting, etc. Six strategies ship today:
  *   - `pick-best-llm` — Sonnet picks the best item against your criteria.
  *   - `concat` — Join all survivors with a separator.
@@ -27,18 +27,18 @@ export interface RegisterCollectOpts {
  *   - `vote` — Return the most common survivor (ties → first).
  *   - `merge-json` — Parse each survivor as JSON and merge into one object.
  *
- * This delegates to the existing `POST /v1/collect` route via
+ * This delegates to the existing `POST /v1/reduce` route via
  * `fastify.inject()` so the credit guard, Zod validation, EmptyInputError
  * handling, and job-lifecycle (reserve/commit/refund) all live in one
  * place. Same pattern as `run_app` / `run_workflow`.
  */
-export function registerCollect({ server, session, fastify }: RegisterCollectOpts): void {
+export function registerReduce({ server, session, fastify }: RegisterReduceOpts): void {
   if (!passesGate(session, executeGate)) return
 
   server.registerTool(
-    "collect",
+    "reduce",
     {
-      title: "Collect (fan-in)",
+      title: "Reduce (fan-in)",
       description:
         "Merge multiple text/URL inputs into a single result using one of " +
         "6 strategies: `pick-best-llm`, `concat`, `first-non-empty`, " +
@@ -48,7 +48,7 @@ export function registerCollect({ server, session, fastify }: RegisterCollectOpt
         "`meta.selectedIndex` and `meta.reasoning` (the LLM rationale).",
       inputSchema: {
         strategyId: z
-          .enum(COLLECT_STRATEGY_IDS as [string, ...string[]])
+          .enum(REDUCE_STRATEGY_IDS as [string, ...string[]])
           .describe(
             "One of: pick-best-llm, concat, first-non-empty, count, vote, merge-json",
           ),
@@ -80,7 +80,7 @@ export function registerCollect({ server, session, fastify }: RegisterCollectOpt
       }
       const res = await fastify.inject({
         method: "POST",
-        url: "/v1/collect",
+        url: "/v1/reduce",
         headers: {
           "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
         },

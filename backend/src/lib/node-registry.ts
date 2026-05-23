@@ -241,16 +241,18 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "loop", label: "Loop", category: "control", description: "Multi-column loop / table.", outputType: "data" },
+  { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
+  { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
   { type: "split-text", label: "Split Text", category: "control", description: "Split text by delimiter.", outputType: "text" },
   { type: "sub-workflow", label: "Sub-Workflow", category: "control", description: "Embed another workflow as a node. Selects a route (matched input+output pair) on the referenced workflow; ports become handles on the parent canvas. Expand opens the child for editing with a breadcrumb back to the parent.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-input", label: "Sub-Workflow Input", category: "control", description: "Entry boundary of a callable sub-workflow route. Declares per-port handles consumed by nodes inside the sub-workflow.", outputType: "data", creditCost: 0 },
   { type: "sub-workflow-output", label: "Sub-Workflow Output", category: "control", description: "Exit boundary of a callable sub-workflow route. Declares per-port handles collected from inner nodes and returned to the caller.", outputType: "none", creditCost: 0 },
   {
-    type: "collect",
-    label: "Collect",
+    type: "reduce",
+    label: "Reduce",
     category: "control",
-    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `collect:<strategyId>` composite key.",
+    description: "Fan-in node — collapses N upstream values into one using a chosen strategy (pick-best-llm, concat, first-non-empty, count, vote, merge-json). Credit cost varies per strategy via the `reduce:<strategyId>` composite key.",
     outputType: "text",
     creditCost: "0-3",
     inputSchema: {
