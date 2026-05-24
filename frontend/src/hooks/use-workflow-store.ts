@@ -557,9 +557,10 @@ function generateNodeId(): string {
  * that source is also in the duplicated set, otherwise cleared — mirroring the
  * paste path so the column's "connected" UI stays in sync with the recreated
  * edge. With no `idMap` (single duplicate) connections are always cleared.
- * Shared by `duplicateNode` (single) and `duplicateNodes`.
+ * Shared by `duplicateNode` (single), `duplicateNodes`, and the Ctrl+V paste
+ * handler so all three clone node data identically.
  */
-function buildDuplicatedNodeData(
+export function buildDuplicatedNodeData(
   source: WorkflowNode,
   handleMap?: Record<string, string>,
   idMap?: Record<string, string>,
@@ -575,8 +576,12 @@ function buildDuplicatedNodeData(
   delete d.__listCompleted
   delete d.__listResults
   delete d.subWorkflowProgress
-  if (source.type === "character" && "characterDbId" in clonedData) {
-    (clonedData as Record<string, unknown>).characterDbId = ""
+  // Clear "owns DB row X" pointers so the clone creates its own entity row on
+  // first save. Otherwise editing/deleting the clone mutates the original's
+  // row (object-page-modal passes the id to UPDATE-instead-of-INSERT) and the
+  // asset→node reverse lookup (unified-asset-library) becomes ambiguous.
+  for (const dbIdField of ["characterDbId", "objectDbId", "locationDbId", "faceDbId"]) {
+    if (dbIdField in d) d[dbIdField] = ""
   }
 
   // Generate fresh UUIDs for sub-workflow port IDs and routeIds
