@@ -22,10 +22,11 @@ export type InstrumentCategory =
   | "woodwinds"
   | "strings"
   | "world"
+  | "middle-eastern"
 
 export const INSTRUMENT_CATEGORY_ORDER: ReadonlyArray<InstrumentCategory> = [
   "drums", "percussion", "keys", "synth", "guitar", "bass",
-  "brass", "woodwinds", "strings", "world",
+  "brass", "woodwinds", "strings", "world", "middle-eastern",
 ] as const
 
 export const INSTRUMENT_CATEGORY_LABELS: Readonly<Record<InstrumentCategory, string>> = {
@@ -39,6 +40,7 @@ export const INSTRUMENT_CATEGORY_LABELS: Readonly<Record<InstrumentCategory, str
   woodwinds: "Woodwinds",
   strings: "Strings",
   world: "World",
+  "middle-eastern": "Middle Eastern",
 }
 
 export interface InstrumentationEntry {
@@ -181,6 +183,11 @@ export const INSTRUMENTS: ReadonlyArray<CategorizedInstrument> = [
   { id: "bouzouki",        label: "Bouzouki",        description: "Greek long-necked lute",    promptHint: "bouzouki",             category: "world" },
   { id: "kora",            label: "Kora",            description: "West African 21-string",    promptHint: "kora",                 category: "world" },
   { id: "hang-drum",       label: "Hang Drum",       description: "Steel hand pan",            promptHint: "hang drum",            category: "world" },
+
+  // -------- Middle Eastern --------
+  { id: "kamancheh",       label: "Kamancheh",       description: "Persian bowed spike fiddle", promptHint: "kamancheh",           category: "middle-eastern" },
+  { id: "ney",             label: "Ney",             description: "Persian/Arabic end-blown reed flute", promptHint: "ney flute", category: "middle-eastern" },
+  { id: "santur",          label: "Santur",          description: "Persian hammered dulcimer",  promptHint: "santur",              category: "middle-eastern" },
 ] as const
 
 export const PRODUCTION_STYLES: ReadonlyArray<InstrumentationEntry> = [

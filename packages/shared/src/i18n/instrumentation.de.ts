@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { description: "Westafrikanisches 21-Saiten-Instrument" },
   "hang-drum": { description: "Stahl-Handpan" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { description: "Persische Stachelgeige mit Bogen" },
+  "ney": { description: "Persisch/arabische endgeblasene Rohrflöte" },
+  "santur": { description: "Persisches Hackbrett" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "Poliert", description: "Makellose, Mainstream-Produktion" },
   "lo-fi": { description: "Warmes Bandrauschen, unvollkommen" },

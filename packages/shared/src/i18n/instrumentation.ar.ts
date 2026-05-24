@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "كورا", description: "آلة 21 وتراً من غرب أفريقيا" },
   "hang-drum": { label: "طبل هانغ", description: "هاندبان فولاذي" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "كمنجة", description: "آلة وترية فارسية ذات قوس وسنّ" },
+  "ney": { label: "ناي", description: "ناي قصبي يُنفخ من الطرف (فارسي/عربي)" },
+  "santur": { label: "سنطور", description: "آلة وترية فارسية تُعزف بالمطارق" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "مصقولة", description: "إنتاج نقي وسائد" },
   "lo-fi": { description: "هسهسة شريط دافئة، غير مثالية" },

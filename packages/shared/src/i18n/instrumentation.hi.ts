@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "कोरा", description: "पश्चिम अफ्रीकी 21-तार" },
   "hang-drum": { label: "हैंग ड्रम", description: "स्टील हैंड पैन" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "कमांचे", description: "धनुष से बजाई जाने वाली फ़ारसी कील-वायलिन" },
+  "ney": { label: "ने", description: "फ़ारसी/अरबी सिरे से फूँकी जाने वाली सरकंडे की बाँसुरी" },
+  "santur": { label: "संतूर", description: "हथौड़े से बजाया जाने वाला फ़ारसी तार-वाद्य" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "परिष्कृत", description: "स्वच्छ, मुख्यधारा का प्रोडक्शन" },
   "lo-fi": { description: "गर्म टेप हिस, अपूर्ण" },

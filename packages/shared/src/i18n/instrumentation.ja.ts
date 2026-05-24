@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "コラ", description: "西アフリカの21弦楽器" },
   "hang-drum": { label: "ハングドラム", description: "スチール・ハンドパン" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "カマンチェ", description: "弓奏の支柱付きペルシャ弦楽器" },
+  "ney": { label: "ネイ", description: "ペルシャ／アラブの端吹き葦笛" },
+  "santur": { label: "サントゥール", description: "ペルシャの打弦楽器" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "洗練された", description: "原始的でメインストリームのプロダクション" },
   "lo-fi": { description: "暖かいテープのヒス、不完全" },
