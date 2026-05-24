@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-23T21:22:05.051Z
-generated_from: 4577bbda
+generated_at: 2026-05-24T21:24:58.561Z
+generated_from: bda59987
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -69,7 +69,6 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `adjust-volume` — Adjust Volume
 - `aesthetic` — Aesthetic / Microtrend
 - `after-effects` — After Effects
-- `ai-writer` — AI Agent
 - `animal` — Animal
 - `aspect-ratio` — Aspect Ratio
 - `atmosphere` — Atmosphere
@@ -121,7 +120,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `linkedin-post` — LinkedIn Post
 - `lip-sync` — Lip Sync
 - `list` — List
-- `llm-chat` — LLM Chat
+- `llm-chat` — Generate Text
 - `location` — Location
 - `loop` — Table
 - `loop-subject` — Loop Subject

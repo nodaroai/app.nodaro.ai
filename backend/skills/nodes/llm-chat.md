@@ -1,7 +1,7 @@
 ---
 node_type: llm-chat
-generated_at: 2026-05-18T13:23:37.746Z
-generated_from: cb1e786d
+generated_at: 2026-05-24T21:24:59.458Z
+generated_from: bda59987
 ---
 
 # LLM Chat
@@ -11,17 +11,18 @@ generated_from: cb1e786d
 **Category:** ai
 **Credit cost:** 3
 **Inputs (target handles):** `prompt`, `references`, `system-prompt`
-**Outputs (source handles):** `text`
+**Outputs (source handles):** `text`, `items`
 
 **Default data:**
 ```json
 {
-  "label": "LLM Chat",
+  "label": "Generate Text",
   "systemPrompt": "",
   "userInput": "",
   "temperature": 0.7,
   "maxTokens": 2048,
-  "fieldMappings": {}
+  "fieldMappings": {},
+  "templateId": "custom"
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -49,12 +50,13 @@ generated_from: cb1e786d
     "y": 0
   },
   "data": {
-    "label": "LLM Chat",
+    "label": "Generate Text",
     "systemPrompt": "",
     "userInput": "",
     "temperature": 0.7,
     "maxTokens": 2048,
-    "fieldMappings": {}
+    "fieldMappings": {},
+    "templateId": "custom"
   }
 }
 ```
