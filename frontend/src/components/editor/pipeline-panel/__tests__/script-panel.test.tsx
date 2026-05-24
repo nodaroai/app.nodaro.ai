@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ShowrunnerPlan } from "@nodaro/shared"
@@ -230,5 +230,36 @@ describe("ScriptPanel", () => {
     expect(approveBtn).not.toBeDisabled()
     await userEvent.click(approveBtn)
     expect(pipelinesApi.approveStage).toHaveBeenCalledWith("p1", "script")
+  })
+
+  it("shows an edited-dot indicator on a scene's chip after a save succeeds", async () => {
+    ;(pipelinesApi.applyEdits as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      newOutput: {},
+    })
+    renderWithClient(<ScriptPanel pipelineId="p1" plan={basePlan()} />)
+
+    // No dots present initially — no scene has been touched.
+    expect(screen.queryByTestId("edited-dot-0")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("edited-dot-1")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("edited-dot-2")).not.toBeInTheDocument()
+
+    // Edit + blur scene 0's description so a save fires.
+    const textarea = screen.getByDisplayValue(
+      "open shot of the runway",
+    ) as HTMLTextAreaElement
+    await userEvent.clear(textarea)
+    await userEvent.type(textarea, "edited opener")
+    textarea.blur()
+
+    // The dot is set in `saveField`'s onSuccess path AFTER the mutation
+    // resolves — waitFor handles the async settle.
+    await waitFor(() =>
+      expect(screen.getByTestId("edited-dot-0")).toBeInTheDocument(),
+    )
+
+    // Sibling scenes that weren't edited remain dot-less.
+    expect(screen.queryByTestId("edited-dot-1")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("edited-dot-2")).not.toBeInTheDocument()
   })
 })
