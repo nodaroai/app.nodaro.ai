@@ -49,7 +49,7 @@ When Tag Audio Events is enabled, non-speech sounds are annotated inline (e.g., 
 
 ## Tips
 
-- The output connects to any text-consuming node. Common downstream connections include AI Writer (for summarization), Combine Text (for assembly), and Add Captions (for subtitle generation).
+- The output connects to any text-consuming node. Common downstream connections include Generate Text (for summarization), Combine Text (for assembly), and Add Captions (for subtitle generation).
 - Speaker diarization and audio event tagging are independent options -- you can enable one, both, or neither.
 - The transcription is processed asynchronously via the backend worker queue. Progress is shown in the node during execution.
 - Language auto-detection works across the full set of supported languages. The explicit language dropdown provides 20+ language options matching the ElevenLabs STT model's capabilities.

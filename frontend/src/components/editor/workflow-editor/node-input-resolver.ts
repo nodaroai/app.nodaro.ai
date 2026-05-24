@@ -15,6 +15,7 @@ import { PARAMETER_NODE_TYPES, OBJECT_PICKER_NODE_TYPES, getParameterPromptHint,
 import { resolveIndex, selectListItems, type SelectorFields } from "@nodaro/shared";
 import { splitByLoopDelimiter } from "@nodaro/shared";
 import { extractAllGeneratedResults, extractGeneratedJsonAsList } from "@nodaro/shared";
+import { splitGeneratedItems } from "@nodaro/shared";
 import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared";
 import { resolveSourceThroughConnectedList } from "@nodaro/shared";
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared";
@@ -132,6 +133,19 @@ function isStructuredListNode(node: { type?: string; data: Record<string, unknow
   return STRUCTURED_LIST_TYPES.has(node.type ?? "") || isExtractFieldListMode(node)
 }
 
+/** Handle-aware variant: the Generate Text (llm-chat) `items` handle emits a
+ *  ===NEXT===-split list which is ALREADY structured — downstream loop/list
+ *  consumers must NOT re-chop each block by their own column delimiter (a block
+ *  may legitimately contain commas/newlines). Every other handle/type defers to
+ *  the plain `isStructuredListNode`. */
+function isStructuredListSource(
+  node: { type?: string; data: Record<string, unknown> },
+  sourceHandle: string | null | undefined,
+): boolean {
+  if (node.type === "llm-chat" && sourceHandle === "items") return true
+  return isStructuredListNode(node)
+}
+
 /**
  * Resolve values flowing through `edge` for a loop/list table UI cell. Honors
  * the edge's outputMode AND selector (range/list). Returns a single-item array
@@ -152,12 +166,14 @@ export function resolveEdgeValuesForTableColumn(
 
   const allOutputs = (upstream.type === "loop" || upstream.type === "list")
     ? resolveLoopColumnValues(upstream, edge.sourceHandle ?? undefined, edges, nodes)
-    : (extractNodeOutputAsList(upstream as WorkflowNode) ?? []);
+    : (extractNodeOutputAsList(upstream as WorkflowNode, edge.sourceHandle ?? undefined) ?? []);
 
   // Already-structured upstreams (loop/list/split-text/json-process/etc.) emit
   // logical items — downstream consumers must NOT re-chop them by the target
-  // column's delimiter. Plain text upstreams DO get split.
-  const isStructured = isStructuredListNode(upstream)
+  // column's delimiter. Plain text upstreams DO get split. The Generate Text
+  // `items` handle is structured too (handle-aware check below), so its
+  // ===NEXT===-split blocks pass through whole.
+  const isStructured = isStructuredListSource(upstream, edge.sourceHandle)
   const splitOrPassthrough = (single: string): string[] =>
     isStructured ? [single] : splitByLoopDelimiter(single, columns)
 
@@ -232,7 +248,7 @@ function resolveUpstreamWithEdgeFilter(
           edges,
           nodes,
         )
-      : (extractNodeOutputAsList(upstreamNode) ?? []);
+      : (extractNodeOutputAsList(upstreamNode, edge.sourceHandle ?? undefined) ?? []);
     if (raw.length === 0) {
       const single = extractNodeOutput(upstreamNode, edge.sourceHandle ?? undefined);
       return single ? [single.trim()] : undefined;
@@ -257,11 +273,12 @@ function resolveUpstreamWithEdgeFilter(
       nodes,
     );
   } else {
-    const raw = extractNodeOutputAsList(upstreamNode);
+    const raw = extractNodeOutputAsList(upstreamNode, edge.sourceHandle ?? undefined);
     // Already-structured sources produce logical items — preserve them even
     // when there's a single item, so downstream doesn't re-split by newline.
-    // Matches resolveEdgeValuesForTableColumn.
-    const isAlreadyStructured = isStructuredListNode(upstreamNode)
+    // Matches resolveEdgeValuesForTableColumn. The Generate Text `items` handle
+    // is structured too (handle-aware), so a single ===NEXT=== block survives.
+    const isAlreadyStructured = isStructuredListSource(upstreamNode, edge.sourceHandle)
     if (raw && (isAlreadyStructured || raw.length > 1)) upstreamVals = raw;
   }
 
@@ -570,6 +587,16 @@ export function extractNodeOutputAsList(
     return requestedType ? buckets[requestedType] : undefined;
   }
   const data = node.data as Record<string, unknown>;
+  // Generate Text (llm-chat) `items` handle: fan-out list = the LLM result
+  // split on the ===NEXT=== delimiter (shared splitGeneratedItems, identical to
+  // the backend output-extractor). The default/`text` handle is intentionally
+  // NOT split — it falls through to extractAllGeneratedResults below and stays
+  // scalar-honest (one item per accumulated result), matching the scalar
+  // extractNodeOutput which returns the full generatedText for every handle.
+  if (node.type === "llm-chat" && sourceHandle === "items") {
+    const items = splitGeneratedItems(data.generatedText as string | undefined);
+    return items.length > 0 ? items : undefined;
+  }
   if (node.type === "split-text") {
     const splitResults = data.splitResults as string[] | undefined;
     if (splitResults && splitResults.length > 0) return splitResults;
@@ -640,6 +667,29 @@ export function getListInputForNode(
         if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
         continue;
       }
+    }
+
+    // Generate Text (llm-chat) "items" handle → ===NEXT===-split list (fan-out).
+    // This handle is NOT in DEFAULT_EACH_TYPES (so it would otherwise resolve to
+    // "last" and be skipped) and the generic branch below ignores the source
+    // handle — so it must be resolved here, handle-aware. The default/`text`
+    // handle is left to the generic branch, where llm-chat is treated as a
+    // scalar source (no fan-out). Honors the edge's range/list selector.
+    if (sourceNode.type === "llm-chat" && edge.sourceHandle === "items") {
+      const edgeData = edge.data as Record<string, unknown> | undefined;
+      const loopEdgeMode = edgeData?.outputMode as string | undefined;
+      // item/last/item:N pick a single value — no fan-out (matches loop/list).
+      if (loopEdgeMode === "item" || loopEdgeMode === "last" || loopEdgeMode?.startsWith("item:")) {
+        continue;
+      }
+      const raw = extractNodeOutputAsList(sourceNode, "items");
+      if (raw && raw.length > 0) {
+        const items = selectListItems(raw, edgeData as SelectorFields | undefined);
+        if (items.length > 1) {
+          if (items.length > maxLen) { maxLen = items.length; longestItems = items; }
+        }
+      }
+      continue;
     }
 
     if (sourceNode.type === "loop" || sourceNode.type === "list") {
@@ -917,6 +967,37 @@ export function resolveNodeInputs(
         } else {
           picked = ranged[0];
         }
+        if (picked) output = picked.trim();
+      }
+    }
+    // Generate Text (llm-chat) `items` handle: the ===NEXT===-split list is a
+    // fan-out source exactly like loop/list. Resolve the per-iteration value
+    // from splitGeneratedItems(generatedText), honoring the edge's item/last/
+    // item:N mode + range/list selector. Mirrors the loop/list block above.
+    // Only the explicit `items` handle splits — the default/text handle stays
+    // scalar and falls through to extractNodeOutput below (full generatedText).
+    if (!output && src.type === "llm-chat" && srcEdge.sourceHandle === "items") {
+      const raw = splitGeneratedItems(srcData.generatedText as string | undefined);
+      const edgeData = srcEdge.data as Record<string, unknown> | undefined;
+      const ranged = selectListItems(raw, edgeData as SelectorFields | undefined);
+      if (ranged.length > 0) {
+        const loopEdgeMode = edgeData?.outputMode as string | undefined;
+        let picked: string | undefined;
+        if (loopEdgeMode === "item") {
+          const itemIndex = edgeData?.itemIndex as string | undefined;
+          picked = ranged[resolveIndex(itemIndex ?? "1", ranged.length)];
+        } else if (loopEdgeMode?.startsWith("item:")) {
+          const idx = parseInt(loopEdgeMode.split(":")[1], 10);
+          picked = ranged[idx] ?? ranged[0];
+        } else if (loopEdgeMode === "last") {
+          picked = ranged[ranged.length - 1];
+        } else if (listIterationIndex !== undefined) {
+          picked = ranged[listIterationIndex % ranged.length];
+        }
+        // Non-iteration / non-fan-out context (listIterationIndex undefined,
+        // default mode): leave `output` unset so it falls through to
+        // extractNodeOutput below — the full generatedText with its ===NEXT===
+        // delimiters intact, preserving the pre-existing scalar prompt value.
         if (picked) output = picked.trim();
       }
     }
@@ -1648,7 +1729,7 @@ export function resolveNodeInputs(
       }
     } else if (src.type === "transcribe" || src.type === "suno-lyrics" || src.type === "suno-style-boost" || src.type === "image-to-text" || src.type === "forced-alignment" || src.type === "qa-check" || src.type === "image-critic") {
       inputs.prompt = output;
-    } else if (src.type === "ai-writer" || src.type === "llm-chat") {
+    } else if ((src.type as string) === "ai-writer" || src.type === "llm-chat") {
       inputs.prompt = output;
     } else if (src.type === "combine-text") {
       inputs.prompt = output;

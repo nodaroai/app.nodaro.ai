@@ -137,8 +137,8 @@ describe("EXECUTABLE_TYPES", () => {
     expect(EXECUTABLE_TYPES.has("combine-videos")).toBe(true)
   })
 
-  it("contains ai-writer", () => {
-    expect(EXECUTABLE_TYPES.has("ai-writer")).toBe(true)
+  it("contains llm-chat", () => {
+    expect(EXECUTABLE_TYPES.has("llm-chat")).toBe(true)
   })
 
   it("contains scene", () => {

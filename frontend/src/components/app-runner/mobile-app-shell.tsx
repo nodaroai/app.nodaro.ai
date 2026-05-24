@@ -23,6 +23,7 @@ import {
 import { createClient } from "@/lib/supabase"
 import { toast } from "sonner"
 import { isVideoUrl } from "@/lib/media-type"
+import { optimizedImageUrl } from "@/lib/image"
 import type { WorkflowNode, PresentationDisplay } from "@/types/nodes"
 import type { PublishedApp } from "@/lib/api"
 import type { PresentationViewMode, PresentationSettings } from "@/hooks/use-workflow-store"
@@ -677,7 +678,7 @@ export function MobileAppShell({
           className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
         >
           {resultData.url && mediaType === "image" && (
-            <img src={resultData.url} alt={label} className="w-full h-32 object-cover" />
+            <img src={optimizedImageUrl(resultData.url)} alt={label} className="w-full h-32 object-cover" />
           )}
           {resultData.url && mediaType === "video" && (
             <video src={resultData.url} muted playsInline className="w-full h-32 object-cover" />

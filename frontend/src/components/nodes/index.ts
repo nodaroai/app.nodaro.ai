@@ -91,7 +91,6 @@ import { VoiceDesignNode } from "./voice-design-node"
 import { ForcedAlignmentNode } from "./forced-alignment-node"
 import { ImageToTextNode } from "./image-to-text-node";
 import { LLMChatNode } from "./llm-chat-node";
-import { AIWriterNode } from "./ai-writer-node";
 import { CombineVideosNode } from "./combine-videos-node";
 import { MergeVideoAudioNode } from "./merge-video-audio-node";
 import { AddCaptionsNode } from "./add-captions-node";
@@ -257,7 +256,6 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "voice-design": VoiceDesignNode,
   "forced-alignment": ForcedAlignmentNode,
   "llm-chat": LLMChatNode,
-  "ai-writer": AIWriterNode,
   // Processing
   "combine-videos": CombineVideosNode,
   "merge-video-audio": MergeVideoAudioNode,

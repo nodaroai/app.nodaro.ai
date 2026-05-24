@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom"
 import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -83,7 +84,7 @@ function TemplatesCarousel() {
           >
             <div className="aspect-video bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-900 overflow-hidden">
               {t.previewMediaUrl ? (
-                <img src={t.previewMediaUrl} alt={t.name} className="w-full h-full object-cover" loading="lazy" />
+                <img src={optimizedImageUrl(t.previewMediaUrl)} alt={t.name} className="w-full h-full object-cover" loading="lazy" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
                   <LayoutTemplate className="h-6 w-6 text-zinc-300 dark:text-zinc-600" />
@@ -579,7 +580,7 @@ export default function ProjectsPage() {
                               onMouseLeave={(e) => { if (!videoAutoplay) { e.currentTarget.pause(); e.currentTarget.currentTime = 0 } }}
                             />
                           ) : (
-                            <img src={app.previewMediaUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={optimizedImageUrl(app.previewMediaUrl)} alt={app.name} className="w-full h-full object-cover" loading="lazy" />
                           )
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">

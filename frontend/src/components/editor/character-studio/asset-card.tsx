@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { Link as LinkIcon, Maximize2, Plus, Star } from "lucide-react"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
@@ -94,7 +95,7 @@ export function AssetCard({ item, isVideo, onDelete, onRefine, onRegenerate, onR
             preload="metadata"
           />
         ) : (
-          <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(item.url)} alt={item.name} className="w-full h-full object-cover" />
         )}
         {errored && (
           <span className="absolute inset-0 flex items-center justify-center text-red-400 text-xs bg-black/50">failed</span>

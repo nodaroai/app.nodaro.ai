@@ -479,3 +479,85 @@ describe("useWorkflowStore — objectStudioNodeId state", () => {
     expect(useWorkflowStore.getState().objectStudioNodeId).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// ai-writer ("AI Agent") → llm-chat ("Generate Text") merge migration.
+// One-way, non-destructive: converts saved ai-writer nodes on load, preserves
+// the effective model (ai-writer defaulted to claude-sonnet-4.6 — must NOT
+// silently fall to llm-chat's gemini-flash default), drops deprecated
+// provider/model, and remaps the edge target handle "in" → "prompt".
+// ---------------------------------------------------------------------------
+
+describe("loadWorkflow — ai-writer → llm-chat merge migration", () => {
+  it("converts ai-writer nodes to llm-chat, defaults missing model to claude-sonnet-4.6, preserves explicit model, drops provider/model, carries data, remaps edge in→prompt", () => {
+    const nodes = [
+      // Source node so the edge below survives loadWorkflow's
+      // "drop edges referencing nonexistent nodes" filter and reaches migration.
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "src", text: "hi", fieldMappings: {} } },
+      {
+        id: "w1", type: "ai-writer", position: { x: 0, y: 0 },
+        data: {
+          label: "AI Agent", templateId: "storyboard", systemPrompt: "s", userInput: "u",
+          provider: "claude", model: "old", generatedItems: ["a", "b"],
+          temperature: 0.7, maxTokens: 4096, fieldMappings: {},
+        },
+      },
+      {
+        id: "w2", type: "ai-writer", position: { x: 0, y: 0 },
+        data: {
+          label: "AI Agent 2", templateId: "custom", systemPrompt: "s2", userInput: "u2",
+          llmModel: "gpt-5.4", provider: "claude", model: "old2",
+          temperature: 0.7, maxTokens: 4096, fieldMappings: {},
+        },
+      },
+    ] as any
+    const edges = [
+      { id: "e1", source: "src", target: "w1", targetHandle: "in" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+
+    const w1 = useWorkflowStore.getState().nodes.find((n) => n.id === "w1")
+    const w2 = useWorkflowStore.getState().nodes.find((n) => n.id === "w2")
+    const d1 = w1?.data as Record<string, unknown>
+    const d2 = w2?.data as Record<string, unknown>
+
+    // node-type conversion
+    expect(w1?.type).toBe("llm-chat")
+    expect(w2?.type).toBe("llm-chat")
+    // effective-model preservation
+    expect(d1.llmModel).toBe("claude-sonnet-4.6") // defaulted (no llmModel in source)
+    expect(d2.llmModel).toBe("gpt-5.4") // preserved
+    // deprecated fields dropped
+    expect(d1.provider).toBeUndefined()
+    expect(d1.model).toBeUndefined()
+    expect(d2.provider).toBeUndefined()
+    expect(d2.model).toBeUndefined()
+    // data carried over via spread
+    expect(d1.templateId).toBe("storyboard")
+    expect(d1.generatedItems).toEqual(["a", "b"])
+    expect(d1.systemPrompt).toBe("s")
+    expect(d1.userInput).toBe("u")
+    // edge target handle remapped in → prompt
+    const e1 = useWorkflowStore.getState().edges.find((e) => e.id === "e1")
+    expect(e1?.targetHandle).toBe("prompt")
+  })
+
+  it("leaves non-ai-writer nodes and their edges untouched", () => {
+    const nodes = [
+      { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "src", text: "hi", fieldMappings: {} } },
+      {
+        id: "k1", type: "llm-chat", position: { x: 0, y: 0 },
+        data: { label: "Generate Text", systemPrompt: "", userInput: "", temperature: 0.7, maxTokens: 2048, fieldMappings: {} },
+      },
+    ] as any
+    const edges = [
+      { id: "e1", source: "src", target: "k1", targetHandle: "in" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+    const k1 = useWorkflowStore.getState().nodes.find((n) => n.id === "k1")
+    expect(k1?.type).toBe("llm-chat")
+    // edge to a non-ai-writer target keeps its original "in" handle
+    const e1 = useWorkflowStore.getState().edges.find((e) => e.id === "e1")
+    expect(e1?.targetHandle).toBe("in")
+  })
+})

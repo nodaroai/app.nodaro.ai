@@ -36,6 +36,8 @@ const mockGenerateMotionGraphics = vi.fn()
 const mockRenderVideoWithSceneGraph = vi.fn()
 const mockRenderVideoWithPlan = vi.fn()
 const mockGenerateAIWriterStream = vi.fn()
+const mockLlmChatStream = vi.fn()
+const mockGetGenerateTextTemplate = vi.fn()
 const mockImageToTextApi = vi.fn()
 const mockTextToDialogueApi = vi.fn()
 const mockVoiceChangerApi = vi.fn()
@@ -85,6 +87,7 @@ vi.mock("@/lib/api", () => ({
   getJobStatus: vi.fn(),
   generateAIWriterStream: (...args: unknown[]) =>
     mockGenerateAIWriterStream(...args),
+  llmChatStream: (...args: unknown[]) => mockLlmChatStream(...args),
   generateSceneGraph: (...args: unknown[]) =>
     mockGenerateSceneGraph(...args),
   generateAfterEffects: (...args: unknown[]) =>
@@ -161,8 +164,9 @@ vi.mock("@/lib/prompt-templates", () => ({
   },
 }))
 
-vi.mock("@/lib/ai-writer-templates", () => ({
-  getAIWriterTemplate: () => null,
+vi.mock("@/lib/generate-text-templates", () => ({
+  getGenerateTextTemplate: (...args: unknown[]) =>
+    mockGetGenerateTextTemplate(...args),
 }))
 
 vi.mock("@/lib/prompt-builder", () => ({
@@ -3233,36 +3237,110 @@ describe("motion-graphics", () => {
 // ai-writer
 // ---------------------------------------------------------------------------
 
-describe("ai-writer", () => {
-  it("resolves without error when no systemPrompt (sets failed status)", async () => {
+// NOTE: the standalone `ai-writer` execute block was folded into `llm-chat`
+// (Generate Text merge, Task 12). The `ai-writer` node type still exists in
+// types.ts until T18 and saved nodes are migrated to `llm-chat` on load (T17),
+// so no `ai-writer`-typed node reaches `executeNode` in the merged state. These
+// former ai-writer execution tests are migrated to `llm-chat` below.
+describe("llm-chat", () => {
+  it("rejects when no user prompt", async () => {
     mockResolveNodeInputs.mockReturnValue({})
+    const promise = executeNode(makeNode("llm-chat", {}), makeCtx())
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No user prompt")
+    expect(mockLlmChatStream).not.toHaveBeenCalled()
+  })
+
+  it("calls llmChatStream on valid input", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockLlmChatStream.mockResolvedValue({
+      jobId: "j1",
+      generatedText: "Hello world",
+    })
     await executeNode(
-      makeNode("ai-writer", {}),
+      makeNode("llm-chat", {
+        userInput: "Write something",
+      }),
+      makeCtx(),
+    )
+    expect(mockLlmChatStream).toHaveBeenCalled()
+  })
+
+  it("rejects (no llmChatStream) when template.requiresImageRef and no image source connected", async () => {
+    mockGetGenerateTextTemplate.mockReturnValue({
+      id: "photo-shoot",
+      label: "Photo Shoot Planner",
+      systemPrompt: "",
+      requiresImageRef: true,
+    })
+    mockResolveNodeInputs.mockReturnValue({})
+    mockNodes = [makeNode("llm-chat", { templateId: "photo-shoot", userInput: "go" })]
+    mockEdges = []
+    const promise = executeNode(
+      makeNode("llm-chat", { templateId: "photo-shoot", userInput: "go" }),
+      makeCtx(),
+    )
+    promise.catch(() => {})
+    await expect(promise).rejects.toThrow("No reference image connected")
+    expect(mockToastError).toHaveBeenCalled()
+    expect(mockLlmChatStream).not.toHaveBeenCalled()
+  })
+
+  it("proceeds when custom template (no requiresImageRef) and no image source", async () => {
+    mockGetGenerateTextTemplate.mockReturnValue({
+      id: "custom",
+      label: "Custom",
+      systemPrompt: "",
+    })
+    mockResolveNodeInputs.mockReturnValue({})
+    mockLlmChatStream.mockResolvedValue({ jobId: "j1", generatedText: "ok" })
+    await executeNode(
+      makeNode("llm-chat", { templateId: "custom", userInput: "go" }),
+      makeCtx(),
+    )
+    expect(mockLlmChatStream).toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+
+  it("proceeds when a non-custom template has requiresImageRef:false and no image source (locks the requiresImageRef gate, not id!=='custom')", async () => {
+    // A user-defined template (random-UUID id, no requiresImageRef) — the T15
+    // "Save as template" shape. Under the old `id !== "custom"` guard this would
+    // be WRONGLY rejected; under `requiresImageRef` it must run.
+    mockGetGenerateTextTemplate.mockReturnValue({
+      id: "user-tpl-7f3a",
+      label: "My Saved Prompt",
+      systemPrompt: "",
+      requiresImageRef: false,
+    })
+    mockResolveNodeInputs.mockReturnValue({})
+    mockLlmChatStream.mockResolvedValue({ jobId: "j1", generatedText: "ok" })
+    mockNodes = [makeNode("llm-chat", { templateId: "user-tpl-7f3a", userInput: "go" })]
+    mockEdges = []
+    await executeNode(
+      makeNode("llm-chat", { templateId: "user-tpl-7f3a", userInput: "go" }),
+      makeCtx(),
+    )
+    expect(mockLlmChatStream).toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+  })
+
+  it("sets generatedItems from the ===NEXT=== split on completion", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockLlmChatStream.mockResolvedValue({
+      jobId: "j1",
+      generatedText: "one===NEXT===two===NEXT===three",
+    })
+    await executeNode(
+      makeNode("llm-chat", { userInput: "go" }),
       makeCtx(),
     )
     expect(mockUpdateNodeData).toHaveBeenCalledWith(
       "n1",
       expect.objectContaining({
-        executionStatus: "failed",
-        errorMessage: "System prompt is required",
+        executionStatus: "completed",
+        generatedItems: ["one", "two", "three"],
       }),
     )
-  })
-
-  it("calls generateAIWriterStream on valid input", async () => {
-    mockResolveNodeInputs.mockReturnValue({})
-    mockGenerateAIWriterStream.mockResolvedValue({
-      jobId: "j1",
-      generatedText: "Hello world",
-    })
-    await executeNode(
-      makeNode("ai-writer", {
-        systemPrompt: "You are a writer",
-        userInput: "Write something",
-      }),
-      makeCtx(),
-    )
-    expect(mockGenerateAIWriterStream).toHaveBeenCalled()
   })
 })
 

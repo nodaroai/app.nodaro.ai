@@ -160,12 +160,12 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: 20,
   },
   {
-    type: "ai-writer",
-    label: "AI Agent",
+    type: "llm-chat",
+    label: "Generate Text",
     category: "ai-text",
-    description: "LLM-powered text generation. Stream-capable.",
+    description: "LLM text generation from a prompt (+ optional image/video/audio refs). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
     outputType: "text",
-    creditCost: 5,
+    creditCost: "3-15",
   },
 
   {

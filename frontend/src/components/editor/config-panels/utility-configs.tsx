@@ -42,6 +42,7 @@ import {
   type WorkflowEdge,
 } from "@/types/nodes"
 import { isMediaUrl } from "@/lib/media-type"
+import { optimizedImageUrl } from "@/lib/image"
 import { AndOrToggle, ConditionRowEditor } from "./condition-row-editor"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
@@ -794,7 +795,7 @@ export function PreviewConfig({ data, onUpdate }: { data: PreviewNodeData; onUpd
               {/* Preview content */}
               <div className={"px-2.5 pb-2 " + (!isVisible ? "opacity-40" : "")}>
                 {item.type === "image" && isMediaUrl(item.value) ? (
-                  <img src={item.value} alt="" className="w-full max-h-40 object-contain rounded border border-border" loading="lazy" />
+                  <img src={optimizedImageUrl(item.value)} alt="" className="w-full max-h-40 object-contain rounded border border-border" loading="lazy" />
                 ) : item.type === "video" && isMediaUrl(item.value) ? (
                   <video src={item.value} className="w-full max-h-40 object-contain rounded border border-border" controls muted playsInline preload="none" />
                 ) : item.type === "audio" && isMediaUrl(item.value) ? (

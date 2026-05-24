@@ -12,6 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput } from "./output-extractor.js"
 import { extractGeneratedJsonAsList } from "@nodaro/shared"
+import { splitGeneratedItems } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -89,9 +90,23 @@ export function resolveNodeInputs(
 
     const edgeData = edge.data as Record<string, unknown> | undefined
     const edgeOutputMode = edgeData?.outputMode as string | undefined
-    const effectiveListResults = state?.output?.listResults
-      ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
-      ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
+
+    // Generate Text (llm-chat) `items` handle MUST resolve via the current
+    // ===NEXT=== split (resolveLlmChatItems below), NEVER via a stale
+    // `data.generatedResults` snapshot persisted from a prior browser run. The
+    // generic `effectiveListResults` fan-out blocks below read
+    // extractAllGeneratedResults(data) and would intercept this edge first,
+    // diverging from the frontend (whose `items` handle ALWAYS splits the
+    // current text). Gate both blocks off for this exact edge so it falls
+    // through to the handle-aware llm-chat block. Other handles/types untouched.
+    const isLlmChatItemsEdge =
+      sourceNode.type === "llm-chat" && edge.sourceHandle === "items"
+
+    const effectiveListResults = isLlmChatItemsEdge
+      ? undefined
+      : state?.output?.listResults
+        ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
+        ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
 
     // Fan-in targets (collect): consume the entire upstream list as a single
     // `inputs.inputs` array regardless of edgeOutputMode — collect strategies
@@ -99,8 +114,15 @@ export function resolveNodeInputs(
     // upstream has no list (no fan-out happened), wrap its single output as
     // `[output]` so the strategy still has something to fold.
     if (FAN_IN_NODE_TYPES.has(targetNode.type)) {
-      const filtered: string[] = effectiveListResults && effectiveListResults.length > 0
-        ? selectListItems(effectiveListResults, edgeData as SelectorFields | undefined)
+      // llm-chat `items` edge: the fold source is the current ===NEXT=== split
+      // (not the stale-generatedResults-derived effectiveListResults, which we
+      // zeroed above), so a reduce over `items` folds the same blocks the
+      // frontend would. Falls through to the single-result wrap if no items.
+      const fanInList: string[] | undefined = isLlmChatItemsEdge
+        ? resolveLlmChatItems(sourceNode, edge.sourceHandle, nodeStates)
+        : effectiveListResults
+      const filtered: string[] = fanInList && fanInList.length > 0
+        ? selectListItems(fanInList, edgeData as SelectorFields | undefined)
         : []
       const collected: string[] = []
       for (const item of filtered) {
@@ -181,6 +203,37 @@ export function resolveNodeInputs(
           edgeData as SelectorFields | undefined,
         )
         output = filtered[listIterationIndex]
+      }
+    }
+
+    // Generate Text (llm-chat) `items` handle: the ===NEXT===-split list is a
+    // fan-out source exactly like loop/list. Resolve the per-iteration value
+    // from the split items, honoring the edge's item/last/item:N mode + range/
+    // list selector. Mirrors the loop/list per-iteration blocks (and the
+    // frontend node-input-resolver). Only the explicit `items` handle splits —
+    // the default/`text` handle stays scalar and falls through to getNodeOutput
+    // below (full generatedText with delimiters intact).
+    if (!output && sourceNode.type === "llm-chat" && edge.sourceHandle === "items") {
+      const raw = resolveLlmChatItems(sourceNode, edge.sourceHandle, nodeStates)
+      if (raw && raw.length > 0) {
+        const ranged = selectListItems(raw, edgeData as SelectorFields | undefined)
+        if (ranged.length > 0) {
+          if (edgeOutputMode === "item") {
+            const itemIndex = edgeData?.itemIndex as string | undefined
+            output = ranged[resolveIndex(itemIndex ?? "1", ranged.length)] ?? ranged[0]
+          } else if (edgeOutputMode?.startsWith("item:")) {
+            const idx = parseInt(edgeOutputMode.split(":")[1], 10)
+            output = ranged[idx] ?? ranged[0]
+          } else if (edgeOutputMode === "last") {
+            output = ranged[ranged.length - 1]
+          } else if (listIterationIndex != null) {
+            output = ranged[listIterationIndex % ranged.length]
+          }
+          // Non-iteration / non-fan-out context (listIterationIndex undefined,
+          // default/each mode): leave `output` unset so it falls through to
+          // getNodeOutput below — the full generatedText with its ===NEXT===
+          // delimiters intact, preserving the pre-existing scalar prompt value.
+        }
       }
     }
 
@@ -304,6 +357,35 @@ function getSavedNodeOutput(node: SimpleNode): string | undefined {
 const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
 
 /**
+ * Resolve the Generate Text (llm-chat) `items` handle into its fan-out list —
+ * the LLM result split on `===NEXT===` via the shared `splitGeneratedItems`
+ * helper (identical to the backend output-extractor + frontend resolver, so
+ * single-node and DAG runs produce the SAME items — design REQ B parity).
+ *
+ * Prefers the completed-state `output.items` (already split at extraction time)
+ * and falls back to splitting the source node's `data.generatedText`. Returns
+ * `undefined` for any handle other than `items` (the default/`text` handle is a
+ * scalar source — no fan-out) so callers only fan out on the explicit handle.
+ *
+ * The list is ALREADY structured: each block may legitimately contain commas /
+ * newlines, so loop/list consumers must NOT re-chop it by their own column
+ * delimiter (callers route through this instead of `splitByLoopDelimiter`).
+ */
+function resolveLlmChatItems(
+  node: SimpleNode,
+  sourceHandle: string | null | undefined,
+  nodeStates: Record<string, NodeExecutionState>,
+): string[] | undefined {
+  if (node.type !== "llm-chat" || sourceHandle !== "items") return undefined
+  const stateItems = nodeStates[node.id]?.output?.items
+  if (stateItems && stateItems.length > 0) return stateItems
+  const items = splitGeneratedItems(
+    (node.data as Record<string, unknown>).generatedText as string | undefined,
+  )
+  return items.length > 0 ? items : undefined
+}
+
+/**
  * Resolve the list of values flowing out of a list/loop column, recursively
  * following connected-mode chains and applying each edge's selector filter.
  *
@@ -347,6 +429,16 @@ function resolveListLoopColumnItems(
     if (upstreamNode) {
       const edgeSelector = colInEdge.data as SelectorFields | undefined
       let upstreamVals: string[] | undefined
+
+      // Generate Text `items` handle: ===NEXT===-split list, ALREADY structured.
+      // Return it whole (after the edge filter), bypassing the `length > 1` gate
+      // and the splitByLoopDelimiter re-chop below — each block may contain
+      // commas/newlines and must NOT be split by this column's delimiter.
+      const llmItems = resolveLlmChatItems(upstreamNode, colInEdge.sourceHandle, nodeStates)
+      if (llmItems) {
+        const filtered = selectListItems(llmItems, edgeSelector)
+        if (filtered.length > 0) return filtered
+      }
 
       if (upstreamNode.type === "list" || upstreamNode.type === "loop") {
         // Recurse into chained lists/loops.
@@ -441,11 +533,19 @@ export function getListInputForNode(
         if (colInEdge) {
           const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
           if (upstreamNode) {
-            const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData, ctx)
-            if (upstreamText) {
-              const items = splitByLoopDelimiter(upstreamText, columns)
-              const filtered = selectListItems(items, selectorArg)
+            // Generate Text `items` handle is ALREADY split (===NEXT===) — feed
+            // it through whole, NOT re-chopped by the loop column's delimiter.
+            const llmItems = resolveLlmChatItems(upstreamNode, colInEdge.sourceHandle, nodeStates)
+            if (llmItems) {
+              const filtered = selectListItems(llmItems, selectorArg)
               if (filtered.length > 1) return filtered
+            } else {
+              const upstreamText = getNodeOutput(upstreamNode, colInEdge.sourceHandle, nodeStates, triggerData, ctx)
+              if (upstreamText) {
+                const items = splitByLoopDelimiter(upstreamText, columns)
+                const filtered = selectListItems(items, selectorArg)
+                if (filtered.length > 1) return filtered
+              }
             }
           }
         }
@@ -459,11 +559,18 @@ export function getListInputForNode(
         const upstreamEdge = loopInEdges[0]
         const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
         if (upstreamNode) {
-          const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData, ctx)
-          if (upstreamText) {
-            const items = splitByLoopDelimiter(upstreamText, columns)
-            const filtered = selectListItems(items, selectorArg)
+          // Generate Text `items` handle is ALREADY split — pass through whole.
+          const llmItems = resolveLlmChatItems(upstreamNode, upstreamEdge.sourceHandle, nodeStates)
+          if (llmItems) {
+            const filtered = selectListItems(llmItems, selectorArg)
             if (filtered.length > 1) return filtered
+          } else {
+            const upstreamText = getNodeOutput(upstreamNode, upstreamEdge.sourceHandle, nodeStates, triggerData, ctx)
+            if (upstreamText) {
+              const items = splitByLoopDelimiter(upstreamText, columns)
+              const filtered = selectListItems(items, selectorArg)
+              if (filtered.length > 1) return filtered
+            }
           }
         }
       } else if (colIndex >= 0) {
@@ -488,6 +595,26 @@ export function getListInputForNode(
         const items = scenesList.map((s) => (s.imagePrompt as string) ?? "")
         return selectListItems(items, selectorArg)
       }
+    }
+
+    // Generate Text (llm-chat) "items" handle → ===NEXT===-split list (fan-out).
+    // This handle is NOT in DEFAULT_EACH_TYPES, so the generic outputMode gate
+    // below would default it to "last" and `continue` (no fan-out) — it must be
+    // resolved here, handle-aware. The default/`text` handle is left to the
+    // generic path, where llm-chat is a scalar source (no fan-out). Mirrors the
+    // frontend node-input-resolver getListInputForNode branch. Honors the edge's
+    // range/list selector. item/last/item:N pick a single value → no fan-out.
+    if (sourceNode.type === "llm-chat" && edge.sourceHandle === "items") {
+      const llmEdgeMode = edgeData?.outputMode as string | undefined
+      if (llmEdgeMode === "item" || llmEdgeMode === "last" || llmEdgeMode?.startsWith("item:")) {
+        continue
+      }
+      const raw = resolveLlmChatItems(sourceNode, edge.sourceHandle, nodeStates)
+      if (raw && raw.length > 0) {
+        const filtered = selectListItems(raw, selectorArg)
+        if (filtered.length > 1) return filtered
+      }
+      continue
     }
 
     // Check outputMode from edge data — only fan-out if mode is "each"

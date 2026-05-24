@@ -12,7 +12,7 @@ vi.mock("@/lib/prompt-builder", () => ({
   buildScenePrompt: vi.fn(() => "mock scene prompt"),
 }))
 
-import { resolveNodeInputs, resolveEdgeValuesForTableColumn, extractNodeOutputAsList } from "../node-input-resolver"
+import { resolveNodeInputs, resolveEdgeValuesForTableColumn, extractNodeOutputAsList, getListInputForNode, resolveLoopColumnValues } from "../node-input-resolver"
 import type { WorkflowNode } from "@/types/nodes"
 
 // ---------------------------------------------------------------------------
@@ -547,6 +547,52 @@ describe("extractNodeOutputAsList", () => {
     const result = extractNodeOutputAsList(node)
     expect(result).toEqual(["https://cdn/img1.png"])
   })
+
+  it("llm-chat items handle yields the ===NEXT=== split list", () => {
+    const n = makeNode("1", "llm-chat", { generatedText: "p1===NEXT===p2===NEXT===p3" })
+    expect(extractNodeOutputAsList(n, "items")).toEqual(["p1", "p2", "p3"])
+  })
+
+  it("llm-chat default (text) handle preserves existing extractAllGeneratedResults behavior — no ===NEXT=== split", () => {
+    // Default/text handle is unchanged: it falls through to extractAllGeneratedResults
+    // (reads generatedResults, NOT generatedText), so the ===NEXT=== delimiter is
+    // never applied. Only the explicit `items` handle splits. With generatedResults
+    // present, each accumulated result is one item, kept whole.
+    const n = makeNode("1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+      generatedResults: [{ text: "p1===NEXT===p2===NEXT===p3" }],
+    })
+    expect(extractNodeOutputAsList(n)).toEqual(["p1===NEXT===p2===NEXT===p3"])
+    expect(extractNodeOutputAsList(n, "text")).toEqual(["p1===NEXT===p2===NEXT===p3"])
+  })
+})
+
+describe("getListInputForNode (consumption: llm-chat items fan-out)", () => {
+  it("downstream node wired from llm-chat items handle fans out over the split list", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "prompt one===NEXT===prompt two===NEXT===prompt three",
+    })
+    const target = makeNode("g1", "generate-image")
+    const edges = [
+      { id: "llm1->g1", source: "llm1", target: "g1", sourceHandle: "items", targetHandle: "prompt" },
+    ]
+    const items = getListInputForNode(target as WorkflowNode, [llm, target] as WorkflowNode[], edges as any)
+    expect(items).toEqual(["prompt one", "prompt two", "prompt three"])
+  })
+
+  it("downstream node wired from llm-chat default handle does NOT fan out", () => {
+    // The default/text handle is a scalar — a single multi-block string. It must
+    // not trigger ===NEXT=== fan-out (only the explicit `items` handle does).
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "prompt one===NEXT===prompt two===NEXT===prompt three",
+    })
+    const target = makeNode("g1", "generate-image")
+    const edges = [
+      { id: "llm1->g1", source: "llm1", target: "g1", sourceHandle: "text", targetHandle: "prompt" },
+    ]
+    const items = getListInputForNode(target as WorkflowNode, [llm, target] as WorkflowNode[], edges as any)
+    expect(items).toBeUndefined()
+  })
 })
 
 describe("selectListItems filtering", () => {
@@ -699,5 +745,174 @@ describe("resolveEdgeValuesForTableColumn (UI display helper)", () => {
       columns,
     )
     expect(vals).toEqual(["one\ntwo"])
+  })
+})
+
+describe("Loop consumption: llm-chat items handle fans out over ===NEXT=== split", () => {
+  // The Generate Text (llm-chat) `items` handle must fan a Loop out over the
+  // ===NEXT===-split list, exactly like it already does for Generate Image
+  // (getListInputForNode). Both are named consumers — both must work. The
+  // upstream node only carries `generatedText` (no generatedResults), so the
+  // ONLY way to get the 3 items is via splitGeneratedItems on the `items`
+  // handle. If the loop-resolution path drops the sourceHandle, it falls back
+  // to the unsplit string and yields ONE item.
+  it("resolveLoopColumnValues: items → loop connected column yields the 3 split items", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+    })
+    const loop = makeNode("loop1", "loop", {
+      columns: [{ id: "c1", handleId: "col_a", type: "text" }],
+      rows: [],
+    })
+    const edges = [
+      {
+        id: "llm1->loop1",
+        source: "llm1",
+        target: "loop1",
+        sourceHandle: "items",
+        targetHandle: "col_a_in",
+        data: { outputMode: "each" },
+      },
+    ]
+    const vals = resolveLoopColumnValues(
+      loop as any,
+      "col_a",
+      edges as any,
+      [llm, loop] as any,
+    )
+    expect(vals).toEqual(["p1", "p2", "p3"])
+  })
+
+  it("resolveLoopColumnValues: items → loop legacy 'in' handle yields the 3 split items", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+    })
+    const loop = makeNode("loop1", "loop", {
+      columns: [{ id: "c1", handleId: "col_a", type: "text" }],
+      rows: [],
+    })
+    const edges = [
+      {
+        id: "llm1->loop1",
+        source: "llm1",
+        target: "loop1",
+        sourceHandle: "items",
+        targetHandle: "in",
+        data: { outputMode: "each" },
+      },
+    ]
+    const vals = resolveLoopColumnValues(
+      loop as any,
+      "col_a",
+      edges as any,
+      [llm, loop] as any,
+    )
+    expect(vals).toEqual(["p1", "p2", "p3"])
+  })
+
+  it("resolveEdgeValuesForTableColumn: items → loop column preview yields the 3 split items", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+    })
+    const edge = {
+      source: "llm1",
+      target: "loop1",
+      sourceHandle: "items",
+      targetHandle: "col_a_in",
+      data: { outputMode: "each" },
+    }
+    const columns = [{ id: "c1", handleId: "col_a", type: "text" as const }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      llm as any,
+      [edge] as any,
+      [llm] as any,
+      columns,
+    )
+    expect(vals).toEqual(["p1", "p2", "p3"])
+  })
+
+  it("resolveEdgeValuesForTableColumn: items handle is NOT re-split by the column delimiter", () => {
+    // Each ===NEXT=== block may itself contain commas/newlines. The `items`
+    // split is already structured — the column's own delimiter must NOT chop
+    // it further (mirrors the split-text already-structured contract).
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "a, b, c===NEXT===d, e===NEXT===f",
+    })
+    const edge = {
+      source: "llm1",
+      target: "loop1",
+      sourceHandle: "items",
+      targetHandle: "col_a_in",
+      data: { outputMode: "each" },
+    }
+    const columns = [{ id: "c1", handleId: "col_a", type: "text" as const, splitDelimiter: "," }]
+    const vals = resolveEdgeValuesForTableColumn(
+      edge as any,
+      llm as any,
+      [edge] as any,
+      [llm] as any,
+      columns,
+    )
+    expect(vals).toEqual(["a, b, c", "d, e", "f"])
+  })
+
+  it("resolveNodeInputs: items → loop per-iteration value picks the i-th split item", () => {
+    const llm = makeNode("llm1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+    })
+    const loop = makeNode("loop1", "loop", {
+      columns: [{ id: "c1", handleId: "col_a", type: "text" }],
+      rows: [],
+    })
+    // generate-image consumes the loop's column output per iteration.
+    const target = makeNode("g1", "generate-image")
+    const edges = [
+      {
+        id: "llm1->loop1",
+        source: "llm1",
+        target: "loop1",
+        sourceHandle: "items",
+        targetHandle: "col_a_in",
+        data: { outputMode: "each" },
+      },
+      {
+        id: "loop1->g1",
+        source: "loop1",
+        target: "g1",
+        sourceHandle: "col_a",
+        targetHandle: "prompt",
+        data: { outputMode: "each" },
+      },
+    ]
+    const nodes = [llm, loop, target] as any
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 0).prompt).toBe("p1")
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 1).prompt).toBe("p2")
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 2).prompt).toBe("p3")
+  })
+
+  it("resolveNodeInputs: items → llm-chat consumer per-iteration value picks the i-th split item", () => {
+    // Direct llm-chat → llm-chat over the items handle. This exercises the
+    // `src.type === "llm-chat"` branch in resolveNodeInputs, which must resolve
+    // the per-iteration value from splitGeneratedItems(generatedText) rather
+    // than routing the full unsplit string into inputs.prompt.
+    const upstream = makeNode("llm1", "llm-chat", {
+      generatedText: "p1===NEXT===p2===NEXT===p3",
+    })
+    const target = makeNode("llm2", "llm-chat")
+    const edges = [
+      {
+        id: "llm1->llm2",
+        source: "llm1",
+        target: "llm2",
+        sourceHandle: "items",
+        targetHandle: "prompt",
+        data: { outputMode: "each" },
+      },
+    ]
+    const nodes = [upstream, target] as any
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 0).prompt).toBe("p1")
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 1).prompt).toBe("p2")
+    expect(resolveNodeInputs(target as any, nodes, edges as any, 2).prompt).toBe("p3")
   })
 })

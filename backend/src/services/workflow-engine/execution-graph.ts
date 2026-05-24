@@ -341,6 +341,7 @@ export const TEXT_SOURCE_TYPES = new Set([
   "suno-style-boost",
   "image-to-text",
   "ai-writer",
+  "llm-chat",
   "combine-text",
   "split-text",
   "preview",

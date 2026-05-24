@@ -37,7 +37,7 @@ const GROUPS: ReadonlyArray<{ title: string; nodeTypes: readonly NodeDefaultType
   },
   {
     title: "LLM-driven",
-    nodeTypes: ["ai-writer", "lottie-overlay", "3d-title", "motion-graphics", "image-to-text", "qa-check"],
+    nodeTypes: ["ai-writer", "llm-chat", "lottie-overlay", "3d-title", "motion-graphics", "image-to-text", "qa-check"],
   },
 ]
 

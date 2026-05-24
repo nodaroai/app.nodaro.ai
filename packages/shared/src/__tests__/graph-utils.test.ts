@@ -395,7 +395,7 @@ describe("IMAGE_REF_TYPES", () => {
 
 describe("PASSTHROUGH_TYPES", () => {
   it("contains the expected passthrough node types", () => {
-    const expected = ["ai-writer", "split-text", "combine-text", "text-prompt", "loop", "list"]
+    const expected = ["ai-writer", "llm-chat", "split-text", "combine-text", "text-prompt", "loop", "list"]
     for (const t of expected) {
       expect(PASSTHROUGH_TYPES.has(t)).toBe(true)
     }

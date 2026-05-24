@@ -96,6 +96,7 @@ describe("useUserSettings", () => {
       publicOutputs: false,
       tier: "pro",
       promptTemplates: { k: "v" },
+      textTemplates: [],
       preferredLocale: null,
       showRecentNodes: false,
       showMostUsedNodes: false,
@@ -115,10 +116,24 @@ describe("useUserSettings", () => {
       publicOutputs: true,
       tier: "free",
       promptTemplates: {},
+      textTemplates: [],
       preferredLocale: null,
       showRecentNodes: false,
       showMostUsedNodes: false,
     })
+  })
+
+  it("queryFn parses textTemplates from the API", async () => {
+    const textTemplates = [{ id: "t1", label: "Blog", systemPrompt: "You write blogs." }]
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { textTemplates } }),
+    })
+    mockUseQuery.mockReturnValue({ data: null })
+    useUserSettings("u1")
+    const opts = mockUseQuery.mock.calls[0][0]
+    const result = await opts.queryFn()
+    expect(result.textTemplates).toEqual(textTemplates)
   })
 })
 
@@ -214,6 +229,28 @@ describe("useSaveTemplatesMutation", () => {
     )
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(body).toEqual({ userId: "u1", promptTemplates: templates })
+  })
+
+  it("mutationFn forwards textTemplates when provided (drops it when undefined)", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useSaveTemplatesMutation()
+
+    const textTemplates = [{ id: "t1", label: "Blog", systemPrompt: "You write blogs." }]
+    await captured.mutationFn({ userId: "u1", promptTemplates: { a: "b" }, textTemplates })
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body).toEqual({ userId: "u1", promptTemplates: { a: "b" }, textTemplates })
+
+    // Without textTemplates, the field is omitted entirely (PATCH-merge semantics).
+    mockFetch.mockClear()
+    await captured.mutationFn({ userId: "u1", promptTemplates: { a: "b" } })
+    const body2 = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body2).toEqual({ userId: "u1", promptTemplates: { a: "b" } })
+    expect("textTemplates" in body2).toBe(false)
   })
 
   it("mutationFn throws on non-ok response", async () => {

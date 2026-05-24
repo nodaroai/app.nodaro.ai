@@ -78,6 +78,7 @@ const RELEVANT_FIELDS: Record<string, readonly string[]> = {
   "generate-music":   ["provider", "modelVersion"],
   "voice-design":     ["model"],
   "ai-writer":        ["model"],
+  "llm-chat":         ["model"],
   "lottie-overlay":   ["model"],
   "3d-title":         ["model"],
   "motion-graphics":  ["model"],

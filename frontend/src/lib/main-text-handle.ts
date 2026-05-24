@@ -31,7 +31,6 @@ export const MAIN_TEXT_HANDLE: Readonly<Record<string, ReadonlyArray<MainTextHan
   "text-to-audio": [{ handle: "in", field: "prompt" }],
   "generate-music": [{ handle: "in", field: "prompt" }],
   "video-to-video": [{ handle: "in", field: "prompt" }],
-  "ai-writer": [{ handle: "in", field: "userInput" }],
   "generate-script": [{ handle: "in", field: "prompt" }],
   "extend-video": [{ handle: "in", field: "prompt" }],
   "llm-chat": [
@@ -50,7 +49,6 @@ export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "combine-text",
   "split-text",
   "extract-field",
-  "ai-writer",
   "transcribe",
   "image-to-text",
   "suno-lyrics",

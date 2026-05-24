@@ -36,10 +36,10 @@ This node uses Claude Sonnet exclusively via the Anthropic API. There is no prov
 - Extracting prompts from existing artwork to reverse-engineer generation parameters.
 - Analyzing reference images to generate structured descriptions for downstream AI nodes.
 - Creating alt text for images in automated content pipelines.
-- Feeding image descriptions into AI Writer or Generate Script nodes for image-driven storytelling.
+- Feeding image descriptions into Generate Text or Generate Script nodes for image-driven storytelling.
 
 ## Tips
 
 - The custom prompt field completely replaces the system prompt when provided. If you want to extend the default behavior rather than replace it, include the original instructions in your custom prompt.
-- This node outputs text (not an image), so it connects to text-consuming nodes downstream (Text Prompt, AI Writer, Generate Script, Combine Text, etc.) via the `text` output handle.
+- This node outputs text (not an image), so it connects to text-consuming nodes downstream (Text Prompt, Generate Text, Generate Script, Combine Text, etc.) via the `text` output handle.
 - Results include a history of generated descriptions (`generatedResults` array) with job IDs and timestamps, accessible via the result navigation in the config panel.

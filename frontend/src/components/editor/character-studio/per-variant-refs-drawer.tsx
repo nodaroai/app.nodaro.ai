@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { X, Upload, ChevronRight, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { uploadImage } from "@/lib/api"
@@ -88,7 +89,7 @@ export function PerVariantRealLifeRefsDrawer({
                   <div className="grid grid-cols-3 gap-1.5">
                     {urls.map((url) => (
                       <div key={url} className="relative group aspect-square">
-                        <img src={url} alt="" className="w-full h-full object-cover rounded" />
+                        <img src={optimizedImageUrl(url)} alt="" className="w-full h-full object-cover rounded" />
                         <button
                           type="button"
                           onClick={() => removeUrl(variant, url)}

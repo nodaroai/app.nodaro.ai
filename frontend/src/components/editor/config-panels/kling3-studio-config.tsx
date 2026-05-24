@@ -17,6 +17,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { prefetchModelCredits } from "@/ee/hooks/use-model-credits"
 import { toast } from "sonner"
 import { uploadFile } from "@/lib/api"
+import { optimizedImageUrl } from "@/lib/image"
 import type { ImageToVideoData } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS } from "./model-options"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
@@ -228,7 +229,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   title={`Click to view: ${img.label}`}
                 >
                   {img.imageUrl ? (
-                    <img src={img.imageUrl} alt={img.label} className="w-full h-full object-cover" />
+                    <img src={optimizedImageUrl(img.imageUrl)} alt={img.label} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <ImageIcon className="w-6 h-6 text-muted-foreground/40" />
@@ -610,7 +611,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {el.urls.map((url, ui) => (
                       <div key={ui} className="relative group/thumb w-12 h-12 shrink-0">
-                        <img src={url} alt={`${el.name} ${ui + 1}`} className="w-12 h-12 rounded-lg object-cover border border-border" />
+                        <img src={optimizedImageUrl(url)} alt={`${el.name} ${ui + 1}`} className="w-12 h-12 rounded-lg object-cover border border-border" />
                         <button
                           type="button"
                           className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow-sm"
@@ -686,7 +687,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                           onClick={() => node.thumbUrl && handleAddFromWorkflow(i, node.thumbUrl)}
                         >
                           {node.thumbUrl ? (
-                            <img src={node.thumbUrl} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
+                            <img src={optimizedImageUrl(node.thumbUrl)} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
                               <ImageIcon className="w-3 h-3 text-muted-foreground/40" />

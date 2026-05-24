@@ -149,7 +149,7 @@ Generate, transform, or extract text using AI models.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Generate Script](./ai-text/generate-script.md) | AI multi-scene script with cinematography | Create structured video scripts with scene descriptions and camera directions |
-| [AI Agent](./ai-text/ai-writer.md) | General-purpose AI text generation (Claude Sonnet) | Rewrite text, generate descriptions, brainstorm, create captions |
+| [Generate Text](./ai-text/llm-chat.md) | LLM text generation from a prompt (selectable model, optional image/video/audio refs). Two outputs: full `text` and a `===NEXT===`-split `items` fan-out list. Built-in + user templates; "Create N Image Nodes" fan-out | Rewrite/transform text, caption media, brainstorm, or fan out N image prompts |
 | [Transcribe](./ai-text/transcribe.md) | Speech-to-text with diarization | Convert audio to text with speaker identification and timestamps |
 
 ---

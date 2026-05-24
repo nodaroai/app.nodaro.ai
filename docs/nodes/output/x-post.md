@@ -43,4 +43,4 @@ None. This is a terminal output node.
 - The 280-character limit applies to the caption only; media attachments do not count toward this limit.
 - OAuth tokens are encrypted at rest using AES-256-GCM.
 - One X account can be connected per user.
-- For threads or longer content, use the AI Writer node to generate concise summaries that fit within the character limit.
+- For threads or longer content, use the Generate Text node to generate concise summaries that fit within the character limit.

@@ -25,7 +25,7 @@ The Combine Text node joins text from multiple input connections into a single o
 
 ## Common Use Cases
 
-- Combine AI Agent output with additional instructions for a second AI pass
+- Combine Generate Text output with additional instructions for a second AI pass
 - Join multiple text prompts into a single complex prompt
 - Assemble captions from different text sources
 - Build structured data from separate text nodes

@@ -79,11 +79,24 @@ export type McpPreferences = z.infer<typeof McpPreferencesPatch>
 const updateSettingsBody = z.object({
   publicOutputs: z.boolean().optional(),
   promptTemplates: z.record(z.string(), z.string()).optional(),
+  textTemplates: z.array(z.object({
+    id: z.string(),
+    label: z.string().max(80),
+    systemPrompt: z.string().max(10000),
+    defaultInput: z.string().max(10000).optional(),
+    defaultMaxTokens: z.number().int().min(1).max(16384).optional(),
+    llmModel: z.string().optional(),
+    fansOut: z.boolean().optional(),
+    requiresImageRef: z.boolean().optional(),
+  })).max(100).optional(),
   preferredLocale: z.enum(SUPPORTED_LOCALES).nullable().optional(),
   mcpPreferences: McpPreferencesPatch.optional(),
   showRecentNodes: z.boolean().optional(),
   showMostUsedNodes: z.boolean().optional(),
 })
+
+/** Generate Text user-defined template preset (stored on profiles.text_templates). */
+export type TextTemplate = NonNullable<z.infer<typeof updateSettingsBody>["textTemplates"]>[number]
 
 export async function userSettingsRoutes(app: FastifyInstance) {
   /**
@@ -98,7 +111,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
+      .select("tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
       .eq("id", userId)
       .single()
 
@@ -111,6 +124,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         tier: profile.tier,
         publicOutputs: profile.public_outputs ?? true,
         promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
+        textTemplates: (profile.text_templates as TextTemplate[]) ?? [],
         preferredLocale: profile.preferred_locale ?? null,
         mcpPreferences: (profile.mcp_preferences as McpPreferences) ?? {},
         showRecentNodes: profile.show_recent_nodes ?? false,
@@ -135,7 +149,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { publicOutputs, promptTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes } = parsed.data
+    const { publicOutputs, promptTemplates, textTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
@@ -144,7 +158,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Fetch current profile (include public_outputs for response accuracy)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
+      .select("tier, public_outputs, prompt_templates, text_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
       .eq("id", userId)
       .single()
 
@@ -187,6 +201,14 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       }
 
       updates.prompt_templates = filtered
+    }
+
+    // Generate Text user-defined templates: a distinct preset LIST (not the
+    // Record<string,string> shape of promptTemplates). No system-default
+    // catalog to filter against, so persist the validated array verbatim.
+    // Ungated — available to all editions, exactly like promptTemplates.
+    if (textTemplates !== undefined) {
+      updates.text_templates = textTemplates
     }
 
     // preferred_locale: null clears the preference (re-defaults to browser
@@ -249,6 +271,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
       data: {
         publicOutputs: confirmedPublicOutputs,
         promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
+        textTemplates: (updates.text_templates as TextTemplate[]) ?? (profile.text_templates as TextTemplate[]) ?? [],
         preferredLocale: confirmedPreferredLocale,
         mcpPreferences: confirmedMcpPreferences,
         showRecentNodes: showRecentNodes ?? (profile.show_recent_nodes ?? false),

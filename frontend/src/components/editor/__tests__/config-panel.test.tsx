@@ -44,7 +44,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-music-video": "Music Video",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
-  "ai-writer": "AI Agent",
+  "llm-chat": "Generate Text",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
@@ -80,7 +80,7 @@ const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "ai-writer",
+  "llm-chat",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
   "render-video",
@@ -113,8 +113,8 @@ describe("getNodeTypeDisplayName", () => {
     expect(getNodeTypeDisplayName("audio-isolation")).toBe("Voice Extractor")
   })
 
-  it("returns the hardcoded name for 'ai-writer' (AI Agent)", () => {
-    expect(getNodeTypeDisplayName("ai-writer")).toBe("AI Agent")
+  it("returns the hardcoded name for 'llm-chat' (Generate Text)", () => {
+    expect(getNodeTypeDisplayName("llm-chat")).toBe("Generate Text")
   })
 
   it("returns the hardcoded name for 'image-to-text' (Describe Image)", () => {
@@ -148,7 +148,7 @@ describe("GENERATE_BUTTON_TYPES", () => {
   it("contains core AI nodes", () => {
     const expected = [
       "generate-image",
-      "ai-writer",
+      "llm-chat",
       "text-to-speech",
       "image-to-video",
       "text-to-video",
@@ -227,7 +227,7 @@ describe("RUN_BUTTON_TYPES", () => {
   it("does NOT contain AI or credit-costing nodes", () => {
     const nonRunTypes = [
       "generate-image",
-      "ai-writer",
+      "llm-chat",
       "text-to-speech",
       "image-to-video",
       "text-to-video",

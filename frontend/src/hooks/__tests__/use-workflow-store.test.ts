@@ -469,3 +469,30 @@ describe("duplicateNodes", () => {
     expect(col.connectedSourceId).toBeUndefined()
   })
 })
+
+describe("userTextTemplates (Generate Text user templates)", () => {
+  beforeEach(() => {
+    useWorkflowStore.setState({ userTextTemplates: [] })
+  })
+
+  it("defaults to an empty array", () => {
+    expect(useWorkflowStore.getState().userTextTemplates).toEqual([])
+  })
+
+  it("setUserTextTemplates replaces the slot", () => {
+    const templates = [
+      { id: "t1", label: "Blog Outline", systemPrompt: "You write blog outlines." },
+      { id: "t2", label: "Email Draft", systemPrompt: "You draft emails.", defaultMaxTokens: 2048, llmModel: "claude-sonnet-4.6" },
+    ]
+    useWorkflowStore.getState().setUserTextTemplates(templates)
+    expect(useWorkflowStore.getState().userTextTemplates).toEqual(templates)
+  })
+
+  it("does not mark the workflow dirty (user-level, not workflow content)", () => {
+    useWorkflowStore.setState({ isDirty: false })
+    useWorkflowStore.getState().setUserTextTemplates([
+      { id: "t1", label: "X", systemPrompt: "Y" },
+    ])
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+})

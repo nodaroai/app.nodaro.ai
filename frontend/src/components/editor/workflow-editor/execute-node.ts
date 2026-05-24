@@ -57,7 +57,6 @@ import {
   combineAudioApi,
   generateImage,
   getJobStatus,
-  generateAIWriterStream,
   llmChatStream,
   setForcePrivate,
   setUserPromptTemplate,
@@ -68,8 +67,8 @@ import {
   executeReduce,
 } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
-import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG } from "@nodaro/shared";
-import { getAIWriterTemplate } from "@/lib/ai-writer-templates";
+import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, MODEL_CATALOG, splitGeneratedItems } from "@nodaro/shared";
+import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
   WorkflowNode,
@@ -104,7 +103,6 @@ import type {
   SunoUploadExtendData,
   TranscribeData,
   ImageToTextData,
-  AIWriterNodeData,
   LLMChatData,
   LipSyncData,
   SpeechToVideoData,
@@ -3675,6 +3673,38 @@ export function executeNode(
     const chatData = node.data as LLMChatData;
     const { updateNodeData } = useWorkflowStore.getState();
 
+    // Template-scoped reference-image guard (folded in from the former
+    // ai-writer block). Only fan-out image templates (`requiresImageRef`)
+    // need a connected image source — general text use (custom / no template)
+    // runs without one.
+    const template = getGenerateTextTemplate(chatData.templateId ?? "");
+    if (template?.requiresImageRef) {
+      const IMG_SRC_TYPES = new Set([
+        "generate-image",
+        "upload-image",
+        "edit-image",
+        "image-to-image",
+        "modify-image",
+        "upscale-image",
+        "remove-background",
+        "character",
+        "object",
+        "location",
+        "face",
+      ]);
+      const chatEdges = edges.filter((e) => e.target === node.id);
+      const hasImageSource = chatEdges.some((e) => {
+        const src = nodes.find((n) => n.id === e.source);
+        return src && IMG_SRC_TYPES.has(src.type ?? "");
+      });
+      if (!hasImageSource) {
+        toast.error(
+          `Node "${chatData.label}": connect a reference image (Generate Image, Upload Image, etc.) before running with a template`,
+        );
+        return Promise.reject(new Error("No reference image connected"));
+      }
+    }
+
     // Manual wins over upstream on both fields — matches the dropdown's "Manual"
     // default: unless the user explicitly maps a source (fieldMappings), their
     // typed text is the source of truth. resolveTextRefs handles inline
@@ -3745,137 +3775,21 @@ export function executeNode(
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedText: result.generatedText,
+          generatedItems: splitGeneratedItems(result.generatedText),
           generatedResults: [newResult, ...existingResults].slice(0, 10),
           activeResultIndex: 0,
           lastSystemPrompt: systemPrompt || "",
           lastUserPrompt: userInput,
         });
-        guardedToast.success("LLM Chat completed");
+        guardedToast.success("Generate Text completed");
         return result.generatedText ?? "";
       })
       .catch((err: Error) => {
         updateNodeData(node.id, {
           executionStatus: "failed",
-          errorMessage: err.message || "LLM Chat failed",
+          errorMessage: err.message || "Generate Text failed",
         });
-        guardedToast.error(`LLM Chat failed: ${err.message}`);
-        throw err;
-      });
-  }
-
-  if (node.type === "ai-writer") {
-    const writerData = node.data as AIWriterNodeData;
-    const { updateNodeData } = useWorkflowStore.getState();
-
-    const writerTemplate = getAIWriterTemplate(writerData.templateId);
-    if (writerTemplate && writerTemplate.id !== "custom") {
-      const IMG_SRC_TYPES = new Set([
-        "generate-image",
-        "upload-image",
-        "edit-image",
-        "image-to-image",
-        "modify-image",
-        "upscale-image",
-        "remove-background",
-        "character",
-        "object",
-        "location",
-        "face",
-      ]);
-      const writerEdges = edges.filter((e) => e.target === node.id);
-      const hasImageSource = writerEdges.some((e) => {
-        const src = nodes.find((n) => n.id === e.source);
-        return src && IMG_SRC_TYPES.has(src.type ?? "");
-      });
-      if (!hasImageSource) {
-        toast.error(
-          `Node "${writerData.label}": connect a reference image (Generate Image, Upload Image, etc.) before running with a template`,
-        );
-        return Promise.reject(new Error("No reference image connected"));
-      }
-    }
-
-    if (!writerData.systemPrompt?.trim()) {
-      updateNodeData(node.id, {
-        executionStatus: "failed",
-        errorMessage: "System prompt is required",
-      });
-      return Promise.resolve("");
-    }
-
-    // Manual wins — see gen-image note above. {} refs in userInput resolve
-    // so "{Framing}" etc. is replaced with the connected source's output.
-    const manualWriterInput = resolveTextRefs(writerData.userInput?.trim(), refMap);
-    const userInput =
-      overridePrompt ||
-      manualWriterInput ||
-      (typeof inputs.prompt === "string" && inputs.prompt.trim()
-        ? inputs.prompt
-        : "");
-
-    if (!userInput?.trim()) {
-      toast.error(`Node "${writerData.label}": no input provided`);
-      return Promise.reject(new Error("No input"));
-    }
-
-    updateNodeData(node.id, {
-      executionStatus: "running",
-      errorMessage: undefined,
-      generatedText: "",
-      activeResultIndex: -1,
-    });
-
-    const processedPrompt = writerData.systemPrompt;
-
-    setUserPromptTemplate(writerData.userInput?.trim() || undefined);
-    return generateAIWriterStream({
-      userId: ctx.userId ?? "",
-      systemPrompt: processedPrompt,
-      userInput,
-      temperature: writerData.temperature ?? 0.7,
-      maxTokens: writerData.maxTokens ?? 4096,
-      llmModel: writerData.llmModel,
-      onToken: (token) => {
-        const fresh = useWorkflowStore
-          .getState()
-          .nodes.find((n) => n.id === node.id);
-        const prev =
-          (fresh?.data as AIWriterNodeData | undefined)?.generatedText ?? "";
-        updateNodeData(node.id, { generatedText: prev + token });
-      },
-    })
-      .then((result) => {
-        const existingResults =
-          (
-            useWorkflowStore.getState().nodes.find((n) => n.id === node.id)
-              ?.data as AIWriterNodeData | undefined
-          )?.generatedResults ?? [];
-        const newResult = {
-          text: result.generatedText,
-          jobId: result.jobId,
-          timestamp: new Date().toISOString(),
-        };
-
-        const items = [result.generatedText];
-
-        updateNodeData(node.id, {
-          executionStatus: "completed",
-          generatedText: result.generatedText,
-          generatedItems: items,
-          generatedResults: [newResult, ...existingResults],
-          activeResultIndex: 0,
-        });
-        guardedToast.success(
-          `AI Agent completed: ${items.length} item${items.length !== 1 ? "s" : ""} generated`,
-        );
-        return result.generatedText ?? "";
-      })
-      .catch((err: Error) => {
-        updateNodeData(node.id, {
-          executionStatus: "failed",
-          errorMessage: err.message || "Generation failed",
-        });
-        guardedToast.error(`AI Agent failed: ${err.message}`);
+        guardedToast.error(`Generate Text failed: ${err.message}`);
         throw err;
       });
   }

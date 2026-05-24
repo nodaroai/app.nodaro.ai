@@ -3,7 +3,7 @@
 
 ## Overview
 
-The Tone parameter node holds a free-text tone descriptor that can be wired into downstream AI nodes such as Generate Script, Generate Image, or AI Writer. It provides a reusable, centralized way to control the emotional or stylistic tone of generated content across multiple nodes in a workflow without duplicating instructions in each prompt.
+The Tone parameter node holds a free-text tone descriptor that can be wired into downstream AI nodes such as Generate Script, Generate Image, or Generate Text. It provides a reusable, centralized way to control the emotional or stylistic tone of generated content across multiple nodes in a workflow without duplicating instructions in each prompt.
 
 ## Configuration
 
@@ -31,7 +31,7 @@ Not applicable. This is a data-passing parameter node with no AI provider.
 ## Common Use Cases
 
 - Setting a consistent cinematic tone across all image and video generation nodes in a storyboard workflow.
-- Defining brand voice tone for AI Writer nodes producing marketing copy.
+- Defining brand voice tone for Generate Text nodes producing marketing copy.
 - Controlling the mood of Generate Script output (e.g., "suspenseful thriller" vs "lighthearted comedy").
 
 ## Tips

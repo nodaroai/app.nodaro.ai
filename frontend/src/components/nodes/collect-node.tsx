@@ -1,11 +1,7 @@
 "use client"
 
 import { memo, useMemo } from "react"
-import {
-  Handle,
-  Position,
-  type NodeProps,
-} from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { Layers, Combine } from "lucide-react"
 import {
   COLLECT_IN_HANDLE,
@@ -15,12 +11,13 @@ import {
 } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
-import { AggregateHandleIcon, HandleIcon } from "@/components/nodes/handle-icon"
+import { AggregateHandleVisual, HandleIcon } from "@/components/nodes/handle-icon"
 import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
+import { BaseNode, type HandleConfig } from "@/components/nodes/base-node"
 import { computeCollectBuckets } from "@/components/editor/workflow-editor/execution-graph"
 import type { CollectNodeData, WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
-function CollectNodeComponent({ id, data }: NodeProps) {
+function CollectNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CollectNodeData
   const allNodes = useWorkflowStore((s) => s.nodes) as WorkflowNode[]
   const allEdges = useWorkflowStore((s) => s.edges) as WorkflowEdge[]
@@ -42,40 +39,61 @@ function CollectNodeComponent({ id, data }: NodeProps) {
 
   useStaleHandleCleanup(id, types)
 
-  const minHeight = Math.max(96, 24 + types.length * 30 + 16)
+  // Functional handles live in BaseNode's `handles` array (hidden); the colored
+  // circles are drawn separately as visual-only overlays at the same anchors.
+  const handles = useMemo<ReadonlyArray<HandleConfig>>(
+    () => [
+      {
+        id: COLLECT_IN_HANDLE,
+        type: "target",
+        position: Position.Left,
+        hideHandle: true,
+        customStyle: { top: "24px", left: "-29px" },
+      },
+      ...types.map((t, idx) => ({
+        id: groupHandleId(t),
+        type: "source" as const,
+        position: Position.Right,
+        hideHandle: true,
+        customStyle: { top: `${24 + idx * 30}px`, right: "-29px" },
+      })),
+    ],
+    [types],
+  )
+
+  const label = nodeData?.label || "Collect"
 
   return (
-    <div
-      className="collect-node relative rounded-lg border border-[#2D2D2D] bg-[#1E1E1E] p-3 min-w-[160px]"
-      style={{ minHeight }}
-    >
+    <div className="relative" style={{ width: "100%", height: "100%" }}>
       <EditableNodeLabel
-        label={nodeData?.label || "Collect"}
+        label={label}
         icon={<Layers className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
       />
-      {/* Input handle — transparent hit-target + icon circle at the left edge. */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id={COLLECT_IN_HANDLE}
-        isConnectable
-        aria-label={COLLECT_IN_HANDLE}
-        className="!w-7 !h-7 !bg-transparent !border-0 touch-manipulation"
-        style={{ top: "24px", left: "-29px", transform: "translateY(-50%)", zIndex: 30 }}
-      />
+      <BaseNode
+        id={id}
+        label={label}
+        icon={<Layers className="h-4 w-4" />}
+        category="processing"
+        selected={selected}
+        minWidth={180}
+        hideHeader
+        handles={handles}
+      >
+        <div className="px-3 py-2 text-xs text-muted-foreground">
+          {incoming.length === 0
+            ? "Connect inputs"
+            : `${incoming.length} connection${incoming.length === 1 ? "" : "s"}`}
+        </div>
+      </BaseNode>
+      {/* Visual handle circles — the functional <Handle>s live in BaseNode. */}
       <HandleIcon icon={<Combine />} color="steel" side="left" top="24px" />
-      <div className="text-xs text-muted-foreground">
-        {incoming.length === 0
-          ? "Connect inputs"
-          : `${incoming.length} connection${incoming.length === 1 ? "" : "s"}`}
-      </div>
       {types.map((t, idx) => (
-        <AggregateHandleIcon
+        <AggregateHandleVisual
           key={groupHandleId(t)}
-          id={groupHandleId(t)}
           type={t}
           top={`${24 + idx * 30}px`}
+          side="right"
         />
       ))}
     </div>

@@ -25,6 +25,7 @@ import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
 import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
+import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -303,7 +304,7 @@ function getNodeOutputForPreview(
   }
 
   // Text output nodes
-  if (t === "suno-lyrics" || t === "suno-style-boost" || t === "ai-writer" || t === "generate-script") {
+  if (t === "suno-lyrics" || t === "suno-style-boost" || (t as string) === "ai-writer" || t === "llm-chat" || t === "generate-script") {
     const v = (d.generatedText as string)?.trim()
     return v ? { type: "text", value: v } : null
   }
@@ -399,6 +400,9 @@ interface WorkflowState {
   readonly newNodeIds: Set<string>
   readonly characterDefinitions: CharacterDefinition[]
   readonly userPromptTemplates: Record<string, string>
+  /** User-defined Generate Text templates (loaded from profiles.text_templates
+   *  via useLoadUserSettings). User-level, not per-workflow. */
+  readonly userTextTemplates: GenerateTextTemplate[]
   readonly flowPromptTemplates: Record<string, string>
   readonly presentationSettings: PresentationSettings
 
@@ -435,6 +439,7 @@ interface WorkflowState {
   readonly duplicateNodes: (ids: string[]) => void
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
+  readonly setUserTextTemplates: (templates: GenerateTextTemplate[]) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
   readonly savedViewport: { x: number; y: number; zoom: number } | null
   readonly setSavedViewport: (vp: { x: number; y: number; zoom: number } | null) => void
@@ -658,6 +663,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   newNodeIds: new Set<string>(),
   characterDefinitions: [],
   userPromptTemplates: {},
+  userTextTemplates: [],
   flowPromptTemplates: {},
   presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
 
@@ -1442,6 +1448,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   setUserPromptTemplates: (templates) => set({ userPromptTemplates: templates }),
 
+  setUserTextTemplates: (templates) => set({ userTextTemplates: templates }),
+
   setFlowPromptTemplates: (templates) => set({ flowPromptTemplates: templates, isDirty: true }),
 
   loadWorkflow: (id, name, nodes, edges, characterDefinitions, flowPromptTemplates, presentationSettings, viewport) => {
@@ -1555,6 +1563,32 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         : { enabled: false })
       return { ...n, data: newData as typeof n.data }
     })
+
+    // Migrate legacy ai-writer ("AI Agent") → llm-chat ("Generate Text").
+    // One-way, non-destructive. ai-writer defaulted to claude-sonnet-4.6 while
+    // llm-chat defaults to gemini-flash, so the effective model is preserved
+    // (fallback to claude-sonnet-4.6 when no explicit llmModel was saved) — a
+    // migrated node must NOT silently switch to a cheaper/different model. The
+    // deprecated `provider`/`model` fields are dropped. ai-writer's text input
+    // handle was "in"; llm-chat's is "prompt", so edges targeting a migrated
+    // node's "in" handle are remapped. The output handle is "text" on both, so
+    // no source-handle remap is needed. templateId/generatedItems/
+    // createdNodeIds/generatedResults carry over via the data spread.
+    const aiWriterIds = new Set(migratedNodes.filter((n) => (n.type as string) === "ai-writer").map((n) => n.id))
+    if (aiWriterIds.size > 0) {
+      migratedNodes = migratedNodes.map((n) => {
+        if ((n.type as string) !== "ai-writer") return n
+        const data = n.data as Record<string, unknown>
+        const newData = { ...data } as Record<string, unknown>
+        newData.llmModel = (data.llmModel as string | undefined) ?? "claude-sonnet-4.6"
+        delete newData.provider
+        delete newData.model
+        return { ...n, type: "llm-chat" as SceneNodeType, data: newData as typeof n.data }
+      })
+      migratedEdges = migratedEdges.map((e) =>
+        aiWriterIds.has(e.target) && e.targetHandle === "in" ? { ...e, targetHandle: "prompt" } : e,
+      )
+    }
 
     // Migrate legacy CharacterNodeData:
     //  - Backfill the Phase-1 Character Studio fields (motions / motionStatus /

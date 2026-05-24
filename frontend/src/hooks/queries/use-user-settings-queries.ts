@@ -1,11 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { queryKeys } from "@/lib/query-keys"
 import { getAuthHeaders } from "@/lib/api"
+import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 
 interface UserSettings {
   publicOutputs: boolean
   tier: string
   promptTemplates: Record<string, string>
+  /** User-defined Generate Text templates (profiles.text_templates). Ungated —
+   *  available to all editions, exactly like promptTemplates. */
+  textTemplates: GenerateTextTemplate[]
   /** User-selected language for parameter-node picker labels/descriptions.
    *  null = browser-detected, falls back to English. */
   preferredLocale: string | null
@@ -27,6 +31,7 @@ async function fetchUserSettings(userId: string): Promise<UserSettings> {
     publicOutputs: data.publicOutputs ?? true,
     tier: data.tier ?? "free",
     promptTemplates: data.promptTemplates ?? {},
+    textTemplates: data.textTemplates ?? [],
     preferredLocale: data.preferredLocale ?? null,
     showRecentNodes: data.showRecentNodes ?? false,
     showMostUsedNodes: data.showMostUsedNodes ?? false,
@@ -89,12 +94,26 @@ export function useUpdatePreferredLocaleMutation() {
 export function useSaveTemplatesMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ userId, promptTemplates }: { userId: string; promptTemplates: Record<string, string> }) => {
+    mutationFn: async ({
+      userId,
+      promptTemplates,
+      textTemplates,
+    }: {
+      userId: string
+      promptTemplates: Record<string, string>
+      /** Optional — only included in the PATCH when present so a prompt-template
+       *  save doesn't clobber text templates (PATCH-merge semantics). */
+      textTemplates?: GenerateTextTemplate[]
+    }) => {
       const authHeaders = await getAuthHeaders()
       const res = await fetch(`/v1/user/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ userId, promptTemplates }),
+        body: JSON.stringify({
+          userId,
+          promptTemplates,
+          ...(textTemplates !== undefined ? { textTemplates } : {}),
+        }),
       })
       if (!res.ok) throw new Error("Failed to save templates")
       return res.json()

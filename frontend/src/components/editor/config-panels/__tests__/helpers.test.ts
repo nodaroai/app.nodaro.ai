@@ -220,9 +220,9 @@ describe("extractDisplayValue", () => {
 })
 
 describe("getModelIdentifier", () => {
-  it("returns 'ai-writer' for ai-writer nodes", () => {
-    const node = makeNode({ type: "ai-writer", data: { label: "Writer", provider: "claude" } as any })
-    expect(getModelIdentifier(node)).toBe("ai-writer")
+  it("returns the llm credit identifier for llm-chat nodes", () => {
+    const node = makeNode({ type: "llm-chat", data: { label: "Generate Text", llmModel: "claude-sonnet-4.6" } as any })
+    expect(getModelIdentifier(node)).toBe("llm-chat")
   })
 
   it("returns provider from node data when available", () => {

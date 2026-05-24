@@ -126,7 +126,7 @@ describe("NODE_DEFINITIONS essential types", () => {
       "qa-check",
       "generate-music",
       "text-to-audio",
-      "ai-writer",
+      "llm-chat",
       "transcribe",
       "image-to-text",
       "audio-isolation",

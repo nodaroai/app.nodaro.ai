@@ -27,7 +27,7 @@ The Split Text node breaks a single text input into multiple items based on a de
 
 - Split a script into individual scene descriptions for per-scene generation
 - Break a comma-separated list of subjects into individual items
-- Parse AI Agent output into separate items for batch processing
+- Parse Generate Text output into separate items for batch processing
 - Convert structured text into list items for iteration
 
 ## Tips

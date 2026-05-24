@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { Trash2, Copy, Info, Pencil, Check, X } from "lucide-react"
 import {
   Tooltip,
@@ -60,7 +61,7 @@ export function CompactSlotItem({
           {slot.thumbnailUrl && mediaType ? (
             <div className="w-11 h-11 rounded overflow-hidden bg-muted shrink-0">
               {mediaType === "image" ? (
-                <img src={slot.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                <img src={optimizedImageUrl(slot.thumbnailUrl)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <video src={slot.thumbnailUrl} className="w-full h-full object-cover" muted />
               )}
@@ -139,7 +140,7 @@ export function RunSlotItem({
         {slot.thumbnailUrl && mediaType && (
           <div className="w-10 h-10 rounded overflow-hidden shrink-0 bg-muted self-center">
             {mediaType === "image" ? (
-              <img src={slot.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+              <img src={optimizedImageUrl(slot.thumbnailUrl)} alt="" className="w-full h-full object-cover" />
             ) : (
               <video src={slot.thumbnailUrl} className="w-full h-full object-cover" muted />
             )}

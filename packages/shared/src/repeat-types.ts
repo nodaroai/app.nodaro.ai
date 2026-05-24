@@ -4,7 +4,7 @@ export const REPEATABLE_NODE_TYPES = new Set([
   "generate-image", "edit-image", "image-to-image",
   "image-to-video", "video-to-video", "text-to-video",
   "text-to-speech", "generate-music", "text-to-audio", "text-to-dialogue",
-  "ai-writer", "generate-script",
+  "ai-writer", "llm-chat", "generate-script",
   "suno-generate", "suno-cover", "suno-extend", "suno-lyrics",
   "lip-sync", "speech-to-video",
   "motion-transfer", "extend-video",

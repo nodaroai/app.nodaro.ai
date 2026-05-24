@@ -164,3 +164,12 @@ describe("registry coverage", () => {
     }
   })
 })
+
+describe("llm-chat (merged Generate Text node)", () => {
+  it("llm-chat is a model-field node mirroring ai-writer", () => {
+    expect(getTargetField("llm-chat")).toBe("model")
+    expect(validateProviderForNodeType("llm-chat", "claude-sonnet-4.6")).toBeNull()
+    expect(validateProviderForNodeType("llm-chat", "fake-model")).toMatch(/not valid/)
+    expect(deriveLinkedFields("llm-chat", "claude-sonnet-4.6")).toEqual({})
+  })
+})

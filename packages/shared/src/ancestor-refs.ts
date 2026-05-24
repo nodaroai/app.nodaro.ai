@@ -14,7 +14,7 @@ export const IMAGE_REF_TYPES = new Set([
 
 // Node types that pass through (don't produce images but connect to ancestors that do)
 export const PASSTHROUGH_TYPES = new Set([
-  "ai-writer", "split-text", "combine-text", "text-prompt", "loop", "list",
+  "ai-writer", "llm-chat", "split-text", "combine-text", "text-prompt", "loop", "list",
 ])
 
 /**

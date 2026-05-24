@@ -60,6 +60,7 @@ import { NodeConfigModal, CONFIG_INPUT_TYPES } from "./node-config-modal"
 import { PlatformPreview, PLATFORM_COLORS } from "@/components/nodes/platform-preview"
 import { PLATFORM_LABELS } from "@/lib/social-media-specs"
 import { isVideoUrl } from "@/lib/media-type"
+import { optimizedImageUrl } from "@/lib/image"
 import { responsiveColumns } from "@/lib/presentation-display"
 import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
@@ -1115,7 +1116,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           className="w-full text-left rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors cursor-pointer overflow-hidden"
         >
           {resultData.url && mediaType === "image" && (
-            <img src={resultData.url} alt={label} className="w-full h-32 object-cover" />
+            <img src={optimizedImageUrl(resultData.url)} alt={label} className="w-full h-32 object-cover" />
           )}
           {resultData.url && mediaType === "video" && (
             <video src={resultData.url} muted playsInline className="w-full h-32 object-cover" />

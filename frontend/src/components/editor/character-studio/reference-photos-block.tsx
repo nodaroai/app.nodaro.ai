@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { X, Upload } from "lucide-react"
 import { toast } from "sonner"
 import type { ReferencePhoto, ReferencePhotoKind } from "@/lib/reference-photo-routing"
@@ -140,7 +141,7 @@ function Slot({
         className="w-16 h-16 rounded-md border border-dashed border-[#334155] bg-[#13161f] flex items-center justify-center text-[10px] text-slate-500 overflow-hidden hover:border-[#3b82f6]/60"
       >
         {photo ? (
-          <img src={photo.url} alt={slot} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(photo.url)} alt={slot} className="w-full h-full object-cover" />
         ) : uploading ? (
           <Upload className="w-3 h-3 animate-pulse" />
         ) : (

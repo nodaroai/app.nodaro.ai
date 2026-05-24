@@ -11,6 +11,7 @@ import { LLM_MODEL_IDS, buildLlmCreditIdentifier, resolveLlmCreditId, LLM_FEATUR
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
 const llmChatBody = z.object({
   systemPrompt: z.string().max(10000),
@@ -125,6 +126,11 @@ export async function llmChatRoutes(app: FastifyInstance) {
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      await markProviderCallStart(job.id, "anthropic-sync")
 
       try {
         const response = await llmComplete({
@@ -241,6 +247,11 @@ export async function llmChatRoutes(app: FastifyInstance) {
       const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
       const usageLogId = reservation?.usageLogId
+
+      // Reconciliation: mark this job inflight before invoking the LLM. The
+      // sync-sweep cron uses this to detect stuck rows that the route
+      // handler never completed. Best-effort — never throws.
+      await markProviderCallStart(job.id, "anthropic-sync")
 
       const sse = await createSSEStream(req, reply)
 

@@ -11,6 +11,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAuth } from "@/hooks/use-auth"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { uploadFile } from "@/lib/api"
+import { optimizedImageUrl } from "@/lib/image"
 import type { ImageToVideoData, GeneratedResult } from "@/types/nodes"
 
 // ─── MentionTextarea ─────────────────────────────────────────────────────────
@@ -519,7 +520,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                     {elements.filter((el) => el.urls.length > 0).map((el) => (
                       <div key={el.name} className="flex flex-col items-center gap-1">
                         <div className="w-16 h-16 rounded-lg overflow-hidden border border-border">
-                          <img src={el.urls[0]!} alt={el.name} className="w-full h-full object-cover" />
+                          <img src={optimizedImageUrl(el.urls[0]!)} alt={el.name} className="w-full h-full object-cover" />
                         </div>
                         <span className="text-[9px] text-muted-foreground font-mono">@{el.name}</span>
                         {el.urls.length > 1 && (
@@ -904,7 +905,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                           <div className="flex items-center gap-3 flex-wrap">
                             {el.urls.map((url, ui) => (
                               <div key={ui} className="relative group/thumb w-20 h-20 shrink-0">
-                                <img src={url} alt={`${el.name} ${ui + 1}`} className="w-20 h-20 rounded-lg object-cover border border-border" />
+                                <img src={optimizedImageUrl(url)} alt={`${el.name} ${ui + 1}`} className="w-20 h-20 rounded-lg object-cover border border-border" />
                                 <button
                                   type="button"
                                   aria-label="Remove"
@@ -983,7 +984,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                                   onClick={() => wfNode.thumbUrl && handleAddFromWorkflow(i, wfNode.thumbUrl)}
                                 >
                                   {wfNode.thumbUrl ? (
-                                    <img src={wfNode.thumbUrl} alt={wfNode.label} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
+                                    <img src={optimizedImageUrl(wfNode.thumbUrl)} alt={wfNode.label} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
                                   ) : (
                                     <div className="w-8 h-8 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
                                       <ImageIcon className="w-3.5 h-3.5 text-muted-foreground/40" />

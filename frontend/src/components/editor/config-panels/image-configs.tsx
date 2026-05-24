@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense, useMemo } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
+import { optimizedImageUrl } from "@/lib/image"
 import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin, Paintbrush } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1600,7 +1601,7 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
           <div className="flex flex-col gap-2 mt-2">
             {data.maskUrl ? (
               <div className="flex items-center gap-2">
-                <img src={data.maskUrl} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
+                <img src={optimizedImageUrl(data.maskUrl)} alt="Mask" className="w-16 h-16 object-cover rounded border border-[#2D2D2D]" />
                 <div className="flex flex-col gap-1">
                   <button
                     type="button"

@@ -15,6 +15,7 @@ export function useLoadUserSettings() {
     if (initializedFor.current === user.id) return
     initializedFor.current = user.id
     useWorkflowStore.getState().setUserPromptTemplates(data.promptTemplates)
+    useWorkflowStore.getState().setUserTextTemplates(data.textTemplates ?? [])
     // Hydrate the locale store from the user's saved preference. Falls back
     // to whatever the store inferred from localStorage / navigator.language.
     useLocaleStore

@@ -26,7 +26,7 @@ The Text Prompt node is the most common starting point for workflows. It provide
 
 ## Common Use Cases
 
-- Provide generation prompts for Generate Image, Text to Video, or AI Agent
+- Provide generation prompts for Generate Image, Text to Video, or Generate Text
 - Enter descriptions for Text to Speech or Text to Dialogue
 - Supply captions for social media output nodes
 - Pass configuration text to downstream processing
