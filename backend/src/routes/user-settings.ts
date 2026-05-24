@@ -81,6 +81,8 @@ const updateSettingsBody = z.object({
   promptTemplates: z.record(z.string(), z.string()).optional(),
   preferredLocale: z.enum(SUPPORTED_LOCALES).nullable().optional(),
   mcpPreferences: McpPreferencesPatch.optional(),
+  showRecentNodes: z.boolean().optional(),
+  showMostUsedNodes: z.boolean().optional(),
 })
 
 export async function userSettingsRoutes(app: FastifyInstance) {
@@ -96,7 +98,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences")
+      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
       .eq("id", userId)
       .single()
 
@@ -111,6 +113,8 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         promptTemplates: (profile.prompt_templates as Record<string, string>) ?? {},
         preferredLocale: profile.preferred_locale ?? null,
         mcpPreferences: (profile.mcp_preferences as McpPreferences) ?? {},
+        showRecentNodes: profile.show_recent_nodes ?? false,
+        showMostUsedNodes: profile.show_most_used_nodes ?? false,
       },
     })
   })
@@ -131,7 +135,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     }
 
     const userId = req.userId
-    const { publicOutputs, promptTemplates, preferredLocale, mcpPreferences } = parsed.data
+    const { publicOutputs, promptTemplates, preferredLocale, mcpPreferences, showRecentNodes, showMostUsedNodes } = parsed.data
 
     if (!userId) {
       return reply.status(401).send({ error: "Authentication required" })
@@ -140,7 +144,7 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     // Fetch current profile (include public_outputs for response accuracy)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences")
+      .select("tier, public_outputs, prompt_templates, preferred_locale, mcp_preferences, show_recent_nodes, show_most_used_nodes")
       .eq("id", userId)
       .single()
 
@@ -159,6 +163,13 @@ export async function userSettingsRoutes(app: FastifyInstance) {
     const updates: Record<string, unknown> = {}
     if (publicOutputs !== undefined) {
       updates.public_outputs = publicOutputs
+    }
+
+    if (showRecentNodes !== undefined) {
+      updates.show_recent_nodes = showRecentNodes
+    }
+    if (showMostUsedNodes !== undefined) {
+      updates.show_most_used_nodes = showMostUsedNodes
     }
 
     // Validate and filter prompt templates
@@ -240,6 +251,8 @@ export async function userSettingsRoutes(app: FastifyInstance) {
         promptTemplates: (updates.prompt_templates as Record<string, string>) ?? (profile.prompt_templates as Record<string, string>) ?? {},
         preferredLocale: confirmedPreferredLocale,
         mcpPreferences: confirmedMcpPreferences,
+        showRecentNodes: showRecentNodes ?? (profile.show_recent_nodes ?? false),
+        showMostUsedNodes: showMostUsedNodes ?? (profile.show_most_used_nodes ?? false),
       },
     })
   })

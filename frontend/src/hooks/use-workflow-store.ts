@@ -18,6 +18,7 @@ import { migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectIn
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import { buildPreviewItemKey, getPreviewItemKey } from "@/lib/preview-items"
 import { autoExecuteNode } from "@/components/editor/workflow-editor/auto-execute"
+import { orderNodesParentFirst, localToWorld } from "@/components/editor/workflow-editor/group-coords"
 import { MAIN_TEXT_HANDLE, TEXT_PRODUCING_SOURCE_TYPES } from "@/lib/main-text-handle"
 import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefaultType, readMemory, type AdminDefault } from "@/lib/node-defaults"
 import { queryClient } from "@/lib/query-client"
@@ -1314,7 +1315,22 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
   deleteNode: (nodeId) =>
     set((state) => {
+      const deletedNode = state.nodes.find((n) => n.id === nodeId)
       let remainingNodes = state.nodes.filter((n) => n.id !== nodeId)
+
+      // Deleting a group must detach its children (clear parentId + restore
+      // world coords) — otherwise they keep a dangling parentId and React Flow
+      // logs "parent not found" + teleports them to origin. The RF-native
+      // onNodesDelete path (handleNodesDelete) already does this, but the
+      // context-menu / config-panel / programmatic delete routes call
+      // deleteNode directly and bypass it.
+      if (deletedNode?.type === "group") {
+        remainingNodes = remainingNodes.map((n) =>
+          n.parentId === nodeId
+            ? { ...n, parentId: undefined, position: localToWorld(n.position, deletedNode.position) }
+            : n,
+        )
+      }
 
       // Clear connectedSourceId on loop columns that referenced the deleted node
       remainingNodes = remainingNodes.map((n) => {
@@ -1663,6 +1679,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         ? { ...n, width: undefined }
         : n
     )
+
+    // Heal persisted ordering: a group node saved AFTER its children (the order
+    // produced when a group is drawn around existing nodes) makes React Flow
+    // render the children at ~origin. Reorder parent-first so the store's
+    // source of truth — and the next save — is correct.
+    migratedNodes = orderNodesParentFirst(migratedNodes)
 
     set((state) => ({
       workflowId: id,

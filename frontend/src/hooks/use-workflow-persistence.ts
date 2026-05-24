@@ -7,6 +7,7 @@ import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData } from "@/types/nodes"
 import { filterCloneNodes } from "@nodaro/shared"
+import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 
 interface StillRunningJob {
   readonly nodeId: string
@@ -483,7 +484,10 @@ export function useWorkflowPersistence(projectId?: string) {
 
       // Filter out temporary nodes: sub-workflow execution nodes and expanded loop clones
       const cleaned = filterCloneNodes(allNodes, allEdges, { filterSubWorkflow: true })
-      const nodes = cleaned.nodes
+      // Persist parent-first so every reader of the saved JSON (read-only
+      // viewer, template preview, SDK, collaborators) renders groups correctly
+      // without each having to re-sort. React Flow requires it (see group-coords).
+      const nodes = orderNodesParentFirst(cleaned.nodes)
       const edges = cleaned.edges
 
       // Don't save empty workflows
@@ -692,11 +696,14 @@ export function useWorkflowPersistence(projectId?: string) {
           prefetchModelCredits(modelIds).catch(() => {})
         }
 
-        // If nodes were updated during sync, save the updated workflow
+        // If nodes were updated during sync, save the updated workflow.
+        // Order parent-first: loadWorkflow heals the store's copy, but this
+        // local `nodes` array was never reordered, so without this the re-save
+        // would re-persist a child-before-parent order to the DB.
         if (nodesChanged && projectId) {
           const { error: saveError } = await supabase
             .from("workflows")
-            .update({ nodes: JSON.parse(JSON.stringify(nodes)) })
+            .update({ nodes: JSON.parse(JSON.stringify(orderNodesParentFirst(nodes))) })
             .eq("id", id)
 
           if (saveError) {

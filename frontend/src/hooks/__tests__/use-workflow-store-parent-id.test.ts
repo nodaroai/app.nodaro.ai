@@ -131,4 +131,49 @@ describe("workflow store parentId round-trip", () => {
     expect(copy?.parentId).toBeUndefined()
     expect(copy?.position).toEqual({ x: 150, y: 100 })
   })
+
+  // Guards the loadWorkflow heal wiring (use-workflow-store.ts) — would fail if
+  // the orderNodesParentFirst call were removed, catching the regression the
+  // node-order.test.ts pure tests cannot (they never exercise loadWorkflow).
+  it("loadWorkflow reorders a child stored before its group to parent-first", () => {
+    const { loadWorkflow } = useWorkflowStore.getState()
+    // child appears BEFORE its group — the order produced by drawing a group
+    // around existing nodes; React Flow requires the parent first.
+    loadWorkflow(
+      "wf",
+      "Test",
+      [
+        { id: "c1", type: "text-prompt", position: { x: 10, y: 10 }, data: { text: "x" }, parentId: "g1" },
+        { id: "g1", type: "group", position: { x: 100, y: 50 }, data: { label: "G" } },
+      ] as unknown as WorkflowNode[],
+      [],
+    )
+    const ids = useWorkflowStore.getState().nodes.map((n) => n.id)
+    expect(ids.indexOf("g1")).toBeLessThan(ids.indexOf("c1"))
+  })
+
+  // Guards the deleteNode cascade-detach (use-workflow-store.ts): deleting a
+  // group must clear its children's parentId and restore world coords, else
+  // the context-menu / config-panel delete orphans them (dangling parentId).
+  it("deleteNode on a group detaches children and restores world coords", () => {
+    const { loadWorkflow, deleteNode } = useWorkflowStore.getState()
+    loadWorkflow(
+      "wf",
+      "Test",
+      [
+        { id: "g1", type: "group", position: { x: 100, y: 50 }, data: { label: "G" } },
+        { id: "c1", type: "text-prompt", position: { x: 10, y: 10 }, data: { text: "x" }, parentId: "g1" },
+      ] as unknown as WorkflowNode[],
+      [],
+    )
+
+    deleteNode("g1")
+
+    const after = useWorkflowStore.getState().nodes
+    expect(after.find((n) => n.id === "g1")).toBeUndefined()
+    const child = after.find((n) => n.id === "c1")
+    expect(child?.parentId).toBeUndefined()
+    // local (10,10) + group (100,50) = world (110,60)
+    expect(child?.position).toEqual({ x: 110, y: 60 })
+  })
 })

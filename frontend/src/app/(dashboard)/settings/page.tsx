@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
-  Pencil, X, Download, Upload, Key, ChevronRight,
+  Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +21,7 @@ import {
   TEMPLATE_GROUPS,
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
-import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation } from "@/hooks/queries/use-user-settings-queries"
+import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation } from "@/hooks/queries/use-user-settings-queries"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,12 +45,15 @@ export default function SettingsPage() {
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
   const [editingKey, setEditingKey] = useState<string | null>(null)
 
-  const { data: settings, isLoading: settingsLoading } = useUserSettings(user?.id)
+  const { data: settings, isLoading: settingsLoading, isError: settingsError, refetch: refetchSettings } = useUserSettings(user?.id)
   const toggleMutation = useUpdatePublicOutputsMutation()
   const templatesMutation = useSaveTemplatesMutation()
+  const nodeMenuMutation = useUpdateNodeMenuPrefsMutation()
 
   const publicOutputs = settings?.publicOutputs ?? true
   const tier = settings?.tier ?? "free"
+  const showRecentNodes = settings?.showRecentNodes ?? false
+  const showMostUsedNodes = settings?.showMostUsedNodes ?? false
 
   useEffect(() => {
     if (settings?.promptTemplates) {
@@ -66,6 +70,26 @@ export default function SettingsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update"
       toast.error(message)
+    }
+  }
+
+  async function handleToggleRecent(next: boolean) {
+    if (!user?.id) return
+    try {
+      await nodeMenuMutation.mutateAsync({ userId: user.id, showRecentNodes: next })
+      toast.success(next ? "Recent category shown" : "Recent category hidden")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update")
+    }
+  }
+
+  async function handleToggleMostUsed(next: boolean) {
+    if (!user?.id) return
+    try {
+      await nodeMenuMutation.mutateAsync({ userId: user.id, showMostUsedNodes: next })
+      toast.success(next ? "Most Used category shown" : "Most Used category hidden")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update")
     }
   }
 
@@ -171,6 +195,22 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (settingsError) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold mb-6">Settings</h1>
+        <div className="rounded-lg border border-red-300 dark:border-red-800 bg-card p-6 text-center">
+          <p className="text-sm text-muted-foreground mb-4">
+            We couldn&apos;t load your settings. Please try again.
+          </p>
+          <Button variant="outline" size="sm" onClick={() => refetchSettings()}>
+            Retry
+          </Button>
+        </div>
       </div>
     )
   }
@@ -291,6 +331,43 @@ export default function SettingsPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+        </div>
+      </div>
+
+      {/* Add Node Menu */}
+      <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <LayoutList className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-base font-semibold">Add Node Menu</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Choose which shortcut categories appear at the top of the Add Node menu in the editor.
+        </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <label htmlFor="show-recent" className="text-sm font-medium">Recent</label>
+              <p className="text-xs text-muted-foreground mt-0.5">Nodes you added most recently.</p>
+            </div>
+            <Switch
+              id="show-recent"
+              checked={showRecentNodes}
+              disabled={!user?.id}
+              onCheckedChange={handleToggleRecent}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <label htmlFor="show-most-used" className="text-sm font-medium">Most Used</label>
+              <p className="text-xs text-muted-foreground mt-0.5">Nodes you add the most often.</p>
+            </div>
+            <Switch
+              id="show-most-used"
+              checked={showMostUsedNodes}
+              disabled={!user?.id}
+              onCheckedChange={handleToggleMostUsed}
+            />
+          </div>
         </div>
       </div>
 

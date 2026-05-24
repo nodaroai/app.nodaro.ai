@@ -9,6 +9,10 @@ interface UserSettings {
   /** User-selected language for parameter-node picker labels/descriptions.
    *  null = browser-detected, falls back to English. */
   preferredLocale: string | null
+  /** Editor Add Node menu — show the "Recent" shortcut category. */
+  showRecentNodes: boolean
+  /** Editor Add Node menu — show the "Most Used" shortcut category. */
+  showMostUsedNodes: boolean
 }
 
 async function fetchUserSettings(userId: string): Promise<UserSettings> {
@@ -24,6 +28,8 @@ async function fetchUserSettings(userId: string): Promise<UserSettings> {
     tier: data.tier ?? "free",
     promptTemplates: data.promptTemplates ?? {},
     preferredLocale: data.preferredLocale ?? null,
+    showRecentNodes: data.showRecentNodes ?? false,
+    showMostUsedNodes: data.showMostUsedNodes ?? false,
   }
 }
 
@@ -94,6 +100,55 @@ export function useSaveTemplatesMutation() {
       return res.json()
     },
     onSuccess: (_data, { userId }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
+    },
+  })
+}
+
+export function useUpdateNodeMenuPrefsMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      showRecentNodes,
+      showMostUsedNodes,
+    }: {
+      userId: string
+      showRecentNodes?: boolean
+      showMostUsedNodes?: boolean
+    }) => {
+      const authHeaders = await getAuthHeaders()
+      const res = await fetch(`/v1/user/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ userId, showRecentNodes, showMostUsedNodes }),
+      })
+      if (!res.ok) throw new Error("Failed to update node menu preferences")
+      return res.json()
+    },
+    // Optimistically flip the toggled field so the Switch — and the Add Node
+    // popup, which reads this same query — update instantly. Roll back on error;
+    // reconcile with the server on settle (so a failed refetch can't leave the
+    // cache disagreeing with the persisted value).
+    onMutate: async ({ userId, showRecentNodes, showMostUsedNodes }) => {
+      const queryKey = queryKeys.userSettings.detail(userId)
+      await qc.cancelQueries({ queryKey })
+      const previous = qc.getQueryData<UserSettings>(queryKey)
+      if (previous) {
+        qc.setQueryData<UserSettings>(queryKey, {
+          ...previous,
+          ...(showRecentNodes !== undefined ? { showRecentNodes } : {}),
+          ...(showMostUsedNodes !== undefined ? { showMostUsedNodes } : {}),
+        })
+      }
+      return { queryKey, previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous !== undefined) {
+        qc.setQueryData(context.queryKey, context.previous)
+      }
+    },
+    onSettled: (_data, _err, { userId }) => {
       qc.invalidateQueries({ queryKey: queryKeys.userSettings.detail(userId) })
     },
   })

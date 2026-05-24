@@ -15,6 +15,7 @@ import "@xyflow/react/dist/style.css"
 
 import { nodeTypes } from "@/components/nodes"
 import { AnimatedFlowEdge } from "./animated-flow-edge"
+import { orderNodesParentFirst } from "./workflow-editor/group-coords"
 import { createClient } from "@/lib/supabase"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -86,9 +87,11 @@ function WorkflowViewerCanvas({
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [handleKeyDown])
 
-  // Filter out hidden nodes (e.g. from sub-workflow execution leftovers)
+  // Filter out hidden nodes (e.g. from sub-workflow execution leftovers).
+  // Order parent-first: this modal reads raw DB nodes (no editor heal), so a
+  // group saved after its children would otherwise teleport in the viewer.
   const visibleNodes = useMemo(
-    () => nodes.filter((n) => !n.hidden),
+    () => orderNodesParentFirst(nodes.filter((n) => !n.hidden)),
     [nodes],
   )
 

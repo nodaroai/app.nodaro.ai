@@ -30,6 +30,7 @@ import {
   useUserSettings,
   useUpdatePublicOutputsMutation,
   useSaveTemplatesMutation,
+  useUpdateNodeMenuPrefsMutation,
 } from "../use-user-settings-queries"
 
 describe("useUserSettings", () => {
@@ -96,6 +97,8 @@ describe("useUserSettings", () => {
       tier: "pro",
       promptTemplates: { k: "v" },
       preferredLocale: null,
+      showRecentNodes: false,
+      showMostUsedNodes: false,
     })
   })
 
@@ -113,6 +116,8 @@ describe("useUserSettings", () => {
       tier: "free",
       promptTemplates: {},
       preferredLocale: null,
+      showRecentNodes: false,
+      showMostUsedNodes: false,
     })
   })
 })
@@ -236,6 +241,145 @@ describe("useSaveTemplatesMutation", () => {
     captured.onSuccess({}, { userId: "u2", promptTemplates: {} })
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["user-settings", "u2"],
+    })
+  })
+})
+
+describe("useUpdateNodeMenuPrefsMutation", () => {
+  const mockCancelQueries = vi.fn()
+  const mockGetQueryData = vi.fn()
+  const mockSetQueryData = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    mockCancelQueries.mockResolvedValue(undefined)
+    mockGetQueryData.mockReturnValue(undefined)
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      cancelQueries: mockCancelQueries,
+      getQueryData: mockGetQueryData,
+      setQueryData: mockSetQueryData,
+    })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  it("mutationFn sends PATCH and drops the untouched (undefined) field", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    await captured.mutationFn({ userId: "u1", showRecentNodes: true })
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/v1/user/settings",
+      expect.objectContaining({ method: "PATCH" })
+    )
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body)
+    expect(body).toEqual({ userId: "u1", showRecentNodes: true })
+  })
+
+  it("mutationFn throws on non-ok response", async () => {
+    mockFetch.mockResolvedValue({ ok: false })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    await expect(
+      captured.mutationFn({ userId: "u1", showMostUsedNodes: false })
+    ).rejects.toThrow("Failed to update node menu preferences")
+  })
+
+  it("onMutate optimistically merges only the toggled field and returns rollback context", async () => {
+    const previous = {
+      publicOutputs: true,
+      tier: "free",
+      promptTemplates: {},
+      preferredLocale: null,
+      showRecentNodes: false,
+      showMostUsedNodes: false,
+    }
+    mockGetQueryData.mockReturnValue(previous)
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    const ctx = await captured.onMutate({ userId: "u1", showRecentNodes: true })
+    expect(mockCancelQueries).toHaveBeenCalledWith({ queryKey: ["user-settings", "u1"] })
+    expect(mockSetQueryData).toHaveBeenCalledWith(
+      ["user-settings", "u1"],
+      { ...previous, showRecentNodes: true }
+    )
+    expect(ctx).toEqual({ queryKey: ["user-settings", "u1"], previous })
+  })
+
+  it("onMutate does not write the cache when there is no cached settings", async () => {
+    mockGetQueryData.mockReturnValue(undefined)
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    const ctx = await captured.onMutate({ userId: "u1", showMostUsedNodes: true })
+    expect(mockSetQueryData).not.toHaveBeenCalled()
+    expect(ctx).toEqual({ queryKey: ["user-settings", "u1"], previous: undefined })
+  })
+
+  it("onError rolls back to the previous snapshot", () => {
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    const previous = { showRecentNodes: false }
+    captured.onError(
+      new Error("boom"),
+      { userId: "u1" },
+      { queryKey: ["user-settings", "u1"], previous }
+    )
+    expect(mockSetQueryData).toHaveBeenCalledWith(["user-settings", "u1"], previous)
+  })
+
+  it("onError is a no-op when there is no previous snapshot", () => {
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    captured.onError(
+      new Error("boom"),
+      { userId: "u1" },
+      { queryKey: ["user-settings", "u1"], previous: undefined }
+    )
+    expect(mockSetQueryData).not.toHaveBeenCalled()
+  })
+
+  it("onSettled invalidates userSettings.detail for the userId", () => {
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useUpdateNodeMenuPrefsMutation()
+
+    captured.onSettled({}, null, { userId: "u3", showRecentNodes: true })
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["user-settings", "u3"],
     })
   })
 })

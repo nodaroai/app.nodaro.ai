@@ -66,6 +66,7 @@ import { handleGenerateCharacterAsset, handleGenerateObjectAsset, handleGenerate
 import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWriterImageNodes as runAllWriterImageNodes } from "./ai-writer-handlers";
 import { resolveManualEdit } from "./execute-node";
 import { extractNodeOutput } from "./execution-graph";
+import { orderNodesParentFirst } from "./group-coords";
 import { getOutputType } from "@nodaro/shared";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import type { ManualEditData, GeneratedResult } from "@/types/nodes";
@@ -566,7 +567,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (!supabaseUrl || !supabaseKey || !wfId || !token) return;
 
       const payload = {
-        nodes: structuredClone(state.nodes),
+        nodes: structuredClone(orderNodesParentFirst(state.nodes)),
         edges: structuredClone(state.edges),
         settings: {
           characterDefinitions: structuredClone(state.characterDefinitions),
