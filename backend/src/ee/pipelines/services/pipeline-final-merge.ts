@@ -110,6 +110,10 @@ export interface PipelineFinalMergeArgs {
 export interface PipelineFinalMergeResult {
   finalAssetId: string | null
   finalAssetUrl: string
+  /** Total duration of the merged MP4 in seconds. Surfaced so Stage 7 can
+   *  persist it into `pipeline_stages.output.final_duration_seconds` for the
+   *  chat-refine-postmerge specialist (and other downstream consumers). */
+  finalDurationSeconds: number
 }
 
 const DEFAULT_FADE_OUT_SEC = 0.8
@@ -201,6 +205,7 @@ export async function pipelineFinalMerge(
     return {
       finalAssetId,
       finalAssetUrl: r2Url,
+      finalDurationSeconds: totalDurationSec,
     }
   } catch (err) {
     // Refund the reservation on dispatch failure. Mirrors the catch path in

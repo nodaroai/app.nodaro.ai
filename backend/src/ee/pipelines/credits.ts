@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  CHAT_STAGES,
   CHAT_TURN_CAPS,
   TIER_MAX_PIPELINE_COST_CREDITS,
   type PipelineFormat,
@@ -101,6 +102,14 @@ export interface EstimateUpfrontArgs {
  * Stage 5, by which point the reservation already needs to be in place.
  * Unused credits refund on completion via normal reconciliation.
  *
+ * Phase 1D.2c (post-merge chat) widens the guided-mode chat budget to ALL
+ * wired chat stages (loops over `CHAT_STAGES[stage].wired`). With Script
+ * (20 turns × 2cr = 40cr) AND Post-merge (8 turns × 2cr = 16cr) wired in
+ * 1D.2c, guided mode now reserves 56cr of chat budget upfront — was 40cr
+ * pre-fix, exposing post-merge chat spend as mid-conversation unreserved
+ * usage. Unused turns refund automatically via the pipeline's normal credit
+ * reconciliation at completion.
+ *
  * 1 credit = $0.02.
  */
 export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
@@ -116,11 +125,18 @@ export function estimateUpfrontCredits(args: EstimateUpfrontArgs): number {
   const estimatedShots = estimateShotCount(args.targetDurationSeconds)
   credits += VIDEO_CRITIC_PER_SHOT_CREDITS[frameMode] * estimatedShots
   if (args.mode === "guided") {
-    // Reserve chat-refine budget for the Script stage only (1D.2b ships
-    // script-only chat). CHAT_TURN_CAPS.script = 20 → 40 credits worst-case.
-    // Unused turns refund automatically via the pipeline's normal credit
-    // reconciliation at completion.
-    credits += CHAT_TURN_CAPS.script * PER_TURN_ESTIMATE_CREDITS
+    // Reserve chat-refine budget for ALL stages whose chat code paths are
+    // actually wired (CHAT_STAGES[stage].wired === true). 1D.2b wired Script
+    // (20 turns); 1D.2c wired Post-merge (8 turns). Worst-case at 2cr/turn:
+    //   script (20) × 2 + post_merge (8) × 2 = 40 + 16 = 56 credits.
+    // Unwired stages (shot_list pre-declared for 1D.2d) reserve 0.
+    let chatBudget = 0
+    for (const stage of Object.keys(CHAT_STAGES) as Array<keyof typeof CHAT_STAGES>) {
+      if (CHAT_STAGES[stage].wired) {
+        chatBudget += CHAT_TURN_CAPS[stage] * PER_TURN_ESTIMATE_CREDITS
+      }
+    }
+    credits += chatBudget
   }
   return credits
 }

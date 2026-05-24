@@ -420,6 +420,136 @@ describe("PipelinePanel", () => {
     expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
   })
 
+  // ── Phase 1D.2c D1: ChatPanel mount at post_merge ───────────────────────
+  it("mounts ChatPanel when mode='guided' AND post_merge stage is awaiting_approval", async () => {
+    // ChatPanel auto-collapses below 1280px viewport; force wide.
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1600,
+    })
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "awaiting_approval",
+      current_stage: "post_merge",
+      mode: "guided",
+      spent_credits: 200,
+      reserved_credits: 250,
+      upfront_credit_estimate: 250,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    // The chat mount uses postMergeStageQuery.status, NOT the legacy
+    // script-status path; mock per-stage so post_merge returns
+    // awaiting_approval (the gate) and script returns approved (so it
+    // doesn't accidentally satisfy the script-side mount).
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_pipelineId: string, stage: string) => {
+        if (stage === "post_merge") {
+          return {
+            status: "awaiting_approval",
+            output: { final_output_url: "https://r2/final.mp4" },
+            critic_feedback: {},
+          }
+        }
+        return { status: "approved", output: {}, critic_feedback: {} }
+      },
+    )
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() =>
+      expect(screen.queryByTestId("chat-panel")).toBeInTheDocument(),
+    )
+    // Header label uses the stage prop — "Post merge chat" confirms the
+    // post_merge stage value was threaded all the way down to ChatPanel.
+    expect(screen.getByText(/post merge chat/i)).toBeInTheDocument()
+  })
+
+  it("does NOT mount ChatPanel at post_merge when mode='manual' (chat is guided-only)", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "awaiting_approval",
+      current_stage: "post_merge",
+      mode: "manual",
+      spent_credits: 200,
+      reserved_credits: 250,
+      upfront_credit_estimate: 250,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "awaiting_approval",
+      output: { final_output_url: "https://r2/final.mp4" },
+      critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("awaiting_approval")).toBeInTheDocument())
+    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
+  })
+
+  it("does NOT mount ChatPanel at post_merge when stage is still running", async () => {
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "running",
+      current_stage: "post_merge",
+      mode: "guided",
+      spent_credits: 200,
+      reserved_credits: 250,
+      upfront_credit_estimate: 250,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      status: "running",
+      output: {},
+      critic_feedback: {},
+    })
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    await waitFor(() => expect(screen.queryByText("running")).toBeInTheDocument())
+    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("chat-panel-collapsed")).not.toBeInTheDocument()
+  })
+
+  // ── Phase 1D.2c follow-up: postMergeStageQuery includes completed ────────
+  it("fetches post_merge stage when pipeline is completed (re-opened panel against finished pipeline)", async () => {
+    // Mirrors sceneImagesStageQuery's enabled gate — re-opening the panel
+    // after a pipeline completes still needs to hydrate the post_merge stage
+    // so the chat artifact + final video are available.
+    ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "p1",
+      status: "completed",
+      current_stage: null,
+      mode: "guided",
+      spent_credits: 200,
+      reserved_credits: 0,
+      upfront_credit_estimate: 250,
+      branched_from_pipeline_id: null,
+      branched_from_stage: null,
+    })
+    ;(pipelinesApi.getStage as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_pipelineId: string, stage: string) => {
+        return {
+          status: stage === "post_merge" ? "approved" : "approved",
+          output: {},
+          critic_feedback: {},
+        }
+      },
+    )
+
+    renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
+
+    // Wait for the pipeline + initial stage fetches to settle.
+    await waitFor(() =>
+      expect(pipelinesApi.getStage).toHaveBeenCalledWith("p1", "post_merge"),
+    )
+  })
+
   it("renders SceneGrid when current_stage is shot_list", async () => {
     ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "p1",

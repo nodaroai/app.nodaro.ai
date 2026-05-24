@@ -261,7 +261,9 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply", (
     await app.close()
   })
 
-  it("returns 501 for chat-enabled-but-unimplemented stage (shot_list)", async () => {
+  it("returns 501 for chat-enabled-but-unwired stage (shot_list)", async () => {
+    // Phase 1D.2c — `chat_not_wired_for_stage` is the new code; replaces
+    // the previous `chat_specialist_not_implemented`.
     setHappyPathFixtures()
     const app = await makeApp()
     const res = await app.inject({
@@ -269,7 +271,8 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply", (
       url: URL(PIPELINE_ID, "shot_list"),
     })
     expect(res.statusCode).toBe(501)
-    expect(res.json().error.code).toBe("chat_specialist_not_implemented")
+    expect(res.json().error.code).toBe("chat_not_wired_for_stage")
+    expect(res.json().error.stage).toBe("shot_list")
     await app.close()
   })
 
@@ -465,6 +468,84 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat/turns/:turnId/apply", (
     const res = await app.inject({ method: "POST", url: URL() })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("stage_not_awaiting")
+    await app.close()
+  })
+
+  // ── Phase 1D.2c C2 — post_merge stage edit_artifact rejection ────────
+  it("post_merge + edit_artifact: returns 400 invalid_change_type_for_stage (defense-in-depth per spec §5.12)", async () => {
+    // The chat-refine-postmerge specialist's prompt explicitly forbids
+    // edit_artifact; this route-level gate catches the rare LLM regression
+    // where an edit_artifact slips through.
+    setHappyPathFixtures()
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: URL(PIPELINE_ID, "post_merge"),
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("invalid_change_type_for_stage")
+    expect(res.json().error.detail).toMatch(/post_merge.*suggest_branch/i)
+    // The applyStageEdit helper MUST NOT have been called — the gate runs
+    // before the dispatcher.
+    expect(applyStageEditMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  // ── Phase 1D.2c C2 — post_merge stage suggest_branch acknowledgement ──
+  it("post_merge + suggest_branch: returns 200 with suggested=true (no artifact mutation)", async () => {
+    setHappyPathFixtures()
+    turnFixture = {
+      ...turnFixture!,
+      proposed_change: {
+        change_type: "suggest_branch",
+        from_stage: "shot_list",
+        reason: "Pacing tweaks require re-cutting shot boundaries.",
+      },
+    }
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: URL(PIPELINE_ID, "post_merge"),
+    })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.applied).toBe(false)
+    expect(body.suggested).toBe(true)
+    expect(body.suggested_from_stage).toBe("shot_list")
+    expect(body.suggested_reason).toMatch(/pacing/i)
+    // No artifact mutation — applyStageEdit not invoked.
+    expect(applyStageEditMock).not.toHaveBeenCalled()
+    // No follow-up turn inserted either — the suggestion stays as-is and
+    // the user acts on it via the dedicated branch endpoint.
+    const inserts = insertedRows.filter(
+      (r) => r.table === "pipeline_chat_turns",
+    )
+    expect(inserts).toHaveLength(0)
+    await app.close()
+  })
+
+  it("script + suggest_branch: still returns 400 turn_not_applyable (unchanged)", async () => {
+    // Defense check: the post_merge suggest_branch carve-out MUST NOT
+    // leak into the script path. The frontend's ProposedChangeCard hides
+    // the Apply button for suggest_branch, so this is purely a contract
+    // assertion — no UX regression.
+    setHappyPathFixtures()
+    turnFixture = {
+      ...turnFixture!,
+      proposed_change: {
+        change_type: "suggest_branch",
+        from_stage: "script",
+        reason: "genre change",
+      },
+    }
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: URL(PIPELINE_ID, "script"),
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("turn_not_applyable")
+    expect(applyStageEditMock).not.toHaveBeenCalled()
     await app.close()
   })
 })

@@ -8,6 +8,7 @@ import type {
 import type { MusicTimelineResult } from "../music-timeline.js"
 import type { EditorCutDecision, EditorShotInput } from "../llms/editor.js"
 import type { FinalMergeSceneInput } from "../services/pipeline-final-merge.js"
+import { reduceTimeline } from "../_freecut-timeline.js"
 
 /**
  * Phase 1C.3 Task A1 — Table-driven sub-step loop for Stage 7
@@ -364,6 +365,13 @@ async function runMusicStep(ctx: SubStepContext): Promise<SubStepResult> {
     plan: plan ? { music_plan: plan.music_plan } : {},
   })
   ctx.stageOutputAcc.music_result = musicResult
+  // `beat_grid_used` is a flat alias of `music_result.beatGrid` (or null when
+  // music is disabled / Suno failed). The chat-refine-postmerge specialist
+  // reads this; surfacing it at the top level of the stage output saves the
+  // post_merge stage handler from poking into the nested music_result shape.
+  ctx.stageOutputAcc.beat_grid_used = musicResult.enabled
+    ? musicResult.beatGrid
+    : null
   return { kind: "continue" }
 }
 
@@ -429,6 +437,12 @@ async function runEditorStep(ctx: SubStepContext): Promise<SubStepResult> {
     targetDurationSec: ctx.targetDurationSec,
     globalStyle: plan?.global_style as Record<string, unknown> | undefined,
   })
+  // Persist cut_decisions onto the stage output so post_merge (and the
+  // chat-refine-postmerge specialist) can read them without re-running the
+  // Editor LLM. The per-scene patch lands on scene_node_data.shots[N].cut_decision
+  // via `persistCutDecisions` below, but the full array on the stage row is
+  // the canonical shape the post-merge specialist consumes.
+  ctx.stageOutputAcc.cut_decisions = editorResult.cut_decisions
   const nextScenes = await persistCutDecisions(
     ctx.supabase,
     ctx.scenes,
@@ -471,6 +485,14 @@ async function runFinalMergeStep(
   let finalAssetId: string | null = null
   let finalAssetUrl = ""
   let finalOutputFormat: "mp4" | "freecut" | "fcpxml" = "mp4"
+  /**
+   * Total runtime of the final asset in seconds. Only the FFmpeg merge path
+   * returns a concrete value — the freecut JSON / FCPXML exports are timeline
+   * descriptors, not rendered media. For those branches we fall back to the
+   * sum of per-shot trimmed durations (intentionally an approximation; the NLE
+   * the user opens the export in may render transitions differently).
+   */
+  let finalDurationSeconds = 0
   try {
     if (useFreecut) {
       const exportFormat = ctx.config.freecut_export_format ?? "json"
@@ -501,6 +523,17 @@ async function runFinalMergeStep(
         finalAssetUrl = exportResult.exportAssetUrl
         finalOutputFormat = "freecut"
       }
+      // Freecut exports don't render media — derive duration via the same
+      // shared reducer the two FreeCut exporters use, so the post-merge
+      // specialist sees the SAME number the rendered NLE timeline would
+      // produce. The pre-fix `sum(in+out across ALL shots)` was incorrect on
+      // two counts: (a) merge only trims FIRST shot in_offset + LAST shot
+      // out_offset per scene (per `reduceTimeline`'s clip math), and
+      // (b) dissolve/overlap transitions shrink the timeline (overlap
+      // duration is subtracted from the running cursor in `reduceTimeline`).
+      // See `freecut-export.ts:153` / `freecut-fcpxml.ts:169` for the
+      // exporters consuming the same value.
+      finalDurationSeconds = reduceTimeline(mergeScenes).timelineDurationSec
     } else {
       const { pipelineFinalMerge } = await import(
         "../services/pipeline-final-merge.js"
@@ -515,6 +548,7 @@ async function runFinalMergeStep(
       })
       finalAssetId = result.finalAssetId
       finalAssetUrl = result.finalAssetUrl
+      finalDurationSeconds = result.finalDurationSeconds
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -535,6 +569,7 @@ async function runFinalMergeStep(
   ctx.stageOutputAcc.final_output_url = finalAssetUrl
   ctx.stageOutputAcc.final_output_asset_id = finalAssetId
   ctx.stageOutputAcc.final_output_format = finalOutputFormat
+  ctx.stageOutputAcc.final_duration_seconds = finalDurationSeconds
   return { kind: "continue" }
 }
 
