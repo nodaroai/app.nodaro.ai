@@ -22,6 +22,31 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   }
 })
 
+// CollectNode renders its functional handles through BaseNode's `handles`
+// array; stub BaseNode (like loop-node.test) so the handles surface as
+// `handle-<id>` testids without pulling in BaseNode's heavy dependencies.
+vi.mock("@/components/nodes/base-node", () => ({
+  BaseNode: ({
+    children,
+    handles,
+  }: {
+    children?: import("react").ReactNode
+    handles?: ReadonlyArray<{ id: string; type: string; position: string }>
+  }) => (
+    <div data-testid="base-node">
+      {handles?.map((h) => (
+        <div
+          key={h.id}
+          data-testid={`handle-${h.id}`}
+          data-type={h.type}
+          data-position={h.position}
+        />
+      ))}
+      {children}
+    </div>
+  ),
+}))
+
 const deleteEdgeMock = vi.fn()
 
 // Mutable per-test state ---

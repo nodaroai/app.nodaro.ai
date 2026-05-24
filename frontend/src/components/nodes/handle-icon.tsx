@@ -80,11 +80,37 @@ function aggregateIcon(type: AggregateableType): ReactNode {
   }
 }
 
-// Source handle for the Group/Collect typed-output handles, styled to match the
-// standard node handle look: a transparent 28px React Flow <Handle> hit-target
-// with a colored icon circle (pointer-events-none) overlaid at the right edge.
+interface AggregateHandleVisualProps {
+  readonly type: AggregateableType
+  readonly top: string
+  readonly side?: "left" | "right"
+}
+
+// Visual-only colored circle for an aggregate-typed handle (NO <Handle>). Use
+// this when the functional React Flow <Handle> is rendered elsewhere — e.g. via
+// BaseNode's `handles` array — so the circle and the hit-target don't conflict.
 // The circle keeps the exact per-type AGGREGATE_HANDLE_COLORS so the
 // text/image/video/audio color stays consistent with edges + minimap.
+function AggregateHandleVisualComponent({ type, top, side = "right" }: AggregateHandleVisualProps) {
+  return (
+    <div
+      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full shadow-lg"
+      style={{ top, [side]: "-29px", transform: "translateY(-50%)", backgroundColor: AGGREGATE_HANDLE_COLORS[type] }}
+    >
+      <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-white flex items-center justify-center">
+        {aggregateIcon(type)}
+      </span>
+    </div>
+  )
+}
+
+export const AggregateHandleVisual = memo(AggregateHandleVisualComponent)
+
+// Source handle for the Group typed-output handles, styled to match the
+// standard node handle look: a transparent 28px React Flow <Handle> hit-target
+// with the colored icon circle overlaid at the right edge. Composes the
+// visual-only circle above with its own functional <Handle> (Group does not
+// use BaseNode, so it owns the handle itself).
 function AggregateHandleIconComponent({ id, type, top }: AggregateHandleIconProps) {
   return (
     <>
@@ -97,14 +123,7 @@ function AggregateHandleIconComponent({ id, type, top }: AggregateHandleIconProp
         className="!w-7 !h-7 !bg-transparent !border-0 touch-manipulation"
         style={{ top, right: "-29px", transform: "translateY(-50%)", zIndex: 30 }}
       />
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full shadow-lg"
-        style={{ top, right: "-29px", transform: "translateY(-50%)", backgroundColor: AGGREGATE_HANDLE_COLORS[type] }}
-      >
-        <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-white flex items-center justify-center">
-          {aggregateIcon(type)}
-        </span>
-      </div>
+      <AggregateHandleVisual type={type} top={top} side="right" />
     </>
   )
 }
