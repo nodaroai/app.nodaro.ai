@@ -431,6 +431,7 @@ interface WorkflowState {
   readonly deleteEdge: (edgeId: string) => void
   readonly updateEdgeData: (edgeId: string, data: Record<string, unknown>) => void
   readonly duplicateNode: (nodeId: string, position?: { x: number; y: number }) => void
+  readonly duplicateNodes: (ids: string[]) => void
   readonly selectNode: (nodeId: string | null) => void
   readonly setUserPromptTemplates: (templates: Record<string, string>) => void
   readonly setFlowPromptTemplates: (templates: Record<string, string>) => void
@@ -543,6 +544,88 @@ function generateNodeId(): string {
   const id = `node_${nextNodeId}`
   nextNodeId += 1
   return id
+}
+
+/**
+ * Build the cloned `data` for a duplicated node: strips live execution state
+ * and regenerates per-type fresh UUIDs (sub-workflow ports/routeId, router
+ * route ids, loop/list column ids + handleIds). When `handleMap` is supplied,
+ * loop/list column handle remappings (old handleId → new) are recorded into it
+ * so a multi-node duplicate can re-point cloned edges that reference those
+ * regenerated handles. When `idMap` is supplied (multi-node duplicate), a
+ * loop/list column's `connectedSourceId` is re-pointed to the cloned source if
+ * that source is also in the duplicated set, otherwise cleared — mirroring the
+ * paste path so the column's "connected" UI stays in sync with the recreated
+ * edge. With no `idMap` (single duplicate) connections are always cleared.
+ * Shared by `duplicateNode` (single) and `duplicateNodes`.
+ */
+function buildDuplicatedNodeData(
+  source: WorkflowNode,
+  handleMap?: Record<string, string>,
+  idMap?: Record<string, string>,
+): SceneNodeData {
+  const clonedData = { ...source.data } as SceneNodeData
+  const d = clonedData as Record<string, unknown>
+  delete d.executionStatus
+  delete d.currentJobId
+  delete d.currentJobProgress
+  delete d.errorMessage
+  delete d.isStreaming
+  delete d.__listTotal
+  delete d.__listCompleted
+  delete d.__listResults
+  delete d.subWorkflowProgress
+  if (source.type === "character" && "characterDbId" in clonedData) {
+    (clonedData as Record<string, unknown>).characterDbId = ""
+  }
+
+  // Generate fresh UUIDs for sub-workflow port IDs and routeIds
+  if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
+    if (source.type === "sub-workflow-input") d.routeId = crypto.randomUUID()
+    const ports = d.ports as Array<{ id: string; name: string; mediaType: string }> | undefined
+    if (ports) {
+      d.ports = ports.map((p) => ({ ...p, id: crypto.randomUUID() }))
+      if (source.type === "sub-workflow-output" && (d.ports as unknown[]).length > 0) {
+        d.visibleOutputPortId = (d.ports as Array<{ id: string }>)[0].id
+      }
+    }
+    // Clear paired routeId on output so user must re-pair
+    if (source.type === "sub-workflow-output") d.routeId = ""
+  }
+
+  // Generate fresh UUIDs for router route IDs
+  if (source.type === "router") {
+    const routes = d.routes as Array<{ id: string; name: string; active: boolean }> | undefined
+    if (routes) {
+      d.routes = routes.map((r) => ({ ...r, id: crypto.randomUUID() }))
+    }
+  }
+
+  // Generate fresh UUIDs for loop column IDs and handleIds; re-point or clear
+  // the column's connected-source reference (see idMap note above).
+  if (source.type === "loop" || source.type === "list") {
+    const cols = d.columns as LoopColumn[] | undefined
+    if (cols) {
+      d.columns = cols.map((c) => {
+        const newId = crypto.randomUUID()
+        const newHandleId = `col_${newId}`
+        if (handleMap) {
+          handleMap[c.handleId] = newHandleId
+          handleMap[`${c.handleId}_in`] = `${newHandleId}_in`
+        }
+        const mappedSource = c.connectedSourceId ? idMap?.[c.connectedSourceId] : undefined
+        return {
+          ...c,
+          id: newId,
+          handleId: newHandleId,
+          connectedSourceId: mappedSource ?? undefined,
+          connectedSourceHandle: mappedSource ? c.connectedSourceHandle : undefined,
+        }
+      })
+    }
+  }
+
+  return clonedData
 }
 
 export const useWorkflowStore = create<WorkflowState>((set, get) => ({
@@ -1131,62 +1214,6 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const source = state.nodes.find((n) => n.id === nodeId)
       if (!source) return state
 
-      // Clone data, stripping execution process state so the duplicate starts idle
-      // but keeping generated results (images, videos, text, etc.) intact
-      const clonedData = { ...source.data } as SceneNodeData
-      const d = clonedData as Record<string, unknown>
-      delete d.executionStatus
-      delete d.currentJobId
-      delete d.currentJobProgress
-      delete d.errorMessage
-      delete d.isStreaming
-      delete d.__listTotal
-      delete d.__listCompleted
-      delete d.__listResults
-      delete d.subWorkflowProgress
-      if (source.type === "character" && "characterDbId" in clonedData) {
-        (clonedData as Record<string, unknown>).characterDbId = ""
-      }
-
-      // Generate fresh UUIDs for sub-workflow port IDs and routeIds
-      if (source.type === "sub-workflow-input" || source.type === "sub-workflow-output") {
-        if (source.type === "sub-workflow-input") d.routeId = crypto.randomUUID()
-        const ports = d.ports as Array<{ id: string; name: string; mediaType: string }> | undefined
-        if (ports) {
-          d.ports = ports.map((p) => ({ ...p, id: crypto.randomUUID() }))
-          if (source.type === "sub-workflow-output" && (d.ports as unknown[]).length > 0) {
-            d.visibleOutputPortId = (d.ports as Array<{ id: string }>)[0].id
-          }
-        }
-        // Clear paired routeId on output so user must re-pair
-        if (source.type === "sub-workflow-output") d.routeId = ""
-      }
-
-      // Generate fresh UUIDs for router route IDs
-      if (source.type === "router") {
-        const routes = d.routes as Array<{ id: string; name: string; active: boolean }> | undefined
-        if (routes) {
-          d.routes = routes.map((r) => ({ ...r, id: crypto.randomUUID() }))
-        }
-      }
-
-      // Generate fresh UUIDs for loop column IDs and handleIds, clear connections
-      if (source.type === "loop" || source.type === "list") {
-        const cols = d.columns as LoopColumn[] | undefined
-        if (cols) {
-          d.columns = cols.map((c) => {
-            const newId = crypto.randomUUID()
-            return {
-              ...c,
-              id: newId,
-              handleId: `col_${newId}`,
-              connectedSourceId: undefined,
-              connectedSourceHandle: undefined,
-            }
-          })
-        }
-      }
-
       // Spread the full source node (preserves measured, style, width, height,
       // className — same as copy+paste) then override id, position, data.
       const newId = generateNodeId()
@@ -1216,13 +1243,66 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           x: sourcePosition.x + 50,
           y: sourcePosition.y + 50,
         },
-        data: clonedData,
+        data: buildDuplicatedNodeData(source),
         selected: false,
       }
 
       return {
         nodes: [...state.nodes, newNode],
         newNodeIds: new Set([...state.newNodeIds, newId]),
+        isDirty: true,
+      }
+    }),
+
+  duplicateNodes: (ids) =>
+    set((state) => {
+      const idSet = new Set(ids)
+      const sources = state.nodes.filter((n) => idSet.has(n.id))
+      if (sources.length === 0) return state
+
+      // Map old id → new id (and loop/list column handle remappings) so edges
+      // BETWEEN the duplicated nodes can be recreated pointing at the clones.
+      // Build the full id map FIRST (before cloning) so a loop/list column's
+      // connectedSourceId can be re-pointed even when its source appears later
+      // in the selection than the loop node.
+      const idMap: Record<string, string> = {}
+      for (const source of sources) idMap[source.id] = generateNodeId()
+      const handleMap: Record<string, string> = {}
+      const clones: WorkflowNode[] = sources.map((source) => ({
+        ...source,
+        id: idMap[source.id],
+        position: { x: source.position.x + 50, y: source.position.y + 50 },
+        data: buildDuplicatedNodeData(source, handleMap, idMap),
+        selected: true,
+      }))
+
+      // Only recreate edges whose BOTH endpoints are in the duplicated set.
+      // Node ids remap via idMap; loop/list column handles via handleMap (other
+      // handle ids like "out"/"image"/"characterRef" are stable and pass through).
+      const newEdges: WorkflowEdge[] = state.edges
+        .filter((e) => idSet.has(e.source) && idSet.has(e.target))
+        .map((e) => ({
+          ...e,
+          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          source: idMap[e.source],
+          target: idMap[e.target],
+          sourceHandle: e.sourceHandle && handleMap[e.sourceHandle] ? handleMap[e.sourceHandle] : e.sourceHandle,
+          targetHandle: e.targetHandle && handleMap[e.targetHandle] ? handleMap[e.targetHandle] : e.targetHandle,
+        }))
+
+      return {
+        // Deselect the originals and select the clones, so the new copies become
+        // the active selection — a repeated Ctrl+D then cascades (next copies at
+        // +50 from the clones, not stacked on the originals) and the user can
+        // drag the copies immediately. selectedNodeId is cleared since a
+        // multi-selection has no single config-panel target.
+        nodes: [
+          ...state.nodes.map((n) => (n.selected ? { ...n, selected: false } : n)),
+          ...clones,
+        ],
+        edges: [...state.edges, ...newEdges],
+        newNodeIds: new Set([...state.newNodeIds, ...clones.map((c) => c.id)]),
+        selectedNodeId: null,
         isDirty: true,
       }
     }),
