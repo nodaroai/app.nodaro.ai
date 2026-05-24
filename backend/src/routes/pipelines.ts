@@ -55,6 +55,26 @@ const ApproveStageBodySchema = z.object({
     .optional(),
 })
 
+/**
+ * Phase 1 (granular-pipeline-control spec) — body schema for the save-only
+ * inline edit route. `edits` is a non-empty RFC 6902 array (named to match
+ * the sibling `approve` route's `edits` field). Ops are `replace` only in
+ * Phase 1 (path whitelist + op restriction further enforced inside
+ * `saveStageEdit`).
+ */
+const SaveStageEditBodySchema = z.object({
+  edits: z
+    .array(
+      z.object({
+        op: z.enum(["replace"]),
+        path: z.string().min(1),
+        value: z.unknown(),
+      }),
+    )
+    .min(1)
+    .max(50),
+})
+
 function gateEdition(reply: FastifyReply): boolean {
   if (!hasCredits()) {
     void reply.status(403).send({
@@ -516,6 +536,96 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       )
       if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
       return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/stages/:stage_name/edit ───────────────────────
+  //
+  // Phase 1 (granular-pipeline-control spec) — save-only inline editing for
+  // Stage 1 scene fields. Applies the JSON Patch to pipeline_stages.output AND
+  // appends the ops to pipeline_stages.user_edits (audit trail). DOES NOT
+  // advance the stage — caller still has to hit /approve afterward.
+  //
+  // Allowed paths (script stage only — enforced in `saveStageEdit`):
+  //   - /scenes/{n}/description
+  //   - /scenes/{n}/duration_seconds
+  //   - /scenes/{n}/emotional_beat
+  //   - /scenes/{n}/dialogue/{m}/line
+  // Other paths return 400 `patch_path_not_editable`. add/remove ops are
+  // deferred (add-scene/delete-scene = Phase 5).
+  app.post<{
+    Params: { id: string; stage_name: string }
+    Body: { edits?: unknown }
+  }>(
+    "/v1/pipelines/:id/stages/:stage_name/edit",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const stageName = req.params.stage_name as PipelineStageName
+      if (!(PIPELINE_STAGE_NAMES as readonly string[]).includes(stageName)) {
+        return reply.status(400).send({
+          error: { code: "invalid_stage_name", stage: req.params.stage_name },
+        })
+      }
+
+      const body = SaveStageEditBodySchema.safeParse(req.body ?? {})
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Ownership check on the parent pipeline row.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Look up the stage row id — `saveStageEdit` takes stageId (not
+      // pipeline+stage_name) to mirror `applyStageEdit`'s signature.
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", stageName)
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(404).send({ error: { code: "stage_not_started" } })
+      }
+
+      const { saveStageEdit } = await import(
+        "../ee/pipelines/save-stage-edit.js"
+      )
+      const result = await saveStageEdit({
+        supabase,
+        pipelineId: req.params.id,
+        stageId: stageRow.id as string,
+        stageName,
+        userId,
+        jsonPatch: body.data.edits as JsonPatch,
+      })
+      if (!result.ok) {
+        // Map helper reason → HTTP status:
+        //   400 — caller's fault (bad patch shape / path / value)
+        //   409 — stage-state issue (not awaiting / not editable / race)
+        const status =
+          result.reason === "patch_path_not_editable" ||
+          result.reason === "patch_invalid" ||
+          result.reason === "schema_invalid"
+            ? 400
+            : 409
+        return reply
+          .status(status)
+          .send({ error: { code: result.reason, detail: result.detail } })
+      }
+      return reply.send({ ok: true, newOutput: result.newOutput })
     },
   )
 
