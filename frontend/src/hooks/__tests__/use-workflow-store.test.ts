@@ -337,3 +337,103 @@ describe("EXECUTION_DATA_KEYS", () => {
     expect(EXECUTION_DATA_KEYS.has("zoom")).toBe(true)
   })
 })
+
+describe("duplicateNodes", () => {
+  beforeEach(() => {
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "a", type: "text-prompt", position: { x: 0, y: 0 }, data: {}, selected: true },
+        { id: "b", type: "generate-image", position: { x: 100, y: 0 }, data: {}, selected: true },
+        { id: "ext", type: "text-prompt", position: { x: 200, y: 0 }, data: {}, selected: false },
+      ],
+      edges: [
+        { id: "e-ab", source: "a", target: "b", sourceHandle: "out", targetHandle: "in" },
+        { id: "e-bext", source: "b", target: "ext", sourceHandle: "image", targetHandle: "in" },
+      ],
+      selectedNodeId: null,
+      isDirty: false,
+    } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
+  })
+
+  it("clones the nodes, selects the clones, deselects the originals", () => {
+    useWorkflowStore.getState().duplicateNodes(["a", "b"])
+    const { nodes, selectedNodeId, isDirty } = useWorkflowStore.getState()
+    expect(nodes).toHaveLength(5) // 3 original + 2 clones
+    const clones = nodes.filter((n) => !["a", "b", "ext"].includes(n.id))
+    expect(clones).toHaveLength(2)
+    expect(clones.every((n) => n.selected === true)).toBe(true)
+    expect(nodes.filter((n) => n.id === "a" || n.id === "b").every((n) => n.selected === false)).toBe(true)
+    // clone of "a" is offset +50/+50 from its source at (0,0)
+    expect(clones.some((n) => n.position.x === 50 && n.position.y === 50)).toBe(true)
+    expect(selectedNodeId).toBeNull()
+    expect(isDirty).toBe(true)
+  })
+
+  it("recreates only the internal edge (a→b), repointed to the clones with handles preserved", () => {
+    useWorkflowStore.getState().duplicateNodes(["a", "b"])
+    const { nodes, edges } = useWorkflowStore.getState()
+    const cloneIds = new Set(nodes.filter((n) => !["a", "b", "ext"].includes(n.id)).map((n) => n.id))
+    expect(edges).toHaveLength(3) // 2 original + 1 recreated (b→ext is NOT recreated)
+    const newEdge = edges.find((e) => cloneIds.has(e.source) && cloneIds.has(e.target))
+    expect(newEdge).toBeDefined()
+    expect(newEdge!.sourceHandle).toBe("out")
+    expect(newEdge!.targetHandle).toBe("in")
+    expect(edges.some((e) => cloneIds.has(e.source) && e.target === "ext")).toBe(false)
+  })
+
+  it("is a no-op when no ids match", () => {
+    const before = useWorkflowStore.getState().nodes
+    useWorkflowStore.getState().duplicateNodes(["nope"])
+    expect(useWorkflowStore.getState().nodes).toBe(before)
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+
+  it("re-points a loop column's connectedSourceId to the clone when its source is also duplicated", () => {
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: {}, selected: true },
+        {
+          id: "lp",
+          type: "loop",
+          position: { x: 100, y: 0 },
+          data: { columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "src", connectedSourceHandle: "out" }] },
+          selected: true,
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+      isDirty: false,
+    } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
+
+    useWorkflowStore.getState().duplicateNodes(["src", "lp"])
+    const { nodes } = useWorkflowStore.getState()
+    const srcClone = nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "text-prompt")
+    const loopClone = nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "loop")
+    const col = (loopClone!.data as { columns: Array<{ connectedSourceId?: string; connectedSourceHandle?: string }> }).columns[0]
+    expect(col.connectedSourceId).toBe(srcClone!.id)
+    expect(col.connectedSourceHandle).toBe("out")
+  })
+
+  it("clears a loop column's connectedSourceId when only the loop (not its source) is duplicated", () => {
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: {}, selected: false },
+        {
+          id: "lp",
+          type: "loop",
+          position: { x: 100, y: 0 },
+          data: { columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "src", connectedSourceHandle: "out" }] },
+          selected: true,
+        },
+      ],
+      edges: [],
+      selectedNodeId: null,
+      isDirty: false,
+    } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
+
+    useWorkflowStore.getState().duplicateNodes(["lp"])
+    const loopClone = useWorkflowStore.getState().nodes.find((n) => !["src", "lp"].includes(n.id) && n.type === "loop")
+    const col = (loopClone!.data as { columns: Array<{ connectedSourceId?: string }> }).columns[0]
+    expect(col.connectedSourceId).toBeUndefined()
+  })
+})

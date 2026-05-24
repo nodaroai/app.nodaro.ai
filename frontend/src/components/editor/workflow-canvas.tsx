@@ -10,6 +10,7 @@ import {
   BackgroundVariant,
   ConnectionMode,
   useReactFlow,
+  useUpdateNodeInternals,
   useStore,
   type NodeMouseHandler,
   type IsValidConnection,
@@ -393,13 +394,34 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const duplicateNode = useWorkflowStore((s) => s.duplicateNode)
+  const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
   const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport } = useReactFlow()
+  const updateNodeInternals = useUpdateNodeInternals()
   const savedViewport = useWorkflowStore((s) => s.savedViewport)
+
+  // Freshly-mounted nodes play a ~300ms scale-up entrance (useNodeInsertAnimation
+  // + the `.animate-fade-in-scale` wrapper class). React Flow measures each handle
+  // once on mount via getBoundingClientRect (transform-aware), but its
+  // ResizeObserver never re-fires for a CSS transform — content-box size is
+  // unchanged — so handles get recorded at their scaled-down, shifted-toward-
+  // center positions and every edge attaches off its handle icon until the next
+  // resize/drag. Re-measure once the entrance settles. Keyed on the node-id SET
+  // (not the `nodes` array, which changes on every drag) so it fires only on
+  // load / add / remove, and batches into ONE updateNodeInternals(ids) call (a
+  // single rAF + store update) rather than one timer per node.
+  const nodeIdSignature = nodes.map((n) => n.id).join(",")
+  useEffect(() => {
+    if (!nodeIdSignature) return
+    const t = window.setTimeout(() => {
+      const ids = useWorkflowStore.getState().nodes.map((n) => n.id)
+      if (ids.length > 0) updateNodeInternals(ids)
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [nodeIdSignature, updateNodeInternals])
   const setSavedViewport = useWorkflowStore((s) => s.setSavedViewport)
   const { undo, redo, canUndo, canRedo } = useUndoRedoActions()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1260,10 +1282,42 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
-      // Ctrl+D - Duplicate
-      if ((e.ctrlKey || e.metaKey) && e.key === "d" && selectedNodeId) {
+      // Effective target for the clipboard / duplicate shortcuts: the React
+      // Flow multi-selection (`.selected`), else the node whose config panel
+      // is open (`selectedNodeId`). This decouples these shortcuts from the
+      // config panel being open and makes them honor a multi-node selection —
+      // previously Ctrl+D only fired when `selectedNodeId` was set (i.e.
+      // settings open) and ignored multi-select entirely.
+      //
+      // We deliberately do NOT fall back to `focusedNodeRef` (the last
+      // single-clicked node): that ref is only cleared on pane-click, so after
+      // an Escape/deselect it stays set and would let Ctrl+X silently cut a
+      // node that the canvas shows as deselected. `.selected` is the visible
+      // selection (it drives the selection ring + native delete), so it is the
+      // correct source of truth here.
+      //
+      // `includeStickyNotes`: Ctrl+D duplicates sticky notes too (matches the
+      // old single-node behavior), but Ctrl+C/X keep excluding them — the
+      // clipboard payload/paste flow never handled sticky notes.
+      const shortcutTargetIds = (includeStickyNotes = false): string[] => {
+        const s = useWorkflowStore.getState()
+        const eligible = (n: (typeof s.nodes)[number]) =>
+          n.selected && (includeStickyNotes || n.type !== "sticky-note")
+        const selectedIds = s.nodes.filter(eligible).map((n) => n.id)
+        if (selectedIds.length > 0) return selectedIds
+        const single = s.selectedNodeId
+        return single &&
+          s.nodes.some((n) => n.id === single && (includeStickyNotes || n.type !== "sticky-note"))
+          ? [single]
+          : []
+      }
+
+      // Ctrl+D - Duplicate selected node(s), preserving edges between them
+      if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+        const ids = shortcutTargetIds(true)
+        if (ids.length === 0) return
         e.preventDefault()
-        duplicateNode(selectedNodeId)
+        duplicateNodes(ids)
         return
       }
 
@@ -1274,10 +1328,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const sel = typeof window !== "undefined" ? window.getSelection() : null
         if (sel && sel.toString().length > 0) return
         const state = useWorkflowStore.getState()
-        const selected = state.nodes.filter((n) => n.selected && n.type !== "sticky-note")
-        if (selected.length === 0) return
+        const selectedIds = new Set(shortcutTargetIds())
+        if (selectedIds.size === 0) return
+        const selected = state.nodes.filter((n) => selectedIds.has(n.id))
         e.preventDefault()
-        const selectedIds = new Set(selected.map((n) => n.id))
         const connectedEdges = state.edges.filter((edge) => selectedIds.has(edge.source) && selectedIds.has(edge.target))
         const payload = JSON.stringify({ __nodaro_clipboard: true, name: state.workflowName, nodes: selected, edges: connectedEdges })
         navigator.clipboard.writeText(payload).then(() => {
@@ -1515,7 +1569,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // selection jumps to the neighbor.
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [selectedNodeId, duplicateNode, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
+  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
   useEffect(() => {

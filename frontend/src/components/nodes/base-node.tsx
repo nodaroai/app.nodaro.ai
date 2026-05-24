@@ -506,7 +506,10 @@ function BaseNodeComponent({
             style={{
               ...(h.customStyle ?? (h.top ? { top: h.top } : undefined)),
               ...(h.hideHandle ? { background: 'transparent', opacity: 0 } : undefined),
-              transform: 'translateY(-60%)',
+              // Center the 28px handle on its `top` anchor so its measured
+              // center coincides with the HandleIcon (which also uses -50%).
+              // -60% left the edge endpoint ~2.8px above each icon center.
+              transform: 'translateY(-50%)',
               zIndex: 30,
             }}
           />
