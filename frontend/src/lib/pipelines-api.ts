@@ -149,6 +149,29 @@ export const pipelinesApi = {
       `/v1/pipelines/${id}/stages/${stage}/approve`,
       edits ? { edits } : {},
     ),
+  /**
+   * Phase 1 (granular-pipeline-control spec) — save inline scene edits
+   * WITHOUT advancing the stage. Backend applies the RFC 6902 patch to
+   * `pipeline_stages.output` and appends the ops to `user_edits` for audit
+   * trail; stage stays `awaiting_approval`. The caller still has to hit
+   * `approveStage` to advance.
+   *
+   * Phase 1 path whitelist (enforced server-side):
+   *   /scenes/{n}/description
+   *   /scenes/{n}/duration_seconds
+   *   /scenes/{n}/emotional_beat
+   *   /scenes/{n}/dialogue/{m}/line
+   * Ops are `replace` only — add/remove are Phase 5.
+   *
+   * `edits` typed as `unknown` to match the sibling approveStage signature
+   * and avoid pulling JsonPatch into the import set; callers can pass a
+   * typed `JsonPatch` from @nodaro/shared and it'll conform.
+   */
+  applyEdits: (id: string, stage: PipelineStageName, edits: unknown) =>
+    postJson<{ ok: true; newOutput: unknown }>(
+      `/v1/pipelines/${id}/stages/${stage}/edit`,
+      { edits },
+    ),
   rejectStage: (id: string, stage: PipelineStageName, feedback: string) =>
     postJson<{ ok: true }>(`/v1/pipelines/${id}/stages/${stage}/reject`, { feedback }),
   approveEntity: (id: string, entityId: string) =>
