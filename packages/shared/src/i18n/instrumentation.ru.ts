@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "Кора", description: "Западноафриканская 21-струнная" },
   "hang-drum": { label: "Ханг-Драм", description: "Стальной хэндпан" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "Кеманча", description: "Персидская смычковая скрипка со штырём" },
+  "ney": { label: "Най", description: "Персидско-арабская продольная тростниковая флейта" },
+  "santur": { label: "Сантур", description: "Персидские цимбалы" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "Отполированный", description: "Безупречное мейнстрим-производство" },
   "lo-fi": { label: "Лоу-фай", description: "Тёплое плёночное шипение, несовершенное" },

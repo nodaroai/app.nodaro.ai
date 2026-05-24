@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "科拉琴", description: "西非21弦琴" },
   "hang-drum": { label: "Hang 鼓", description: "钢制手鼓" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "卡曼贾", description: "波斯弓弦针式提琴" },
+  "ney": { label: "奈伊笛", description: "波斯/阿拉伯端吹芦笛" },
+  "santur": { label: "桑图尔", description: "波斯击弦扬琴" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "精致", description: "纯净、主流的制作" },
   "lo-fi": { description: "温暖的磁带嘶嘶声,不完美" },

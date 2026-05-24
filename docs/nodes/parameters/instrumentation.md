@@ -2,7 +2,7 @@
 
 A parameter-picker that emits an instrumentation prompt-hint to feed Suno Generate, Generate Music (MiniMax), and Text to Audio. Also controls MiniMax's `instrumental` flag when the vocal presence includes `instrumental`.
 
-The Instruments section shows a horizontal tab row across instrument families (Drums, Percussion, Keys, Synth, Guitar, Bass, Brass, Woodwinds, Strings, World) — taxonomy aligned with [Splice](https://splice.com/sounds/instruments).
+The Instruments section shows a horizontal tab row across instrument families (Drums, Percussion, Keys, Synth, Guitar, Bass, Brass, Woodwinds, Strings, World, Middle Eastern) — taxonomy aligned with [Splice](https://splice.com/sounds/instruments), with Middle Eastern added for Kamancheh / Ney / Santur.
 
 ## Configuration
 

@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "코라", description: "서아프리카의 21현 악기" },
   "hang-drum": { label: "행 드럼", description: "스틸 핸드 팬" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "카만체", description: "활로 연주하는 페르시아의 스파이크 피들" },
+  "ney": { label: "네이", description: "페르시아/아랍의 끝부분을 부는 갈대 피리" },
+  "santur": { label: "산투르", description: "페르시아의 망치로 치는 덜시머" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "정제된", description: "깨끗한 메인스트림 프로덕션" },
   "lo-fi": { description: "따뜻한 테이프 히스, 불완전한" },

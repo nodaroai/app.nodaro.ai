@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { description: "Instrumento de 21 cuerdas de África Occidental" },
   "hang-drum": { description: "Hang de acero de mano" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { description: "Violín persa de mástil con arco" },
+  "ney": { description: "Flauta de caña soplada por el extremo (persa/árabe)" },
+  "santur": { description: "Salterio persa percutido" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "Pulida", description: "Producción prístina y mainstream" },
   "lo-fi": { description: "Cinta cálida con siseo, imperfecta" },

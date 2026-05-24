@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { description: "Instrument à 21 cordes d'Afrique de l'Ouest" },
   "hang-drum": { description: "Hang en acier joué à la main" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "Kamânche", description: "Vièle persane à pique jouée à l'archet" },
+  "ney": { description: "Flûte de roseau à embouchure terminale (persane/arabe)" },
+  "santur": { label: "Santour", description: "Cithare persane frappée à mailloches" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "Soignée", description: "Production prestine et grand public" },
   "lo-fi": { description: "Cassette chaude avec souffle, imparfaite" },

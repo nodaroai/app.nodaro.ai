@@ -130,6 +130,11 @@ const map: LocaleCatalogMap = {
   "kora": { label: "קורה", description: "כלי בן 21 מיתרים ממערב אפריקה" },
   "hang-drum": { label: "תוף האנג", description: "האנדפן פלדה" },
 
+  // -------------------- INSTRUMENTS: Middle Eastern --------------------
+  "kamancheh": { label: "קמאנצ׳ה", description: "כינור כידני פרסי בקשת" },
+  "ney": { label: "ניי", description: "חליל קנה נשוף בקצה (פרסי/ערבי)" },
+  "santur": { label: "סנטור", description: "כלי פטישים פרסי דמוי צ׳מבלו" },
+
   // -------------------- PRODUCTION_STYLES --------------------
   "polished": { label: "מלוטשת", description: "הפקה נקייה ומיינסטרים" },
   "lo-fi": { description: "סרט חם עם רעש, לא מושלם" },
