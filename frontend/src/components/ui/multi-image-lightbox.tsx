@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
+import { useImageAspect } from "@/hooks/use-image-aspect"
 
 interface LightboxItem {
   readonly url: string
@@ -62,8 +63,15 @@ export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLig
     return () => document.removeEventListener("keydown", handler)
   }, [startIndex, onClose, prev, next])
 
+  const safeIndex = Math.max(0, Math.min(index, Math.max(0, total - 1)))
+  const current = total > 0 ? items[safeIndex] : undefined
+  // Hook must run on every render; pass null when there's no image to probe
+  // (video items, empty list, or closed lightbox) so it resets cleanly.
+  const aspect = useImageAspect(
+    current && current.kind !== "video" && startIndex !== null ? current.url : null,
+  )
+
   if (startIndex === null || total === 0) return null
-  const current = items[Math.max(0, Math.min(index, total - 1))]
   if (!current) return null
 
   return createPortal(
@@ -119,14 +127,22 @@ export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLig
           playsInline
           onClick={(e) => e.stopPropagation()}
         />
-      ) : (
-        <CachedImage
-          src={current.url}
-          alt={current.alt ?? "Preview"}
-          className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+      ) : aspect !== null ? (
+        <div
+          className="rounded-lg shadow-2xl overflow-hidden"
+          style={{
+            width: `min(90vw, calc(90vh * ${aspect}))`,
+            height: `min(90vh, calc(90vw / ${aspect}))`,
+          }}
           onClick={(e) => e.stopPropagation()}
-        />
-      )}
+        >
+          <CachedImage
+            src={current.url}
+            alt={current.alt ?? "Preview"}
+            className="w-full h-full object-contain"
+          />
+        </div>
+      ) : null}
 
       {/* Next (right edge) */}
       {total > 1 && (

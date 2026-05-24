@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { useGalleryInfinite, useGalleryFavorites, useToggleFavoriteMutation, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
+import { useImageAspect } from "@/hooks/use-image-aspect"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
@@ -310,6 +311,13 @@ export default function GalleryPage() {
   const totalCount = data?.pages[0]?.totalCount ?? items.length
 
   const selectedItem = selectedIndex !== null ? items[selectedIndex] ?? null : null
+  // Probe aspect ratio so fullscreen-mode image renders at its final display
+  // size from the first paint. Without this, the progressive placeholder
+  // (~320px) renders at its tiny natural size, then snaps when the 2048px
+  // hi-res arrives — jumpy.
+  const fullscreenImageAspect = useImageAspect(
+    selectedItem && selectedItem.type === "image" ? selectedItem.outputUrl : null,
+  )
 
   // Mobile back button closes modal instead of navigating away
   const closeModal = useCallback(() => setSelectedIndex(null), [])
@@ -798,7 +806,17 @@ export default function GalleryPage() {
           onTouchEnd={handleTouchEnd}
         >
           {selectedItem.type === "image" ? (
-            <CachedImage src={selectedItem.outputUrl} alt="" className="max-w-full max-h-full object-contain" />
+            fullscreenImageAspect !== null ? (
+              <div
+                className="overflow-hidden"
+                style={{
+                  width: `min(100vw, calc(100vh * ${fullscreenImageAspect}))`,
+                  height: `min(100vh, calc(100vw / ${fullscreenImageAspect}))`,
+                }}
+              >
+                <CachedImage src={selectedItem.outputUrl} alt="" className="w-full h-full object-contain" />
+              </div>
+            ) : null
           ) : selectedItem.type === "video" ? (
             <video key={selectedItem.id} src={selectedItem.outputUrl} controls autoPlay playsInline className="max-w-full max-h-full" />
           ) : (
