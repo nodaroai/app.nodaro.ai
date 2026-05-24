@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
+import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -103,9 +104,11 @@ export function TemplatePreviewModal({
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [handleKeyDown])
 
-  // Prepare snapshot nodes/edges
+  // Prepare snapshot nodes/edges. Order parent-first: template JSON is raw
+  // (no editor heal), so a group saved after its children would teleport in
+  // the preview.
   const snapshotNodes = useMemo(
-    () => (fullTemplate?.snapshotNodes as Node[] | undefined) ?? [],
+    () => orderNodesParentFirst((fullTemplate?.snapshotNodes as Node[] | undefined) ?? []),
     [fullTemplate],
   )
 

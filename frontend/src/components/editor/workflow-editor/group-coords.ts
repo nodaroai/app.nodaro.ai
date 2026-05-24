@@ -23,3 +23,28 @@ export function worldToLocal(worldPos: Point, groupPos: Point): Point {
 export function localToWorld(localPos: Point, groupPos: Point): Point {
   return { x: localPos.x + groupPos.x, y: localPos.y + groupPos.y };
 }
+
+/**
+ * React Flow v12 requires a parent node to appear BEFORE its children in the
+ * nodes array. `adoptUserNodes` processes nodes in array order; a child seen
+ * before its parent warns "Parent node not found" and renders at
+ * positionAbsolute = its LOCAL coords (so it teleports to ~origin and the
+ * group can't move it). Several store writes (drag-attach, paste, undo, load)
+ * can leave the array child-before-parent, so callers run this wherever the
+ * array reaches React Flow or is persisted.
+ *
+ * This is a SINGLE-LEVEL partition (top-level nodes kept in order, then
+ * children in order). It is sufficient because groups cannot be nested: the
+ * drag-attach path in `workflow-canvas.tsx` refuses to parent a group node.
+ * It does NOT topologically sort, so a multi-level chain (a child that is
+ * itself a parent) — only reachable via imported/pasted malformed JSON — is
+ * not fully ordered. Returns the same array reference when there are no
+ * children, to avoid needless re-renders.
+ */
+export function orderNodesParentFirst<N extends { id: string; parentId?: string }>(nodes: N[]): N[] {
+  if (!nodes.some((n) => n.parentId)) return nodes;
+  const parents: N[] = [];
+  const children: N[] = [];
+  for (const n of nodes) (n.parentId ? children : parents).push(n);
+  return [...parents, ...children];
+}

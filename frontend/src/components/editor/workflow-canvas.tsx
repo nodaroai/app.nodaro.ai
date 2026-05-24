@@ -37,7 +37,7 @@ import { useElkLayout, elk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
-import { computeOverlap, worldToLocal, localToWorld, GROUP_ATTACH_THRESHOLD } from "./workflow-editor/group-coords"
+import { computeOverlap, worldToLocal, localToWorld, GROUP_ATTACH_THRESHOLD, orderNodesParentFirst } from "./workflow-editor/group-coords"
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
@@ -388,6 +388,13 @@ interface WorkflowCanvasProps {
 
 export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanvasProps) {
   const nodes = useWorkflowStore((s) => s.nodes)
+  // React Flow v12 requires a parent (group) node to precede its children in
+  // the array it receives, else the child renders at its local coords as if
+  // absolute (teleports to ~origin) and warns. The store keeps insertion order
+  // (a group drawn around existing nodes lands AFTER them), so reorder here at
+  // the single point the array enters React Flow. onNodesChange is id-based, so
+  // feeding a reordered array back is safe.
+  const orderedNodes = useMemo(() => orderNodesParentFirst(nodes), [nodes])
   const edges = useWorkflowStore((s) => s.edges)
   const onNodesChange = useWorkflowStore((s) => s.onNodesChange)
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange)
@@ -1073,13 +1080,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   const handleTidyUp = useCallback(async () => {
+    // Grouped children (parentId set) are excluded from layout like sticky
+    // notes: ELK produces ABSOLUTE coords, but React Flow interprets a
+    // parentId node's position as parent-LOCAL, so laying them out flings them
+    // out of their group. They stay untouched (local coords) and move with
+    // their group when the group itself is tidied.
+    const isTidyable = (n: WorkflowNode) => n.type !== "sticky-note" && !n.parentId
     // If nodes are selected, only tidy those; otherwise tidy all
-    const selectedNodes = nodes.filter((n) => n.selected && n.type !== "sticky-note")
+    const selectedNodes = nodes.filter((n) => n.selected && isTidyable(n))
     const isSelectionMode = selectedNodes.length >= 2
-    const targetNodes = isSelectionMode ? selectedNodes : nodes.filter((n) => n.type !== "sticky-note")
+    const targetNodes = isSelectionMode ? selectedNodes : nodes.filter(isTidyable)
     const untouchedNodes = isSelectionMode
-      ? nodes.filter((n) => !n.selected || n.type === "sticky-note")
-      : nodes.filter((n) => n.type === "sticky-note")
+      ? nodes.filter((n) => !n.selected || !isTidyable(n))
+      : nodes.filter((n) => !isTidyable(n))
 
     if (targetNodes.length === 0) return
 
@@ -1807,7 +1820,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       <CanvasZoomContext.Provider value={{ zoom }}>
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
-          nodes={nodes}
+          nodes={orderedNodes}
           edges={visibleEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
