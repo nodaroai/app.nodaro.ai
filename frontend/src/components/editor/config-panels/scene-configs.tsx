@@ -838,7 +838,8 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
           </div>
         )
       })}
-      <div className="space-y-2 pt-3 border-t border-zinc-200">
+      {isPipelineManaged && (
+      <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
         <Label>Helpers</Label>
         <SceneHelperButtons
           pipelineId={pipelineId}
@@ -884,6 +885,7 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
           }}
         />
       </div>
+      )}
       <SceneHelperModal
         state={state}
         data={data}

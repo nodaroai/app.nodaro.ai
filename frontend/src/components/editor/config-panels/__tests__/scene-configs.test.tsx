@@ -370,4 +370,18 @@ describe("SceneConfig pipeline-managed vs manual gating", () => {
     expect(screen.queryByTestId("pipeline-managed-message")).not.toBeInTheDocument()
     expect(screen.getByLabelText(/^Label$/i)).toBeInTheDocument()
   })
+
+  it("hides the Helpers block on manually-placed scenes (backend routes require a parent pipeline)", () => {
+    renderPanel(makeData("first_frame"))
+    expect(screen.queryByTestId("scene-helper-buttons")).not.toBeInTheDocument()
+  })
+
+  it("shows the Helpers block on pipeline-managed scenes", () => {
+    const data = {
+      ...makeData("first_frame"),
+      pipeline_owned: true,
+    } as unknown as SceneNodeFrontendData
+    renderPanel(data)
+    expect(screen.getByTestId("scene-helper-buttons")).toBeInTheDocument()
+  })
 })
