@@ -24,6 +24,13 @@ interface MakeSupabaseOpts {
   initialStageStatus?: string
   assetR2Url?: string
   assetMissing?: boolean
+  /**
+   * Stage 7 (`animate_audio_edit`) output that the post_merge handler reads
+   * to copy cut_decisions / final_duration_seconds / beat_grid_used onto its
+   * own row. Defaults to an empty object so the existing tests that don't
+   * exercise the copy path still pass.
+   */
+  animateStageOutput?: Record<string, unknown> | null
 }
 
 function makeSupabase(opts: MakeSupabaseOpts = {}) {
@@ -35,12 +42,34 @@ function makeSupabase(opts: MakeSupabaseOpts = {}) {
       if (table === "pipeline_stages") {
         return {
           select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: { status: opts.initialStageStatus ?? "running" },
-                error: null,
-              }),
-            }),
+            eq: (col: string, value: string) => {
+              // Two distinct SELECT paths land here:
+              //  - by id (the re-entrancy guard)        → returns { status }
+              //  - by pipeline_id + .eq("stage_name", "animate_audio_edit")
+              //                                          → returns { output }
+              // We branch on the first eq() arg to mirror real behavior.
+              if (col === "id") {
+                return {
+                  maybeSingle: async () => ({
+                    data: { status: opts.initialStageStatus ?? "running" },
+                    error: null,
+                  }),
+                }
+              }
+              if (col === "pipeline_id") {
+                return {
+                  eq: () => ({
+                    maybeSingle: async () => ({
+                      data: opts.animateStageOutput === null
+                        ? null
+                        : { output: opts.animateStageOutput ?? {} },
+                      error: null,
+                    }),
+                  }),
+                }
+              }
+              throw new Error(`Unmocked pipeline_stages.select.eq(${col}, ${value})`)
+            },
           }),
           update: (patch: Record<string, unknown>) => ({
             eq: async () => {
@@ -169,6 +198,10 @@ describe("runPostMergeStage (J1 — pure approval gate)", () => {
     expect(awaitingUpdate?.output).toMatchObject({
       final_output_url: "https://r2/final.mp4",
       final_output_asset_id: "asset-final",
+      // Stage 7 output not provided → defaults to empty/zero/null.
+      cut_decisions: [],
+      final_duration_seconds: 0,
+      beat_grid_used: null,
     })
 
     // Should NOT emit pipeline:completed yet.
@@ -180,6 +213,106 @@ describe("runPostMergeStage (J1 — pure approval gate)", () => {
       (c) => c[0]?.type === "stage:status" && c[0]?.status === "awaiting_approval",
     )
     expect(stageStatusEvent).toBeTruthy()
+    expect(failStage).not.toHaveBeenCalled()
+  })
+
+  it("8. copies cut_decisions + final_duration_seconds + beat_grid_used from animate_audio_edit stage output", async () => {
+    const animateOutput = {
+      cut_decisions: [
+        { shot_id: "s1_shot1", transition_to_next: "hard_cut" },
+        { shot_id: "s1_shot2", transition_to_next: "match_cut" },
+      ],
+      final_duration_seconds: 42.5,
+      beat_grid_used: [0.5, 1.0, 1.5, 2.0],
+    }
+    const supabase = makeSupabase({
+      pipelineMode: "manual",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
+      animateStageOutput: animateOutput,
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const awaitingUpdate = stageUpdates.find(
+      (u) => u.status === "awaiting_approval",
+    )
+    expect(awaitingUpdate?.output).toMatchObject({
+      final_output_url: "https://r2/final.mp4",
+      final_output_asset_id: "asset-final",
+      cut_decisions: animateOutput.cut_decisions,
+      final_duration_seconds: 42.5,
+      beat_grid_used: animateOutput.beat_grid_used,
+    })
+  })
+
+  it("9. auto mode also writes cut_decisions + duration + beat_grid into the approved output", async () => {
+    const animateOutput = {
+      cut_decisions: [{ shot_id: "s1_shot1", transition_to_next: "hard_cut" }],
+      final_duration_seconds: 60,
+      beat_grid_used: null,
+    }
+    const supabase = makeSupabase({
+      pipelineMode: "auto",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
+      animateStageOutput: animateOutput,
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const approvedUpdate = stageUpdates.find((u) => u.status === "approved")
+    expect(approvedUpdate?.output).toMatchObject({
+      final_output_url: "https://r2/final.mp4",
+      final_output_asset_id: "asset-final",
+      cut_decisions: animateOutput.cut_decisions,
+      final_duration_seconds: 60,
+      beat_grid_used: null,
+    })
+  })
+
+  it("10. missing animate_audio_edit row → defaults to empty array / 0 / null (no crash)", async () => {
+    const supabase = makeSupabase({
+      pipelineMode: "manual",
+      finalOutputAssetId: "asset-final",
+      assetR2Url: "https://r2/final.mp4",
+      animateStageOutput: null, // simulate "no Stage 7 row in DB"
+    })
+
+    await runPostMergeStage({
+      supabase,
+      pipelineId: "p1",
+      userId: "u1",
+      userTier: "pro",
+    })
+
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const awaitingUpdate = stageUpdates.find(
+      (u) => u.status === "awaiting_approval",
+    )
+    expect(awaitingUpdate?.output).toMatchObject({
+      cut_decisions: [],
+      final_duration_seconds: 0,
+      beat_grid_used: null,
+    })
     expect(failStage).not.toHaveBeenCalled()
   })
 

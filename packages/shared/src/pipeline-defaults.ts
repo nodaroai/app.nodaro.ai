@@ -236,15 +236,55 @@ export function clearVideoCriticMetadata<T extends Record<string, unknown>>(
   return cleaned as Omit<T, VideoCriticMetadataKey>
 }
 
-export type ChatEnabledStage = keyof typeof CHAT_TURN_CAPS
+/**
+ * Phase 1D.2 — single source of truth for chat-stage configuration.
+ *
+ * `wired: true` = the route has a specialist implemented + the LLM emits
+ *                 valid `ChatTurnResponse` for this stage's artifact.
+ * `wired: false` = stage is in the v0.5 spec but not yet implemented
+ *                  (the chat POST returns HTTP 501 `chat_not_wired_for_stage`).
+ *
+ * Per spec §5.12 v0.5: `script` + `shot_list` + `post_merge`.
+ *
+ * - `script`: wired in 1D.2b (chat-refine-showrunner)
+ * - `post_merge`: wired in 1D.2c (chat-refine-postmerge; suggest_branch only)
+ * - `shot_list`: pre-declared, ships in 1D.2d (blocked by v4.0 per-scene
+ *   architecture)
+ *
+ * Prefer reading `CHAT_STAGES[stage].wired` directly in new code; the
+ * sibling `CHAT_ENABLED_STAGES` / `CHAT_WIRED_STAGES` exports below are
+ * derived and remain for backward compatibility with existing call sites.
+ */
+export const CHAT_STAGES = {
+  script: { wired: true },
+  shot_list: { wired: false },
+  post_merge: { wired: true },
+} as const
+
+export type ChatEnabledStage = keyof typeof CHAT_STAGES
 
 /**
- * Ordered list of stages with chat enabled. **In 1D.2b only `script`
- * actually has chat code paths wired** — the others are pre-declared for
- * 1D.2d. Route-level guards filter on `script` until then.
+ * Ordered list of stages with chat enabled. Derived from {@link CHAT_STAGES}.
+ * **In 1D.2c, `script` AND `post_merge` have chat code paths wired** —
+ * post-merge ships with a dedicated `chat-refine-postmerge` specialist
+ * (suggest_branch only — see {@link STAGE_PATCH_SCHEMA}, `post_merge` stays
+ * `null` since the merged video isn't user-editable in place). `shot_list`
+ * is pre-declared for 1D.2d. The route's chat dispatch checks
+ * {@link CHAT_WIRED_STAGES} to decide which specialist to invoke (or 501
+ * for unwired stages).
  */
-export const CHAT_ENABLED_STAGES: readonly ChatEnabledStage[] = [
-  "script",
-  "shot_list",
-  "post_merge",
-]
+export const CHAT_ENABLED_STAGES: readonly ChatEnabledStage[] = Object.keys(
+  CHAT_STAGES,
+) as ChatEnabledStage[]
+
+/**
+ * Per-stage boolean map of whether chat code paths are actually wired
+ * end-to-end. Derived from {@link CHAT_STAGES}. The chat POST route reads
+ * this to decide whether to invoke a specialist (true) or return 501
+ * `chat_not_wired_for_stage` (false).
+ */
+export const CHAT_WIRED_STAGES: Record<ChatEnabledStage, boolean> = {
+  script: CHAT_STAGES.script.wired,
+  shot_list: CHAT_STAGES.shot_list.wired,
+  post_merge: CHAT_STAGES.post_merge.wired,
+}

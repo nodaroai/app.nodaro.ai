@@ -99,11 +99,43 @@ export async function runPostMergeStage(
   }
   const finalAssetUrl = (asset as { r2_url: string }).r2_url
 
+  // Pull the artifact metadata produced by Stage 7 (animate_audio_edit) onto
+  // the post_merge stage row. The chat-refine-postmerge specialist reads
+  // `cut_decisions`, `final_duration_seconds`, `beat_grid_used` off the
+  // post_merge stage's `output` — without this copy, those fields would be
+  // empty in production and the Sonnet refine prompt would lose almost all
+  // of its diagnostic context. Stage 7 already persists them on its own
+  // stage row (registry sub-steps 7g music + 7h editor + 7j final_merge), so
+  // we just shallow-copy onto post_merge.output. Missing keys (e.g. music
+  // disabled) flow through as undefined → null on the persisted row.
+  const { data: animateStage } = await supabase
+    .from("pipeline_stages")
+    .select("output")
+    .eq("pipeline_id", pipelineId)
+    .eq("stage_name", "animate_audio_edit")
+    .maybeSingle()
+  const animateOutput =
+    (animateStage?.output as {
+      cut_decisions?: Array<Record<string, unknown>>
+      final_duration_seconds?: number
+      beat_grid_used?: number[] | null
+    } | null) ?? {}
+  const cutDecisions = animateOutput.cut_decisions ?? []
+  const finalDurationSeconds = animateOutput.final_duration_seconds ?? 0
+  const beatGridUsed = animateOutput.beat_grid_used ?? null
+
   const mode = ((pipeline as { mode?: string }).mode ?? "manual") as
     | "manual"
     | "auto"
     | "guided"
   const completedAt = new Date().toISOString()
+  const outputForStage = {
+    final_output_url: finalAssetUrl,
+    final_output_asset_id: finalAssetId,
+    cut_decisions: cutDecisions,
+    final_duration_seconds: finalDurationSeconds,
+    beat_grid_used: beatGridUsed,
+  }
 
   if (mode === "auto") {
     // Auto-advance — no user approval needed. Flip status=completed +
@@ -125,10 +157,7 @@ export async function runPostMergeStage(
       .update({
         status: "approved",
         completed_at: completedAt,
-        output: {
-          final_output_url: finalAssetUrl,
-          final_output_asset_id: finalAssetId,
-        },
+        output: outputForStage,
       })
       .eq("id", stageId)
 
@@ -160,10 +189,7 @@ export async function runPostMergeStage(
     .from("pipeline_stages")
     .update({
       status: "awaiting_approval",
-      output: {
-        final_output_url: finalAssetUrl,
-        final_output_asset_id: finalAssetId,
-      },
+      output: outputForStage,
     })
     .eq("id", stageId)
 

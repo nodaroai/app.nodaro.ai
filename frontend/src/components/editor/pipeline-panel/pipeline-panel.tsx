@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type {
+  ChatEnabledStage,
   PipelineStageStatus,
   ShowrunnerPlan,
   StoryboardCohesionCriticVerdict,
@@ -174,6 +175,35 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     },
     retry: false,
   })
+
+  // Phase 1D.2c — Stage 8 (post_merge) query, gating the post-merge chat
+  // mount. Stage 8 reaches `awaiting_approval` after the final video is
+  // rendered (in manual + guided modes; auto-mode auto-advances and never
+  // pauses here — see backend/src/ee/pipelines/stages/post-merge.ts). We
+  // only fetch it when the pipeline has actually progressed there, to avoid
+  // spurious 404s while earlier stages are still running. Polling stops
+  // once the stage approves OR the pipeline ends.
+  //
+  // The `completed` clause mirrors `sceneImagesStageQuery`'s enabled gate:
+  // re-opening the panel for a finished pipeline still needs the post_merge
+  // stage data hydrated so the chat surface (and any post-merge details)
+  // render against the persisted artifact.
+  const postMergeStageReachable =
+    pipelineQuery.data?.current_stage === "post_merge"
+  const postMergeStageQuery = useQuery({
+    queryKey: ["pipeline-stage", pipelineId, "post_merge"],
+    queryFn: () => pipelinesApi.getStage(pipelineId, "post_merge"),
+    enabled:
+      postMergeStageReachable || pipelineQuery.data?.status === "completed",
+    refetchInterval: (q) => {
+      if (isTerminalPipelineStatus(pipelineQuery.data?.status)) return false
+      return q.state.data?.status === "awaiting_approval" ||
+        q.state.data?.status === "running"
+        ? 5000
+        : false
+    },
+    retry: false,
+  })
   const setActivePipelineStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
   // SSE `pipeline:forked` flips `activePipelineStatus` to "forked"; reading
   // from the store wins over the polled value so the ForkButton hides
@@ -207,6 +237,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       void stageQuery.refetch()
       void animateStageQuery.refetch()
       void sceneImagesStageQuery.refetch()
+      void postMergeStageQuery.refetch()
     }
     // Stage-level events: only refetch the affected stage query (was
     // indiscriminately refetching every stage query on every `stage:status`
@@ -221,6 +252,9 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       }
       if (lastEvent.stageName === "animate_audio_edit") {
         void animateStageQuery.refetch()
+      }
+      if (lastEvent.stageName === "post_merge") {
+        void postMergeStageQuery.refetch()
       }
     }
     // Phase 1C.2 — sub-gate just opened; pull the latest stage output so
@@ -313,14 +347,27 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
   const plan = (stage?.output as { plan?: ShowrunnerPlan } | undefined)?.plan ?? null
   const status = (stage?.status as PipelineStageStatus | undefined) ?? "queued"
 
-  // Phase 1D.2b — Guided-mode chat panel mount conditional.
-  // Three gates: mode==='guided' AND the script stage exists AND it's
-  // currently awaiting_approval (the only point where chat refinement is
-  // active). 1D.2b ships Script chat only — the other entries in
-  // CHAT_ENABLED_STAGES (shot_list, post_merge) land in 1D.2d.
-  const chatStage: "script" | null =
-    pipeline?.mode === "guided" && status === "awaiting_approval"
-      ? "script"
+  // Phase 1D.2b + 1D.2c — Guided-mode chat panel mount conditional.
+  // mode==='guided' AND a chat-wired stage is currently awaiting_approval.
+  // Two wired stages today:
+  //   - Script (1D.2b): `stage` query above tracks the script row.
+  //   - Post-merge (1D.2c): `postMergeStageQuery` tracks Stage 8.
+  // shot_list is in CHAT_ENABLED_STAGES but the specialist isn't wired yet
+  // (CHAT_WIRED_STAGES.shot_list === false on the backend), so we don't
+  // even consider it here.
+  const isScriptAwaitingApproval =
+    pipelineQuery.data?.current_stage === "script" &&
+    status === "awaiting_approval"
+  const isPostMergeAwaitingApproval =
+    pipelineQuery.data?.current_stage === "post_merge" &&
+    postMergeStageQuery.data?.status === "awaiting_approval"
+  const chatStage: ChatEnabledStage | null =
+    pipeline?.mode === "guided"
+      ? isScriptAwaitingApproval
+        ? "script"
+        : isPostMergeAwaitingApproval
+          ? "post_merge"
+          : null
       : null
 
   // Phase 1C.2 — derive the active sub-gate. SSE-driven `currentSubGate`
@@ -422,7 +469,14 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           stage={chatStage}
           onApplied={() => {
             void pipelineQuery.refetch()
-            void stageQuery.refetch()
+            // Refetch the stage that just received the apply so the panel
+            // sees the new attempt + the stage's approved status without
+            // waiting for the next 5s poll.
+            if (chatStage === "script") {
+              void stageQuery.refetch()
+            } else if (chatStage === "post_merge") {
+              void postMergeStageQuery.refetch()
+            }
           }}
         />
       )}

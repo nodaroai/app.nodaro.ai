@@ -56,7 +56,7 @@ describe("estimateUpfrontCredits", () => {
     ).toBe(75)
   })
 
-  it("adds 40 credits for mode='guided' vs mode='manual' baseline", () => {
+  it("adds 56 credits for mode='guided' vs mode='manual' baseline (script + post_merge chat)", () => {
     const baseline = estimateUpfrontCredits({
       targetDurationSeconds: 30,
       format: "short_film",
@@ -73,7 +73,10 @@ describe("estimateUpfrontCredits", () => {
       narrationEnabled: true,
       lipsyncEnabled: true,
     })
-    expect(guided - baseline).toBe(40) // CHAT_TURN_CAPS.script (20) × 2 credits/turn
+    // Phase 1D.2c: chat reservation now loops over ALL wired chat stages.
+    // CHAT_TURN_CAPS.script (20) × 2 + CHAT_TURN_CAPS.post_merge (8) × 2
+    //   = 40 + 16 = 56 credits.
+    expect(guided - baseline).toBe(56)
   })
 
   it("adds 5 credits for the Storyboard Cohesion critic to the baseline in all 3 modes", () => {
@@ -89,10 +92,11 @@ describe("estimateUpfrontCredits", () => {
     const manual = estimateUpfrontCredits({ ...args, mode: "manual" })
     const auto = estimateUpfrontCredits({ ...args, mode: "auto" })
     const guided = estimateUpfrontCredits({ ...args, mode: "guided" })
-    // Manual + 5 cohesion + 16 video critic = 61; auto same; guided adds 40 chat-refine = 101.
+    // Manual + 5 cohesion + 16 video critic = 61; auto same; guided adds 56
+    // chat-refine (script 40 + post_merge 16) = 117.
     expect(manual).toBe(61)
     expect(auto).toBe(61)
-    expect(guided).toBe(101)
+    expect(guided).toBe(117)
   })
 
   // ─── Phase 1D.2c-b-ii G1 — Video Critic per-shot budget ─────────────
@@ -176,9 +180,9 @@ describe("estimateUpfrontCredits", () => {
 
   it("G1 guided mode combines chat budget AND video-critic budget", () => {
     // 30 + 4 + 3 + 3 + 5 = 45 baseline
-    // + 40 chat (guided)
+    // + 56 chat (guided: script 20×2 + post_merge 8×2 = 40 + 16, Phase 1D.2c)
     // + 2 × 8 = 16 video critic (first_last @ 30s = 8 shots)
-    // = 101
+    // = 117
     const credits = estimateUpfrontCredits({
       targetDurationSeconds: 30,
       format: "short_film",
@@ -188,7 +192,7 @@ describe("estimateUpfrontCredits", () => {
       lipsyncEnabled: true,
       videoCriticFrameCount: "first_last",
     })
-    expect(credits).toBe(45 + 40 + 16)
+    expect(credits).toBe(45 + 56 + 16)
   })
 })
 

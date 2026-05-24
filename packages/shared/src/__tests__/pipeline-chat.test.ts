@@ -64,6 +64,30 @@ describe("ChatTurnResponseSchema", () => {
     const js = zodToJsonSchema(ChatTurnResponseSchema, { target: "jsonSchema7" })
     expect((js as { type?: string }).type).toBe("object")
   })
+
+  it("rejects from_stage='post_merge' for suggest_branch (branching back to itself is a no-op re-merge)", () => {
+    const result = ChatTurnResponseSchema.safeParse({
+      reply: "test",
+      proposed_change: {
+        change_type: "suggest_branch",
+        from_stage: "post_merge",
+        reason: "test",
+      },
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("accepts from_stage='characters' for suggest_branch (covers the widened enum)", () => {
+    const result = ChatTurnResponseSchema.safeParse({
+      reply: "Cast tweaks needed.",
+      proposed_change: {
+        change_type: "suggest_branch",
+        from_stage: "characters",
+        reason: "Re-cast the protagonist to a different age range.",
+      },
+    })
+    expect(result.success).toBe(true)
+  })
 })
 
 describe("STAGE_PATCH_SCHEMA", () => {

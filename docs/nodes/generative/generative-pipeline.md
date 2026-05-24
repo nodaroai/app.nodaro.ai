@@ -55,6 +55,29 @@ In `mode='guided'`, the Script stage pauses at `awaiting_approval` like manual m
 
 Chat is enabled at the **Script stage only in 1D.2b**. Shot List and Post-merge chat ship in 1D.2d.
 
+### Post-merge Chat (Phase 1D.2c)
+
+After Stage 8 (Post-merge) completes and the pipeline reaches its final `awaiting_approval` gate, Guided Mode mounts a chat panel where users can review the assembled video and request stage re-runs:
+
+- **Artifact**: the final video URL + Editor LLM's cut decisions + total duration + beat grid (if music was used)
+- **LLM**: Sonnet 4.6 (Post-merge Refinement Director), reviews artifact + chat history + user message
+- **Output**: natural-language diagnosis + optional `suggest_branch` payload pointing to an earlier stage
+
+**Key constraint**: Post-merge chat does NOT support `edit_artifact` proposals — the final video isn't user-editable in place. The route validator rejects `edit_artifact` here with HTTP 400 `invalid_change_type_for_stage`. The only meaningful refinement at Stage 8 is to re-run from an earlier stage with adjusted inputs.
+
+**Branchable stages** (`suggest_branch.from_stage`):
+- `script` — re-plan the whole pipeline from the Showrunner
+- `characters`, `objects`, `locations` — regenerate specific entity images
+- `shot_list` — re-do per-scene Scene Director cinematography
+- `scene_images` — regenerate keyframes
+- `animate_audio_edit` — re-run Stage 7 with current keyframes (e.g., to retry the Editor LLM's cut decisions)
+
+`post_merge` is NOT branchable (branching to post_merge alone would re-merge identical inputs).
+
+**Turn cap**: 8 turns per pipeline (per `CHAT_TURN_CAPS.post_merge` in `@nodaro/shared`).
+
+**Cost**: [figures removed] (cached Sonnet 4.6).
+
 ### Image-level critics (Phase 1D.2c-a)
 
 Stages 2 (Characters) and 4 (Locations) each run a vision-LLM critic (Sonnet 4.6) against generated main images. The critic validates that the image matches the entity's `visual_description` from the ShowrunnerPlan:

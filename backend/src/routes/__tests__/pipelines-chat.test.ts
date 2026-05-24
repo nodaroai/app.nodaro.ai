@@ -63,6 +63,15 @@ vi.mock("../../ee/pipelines/llms/chat-refine-showrunner.js", () => ({
 }))
 
 // ---------------------------------------------------------------------------
+// chat-refine-postmerge mock (Phase 1D.2c).
+// ---------------------------------------------------------------------------
+
+const runChatRefinePostMergeMock = vi.fn()
+vi.mock("../../ee/pipelines/llms/chat-refine-postmerge.js", () => ({
+  runChatRefinePostMerge: runChatRefinePostMergeMock,
+}))
+
+// ---------------------------------------------------------------------------
 // Supabase mock with mutable per-test fixture state. Each table builder
 // reads from a small set of module-level fixtures the tests overwrite via
 // the `set*` helpers below.
@@ -367,7 +376,11 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat", () => {
     await app.close()
   })
 
-  it("returns 501 for chat-enabled-but-unimplemented stages (shot_list)", async () => {
+  it("returns 501 for chat-enabled-but-unwired stages (shot_list)", async () => {
+    // Phase 1D.2c — shot_list is in CHAT_ENABLED_STAGES (so it passes the
+    // Zod enum) but CHAT_WIRED_STAGES.shot_list === false, so the route
+    // returns 501 with the new `chat_not_wired_for_stage` code instead of
+    // the legacy `chat_specialist_not_implemented`.
     setHappyPathFixtures()
     const app = await makeApp()
     const res = await app.inject({
@@ -376,20 +389,8 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat", () => {
       payload: { message: "hi" },
     })
     expect(res.statusCode).toBe(501)
-    expect(res.json().error.code).toBe("chat_specialist_not_implemented")
-    await app.close()
-  })
-
-  it("returns 501 for post_merge stage too", async () => {
-    setHappyPathFixtures()
-    const app = await makeApp()
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/pipelines/${PIPELINE_ID}/stages/post_merge/chat`,
-      payload: { message: "hi" },
-    })
-    expect(res.statusCode).toBe(501)
-    expect(res.json().error.code).toBe("chat_specialist_not_implemented")
+    expect(res.json().error.code).toBe("chat_not_wired_for_stage")
+    expect(res.json().error.stage).toBe("shot_list")
     await app.close()
   })
 
@@ -506,6 +507,118 @@ describe("POST /v1/pipelines/:id/stages/:stage_name/chat", () => {
       payload: { message: "hi" },
     })
     expect(res.statusCode).toBe(403)
+    await app.close()
+  })
+
+  // ── Phase 1D.2c C1 — post_merge dispatch ───────────────────────────────
+  it("post_merge: happy path — dispatches to runChatRefinePostMerge with the stage artifact", async () => {
+    pipelineFixture = { user_id: TEST_USER_ID, mode: "guided" }
+    stageFixture = {
+      id: STAGE_ID,
+      status: "awaiting_approval",
+      output: {
+        final_output_url: "https://r2/final.mp4",
+        cut_decisions: [
+          { shot_id: "s1_shot1", cut_kind: "hard_cut", out_point_seconds: 2.5 },
+        ],
+        final_duration_seconds: 42,
+        beat_grid_used: [0.5, 1.0, 1.5],
+      },
+    }
+    runChatRefinePostMergeMock.mockResolvedValue({
+      output: {
+        reply: "Re-run from shot_list to fix the pacing.",
+        proposed_change: {
+          change_type: "suggest_branch",
+          from_stage: "shot_list",
+          reason: "Pacing tweaks require re-cutting shot boundaries.",
+        },
+      },
+      llmCallId: "llm-pm-1",
+    })
+
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/post_merge/chat`,
+      payload: { message: "the climax feels rushed" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.role).toBe("assistant")
+    expect(body.content).toContain("Re-run from shot_list")
+    expect(body.proposed_change?.change_type).toBe("suggest_branch")
+
+    // Specialist called with the artifact fields from the stage output.
+    expect(runChatRefinePostMergeMock).toHaveBeenCalledTimes(1)
+    expect(runChatRefineShowrunnerMock).not.toHaveBeenCalled()
+    const args = runChatRefinePostMergeMock.mock.calls[0][0]
+    expect(args.pipelineId).toBe(PIPELINE_ID)
+    expect(args.stageId).toBe(STAGE_ID)
+    expect(args.userId).toBe(TEST_USER_ID)
+    expect(args.userMessage).toBe("the climax feels rushed")
+    expect(args.finalOutputUrl).toBe("https://r2/final.mp4")
+    expect(args.cutDecisions).toHaveLength(1)
+    expect(args.finalDurationSeconds).toBe(42)
+    expect(args.beatGridUsed).toEqual([0.5, 1.0, 1.5])
+
+    // Both turn rows inserted (user + assistant).
+    const turnInserts = insertedRows.filter(
+      (r) => r.table === "pipeline_chat_turns",
+    )
+    expect(turnInserts).toHaveLength(2)
+    expect(turnInserts[1].row.llm_call_id).toBe("llm-pm-1")
+    await app.close()
+  })
+
+  it("post_merge: returns 409 stage_artifact_incomplete when no final_output_url", async () => {
+    pipelineFixture = { user_id: TEST_USER_ID, mode: "guided" }
+    stageFixture = {
+      id: STAGE_ID,
+      status: "awaiting_approval",
+      output: {
+        // Final URL not yet persisted — e.g. the user opens chat while the
+        // post-merge handler is still running.
+        cut_decisions: [],
+        final_duration_seconds: 0,
+      },
+    }
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/post_merge/chat`,
+      payload: { message: "hi" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("stage_artifact_incomplete")
+    expect(res.json().error.stage).toBe("post_merge")
+    expect(runChatRefinePostMergeMock).not.toHaveBeenCalled()
+    await app.close()
+  })
+
+  it("post_merge: returns 502 llm_unavailable when the specialist throws", async () => {
+    pipelineFixture = { user_id: TEST_USER_ID, mode: "guided" }
+    stageFixture = {
+      id: STAGE_ID,
+      status: "awaiting_approval",
+      output: { final_output_url: "https://r2/final.mp4" },
+    }
+    runChatRefinePostMergeMock.mockRejectedValueOnce(new Error("502 down"))
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/stages/post_merge/chat`,
+      payload: { message: "hi" },
+    })
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.code).toBe("llm_unavailable")
+    // User turn persisted before the throw — mirrors the script path.
+    const turnInserts = insertedRows.filter(
+      (r) => r.table === "pipeline_chat_turns",
+    )
+    expect(turnInserts).toHaveLength(1)
+    expect(turnInserts[0].row.role).toBe("user")
     await app.close()
   })
 })

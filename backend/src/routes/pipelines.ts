@@ -3,6 +3,7 @@ import { z } from "zod"
 import {
   CHAT_ENABLED_STAGES,
   CHAT_TURN_CAPS,
+  CHAT_WIRED_STAGES,
   ENTITY_TYPES,
   EntityRejectInputSchema,
   IMAGE_CRITIC_UNRESOLVABLE,
@@ -599,13 +600,17 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
       const stageName = params.data.stage_name as ChatEnabledStage
 
-      // Only Script chat ships in 1D.2b. shot_list + post_merge are pre-
-      // declared in CHAT_ENABLED_STAGES for 1D.2d but the specialist isn't
-      // wired yet — return 501 so callers get a clear "not implemented" rather
-      // than a silent fallback.
-      if (stageName !== "script") {
+      // Phase 1D.2c C1 — defense-in-depth gate. `CHAT_ENABLED_STAGES`
+      // pre-declares every stage that *could* host chat (script, shot_list,
+      // post_merge) so the Zod enum stays stable across phases. The actual
+      // wiring lives in `CHAT_WIRED_STAGES`: only stages that map to `true`
+      // have a specialist + dispatch branch below. shot_list is enabled but
+      // not yet wired (1D.2d) — return 501 with a distinct code so callers
+      // can tell the difference between "unknown stage" (400) and "future
+      // work" (501).
+      if (!CHAT_WIRED_STAGES[stageName]) {
         return reply.status(501).send({
-          error: { code: "chat_specialist_not_implemented", stage: stageName },
+          error: { code: "chat_not_wired_for_stage", stage: stageName },
         })
       }
 
@@ -713,45 +718,116 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           content: t.content as string,
         }))
 
-      const stageOutput = (stageRow.output as { plan?: unknown } | null) ?? {}
-      const currentPlan = (stageOutput as { plan?: unknown }).plan
-
-      // Call the specialist. Failure leaves the user turn persistent so the
-      // user can retry without losing their input.
-      const { runChatRefineShowrunner } = await import(
-        "../ee/pipelines/llms/chat-refine-showrunner.js"
-      )
-      let result: Awaited<ReturnType<typeof runChatRefineShowrunner>>
+      // Phase 1D.2c C1 — dispatch by stage. Each chat-wired stage has its
+      // own specialist + artifact shape; they all converge on
+      // ChatTurnResponse `{ reply, proposed_change }` so the downstream
+      // INSERT + SSE path is shared.
+      let chatResponse: import("@nodaro/shared").ChatTurnResponse
+      let llmCallId: string
       try {
-        result = await runChatRefineShowrunner({
-          supabase,
-          pipelineId: params.data.id,
-          stageId: stageRow.id as string,
-          userId,
-          // currentPlan is typed as ShowrunnerPlan — at this point we've
-          // validated stageRow.status='awaiting_approval' so a plan must
-          // exist; the route's promised invariant is "we don't call the LLM
-          // unless we have a plan to refine".
-          currentPlan: currentPlan as never,
-          priorTurns: historyTurns,
-          userMessage: body.data.message,
-        })
+        if (stageName === "script") {
+          // Script chat: needs the current ShowrunnerPlan from the stage's
+          // output envelope.
+          const stageOutput =
+            (stageRow.output as { plan?: unknown } | null) ?? {}
+          const currentPlan = (stageOutput as { plan?: unknown }).plan
+          const { runChatRefineShowrunner } = await import(
+            "../ee/pipelines/llms/chat-refine-showrunner.js"
+          )
+          const result = await runChatRefineShowrunner({
+            supabase,
+            pipelineId: params.data.id,
+            stageId: stageRow.id as string,
+            userId,
+            // currentPlan is typed as ShowrunnerPlan — at this point we've
+            // validated stageRow.status='awaiting_approval' so a plan must
+            // exist; the route's promised invariant is "we don't call the
+            // LLM unless we have a plan to refine".
+            currentPlan: currentPlan as never,
+            priorTurns: historyTurns,
+            userMessage: body.data.message,
+          })
+          chatResponse = result.response
+          llmCallId = result.llmCallId
+        } else if (stageName === "post_merge") {
+          // Post-merge chat: needs the rendered video artifact from the
+          // post_merge stage output. `final_output_url` is the canonical key
+          // — written at 2 sites in `backend/src/ee/pipelines/stages/post-merge.ts`
+          // (auto branch + manual/guided branch). The specialist field
+          // matches the persisted name; no aliasing required.
+          //
+          // `cut_decisions` is persisted by Stage 7's Editor sub-step as an
+          // array of `EditorCutDecision` (`ee/pipelines/llms/editor.ts`). We
+          // keep `unknown[]` here because core/ can't statically import the
+          // ee/ type — the specialist's typed signature checks the shape on
+          // its own side, and a runtime mismatch would surface as an LLM
+          // schema-validation failure (callLLM Zod-validates the response,
+          // not the request payload, but the prompt's JSON stringification
+          // is shape-tolerant).
+          const postMergeOutput = (stageRow.output as {
+            final_output_url?: string
+            cut_decisions?: unknown[]
+            final_duration_seconds?: number
+            beat_grid_used?: number[] | null
+          } | null) ?? {}
+          const finalOutputUrl = postMergeOutput.final_output_url ?? ""
+          // If the artifact hasn't been rendered yet, refuse to call the LLM —
+          // a `chat_unavailable` would be misleading (the stage IS awaiting
+          // approval; the artifact just isn't ready). Return a distinct code
+          // so the panel can render a "wait for the video to finish" hint.
+          if (!finalOutputUrl) {
+            return reply.status(409).send({
+              error: { code: "stage_artifact_incomplete", stage: stageName },
+            })
+          }
+          const { runChatRefinePostMerge } = await import(
+            "../ee/pipelines/llms/chat-refine-postmerge.js"
+          )
+          const result = await runChatRefinePostMerge({
+            supabase,
+            pipelineId: params.data.id,
+            stageId: stageRow.id as string,
+            userId,
+            finalOutputUrl,
+            // Cast through `never` mirrors the showrunner-chat branch's
+            // `currentPlan as never` pattern — the typed shape lives in ee/
+            // and core/ can't statically import it.
+            cutDecisions: (postMergeOutput.cut_decisions ?? []) as never,
+            finalDurationSeconds: postMergeOutput.final_duration_seconds ?? 0,
+            beatGridUsed: postMergeOutput.beat_grid_used ?? null,
+            chatHistory: historyTurns,
+            userMessage: body.data.message,
+          })
+          chatResponse = result.output
+          llmCallId = result.llmCallId
+        } else {
+          // Unreachable today — `CHAT_WIRED_STAGES[stageName]` returned
+          // 501 above for every stage that doesn't have an explicit
+          // dispatch branch here. Kept as a runtime escape hatch in case
+          // a future entry is added to CHAT_WIRED_STAGES without a
+          // matching branch (the compile-time guard is the lint rule on
+          // stale stage handling rather than TS exhaustiveness — TS can't
+          // narrow from a Record<K, boolean> value).
+          return reply.status(501).send({
+            error: { code: "chat_not_wired_for_stage", stage: stageName },
+          })
+        }
       } catch {
         return reply.status(502).send({ error: { code: "llm_unavailable" } })
       }
 
       // INSERT assistant turn.
       const assistantTurnN = nextTurnN + 1
-      const proposedChange = result.response.proposed_change ?? null
+      const proposedChange = chatResponse.proposed_change ?? null
       const { data: assistantTurn, error: assistantInsertErr } = await supabase
         .from("pipeline_chat_turns")
         .insert({
           pipeline_stage_id: stageRow.id,
           turn_n: assistantTurnN,
           role: "assistant",
-          content: result.response.reply,
+          content: chatResponse.reply,
           proposed_change: proposedChange,
-          llm_call_id: result.llmCallId,
+          llm_call_id: llmCallId,
         })
         .select("id")
         .single()
@@ -772,7 +848,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           id: assistantTurn.id as string,
           turn_n: assistantTurnN,
           role: "assistant",
-          content: result.response.reply,
+          content: chatResponse.reply,
           proposed_change: proposedChange as ProposedChange | null,
         },
       })
@@ -780,7 +856,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       return reply.send({
         turnId: assistantTurn.id,
         role: "assistant",
-        content: result.response.reply,
+        content: chatResponse.reply,
         proposed_change: proposedChange,
       })
     },
@@ -824,9 +900,13 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       }
       const stageName = params.data.stage_name as ChatEnabledStage
 
-      if (stageName !== "script") {
+      // Phase 1D.2c C1 — same wired-stage gate as the POST /chat route. The
+      // Zod enum already restricts to CHAT_ENABLED_STAGES; this catches the
+      // shot_list case where chat is enabled but no specialist (and therefore
+      // no Apply path) exists yet.
+      if (!CHAT_WIRED_STAGES[stageName]) {
         return reply.status(501).send({
-          error: { code: "chat_specialist_not_implemented", stage: stageName },
+          error: { code: "chat_not_wired_for_stage", stage: stageName },
         })
       }
 
@@ -840,7 +920,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: { code: "not_found" } })
       }
 
-      // Look up the turn — must be assistant + edit_artifact + not already applied.
+      // Look up the turn — must be assistant + applyable + not already applied.
       const { data: turn } = await supabase
         .from("pipeline_chat_turns")
         .select(
@@ -855,11 +935,58 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         return reply.status(409).send({ error: { code: "already_applied" } })
       }
       const proposedChange = turn.proposed_change as ProposedChange | null
+      if (turn.role !== "assistant" || !proposedChange) {
+        return reply.status(400).send({ error: { code: "turn_not_applyable" } })
+      }
+
+      // Phase 1D.2c C2 — post_merge stage only accepts suggest_branch
+      // (STAGE_PATCH_SCHEMA.post_merge=null, the merged artifact isn't
+      // user-editable in place). The chat-refine-postmerge system prompt
+      // forbids edit_artifact, so this should rarely fire — but per spec
+      // §5.12 it's a hard defense-in-depth gate.
       if (
-        turn.role !== "assistant" ||
-        !proposedChange ||
-        proposedChange.change_type !== "edit_artifact"
+        stageName === "post_merge" &&
+        proposedChange.change_type === "edit_artifact"
       ) {
+        return reply.status(400).send({
+          error: {
+            code: "invalid_change_type_for_stage",
+            detail:
+              "post_merge stage only accepts suggest_branch; edit_artifact is not valid here.",
+          },
+        })
+      }
+
+      // Phase 1D.2c C2 — suggest_branch on post_merge is informational only;
+      // the user acts on it via the dedicated POST /v1/pipelines/:id/branch
+      // endpoint, NOT this Apply route. Return 200 to confirm we saw the
+      // click; no JSON Patch to apply, no pipeline_stage_attempts row to
+      // bind `applied_to_attempt_id` to (the FK is nullable but writing
+      // NULL is meaningless). Frontend's ProposedChangeCard.tsx already
+      // renders suggest_branch as a hint pointing at "Re-run from here";
+      // this endpoint exists as the API contract for non-UI callers.
+      //
+      // For other stages (script today), suggest_branch still falls through
+      // to the legacy `turn_not_applyable` 400 below — the script chat
+      // already has an edit_artifact path the user can take, and the LLM
+      // emits suggest_branch sparingly as a "this is too deep to patch"
+      // signal. Keeping the script behavior unchanged preserves the
+      // existing API contract.
+      if (
+        stageName === "post_merge" &&
+        proposedChange.change_type === "suggest_branch"
+      ) {
+        return reply.send({
+          applied: false,
+          suggested: true,
+          suggested_from_stage: proposedChange.from_stage,
+          suggested_reason: proposedChange.reason,
+        })
+      }
+
+      // After the stage-specific gates: every remaining apply MUST be an
+      // edit_artifact. suggest_branch on non-post_merge stages falls here.
+      if (proposedChange.change_type !== "edit_artifact") {
         return reply.status(400).send({ error: { code: "turn_not_applyable" } })
       }
 

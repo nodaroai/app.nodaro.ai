@@ -37,7 +37,15 @@ export const ChatTurnResponseSchema = z.object({
       }),
       z.object({
         change_type: z.literal("suggest_branch"),
-        from_stage: z.literal("script"),
+        from_stage: z.enum([
+          "script",
+          "characters",
+          "objects",
+          "locations",
+          "shot_list",
+          "scene_images",
+          "animate_audio_edit",
+        ]),
         reason: z.string().min(1).max(300),
       }),
     ])
