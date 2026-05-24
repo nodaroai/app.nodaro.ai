@@ -1,7 +1,7 @@
 ---
 node_type: generative-pipeline
-generated_at: 2026-05-18T13:23:37.893Z
-generated_from: cb1e786d
+generated_at: 2026-05-24T12:49:47.232Z
+generated_from: b2943819
 ---
 
 # Story → Video
@@ -17,9 +17,9 @@ generated_from: cb1e786d
 ```json
 {
   "label": "Story → Video",
-  "target_duration_seconds": 60,
+  "target_duration_seconds": 35,
   "format": "short_film",
-  "output_resolution": "1080p",
+  "output_resolution": "720p",
   "mode": "manual"
 }
 ```
@@ -49,9 +49,9 @@ generated_from: cb1e786d
   },
   "data": {
     "label": "Story → Video",
-    "target_duration_seconds": 60,
+    "target_duration_seconds": 35,
     "format": "short_film",
-    "output_resolution": "1080p",
+    "output_resolution": "720p",
     "mode": "manual"
   }
 }
