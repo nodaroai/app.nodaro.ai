@@ -90,7 +90,7 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userId: args.userId,
     role: "showrunner",
     task: "script",
-    modelId: "claude-opus-4-7",
+    modelId: "claude-sonnet-4-6",
     temperature: 0.4,
     systemPrompt: '[REDACTED]',
     userPrompt,
