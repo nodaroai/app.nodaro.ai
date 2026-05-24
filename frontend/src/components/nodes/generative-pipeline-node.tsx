@@ -11,14 +11,19 @@ function GenerativePipelineNodeImpl({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        "rounded-lg border-2 bg-white dark:bg-[#1E1E1E] p-3 min-w-[200px] shadow-sm",
+        "relative rounded-lg border-2 bg-white dark:bg-[#1E1E1E] p-3 min-w-[200px] shadow-sm",
         selected
           ? "border-blue-500"
           : "border-zinc-300 dark:border-[#2D2D2D]",
       )}
       data-testid="generative-pipeline-node"
     >
-      <Handle type="target" position={Position.Left} id="story_prompt" />
+      <Handle type="target" position={Position.Left} id="story_prompt" style={{ top: 24 }} />
+      <span
+        className="absolute left-3 top-[24px] -translate-y-1/2 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none"
+      >
+        prompt
+      </span>
       <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Story → Video</div>
       <div className="mt-1 font-semibold">{nodeData.label ?? "Pipeline"}</div>
       <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
@@ -38,7 +43,12 @@ function GenerativePipelineNodeImpl({ data, selected }: NodeProps) {
           {status.replace("_", " ")}
         </span>
       </div>
-      <Handle type="source" position={Position.Right} id="final_video" />
+      <Handle type="source" position={Position.Right} id="final_video" style={{ top: 24 }} />
+      <span
+        className="absolute right-3 top-[24px] -translate-y-1/2 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none"
+      >
+        video
+      </span>
     </div>
   )
 }
