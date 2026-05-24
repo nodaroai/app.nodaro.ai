@@ -252,7 +252,7 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
+    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
     <HandleIcon icon={<BookOpen />} color="pink" side="right" top="20px" label="scenes" />
     <HandleIcon icon={<ImageIcon />} color="cyan" side="right" top="50px" label="images" />
     <HandleIcon icon={<MessageSquare />} color="orange" side="right" top="80px" label="dialogue" />
