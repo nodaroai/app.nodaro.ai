@@ -1,7 +1,7 @@
 ---
 node_type: instrumentation
-generated_at: 2026-05-18T13:23:37.187Z
-generated_from: cb1e786d
+generated_at: 2026-05-24T21:59:30.535Z
+generated_from: 5d3f8b39
 ---
 
 # Instrumentation
@@ -27,7 +27,8 @@ generated_from: cb1e786d
 **Default data:**
 ```json
 {
-  "label": "Instrumentation"
+  "label": "Instrumentation",
+  "instruments": []
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -55,7 +56,8 @@ generated_from: cb1e786d
     "y": 0
   },
   "data": {
-    "label": "Instrumentation"
+    "label": "Instrumentation",
+    "instruments": []
   }
 }
 ```
