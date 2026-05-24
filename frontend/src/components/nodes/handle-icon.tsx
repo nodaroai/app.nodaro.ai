@@ -2,6 +2,10 @@
 
 import { memo } from "react"
 import type { ReactNode } from "react"
+import { Handle, Position } from "@xyflow/react"
+import { Type, Image as ImageIcon, Film, Music } from "lucide-react"
+import type { AggregateableType } from "@nodaro/shared"
+import { AGGREGATE_HANDLE_COLORS } from "./handle-colors"
 
 const COLOR_MAP = {
   cyan: { bg: "bg-[#38BDF8]", shadow: "shadow-sky-500/30" },
@@ -52,3 +56,57 @@ function HandleIconComponent({ icon, color = "cyan", side = "right", top = "50%"
 }
 
 export const HandleIcon = memo(HandleIconComponent)
+
+interface AggregateHandleIconProps {
+  readonly id: string
+  readonly type: AggregateableType
+  readonly top: string
+}
+
+// Icon per aggregate type, resolved at render time (not module scope) so that
+// the lucide-react bindings are only dereferenced when this component actually
+// renders — partial lucide mocks in unrelated node tests transitively import
+// this module and would otherwise throw on missing icon exports.
+function aggregateIcon(type: AggregateableType): ReactNode {
+  switch (type) {
+    case "text":
+      return <Type />
+    case "image":
+      return <ImageIcon />
+    case "video":
+      return <Film />
+    case "audio":
+      return <Music />
+  }
+}
+
+// Source handle for the Group/Collect typed-output handles, styled to match the
+// standard node handle look: a transparent 28px React Flow <Handle> hit-target
+// with a colored icon circle (pointer-events-none) overlaid at the right edge.
+// The circle keeps the exact per-type AGGREGATE_HANDLE_COLORS so the
+// text/image/video/audio color stays consistent with edges + minimap.
+function AggregateHandleIconComponent({ id, type, top }: AggregateHandleIconProps) {
+  return (
+    <>
+      <Handle
+        id={id}
+        type="source"
+        position={Position.Right}
+        isConnectable
+        aria-label={id}
+        className="!w-7 !h-7 !bg-transparent !border-0 touch-manipulation"
+        style={{ top, right: "-29px", transform: "translateY(-50%)", zIndex: 30 }}
+      />
+      <div
+        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full shadow-lg"
+        style={{ top, right: "-29px", transform: "translateY(-50%)", backgroundColor: AGGREGATE_HANDLE_COLORS[type] }}
+      >
+        <span className="[&>svg]:w-3.5 [&>svg]:h-3.5 text-white flex items-center justify-center">
+          {aggregateIcon(type)}
+        </span>
+      </div>
+    </>
+  )
+}
+
+export const AggregateHandleIcon = memo(AggregateHandleIconComponent)

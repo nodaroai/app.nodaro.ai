@@ -2,15 +2,14 @@
 
 import { memo, useCallback, useMemo, useState } from "react"
 import {
-  Handle,
   NodeResizer,
-  Position,
   type NodeProps,
 } from "@xyflow/react"
+import { Boxes } from "lucide-react"
 import { groupHandleId, presentTypes } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
-import { AGGREGATE_HANDLE_COLORS } from "@/components/nodes/handle-colors"
+import { AggregateHandleIcon } from "@/components/nodes/handle-icon"
 import { computeGroupBuckets } from "@/components/editor/workflow-editor/execution-graph"
 import type { GroupNodeData, WorkflowNode } from "@/types/nodes"
 
@@ -62,13 +61,18 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
         handleClassName="!w-2.5 !h-2.5 !bg-[#ff0073] !border-none !rounded-sm"
       />
 
-      <div className="title-bar border-b border-[#2D2D2D] px-3 py-2">
+      {/* Floating label above the node — matches the standard node title location. */}
+      <div
+        className={`absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
+      >
+        <Boxes className="w-3.5 h-3.5" />
         {editing ? (
           <input
             autoFocus
             value={labelDraft}
             onChange={(e) => setLabelDraft(e.target.value)}
             onBlur={commitLabel}
+            onMouseDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.stopPropagation()
@@ -78,16 +82,17 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
                 cancelLabel()
               }
             }}
-            className="w-full bg-transparent text-sm font-medium text-foreground outline-none dark:text-white"
+            className="bg-white border border-border rounded-md px-2 py-0.5 text-foreground outline-none min-w-[8rem] max-w-[20rem] text-[12px] focus:ring-1 focus:ring-[#ff0073]/40 focus:border-[#ff0073] dark:bg-zinc-900 dark:border-white/20 dark:text-white/90"
           />
         ) : (
-          <div
-            className="cursor-text text-sm font-medium text-foreground dark:text-white"
+          <span
+            className="truncate cursor-text hover:text-foreground dark:hover:text-white/90 transition-colors"
             onDoubleClick={enterEditMode}
+            onMouseDown={(e) => e.stopPropagation()}
             title="Double-click to rename"
           >
             {nodeData.label || "New group"}
-          </div>
+          </span>
         )}
       </div>
 
@@ -98,16 +103,11 @@ function GroupNodeComponent({ id, data, selected }: NodeProps) {
       )}
 
       {types.map((t, idx) => (
-        <Handle
+        <AggregateHandleIcon
           key={groupHandleId(t)}
-          type="source"
-          position={Position.Right}
           id={groupHandleId(t)}
-          style={{
-            top: `${20 + idx * 24}px`,
-            background: AGGREGATE_HANDLE_COLORS[t],
-          }}
-          aria-label={groupHandleId(t)}
+          type={t}
+          top={`${24 + idx * 30}px`}
         />
       ))}
     </div>
