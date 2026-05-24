@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { X } from "lucide-react"
 
 export type CandidateCount = 1 | 2 | 4
@@ -99,7 +100,7 @@ function CandidateCard({
           onClick={onApprove}
           className="block w-full h-full"
         >
-          <img src={candidate.url} alt={`candidate ${candidate.jobId}`} className="w-full h-full object-cover" />
+          <img src={optimizedImageUrl(candidate.url)} alt={`candidate ${candidate.jobId}`} className="w-full h-full object-cover" />
           <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] py-1 text-center">
             Click to approve
           </div>

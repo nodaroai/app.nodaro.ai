@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { useAuth } from "@/hooks/use-auth"
 import { queryKeys } from "@/lib/query-keys"
+import { optimizedImageUrl } from "@/lib/image"
 import {
   getArchivedRuns,
   restoreAppRun,
@@ -110,7 +111,7 @@ export default function ArchivedRunsPage() {
             >
               <div className="h-16 w-16 shrink-0 rounded-md bg-muted overflow-hidden flex items-center justify-center">
                 {run.thumbnailUrl ? (
-                  <img src={run.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={optimizedImageUrl(run.thumbnailUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
                 )}

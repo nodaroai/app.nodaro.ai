@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useMemo } from "react"
+import { optimizedImageUrl } from "@/lib/image"
 import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical, Scissors } from "lucide-react"
 import {
   DndContext,
@@ -998,7 +999,7 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
                           <td key={col.id} className={`px-3 py-2 text-sm text-foreground ${isConnected ? "opacity-70" : ""}`}>
                             {isMedia && val ? (
                               col.type === "image-url" ? (
-                                <img src={val} alt="" className="w-12 h-12 rounded object-cover" />
+                                <img src={optimizedImageUrl(val)} alt="" className="w-12 h-12 rounded object-cover" />
                               ) : col.type === "video-url" ? (
                                 <video src={val} crossOrigin="anonymous" className="w-16 h-12 rounded object-cover" muted playsInline />
                               ) : (

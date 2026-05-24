@@ -6,6 +6,7 @@ import { Send, Download, ArrowRight, ArrowLeft } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isTeleportDefaultLabel, TELEPORTER_PAN_EVENT, type TeleportSendData, type TeleportReceiveData } from "@/types/nodes"
 import { isImageUrl, isVideoUrl } from "@/lib/media-type"
+import { optimizedImageUrl } from "@/lib/image"
 
 type TeleporterNodeData = TeleportSendData | TeleportReceiveData
 
@@ -75,7 +76,7 @@ function TeleportNodeShell({ id, data, selected, variant }: NodeProps & { varian
       style={{ borderColor: nodeData.channelColor + "40" }}
     >
       {isImage ? (
-        <img src={displayResult} alt="" className="w-full h-full object-cover" loading="lazy" />
+        <img src={optimizedImageUrl(displayResult)} alt="" className="w-full h-full object-cover" loading="lazy" />
       ) : (
         <video src={displayResult} className="w-full h-full object-cover" muted playsInline preload="metadata" />
       )}

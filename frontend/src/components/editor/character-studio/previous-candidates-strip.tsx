@@ -1,4 +1,5 @@
 import { Clock } from "lucide-react"
+import { optimizedImageUrl } from "@/lib/image"
 
 export interface PreviousCandidate {
   readonly jobId: string
@@ -29,7 +30,7 @@ export function PreviousCandidatesStrip({ candidates, onReApprove }: PreviousCan
             className="shrink-0 w-14 h-18 rounded-md overflow-hidden border border-[#334155] hover:border-[#3b82f6]/60"
             title={new Date(c.createdAt).toLocaleString()}
           >
-            <img src={c.url} alt="" className="w-full h-full object-cover" />
+            <img src={optimizedImageUrl(c.url)} alt="" className="w-full h-full object-cover" />
           </button>
         ))}
       </div>

@@ -14,6 +14,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 import { toast } from "sonner"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults } from "@/lib/api"
 import type { AppBrowseCard, PublishedApp } from "@/lib/api"
@@ -570,7 +571,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   {comp.description && <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{comp.description}</p>}
                   {comp.previewMediaUrl && (
                     <div className="mb-2 rounded-md overflow-hidden aspect-video bg-zinc-100 dark:bg-zinc-800">
-                      <img src={comp.previewMediaUrl} alt="" className="w-full h-full object-cover" />
+                      <img src={optimizedImageUrl(comp.previewMediaUrl)} alt="" className="w-full h-full object-cover" />
                     </div>
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">

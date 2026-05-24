@@ -53,6 +53,7 @@ import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 import { getMyApps, updateApp, deactivateApp, getMonetizationDefaults, updateMonetizationDefaults, type PublishedApp } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
@@ -724,7 +725,7 @@ function MyAppCard({
           {app.previewMediaType === "video" ? (
             <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted />
           ) : (
-            <img src={app.previewMediaUrl} alt="" className="w-full h-full object-cover" />
+            <img src={optimizedImageUrl(app.previewMediaUrl)} alt="" className="w-full h-full object-cover" />
           )}
         </div>
       )}

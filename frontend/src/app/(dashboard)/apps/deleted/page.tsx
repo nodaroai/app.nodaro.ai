@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/use-auth"
 import { getMyApps, restoreApp } from "@/lib/api"
 import { formatRelative } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 
 export default function DeletedAppsPage() {
   const { user } = useAuth()
@@ -85,7 +86,7 @@ export default function DeletedAppsPage() {
             >
               <div className="h-12 w-12 shrink-0 rounded-md bg-muted overflow-hidden flex items-center justify-center">
                 {app.previewMediaUrl ? (
-                  <img src={app.previewMediaUrl} alt="" className="h-full w-full object-cover" />
+                  <img src={optimizedImageUrl(app.previewMediaUrl)} alt="" className="h-full w-full object-cover" />
                 ) : (
                   <Archive className="h-5 w-5 text-muted-foreground/40" />
                 )}
