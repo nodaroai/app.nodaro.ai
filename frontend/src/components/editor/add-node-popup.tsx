@@ -118,6 +118,7 @@ import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
 import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
@@ -1347,7 +1348,7 @@ export const CATEGORIES = [
     id: "AI",
     label: "AI",
     icon: <BookOpen className="h-4 w-4" />,
-    description: "Generate Script, Image",
+    description: "Image, Video, Voice, Music",
   },
   {
     id: "Input",
@@ -1453,7 +1454,10 @@ export function AddNodePopup({
   storeAddNode,
   storeOnConnect,
 }: AddNodePopupProps) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  const { data: userSettings } = useUserSettings(user?.id);
+  const showRecentNodes = userSettings?.showRecentNodes ?? false;
+  const showMostUsedNodes = userSettings?.showMostUsedNodes ?? false;
   const history = useNodeSelectionHistoryStore((s) => s.history);
   const recordSelection = useNodeSelectionHistoryStore((s) => s.recordSelection);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1578,16 +1582,15 @@ export function AddNodePopup({
     return clusterByGroup(effectivePool.filter((node) => node.category === selectedCategory));
   }, [selectedCategory, effectivePool, optionByType, history]);
 
-  // Hide Recent + Most Used until the user has history — keeps the first-run
-  // popup compact.
+  // Recent + Most Used are opt-in per-user (Settings → Add Node Menu); hidden by
+  // default to keep the popup compact.
   const visibleCategories = useMemo(() => {
-    if (history.length > 0) return CATEGORIES;
-    return CATEGORIES.filter(
-      (cat) =>
-        cat.id !== VIRTUAL_CATEGORY_IDS.recent &&
-        cat.id !== VIRTUAL_CATEGORY_IDS.mostUsed,
-    );
-  }, [history.length]);
+    return CATEGORIES.filter((cat) => {
+      if (cat.id === VIRTUAL_CATEGORY_IDS.recent) return showRecentNodes;
+      if (cat.id === VIRTUAL_CATEGORY_IDS.mostUsed) return showMostUsedNodes;
+      return true;
+    });
+  }, [showRecentNodes, showMostUsedNodes]);
 
   // Items to display (search results, compatibility tiers, category nodes, or categories)
   const displayItems = useMemo(() => {
@@ -1890,6 +1893,11 @@ export function AddNodePopup({
             )}
           </>
         ) : selectedCategory ? (
+          categoryNodes.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-[#94A3B8]">
+              No nodes here yet — they&apos;ll appear as you use them.
+            </div>
+          ) : (
           // Category nodes — with optional group sub-headers
           categoryNodes.map((node, index) => {
             const prevGroup =
@@ -1941,6 +1949,7 @@ export function AddNodePopup({
               </div>
             );
           })
+          )
         ) : (
           // Categories
           visibleCategories.map((cat, index) => (

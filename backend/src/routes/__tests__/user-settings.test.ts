@@ -123,12 +123,13 @@ describe("GET /v1/user/settings", () => {
     expect(body.error).toBe("Profile not found")
   })
 
-  it("returns settings on success", async () => {
+  it("returns settings on success (incl. node-menu defaults)", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: {
         tier: "standard",
         public_outputs: false,
         prompt_templates: { "character-description": "Custom template" },
+        // show_recent_nodes / show_most_used_nodes intentionally omitted
       },
       error: null,
     })
@@ -146,6 +147,35 @@ describe("GET /v1/user/settings", () => {
     expect(body.data.tier).toBe("standard")
     expect(body.data.publicOutputs).toBe(false)
     expect(body.data.promptTemplates).toEqual({ "character-description": "Custom template" })
+    // New fields default to false when the columns are null/absent
+    expect(body.data.showRecentNodes).toBe(false)
+    expect(body.data.showMostUsedNodes).toBe(false)
+  })
+
+  it("returns saved node-menu prefs when present", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        tier: "free",
+        public_outputs: true,
+        prompt_templates: {},
+        show_recent_nodes: true,
+        show_most_used_nodes: false,
+      },
+      error: null,
+    })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/user/settings?userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.showRecentNodes).toBe(true)
+    expect(body.data.showMostUsedNodes).toBe(false)
   })
 })
 
@@ -180,5 +210,40 @@ describe("PATCH /v1/user/settings", () => {
     expect(res.statusCode).toBe(403)
     const body = res.json()
     expect(body.error).toContain("Private mode")
+  })
+
+  it("updates node-menu prefs and echoes them back", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        tier: "free",
+        public_outputs: true,
+        prompt_templates: {},
+        show_recent_nodes: false,
+        show_most_used_nodes: false,
+      },
+      error: null,
+    })
+    const mockSelectEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockSelectEq })
+
+    const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
+
+    vi.mocked(supabase.from).mockReturnValue({
+      select: mockSelect,
+      update: mockUpdate,
+    } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/user/settings",
+      payload: { userId: TEST_USER_ID, showRecentNodes: true },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.showRecentNodes).toBe(true)
+    expect(body.data.showMostUsedNodes).toBe(false)
+    expect(mockUpdate).toHaveBeenCalledWith({ show_recent_nodes: true })
   })
 })
