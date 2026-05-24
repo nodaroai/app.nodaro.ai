@@ -30,21 +30,18 @@ VALUES
   ('reduce:merge-json', 0, true, 'utility')
 ON CONFLICT (model_identifier) DO NOTHING;
 
--- 2. Rewrite saved workflow JSON: nodes[].type "collect" → "reduce"
---    (JSONB path update across the workflows.data column). Only touches
---    workflows that contain at least one collect node.
+-- 2. Rewrite saved workflow JSON: nodes[].type "collect" → "reduce".
+--    The workflow graph lives directly in workflows.nodes (a JSONB array of
+--    node objects), NOT under a "data" wrapper. Only touches workflows that
+--    contain at least one collect node.
 UPDATE workflows
-SET data = jsonb_set(
-  data,
-  '{nodes}',
-  (
-    SELECT jsonb_agg(
-      CASE WHEN node->>'type' = 'collect'
-        THEN jsonb_set(node, '{type}', '"reduce"')
-        ELSE node
-      END
-    )
-    FROM jsonb_array_elements(data->'nodes') AS node
+SET nodes = (
+  SELECT jsonb_agg(
+    CASE WHEN node->>'type' = 'collect'
+      THEN jsonb_set(node, '{type}', '"reduce"')
+      ELSE node
+    END
   )
+  FROM jsonb_array_elements(nodes) AS node
 )
-WHERE data->'nodes' @> '[{"type": "collect"}]'::jsonb;
+WHERE nodes @> '[{"type": "collect"}]'::jsonb;
