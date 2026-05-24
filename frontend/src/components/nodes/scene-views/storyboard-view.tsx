@@ -17,16 +17,16 @@ function StoryboardView({ data }: SceneViewProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase text-zinc-500">Scene {data.scene_index}</div>
-        <div className="text-[10px] text-zinc-500">
+        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
+        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
           {shots.length} shot{shots.length === 1 ? "" : "s"} · {data.duration_seconds}s
         </div>
       </div>
-      <div className="font-medium text-sm truncate">
+      <div className="font-medium text-sm truncate text-zinc-900 dark:text-zinc-100">
         {data.label ?? data.description ?? "Untitled scene"}
       </div>
       {shots.length === 0 ? (
-        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 text-[10px] text-zinc-400">
+        <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
           No shots yet
         </div>
       ) : (
@@ -39,7 +39,7 @@ function StoryboardView({ data }: SceneViewProps) {
                 className="flex flex-col gap-0.5"
                 title={`${shot.shot_id} · ${shot.action}`}
               >
-                <div className="relative aspect-video rounded-sm bg-zinc-100 overflow-hidden">
+                <div className="relative aspect-video rounded-sm bg-zinc-100 dark:bg-[#2D2D2D] overflow-hidden">
                   {keyframeUrl ? (
                     <img
                       src={keyframeUrl}
@@ -47,12 +47,12 @@ function StoryboardView({ data }: SceneViewProps) {
                       className="absolute inset-0 w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-[8px] text-zinc-400">
+                    <div className="absolute inset-0 flex items-center justify-center text-[8px] text-zinc-400 dark:text-zinc-500">
                       {idx + 1}
                     </div>
                   )}
                 </div>
-                <div className="flex items-center justify-between text-[8px] text-zinc-500">
+                <div className="flex items-center justify-between text-[8px] text-zinc-500 dark:text-zinc-400">
                   <span className="font-mono truncate">{shot.shot_id.replace(/^shot_/, "#")}</span>
                   <span>{shot.duration_seconds}s</span>
                 </div>
@@ -61,7 +61,7 @@ function StoryboardView({ data }: SceneViewProps) {
           })}
         </div>
       )}
-      <div className="text-[10px] text-zinc-500 mt-0.5">
+      <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
         {data.video_model} · {data.shot_input_mode}
       </div>
     </div>

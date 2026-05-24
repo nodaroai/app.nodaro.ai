@@ -88,6 +88,16 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
   const sceneEntityId = data.pipeline_entity_id
   const { state, invoke, reset } = useSceneHelper(pipelineId, sceneEntityId)
 
+  // Per spec §6.9.6 Manual Mode: standalone Scene nodes (dragged onto the
+  // canvas from the toolbar, NOT materialized by the Scene Director) are a
+  // first-class placement pattern. They have NEITHER `pipeline_owned` NOR
+  // `pipeline_entity_id` set. For these nodes the read-only "pipeline-managed"
+  // banner is incorrect and the basic scene fields must be editable. The gate
+  // checks `pipeline_owned === true` (the canonical flag written by
+  // canvas-materializer) so a stray `pipeline_id` alone never silently locks
+  // a manually-placed scene.
+  const isPipelineManaged = data.pipeline_owned === true
+
   // Local state for camera_path_directive.parameters JSON text fields, keyed
   // by shot_id. We keep the raw textarea string here and only write parsed JSON
   // to node data on blur (skipping invalid JSON silently).
@@ -118,56 +128,203 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
 
   return (
     <div className="space-y-3">
-      <div>
-        <Label>Scene</Label>
-        <div className="text-sm">{data.description || data.label || `Scene ${data.scene_index}`}</div>
-      </div>
-      <div>
-        <Label>Beat</Label>
-        <div className="text-sm">{data.emotional_beat}</div>
-      </div>
-      <div>
-        <Label>Duration</Label>
-        <div className="text-sm">{data.duration_seconds}s</div>
-      </div>
-      <div>
-        <Label>Shots</Label>
-        <div className="text-sm">{data.shots.length} planned</div>
-      </div>
-      <div>
-        <Label>Image model</Label>
-        <div className="text-sm">{data.image_model}</div>
-      </div>
-      <div>
-        <Label>Video model</Label>
-        <div className="text-sm">{data.video_model}</div>
-      </div>
-      <div>
-        <Label>Input mode</Label>
-        <div className="text-sm">{data.shot_input_mode}</div>
-      </div>
-      <div>
-        <Label>View mode</Label>
-        <Select
-          value={data.view_mode ?? "storyboard"}
-          onValueChange={(v) =>
-            onUpdate({ view_mode: v as "default" | "storyboard" | "video" | "scripting" })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="default">Default</SelectItem>
-            <SelectItem value="storyboard">Storyboard</SelectItem>
-            <SelectItem value="scripting">Scripting</SelectItem>
-            <SelectItem value="video">Video</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="text-xs text-zinc-500 italic">
-        Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
-      </div>
+      {isPipelineManaged ? (
+        <>
+          {/* Pipeline-managed scene — read-only display. Data is written by
+              the Scene Director LLM (Stage 6) and the user approves/rejects
+              through the pipeline panel, not here. */}
+          <div>
+            <Label>Scene</Label>
+            <div className="text-sm">{data.description || data.label || `Scene ${data.scene_index}`}</div>
+          </div>
+          <div>
+            <Label>Beat</Label>
+            <div className="text-sm">{data.emotional_beat}</div>
+          </div>
+          <div>
+            <Label>Duration</Label>
+            <div className="text-sm">{data.duration_seconds}s</div>
+          </div>
+          <div>
+            <Label>Shots</Label>
+            <div className="text-sm">{data.shots.length} planned</div>
+          </div>
+          <div>
+            <Label>Image model</Label>
+            <div className="text-sm">{data.image_model}</div>
+          </div>
+          <div>
+            <Label>Video model</Label>
+            <div className="text-sm">{data.video_model}</div>
+          </div>
+          <div>
+            <Label>Input mode</Label>
+            <div className="text-sm">{data.shot_input_mode}</div>
+          </div>
+          <div>
+            <Label>View mode</Label>
+            <Select
+              value={data.view_mode ?? "storyboard"}
+              onValueChange={(v) =>
+                onUpdate({ view_mode: v as "default" | "storyboard" | "video" | "scripting" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="storyboard">Storyboard</SelectItem>
+                <SelectItem value="scripting">Scripting</SelectItem>
+                <SelectItem value="video">Video</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="text-xs text-zinc-500 italic" data-testid="pipeline-managed-message">
+            Edit through the pipeline panel; this node is pipeline-managed in Phase 1B.2.
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Manually-placed Scene — editable. Per spec §6.9.6 the user wires
+              Characters + Location + Objects + prev_last_frame inputs manually
+              via the node's left-side handles. Helper buttons below require a
+              parent pipeline binding; they render disabled here until the
+              scene is bound. */}
+          <div>
+            <Label htmlFor="scene-label">Label</Label>
+            <Input
+              id="scene-label"
+              value={data.label ?? ""}
+              onChange={(e) => onUpdate({ label: e.target.value })}
+              placeholder={`Scene ${data.scene_index}`}
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-index">Scene index</Label>
+            <Input
+              id="scene-index"
+              type="number"
+              min={1}
+              value={data.scene_index}
+              onChange={(e) =>
+                onUpdate({ scene_index: parseInt(e.target.value, 10) || 1 })
+              }
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-description">Description</Label>
+            <Textarea
+              id="scene-description"
+              value={data.description ?? ""}
+              onChange={(e) => onUpdate({ description: e.target.value })}
+              placeholder="What happens in this scene…"
+              rows={3}
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-beat">Emotional beat</Label>
+            <Input
+              id="scene-beat"
+              value={data.emotional_beat ?? ""}
+              onChange={(e) => onUpdate({ emotional_beat: e.target.value })}
+              placeholder="e.g. tension, reveal, resolution"
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-duration">Duration (s)</Label>
+            <Input
+              id="scene-duration"
+              type="number"
+              min={1}
+              value={data.duration_seconds}
+              onChange={(e) =>
+                onUpdate({ duration_seconds: parseInt(e.target.value, 10) || 1 })
+              }
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-shot-input-mode">Shot input mode</Label>
+            <Select
+              value={data.shot_input_mode ?? "first_frame"}
+              onValueChange={(v) =>
+                onUpdate({
+                  shot_input_mode: v as SceneNodeFrontendData["shot_input_mode"],
+                })
+              }
+            >
+              <SelectTrigger id="scene-shot-input-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="first_frame">first_frame</SelectItem>
+                <SelectItem value="text_to_video">text_to_video</SelectItem>
+                <SelectItem value="video_continuation">video_continuation</SelectItem>
+                <SelectItem value="frame_interpolation">frame_interpolation</SelectItem>
+                <SelectItem value="camera_path">camera_path</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="scene-image-model">Image model</Label>
+            <Input
+              id="scene-image-model"
+              value={data.image_model ?? ""}
+              onChange={(e) => onUpdate({ image_model: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-video-model">Video model</Label>
+            <Input
+              id="scene-video-model"
+              value={data.video_model ?? ""}
+              onChange={(e) => onUpdate({ video_model: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label htmlFor="scene-continuity">Continuity from previous</Label>
+            <Select
+              value={data.continuity_from_prev ?? "hard_cut"}
+              onValueChange={(v) =>
+                onUpdate({
+                  continuity_from_prev:
+                    v as SceneNodeFrontendData["continuity_from_prev"],
+                })
+              }
+            >
+              <SelectTrigger id="scene-continuity">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hard_cut">hard_cut</SelectItem>
+                <SelectItem value="match_cut">match_cut</SelectItem>
+                <SelectItem value="dissolve">dissolve</SelectItem>
+                <SelectItem value="fade_in">fade_in</SelectItem>
+                <SelectItem value="fade_out">fade_out</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>View mode</Label>
+            <Select
+              value={data.view_mode ?? "storyboard"}
+              onValueChange={(v) =>
+                onUpdate({ view_mode: v as "default" | "storyboard" | "video" | "scripting" })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default</SelectItem>
+                <SelectItem value="storyboard">Storyboard</SelectItem>
+                <SelectItem value="scripting">Scripting</SelectItem>
+                <SelectItem value="video">Video</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
 
       {/* ── Per-shot editors: Phase 1C.3 input-mode fields + Phase 1D.1 match-cut + Phase 1D.2c-b-ii video-critic ── */}
       {data.shots.map((shot, idx) => {
