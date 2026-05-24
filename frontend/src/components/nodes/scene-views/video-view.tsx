@@ -30,10 +30,10 @@ function VideoView({ data }: SceneViewProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <div className="text-xs uppercase text-zinc-500">Scene {data.scene_index}</div>
-        <div className="text-[10px] text-zinc-500">{data.duration_seconds}s</div>
+        <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
+        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{data.duration_seconds}s</div>
       </div>
-      <div className="font-medium text-sm truncate">
+      <div className="font-medium text-sm truncate text-zinc-900 dark:text-zinc-100">
         {data.label ?? data.description ?? "Untitled scene"}
       </div>
       {compositeUrl ? (
@@ -45,14 +45,14 @@ function VideoView({ data }: SceneViewProps) {
           className="aspect-video w-full rounded-md bg-zinc-900 object-contain"
         />
       ) : (
-        <div className="flex flex-col items-center justify-center aspect-video rounded-md border-2 border-dashed border-zinc-200 text-[10px] text-zinc-400 gap-0.5">
+        <div className="flex flex-col items-center justify-center aspect-video rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500 gap-0.5">
           <span>Stage 7 will populate this view.</span>
           <span className="text-[9px]">
             {clips.length} clip{clips.length === 1 ? "" : "s"} rendered
           </span>
         </div>
       )}
-      <div className="text-[10px] text-zinc-500">
+      <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
         {data.video_model} · {data.shot_input_mode}
       </div>
     </div>

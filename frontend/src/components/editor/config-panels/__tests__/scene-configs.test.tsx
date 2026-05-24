@@ -319,3 +319,55 @@ describe("SceneConfig per-shot editor", () => {
     expect(screen.getByText(/degrees/i)).toBeInTheDocument()
   })
 })
+
+// ── Pipeline-managed vs. manually-placed gating (Bug 3) ──────────────────────
+
+describe("SceneConfig pipeline-managed vs manual gating", () => {
+  it("shows the read-only 'pipeline-managed' message when pipeline_owned=true", () => {
+    const data = {
+      ...makeData("first_frame"),
+      pipeline_owned: true,
+    } as unknown as SceneNodeFrontendData
+    renderPanel(data)
+    expect(screen.getByTestId("pipeline-managed-message")).toBeInTheDocument()
+    // Editable label/description inputs MUST NOT be rendered.
+    expect(screen.queryByLabelText(/^Label$/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Description$/i)).not.toBeInTheDocument()
+  })
+
+  it("does NOT show the read-only message for a manually-placed scene (no pipeline_owned)", () => {
+    renderPanel(makeData("first_frame"))
+    expect(screen.queryByTestId("pipeline-managed-message")).not.toBeInTheDocument()
+  })
+
+  it("renders editable Label / Description / Beat / Duration inputs for a manual scene", () => {
+    renderPanel(makeData("first_frame"))
+    // Labels are wired to the inputs via htmlFor — getByLabelText resolves them.
+    expect(screen.getByLabelText(/^Label$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Scene index/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^Description$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Emotional beat/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Duration \(s\)/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Image model/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Video model/i)).toBeInTheDocument()
+  })
+
+  it("calls onUpdate when the Description textarea is edited (manual scene)", () => {
+    const { onUpdate } = renderPanel(makeData("first_frame"))
+    const desc = screen.getByLabelText(/^Description$/i)
+    fireEvent.change(desc, { target: { value: "An updated description" } })
+    expect(onUpdate).toHaveBeenCalledWith({ description: "An updated description" })
+  })
+
+  it("does NOT show the read-only message when pipeline_owned is undefined but pipeline_id is set", () => {
+    // A stray `pipeline_id` alone (e.g. a half-initialized node) must NOT
+    // silently lock the scene. Only `pipeline_owned === true` does.
+    const data = {
+      ...makeData("first_frame"),
+      pipeline_id: "some-pipeline-uuid",
+    } as unknown as SceneNodeFrontendData
+    renderPanel(data)
+    expect(screen.queryByTestId("pipeline-managed-message")).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/^Label$/i)).toBeInTheDocument()
+  })
+})

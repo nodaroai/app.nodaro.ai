@@ -162,6 +162,12 @@ function makeDataWithShot(shotPatch: Record<string, unknown> = {}): SceneNodeFro
     scene_audio_track: null,
     pipeline_id: "pipe_01",
     pipeline_entity_id: "entity_01",
+    // Video-critic findings only surface on pipeline-managed scenes (the
+    // critic is a Stage 7 sub-step). The read-only display gate keyed on
+    // `pipeline_owned` is what suppresses the editable manual-mode fields
+    // here (which would otherwise inject "Continuity from previous" into
+    // the rendered DOM and break the `queryByText(/continuity/i)` assertion).
+    pipeline_owned: true,
   } as unknown as SceneNodeFrontendData
 }
 

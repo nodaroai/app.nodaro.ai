@@ -134,4 +134,38 @@ describe("SceneNode (Phase 1B.2 pipeline)", () => {
     renderNode(makeData({ label: "Opening lighthouse", view_mode: "storyboard" }))
     expect(screen.getByText("Opening lighthouse")).toBeInTheDocument()
   })
+
+  it("renders dark-mode classes on the node body", () => {
+    renderNode(makeData())
+    const body = screen.getByTestId("scene-node")
+    // Light-mode classes + their dark-mode counterparts per frontend/CLAUDE.md.
+    expect(body.className).toContain("bg-white")
+    expect(body.className).toContain("dark:bg-[#1E1E1E]")
+    expect(body.className).toContain("border-zinc-300")
+    expect(body.className).toContain("dark:border-[#2D2D2D]")
+  })
+
+  it("renders dark-mode ring counterpart when pipeline_owned", () => {
+    renderNode(makeData({ pipeline_owned: true }))
+    const body = screen.getByTestId("scene-node")
+    expect(body.className).toContain("ring-blue-200")
+    expect(body.className).toContain("dark:ring-blue-900")
+  })
+
+  it("renders visible text labels next to each left-side handle", () => {
+    renderNode(makeData())
+    expect(screen.getByTestId("handle-label-characters")).toHaveTextContent("characters")
+    expect(screen.getByTestId("handle-label-location")).toHaveTextContent("location")
+    expect(screen.getByTestId("handle-label-objects")).toHaveTextContent("objects")
+    expect(screen.getByTestId("handle-label-prev_last_frame")).toHaveTextContent(
+      "prev_last_frame",
+    )
+  })
+
+  it("renders visible text labels next to each right-side handle", () => {
+    renderNode(makeData())
+    expect(screen.getByTestId("handle-label-video")).toHaveTextContent("video")
+    expect(screen.getByTestId("handle-label-last_frame")).toHaveTextContent("last_frame")
+    expect(screen.getByTestId("handle-label-audio_track")).toHaveTextContent("audio_track")
+  })
 })
