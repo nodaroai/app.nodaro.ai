@@ -27,7 +27,7 @@ vi.mock("@xyflow/react", () => ({
   ]),
 }))
 
-import { useWorkflowStore, EXECUTION_DATA_KEYS } from "../use-workflow-store"
+import { useWorkflowStore, EXECUTION_DATA_KEYS, buildDuplicatedNodeData } from "../use-workflow-store"
 import * as undoFlags from "../undo-flags"
 
 function resetStore() {
@@ -335,6 +335,38 @@ describe("useWorkflowStore", () => {
 describe("EXECUTION_DATA_KEYS", () => {
   it("includes zoom so per-frame zoom drag writes skip undo capture", () => {
     expect(EXECUTION_DATA_KEYS.has("zoom")).toBe(true)
+  })
+})
+
+describe("buildDuplicatedNodeData", () => {
+  type Src = Parameters<typeof buildDuplicatedNodeData>[0]
+  const clone = (type: string, data: Record<string, unknown>) =>
+    buildDuplicatedNodeData({ id: "x", type, position: { x: 0, y: 0 }, data } as unknown as Src) as Record<string, unknown>
+
+  it("clears every entity DB-row pointer so the clone creates its own row", () => {
+    expect(clone("character", { characterDbId: "c1" }).characterDbId).toBe("")
+    expect(clone("object", { objectDbId: "o1" }).objectDbId).toBe("")
+    expect(clone("location", { locationDbId: "l1" }).locationDbId).toBe("")
+    expect(clone("face", { faceDbId: "f1" }).faceDbId).toBe("")
+  })
+
+  it("strips live execution state but keeps generated results", () => {
+    const d = clone("generate-image", {
+      executionStatus: "running",
+      currentJobId: "j1",
+      generatedResults: [{ url: "u" }],
+    })
+    expect(d.executionStatus).toBeUndefined()
+    expect(d.currentJobId).toBeUndefined()
+    expect(d.generatedResults).toEqual([{ url: "u" }])
+  })
+
+  it("regenerates sub-workflow port/route ids and router route ids", () => {
+    const sub = clone("sub-workflow-input", { routeId: "r1", ports: [{ id: "p1", name: "a", mediaType: "image" }] })
+    expect(sub.routeId).not.toBe("r1")
+    expect((sub.ports as Array<{ id: string }>)[0].id).not.toBe("p1")
+    const router = clone("router", { routes: [{ id: "rt1", name: "a", active: true }] })
+    expect((router.routes as Array<{ id: string }>)[0].id).not.toBe("rt1")
   })
 })
 
