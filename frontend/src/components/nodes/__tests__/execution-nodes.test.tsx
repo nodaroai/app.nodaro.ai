@@ -115,8 +115,8 @@ vi.mock("@/lib/tts-voices", () => ({
   getVoiceName: () => "Test Voice",
 }))
 
-vi.mock("@/lib/ai-writer-templates", () => ({
-  getAIWriterTemplate: () => null,
+vi.mock("@/lib/generate-text-templates", () => ({
+  getGenerateTextTemplate: () => null,
 }))
 
 vi.mock("@/lib/api", () => ({

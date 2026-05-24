@@ -393,6 +393,13 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("Once upon a time...")
   })
 
+  it("llm-chat scalar accessor returns the full text (string) for every handle", () => {
+    const n = makeNode("1", "llm-chat", { generatedText: "p1===NEXT===p2" })
+    expect(extractNodeOutput(n, "items")).toBe("p1===NEXT===p2")
+    expect(extractNodeOutput(n, "text")).toBe("p1===NEXT===p2")
+    expect(extractNodeOutput(n)).toBe("p1===NEXT===p2")
+  })
+
   it("returns first item from list node", () => {
     const node = makeNode("1", "list", {
       items: "line one\nline two\nline three",

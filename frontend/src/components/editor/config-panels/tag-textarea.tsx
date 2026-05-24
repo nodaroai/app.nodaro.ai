@@ -219,7 +219,7 @@ const SSML_SUGGESTIONS: SuggestionItem[] = SSML_BREAK_OPTIONS.map((b) => ({
 
 /** Map node type to a human-readable category for the dropdown */
 function nodeTypeCategory(type: string): string {
-  if (["text-prompt", "ai-writer", "list", "loop"].includes(type)) return "Text"
+  if (["text-prompt", "ai-writer", "llm-chat", "list", "loop"].includes(type)) return "Text"
   if (["generate-image", "upload-image", "edit-image", "image-to-image", "character", "face", "object", "location", "scene"].includes(type)) return "Image"
   if (["image-to-video", "text-to-video", "video-to-video", "upload-video", "youtube-video", "combine-videos", "extend-video"].includes(type)) return "Video"
   if (["text-to-speech", "generate-music", "text-to-audio", "upload-audio", "suno-generate"].includes(type)) return "Audio"

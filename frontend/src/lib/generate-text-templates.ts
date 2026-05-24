@@ -1,14 +1,17 @@
-export interface AIWriterTemplate {
+export interface GenerateTextTemplate {
   readonly id: string
   readonly label: string
-  readonly description: string
+  readonly description?: string
   readonly systemPrompt: string
-  readonly placeholderInput: string
   readonly defaultInput?: string
+  readonly placeholderInput?: string
   readonly defaultMaxTokens?: number
+  readonly llmModel?: string
+  readonly fansOut?: boolean
+  readonly requiresImageRef?: boolean
 }
 
-export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
+export const GENERATE_TEXT_TEMPLATES: readonly GenerateTextTemplate[] = [
   {
     id: "photo-shoot",
     label: "Photo Shoot Planner",
@@ -89,6 +92,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
     placeholderInput: "e.g. American blonde model, 28 days: 7 days Paris, 7 days Thailand, 7 days Bali, 7 days New York. Mix casual street style with high fashion campaign shoots. Body type: tall 5'10, athletic, slim figure.",
     defaultInput: "American blonde model, 28 days:\n7 days Paris, 7 days Thailand, 7 days Bali, 7 days New York.\nMix casual street style with high fashion campaign shoots.\nBody type: tall 5'10, athletic, slim figure.",
     defaultMaxTokens: 16384,
+    fansOut: true,
+    requiresImageRef: true,
   },
   {
     id: "product-catalog",
@@ -102,6 +107,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "Do NOT use markdown, headers, bullet points, or numbered lists. Write pure descriptive text only.\n\n" +
       "Separate each prompt with ===NEXT=== on its own line.",
     placeholderInput: "e.g. Wireless noise-canceling headphones with 40-hour battery, matte black...",
+    fansOut: true,
+    requiresImageRef: true,
   },
   {
     id: "storyboard",
@@ -115,6 +122,8 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
       "Do NOT use markdown, headers, bullet points, or numbered lists. Write pure descriptive text only.\n\n" +
       "Separate each scene with ===NEXT=== on its own line.",
     placeholderInput: "e.g. 30-second product launch video for a smartwatch...",
+    fansOut: true,
+    requiresImageRef: true,
   },
   {
     id: "custom",
@@ -125,6 +134,6 @@ export const AI_WRITER_TEMPLATES: readonly AIWriterTemplate[] = [
   },
 ]
 
-export function getAIWriterTemplate(id: string): AIWriterTemplate | undefined {
-  return AI_WRITER_TEMPLATES.find((t) => t.id === id)
+export function getGenerateTextTemplate(id: string): GenerateTextTemplate | undefined {
+  return GENERATE_TEXT_TEMPLATES.find((t) => t.id === id)
 }

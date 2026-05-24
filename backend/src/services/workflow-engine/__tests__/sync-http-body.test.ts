@@ -6,6 +6,9 @@
  * Historical bugs:
  *   - after-effects/lottie-overlay sent `videoUrl` instead of `inputVideoUrl`
  *   - lottie-overlay never collected lottieAssets from upstream edges
+ *   - llm-chat (Generate Text) forwarded only referenceImageUrls, dropping
+ *     referenceVideoUrls + referenceAudioUrls in server-side DAG runs while
+ *     single-node Run sent all three (design §6.14 "GAP A")
  */
 
 import { describe, it, expect } from "vitest"
@@ -89,6 +92,47 @@ describe("buildSyncHttpBody — field shape matches route Zod schemas", () => {
         CTX,
       )
       expect(body.lottieAssets).toBeUndefined()
+    })
+  })
+
+  describe("llm-chat (Generate Text)", () => {
+    it("forwards image + video + audio references (GAP A)", () => {
+      const body = buildSyncHttpBody(
+        node("llm-chat", { systemPrompt: "s", userInput: "u" }),
+        {
+          prompt: "u",
+          referenceImageUrls: ["https://i.png"],
+          referenceVideoUrls: ["https://v.mp4"],
+          referenceAudioUrls: ["https://a.mp3"],
+        },
+        CTX,
+      )
+      // Pre-GAP-A the body dropped video + audio arrays, so Gemini multimodal
+      // refs silently vanished in server-side DAG runs (single-node Run sent
+      // all three). All three must now be present and forwarded verbatim.
+      expect(body).toMatchObject({
+        referenceImageUrls: ["https://i.png"],
+        referenceVideoUrls: ["https://v.mp4"],
+        referenceAudioUrls: ["https://a.mp3"],
+      })
+    })
+
+    it("forwards resolved systemPrompt + prompt and falls back to node data", () => {
+      const fromUpstream = buildSyncHttpBody(
+        node("llm-chat", { systemPrompt: "data-sys", userInput: "data-user" }),
+        { systemPrompt: "wired-sys", prompt: "wired-user" },
+        CTX,
+      )
+      expect(fromUpstream.systemPrompt).toBe("wired-sys")
+      expect(fromUpstream.userInput).toBe("wired-user")
+
+      const fromData = buildSyncHttpBody(
+        node("llm-chat", { systemPrompt: "data-sys", userInput: "data-user" }),
+        {},
+        CTX,
+      )
+      expect(fromData.systemPrompt).toBe("data-sys")
+      expect(fromData.userInput).toBe("data-user")
     })
   })
 

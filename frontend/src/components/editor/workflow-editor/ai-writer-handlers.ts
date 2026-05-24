@@ -4,7 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import type {
   WorkflowNode,
   WorkflowEdge,
-  AIWriterNodeData,
+  LLMChatData,
 } from "@/types/nodes";
 import { NODE_DEFINITIONS } from "@/types/nodes";
 import { executeNode } from "./execute-node";
@@ -41,11 +41,11 @@ export function handleCreateNodesFromWriter(writerNodeId: string): void {
   const writerNode = store.nodes.find((n) => n.id === writerNodeId);
   if (!writerNode) return;
 
-  const writerData = writerNode.data as AIWriterNodeData;
+  const writerData = writerNode.data as LLMChatData;
   const items = writerData.generatedItems;
   if (!items || items.length === 0) {
     toast.error(
-      "No generated prompts to create nodes from. Run the AI Agent first.",
+      "No generated prompts to create nodes from. Run the Generate Text node first.",
     );
     return;
   }
@@ -195,7 +195,7 @@ export async function handleRunAllWriterImageNodes(
   const writerNode = store.nodes.find((n) => n.id === writerNodeId);
   if (!writerNode) return;
 
-  const writerData = writerNode.data as AIWriterNodeData;
+  const writerData = writerNode.data as LLMChatData;
   const nodeIds = writerData.createdNodeIds ?? [];
   if (nodeIds.length === 0) {
     toast.error("No image nodes to run. Create nodes first.");

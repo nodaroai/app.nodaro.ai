@@ -207,7 +207,7 @@ The orchestrator does:
 | Category | Where | Example node types | Why |
 |---|---|---|---|
 | **Worker-queued** | BullMQ → video/render worker | `generate-image`, `image-to-video`, `text-to-speech`, `combine-videos`, `render-video`, … (40+) | Long-running or external API calls. Decoupled from the orchestrator process for backpressure. |
-| **Sync HTTP** | Internal `fetch` to backend route | `ai-writer`, `after-effects-ai`, `motion-graphics-ai`, `prompt-helper`, social-publish nodes (~15) | Cheap, sub-second LLM calls. No queueing overhead. |
+| **Sync HTTP** | Internal `fetch` to backend route | `llm-chat` (Generate Text — routes via `/v1/llm-chat`; the legacy `/v1/ai-writer` route remains for back-compat), `after-effects-ai`, `motion-graphics-ai`, `prompt-helper`, social-publish nodes (~15) | Cheap, sub-second LLM calls. No queueing overhead. |
 | **Inline** | Run inside the orchestrator process | `combine-text`, `split-text`, `composite` | Pure JS, no external I/O, no need to queue. |
 
 5. After each node finishes, propagate its output to downstream

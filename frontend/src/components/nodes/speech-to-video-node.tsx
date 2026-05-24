@@ -46,6 +46,7 @@ const TEXT_OUTPUT_TYPES = [
   "text-prompt",
   "generate-script",
   "ai-writer",
+  "llm-chat",
   "combine-text",
 ]
 

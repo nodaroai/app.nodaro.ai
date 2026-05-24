@@ -26,7 +26,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 ## Inputs & Outputs
 
 **Inputs:**
-- `in` -- text prompt from upstream node (Text Prompt, AI Writer, etc.)
+- `in` -- text prompt from upstream node (Text Prompt, Generate Text, etc.)
 
 **Outputs:**
 - `image` -- generated image URL

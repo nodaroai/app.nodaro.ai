@@ -104,8 +104,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "voice-delivery", label: "Voice Delivery", icon: <MessageCircle className="h-4 w-4" />, category: "Pickers", group: "Sound", keywords: ["voice", "delivery"] },
   // AI — Script & Text
   { type: "generate-script", label: "Generate Script", icon: <BookOpen className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  { type: "llm-chat", label: "LLM Chat", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
-  { type: "ai-writer", label: "AI Agent", icon: <Sparkles className="h-4 w-4" />, category: "AI", group: "Script & Text" },
+  { type: "llm-chat", label: "Generate Text", icon: <MessageSquare className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   { type: "transcribe", label: "Transcribe", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Script & Text" },
   // AI — Image
   { type: "generate-image", label: "Generate Image", icon: <ImageIcon className="h-4 w-4" />, category: "AI", group: "Image" },

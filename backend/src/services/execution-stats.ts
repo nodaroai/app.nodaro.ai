@@ -253,6 +253,7 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
     // -----------------------------------------------------------------------
     // LLM / AI writer nodes
     // -----------------------------------------------------------------------
+    case "llm-chat":
     case "ai-writer":
     case "image-to-text":
     case "generate-script":

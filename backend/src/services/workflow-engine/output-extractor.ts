@@ -18,6 +18,7 @@ import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/shared"
 import type { SceneData } from "@nodaro/shared"
 import { extractAllGeneratedResults } from "@nodaro/shared"
+import { splitGeneratedItems } from "@nodaro/shared"
 import {
   aggregateByType,
   getOutputType,
@@ -388,6 +389,17 @@ export function extractSourceNodeOutputAsList(
     // Mirror existing semantics: only return when there's more than one item
     // (single-item lists are scalar; fan-out detectors filter on length > 1).
     return items.length > 1 ? [...items] : undefined
+  }
+
+  // Generate Text (llm-chat) `items` handle: fan-out list = the LLM result
+  // split on the ===NEXT=== delimiter via the shared splitGeneratedItems helper
+  // (identical to extractSavedNodeOutput's `items` field and the frontend
+  // extractNodeOutputAsList). This is the ONLY handle that splits — the
+  // default/`text` handle stays scalar (falls through to the switch default →
+  // undefined, no fan-out). Matches frontend node-input-resolver §items.
+  if (type === "llm-chat" && sourceHandle === "items") {
+    const items = splitGeneratedItems(data.generatedText as string | undefined)
+    return items.length > 0 ? items : undefined
   }
 
   switch (type) {
@@ -860,7 +872,8 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // Text-generating nodes
   if (type === "ai-writer" || type === "llm-chat" || type === "suno-lyrics" || type === "suno-style-boost") {
     const text = data.generatedText as string | undefined
-    return text ? { text } : undefined
+    if (!text) return undefined
+    return type === "llm-chat" ? { text, items: splitGeneratedItems(text) } : { text }
   }
 
   // Web-scrape: single `json` output (object/array from the actor).
@@ -1010,6 +1023,18 @@ export function buildNodeOutputFromJobData(
   // Normalize generatedText -> text (image-to-text, ai-writer store output as generatedText)
   if (!output.text && outputData.generatedText) {
     output.text = outputData.generatedText as string
+  }
+
+  // Generate Text (llm-chat) `items`: the route stores only `generatedText` in
+  // job.output_data (no items), so the LIVE orchestration path — node-executor's
+  // pollJobToCompletion → buildNodeOutputFromJobData → state.output — would have
+  // NO items and the `items`-handle fan-out (resolveLlmChatItems / getListInputForNode)
+  // would find neither state.output.items nor data.generatedText and produce zero
+  // fan-out. Derive items here, mirroring extractSavedNodeOutput's llm-chat branch
+  // (output-extractor.ts:876) so DAG and single-node runs split identically.
+  // Gated on nodeType === "llm-chat" ONLY — no other text node fans out on items.
+  if (nodeType === "llm-chat" && output.text) {
+    output.items = splitGeneratedItems(output.text)
   }
 
   // Reduce (fan-in): the route stores its aggregated string under `output`

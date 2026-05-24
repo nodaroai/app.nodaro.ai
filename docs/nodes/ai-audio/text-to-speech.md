@@ -36,7 +36,7 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 
 ## Inputs & Outputs
 
-- **Input**: `in` -- text string (from Text Prompt, AI Writer, Combine Text, or any text-producing node)
+- **Input**: `in` -- text string (from Text Prompt, Generate Text, Combine Text, or any text-producing node)
 - **Output**: `audio` -- generated speech audio file (URL)
 ## Best Practices
 

@@ -305,6 +305,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
   // Scene and AI nodes - brand pink (spotlight)
   if (nodeType === 'scene' ||
       nodeType === 'ai-writer' ||
+      nodeType === 'llm-chat' ||
       nodeType.startsWith('generate-') ||
       nodeType.startsWith('text-to-') ||
       nodeType.startsWith('image-to-') ||

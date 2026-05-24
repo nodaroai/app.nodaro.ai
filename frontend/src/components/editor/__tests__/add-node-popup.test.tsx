@@ -123,7 +123,7 @@ describe("NODE_OPTIONS", () => {
     expect(aiTypes).toContain("image-to-video")
     expect(aiTypes).toContain("text-to-video")
     expect(aiTypes).toContain("text-to-speech")
-    expect(aiTypes).toContain("ai-writer")
+    expect(aiTypes).toContain("llm-chat")
     expect(aiTypes).toContain("generate-music")
     // Phase 1B.2 — Scene moved from Assets to AI (Pipeline group), pipeline-managed
     expect(aiTypes).toContain("scene")

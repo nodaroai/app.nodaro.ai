@@ -580,7 +580,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return (data.webhookResponseBody as string) || undefined;
   }
 
-  if (type === "ai-writer" || type === "llm-chat") {
+  if ((type as string) === "ai-writer" || type === "llm-chat") {
     return data.generatedText as string | undefined;
   }
   if (type === "web-scrape") {

@@ -452,6 +452,16 @@ describe("extractSavedNodeOutput", () => {
     expect(extractSavedNodeOutput(n)?.text).toBe("written text")
   })
 
+  it("llm-chat emits text AND split items", () => {
+    const out = extractSavedNodeOutput(node("1", "llm-chat", { generatedText: "p1===NEXT===p2" }))
+    expect(out).toMatchObject({ text: "p1===NEXT===p2", items: ["p1", "p2"] })
+  })
+
+  it("ai-writer still emits text only (no items)", () => {
+    const out = extractSavedNodeOutput(node("1", "ai-writer", { generatedText: "p1===NEXT===p2" }))
+    expect(out).toEqual({ text: "p1===NEXT===p2" })
+  })
+
   it("extracts web-scrape json output", () => {
     const n = node("1", "web-scrape", {
       generatedJson: { pages: [{ url: "u", markdown: "m" }] },

@@ -77,7 +77,12 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   // when upstream completes. So we don't need to exempt it (the iteration
   // source filters it out already).
   // SYNC_HTTP_NODES (executed via internal fetch)
-  "ai-writer",
+  // Note: "ai-writer" remains a SYNC_HTTP node in node-executor.ts for
+  // back-compat (legacy saved nodes migrate to llm-chat on load), but it was
+  // removed from the frontend EXECUTABLE_TYPES set when the editor type was
+  // merged into "Generate Text" (llm-chat). Exemptions here must mirror
+  // EXECUTABLE_TYPES (see the NON_BUILDPAYLOAD_NODES integrity test below), so
+  // ai-writer is intentionally absent.
   "llm-chat",
   "video-composer",
   "after-effects",

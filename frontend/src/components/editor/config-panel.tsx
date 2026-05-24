@@ -152,7 +152,6 @@ import {
   FaceConfig,
   ObjectConfig,
   LocationConfig,
-  AIWriterConfig,
   LLMChatConfig,
   WebScrapeConfig,
   CombineTextConfig,
@@ -287,8 +286,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "suno-upload-extend": "Suno Upload Extend",
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
-  "llm-chat": "LLM Chat",
-  "ai-writer": "AI Agent",
+  "llm-chat": "Generate Text",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
   "add-captions": "Add Captions",
@@ -360,7 +358,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "video-upscale", "extend-video", "face-swap", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
-  "ai-writer", "llm-chat", "web-scrape",
+  "llm-chat", "web-scrape",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "image-to-text", "qa-check", "transcribe",
   "render-video",
@@ -532,7 +530,6 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "transcribe": return <TranscribeConfig {...configProps} />
     case "image-to-text": return <ImageToTextConfig {...configProps} />
     case "llm-chat": return <LLMChatConfig {...configProps} />
-    case "ai-writer": return <AIWriterConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />

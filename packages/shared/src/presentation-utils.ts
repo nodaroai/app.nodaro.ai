@@ -97,6 +97,7 @@ const MEDIA_PRODUCING_TYPES = new Set([
   "text-to-audio",
   "generate-script",
   "ai-writer",
+  "llm-chat",
   "render-video",
   "video-composer",
   "after-effects",
@@ -141,7 +142,7 @@ const AUDIO_OUTPUT_TYPES = new Set([
 ])
 
 const TEXT_OUTPUT_TYPES = new Set([
-  "generate-script", "ai-writer", "transcribe", "image-to-text", "qa-check",
+  "generate-script", "ai-writer", "llm-chat", "transcribe", "image-to-text", "qa-check",
   "text-prompt",
 ])
 

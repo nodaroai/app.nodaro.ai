@@ -66,6 +66,7 @@ export const JOB_TYPE_LABELS: Record<string, string> = {
   "text-to-audio": "Sound Effects",
   "generate-script": "Script Generation",
   "ai-writer": "AI Writer",
+  "llm-chat": "Generate Text",
   "video-composer": "Video Composer",
   "after-effects": "After Effects",
   "lottie-overlay": "Lottie Overlay",

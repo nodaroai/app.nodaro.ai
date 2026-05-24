@@ -520,6 +520,8 @@ export function buildSyncHttpBody(
         systemPrompt: resolvedInputs.systemPrompt || data.systemPrompt,
         userInput: resolvedInputs.prompt || data.userInput,
         referenceImageUrls: resolvedInputs.referenceImageUrls,
+        referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+        referenceAudioUrls: resolvedInputs.referenceAudioUrls,
         llmModel: data.llmModel,
         temperature: data.temperature ?? 0.7,
         maxTokens: data.maxTokens ?? 2048,

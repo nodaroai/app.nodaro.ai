@@ -29,10 +29,10 @@ The RSS Feed node fetches content from an RSS or Atom feed URL. Select a specifi
 
 - Auto-generate social media posts from new blog articles
 - Create video summaries of daily news feeds
-- Feed article content to AI Agent for rewriting or summarization
+- Feed article content to Generate Text for rewriting or summarization
 - Automated content curation pipelines
 
 ## Tips
 
 - Pair with Schedule Trigger to check the feed on a recurring schedule
-- Connect to AI Agent to summarize or rewrite feed content before further processing
+- Connect to Generate Text to summarize or rewrite feed content before further processing

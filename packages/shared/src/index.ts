@@ -336,6 +336,8 @@ export type { LipSyncDurationBucket } from "./lip-sync-pricing.js"
 
 export { splitByLoopDelimiter, spliceDelimitedRows, NO_SPLIT_DELIMITER } from "./loop-delimiter.js"
 
+export { splitGeneratedItems, GENERATE_TEXT_DELIMITER } from "./generate-text-items.js"
+
 export {
   SEPARATOR_PRESETS,
   SEPARATOR_DISPLAY,

@@ -77,7 +77,7 @@ describe("FRONTEND_EXECUTABLE_TYPES extraction sanity", () => {
   it("contains a baseline of types known to exist", () => {
     expect(FRONTEND_EXECUTABLE_TYPES.has("generate-image")).toBe(true)
     expect(FRONTEND_EXECUTABLE_TYPES.has("image-to-video")).toBe(true)
-    expect(FRONTEND_EXECUTABLE_TYPES.has("ai-writer")).toBe(true)
+    expect(FRONTEND_EXECUTABLE_TYPES.has("llm-chat")).toBe(true)
     expect(FRONTEND_EXECUTABLE_TYPES.has("render-video")).toBe(true)
   })
 
@@ -167,5 +167,19 @@ describe("PARAMETER_NODE_TYPES entries are not falsely executable", () => {
       offenders,
       `These parameter types are listed in EXECUTABLE_TYPES — the frontend will create a job that the backend orchestrator immediately short-circuits. Either remove from EXECUTABLE_TYPES (correct fix), or remove from PARAMETER_NODE_TYPES (only if the type really should execute): ${offenders.join(", ")}`,
     ).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Test 4 — the legacy ai-writer descriptor was merged into llm-chat
+// ("Generate Text"). The registry must expose the merged llm-chat node and
+// must no longer carry the standalone ai-writer descriptor.
+// ---------------------------------------------------------------------------
+
+describe("ai-writer → llm-chat merge", () => {
+  it("node-registry exposes llm-chat (Generate Text) with text output, not ai-writer", () => {
+    const types = NODE_REGISTRY.map((n) => n.type)
+    expect(types).toContain("llm-chat")
+    expect(types).not.toContain("ai-writer")
   })
 })

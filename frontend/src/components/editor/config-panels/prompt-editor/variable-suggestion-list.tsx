@@ -15,6 +15,7 @@ interface VariableSuggestionListProps {
 const TYPE_CATEGORY: Record<string, string> = {
   "text-prompt": "Text",
   "ai-writer": "Text",
+  "llm-chat": "Text",
   "list": "Text",
   "loop": "Text",
   "generate-image": "Image",

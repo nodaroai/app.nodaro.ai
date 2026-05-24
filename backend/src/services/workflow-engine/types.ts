@@ -24,6 +24,9 @@ export interface NodeOutput {
   json?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */
   extractedText?: string
+  /** Generate Text (llm-chat) second output — the result split on `===NEXT===`
+   *  (via `splitGeneratedItems`) so downstream nodes can fan out per item. */
+  items?: string[]
   /** JSON Process node output — filtered/transformed JSON value. */
   processedResult?: unknown
   plan?: Record<string, unknown>

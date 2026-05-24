@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import Fastify from "fastify"
 import { llmChatRoutes } from "../llm-chat.js"
+import { markProviderCallStart } from "../../lib/reconcile/persistence.js"
 
 vi.mock("../../middleware/credit-guard.js", () => ({
   creditGuard: () => async () => undefined,
@@ -31,6 +32,10 @@ vi.mock("../../ee/billing/credits.js", () => ({
 
 vi.mock("../../lib/config.js", () => ({
   config: { KIE_API_KEY: "kie", ANTHROPIC_API_KEY: "ant" },
+}))
+
+vi.mock("../../lib/reconcile/persistence.js", () => ({
+  markProviderCallStart: vi.fn(async () => undefined),
 }))
 
 async function buildApp() {
@@ -114,5 +119,21 @@ describe("POST /v1/llm-chat/generate — capability filter", () => {
       },
     })
     expect(res.statusCode).toBe(200)
+  })
+
+  it("calls markProviderCallStart with anthropic-sync on success (reconcile parity)", async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/llm-chat/generate",
+      payload: {
+        systemPrompt: "",
+        userInput: "write something",
+        llmModel: "claude-sonnet-4.6",
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(markProviderCallStart).toHaveBeenCalledTimes(1)
+    expect(markProviderCallStart).toHaveBeenCalledWith("job-1", "anthropic-sync")
   })
 })

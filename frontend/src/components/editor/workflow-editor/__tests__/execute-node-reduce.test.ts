@@ -112,8 +112,8 @@ vi.mock("@/lib/prompt-templates", () => ({
   applyTemplate: (t: string) => t,
 }))
 
-vi.mock("@/lib/ai-writer-templates", () => ({
-  getAIWriterTemplate: () => null,
+vi.mock("@/lib/generate-text-templates", () => ({
+  getGenerateTextTemplate: () => null,
 }))
 
 vi.mock("@/lib/prompt-builder", () => ({

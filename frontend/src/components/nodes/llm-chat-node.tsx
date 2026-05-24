@@ -3,7 +3,7 @@
 import { memo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, AlignLeft } from "lucide-react"
+import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, AlignLeft, List } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -12,6 +12,7 @@ import { HandleIcon } from "./handle-icon"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { getGenerateTextTemplate } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { LLMChatData } from "@/types/nodes"
 
@@ -30,6 +31,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const [showRuns, setShowRuns] = useState(false)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const credits = useModelCredits(buildLlmCreditIdentifier("llm-chat", nodeData.llmModel || LLM_FEATURE_DEFAULTS["llm-chat"]), 3)
+  const template = getGenerateTextTemplate(nodeData.templateId ?? "")
 
   // Group results by runId
   const runGroups: Map<string, typeof results> = new Map()
@@ -72,11 +74,21 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
           { id: "references", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
           { id: "system-prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-          { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "text", type: "source", position: Position.Right, label: "Text", customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "items", type: "source", position: Position.Right, label: "Items", customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
         ]}
       >
         <div className="flex flex-col gap-1 h-full">
             <>
+          {/* Template badge */}
+          {template && template.id !== "custom" && (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-500 font-medium">
+                {template.label}
+              </span>
+            </div>
+          )}
+
           {status === "running" && !activeText && (
             <div className="flex items-center justify-center h-12 rounded-md bg-muted/30">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -264,8 +276,9 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
       <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
       <HandleIcon icon={<BookOpen />} color="pink" side="left" top="calc(100% - 50px)" label="refs" />
       <HandleIcon icon={<AlignLeft />} color="pink" side="left" top="calc(100% - 80px)" label="system" />
-      {/* Output handle icon */}
-      <HandleIcon icon={<Type />} color="pink" side="right" top="20px" />
+      {/* Output handle icons: text = full generated output; items = fan-out list */}
+      <HandleIcon icon={<Type />} color="pink" side="right" top="20px" label="text" />
+      <HandleIcon icon={<List />} color="pink" side="right" top="50px" label="items" />
       {showLog && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"

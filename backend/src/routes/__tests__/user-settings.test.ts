@@ -177,6 +177,56 @@ describe("GET /v1/user/settings", () => {
     expect(body.data.showRecentNodes).toBe(true)
     expect(body.data.showMostUsedNodes).toBe(false)
   })
+
+  it("returns saved text templates when present", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        tier: "free",
+        public_outputs: true,
+        prompt_templates: {},
+        text_templates: [{ id: "t1", label: "X", systemPrompt: "do X" }],
+      },
+      error: null,
+    })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/user/settings?userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.textTemplates).toEqual([
+      { id: "t1", label: "X", systemPrompt: "do X" },
+    ])
+  })
+
+  it("defaults textTemplates to [] when column absent", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        tier: "free",
+        public_outputs: true,
+        prompt_templates: {},
+        // text_templates intentionally omitted
+      },
+      error: null,
+    })
+    const mockEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq })
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as never)
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/user/settings?userId=${TEST_USER_ID}`,
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.textTemplates).toEqual([])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -245,5 +295,40 @@ describe("PATCH /v1/user/settings", () => {
     expect(body.data.showRecentNodes).toBe(true)
     expect(body.data.showMostUsedNodes).toBe(false)
     expect(mockUpdate).toHaveBeenCalledWith({ show_recent_nodes: true })
+  })
+
+  it("persists textTemplates and echoes them back", async () => {
+    const mockSingle = vi.fn().mockResolvedValue({
+      data: {
+        tier: "free",
+        public_outputs: true,
+        prompt_templates: {},
+        text_templates: [],
+      },
+      error: null,
+    })
+    const mockSelectEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockSelectEq })
+
+    const mockUpdateEq = vi.fn().mockResolvedValue({ error: null })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockUpdateEq })
+
+    vi.mocked(supabase.from).mockReturnValue({
+      select: mockSelect,
+      update: mockUpdate,
+    } as never)
+
+    const textTemplates = [{ id: "t1", label: "X", systemPrompt: "do X" }]
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/user/settings",
+      payload: { userId: TEST_USER_ID, textTemplates },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.textTemplates).toEqual(textTemplates)
+    expect(mockUpdate).toHaveBeenCalledWith({ text_templates: textTemplates })
   })
 })

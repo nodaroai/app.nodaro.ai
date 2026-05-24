@@ -5,7 +5,7 @@ import type {
   ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
   VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
-  LipSyncProvider, ScriptProvider, AiWriterProvider, QaCheckProvider,
+  LipSyncProvider, ScriptProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
   ReduceStrategyId, ReduceMeta,
 } from "@nodaro/shared"
@@ -3379,6 +3379,9 @@ export type LLMChatData = {
   temperature: number
   maxTokens: number
   fieldMappings: FieldMappings
+  templateId?: string
+  generatedItems?: string[]
+  createdNodeIds?: string[]
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedText?: string
@@ -3392,31 +3395,6 @@ export type LLMChatData = {
   referenceVideoUrls?: readonly string[]
   /** Audio reference URLs. Only used when llmModel supports audio (Gemini family). */
   referenceAudioUrls?: readonly string[]
-}
-
-// --- AI Writer Node Data ---
-
-export type AIWriterNodeData = {
-  [key: string]: unknown
-  label: string
-  templateId: string
-  systemPrompt: string
-  userInput: string
-  /** @deprecated Single-option dropdown ("claude") was removed; LLM is now picked via `llmModel`. Kept optional for backward compat with saved workflows. */
-  provider?: AiWriterProvider
-  /** @deprecated Use llmModel instead. Kept optional for backward compat with saved workflows. */
-  model?: string
-  llmModel?: string
-  temperature: number
-  maxTokens: number
-  fieldMappings: FieldMappings
-  executionStatus?: "idle" | "running" | "completed" | "failed"
-  errorMessage?: string
-  generatedText?: string
-  generatedItems?: string[]
-  generatedResults?: Array<{ text: string; jobId?: string; timestamp?: string }>
-  activeResultIndex?: number
-  createdNodeIds?: string[]
 }
 
 // --- Web Scrape Node Data ---
@@ -4126,7 +4104,6 @@ export type SceneNodeData =
   | LocationNodeData
   | FaceNodeData
   | LLMChatData
-  | AIWriterNodeData
   | WebScrapeNodeData
   | ListNodeData
   | LoopNodeData
@@ -4288,7 +4265,6 @@ export type SceneNodeType =
   | "object"
   | "location"
   | "llm-chat"
-  | "ai-writer"
   | "combine-text"
   | "split-text"
   | "extract-field"
@@ -6109,47 +6085,25 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
   // LLM Chat
   {
     type: "llm-chat",
-    label: "LLM Chat",
+    label: "Generate Text",
     category: "ai",
     creditCost: 3,
     inputs: ["prompt", "references", "system-prompt"],
-    outputs: ["text"],
+    outputs: ["text", "items"],
     defaultData: {
-      label: "LLM Chat",
+      label: "Generate Text",
       systemPrompt: "",
       userInput: "",
       temperature: 0.7,
       maxTokens: 2048,
       fieldMappings: {},
+      templateId: "custom",
     } as LLMChatData,
-    exposableOutputs: [{ key: "result", label: "Result", outputType: "text" as const }],
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "text" as const }, { key: "items", label: "Items", outputType: "text" as const }],
     exposableFields: [
       { key: "systemPrompt", label: "System Prompt", type: "text" as const },
       { key: "userInput", label: "User Prompt", type: "text" as const },
       { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 2, step: 0.1 },
-      { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256 },
-    ],
-  },
-  // AI Agent
-  {
-    type: "ai-writer",
-    label: "AI Agent",
-    category: "ai",
-    creditCost: 2,
-    inputs: ["in"],
-    outputs: ["text"],
-    defaultData: {
-      label: "AI Agent",
-      templateId: "custom",
-      systemPrompt: "",
-      userInput: "",
-      temperature: 0.7,
-      maxTokens: 4096,
-      fieldMappings: {},
-    } as AIWriterNodeData,
-    exposableOutputs: [{ key: "result", label: "Result", outputType: "text" as const }],
-    exposableFields: [
-      { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 1, step: 0.1 },
       { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256 },
     ],
   },

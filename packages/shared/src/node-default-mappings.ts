@@ -35,6 +35,7 @@ export const NODE_DEFAULT_TYPES = [
   "voice-design",
   // LLM-driven
   "ai-writer",
+  "llm-chat",
   "lottie-overlay",
   "3d-title",
   "motion-graphics",
@@ -89,6 +90,7 @@ const META: Record<NodeDefaultType, NodeTypeMeta> = {
   "generate-music":   { field: "provider", validValues: MUSIC_PROVIDERS_FOR_VALIDATION, hasQuality: false, hasAspectRatio: false },
   "voice-design":     { field: "model",    validValues: VOICE_DESIGN_MODELS,   hasQuality: false, hasAspectRatio: false },
   "ai-writer":        { field: "model",    validValues: LLM_MODEL_IDS,         hasQuality: false, hasAspectRatio: false },
+  "llm-chat":         { field: "model",    validValues: LLM_MODEL_IDS,         hasQuality: false, hasAspectRatio: false },
   "lottie-overlay":   { field: "model",    validValues: LLM_MODEL_IDS,         hasQuality: false, hasAspectRatio: false },
   "3d-title":         { field: "model",    validValues: LLM_MODEL_IDS,         hasQuality: false, hasAspectRatio: false },
   "motion-graphics":  { field: "model",    validValues: LLM_MODEL_IDS,         hasQuality: false, hasAspectRatio: false },

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import {
   Loader2, Globe, Lock, RotateCcw, FileText, Save, Info,
   Pencil, X, Download, Upload, Key, ChevronRight, LayoutList,
+  Plus, Trash2, Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -22,6 +23,8 @@ import {
   WRAPPER_TEMPLATE_KEY,
 } from "@/lib/prompt-templates"
 import { useUserSettings, useUpdatePublicOutputsMutation, useSaveTemplatesMutation, useUpdateNodeMenuPrefsMutation } from "@/hooks/queries/use-user-settings-queries"
+import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
+import { LlmModelSelect } from "@/components/editor/config-panels/llm-model-select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +48,12 @@ export default function SettingsPage() {
   const [savedTemplates, setSavedTemplates] = useState<Record<string, string>>({})
   const [editingKey, setEditingKey] = useState<string | null>(null)
 
+  // Generate Text user templates (profiles.text_templates). Local working copy +
+  // last-saved snapshot so we can compute dirtiness, mirroring promptTemplates.
+  const [textTemplates, setTextTemplates] = useState<GenerateTextTemplate[]>([])
+  const [savedTextTemplates, setSavedTextTemplates] = useState<GenerateTextTemplate[]>([])
+  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+
   const { data: settings, isLoading: settingsLoading, isError: settingsError, refetch: refetchSettings } = useUserSettings(user?.id)
   const toggleMutation = useUpdatePublicOutputsMutation()
   const templatesMutation = useSaveTemplatesMutation()
@@ -61,6 +70,13 @@ export default function SettingsPage() {
       setSavedTemplates(settings.promptTemplates)
     }
   }, [settings?.promptTemplates])
+
+  useEffect(() => {
+    if (settings?.textTemplates) {
+      setTextTemplates(settings.textTemplates)
+      setSavedTextTemplates(settings.textTemplates)
+    }
+  }, [settings?.textTemplates])
 
   async function handleToggle() {
     if (!user?.id) return
@@ -119,6 +135,63 @@ export default function SettingsPage() {
       await templatesMutation.mutateAsync({ userId: user.id, promptTemplates: localTemplates })
       setEditingKey(null)
       toast.success("Prompt templates saved")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to save"
+      toast.error(message)
+    }
+  }
+
+  // --- Generate Text templates ---
+
+  function handleAddTextTemplate() {
+    const id = crypto.randomUUID()
+    setTextTemplates((prev) => [...prev, { id, label: "New Template", systemPrompt: "" }])
+    setEditingTextId(id)
+  }
+
+  function handleTextTemplateChange(id: string, patch: Partial<GenerateTextTemplate>) {
+    setTextTemplates((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    )
+  }
+
+  function handleDeleteTextTemplate(id: string) {
+    setTextTemplates((prev) => prev.filter((t) => t.id !== id))
+    if (editingTextId === id) setEditingTextId(null)
+  }
+
+  async function handleSaveTextTemplates() {
+    if (!user?.id) return
+    // Drop blank entries (no label or no system prompt) so empty rows aren't
+    // persisted. Also drop an out-of-range maxTokens (backend Zod requires
+    // 1..16384) so a partially-typed value can't 400 the whole save.
+    const cleaned = textTemplates
+      .map((t) => {
+        const maxTokensValid =
+          t.defaultMaxTokens != null &&
+          Number.isInteger(t.defaultMaxTokens) &&
+          t.defaultMaxTokens >= 1 &&
+          t.defaultMaxTokens <= 16384
+        return {
+          ...t,
+          label: t.label.trim(),
+          systemPrompt: t.systemPrompt.trim(),
+          ...(maxTokensValid ? {} : { defaultMaxTokens: undefined }),
+        }
+      })
+      .filter((t) => t.label.length > 0 && t.systemPrompt.length > 0)
+    try {
+      // Re-send the already-saved prompt templates so this PATCH doesn't clobber
+      // them (the backend updates prompt_templates whenever the field is present).
+      await templatesMutation.mutateAsync({
+        userId: user.id,
+        promptTemplates: savedTemplates,
+        textTemplates: cleaned,
+      })
+      setTextTemplates(cleaned)
+      setSavedTextTemplates(cleaned)
+      setEditingTextId(null)
+      toast.success("Generate Text templates saved")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to save"
       toast.error(message)
@@ -188,6 +261,8 @@ export default function SettingsPage() {
   const hasAnyOverride = Object.keys(localTemplates).length > 0
 
   const hasTemplateChanges = JSON.stringify(localTemplates) !== JSON.stringify(savedTemplates)
+
+  const hasTextTemplateChanges = JSON.stringify(textTemplates) !== JSON.stringify(savedTextTemplates)
 
   const canToggle = PRIVATE_MODE_TIERS.has(tier)
 
@@ -468,6 +543,199 @@ export default function SettingsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Generate Text Templates (user-defined presets for the Generate Text node) */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-xl font-bold">Generate Text Templates</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 ml-auto"
+            onClick={handleAddTextTemplate}
+            disabled={!user?.id}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add Template
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Save reusable system prompts for the Generate Text node. Each template
+          appears under &ldquo;My Templates&rdquo; when you configure a Generate Text node.
+        </p>
+
+        <div className="space-y-4 mb-6">
+          {textTemplates.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 bg-card p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                No templates yet. Click &ldquo;Add Template&rdquo; to create one.
+              </p>
+            </div>
+          ) : (
+            textTemplates.map((template) => (
+              <TextTemplateCard
+                key={template.id}
+                template={template}
+                isEditing={editingTextId === template.id}
+                onStartEdit={() => setEditingTextId(template.id)}
+                onCancelEdit={() => setEditingTextId(null)}
+                onChange={handleTextTemplateChange}
+                onDelete={handleDeleteTextTemplate}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSaveTextTemplates}
+            disabled={templatesMutation.isPending || !hasTextTemplateChanges}
+            className="bg-[#ff0073] hover:bg-[#e00067] text-white"
+          >
+            {templatesMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            Save Templates
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TextTemplateCard({
+  template,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onChange,
+  onDelete,
+}: {
+  readonly template: GenerateTextTemplate
+  readonly isEditing: boolean
+  readonly onStartEdit: () => void
+  readonly onCancelEdit: () => void
+  readonly onChange: (id: string, patch: Partial<GenerateTextTemplate>) => void
+  readonly onDelete: (id: string) => void
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-card p-4">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <input
+              type="text"
+              value={template.label}
+              placeholder="Template name"
+              onChange={(e) => onChange(template.id, { label: e.target.value })}
+              className={cn(
+                "w-full rounded-md border px-2 py-1 text-sm font-semibold",
+                "bg-transparent placeholder:text-muted-foreground/50",
+                "border-zinc-200 dark:border-zinc-700",
+                "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+              )}
+              autoFocus
+            />
+          ) : (
+            <h4 className="text-sm font-semibold truncate">{template.label || "Untitled"}</h4>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {isEditing ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onCancelEdit}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              Done
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onStartEdit}
+            >
+              <Pencil className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
+          )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                  onClick={() => onDelete(template.id)}
+                  aria-label="Delete template"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete template</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">System Prompt</label>
+            <textarea
+              rows={4}
+              value={template.systemPrompt}
+              placeholder="You are a helpful assistant that…"
+              onChange={(e) => onChange(template.id, { systemPrompt: e.target.value })}
+              className={cn(
+                "mt-1 w-full rounded-md border px-3 py-2 text-sm font-mono resize-y",
+                "bg-transparent placeholder:text-muted-foreground/50",
+                "border-zinc-200 dark:border-zinc-700",
+                "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+              )}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Max Tokens (optional)</label>
+              <input
+                type="number"
+                min={1}
+                max={16384}
+                value={template.defaultMaxTokens ?? ""}
+                placeholder="e.g. 4096"
+                onChange={(e) => {
+                  const v = e.target.value.trim()
+                  onChange(template.id, { defaultMaxTokens: v === "" ? undefined : Number(v) })
+                }}
+                className={cn(
+                  "mt-1 w-full rounded-md border px-2 py-1 text-sm",
+                  "bg-transparent placeholder:text-muted-foreground/50",
+                  "border-zinc-200 dark:border-zinc-700",
+                  "focus:outline-none focus:ring-2 focus:ring-[#ff0073]/30 focus:border-[#ff0073]",
+                )}
+              />
+            </div>
+            <LlmModelSelect
+              feature="llm-chat"
+              value={template.llmModel}
+              onChange={(modelId) => onChange(template.id, { llmModel: modelId })}
+            />
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs font-mono leading-relaxed whitespace-pre-wrap text-muted-foreground line-clamp-3">
+          {template.systemPrompt || "No system prompt set."}
+        </p>
+      )}
     </div>
   )
 }

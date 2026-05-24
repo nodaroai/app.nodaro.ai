@@ -133,7 +133,7 @@ This is exposed via `client.workflows.run` if the param is supported — check t
 
 ## When NOT to use the SDK
 
-- **SSE / streaming endpoints** (e.g. `/v1/ai-writer/generate-stream`): the SDK doesn't yet expose SSE. Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
+- **SSE / streaming endpoints** (e.g. the Generate Text node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK doesn't yet expose SSE. Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
 - **Single-node single-shot routes** (e.g. `/v1/generate-image` directly): if you're just calling one provider, the SDK currently routes through `client.workflows.run` which expects a workflow. For raw single-route calls, use fetch.
 
 ## Custom fetch / timeout

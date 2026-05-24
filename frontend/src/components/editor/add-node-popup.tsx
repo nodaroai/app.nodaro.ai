@@ -604,15 +604,8 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "llm-chat",
-    label: "LLM Chat",
+    label: "Generate Text",
     icon: <MessageSquare className="h-4 w-4" />,
-    category: "AI",
-    group: "Script & Text",
-  },
-  {
-    type: "ai-writer",
-    label: "AI Agent",
-    icon: <Sparkles className="h-4 w-4" />,
     category: "AI",
     group: "Script & Text",
   },
