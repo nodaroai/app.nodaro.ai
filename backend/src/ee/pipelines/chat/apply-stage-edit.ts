@@ -34,7 +34,12 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { applyPatch, validate as validatePatch } from "fast-json-patch"
+// fast-json-patch ships as CJS (main: index.js). Node's lexer detects its
+// named exports, but tsx/esbuild's ESM loader does not — a named import
+// (`import { applyPatch } from ...`) throws "no export named applyPatch" under
+// tsx. Default-import the module object + destructure, which works under both.
+import jsonpatch from "fast-json-patch"
+const { applyPatch, validate: validatePatch } = jsonpatch
 import type {
   JsonPatch,
   PipelineStageName,

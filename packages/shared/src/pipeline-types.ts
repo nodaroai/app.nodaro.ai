@@ -44,7 +44,7 @@ export const PipelineInputSchema = z.object({
   story_prompt: z.string().min(1).max(4000),
   target_duration_seconds: z.number().int().min(5).max(600),
   format: z.enum(PIPELINE_FORMATS),
-  output_resolution: z.enum(PIPELINE_OUTPUT_RESOLUTIONS).default("1080p"),
+  output_resolution: z.enum(PIPELINE_OUTPUT_RESOLUTIONS).default("720p"),
   language: z.string().min(2).max(10).default("en"),
   mode: z.enum(PIPELINE_MODES).default("manual"),
   // Legacy back-compat — when both `mode` and `auto_mode` present, `mode` wins.

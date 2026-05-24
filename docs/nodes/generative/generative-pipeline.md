@@ -12,7 +12,7 @@ multiple LLMs and generation steps under approval gates.
 | `story_prompt` | string | yes | The story description, max 4000 chars |
 | `target_duration_seconds` | number | yes | Per-format range; max 600s |
 | `format` | enum | yes | `trailer` \| `short_film` \| `music_video` \| `reel` \| `commercial` |
-| `output_resolution` | enum | no | `720p` \| `1080p` (default) \| `4K` |
+| `output_resolution` | enum | no | `480p` \| `720p` (default) \| `1080p` \| `4K` |
 | `mode` | enum | no | `manual` (default in 1A) \| `auto` \| `guided` |
 
 ### Format duration bounds
@@ -22,7 +22,7 @@ multiple LLMs and generation steps under approval gates.
 | reel | 7 | 90 |
 | commercial | 10 | 90 |
 | trailer | 30 | 180 |
-| short_film | 30 | 600 |
+| short_film | 12 | 600 |
 | music_video | 30 | 600 |
 
 ## Modes (manual / auto / guided)

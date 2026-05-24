@@ -60,7 +60,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
   const [err, setErr] = useState<string | null>(null)
 
   const format: PipelineFormat = data.format ?? "short_film"
-  const duration = data.target_duration_seconds ?? 60
+  const duration = data.target_duration_seconds ?? 35
   const validation = validateDurationForFormat(format, duration)
 
   async function handleRun() {
@@ -85,7 +85,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
         story_prompt: data.story_prompt,
         target_duration_seconds: duration,
         format,
-        output_resolution: data.output_resolution ?? "1080p",
+        output_resolution: data.output_resolution ?? "720p",
         language: "en",
         mode: data.mode ?? "manual",
         video_critic_frame_count: data.video_critic_frame_count ?? "first_last",
@@ -146,8 +146,8 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
       <div>
         <Label>Output resolution</Label>
         <Select
-          value={data.output_resolution ?? "1080p"}
-          onValueChange={(v) => onUpdate({ output_resolution: v as "720p" | "1080p" | "4K" })}
+          value={data.output_resolution ?? "720p"}
+          onValueChange={(v) => onUpdate({ output_resolution: v as "480p" | "720p" | "1080p" | "4K" })}
         >
           <SelectTrigger>
             <SelectValue />

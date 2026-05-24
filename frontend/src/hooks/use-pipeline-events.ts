@@ -91,12 +91,16 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     void (async () => {
       const headers = await getAuthHeaders()
       const url = pipelinesApi.eventsUrl(pipelineId)
+      // SSE must bypass the Vite dev proxy (it buffers responses → socket
+      // hang up). Call VITE_API_URL directly when set; fall back to
+      // same-origin otherwise. Mirrors the AI-writer streaming path.
+      const sseBaseUrl = import.meta.env.VITE_API_URL || ""
       try {
         setConnected(true)
         for await (const frame of streamGet<{
           type: string
           data?: PipelineEvent
-        }>(url, { signal: abortCtrl.signal, headers })) {
+        }>(url, { signal: abortCtrl.signal, headers, baseUrl: sseBaseUrl || undefined })) {
           if (frame.type !== "execution" || !frame.data) continue
           const evt = frame.data
           setLastEvent(evt)
