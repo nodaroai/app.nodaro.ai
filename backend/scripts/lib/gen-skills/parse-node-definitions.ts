@@ -10,7 +10,24 @@
  *
  * Used only by backend/scripts/gen-skills.ts.
  */
-import { Project, SyntaxKind, type ObjectLiteralExpression } from "ts-morph"
+import { existsSync } from "node:fs"
+import path from "node:path"
+import {
+  Project,
+  SyntaxKind,
+  type ObjectLiteralExpression,
+  type SourceFile,
+  type VariableDeclaration,
+} from "ts-morph"
+
+/**
+ * Map non-relative module specifiers to their on-disk source roots.
+ * Add new entries here when nodes.ts starts spreading a const from another
+ * workspace package — the parser can only follow paths it knows about.
+ */
+const WORKSPACE_PACKAGE_ROOTS: Record<string, string> = {
+  "@nodaro/shared": "packages/shared/src/index",
+}
 
 export interface NodeDef {
   type: string
@@ -36,6 +53,11 @@ export interface InterfaceShape {
 export function parseNodeDefinitions(filePath: string): NodeDef[] {
   const project = new Project({ skipAddingFilesFromTsConfig: true })
   const sourceFile = project.addSourceFileAtPath(filePath)
+  // frontend/src/types/nodes.ts → repo root is 4 levels up. Used to resolve
+  // workspace-package module specifiers (e.g. `@nodaro/shared`) to on-disk
+  // source files for the spread resolver.
+  const repoRoot = path.resolve(filePath, "..", "..", "..", "..")
+  const ctx: ParseContext = { project, repoRoot }
 
   const decl = sourceFile.getVariableDeclaration("NODE_DEFINITIONS")
   if (!decl) throw new Error(`NODE_DEFINITIONS not found in ${filePath}`)
@@ -52,12 +74,17 @@ export function parseNodeDefinitions(filePath: string): NodeDef[] {
   const results: NodeDef[] = []
   for (const el of elements) {
     if (el.getKind() !== SyntaxKind.ObjectLiteralExpression) continue
-    results.push(readNodeDefObject(el.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)))
+    results.push(readNodeDefObject(el.asKindOrThrow(SyntaxKind.ObjectLiteralExpression), ctx))
   }
   return results
 }
 
-function readNodeDefObject(obj: ObjectLiteralExpression): NodeDef {
+interface ParseContext {
+  project: Project
+  repoRoot: string
+}
+
+function readNodeDefObject(obj: ObjectLiteralExpression, ctx: ParseContext): NodeDef {
   const type = readStringProp(obj, "type")
   const label = readStringProp(obj, "label")
   const category = readStringProp(obj, "category")
@@ -72,7 +99,7 @@ function readNodeDefObject(obj: ObjectLiteralExpression): NodeDef {
       .asKindOrThrow(SyntaxKind.PropertyAssignment)
       .getInitializer()
     if (initExpr) {
-      defaultData = readObjectLiteralOrCast(initExpr) ?? {}
+      defaultData = readObjectLiteralOrCast(initExpr, ctx) ?? {}
     }
   }
 
@@ -138,36 +165,36 @@ function readStringArrayProp(obj: ObjectLiteralExpression, name: string): string
 
 function readObjectLiteralOrCast(
   expr: import("ts-morph").Node,
+  ctx: ParseContext,
 ): Record<string, unknown> | undefined {
   if (expr.getKind() === SyntaxKind.ObjectLiteralExpression) {
-    return readObjectLiteral(expr.asKindOrThrow(SyntaxKind.ObjectLiteralExpression))
+    return readObjectLiteral(expr.asKindOrThrow(SyntaxKind.ObjectLiteralExpression), ctx)
   }
   if (expr.getKind() === SyntaxKind.AsExpression) {
     const inner = expr.asKindOrThrow(SyntaxKind.AsExpression).getExpression()
-    return readObjectLiteralOrCast(inner)
+    return readObjectLiteralOrCast(inner, ctx)
   }
   return undefined
 }
 
-function readObjectLiteral(obj: ObjectLiteralExpression): Record<string, unknown> {
+function readObjectLiteral(obj: ObjectLiteralExpression, ctx: ParseContext): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const prop of obj.getProperties()) {
     if (prop.getKind() === SyntaxKind.SpreadAssignment) {
-      // TODO(gen-skills): Resolve spread references (e.g. `...MUSIC_GENRE_DEFAULT_DATA`)
-      // by following the imported const back to its definition. Today the 5
-      // known spreads in frontend/src/types/nodes.ts target objects that are
-      // empty (music-genre, music-mood, voice-character, voice-delivery) or
-      // contain only `{ instruments: [] }` (instrumentation) — none of which
-      // currently matter in the rendered skill. The moment any of those gains
-      // a non-trivial key, the rendered skill content will silently drift and
-      // CI's drift gate won't catch it. Promote this warn to a throw once a
-      // resolver exists.
-      const sf = prop.getSourceFile()
-      console.warn(
-        `gen-skills parser: silently skipping spread '${prop.getText()}' at ${sf.getFilePath()}:${prop.getStartLineNumber()}. ` +
-          `Spread targets are not resolved — any non-empty keys will be dropped from the rendered skill. ` +
-          `Inline the spread's keys into the literal, or extend the parser to resolve module-scoped const refs.`,
-      )
+      const spread = prop.asKindOrThrow(SyntaxKind.SpreadAssignment)
+      const resolved = resolveSpread(spread, ctx)
+      // Loud failure: with a resolver in place, any unresolved spread is a
+      // real bug — either a new identifier the resolver can't follow, or a
+      // missing workspace-package mapping. Silent skipping would let the
+      // rendered skill drift past CI's drift gate.
+      if (resolved === undefined) {
+        const sf = prop.getSourceFile()
+        throw new Error(
+          `gen-skills parser cannot resolve spread '${prop.getText()}' at ${sf.getFilePath()}:${prop.getStartLineNumber()}. ` +
+            `Inline the spread's keys into the literal, or add a resolution path (same-file const, relative import, or workspace-package entry in WORKSPACE_PACKAGE_ROOTS).`,
+        )
+      }
+      Object.assign(out, resolved)
       continue
     }
     if (prop.getKind() !== SyntaxKind.PropertyAssignment) continue
@@ -175,12 +202,12 @@ function readObjectLiteral(obj: ObjectLiteralExpression): Record<string, unknown
     const name = pa.getNameNode().getText().replace(/^["']|["']$/g, "")
     const init = pa.getInitializer()
     if (!init) continue
-    out[name] = readLiteralValue(init)
+    out[name] = readLiteralValue(init, ctx)
   }
   return out
 }
 
-function readLiteralValue(expr: import("ts-morph").Node): unknown {
+function readLiteralValue(expr: import("ts-morph").Node, ctx: ParseContext): unknown {
   switch (expr.getKind()) {
     case SyntaxKind.StringLiteral:
       return expr.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralText()
@@ -214,7 +241,7 @@ function readLiteralValue(expr: import("ts-morph").Node): unknown {
       // the loud default branch.
       const pu = expr.asKindOrThrow(SyntaxKind.PrefixUnaryExpression)
       const operator = pu.getOperatorToken()
-      const operand = readLiteralValue(pu.getOperand())
+      const operand = readLiteralValue(pu.getOperand(), ctx)
       if (typeof operand === "number") {
         if (operator === SyntaxKind.MinusToken) return -operand
         if (operator === SyntaxKind.PlusToken) return operand
@@ -226,12 +253,12 @@ function readLiteralValue(expr: import("ts-morph").Node): unknown {
     }
     case SyntaxKind.ArrayLiteralExpression: {
       const arr = expr.asKindOrThrow(SyntaxKind.ArrayLiteralExpression)
-      return arr.getElements().map((e) => readLiteralValue(e))
+      return arr.getElements().map((e) => readLiteralValue(e, ctx))
     }
     case SyntaxKind.ObjectLiteralExpression:
-      return readObjectLiteral(expr.asKindOrThrow(SyntaxKind.ObjectLiteralExpression))
+      return readObjectLiteral(expr.asKindOrThrow(SyntaxKind.ObjectLiteralExpression), ctx)
     case SyntaxKind.AsExpression:
-      return readLiteralValue(expr.asKindOrThrow(SyntaxKind.AsExpression).getExpression())
+      return readLiteralValue(expr.asKindOrThrow(SyntaxKind.AsExpression).getExpression(), ctx)
     default: {
       const sf = expr.getSourceFile()
       throw new Error(
@@ -239,6 +266,107 @@ function readLiteralValue(expr: import("ts-morph").Node): unknown {
       )
     }
   }
+}
+
+/**
+ * Resolve `...IDENT` inside an object literal back to a `Record<string, unknown>`.
+ *
+ * Strategy: identifier → same-file VariableDeclaration; failing that, scan
+ * ImportDeclarations in the current file, resolve the module specifier to an
+ * on-disk source file (relative path or workspace package), then recursively
+ * follow `export ... from` re-exports until a `VariableDeclaration` is found.
+ * Returns undefined if no resolution path exists — the caller throws.
+ */
+function resolveSpread(
+  spread: import("ts-morph").SpreadAssignment,
+  ctx: ParseContext,
+): Record<string, unknown> | undefined {
+  const expr = spread.getExpression()
+  if (expr.getKind() !== SyntaxKind.Identifier) return undefined
+  const name = expr.getText()
+  return resolveExportedConst(spread.getSourceFile(), name, ctx)
+}
+
+function resolveExportedConst(
+  file: SourceFile,
+  name: string,
+  ctx: ParseContext,
+): Record<string, unknown> | undefined {
+  const local = file.getVariableDeclaration(name)
+  if (local) return evalObjectDecl(local, ctx)
+
+  for (const imp of file.getImportDeclarations()) {
+    const named = imp.getNamedImports().find((n) => {
+      const alias = n.getAliasNode()?.getText()
+      return (alias ?? n.getName()) === name
+    })
+    if (!named) continue
+    const target = resolveModuleToSourceFile(imp.getModuleSpecifierValue(), file, ctx)
+    if (!target) continue
+    return resolveExportedConst(target, named.getName(), ctx)
+  }
+
+  for (const exp of file.getExportDeclarations()) {
+    const moduleSpec = exp.getModuleSpecifierValue()
+    if (!moduleSpec) continue
+    const target = resolveModuleToSourceFile(moduleSpec, file, ctx)
+    if (!target) continue
+    const named = exp.getNamedExports()
+    if (named.length === 0) {
+      // export * from "./x" — recurse with the same name
+      const resolved = resolveExportedConst(target, name, ctx)
+      if (resolved !== undefined) return resolved
+      continue
+    }
+    const match = named.find((n) => {
+      const alias = n.getAliasNode()?.getText()
+      return (alias ?? n.getName()) === name
+    })
+    if (match) return resolveExportedConst(target, match.getName(), ctx)
+  }
+
+  return undefined
+}
+
+function evalObjectDecl(
+  decl: VariableDeclaration,
+  ctx: ParseContext,
+): Record<string, unknown> | undefined {
+  const init = decl.getInitializer()
+  if (!init) return undefined
+  return readObjectLiteralOrCast(init, ctx)
+}
+
+/**
+ * Map a module specifier to an on-disk `.ts` source file and load it into the
+ * shared project (idempotent). Handles:
+ *   - relative paths (`./foo`, `../foo/bar`) — strips a trailing `.js` since
+ *     ESM-internal re-exports in this repo write `from "./foo.js"`
+ *   - bare specifiers listed in WORKSPACE_PACKAGE_ROOTS (e.g. `@nodaro/shared`)
+ * Returns undefined for unknown bare specifiers so the caller can keep looking.
+ */
+function resolveModuleToSourceFile(
+  spec: string | undefined,
+  fromFile: SourceFile,
+  ctx: ParseContext,
+): SourceFile | undefined {
+  if (!spec) return undefined
+  let basePath: string
+  if (spec.startsWith(".")) {
+    const stripped = spec.replace(/\.js$/, "")
+    basePath = path.resolve(path.dirname(fromFile.getFilePath()), stripped)
+  } else {
+    const rel = WORKSPACE_PACKAGE_ROOTS[spec]
+    if (!rel) return undefined
+    basePath = path.resolve(ctx.repoRoot, rel)
+  }
+  for (const candidate of [`${basePath}.ts`, `${basePath}.tsx`, `${basePath}/index.ts`, `${basePath}/index.tsx`]) {
+    if (existsSync(candidate)) {
+      // ts-morph throws on a duplicate add; check first.
+      return ctx.project.getSourceFile(candidate) ?? ctx.project.addSourceFileAtPath(candidate)
+    }
+  }
+  return undefined
 }
 
 export function parseDataInterface(
