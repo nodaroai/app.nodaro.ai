@@ -16,7 +16,7 @@ export type PipelineMode = (typeof PIPELINE_MODES)[number]
 export const PIPELINE_ACTIVATION_MODES = ["interactive", "programmatic"] as const
 export type PipelineActivationMode = (typeof PIPELINE_ACTIVATION_MODES)[number]
 
-export const PIPELINE_OUTPUT_RESOLUTIONS = ["720p", "1080p", "4K"] as const
+export const PIPELINE_OUTPUT_RESOLUTIONS = ["480p", "720p", "1080p", "4K"] as const
 export type PipelineOutputResolution = (typeof PIPELINE_OUTPUT_RESOLUTIONS)[number]
 
 export const PER_FORMAT_DURATION_BOUNDS: Record<
@@ -26,7 +26,7 @@ export const PER_FORMAT_DURATION_BOUNDS: Record<
   reel: { min: 7, max: 90 },
   commercial: { min: 10, max: 90 },
   trailer: { min: 30, max: 180 },
-  short_film: { min: 30, max: 600 },
+  short_film: { min: 12, max: 600 },
   music_video: { min: 30, max: 600 },
 }
 

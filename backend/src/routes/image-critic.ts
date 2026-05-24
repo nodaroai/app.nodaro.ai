@@ -40,7 +40,7 @@ You receive image(s) and optional context. Score from 0.0 (terrible) to 1.0
 (perfect). Output ONLY a single JSON object — no markdown fences, no prose,
 no <tool_use>. The exact JSON shape:
 
-{"score": 0.0-1.0, "feedback": "<1-3 imperative sentences>", "issues": [...]?}
+{"score": 0.0-1.0, "feedback": "<1-3 imperative sentences>", "issues": [{"category": "<short label>", "severity": "blocking" | "warning" | "info", "description": "<imperative fix>"}]?}
 
 For "all" mode also include "perMode": { "<leaf-mode>": { "score": ..., "feedback": ... }, ... }
 where <leaf-mode> is one of: character-consistency, realism, prompt-adherence,

@@ -22,9 +22,6 @@ function StoryboardView({ data }: SceneViewProps) {
           {shots.length} shot{shots.length === 1 ? "" : "s"} · {data.duration_seconds}s
         </div>
       </div>
-      <div className="font-medium text-sm truncate text-zinc-900 dark:text-zinc-100">
-        {data.label ?? data.description ?? "Untitled scene"}
-      </div>
       {shots.length === 0 ? (
         <div className="flex items-center justify-center h-16 rounded-md border-2 border-dashed border-zinc-200 dark:border-[#2D2D2D] text-[10px] text-zinc-400 dark:text-zinc-500">
           No shots yet

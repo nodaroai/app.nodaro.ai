@@ -33,9 +33,6 @@ function VideoView({ data }: SceneViewProps) {
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
         <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{data.duration_seconds}s</div>
       </div>
-      <div className="font-medium text-sm truncate text-zinc-900 dark:text-zinc-100">
-        {data.label ?? data.description ?? "Untitled scene"}
-      </div>
       {compositeUrl ? (
         <video
           controls

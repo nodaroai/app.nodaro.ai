@@ -28,10 +28,22 @@ const issue = z.object({
   description: z.string().max(400),
 })
 
+// The critic LLM frequently emits `issues` as a bare string array even when the
+// prompt asks for objects. Coerce strings into the issue shape so an otherwise
+// well-formed critique isn't rejected as invalid_llm_output (which surfaced as
+// a 502 from the /v1/image-critic route). Objects pass through unchanged.
+const issueLenient = z.preprocess(
+  (v) =>
+    typeof v === "string"
+      ? { category: "general", severity: "warning", description: v.slice(0, 400) }
+      : v,
+  issue,
+)
+
 export const ImageCriticResultSchema = z.object({
   score: z.number().min(0).max(1),
   feedback: z.string().min(1).max(600),
-  issues: z.array(issue).optional(),
+  issues: z.array(issueLenient).optional(),
   perMode: z
     .object({
       "character-consistency": modeResult.optional(),

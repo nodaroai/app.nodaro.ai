@@ -12,6 +12,7 @@
     "worker": "tsx watch src/worker.ts",
     "render-worker": "tsx watch src/render-worker.ts",
     "pipeline-worker": "node dist/pipeline-worker.js",
+    "pipeline-worker:dev": "tsx watch src/pipeline-worker.ts",
     "lint": "eslint src/",
     "lint:tenant-scope": "node scripts/check-tenant-scope.mjs",
     "lint:admin-client-import": "node scripts/check-admin-client-import.mjs",

@@ -58,4 +58,29 @@ describe("image-critic shared types", () => {
     expect(() => ImageCriticResultSchema.parse({ score: 1.5, feedback: "x" })).toThrow()
     expect(() => ImageCriticResultSchema.parse({ score: -0.1, feedback: "x" })).toThrow()
   })
+
+  it("coerces bare-string issues into the object shape (LLM drift → was a 502)", () => {
+    const result = ImageCriticResultSchema.parse({
+      score: 0.1,
+      feedback: "Match the facial bone structure to the reference.",
+      issues: ["different hair color (black vs blonde)", "different jaw shape"],
+    })
+    expect(result.issues).toEqual([
+      { category: "general", severity: "warning", description: "different hair color (black vs blonde)" },
+      { category: "general", severity: "warning", description: "different jaw shape" },
+    ])
+  })
+
+  it("accepts object-shaped issues unchanged", () => {
+    const result = ImageCriticResultSchema.parse({
+      score: 0.4,
+      feedback: "Fix the eyes.",
+      issues: [{ category: "anatomy", severity: "blocking", description: "Eyes misaligned." }],
+    })
+    expect(result.issues?.[0]).toEqual({
+      category: "anatomy",
+      severity: "blocking",
+      description: "Eyes misaligned.",
+    })
+  })
 })

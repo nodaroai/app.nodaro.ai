@@ -1,54 +1,75 @@
 "use client"
 
 import { memo } from "react"
-import { Handle, Position, type NodeProps } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
+import { Film, Type, Clapperboard } from "lucide-react"
+import { BaseNode } from "./base-node"
+import { HandleIcon } from "./handle-icon"
+import { EditableNodeLabel } from "./editable-node-label"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 
-function GenerativePipelineNodeImpl({ data, selected }: NodeProps) {
+function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerativePipelineNodeData
+  const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.status ?? "queued"
+  const label = nodeData.label ?? "Story → Video"
   return (
     <div
-      className={cn(
-        "relative rounded-lg border-2 bg-white dark:bg-[#1E1E1E] p-3 min-w-[200px] shadow-sm",
-        selected
-          ? "border-blue-500"
-          : "border-zinc-300 dark:border-[#2D2D2D]",
-      )}
+      className="relative"
+      style={{ width: "100%", height: "100%" }}
       data-testid="generative-pipeline-node"
     >
-      <Handle type="target" position={Position.Left} id="story_prompt" style={{ top: 24 }} />
-      <span
-        className="absolute left-3 top-[24px] -translate-y-1/2 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none"
+      {/* Floating label above node */}
+      <EditableNodeLabel
+        label={label}
+        icon={<Film className="w-3.5 h-3.5" />}
+        onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
+      />
+      <BaseNode
+        id={id}
+        label={label}
+        icon={<Film className="h-4 w-4" />}
+        category="scene"
+        selected={selected}
+        isRunning={status === "running"}
+        minWidth={200}
+        minHeight={120}
+        hideHeader
+        handles={[
+          { id: "story_prompt", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
+          { id: "final_video", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+        ]}
       >
-        prompt
-      </span>
-      <div className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Story → Video</div>
-      <div className="mt-1 font-semibold">{nodeData.label ?? "Pipeline"}</div>
-      <div className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
-        {nodeData.target_duration_seconds ?? "—"}s · {nodeData.format ?? "—"}
-      </div>
-      <div className="mt-2 text-xs">
-        <span
-          className={cn(
-            "rounded px-1.5 py-0.5",
-            status === "running" && "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-            status === "awaiting_approval" && "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-            status === "completed" && "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-            status === "failed" && "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-            status === "cancelled" && "bg-zinc-100 text-zinc-700 dark:bg-[#2D2D2D] dark:text-zinc-300",
-          )}
-        >
-          {status.replace("_", " ")}
-        </span>
-      </div>
-      <Handle type="source" position={Position.Right} id="final_video" style={{ top: 24 }} />
-      <span
-        className="absolute right-3 top-[24px] -translate-y-1/2 text-[10px] text-zinc-600 dark:text-zinc-300 whitespace-nowrap pointer-events-none"
-      >
-        video
-      </span>
+        <div className="flex h-full flex-col gap-2 p-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Story → Video
+          </div>
+          <div className="text-xs text-zinc-600 dark:text-zinc-300">
+            {nodeData.target_duration_seconds ?? "—"}s · {(nodeData.format ?? "—").replace("_", " ")}
+          </div>
+          <div>
+            <span
+              className={cn(
+                "inline-block rounded px-1.5 py-0.5 text-xs",
+                status === "queued" && "bg-zinc-100 text-zinc-600 dark:bg-[#2D2D2D] dark:text-zinc-400",
+                status === "running" && "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+                status === "awaiting_approval" && "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+                status === "completed" && "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
+                status === "failed" && "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+                status === "cancelled" && "bg-zinc-100 text-zinc-700 dark:bg-[#2D2D2D] dark:text-zinc-300",
+              )}
+            >
+              {status.replace("_", " ")}
+            </span>
+          </div>
+        </div>
+      </BaseNode>
+      {/* Story prompt input handle icon (bottom-left) */}
+      <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
+      {/* Final video output handle icon (top-right) */}
+      <HandleIcon icon={<Clapperboard />} color="pink" side="right" top="20px" label="video" />
     </div>
   )
 }

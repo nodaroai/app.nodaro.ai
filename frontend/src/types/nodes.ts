@@ -3950,7 +3950,7 @@ export interface GenerativePipelineNodeData {
   story_prompt?: string
   target_duration_seconds?: number
   format?: PipelineFormat
-  output_resolution?: "720p" | "1080p" | "4K"
+  output_resolution?: "480p" | "720p" | "1080p" | "4K"
   mode?: PipelineMode
   /**
    * Phase 1D.2c-b-ii §3 — chooses how many frames the Video Critic samples from
@@ -6582,9 +6582,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["final_video"],
     defaultData: {
       label: "Story → Video",
-      target_duration_seconds: 60,
+      target_duration_seconds: 35,
       format: "short_film",
-      output_resolution: "1080p",
+      output_resolution: "720p",
       mode: "manual",
     } as GenerativePipelineNodeData,
   },

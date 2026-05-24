@@ -10,6 +10,10 @@ vi.mock("@xyflow/react", () => ({
   ),
 }))
 
+vi.mock("@/hooks/use-workflow-store", () => ({
+  useWorkflowStore: (selector: any) => selector({ updateNodeData: vi.fn() }),
+}))
+
 function makeData(overrides: Partial<SceneNodeFrontendData> = {}): SceneNodeFrontendData {
   return {
     label: "Scene 1",

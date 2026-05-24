@@ -281,7 +281,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
         { key: "story_prompt", type: "text", required: true },
         { key: "target_duration_seconds", type: "number", required: true },
         { key: "format", type: "select", required: true, options: ["trailer", "short_film", "music_video", "reel", "commercial"] },
-        { key: "output_resolution", type: "select", options: ["720p", "1080p", "4K"] },
+        { key: "output_resolution", type: "select", options: ["480p", "720p", "1080p", "4K"] },
         { key: "mode", type: "select", options: ["manual", "auto"] },
       ],
     },
