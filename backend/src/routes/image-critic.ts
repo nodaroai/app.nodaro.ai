@@ -15,6 +15,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { llmComplete, type LlmContentBlock } from "../lib/llm-client.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
+import sharp from "sharp"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -70,19 +71,50 @@ const MODE_TAILS: Record<ImageCriticMode, string> = {
     "Run every applicable check given the inputs you have. Always include realism, anatomy, aesthetic. Include character-consistency and style-match only if a reference image is provided. Include prompt-adherence only if a target prompt is provided. Emit perMode with one entry per check that ran (NEVER an 'all' key). The top-level score must be the minimum of the perMode scores; the top-level feedback must concatenate per-mode feedback ordered worst-score-first.",
 }
 
+// Anthropic rejects any single base64 image whose encoded payload exceeds 5 MB
+// (5_242_880 bytes). base64 inflates raw bytes by 4/3, so the raw image must stay
+// under ~3.9 MB; we re-encode past a conservative 3.5 MB budget to leave headroom.
+const ANTHROPIC_B64_RAW_BUDGET = 3_500_000
+// Sonnet/Haiku downscale anything past a 1568px long edge internally, so capping
+// there before sending costs the model no fidelity it would otherwise have used.
+const ANTHROPIC_NATIVE_LONG_EDGE = 1568
+
 async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
   try {
     const r = await safeFetch(url, { timeoutMs: 30_000 })
-    if (r.ok) {
-      const buf = Buffer.from(await r.arrayBuffer())
-      const mediaType =
-        (r.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
+    if (!r.ok) return { type: "image", url }
+
+    const buf = Buffer.from(await r.arrayBuffer())
+    const mediaType =
+      (r.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
+
+    // Small enough to send verbatim — preserve the original encoding.
+    if (buf.byteLength <= ANTHROPIC_B64_RAW_BUDGET) {
       return { type: "image_base64", mediaType, data: buf.toString("base64") }
     }
+
+    // Oversized: downscale to the model's native long edge and re-encode as JPEG
+    // so the base64 payload clears Anthropic's 5 MB-per-image cap. Flatten any
+    // alpha onto white so transparent PNGs don't pick up a black background.
+    const jpeg = await sharp(buf)
+      .rotate() // honor EXIF orientation before metadata is dropped
+      .resize(ANTHROPIC_NATIVE_LONG_EDGE, ANTHROPIC_NATIVE_LONG_EDGE, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 90 })
+      .toBuffer()
+    if (jpeg.byteLength <= ANTHROPIC_B64_RAW_BUDGET) {
+      return { type: "image_base64", mediaType: "image/jpeg", data: jpeg.toString("base64") }
+    }
+    // Pathologically dense even after downscale — let Claude fetch the URL itself
+    // (no base64 size cap on URL sources) rather than send an oversized payload.
+    return { type: "image", url }
   } catch {
-    // fall through
+    // Network error, SSRF block, or an undecodable image → URL pass-through.
+    return { type: "image", url }
   }
-  return { type: "image", url }
 }
 
 function escapeXml(s: string): string {

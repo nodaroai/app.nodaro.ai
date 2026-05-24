@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import Fastify, { FastifyInstance } from "fastify"
 import { imageCriticRoutes } from "../image-critic.js"
+import sharp from "sharp"
+import { randomBytes } from "node:crypto"
 
 vi.mock("@/lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
@@ -211,5 +213,64 @@ describe("POST /v1/image-critic", () => {
     const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
     expect(res.statusCode).toBe(200)
     expect(res.json().score).toBe(0.5)
+  })
+
+  // --- oversized-image handling (Anthropic rejects base64 images > 5 MB) ---
+
+  function mockFetchReturning(buf: Buffer, contentType: string) {
+    ;(safeFetch as any).mockResolvedValue({
+      ok: true,
+      headers: {
+        get: (h: string) => (h.toLowerCase() === "content-type" ? contentType : null),
+      },
+      arrayBuffer: async () =>
+        buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    })
+  }
+
+  function imageBlockSentToClaude() {
+    const call = (llmComplete as any).mock.calls[0][0]
+    return call.messages[0].content.find((b: any) => b.type === "image_base64")
+  }
+
+  it("downsizes an oversized image so the base64 payload stays under Anthropic's 5 MB cap", async () => {
+    // Random noise is ~incompressible, so this PNG lands well over the raw-byte
+    // budget — mirroring the 6.3 MB PNG (→ 8.4 MB base64) that triggered the 400.
+    const big = await sharp(randomBytes(1800 * 1800 * 3), {
+      raw: { width: 1800, height: 1800, channels: 3 },
+    })
+      .png()
+      .toBuffer()
+    expect(big.byteLength).toBeGreaterThan(3_500_000) // sanity: genuinely oversized
+    mockFetchReturning(big, "image/png")
+    ;(llmComplete as any).mockResolvedValue(buildResponse(0.8))
+
+    const app = await setupApp()
+    const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
+
+    expect(res.statusCode).toBe(200)
+    const block = imageBlockSentToClaude()
+    expect(block).toBeTruthy()
+    expect(block.data.length).toBeLessThanOrEqual(5_242_880) // base64 string ≤ 5 MB
+    expect(block.mediaType).toBe("image/jpeg") // re-encoded on the downscale path
+  })
+
+  it("sends a small image as base64 untouched (no re-encode)", async () => {
+    const small = await sharp({
+      create: { width: 48, height: 48, channels: 3, background: "#777777" },
+    })
+      .png()
+      .toBuffer()
+    expect(small.byteLength).toBeLessThan(3_500_000)
+    mockFetchReturning(small, "image/png")
+    ;(llmComplete as any).mockResolvedValue(buildResponse(0.8))
+
+    const app = await setupApp()
+    const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
+
+    expect(res.statusCode).toBe(200)
+    const block = imageBlockSentToClaude()
+    expect(block.mediaType).toBe("image/png") // original encoding preserved
+    expect(block.data).toBe(small.toString("base64"))
   })
 })
