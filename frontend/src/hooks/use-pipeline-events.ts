@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import type {
   PipelineEvent,
   PipelineDriftSummary,
+  PipelineStageName,
   SubGateName,
 } from "@nodaro/shared"
 import type { ChatTurn } from "@nodaro/client"
@@ -38,6 +39,15 @@ interface UsePipelineEventsResult {
    * rather than mirroring every field into hook state.
    */
   readonly currentSubGate: SubGateName | null
+  /**
+   * Most recent `stage:progress` LLM-streaming narrative for the active
+   * stage, or `null` when no stage is mid-stream. The backend emits these
+   * from `callLLM` when a caller opts in via `onProgress` (Stage 1
+   * Showrunner today). The hook auto-clears the value on the next
+   * `stage:status` event for the same stage so a stale "Drafting plan…"
+   * doesn't outlive its run.
+   */
+  readonly stageProgress: { stageName: PipelineStageName; message: string; bytesSoFar?: number } | null
 }
 
 /**
@@ -60,6 +70,9 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
   const [connected, setConnected] = useState(false)
   const [drift, setDrift] = useState<PipelineDriftSummary | null>(null)
   const [currentSubGate, setCurrentSubGate] = useState<SubGateName | null>(null)
+  const [stageProgress, setStageProgress] = useState<
+    { stageName: PipelineStageName; message: string; bytesSoFar?: number } | null
+  >(null)
 
   // Zustand setters are referentially stable — read once per effect run and
   // call directly inside the SSE handler. No ref wrappers needed.
@@ -79,6 +92,7 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     setDrift(null)
     setLastEvent(null)
     setCurrentSubGate(null)
+    setStageProgress(null)
     // Mirror into the workflow store so the canvas-side live-build hooks
     // (auto-pan + ELK) can react without re-subscribing to SSE.
     setStoreLastAddedNodeId(null)
@@ -138,6 +152,19 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
             ) {
               setCurrentSubGate(null)
             }
+            // Clear the LLM-streaming progress banner once the matching
+            // stage transitions out of `running`. Without this the
+            // "Drafting plan…" message persists after the stage's actual
+            // status arrives and starts driving the panel.
+            setStageProgress((prev) =>
+              prev && prev.stageName === evt.stageName ? null : prev,
+            )
+          } else if (evt.type === "stage:progress") {
+            setStageProgress({
+              stageName: evt.stageName,
+              message: evt.message,
+              bytesSoFar: evt.bytesSoFar,
+            })
           } else if (evt.type === "pipeline:music_ready") {
             // eslint-disable-next-line no-console
             console.info("[pipeline] music_ready", evt.musicAssetUrl)
@@ -218,5 +245,5 @@ export function usePipelineEvents(pipelineId: string | undefined): UsePipelineEv
     queryClient,
   ])
 
-  return { lastEvent, connected, drift, currentSubGate }
+  return { lastEvent, connected, drift, currentSubGate, stageProgress }
 }
