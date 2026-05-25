@@ -19,6 +19,10 @@ export interface HandleConfig {
   readonly label?: string
   readonly top?: string
   readonly hideHandle?: boolean
+  /** When true, BaseNode does NOT render a `<Handle>` for this entry — the
+   *  node component owns rendering (e.g. via `HandleWithPopover`). The entry
+   *  still counts toward node sizing (`leftCount` / `rightCount`). */
+  readonly external?: boolean
   readonly customStyle?: React.CSSProperties
 }
 
@@ -143,14 +147,33 @@ function BaseNodeComponent({
   // explicit width yet (never manually resized), promote it to 320px.
   // Re-runs when height becomes undefined (Fit Content) so the node snaps
   // back to its aspect-correct size.
+  //
+  // Floor-clamp: if the aspect-correct height would fall below the
+  // handle-driven `effectiveMinHeight` (e.g. landscape image on a 6-handle
+  // Generate Image node), bump height up to the floor. ONLY widen the box
+  // to maintain aspect when the user hasn't explicitly resized (no
+  // `rf-resized` className) — otherwise we'd silently balloon a user's
+  // deliberately compact width on every aspect-ratio change. Also clamp
+  // width to `minWidth` so portrait images don't write below the floor.
   useEffect(() => {
     if (!imageAspectRatio || !id) return
     const state = useWorkflowStore.getState()
     const node = state.nodes.find((n) => n.id === id)
     const hasExplicitWidth = typeof node?.width === "number"
-    const w = hasExplicitWidth ? node!.width! : 320
-    const correctH = w / imageAspectRatio
-    if (hasExplicitWidth && typeof node?.height === "number" && Math.abs(node.height - correctH) < 2) return
+    let w = hasExplicitWidth ? node!.width! : 320
+    let correctH = w / imageAspectRatio
+    if (correctH < effectiveMinHeight) {
+      correctH = effectiveMinHeight
+      if (!hasExplicitWidth) {
+        // First-time sizing — derive width from height × aspect, but never
+        // below minWidth (would write a sub-minimum box on portrait images).
+        w = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
+      }
+      // hasExplicitWidth: preserve user-chosen width. The image renders
+      // letterboxed/cropped via `object-cover` — acceptable trade-off for
+      // not silently overriding a deliberate manual resize.
+    }
+    if (hasExplicitWidth && typeof node?.height === "number" && Math.abs(node.height - correctH) < 2 && Math.abs((node.width ?? 0) - w) < 2) return
     const cls = node?.className?.includes("rf-resized")
       ? node.className
       : ((node?.className ?? "") + " rf-resized").trim()
@@ -159,7 +182,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, width: w, height: correctH, className: cls } : n
       ),
     })
-  }, [imageAspectRatio, id, storedHeight])
+  }, [imageAspectRatio, id, storedHeight, effectiveMinHeight, minWidth])
 
   const { isMobile } = useMobileCanvas()
   const altPressed = useAltKeyStore((s) => s.pressed)
@@ -497,7 +520,7 @@ function BaseNodeComponent({
 
       {handles.map((h) => (
         <div key={h.id}>
-          <Handle
+          {!h.external && <Handle
             id={h.id}
             type={h.type}
             position={h.position}
@@ -512,7 +535,7 @@ function BaseNodeComponent({
               transform: 'translateY(-50%)',
               zIndex: 30,
             }}
-          />
+          />}
           {h.label && h.top && (
             <span
               className={cn(

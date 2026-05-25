@@ -17,6 +17,9 @@ const COLOR_MAP = {
   orange: { bg: "bg-orange-400", shadow: "shadow-orange-500/30" },
   purple: { bg: "bg-purple-400", shadow: "shadow-purple-500/30" },
   emerald: { bg: "bg-emerald-400", shadow: "shadow-emerald-500/30" },
+  // Used for Generate Image v2: References (cyan/location color) + Subjects (rose/character color).
+  cyanLocation: { bg: "bg-[#22D3EE]", shadow: "shadow-cyan-500/30" },
+  rose: { bg: "bg-[#F472B6]", shadow: "shadow-pink-500/30" },
 } as const
 
 interface HandleIconProps {

@@ -37,7 +37,7 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
   "node-data-shape": "**Type:** \`generate-image\`
 **Category:** ai
 **Credit cost:** 5
-**Inputs (target handles):** \`in\`
+**Inputs (target handles):** \`prompt\`, \`negative\`, \`references\`, \`assets\`, \`elements\`, \`look\`
 **Outputs (source handles):** \`image\`
 
 **Required data fields:**

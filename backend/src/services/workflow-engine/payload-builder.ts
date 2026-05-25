@@ -1196,7 +1196,15 @@ function hasConnectedStyleNode(
   const edges = ctx?.edges ?? []
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
-    if (edge.targetHandle !== "cinematography") continue
+    // Generate Image v2.1 splits `style` into `look` + `elements`; accept all
+    // four (legacy + v2 + v2.1) so the connected-style check stays correct
+    // across the migration window.
+    if (
+      edge.targetHandle !== "cinematography" &&
+      edge.targetHandle !== "style" &&
+      edge.targetHandle !== "look" &&
+      edge.targetHandle !== "elements"
+    ) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (srcNode?.type === "style") return true
   }
@@ -1226,7 +1234,14 @@ function collectCinematographyHints(
   const exclude = options?.excludeTypes
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
-    if (edge.targetHandle !== "cinematography") continue
+    // v2.1: accept `cinematography` / `style` / `look` / `elements` — all four
+    // route hints through this same collector at runtime.
+    if (
+      edge.targetHandle !== "cinematography" &&
+      edge.targetHandle !== "style" &&
+      edge.targetHandle !== "look" &&
+      edge.targetHandle !== "elements"
+    ) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     if (exclude?.has(srcNode.type ?? "")) continue

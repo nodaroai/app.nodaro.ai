@@ -118,7 +118,15 @@ export function collectCinematographyHints(
   const exclude = options?.excludeTypes
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
-    if (edge.targetHandle !== "cinematography") continue
+    // Generate Image v2.1 splits the legacy `cinematography` / `style` handle
+    // into `look` and `elements`. Accept all four so pre-migration AND
+    // post-migration workflows still inject hints.
+    if (
+      edge.targetHandle !== "cinematography" &&
+      edge.targetHandle !== "style" &&
+      edge.targetHandle !== "look" &&
+      edge.targetHandle !== "elements"
+    ) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (!srcNode) continue
     if (exclude?.has(srcNode.type ?? "")) continue
@@ -150,7 +158,12 @@ export function hasConnectedStyleNode(
   if (!consumerNodeId) return false
   for (const edge of edges) {
     if (edge.target !== consumerNodeId) continue
-    if (edge.targetHandle !== "cinematography") continue
+    if (
+      edge.targetHandle !== "cinematography" &&
+      edge.targetHandle !== "style" &&
+      edge.targetHandle !== "look" &&
+      edge.targetHandle !== "elements"
+    ) continue
     const srcNode = nodes.find((n) => n.id === edge.source)
     if (srcNode?.type === "style") return true
   }

@@ -27,6 +27,8 @@ import { CanvasToolbar } from "./canvas-toolbar"
 import { ViewModeToggle } from "./canvas-toolbar/view-mode-toggle"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
+import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
@@ -763,6 +765,18 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         const mediaOnly = new Set(["image", "video", "audio", "startFrame", "endFrame", "video1", "video2", "video3", "video4", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio"])
         if (mediaOnly.has(th)) return false
       }
+      // Generate Image v2: enforce typed-handle compatibility
+      const targetNode = connection.target ? getNode(connection.target) : null
+      if (targetNode?.type === "generate-image" && connection.targetHandle) {
+        const sourceNode = connection.source ? getNode(connection.source) : null
+        if (sourceNode) {
+          return isValidGenerateImageConnection(
+            connection.targetHandle,
+            sourceNode.type ?? "",
+            (t) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t),
+          )
+        }
+      }
       return true
     },
     [getNode],
@@ -929,6 +943,50 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setCanvasContextMenu(null)
     setNodeContextMenu(null)
   }, [getViewportCenter])
+
+  /** Opens the add-node popup with a connectionContext bound to a specific
+   *  handle. Called by HandleWithPopover's "Add new" affordance via the
+   *  workflow store. The popup is anchored next to the handle's node on the
+   *  side that makes sense for the direction (right for target handles —
+   *  user wants an upstream node; left for source handles — user wants a
+   *  downstream node). */
+  const openAddNodePopupForHandle = useCallback(
+    ({ nodeId, handleId, direction, nodeType }: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => {
+      const node = getNode(nodeId)
+      if (!node) return
+      const w = (node.measured?.width ?? 220) as number
+      const h = (node.measured?.height ?? 150) as number
+      // Place popup slightly offset from the node so it doesn't overlap.
+      const offsetX = direction === "target" ? -260 : w + 20
+      const flowX = node.position.x + offsetX
+      const flowY = node.position.y + h / 2
+      // Convert flow coordinates to screen for setAddNodePopupPosition,
+      // which expects screen-space.
+      const { x: vx, y: vy, zoom } = getViewport()
+      const screenX = flowX * zoom + vx
+      const screenY = flowY * zoom + vy
+      setAddNodePopupPosition({ x: screenX, y: screenY })
+      setAddNodeAtCenter(false)
+      setConnectionContext({
+        nodeId,
+        handleId,
+        direction,
+        dropPosition: { x: flowX, y: flowY },
+        nodeType,
+      })
+      setAddNodePopupOpen(true)
+      setCanvasContextMenu(null)
+      setNodeContextMenu(null)
+    },
+    [getNode, getViewport],
+  )
+
+  // Register the handle-popup opener with the store so HandleWithPopover can call it.
+  const setOpenAddNodePopupForHandleStore = useWorkflowStore((s) => s.setOpenAddNodePopupForHandle)
+  useEffect(() => {
+    setOpenAddNodePopupForHandleStore(openAddNodePopupForHandle)
+    return () => setOpenAddNodePopupForHandleStore(null)
+  }, [setOpenAddNodePopupForHandleStore, openAddNodePopupForHandle])
 
   const handleOpenSearch = useCallback(() => setSearchModalOpen(true), [])
   const handleOpenAssetLibrary = useCallback(() => setAssetLibraryOpen(true), [])
@@ -1850,6 +1908,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           edgeTypes={edgeTypes}
           defaultEdgeOptions={{ type: 'default' }}
           connectionMode={ConnectionMode.Loose}
+          // Match HandleWithPopover's click-vs-drag threshold (5px) so a small
+          // pointer jitter on a typed pip doesn't simultaneously open the
+          // popover AND trigger React Flow's connect-end (which would open
+          // the empty-canvas add-node popup).
+          connectionDragThreshold={5}
           connectOnClick={isMobile}
           selectNodesOnDrag={!isMobile}
           deleteKeyCode={["Delete", "Backspace"]}

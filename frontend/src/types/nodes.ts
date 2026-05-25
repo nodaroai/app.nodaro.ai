@@ -4864,7 +4864,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Generate Image",
     category: "ai",
     creditCost: 5,
-    inputs: ["in"],
+    inputs: ["prompt", "negative", "references", "assets", "elements", "look"],
     outputs: ["image"],
     width: 220,
     defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },

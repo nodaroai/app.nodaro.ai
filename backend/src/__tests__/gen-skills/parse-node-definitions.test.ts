@@ -15,7 +15,7 @@ describe("parseNodeDefinitions", () => {
     expect(gi?.label).toBe("Generate Image")
     expect(gi?.category).toBe("ai")
     expect(typeof gi?.creditCost).toBe("number")
-    expect(gi?.inputs).toContain("in")
+    expect(gi?.inputs).toEqual(expect.arrayContaining(["prompt", "negative", "references", "assets", "elements", "look"]))
     expect(gi?.outputs).toContain("image")
     expect(gi?.defaultData).toMatchObject({
       label: expect.any(String),

@@ -17,6 +17,8 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     useStore: vi.fn(() => 1),
     useNodeId: vi.fn(() => "test-node"),
     useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+    useUpdateNodeInternals: vi.fn(() => vi.fn()),
+    useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
   }
 })
 
@@ -30,7 +32,7 @@ vi.mock("../base-node", () => ({
       data-id={id}
       data-is-running={isRunning}
     >
-      {handles?.map((h: any) => (
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
         <div
           key={h.id}
           data-testid={`handle-${h.id}`}
@@ -112,6 +114,17 @@ vi.mock("@/components/editor/canvas-zoom-context", () => ({
 
 vi.mock("@/components/editor/extract-references-modal", () => ({
   ExtractReferencesModal: () => null,
+}))
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
 }))
 
 // ---------------------------------------------------------------------------
@@ -205,12 +218,13 @@ describe("GenerateImageNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-id", "gen-42")
   })
 
-  it("has correct handles", () => {
+  it("has correct handles (v2.1: 6 typed inputs + image output)", () => {
     renderNode()
-    const inHandle = screen.getByTestId("handle-in")
-    expect(inHandle).toHaveAttribute("data-type", "target")
-    expect(inHandle).toHaveAttribute("data-position", "left")
-
+    for (const id of ["prompt", "negative", "references", "assets", "elements", "look"]) {
+      const h = screen.getByTestId(`handle-${id}`)
+      expect(h).toHaveAttribute("data-type", "target")
+      expect(h).toHaveAttribute("data-position", "left")
+    }
     const imageHandle = screen.getByTestId("handle-image")
     expect(imageHandle).toHaveAttribute("data-type", "source")
     expect(imageHandle).toHaveAttribute("data-position", "right")

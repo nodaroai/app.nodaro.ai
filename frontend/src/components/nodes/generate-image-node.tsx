@@ -1,16 +1,29 @@
 "use client"
 
-import { memo, useState, Suspense } from "react"
+import { memo, useState, useEffect, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Position, type NodeProps } from "@xyflow/react"
-import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture } from "lucide-react"
-import { HandleIcon } from "./handle-icon"
+import { Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+
+// Stable, module-level `accepts` predicates for each typed handle. Defining
+// these outside the component avoids creating fresh arrow refs on every
+// render — HandleWithPopover's `useMemo([..., accepts])` would otherwise
+// bust every render, cascading to O(N×6) re-computes on every drag frame.
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT     = (t: string) => isValidGenerateImageConnection("prompt",     t, isPickerType)
+const ACCEPTS_NEGATIVE   = (t: string) => isValidGenerateImageConnection("negative",   t, isPickerType)
+const ACCEPTS_REFERENCES = (t: string) => isValidGenerateImageConnection("references", t, isPickerType)
+const ACCEPTS_ASSETS     = (t: string) => isValidGenerateImageConnection("assets",     t, isPickerType)
+const ACCEPTS_ELEMENTS   = (t: string) => isValidGenerateImageConnection("elements",   t, isPickerType)
+const ACCEPTS_LOOK       = (t: string) => isValidGenerateImageConnection("look",       t, isPickerType)
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
@@ -31,7 +44,6 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -54,6 +66,38 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = useFullResolution(id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
+  // Typed handles are anchored to the BOTTOM via `top: calc(100% - Npx)`, so
+  // every time the node's height changes (image loads, aspect ratio updates,
+  // user resizes), the resolved handle positions shift. React Flow caches
+  // handle bounds at mount via getBoundingClientRect; without a re-measure
+  // trigger, edges keep drawing to the original (stale) positions.
+  const updateNodeInternals = useUpdateNodeInternals()
+  const { setNodes } = useReactFlow()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, imgAspectRatio, updateNodeInternals])
+  // Floor-clamp the persisted node.height ONLY for nodes that haven't been
+  // user-resized (no `rf-resized` className). Pre-v2.1 workflows stored a
+  // height ~150px which is too short for the 6 typed handles; without this,
+  // those nodes render with handles overflowing the body until manual resize.
+  //
+  // Skipping `rf-resized` nodes is critical — a user who deliberately resized
+  // smaller (e.g., 180px to keep RunNodeButton close to content) should NOT
+  // have their choice silently overwritten on every reload. BaseNode's
+  // aspect-fit effect handles the image-loaded case separately when an
+  // imageAspectRatio is present; this effect only catches the no-image-yet gap.
+  useEffect(() => {
+    if (imgAspectRatio) return // BaseNode's aspect-fit owns sizing once image is loaded
+    setNodes((nodes) => nodes.map((n) => {
+      if (n.id !== id) return n
+      // Respect explicit user resize — `rf-resized` is added by BaseNode
+      // whenever the user grabs a corner handle or BaseNode auto-fits.
+      if (typeof n.className === "string" && n.className.includes("rf-resized")) return n
+      const currentHeight = (n.height ?? n.measured?.height ?? 0) as number
+      if (currentHeight >= 220) return n
+      return { ...n, height: 220 }
+    }))
+  }, [id, imgAspectRatio, setNodes])
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana-pro",
     nodeData as unknown as Record<string, unknown>,
@@ -98,7 +142,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative" style={{ width: "100%", height: "100%" }}>
+    <div className="relative" style={{ width: "100%", height: "100%", minHeight: 220 }}>
     {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
@@ -114,7 +158,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       minWidth={200}
-      minHeight={imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150}
+      // 6 input handles stacked from bottom up — the topmost pip ("Look")
+      // sits at top: calc(100% - 184px), so the node body needs at least
+      // ~200px to keep handles in view. Floor-clamp the aspect-ratio-driven
+      // height to 200 so freshly-created nodes (image not loaded yet) AND
+      // landscape-image nodes (computed height < 200) both render with
+      // handles on the visible body.
+      minHeight={Math.max(200, imgAspectRatio ? Math.round(200 / imgAspectRatio) : 150)}
       listCount={listTotal}
       listProgress={isNodeRunning && listTotal ? `${listCompleted ?? 0}/${listTotal}` : undefined}
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
@@ -145,9 +195,13 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "image", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
+        { id: "negative",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
+        { id: "references", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
+        { id: "assets",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+        { id: "elements",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 152px)', left: '-29px' }, external: true },
+        { id: "look",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 184px)', left: '-29px' }, external: true },
+        { id: "image",      type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
       ]}
       imageAspectRatio={imgAspectRatio}
     >
@@ -270,28 +324,21 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    {/* Input handle icon (TYPE 1) */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Type className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </div>
-    {/* Cinematography input handle icon */}
-    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 50px)" label="Cinematography" />
-    {/* Image output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-    </div>
+    {/* Generate Image v2.1 — typed handle pips stacked from bottom-up:
+        Prompt → Negative → References → Assets → Elements → Look.
+        Prompt is the primary (closest to bottom-left). "Look" + "Elements"
+        replace the single legacy "Style"; "Assets" replaces "Subjects" —
+        accepts split by registry family so the popup mirrors the picker
+        structure users already know. Distinct icons: Users (Assets,
+        identity entities) vs Sparkles (Elements, atomic descriptors). */}
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="negative"   type="target" position={Position.Left}  label="Negative"   color="#ef4444" icon={<Minus />}     side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="references" type="target" position={Position.Left}  label="References" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  orderMatters accepts={ACCEPTS_REFERENCES} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color="#F472B6" icon={<Users />}     side="left"  top="calc(100% - 120px)" orderMatters accepts={ACCEPTS_ASSETS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color="#818CF8" icon={<Sparkles />}  side="left"  top="calc(100% - 152px)" accepts={ACCEPTS_ELEMENTS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color="#818CF8" icon={<Aperture />}  side="left"  top="calc(100% - 184px)" accepts={ACCEPTS_LOOK} />
+    {/* Output image shares the References color (#22D3EE) — both are "image" type. */}
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="image"      type="source" position={Position.Right} label="Image"      color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}
