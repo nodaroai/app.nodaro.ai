@@ -16,6 +16,14 @@ export const ENTITY_STATUSES = [
   "approved",
   "rejected",
   "failed",
+  // Phase 3 (granular-pipeline-control) — Stage 2 Character Wizard.
+  // `pending_description` is the initial state for character entities in
+  // manual/guided mode pipelines; the engine waits for the user's Step A
+  // approval before generating the portrait. `skipped` is a terminal state
+  // for entities the user explicitly opts out of (no generation, excluded
+  // from stage-advance gating). Migration: 154_phase_1d3_character_wizard.sql.
+  "pending_description",
+  "skipped",
 ] as const
 export type EntityStatus = (typeof ENTITY_STATUSES)[number]
 

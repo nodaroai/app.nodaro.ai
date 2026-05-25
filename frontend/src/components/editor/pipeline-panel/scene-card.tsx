@@ -25,11 +25,16 @@ interface SceneNodeData {
 // Replaces the brittle inline `cn()` chain.
 const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
   pending: "bg-zinc-100 text-zinc-700",
+  // Phase 3 — Step A user-action-needed (cyan); rare on scene cards but
+  // typing requires the value.
+  pending_description: "bg-sky-100 text-sky-800",
   generating: "bg-amber-100 text-amber-800",
   awaiting_approval: "bg-blue-100 text-blue-800",
   approved: "bg-green-100 text-green-800",
   rejected: "bg-red-100 text-red-800",
   failed: "bg-red-100 text-red-800",
+  // Phase 3 — terminal opted-out; muted.
+  skipped: "bg-zinc-100 text-zinc-500",
 }
 
 export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
