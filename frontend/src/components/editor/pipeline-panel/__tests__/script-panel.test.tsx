@@ -24,6 +24,7 @@ vi.mock("@/lib/pipelines-api", () => ({
   pipelinesApi: {
     applyEdits: vi.fn(),
     approveStage: vi.fn(),
+    regenerateScene: vi.fn(),
   },
 }))
 
@@ -261,5 +262,148 @@ describe("ScriptPanel", () => {
     // Sibling scenes that weren't edited remain dot-less.
     expect(screen.queryByTestId("edited-dot-1")).not.toBeInTheDocument()
     expect(screen.queryByTestId("edited-dot-2")).not.toBeInTheDocument()
+  })
+
+  // ── Phase 2 — Regenerate scene UI tests ──────────────────────────────
+
+  it("opens the feedback panel when the Regenerate button is clicked", async () => {
+    renderWithClient(<ScriptPanel pipelineId="p1" plan={basePlan()} />)
+    // Panel closed initially — no textarea visible.
+    expect(screen.queryByTestId("regen-feedback-textarea")).not.toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+
+    expect(screen.getByTestId("regen-feedback-textarea")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Regenerate · ~3 credits/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
+  })
+
+  it("calls regenerateScene with the correct args on submit", async () => {
+    ;(pipelinesApi.regenerateScene as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      newScene: {},
+      newPlan: {},
+    })
+    renderWithClient(<ScriptPanel pipelineId="p1" plan={basePlan()} />)
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+    await userEvent.type(
+      screen.getByTestId("regen-feedback-textarea"),
+      "make it more tense",
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate · ~3 credits/i }),
+    )
+
+    await waitFor(() => {
+      expect(pipelinesApi.regenerateScene).toHaveBeenCalledWith(
+        "p1",
+        0,
+        "make it more tense",
+      )
+    })
+  })
+
+  it("Cancel closes the feedback panel without firing the API", async () => {
+    renderWithClient(<ScriptPanel pipelineId="p1" plan={basePlan()} />)
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+    expect(screen.getByTestId("regen-feedback-textarea")).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
+
+    expect(screen.queryByTestId("regen-feedback-textarea")).not.toBeInTheDocument()
+    expect(pipelinesApi.regenerateScene).not.toHaveBeenCalled()
+  })
+
+  it("shows the inline-edit warning when scene has prior entries in user_edits", async () => {
+    const userEdits = [
+      { op: "replace", path: "/scenes/0/description", value: "edited earlier" },
+    ]
+    renderWithClient(
+      <ScriptPanel pipelineId="p1" plan={basePlan()} userEdits={userEdits} />,
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+
+    expect(screen.getByTestId("regen-prior-edits-warning")).toBeInTheDocument()
+    expect(
+      screen.getByText(/scene has unsaved edits that will be replaced/i),
+    ).toBeInTheDocument()
+  })
+
+  it("does NOT show the inline-edit warning when user_edits is empty or unrelated", async () => {
+    // Only scene 1 has prior edits — viewing scene 0 should not show warning.
+    const userEdits = [
+      { op: "replace", path: "/scenes/1/description", value: "different scene" },
+    ]
+    renderWithClient(
+      <ScriptPanel pipelineId="p1" plan={basePlan()} userEdits={userEdits} />,
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+    expect(screen.queryByTestId("regen-prior-edits-warning")).not.toBeInTheDocument()
+
+    // Switch to scene 1 (which DOES have prior edits) — warning should appear.
+    await userEvent.click(screen.getByRole("tab", { name: /Scene 2/ }))
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+    expect(screen.getByTestId("regen-prior-edits-warning")).toBeInTheDocument()
+  })
+
+  it("renders the new scene content after regenerateScene resolves", async () => {
+    // Mock the API resolved; the new content comes via the parent's prop
+    // refresh (React Query invalidation → refetch in real flow). Here we
+    // simulate by re-rendering with a patched plan after the mutation
+    // resolves, mirroring what happens in production.
+    ;(pipelinesApi.regenerateScene as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      newScene: {},
+      newPlan: {},
+    })
+    const { rerender } = renderWithClient(
+      <ScriptPanel pipelineId="p1" plan={basePlan()} />,
+    )
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate scene/i }),
+    )
+    await userEvent.type(
+      screen.getByTestId("regen-feedback-textarea"),
+      "tighten",
+    )
+    await userEvent.click(
+      screen.getByRole("button", { name: /Regenerate · ~3 credits/i }),
+    )
+
+    // After the API resolves, parent refreshes the plan with new scene content.
+    await waitFor(() => expect(pipelinesApi.regenerateScene).toHaveBeenCalled())
+
+    const patchedPlan = basePlan()
+    patchedPlan.scenes[0]!.description = "newly regenerated opener"
+    rerender(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+          })
+        }
+      >
+        <ScriptPanel pipelineId="p1" plan={patchedPlan} />
+      </QueryClientProvider>,
+    )
+
+    expect(
+      screen.getByDisplayValue("newly regenerated opener"),
+    ).toBeInTheDocument()
   })
 })

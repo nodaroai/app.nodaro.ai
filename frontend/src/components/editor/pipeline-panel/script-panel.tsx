@@ -1,34 +1,41 @@
 /**
- * Phase 1 (granular-pipeline-control spec) — ScriptPanel.
+ * Phase 1 + 2 (granular-pipeline-control spec) — ScriptPanel.
  *
- * Replaces the binary approve/reject UI for Stage 1 with a per-scene inline
- * editor. Scope per spec lines 211-217:
- *   - Inline edit `description` / `dialogue[m].line` / `duration_seconds` /
- *     `emotional_beat`. Save on blur via `pipelinesApi.applyEdits` (no
- *     debounce — single-fire-per-blur is fine).
- *   - Total-duration meter in the footer; Approve plan disabled when outside
- *     ±10% of `plan.target_duration_seconds`.
- *   - Approve plan uses `pipelinesApi.approveStage` (no edits — they were
- *     already saved inline).
- *   - Title + logline are read-only in Phase 1; editing lands in Phase 2.
- *   - Regenerate-scene (Phase 2), Add-scene + Delete-scene (Phase 5),
- *     roster + continuity edits (deferred) are NOT rendered.
+ * Phase 1: per-scene inline editor (action / dialogue / duration /
+ * emotional_beat) with save-on-blur via `pipelinesApi.applyEdits`. Total
+ * duration meter + "Approve plan" button in the footer.
+ *
+ * Phase 2: per-scene "Regenerate" button + inline feedback panel that calls
+ * `pipelinesApi.regenerateScene`. Replaces only the targeted scene. Shows
+ * an inline warning when the scene has prior persisted edits (sub-decision
+ * #6 — informational only, not blocking). Brief ring-pulse on the scene
+ * card when a regen succeeds.
+ *
+ * Out of scope here:
+ *   - Title + logline editing (Phase 2 spec — separate decision, deferred)
+ *   - Add-scene + Delete-scene (Phase 5)
+ *   - Roster + continuity edits (deferred)
  *
  * Errors:
- *   - Validation failures (400 schema_invalid / patch_path_not_editable):
- *     inline under the field that triggered them.
- *   - Network / total save failure: toast.
+ *   - Edit-on-blur validation failures → inline under the field
+ *   - Edit-on-blur network failures → toast
+ *   - Regen validation / roster failures → inline error in the feedback panel
+ *   - Regen network failures → inline error in the feedback panel
  *
- * Edit indicator: a single small dot on the navigator chip for any scene
- * the user has edited this session.
+ * Edit indicator: a single dot on the navigator chip for any scene the
+ * user has touched this session (inline edits OR regens).
  */
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Minus, Plus } from "lucide-react"
+import { Loader2, Minus, Plus, Sparkles } from "lucide-react"
 import type { JsonPatch, ShowrunnerPlan } from "@nodaro/shared"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import {
+  STORY_MOMENT_LABELS,
+  storyMomentLabel,
+} from "@/lib/story-moment-labels"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -59,6 +66,8 @@ const EMOTIONAL_BEAT_VALUES = [
 type EmotionalBeat = (typeof EMOTIONAL_BEAT_VALUES)[number]
 
 const DURATION_TOLERANCE = 0.1 // ±10% per spec line 25
+const REGEN_PULSE_MS = 1200    // Phase 2: how long the post-regen ring pulse lingers
+const REGEN_COST_LABEL = "~3 credits"
 
 type SceneSpec = ShowrunnerPlan["scenes"][number]
 
@@ -66,15 +75,44 @@ interface Props {
   pipelineId: string
   /** ShowrunnerPlan unwrapped from `pipeline_stages.output.plan`. */
   plan: ShowrunnerPlan
+  /**
+   * Optional — `pipeline_stages.user_edits` as exposed by GET /stages/:name.
+   * Used to detect whether a scene has prior persisted edits, which gates
+   * the inline-edit-loss warning above the regen feedback textarea.
+   * Phase 2 sub-decision #6: warn but do not block.
+   */
+  userEdits?: unknown[] | null
   /** Optional callback after Approve plan succeeds (parent refetch trigger). */
   onApprove?: () => void
 }
 
-export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
+export function ScriptPanel({ pipelineId, plan, userEdits, onApprove }: Props) {
   const qc = useQueryClient()
   const [activeSceneIdx, setActiveSceneIdx] = useState(0)
   const [editedScenes, setEditedScenes] = useState<Set<number>>(new Set())
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  // Phase 2 — regen state. Single regen at a time (one button click → one
+  // panel → one API call). Tracked at parent level so navigator chips can
+  // show a spinner even if the user has navigated to a different scene.
+  const [regeneratingSceneIdx, setRegeneratingSceneIdx] = useState<number | null>(
+    null,
+  )
+  const [recentlyRegeneratedIdx, setRecentlyRegeneratedIdx] = useState<
+    number | null
+  >(null)
+  const [regenError, setRegenError] = useState<{
+    sceneIdx: number
+    message: string
+  } | null>(null)
+
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (pulseTimer.current) clearTimeout(pulseTimer.current)
+    },
+    [],
+  )
 
   // ── Mutations ──────────────────────────────────────────────────────────
 
@@ -82,8 +120,6 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
     mutationFn: (edits: JsonPatch) =>
       pipelinesApi.applyEdits(pipelineId, "script", edits),
     onSuccess: () => {
-      // Invalidate the pipeline + stage queries so dependent UI re-fetches
-      // the patched plan. Keys match what PipelinePanel + sibling hooks use.
       qc.invalidateQueries({ queryKey: ["pipeline", pipelineId] })
       qc.invalidateQueries({
         queryKey: ["pipeline-stage", pipelineId, "script"],
@@ -101,6 +137,42 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
       toast.error(err instanceof Error ? err.message : "Failed to approve"),
   })
 
+  const regenMutation = useMutation({
+    mutationFn: (vars: { sceneIndex: number; feedback: string }) =>
+      pipelinesApi.regenerateScene(pipelineId, vars.sceneIndex, vars.feedback),
+    onSuccess: (_data, vars) => {
+      // React Query invalidation flows the new plan + user_edits back through
+      // the parent stage query — the SceneEditor's useEffect re-syncs from
+      // the fresh `scene` prop. No explicit local-state patching needed.
+      qc.invalidateQueries({ queryKey: ["pipeline", pipelineId] })
+      qc.invalidateQueries({
+        queryKey: ["pipeline-stage", pipelineId, "script"],
+      })
+      setRegeneratingSceneIdx(null)
+      setRegenError(null)
+      setEditedScenes((prev) => {
+        if (prev.has(vars.sceneIndex)) return prev
+        const next = new Set(prev)
+        next.add(vars.sceneIndex)
+        return next
+      })
+      // Trigger the brief ring-pulse on the changed scene's card.
+      setRecentlyRegeneratedIdx(vars.sceneIndex)
+      if (pulseTimer.current) clearTimeout(pulseTimer.current)
+      pulseTimer.current = setTimeout(() => {
+        setRecentlyRegeneratedIdx(null)
+        pulseTimer.current = null
+      }, REGEN_PULSE_MS)
+    },
+    onError: (err, vars) => {
+      setRegeneratingSceneIdx(null)
+      const message = err instanceof Error ? err.message : "Regen failed"
+      const code = extractBackendErrorCode(message)
+      const inline = code ? humanizeRegenError(code) : "Couldn't regenerate. Try again."
+      setRegenError({ sceneIdx: vars.sceneIndex, message: inline })
+    },
+  })
+
   // ── Derived state ──────────────────────────────────────────────────────
 
   const activeScene = plan.scenes[activeSceneIdx]
@@ -114,6 +186,24 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
       ? Math.abs(totalDuration - targetDuration) / targetDuration
       : 0
   const durationOk = durationDelta <= DURATION_TOLERANCE
+
+  // Phase 2 sub-decision #6 — check user_edits for ops whose path targets
+  // `/scenes/{sceneIdx}` (whole-scene replace from regen) or
+  // `/scenes/{sceneIdx}/...` (inline field edits via applyEdits).
+  const hasPriorEditsForScene = useCallback(
+    (sceneIdx: number): boolean => {
+      if (!Array.isArray(userEdits)) return false
+      const exact = `/scenes/${sceneIdx}`
+      const prefix = `/scenes/${sceneIdx}/`
+      return userEdits.some((op) => {
+        if (typeof op !== "object" || op === null) return false
+        const path = (op as { path?: unknown }).path
+        if (typeof path !== "string") return false
+        return path === exact || path.startsWith(prefix)
+      })
+    },
+    [userEdits],
+  )
 
   // ── Save handler ───────────────────────────────────────────────────────
 
@@ -134,9 +224,6 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
           return next
         })
       } catch (err) {
-        // The fetch wrapper throws `Error("${status}: ${body}")`. Try to
-        // pull a structured `error.code` out of the body for an inline
-        // message; fall back to a toast for genuine network / parse failures.
         const message = err instanceof Error ? err.message : "Save failed"
         const code = extractBackendErrorCode(message)
         if (code) {
@@ -152,11 +239,24 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
     [activeSceneIdx, saveMutation],
   )
 
+  // ── Regenerate handler ────────────────────────────────────────────────
+
+  const handleRegenerate = useCallback(
+    (sceneIdx: number, feedback: string) => {
+      const trimmed = feedback.trim()
+      if (!trimmed) return
+      setRegeneratingSceneIdx(sceneIdx)
+      setRegenError(null)
+      regenMutation.mutate({ sceneIndex: sceneIdx, feedback: trimmed })
+    },
+    [regenMutation],
+  )
+
   if (!activeScene) return null
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header — title + logline. Read-only in Phase 1. */}
+      {/* Header — title + logline. Read-only in Phase 1+2. */}
       <div className="border-b border-border px-4 py-3">
         <h2 className="text-base font-semibold text-foreground">
           {plan.title}
@@ -172,17 +272,26 @@ export function ScriptPanel({ pipelineId, plan, onApprove }: Props) {
           sceneCount={plan.scenes.length}
           activeIdx={activeSceneIdx}
           editedScenes={editedScenes}
+          regeneratingIdx={regeneratingSceneIdx}
           onSelect={setActiveSceneIdx}
         />
         <SceneEditor
-          // Remount on scene change so the input state resets cleanly from
-          // the new scene's prop values without an explicit reset effect.
+          // Remount on scene change so the input + feedback panel state
+          // reset cleanly from the new scene's prop values.
           key={activeSceneIdx}
           scene={activeScene}
           sceneIdx={activeSceneIdx}
           fieldErrors={fieldErrors}
           saving={saveMutation.isPending}
           onSave={saveField}
+          // Phase 2 — regen wiring
+          hasPriorEdits={hasPriorEditsForScene(activeSceneIdx)}
+          isRegenerating={regeneratingSceneIdx === activeSceneIdx}
+          regenError={
+            regenError?.sceneIdx === activeSceneIdx ? regenError.message : null
+          }
+          recentlyRegenerated={recentlyRegeneratedIdx === activeSceneIdx}
+          onRegenerate={(feedback) => handleRegenerate(activeSceneIdx, feedback)}
         />
       </div>
 
@@ -219,6 +328,8 @@ interface SceneNavigatorProps {
   sceneCount: number
   activeIdx: number
   editedScenes: Set<number>
+  /** Phase 2 — index of the scene currently being regenerated (spinner). */
+  regeneratingIdx: number | null
   onSelect: (idx: number) => void
 }
 
@@ -226,6 +337,7 @@ function SceneNavigator({
   sceneCount,
   activeIdx,
   editedScenes,
+  regeneratingIdx,
   onSelect,
 }: SceneNavigatorProps) {
   return (
@@ -237,13 +349,16 @@ function SceneNavigator({
         {Array.from({ length: sceneCount }, (_, idx) => {
           const isActive = idx === activeIdx
           const isEdited = editedScenes.has(idx)
+          const isRegenerating = idx === regeneratingIdx
           return (
             <button
               key={idx}
               type="button"
               role="tab"
               aria-selected={isActive}
-              aria-label={`Scene ${idx + 1}${isEdited ? " (edited)" : ""}`}
+              aria-label={`Scene ${idx + 1}${isEdited ? " (edited)" : ""}${
+                isRegenerating ? " (regenerating)" : ""
+              }`}
               onClick={() => onSelect(idx)}
               className={cn(
                 "inline-flex h-7 min-w-[2rem] items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-colors",
@@ -253,15 +368,23 @@ function SceneNavigator({
               )}
             >
               <span>{idx + 1}</span>
-              {isEdited && (
-                <span
-                  data-testid={`edited-dot-${idx}`}
-                  className={cn(
-                    "inline-block h-1.5 w-1.5 rounded-full",
-                    isActive ? "bg-primary-foreground/80" : "bg-primary",
-                  )}
+              {isRegenerating ? (
+                <Loader2
+                  data-testid={`regen-spinner-${idx}`}
+                  className="h-3 w-3 animate-spin"
                   aria-hidden="true"
                 />
+              ) : (
+                isEdited && (
+                  <span
+                    data-testid={`edited-dot-${idx}`}
+                    className={cn(
+                      "inline-block h-1.5 w-1.5 rounded-full",
+                      isActive ? "bg-primary-foreground/80" : "bg-primary",
+                    )}
+                    aria-hidden="true"
+                  />
+                )
               )}
             </button>
           )
@@ -279,6 +402,12 @@ interface SceneEditorProps {
   fieldErrors: Record<string, string>
   saving: boolean
   onSave: (path: string, value: unknown, fieldKey: string) => void
+  // Phase 2 — regen UI
+  hasPriorEdits: boolean
+  isRegenerating: boolean
+  regenError: string | null
+  recentlyRegenerated: boolean
+  onRegenerate: (feedback: string) => void
 }
 
 function SceneEditor({
@@ -287,11 +416,12 @@ function SceneEditor({
   fieldErrors,
   saving,
   onSave,
+  hasPriorEdits,
+  isRegenerating,
+  regenError,
+  recentlyRegenerated,
+  onRegenerate,
 }: SceneEditorProps) {
-  // Controlled inputs — local state tracks what the user is typing; save
-  // fires on blur if the value differs from the prop. `key={activeSceneIdx}`
-  // on the parent remounts this whole component on scene change, so initial
-  // state is always fresh from the new scene's props.
   const [description, setDescription] = useState(scene.description)
   const [duration, setDuration] = useState(scene.duration_seconds)
   const [emotionalBeat, setEmotionalBeat] = useState<EmotionalBeat>(
@@ -301,29 +431,50 @@ function SceneEditor({
     scene.dialogue.map((d) => d.line),
   )
 
-  // Sync local state when the scene prop changes WITHIN the same mount
-  // (e.g. after a save → query invalidation → refetch → new prop). The
-  // outer key={sceneIdx} handles the cross-scene case; this handles the
-  // intra-scene refresh case.
+  // Phase 2 — feedback panel local state. Resets on scene change via the
+  // parent's key={activeSceneIdx} remount. Mid-regen the panel stays open
+  // (isRegenerating flag overrides the local feedbackOpen state).
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState("")
+
+  // Sync local field state when the scene prop changes (e.g. after a save
+  // or regen success → query invalidation → refetch → new prop).
   useEffect(() => {
     setDescription(scene.description)
     setDuration(scene.duration_seconds)
     setEmotionalBeat(scene.emotional_beat as EmotionalBeat)
     setDialogueLines(scene.dialogue.map((d) => d.line))
+    // Auto-close the feedback panel when a regen lands new content.
+    if (!isRegenerating) {
+      setFeedbackOpen(false)
+      setFeedbackText("")
+    }
+    // intentionally only re-run when scene changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene])
 
   const descriptionKey = `scene-${sceneIdx}-description`
   const durationKey = `scene-${sceneIdx}-duration`
   const beatKey = `scene-${sceneIdx}-emotional_beat`
 
+  const showFeedbackPanel = feedbackOpen || isRegenerating
+
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div
+      data-testid={`scene-card-${sceneIdx}`}
+      className={cn(
+        "rounded-lg border border-border bg-card p-4 transition-all duration-700",
+        // Phase 2 — ring pulse after a successful regen (toggled off after
+        // REGEN_PULSE_MS by the parent; CSS transition fades the ring back).
+        recentlyRegenerated && "ring-2 ring-primary ring-offset-2",
+      )}
+    >
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">
           Scene {sceneIdx + 1}
         </h3>
-        <Badge variant="outline" className="text-xs capitalize">
-          {scene.emotional_beat.replace(/_/g, " ")}
+        <Badge variant="outline" className="text-xs">
+          {storyMomentLabel(scene.emotional_beat)}
         </Badge>
       </div>
 
@@ -348,7 +499,7 @@ function SceneEditor({
               )
             }
           }}
-          disabled={saving}
+          disabled={saving || isRegenerating}
           rows={4}
           className="resize-none text-sm leading-relaxed"
         />
@@ -359,9 +510,7 @@ function SceneEditor({
         )}
       </div>
 
-      {/* Dialogue lines — one editable textarea per `dialogue[m].line`.
-          cast_key is read-only in Phase 1 (roster-aware autocomplete is
-          deferred per spec lines 46-47). */}
+      {/* Dialogue */}
       {scene.dialogue.length > 0 && (
         <div className="mb-4">
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -393,7 +542,7 @@ function SceneEditor({
                         )
                       }
                     }}
-                    disabled={saving}
+                    disabled={saving || isRegenerating}
                     rows={2}
                     className="resize-none text-sm italic"
                   />
@@ -409,7 +558,7 @@ function SceneEditor({
         </div>
       )}
 
-      {/* Duration + Beat */}
+      {/* Duration + Story moment ( = SceneSpec.emotional_beat ) */}
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -431,7 +580,7 @@ function SceneEditor({
                   durationKey,
                 )
               }}
-              disabled={saving || duration <= 1}
+              disabled={saving || isRegenerating || duration <= 1}
               aria-label="Decrease duration"
             >
               <Minus className="h-3 w-3" />
@@ -453,7 +602,7 @@ function SceneEditor({
                   durationKey,
                 )
               }}
-              disabled={saving}
+              disabled={saving || isRegenerating}
               aria-label="Increase duration"
             >
               <Plus className="h-3 w-3" />
@@ -468,7 +617,7 @@ function SceneEditor({
 
         <div>
           <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Beat
+            Story moment
           </label>
           <Select
             value={emotionalBeat}
@@ -476,21 +625,24 @@ function SceneEditor({
               const next = v as EmotionalBeat
               if (next === emotionalBeat) return
               setEmotionalBeat(next)
+              // Form value stays the enum string — saveField receives the
+              // raw schema value, NOT the friendly display label. Phase 1's
+              // edit endpoint validates the enum at backend boundary.
               onSave(
                 `/scenes/${sceneIdx}/emotional_beat`,
                 next,
                 beatKey,
               )
             }}
-            disabled={saving}
+            disabled={saving || isRegenerating}
           >
-            <SelectTrigger className="h-9 text-sm capitalize">
+            <SelectTrigger className="h-9 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {EMOTIONAL_BEAT_VALUES.map((v) => (
-                <SelectItem key={v} value={v} className="capitalize">
-                  {v.replace(/_/g, " ")}
+                <SelectItem key={v} value={v}>
+                  {STORY_MOMENT_LABELS[v]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -501,6 +653,104 @@ function SceneEditor({
             </p>
           )}
         </div>
+      </div>
+
+      {/* Phase 2 — Regenerate action row + inline feedback panel */}
+      <div className="mt-4 border-t border-border pt-3">
+        {!showFeedbackPanel && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">
+              {REGEN_COST_LABEL}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFeedbackOpen(true)
+                setFeedbackText("")
+              }}
+              disabled={saving}
+            >
+              <Sparkles className="mr-1.5 h-3 w-3" aria-hidden="true" />
+              Regenerate scene
+            </Button>
+          </div>
+        )}
+
+        {showFeedbackPanel && (
+          <div className="space-y-2">
+            {/* Sub-decision #6 — inline-edit-loss warning (informational, not blocking) */}
+            {hasPriorEdits && (
+              <p
+                data-testid="regen-prior-edits-warning"
+                className="text-xs text-amber-700 dark:text-amber-400"
+              >
+                This scene has unsaved edits that will be replaced.
+              </p>
+            )}
+            <label
+              htmlFor={`scene-${sceneIdx}-feedback`}
+              className="block text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              What should change?
+            </label>
+            <Textarea
+              id={`scene-${sceneIdx}-feedback`}
+              data-testid="regen-feedback-textarea"
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder='e.g. "make it more tense" or "shorter — 4 seconds"'
+              disabled={isRegenerating}
+              rows={3}
+              autoFocus
+              className="resize-none text-sm"
+            />
+            {regenError && (
+              <p
+                data-testid="regen-error"
+                className="text-xs text-destructive"
+              >
+                {regenError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFeedbackOpen(false)
+                  setFeedbackText("")
+                }}
+                disabled={isRegenerating}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onRegenerate(feedbackText)}
+                disabled={isRegenerating || feedbackText.trim().length === 0}
+              >
+                {isRegenerating ? (
+                  <>
+                    <Loader2
+                      className="mr-1.5 h-3 w-3 animate-spin"
+                      aria-hidden="true"
+                    />
+                    Regenerating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1.5 h-3 w-3" aria-hidden="true" />
+                    Regenerate · {REGEN_COST_LABEL}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -515,8 +765,6 @@ interface DurationMeterProps {
 }
 
 function DurationMeter({ total, target, ok }: DurationMeterProps) {
-  // Bar fill is total/target, clamped 0-100% for the visible bar; out-of-range
-  // values show the bar full + amber so the user sees "we're past target".
   const fillPct =
     target > 0 ? Math.min(100, (total / target) * 100) : 0
   return (
@@ -557,12 +805,6 @@ function DurationMeter({ total, target, ok }: DurationMeterProps) {
 
 // ─── Error parsing helpers ───────────────────────────────────────────────────
 
-/**
- * Pull a structured `error.code` out of the fetch wrapper's thrown message.
- * The wrapper formats errors as `Error("${status}: ${responseBody}")`; we
- * try to JSON.parse the body suffix and read `error.code`. Returns null when
- * the message isn't a wrapped backend error (e.g., genuine network failures).
- */
 function extractBackendErrorCode(message: string): string | null {
   const colon = message.indexOf(":")
   if (colon < 0) return null
@@ -589,6 +831,25 @@ function humanizeErrorCode(code: string): string {
       return "Inline edits aren't available for this stage"
     case "reference_integrity_failed":
       return "Edit would break a downstream reference"
+    default:
+      return code
+  }
+}
+
+function humanizeRegenError(code: string): string {
+  switch (code) {
+    case "roster_ref_invalid":
+      return "The regenerated scene referenced a missing cast/location/object. Try clearer feedback."
+    case "scene_index_out_of_range":
+      return "Scene no longer exists — refresh the panel."
+    case "stage_not_awaiting":
+      return "Script already approved — refresh the panel."
+    case "plan_not_available":
+      return "Plan not loaded — refresh the panel."
+    case "llm_unavailable":
+      return "AI couldn't be reached. Try again in a moment."
+    case "validation_error":
+      return "Feedback was rejected — try rephrasing."
     default:
       return code
   }

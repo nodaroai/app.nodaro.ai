@@ -612,7 +612,11 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
             mode + every other state still falls through to StageRow. */}
         {isScriptAwaitingApproval && plan && pipeline?.mode !== "auto" ? (
           <>
-            <ScriptPanel pipelineId={pipelineId} plan={plan} />
+            <ScriptPanel
+              pipelineId={pipelineId}
+              plan={plan}
+              userEdits={(stage as { user_edits?: unknown[] | null } | undefined)?.user_edits ?? null}
+            />
             <div className="flex justify-end pt-1 text-xs">
               <button
                 type="button"

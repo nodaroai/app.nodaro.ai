@@ -398,7 +398,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
 
       const { data, error } = await supabase
         .from("pipeline_stages")
-        .select("status,output,critic_feedback,started_at,completed_at")
+        .select("status,output,critic_feedback,user_edits,started_at,completed_at")
         .eq("pipeline_id", req.params.id)
         .eq("stage_name", stageName)
         .maybeSingle()

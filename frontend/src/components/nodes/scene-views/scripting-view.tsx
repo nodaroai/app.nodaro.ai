@@ -1,5 +1,6 @@
 import type { SceneViewProps } from "./view-mode-registry"
 import { registerSceneView } from "./view-mode-registry"
+import { storyMomentLabel } from "@/lib/story-moment-labels"
 
 /**
  * ScriptingView — Phase 1B.2 view-mode for the pipeline SceneNode.
@@ -17,7 +18,7 @@ function ScriptingView({ data }: SceneViewProps) {
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <div className="text-xs uppercase text-zinc-500 dark:text-zinc-400">Scene {data.scene_index}</div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{data.emotional_beat}</div>
+        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">{storyMomentLabel(data.emotional_beat)}</div>
       </div>
       {data.description && (
         <p className="text-[11px] text-zinc-600 dark:text-zinc-300 line-clamp-2">{data.description}</p>
