@@ -814,6 +814,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({ status: "failed", error: message })
           .eq("id", job.id)
+          .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply.status(502).send({ error: { code: "llm_unavailable", detail: message } })
       }
@@ -823,6 +824,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({ status: "failed", error: refinerResult.reason })
           .eq("id", job.id)
+          .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         // scene_index_out_of_range can't fire here (we pre-checked above),
         // but we handle it for completeness.
@@ -866,6 +868,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({ status: "failed", error: "db_update_failed" })
           .eq("id", job.id)
+          .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply
           .status(500)
@@ -876,12 +879,17 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .from("jobs")
           .update({ status: "failed", error: "stage_not_awaiting" })
           .eq("id", job.id)
+          .eq("user_id", userId)
         if (usageLogId) await CreditsService.refundCredits(usageLogId)
         return reply.status(409).send({ error: { code: "stage_not_awaiting" } })
       }
 
       // Success — mark job completed and commit the reserved credits.
-      await supabase.from("jobs").update({ status: "completed" }).eq("id", job.id)
+      await supabase
+        .from("jobs")
+        .update({ status: "completed" })
+        .eq("id", job.id)
+        .eq("user_id", userId)
       if (usageLogId) await CreditsService.commitCredits(usageLogId)
 
       return reply.send({

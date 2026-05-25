@@ -403,8 +403,11 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/approve", () => {
   })
 
   it("returns 403 edition_required when hasCredits() is false", async () => {
-    ;(hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
+    // Register first, then queue `false` — makeApp's registration calls
+    // hasCredits across multiple edition-gated routes and would consume
+    // the mockReturnValueOnce before the request fires.
     const app = await makeApp()
+    ;(hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/sub-gates/silent_cut_preview/approve`,
@@ -541,8 +544,9 @@ describe("POST /v1/pipelines/:id/sub-gates/:gate/reject", () => {
   })
 
   it("returns 403 edition_required when hasCredits() is false", async () => {
-    ;(hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
+    // Register first, then queue `false` — see prior approve test.
     const app = await makeApp()
+    ;(hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/sub-gates/silent_cut_preview/reject`,

@@ -300,9 +300,12 @@ describe("POST /v1/pipelines/:id/shots/:scene_id/:shot_id/skip-video-critic-fail
   })
 
   it("403 edition_required when not cloud edition", async () => {
+    // makeApp's registration consumes the first hasCredits() call across
+    // multiple edition-gated routes — register BEFORE queuing the `false`
+    // so only the route's gateEdition consumes it.
+    const app = await makeApp()
     const config = await import("../../lib/config.js")
     ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    const app = await makeApp()
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/shots/${SCENE_ID}/${SHOT_ID}/skip-video-critic-failure`,
@@ -422,9 +425,10 @@ describe("POST /v1/pipelines/:id/shots/:scene_id/:shot_id/retry-video-generation
   })
 
   it("403 edition_required when not cloud edition", async () => {
+    // Register first, then queue the `false` — see note above.
+    const app = await makeApp()
     const config = await import("../../lib/config.js")
     ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    const app = await makeApp()
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/shots/${SCENE_ID}/${SHOT_ID}/retry-video-generation`,
