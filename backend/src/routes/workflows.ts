@@ -19,6 +19,7 @@ import {
   remapNodeAssetIds,
   workflowExportSchema,
 } from "../lib/workflow-assets.js"
+import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -271,6 +272,13 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
 
+    if (body.nodes && body.edges) {
+      body.edges = migrateGenerateImageHandles(
+        body.nodes as unknown as ReadonlyArray<{ id: string; type?: string }>,
+        body.edges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>,
+      ) as unknown as typeof body.edges
+    }
+
     const { data, error } = await supabase
       .from("workflows")
       .insert({
@@ -325,6 +333,13 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!body) return
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
+
+    if (body.nodes && body.edges) {
+      body.edges = migrateGenerateImageHandles(
+        body.nodes as unknown as ReadonlyArray<{ id: string; type?: string }>,
+        body.edges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>,
+      ) as unknown as typeof body.edges
+    }
 
     let projectId = body.projectId
 
@@ -399,6 +414,13 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (!body) return
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return
+
+    if (body.nodes && body.edges) {
+      body.edges = migrateGenerateImageHandles(
+        body.nodes as unknown as ReadonlyArray<{ id: string; type?: string }>,
+        body.edges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>,
+      ) as unknown as typeof body.edges
+    }
 
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
@@ -543,6 +565,11 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     const remappedNodes = remapNodeAssetIds(wf.nodes, assetIdMap)
 
+    const migratedEdges = migrateGenerateImageHandles(
+      remappedNodes as Array<{ id: string; type?: string }>,
+      (wf.edges ?? []) as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+    )
+
     const { data: newWorkflow, error: wfError } = await supabase
       .from("workflows")
       .insert({
@@ -550,7 +577,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         user_id: userId,
         name: wf.name,
         nodes: remappedNodes,
-        edges: wf.edges ?? [],
+        edges: migratedEdges,
         settings: wf.settings ?? {},
       })
       .select(WORKFLOW_FULL_COLS)

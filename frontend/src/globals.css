@@ -387,8 +387,82 @@ html, body {
   box-shadow: 0 0 20px rgba(52, 211, 153, 0.4) !important;
 }
 
-/* Visible 18px dot centered inside 36px transparent handle */
-.react-flow__handle::after {
+/* React Flow's in-progress connection line ships at z-index 1001, which sits
+ * ABOVE any node's local z-index — when dragging from a typed pip, the line
+ * is drawn in front of the pip instead of emerging from behind it. Scope the
+ * z-index lowering to ONLY the case where the drag started from a typed
+ * pip (via :has()), so legacy nodes' drag-to-connect line stays on top of
+ * other node cards as before. */
+.react-flow:has(.handle-typed-pip.connectingfrom) svg.react-flow__connectionline {
+  z-index: 0 !important;
+}
+
+/* Typed pips (HandleWithPopover) light up in their brand color during a
+ * drag-to-connect, so the user can see where the in-progress edge can land.
+ * `--pip-color` is set inline by HandleWithPopover; the React Flow state
+ * classes (.connectingfrom / .connectingto / .clickconnecting) plus the
+ * Nodaro wrapper classes (.connecting-from-source / -target) trigger the
+ * brand-color override. !important beats HandleWithPopover's inline
+ * `borderColor` which sets the muted unconnected gray. */
+/* (Note: the icon `color` for typed pips is set inline by HandleWithPopover —
+ * white when connected, brand color when idle — because inline beats class
+ * specificity. The drag-state overrides below use !important to win back. */
+
+/* Connection counter badges + type labels are visually quiet — only
+ * revealed when the user is hovering the node or the node is selected.
+ * Keeps the typed-pip stack uncluttered at rest. */
+.handle-typed-pip-badge,
+.handle-typed-pip-label {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.react-flow__node:hover .handle-typed-pip-badge,
+.react-flow__node.selected .handle-typed-pip-badge,
+.react-flow__node:hover .handle-typed-pip-label,
+.react-flow__node.selected .handle-typed-pip-label {
+  opacity: 1;
+}
+
+/* During a drag-to-connect, also reveal labels on the source pip and on
+ * every TYPE-COMPATIBLE candidate pip (driven by `.valid-candidate`,
+ * NOT a wrapper-class blanket reveal). */
+.handle-typed-pip.connectingfrom .handle-typed-pip-label,
+.handle-typed-pip.connectingto .handle-typed-pip-label,
+.handle-typed-pip.clickconnecting .handle-typed-pip-label,
+.handle-typed-pip.valid-candidate .handle-typed-pip-label {
+  opacity: 1;
+}
+
+/* Connecting state: force the hollow-ring look on every typed pip that can
+ * participate. `.valid-candidate` is set per-pip by HandleWithPopover when
+ * the in-progress drag's source type passes the pip's `accepts` predicate,
+ * so only TYPE-COMPATIBLE pips light up (not every target pip on the canvas
+ * the way `.connecting-from-source` would). */
+.handle-typed-pip.connectingfrom,
+.handle-typed-pip.connectingto,
+.handle-typed-pip.clickconnecting,
+.handle-typed-pip.valid-candidate {
+  border-color: var(--pip-color) !important;
+  background: var(--background) !important;
+  box-shadow: none !important;
+}
+
+/* Icon during connecting: full opacity, brand color (overrides the white
+ * icon-on-fill of the connected state and the 35% dim of idle state). */
+.handle-typed-pip.connectingfrom .handle-typed-pip-icon,
+.handle-typed-pip.connectingto .handle-typed-pip-icon,
+.handle-typed-pip.clickconnecting .handle-typed-pip-icon,
+.handle-typed-pip.valid-candidate .handle-typed-pip-icon {
+  opacity: 1 !important;
+  color: var(--pip-color) !important;
+}
+
+/* Visible 18px dot centered inside 36px transparent handle.
+ * Generate Image v2 handles (and any typed handle that owns its own visual
+ * via HandleWithPopover) opt out by setting the `.handle-typed-pip` class —
+ * for those the Handle IS the pip and the ::after dot would just cover the
+ * icon. */
+.react-flow__handle:not(.handle-typed-pip)::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -402,10 +476,10 @@ html, body {
   pointer-events: none;
   transition: transform 0.15s ease;
 }
-.react-flow__handle:hover::after {
+.react-flow__handle:not(.handle-typed-pip):hover::after {
   transform: translate(-50%, -50%) scale(1.2);
 }
-.dark .react-flow__handle::after {
+.dark .react-flow__handle:not(.handle-typed-pip)::after {
   background: #ff0073;
   border-color: #1E1E1E;
 }

@@ -20,6 +20,7 @@ import {
   remapNodeAssetIds,
   workflowExportSchema,
 } from "../../workflow-assets.js"
+import { migrateGenerateImageHandles } from "../../generate-image-handle-migration.js"
 
 const readGate: ToolGate = { required: ["workflows:read"] }
 const writeGate: ToolGate = { required: ["workflows:write"] }
@@ -340,9 +341,13 @@ export function registerWorkflows({
             "Workflow was modified since you last read it. Fetch the latest JSON with get_workflow_json and retry.",
           )
         }
+        const migratedEdges = migrateGenerateImageHandles(
+          args.nodes as Array<{ id: string; type?: string }>,
+          args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+        )
         const updates: Record<string, unknown> = {
           nodes: args.nodes,
-          edges: args.edges,
+          edges: migratedEdges,
           updated_at: new Date().toISOString(),
         }
         if (args.settings !== undefined) updates.settings = args.settings
@@ -402,6 +407,11 @@ export function registerWorkflows({
 
         const remappedNodes = remapNodeAssetIds(wf.nodes, assetIdMap)
 
+        const migratedEdges = migrateGenerateImageHandles(
+          remappedNodes as Array<{ id: string; type?: string }>,
+          (wf.edges ?? []) as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+        )
+
         const { data: newWorkflow, error: wfError } = await supabase
           .from("workflows")
           .insert({
@@ -409,7 +419,7 @@ export function registerWorkflows({
             user_id: session.userId,
             name: wf.name,
             nodes: remappedNodes,
-            edges: wf.edges ?? [],
+            edges: migratedEdges,
             settings: wf.settings ?? {},
           })
           .select("id, name, created_at, updated_at")

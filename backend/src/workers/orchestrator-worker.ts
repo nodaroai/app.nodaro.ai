@@ -20,6 +20,7 @@ import {
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
 import { resolveNodeInputs, getListInputForNode } from "../services/workflow-engine/input-resolver.js"
+import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
 import { executeNode, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
@@ -305,7 +306,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
         parentId: (n as { parentId?: string }).parentId,
       }))
     const nodeIds = new Set(nodes.map((n) => n.id))
-    const edges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
+    const filteredEdges = cleaned.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
+    // Defensive Generate Image handles v2 migration — catches workflows
+    // persisted before the migration deployed, or those created by external
+    // clients (SDK, CLI, direct DB writes).
+    const edges = migrateGenerateImageHandles(nodes, filteredEdges as unknown as ReadonlyArray<{ id: string; source: string; target: string; targetHandle?: string | null }>) as unknown as typeof filteredEdges
 
     // Pass workflow settings (character definitions, prompt templates) to context
     // Load user-level prompt templates and tier from profiles

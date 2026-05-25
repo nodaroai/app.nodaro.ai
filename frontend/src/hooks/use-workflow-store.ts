@@ -26,6 +26,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
 import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
+import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -455,6 +456,15 @@ interface WorkflowState {
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
   readonly runSelected: (() => void) | null
   readonly setRunSelected: (fn: (() => void) | null) => void
+  /** Opens the canvas add-node popup anchored to a specific handle. Wired
+   *  by `workflow-canvas.tsx` at mount; consumed by HandleWithPopover's
+   *  "Add new" affordance. Null when the canvas isn't mounted. */
+  readonly openAddNodePopupForHandle:
+    | ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => void)
+    | null
+  readonly setOpenAddNodePopupForHandle: (
+    fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => void) | null,
+  ) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
   readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
   readonly addCharacterDefinition: (char: CharacterDefinition) => void
@@ -1590,6 +1600,29 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       )
     }
 
+    // Migrate Generate Image handles v2: re-route legacy `in` / `cinematography`
+    // / null edges to the new typed handles (`prompt`, `references`, `subjects`,
+    // `style`). Zero runtime behavior change — backend resolver classifies by
+    // source type regardless of handle ID.
+    {
+      const result = migrateGenerateImageHandles(migratedNodes, migratedEdges)
+      migratedEdges = result.edges
+      if (result.pickerEdgesMigrated > 0) {
+        try {
+          const shown = typeof window !== "undefined" && window.localStorage.getItem("genimg-handles-v2-picker-toast")
+          if (!shown) {
+            void import("sonner").then(({ toast }) => {
+              toast.info("Generate Image picker handles split", {
+                description: "Pickers now route by family: aesthetic ones (lens, lighting, style…) on the new Look handle, subject/mood/props (person, animal, mood…) on the new Elements handle. Both tail-append to your prompt at runtime — drag a picker to either handle to use it.",
+                duration: 12000,
+              })
+            }).catch(() => {})
+            window.localStorage.setItem("genimg-handles-v2-picker-toast", "1")
+          }
+        } catch { /* SSR or localStorage unavailable — silently skip */ }
+      }
+    }
+
     // Migrate legacy CharacterNodeData:
     //  - Backfill the Phase-1 Character Studio fields (motions / motionStatus /
     //    voice / personality) on character nodes saved before they existed.
@@ -1785,6 +1818,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setRunFromHere: (fn) => set({ runFromHere: fn }),
   runSelected: null,
   setRunSelected: (fn) => set({ runSelected: fn }),
+  openAddNodePopupForHandle: null,
+  setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 

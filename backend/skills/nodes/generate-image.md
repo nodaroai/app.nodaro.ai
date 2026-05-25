@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-05-18T20:51:28.570Z
-generated_from: af4193bd
+generated_at: 2026-05-25T09:50:13.251Z
+generated_from: 4f5087a5
 ---
 
 # generate-image
@@ -10,7 +10,7 @@ generated_from: af4193bd
 **Type:** `generate-image`
 **Category:** ai
 **Credit cost:** 5
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `prompt`, `negative`, `references`, `assets`, `elements`, `look`
 **Outputs (source handles):** `image`
 
 **Required data fields:**

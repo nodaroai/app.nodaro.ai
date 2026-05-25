@@ -96,11 +96,11 @@ export function getCompatibleNodes(
   nodeOptions: readonly NodeOption[],
   consumerNodeType?: string,
 ): CompatibleNodes {
-  // Special-case: the `cinematography` target handle accepts only parameter-
-  // picker nodes (style, lens, lighting, framing, …). Without this branch the
-  // fallback below would list every node with any output handle, which is
-  // useless.
-  if (handleId === "cinematography" && direction === "target") {
+  // Special-case: the `cinematography` / `style` target handle accepts only
+  // parameter-picker nodes. v2.1 splits this into `look` and `scene`, but
+  // the legacy IDs still resolve here for backwards compat (pre-migration
+  // workflows).
+  if ((handleId === "cinematography" || handleId === "style") && direction === "target") {
     const excludeMotion = consumerNodeType !== undefined
       && STILL_IMAGE_CONSUMERS.has(consumerNodeType)
     const direct: NodeOption[] = []
@@ -108,6 +108,111 @@ export function getCompatibleNodes(
     for (const option of nodeOptions) {
       if (!VISUAL_PARAMETER_PICKER_NODE_TYPES.has(option.type)) continue
       if (excludeMotion && MOTION_ONLY_PICKER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Image v2.1: Look handle (cinematography/camera family pickers).
+  if (handleId === "look" && direction === "target") {
+    const LOOK_TYPES: ReadonlySet<string> = new Set([
+      "setting", "atmosphere", "style", "color-look", "mood", "photographer",
+      "aesthetic", "era", "photo-genre", "backdrop", "render-quality",
+      "composition-effects", "action-fx", "loop-subject", "post-process-effects",
+      "tone", "camera-motion", "lens", "camera-format", "framing", "lighting",
+      "exposure-settings", "temporal", "transition", "character-fx",
+    ])
+    const excludeMotion = consumerNodeType !== undefined && STILL_IMAGE_CONSUMERS.has(consumerNodeType)
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!LOOK_TYPES.has(option.type)) continue
+      if (excludeMotion && MOTION_ONLY_PICKER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Image v2.1: Elements handle (Subject / Object family + instrumentation).
+  if (handleId === "elements" && direction === "target") {
+    const ELEMENTS_TYPES: ReadonlySet<string> = new Set([
+      "person", "pose", "animal", "vehicle", "weapon", "furniture", "material",
+      "held-prop", "styling", "instrumentation",
+    ])
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!ELEMENTS_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Image v2: References accepts only image-producing nodes.
+  if (handleId === "references" && direction === "target") {
+    const IMAGE_TYPES: ReadonlySet<string> = new Set([
+      "upload-image", "generate-image", "edit-image", "image-to-image",
+      "modify-image", "upscale-image", "remove-background",
+    ])
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!IMAGE_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Image v2.1: Assets handle accepts only identity-locking nodes.
+  // (Legacy alias `subjects` also matched here pre-v2.1 rename.)
+  if ((handleId === "assets" || handleId === "subjects") && direction === "target") {
+    const IDENTITY_TYPES: ReadonlySet<string> = new Set(["character", "location", "object", "face"])
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!IDENTITY_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Generate Image v2: Prompt accepts text producers + all visual parameter
+  // pickers (as `{Label}` variable sources; the wire is visual per the v2 design).
+  if (handleId === "prompt" && direction === "target") {
+    const TEXT_TYPES: ReadonlySet<string> = new Set([
+      "text-prompt", "ai-writer", "llm-chat", "generate-script",
+      "combine-text", "image-to-text", "split-text",
+    ])
+    const direct: NodeOption[] = []
+    const compatible: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (TEXT_TYPES.has(option.type)) {
+        direct.push(option)
+        directTypes.add(option.type)
+      } else if (VISUAL_PARAMETER_PICKER_NODE_TYPES.has(option.type)) {
+        compatible.push(option)
+      }
+    }
+    return { direct, compatible, directTypes }
+  }
+
+  // Generate Image v2: Negative accepts text producers only (pickers as
+  // variable sources work via workflow-wide {Label}, no wire needed).
+  if (handleId === "negative" && direction === "target") {
+    const TEXT_TYPES: ReadonlySet<string> = new Set([
+      "text-prompt", "ai-writer", "llm-chat", "generate-script",
+      "combine-text", "image-to-text", "split-text",
+    ])
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!TEXT_TYPES.has(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }
