@@ -172,6 +172,32 @@ export const pipelinesApi = {
       `/v1/pipelines/${id}/stages/${stage}/edit`,
       { edits },
     ),
+  /**
+   * Phase 2 (granular-pipeline-control spec) — regenerate ONE scene from
+   * the Stage 1 script plan based on user feedback. Backend cost: 3 credits
+   * per call (refunded automatically on roster-validation failure or LLM
+   * error). Replaces only `scenes[sceneIndex]` in
+   * `pipeline_stages.output.plan`; other scenes (including any prior inline
+   * edits) are preserved.
+   *
+   * sceneIndex is 0-based (matches the React array index, not the
+   * 1-based scene_index field stored on the SceneSpec). feedback is
+   * free-form user guidance, e.g. "make it more tense", "remove the
+   * helicopter", "shorter — 4 seconds".
+   *
+   * On success returns the new scene and the full patched plan so the
+   * caller can update local UI without an extra refetch (React Query
+   * invalidations also handled in the mutation onSuccess).
+   */
+  regenerateScene: (
+    id: string,
+    sceneIndex: number,
+    feedback: string,
+  ) =>
+    postJson<{ ok: true; newScene: unknown; newPlan: unknown }>(
+      `/v1/pipelines/${id}/stages/script/regenerate-scene`,
+      { sceneIndex, feedback },
+    ),
   rejectStage: (id: string, stage: PipelineStageName, feedback: string) =>
     postJson<{ ok: true }>(`/v1/pipelines/${id}/stages/${stage}/reject`, { feedback }),
   approveEntity: (id: string, entityId: string) =>
