@@ -57,6 +57,7 @@ const ADMIN_NAV = [
   { href: "/admin/credit-anomalies", label: "Credit Anomalies", icon: AlertTriangle },
   { href: "/admin/kie-credits", label: "KIE Credits", icon: Wallet },
   { href: "/admin/subscriptions", label: "Subscriptions", icon: HeartPulse },
+  { href: "/admin/stuck-pipelines", label: "Stuck Pipelines", icon: AlertTriangle },
   { href: "/admin/tutorial-categories", label: "Tutorial Categories", icon: FolderTree },
   { href: "/admin/tutorials", label: "Tutorials", icon: PlayCircle },
   { href: "/admin/settings", label: "Settings", icon: Settings },
