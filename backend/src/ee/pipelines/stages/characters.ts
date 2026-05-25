@@ -99,6 +99,24 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
     await ensureCharacterEntity(supabase, pipelineId, stageId, cast)
   }
 
+  // 3.5. Phase 3 (granular-pipeline-control spec) — auto-mode short-circuits
+  // the Step A wizard. New character entities are inserted at
+  // `pending_description` so manual/guided pipelines wait for the user's
+  // wizard click. Auto mode bulk-flips `pending_description → pending` here
+  // BEFORE the entity SELECT below, so the existing parallel-gen flow picks
+  // up exactly as before (LLM-generated description → auto-approved →
+  // image generated). Per spec: "Auto mode is auto-resolved: backend
+  // auto-approves the LLM-generated description and triggers generation
+  // immediately." Manual/guided modes skip this and pause at pending_description.
+  if (args.mode === "auto") {
+    await supabase
+      .from("pipeline_entities")
+      .update({ status: "pending" })
+      .eq("pipeline_id", pipelineId)
+      .eq("entity_type", "character")
+      .eq("status", "pending_description")
+  }
+
   // 4. Process each entity in turn.
   const { data: entities } = await supabase
     .from("pipeline_entities")
@@ -128,6 +146,23 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
   let anyAwaiting = false
   const tasks = (entities ?? []).map((entity) => async () => {
     try {
+      // Phase 3 (granular-pipeline-control) — manual/guided pipelines pause
+      // here for the user's Step A click. Auto mode is impossible here
+      // because the bulk-flip above already converted pending_description →
+      // pending. Set anyAwaiting=true so the post-loop branch hits the
+      // "pause for user" return instead of falling through to the
+      // variant-batch-gate / stage-approved path.
+      if (entity.status === "pending_description") {
+        anyAwaiting = true
+        return
+      }
+      // Phase 3 — terminal opt-out. Skipped entities don't get an image, but
+      // they also don't BLOCK the stage from advancing once all non-skipped
+      // entities are resolved. So just return without setting anyAwaiting;
+      // the variant-batch-gate check below filters them out.
+      if (entity.status === "skipped") {
+        return
+      }
       if (entity.status === "approved") {
         // Ensure variants are generated.
         await ensureCharacterVariants(supabase, pipelineId, userId, entity, plan)
@@ -221,12 +256,19 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
   // the "all approved" branch, skipping the batch-variant approval gate entirely.
   const { data: refreshedEntities } = await supabase
     .from("pipeline_entities")
-    .select("metadata")
+    .select("status, metadata")
     .eq("pipeline_id", pipelineId)
     .eq("entity_type", "character")
+  // Phase 3 — skipped entities are terminal opt-outs; they never have
+  // variants, so filter them out of the variant-batch-gate check. If EVERY
+  // entity was skipped, nonSkipped.length === 0 → allVariantsAwaiting=false
+  // → falls through to step 6 (stage approved) which is correct.
+  const nonSkippedEntities = (refreshedEntities ?? []).filter(
+    (e) => e.status !== "skipped",
+  )
   const allVariantsAwaiting =
-    (refreshedEntities ?? []).length > 0 &&
-    (refreshedEntities ?? []).every(
+    nonSkippedEntities.length > 0 &&
+    nonSkippedEntities.every(
       (e) =>
         (e.metadata as Record<string, unknown> | null)?.variants_awaiting_approval === true,
     )
@@ -310,7 +352,12 @@ async function ensureCharacterEntity(
         stage_id: stageId,
         entity_type: "character",
         entity_key: cast.key,
-        status: "pending",
+        // Phase 3 (granular-pipeline-control spec) — new initial state.
+        // Manual/guided pipelines wait here for the user's Step A click
+        // (POST /entities/:id/approve-description); auto mode bulk-flips
+        // to 'pending' at stage start so the existing parallel-gen flow
+        // takes over.
+        status: "pending_description",
         metadata: {
           entity_type: "character",
           name: cast.name,
