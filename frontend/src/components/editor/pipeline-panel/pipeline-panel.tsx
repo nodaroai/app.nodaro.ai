@@ -32,6 +32,7 @@ import {
   DialogueRecheckBanner,
   type DialogueRecheckResult,
 } from "./dialogue-recheck-banner"
+import { StageProgressBanner } from "./stage-progress-banner"
 import { ChatPanel } from "./chat/chat-panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -118,7 +119,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     retry: false,
   })
 
-  const { lastEvent, drift, currentSubGate } = usePipelineEvents(pipelineId)
+  const { lastEvent, drift, currentSubGate, stageProgress } = usePipelineEvents(pipelineId)
 
   // Phase 1C.2 — Stage 7 sub-gate detection. We pull `animate_audio_edit`
   // whenever the pipeline could plausibly be paused at one of its sub-gates:
@@ -601,6 +602,18 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
             onDismiss={() => setVideoCriticDismissed(true)}
           />
         </div>
+      )}
+
+      {/* LLM-stream progress banner — Stage 1 Showrunner today; same pattern
+          extends to any future stage that calls callLLM with onProgress.
+          Mounted on the first stage:progress SSE event, auto-cleared when
+          the matching stage's status transitions out of `running`. */}
+      {stageProgress && (
+        <StageProgressBanner
+          stageName={stageProgress.stageName}
+          message={stageProgress.message}
+          bytesSoFar={stageProgress.bytesSoFar}
+        />
       )}
 
       <div className="space-y-2">

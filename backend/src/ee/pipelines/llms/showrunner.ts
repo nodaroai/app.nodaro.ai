@@ -13,7 +13,8 @@ import {
   type LocationsCoverageCriticVerdict,
   type ObjectsValidationResult,
 } from "@nodaro/shared"
-import { callLLM } from "./call-llm.js"
+import { callLLM, type ProgressUpdate } from "./call-llm.js"
+import { pipelineEvents } from "../events.js"
 
 const _REDACTED_PROMPT_2 = `[REDACTED — moved to private plugin, S9 extraction]`
 
@@ -96,6 +97,43 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userPrompt,
     schema: ShowrunnerPlanSchema,
     maxRetries: 1,
+    // Live "Drafting plan…" banner in the panel. Showrunner is the slowest
+    // Stage 1 LLM call (1-3 min) — without streaming the panel shows a
+    // spinner for the whole duration. The callback runs at observable
+    // stream boundaries; the panel renders the latest message + a coarse
+    // progress proxy (bytes received).
+    onProgress: (update) => {
+      pipelineEvents.publish({
+        type: "stage:progress",
+        pipelineId: args.pipelineId,
+        stageName: "script",
+        message: showrunnerProgressMessage(update, !!args.criticFeedback),
+        bytesSoFar:
+          update.phase === "drafting" || update.phase === "finalizing"
+            ? update.bytesSoFar
+            : undefined,
+      })
+    },
   })
   return result.output
+}
+
+function showrunnerProgressMessage(
+  update: ProgressUpdate,
+  isRetry: boolean,
+): string {
+  const prefix = isRetry ? "Refining plan after critic feedback" : "Drafting plan"
+  switch (update.phase) {
+    case "starting":
+      return `${prefix}…`
+    case "drafting":
+      return `${prefix} (${formatBytes(update.bytesSoFar)} so far)…`
+    case "finalizing":
+      return "Finalizing plan…"
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  return `${(bytes / 1024).toFixed(1)} KB`
 }

@@ -1,11 +1,43 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react"
+import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { Handle, Position, useConnection } from "@xyflow/react"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
-import { HandlePopover } from "./handle-popover"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { lazyWithRetry } from "@/lib/lazy-with-retry"
+
+// HandlePopover transitively pulls the parameter-picker registry (and ~30
+// picker-preview components + ~30 catalogs) for in-node visuals on picker
+// rows. None of that is needed for the always-rendered handle pip — it's
+// only used inside the Radix PopoverContent which only mounts when the
+// user clicks a pip. Lazy-loading keeps the editor's main bundle slim.
+// Uses `lazyWithRetry` so a stale-chunk error after a production deploy
+// auto-retries (and reloads once if needed) instead of bubbling to the
+// route ErrorBoundary and crashing the editor.
+//
+// Defensive guard against a missing named export.
+//
+// In PROD: throw a chunk-error-shaped message so lazyWithRetry's retry +
+// reload path engages. The intent is to recover from a stale-deploy
+// scenario where the chunk loaded ok but the export-shape changed.
+//
+// In DEV: throw the REAL error so the developer sees an actionable stack
+// trace. A fake chunk-error in dev would put a rename-bug into a
+// reload-storm (RELOAD_KEY is cleared by main.tsx on every load, so the
+// retry-reload cycle has no infinite-loop guard for this specific failure
+// mode) which makes the bug nearly impossible to diagnose.
+const HandlePopover = lazyWithRetry(() =>
+  import("./handle-popover").then((m) => {
+    if (!m.HandlePopover) {
+      if (import.meta.env.PROD) {
+        throw new Error("Failed to fetch dynamically imported module: HandlePopover export missing")
+      }
+      throw new Error("HandlePopover named export missing from ./handle-popover")
+    }
+    return { default: m.HandlePopover }
+  }),
+)
 
 interface HandleWithPopoverProps {
   readonly nodeId: string
@@ -111,6 +143,11 @@ export function HandleWithPopover({
   const handleAddNew = useCallback(() => {
     openPopup?.({ nodeId, handleId, direction: type === "target" ? "target" : "source", nodeType })
   }, [openPopup, nodeId, handleId, type, nodeType])
+
+  // Stable identity so HandlePopover's `handleJump` useCallback deps don't
+  // bust on every parent render (which would in turn churn every row's
+  // onJump prop and defeat any future React.memo on rows).
+  const onClose = useCallback(() => setOpen(false), [])
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     downRef.current = { x: e.clientX, y: e.clientY, t: Date.now() }
@@ -226,16 +263,39 @@ export function HandleWithPopover({
         className="w-auto p-2"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <HandlePopover
-          nodeId={nodeId}
-          handleId={handleId}
-          direction={type === "target" ? "target" : "source"}
-          label={label}
-          orderMatters={orderMatters}
-          accepts={accepts}
-          onAddNew={openPopup ? handleAddNew : undefined}
-          onClose={() => setOpen(false)}
-        />
+        {/* Skeleton fallback gives Radix Floating UI a stable WIDTH anchor
+         *  on first cold open so the popover doesn't paint at ~0×0 and
+         *  collision-pad against the viewport. Vertical size is left to
+         *  the spinner (`py-4` = ~48px) so the skeleton tracks the typical
+         *  sparse popover (~60-80px content) without OVERSHOOTING — a
+         *  fixed `min-h` taller than the typical content would cause a
+         *  post-paint SHRINK that Radix may respond to with a side-flip,
+         *  which is the exact jump we're trying to prevent.
+         *
+         *  Accessibility: `role="status"` implies `aria-live="polite"`,
+         *  so we don't repeat it. The visible "Loading…" text drives the
+         *  accessible name (no `aria-label` shadowing). */}
+        <Suspense
+          fallback={
+            <div
+              role="status"
+              className="min-w-[280px] flex items-center justify-center py-4"
+            >
+              <span className="text-[10px] text-muted-foreground/60">Loading…</span>
+            </div>
+          }
+        >
+          <HandlePopover
+            nodeId={nodeId}
+            handleId={handleId}
+            direction={type === "target" ? "target" : "source"}
+            label={label}
+            orderMatters={orderMatters}
+            accepts={accepts}
+            onAddNew={openPopup ? handleAddNew : undefined}
+            onClose={onClose}
+          />
+        </Suspense>
       </PopoverContent>
     </Popover>
   )

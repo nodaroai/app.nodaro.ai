@@ -27,8 +27,8 @@ import { CanvasToolbar } from "./canvas-toolbar"
 import { ViewModeToggle } from "./canvas-toolbar/view-mode-toggle"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
-import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
-import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+import { isValidWorkflowConnection } from "@/lib/connection-validation"
+import { pickEdgeAccent } from "@/lib/edge-accent"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
@@ -754,31 +754,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   }, [])
 
   const isValidConnection = useCallback<IsValidConnection>(
-    (connection) => {
-      if (connection.sourceHandle === "composition") {
-        const targetNode = getNode(connection.target ?? "")
-        return targetNode?.type === "render-video"
-      }
-      // Block json output from connecting to media-only inputs
-      if (connection.sourceHandle === "json") {
-        const th = connection.targetHandle ?? ""
-        const mediaOnly = new Set(["image", "video", "audio", "startFrame", "endFrame", "video1", "video2", "video3", "video4", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio"])
-        if (mediaOnly.has(th)) return false
-      }
-      // Generate Image v2: enforce typed-handle compatibility
-      const targetNode = connection.target ? getNode(connection.target) : null
-      if (targetNode?.type === "generate-image" && connection.targetHandle) {
-        const sourceNode = connection.source ? getNode(connection.source) : null
-        if (sourceNode) {
-          return isValidGenerateImageConnection(
-            connection.targetHandle,
-            sourceNode.type ?? "",
-            (t) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t),
-          )
-        }
-      }
-      return true
-    },
+    (connection) => isValidWorkflowConnection(connection, (id) => getNode(id)?.type),
     [getNode],
   )
 
@@ -806,13 +782,15 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const isDragging = draggingNodeId !== null &&
         (edge.source === draggingNodeId || edge.target === draggingNodeId)
 
-      // Execution animations take priority over drag highlighting
-      // Edge color priority: running (pink) > input running (blue) > dragging (pink) > default
+      // Execution animations take priority over drag highlighting.
+      // `pickEdgeAccent` (lib/edge-accent.ts) is the SINGLE SOURCE OF
+      // TRUTH for the running-edge color priority — shared with
+      // animated-flow-edge's hover-glow so both surfaces always agree on
+      // which color "wins" when source AND target are both running.
+      // Dragging gets pink iff no execution accent applies.
       let edgeColor: string | undefined
-      if (isRunning) {
-        edgeColor = "#ff0073"  // Pink for output animation
-      } else if (isInputRunning) {
-        edgeColor = "#3b82f6"  // Blue for input animation
+      if (isRunning || isInputRunning) {
+        edgeColor = pickEdgeAccent(isRunning, isInputRunning).stroke
       } else if (isDragging) {
         edgeColor = "#ff0073"  // Pink for drag highlighting
       }
