@@ -142,47 +142,75 @@ function BaseNodeComponent({
   // auto-fit effect below so it re-runs when Fit Content clears height.
   const storedHeight = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.height)
 
-  // When image/video aspect ratio is known, update the node's explicit
-  // width + height so the box matches the content. If the node has no
-  // explicit width yet (never manually resized), promote it to 320px.
-  // Re-runs when height becomes undefined (Fit Content) so the node snaps
-  // back to its aspect-correct size.
+  // Unified node-sizing effect. One source of truth — runs whenever the
+  // aspect ratio, stored height, handle-derived minHeight, or minWidth
+  // changes. Two cases:
   //
-  // Floor-clamp: if the aspect-correct height would fall below the
-  // handle-driven `effectiveMinHeight` (e.g. landscape image on a 6-handle
-  // Generate Image node), bump height up to the floor. ONLY widen the box
-  // to maintain aspect when the user hasn't explicitly resized (no
-  // `rf-resized` className) — otherwise we'd silently balloon a user's
-  // deliberately compact width on every aspect-ratio change. Also clamp
-  // width to `minWidth` so portrait images don't write below the floor.
+  //   1. `imageAspectRatio` known → fit box to content aspect. With explicit
+  //      width: preserve it, derive height (letterbox via object-cover when
+  //      mismatched). Without explicit width: promote to 320px, derive
+  //      height. In either branch, floor-clamp height up to
+  //      `effectiveMinHeight` so handle stacks stay visible. The width side
+  //      of the floor-clamp only kicks in for non-resized nodes (avoids
+  //      ballooning a user's deliberately compact width); it also respects
+  //      `minWidth` so portrait images don't write a sub-minimum box.
+  //
+  //   2. No aspect ratio yet → just ensure stored height ≥ effectiveMinHeight
+  //      for nodes the user hasn't explicitly resized (no `rf-resized`).
+  //      Catches pre-handle-stack-change workflows where node.height was
+  //      persisted below the new handle minimum.
+  //
+  // Either case triggers `useUpdateNodeInternals` (via the storedHeight
+  // dep on the effect below) so React Flow re-measures handle bounds after
+  // any size change.
   useEffect(() => {
-    if (!imageAspectRatio || !id) return
+    if (!id) return
     const state = useWorkflowStore.getState()
     const node = state.nodes.find((n) => n.id === id)
-    const hasExplicitWidth = typeof node?.width === "number"
-    let w = hasExplicitWidth ? node!.width! : 320
-    let correctH = w / imageAspectRatio
-    if (correctH < effectiveMinHeight) {
-      correctH = effectiveMinHeight
-      if (!hasExplicitWidth) {
-        // First-time sizing — derive width from height × aspect, but never
-        // below minWidth (would write a sub-minimum box on portrait images).
-        w = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
+    if (!node) return
+    const hasExplicitResize = typeof node.className === "string" && node.className.includes("rf-resized")
+    const hasExplicitWidth = typeof node.width === "number"
+
+    if (imageAspectRatio) {
+      let w = hasExplicitWidth ? node.width! : 320
+      let correctH = w / imageAspectRatio
+      if (correctH < effectiveMinHeight) {
+        correctH = effectiveMinHeight
+        if (!hasExplicitWidth) {
+          w = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
+        }
       }
-      // hasExplicitWidth: preserve user-chosen width. The image renders
-      // letterboxed/cropped via `object-cover` — acceptable trade-off for
-      // not silently overriding a deliberate manual resize.
+      if (hasExplicitWidth && typeof node.height === "number" && Math.abs(node.height - correctH) < 2 && Math.abs((node.width ?? 0) - w) < 2) return
+      const cls = node.className?.includes("rf-resized")
+        ? node.className
+        : ((node.className ?? "") + " rf-resized").trim()
+      useWorkflowStore.setState({
+        nodes: state.nodes.map((n) =>
+          n.id === id ? { ...n, width: w, height: correctH, className: cls } : n
+        ),
+      })
+      return
     }
-    if (hasExplicitWidth && typeof node?.height === "number" && Math.abs(node.height - correctH) < 2 && Math.abs((node.width ?? 0) - w) < 2) return
-    const cls = node?.className?.includes("rf-resized")
-      ? node.className
-      : ((node?.className ?? "") + " rf-resized").trim()
+
+    // No aspect ratio: only floor-clamp height for non-resized nodes.
+    if (hasExplicitResize) return
+    const currentHeight = (node.height ?? node.measured?.height ?? 0) as number
+    if (currentHeight >= effectiveMinHeight) return
     useWorkflowStore.setState({
       nodes: state.nodes.map((n) =>
-        n.id === id ? { ...n, width: w, height: correctH, className: cls } : n
+        n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
   }, [imageAspectRatio, id, storedHeight, effectiveMinHeight, minWidth])
+
+  // After any size change above, re-measure handle bounds. Needed for nodes
+  // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
+  // the bottom) so React Flow's cached `getHandleBounds` reflects the new
+  // box. Cheap no-op for nodes with absolute top-positioned handles.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    if (id) updateNodeInternals(id)
+  }, [id, storedHeight, updateNodeInternals])
 
   const { isMobile } = useMobileCanvas()
   const altPressed = useAltKeyStore((s) => s.pressed)
@@ -221,8 +249,8 @@ function BaseNodeComponent({
   // Defensive insurance: when interactive zoom changes width/height + zoom together,
   // React Flow re-measures handle positions automatically. But if width/height happen
   // not to change (e.g. floor clamp), force a re-measure so connection handles stay
-  // visually aligned with the zoomed wrapper edges.
-  const updateNodeInternals = useUpdateNodeInternals()
+  // visually aligned with the zoomed wrapper edges. (Reuses the
+  // `updateNodeInternals` declared in the sizing-effect block above.)
   useEffect(() => {
     // Only force re-measurement when zoom is non-identity. At zoom=1 React
     // Flow's native auto-measure handles handle positions correctly — calling

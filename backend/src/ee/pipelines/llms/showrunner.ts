@@ -73,6 +73,14 @@ OPTIONAL STYLE OVERRIDES FROM USER (may be empty):
 ${JSON.stringify(args.styleDirectives ?? {}, null, 2)}
 \`\`\`
 
+EMIT SCHEMA — your emit tool call MUST include these exact top-level fields:
+- title: a short cinematic title for this production
+- logline: one-sentence premise, max 200 chars
+- target_duration_seconds: ${args.targetDurationSeconds}
+- format: "${args.format}"
+- output_resolution: "${args.outputResolution}"
+- language: "${args.language}"
+
 Produce the ShowrunnerPlan as JSON via the emit tool.`
 
   const result = await callLLM({
@@ -82,7 +90,7 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userId: args.userId,
     role: "showrunner",
     task: "script",
-    modelId: "claude-opus-4-7",
+    modelId: "claude-sonnet-4-6",
     temperature: 0.4,
     systemPrompt: '[REDACTED]',
     userPrompt,

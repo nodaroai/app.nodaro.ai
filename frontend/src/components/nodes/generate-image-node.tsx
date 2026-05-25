@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useEffect, Suspense } from "react"
+import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
-import { Position, useReactFlow, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles } from "lucide-react"
 import { HandleWithPopover } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
@@ -66,38 +66,10 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const useFull = useFullResolution(id)
   const { aspectRatio: imgAspectRatio, onLoadDimensions: handleLoadDimensions } =
     useResultAspectRatio(id, results, activeIndex)
-  // Typed handles are anchored to the BOTTOM via `top: calc(100% - Npx)`, so
-  // every time the node's height changes (image loads, aspect ratio updates,
-  // user resizes), the resolved handle positions shift. React Flow caches
-  // handle bounds at mount via getBoundingClientRect; without a re-measure
-  // trigger, edges keep drawing to the original (stale) positions.
-  const updateNodeInternals = useUpdateNodeInternals()
-  const { setNodes } = useReactFlow()
-  useEffect(() => {
-    updateNodeInternals(id)
-  }, [id, imgAspectRatio, updateNodeInternals])
-  // Floor-clamp the persisted node.height ONLY for nodes that haven't been
-  // user-resized (no `rf-resized` className). Pre-v2.1 workflows stored a
-  // height ~150px which is too short for the 6 typed handles; without this,
-  // those nodes render with handles overflowing the body until manual resize.
-  //
-  // Skipping `rf-resized` nodes is critical — a user who deliberately resized
-  // smaller (e.g., 180px to keep RunNodeButton close to content) should NOT
-  // have their choice silently overwritten on every reload. BaseNode's
-  // aspect-fit effect handles the image-loaded case separately when an
-  // imageAspectRatio is present; this effect only catches the no-image-yet gap.
-  useEffect(() => {
-    if (imgAspectRatio) return // BaseNode's aspect-fit owns sizing once image is loaded
-    setNodes((nodes) => nodes.map((n) => {
-      if (n.id !== id) return n
-      // Respect explicit user resize — `rf-resized` is added by BaseNode
-      // whenever the user grabs a corner handle or BaseNode auto-fits.
-      if (typeof n.className === "string" && n.className.includes("rf-resized")) return n
-      const currentHeight = (n.height ?? n.measured?.height ?? 0) as number
-      if (currentHeight >= 220) return n
-      return { ...n, height: 220 }
-    }))
-  }, [id, imgAspectRatio, setNodes])
+  // Node sizing (floor-clamp to handle-derived minHeight + aspect-fit when
+  // an image is present + handle bounds re-measure) is owned by BaseNode —
+  // see the unified sizing effect in `base-node.tsx`. No per-node sizing
+  // logic needed here.
   const creditModelId = buildCreditModelIdentifier(
     nodeData.provider ?? "nano-banana-pro",
     nodeData as unknown as Record<string, unknown>,
