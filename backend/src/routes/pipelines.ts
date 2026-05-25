@@ -19,11 +19,13 @@ import {
   type JsonPatch,
   type PipelineStageName,
   type ProposedChange,
+  type ShowrunnerPlan,
 } from "@nodaro/shared"
 import { hasCredits } from "../lib/config.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { createSSEStream } from "../lib/sse.js"
 import { supabase } from "../lib/supabase.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
 const STAGE_NAMES: PipelineStageName[] = [
   "script",
@@ -53,6 +55,38 @@ const ApproveStageBodySchema = z.object({
       }),
     )
     .optional(),
+})
+
+/**
+ * Phase 1 (granular-pipeline-control spec) — body schema for the save-only
+ * inline edit route. `edits` is a non-empty RFC 6902 array (named to match
+ * the sibling `approve` route's `edits` field). Ops are `replace` only in
+ * Phase 1 (path whitelist + op restriction further enforced inside
+ * `saveStageEdit`).
+ */
+const SaveStageEditBodySchema = z.object({
+  edits: z
+    .array(
+      z.object({
+        op: z.enum(["replace"]),
+        path: z.string().min(1),
+        value: z.unknown(),
+      }),
+    )
+    .min(1)
+    .max(50),
+})
+
+/**
+ * Phase 2 (granular-pipeline-control spec) — body schema for the
+ * regenerate-scene route. `sceneIndex` is 0-based against plan.scenes.
+ * `feedback` is free-form user guidance (e.g. "make it more tense",
+ * "shorter — 4 seconds"). 2000 char cap mirrors the chat route's user
+ * turn cap so the LLM doesn't get pages of guidance per scene.
+ */
+const RegenerateSceneBodySchema = z.object({
+  sceneIndex: z.number().int().min(0),
+  feedback: z.string().min(1).max(2000),
 })
 
 function gateEdition(reply: FastifyReply): boolean {
@@ -364,7 +398,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
 
       const { data, error } = await supabase
         .from("pipeline_stages")
-        .select("status,output,critic_feedback,started_at,completed_at")
+        .select("status,output,critic_feedback,user_edits,started_at,completed_at")
         .eq("pipeline_id", req.params.id)
         .eq("stage_name", stageName)
         .maybeSingle()
@@ -516,6 +550,313 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       )
       if (!result.ok) return reply.status(409).send({ error: { code: result.reason } })
       return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/stages/:stage_name/edit ───────────────────────
+  //
+  // Phase 1 (granular-pipeline-control spec) — save-only inline editing for
+  // Stage 1 scene fields. Applies the JSON Patch to pipeline_stages.output AND
+  // appends the ops to pipeline_stages.user_edits (audit trail). DOES NOT
+  // advance the stage — caller still has to hit /approve afterward.
+  //
+  // Allowed paths (script stage only — enforced in `saveStageEdit`):
+  //   - /scenes/{n}/description
+  //   - /scenes/{n}/duration_seconds
+  //   - /scenes/{n}/emotional_beat
+  //   - /scenes/{n}/dialogue/{m}/line
+  // Other paths return 400 `patch_path_not_editable`. add/remove ops are
+  // deferred (add-scene/delete-scene = Phase 5).
+  app.post<{
+    Params: { id: string; stage_name: string }
+    Body: { edits?: unknown }
+  }>(
+    "/v1/pipelines/:id/stages/:stage_name/edit",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const stageName = req.params.stage_name as PipelineStageName
+      if (!(PIPELINE_STAGE_NAMES as readonly string[]).includes(stageName)) {
+        return reply.status(400).send({
+          error: { code: "invalid_stage_name", stage: req.params.stage_name },
+        })
+      }
+
+      const body = SaveStageEditBodySchema.safeParse(req.body ?? {})
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Ownership check on the parent pipeline row.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Look up the stage row id — `saveStageEdit` takes stageId (not
+      // pipeline+stage_name) to mirror `applyStageEdit`'s signature.
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", stageName)
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(404).send({ error: { code: "stage_not_started" } })
+      }
+
+      const { saveStageEdit } = await import(
+        "../ee/pipelines/save-stage-edit.js"
+      )
+      const result = await saveStageEdit({
+        supabase,
+        pipelineId: req.params.id,
+        stageId: stageRow.id as string,
+        stageName,
+        userId,
+        jsonPatch: body.data.edits as JsonPatch,
+      })
+      if (!result.ok) {
+        // Map helper reason → HTTP status:
+        //   400 — caller's fault (bad patch shape / path / value)
+        //   409 — stage-state issue (not awaiting / not editable / race)
+        const status =
+          result.reason === "patch_path_not_editable" ||
+          result.reason === "patch_invalid" ||
+          result.reason === "schema_invalid"
+            ? 400
+            : 409
+        return reply
+          .status(status)
+          .send({ error: { code: result.reason, detail: result.detail } })
+      }
+      return reply.send({ ok: true, newOutput: result.newOutput })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/stages/script/regenerate-scene ────────────────
+  //
+  // Phase 2 (granular-pipeline-control spec) — single-scene LLM regeneration.
+  // Replaces ONLY scenes[sceneIndex] in the script stage's plan; other scenes
+  // (including any user inline edits) are preserved. Appends an audit op to
+  // pipeline_stages.user_edits.
+  //
+  // Cost: 3 credits per call (STATIC_CREDIT_COSTS["regenerate-scene"]).
+  // Refund: on LLM failure / roster-ref-invalid / CAS-lost — full refund.
+  //
+  // `dedup: false` because our success response shape is
+  // `{ ok: true, newScene, newPlan }` not `{ jobId }`, so the dedup
+  // middleware's `{ jobId, deduped: true }` short-circuit would break the
+  // frontend.
+  app.post<{
+    Params: { id: string }
+    Body: { sceneIndex?: unknown; feedback?: unknown }
+  }>(
+    "/v1/pipelines/:id/stages/script/regenerate-scene",
+    {
+      preHandler: creditGuard(() => "regenerate-scene", { dedup: false }),
+    },
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const body = RegenerateSceneBodySchema.safeParse(req.body ?? {})
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Ownership check (existence-leak prevention — wrong-user → 404).
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Stage lookup. Must be Stage 1 (script) AND awaiting_approval AND
+      // have a plan in output. Anything else → reject early (before any
+      // credit reservation).
+      const { data: stageRow } = await supabase
+        .from("pipeline_stages")
+        .select("id, status, output, user_edits")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", "script")
+        .maybeSingle()
+      if (!stageRow) {
+        return reply.status(404).send({ error: { code: "stage_not_started" } })
+      }
+      if (stageRow.status !== "awaiting_approval") {
+        return reply.status(409).send({ error: { code: "stage_not_awaiting" } })
+      }
+      const stageOutput = stageRow.output as { plan?: ShowrunnerPlan } | null
+      const currentPlan = stageOutput?.plan
+      if (!currentPlan) {
+        return reply.status(409).send({ error: { code: "plan_not_available" } })
+      }
+
+      // sceneIndex range check BEFORE any credit charge — saves the user
+      // 3cr on a bad request.
+      if (body.data.sceneIndex >= currentPlan.scenes.length) {
+        return reply.status(400).send({
+          error: {
+            code: "scene_index_out_of_range",
+            detail: {
+              sceneIndex: body.data.sceneIndex,
+              sceneCount: currentPlan.scenes.length,
+            },
+          },
+        })
+      }
+
+      // Create a jobs row for credit accounting (matches the ai-writer /
+      // adjust-volume pattern — synchronous LLM call, jobs row exists only
+      // to anchor the credit reservation for commit/refund).
+      const { data: job, error: jobErr } = await supabase
+        .from("jobs")
+        .insert({
+          user_id: userId,
+          status: "pending",
+          input_data: {
+            type: "regenerate-scene",
+            pipeline_id: req.params.id,
+            scene_index: body.data.sceneIndex,
+            feedback: body.data.feedback,
+          },
+        })
+        .select("id")
+        .single()
+      if (jobErr || !job) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: jobErr?.message } })
+      }
+
+      // Reserve credits against the job. Sets req.creditReservation +
+      // usageLogId. If the reservation fails (insufficient credits etc.),
+      // reserveCreditsForJob sends the reply itself — we return.
+      const reservation = await reserveCreditsForJob(
+        req,
+        reply,
+        job.id,
+        "regenerate-scene",
+      )
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+
+      const { CreditsService } = await import("../ee/billing/credits.js")
+      const { runSceneRefiner } = await import(
+        "../ee/pipelines/llms/scene-refiner.js"
+      )
+
+      // Run the refiner. Catch BOTH explicit ok=false branches and thrown
+      // errors. Refund credits on any failure path.
+      let refinerResult: Awaited<ReturnType<typeof runSceneRefiner>>
+      try {
+        refinerResult = await runSceneRefiner({
+          supabase,
+          pipelineId: req.params.id,
+          stageId: stageRow.id as string,
+          userId,
+          plan: currentPlan,
+          sceneIndex: body.data.sceneIndex,
+          feedback: body.data.feedback,
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", error: message })
+          .eq("id", job.id)
+        if (usageLogId) await CreditsService.refundCredits(usageLogId)
+        return reply.status(502).send({ error: { code: "llm_unavailable", detail: message } })
+      }
+
+      if (!refinerResult.ok) {
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", error: refinerResult.reason })
+          .eq("id", job.id)
+        if (usageLogId) await CreditsService.refundCredits(usageLogId)
+        // scene_index_out_of_range can't fire here (we pre-checked above),
+        // but we handle it for completeness.
+        const status =
+          refinerResult.reason === "roster_ref_invalid" ? 422 : 400
+        return reply.status(status).send({
+          error: { code: refinerResult.reason, detail: refinerResult.detail },
+        })
+      }
+
+      // Replace the target scene in the plan. Append an audit op to
+      // user_edits (mirrors saveStageEdit's audit-trail pattern — the op is
+      // a whole-scene replace, conceptually one big patch op).
+      const patchedScenes = currentPlan.scenes.map((s, i) =>
+        i === body.data.sceneIndex ? refinerResult.newScene : s,
+      )
+      const patchedPlan: ShowrunnerPlan = { ...currentPlan, scenes: patchedScenes }
+      const existingEdits = Array.isArray(stageRow.user_edits)
+        ? (stageRow.user_edits as unknown[])
+        : []
+      const auditOp = {
+        op: "replace",
+        path: `/scenes/${body.data.sceneIndex}`,
+        value: refinerResult.newScene,
+      }
+      const mergedEdits = [...existingEdits, auditOp]
+
+      // CAS-guard on status — protect against a concurrent approve flipping
+      // the row out from under us between our SELECT and UPDATE.
+      const { data: updatedRows, error: updateErr } = await supabase
+        .from("pipeline_stages")
+        .update({
+          output: { plan: patchedPlan },
+          user_edits: mergedEdits,
+        })
+        .eq("id", stageRow.id)
+        .eq("status", "awaiting_approval")
+        .select("id")
+      if (updateErr) {
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", error: "db_update_failed" })
+          .eq("id", job.id)
+        if (usageLogId) await CreditsService.refundCredits(usageLogId)
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: updateErr.message } })
+      }
+      if (!updatedRows || updatedRows.length === 0) {
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", error: "stage_not_awaiting" })
+          .eq("id", job.id)
+        if (usageLogId) await CreditsService.refundCredits(usageLogId)
+        return reply.status(409).send({ error: { code: "stage_not_awaiting" } })
+      }
+
+      // Success — mark job completed and commit the reserved credits.
+      await supabase.from("jobs").update({ status: "completed" }).eq("id", job.id)
+      if (usageLogId) await CreditsService.commitCredits(usageLogId)
+
+      return reply.send({
+        ok: true,
+        newScene: refinerResult.newScene,
+        newPlan: patchedPlan,
+      })
     },
   )
 
