@@ -8,6 +8,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { parseListExpression, describeEdgeBehavior, type SelectorMode } from "@nodaro/shared"
 import type { CSSProperties } from "react"
 import { useEdgeInsertAnimation } from "./workflow-editor/use-edge-insert-animation"
+import { pickEdgeAccent, ACCENT_PINK, ACCENT_BLUE } from "@/lib/edge-accent"
 
 type AnimatedFlowEdgeData = {
   isRunning?: boolean       // Output animation: source node is running (pink)
@@ -220,10 +221,41 @@ function AnimatedFlowEdgeComponent({
   // Keep labels readable when zoomed out: scale up inversely below zoom 0.6
   const labelScale = zoom < 0.6 ? Math.min(0.6 / zoom, 2.5) : 1
 
+  // Hover from the popover signals "this is the edge you're inspecting" via
+  // a thicker stroke + glow. During execution (input-running blue or output-
+  // running pink), the stroke color carries semantic info — DON'T overwrite
+  // it with hover-pink or we silently shadow the data-flow direction. We
+  // still apply the stroke-width bump + a color-matched glow so the hover
+  // signal remains visible. `pickEdgeAccent` (lib/edge-accent.ts) is the
+  // SINGLE SOURCE OF TRUTH for the running-edge color priority — shared
+  // with workflow-canvas.tsx's edgeColor assignment so the two render
+  // surfaces always agree on which color "wins" when source AND target
+  // are both running.
+  const baseStyle = style as CSSProperties | undefined
+  const isExecuting = isRunning || isInputRunning
+  const baseStroke = baseStyle?.stroke
+  const baseStrokeWidth = baseStyle?.strokeWidth
+  const baseFilter = baseStyle?.filter
+  const accent = pickEdgeAccent(isRunning, isInputRunning)
+  const hoverStroke = isExecuting ? baseStroke : accent.stroke
+  const hoverGlow = accent.glow
+
   return (
     <>
       {/* Base edge line */}
-      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: isHoveredFromPopover ? 4 : (selected ? 3 : (style as CSSProperties)?.strokeWidth), stroke: isHoveredFromPopover ? "#ff0073" : (selected ? "#ff0073" : (style as CSSProperties)?.stroke), filter: isHoveredFromPopover ? "drop-shadow(0 0 6px rgba(255, 0, 115, 0.55))" : ((style as CSSProperties) as { filter?: string })?.filter, transition: "stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease", ...edgeInsertAnim.style } as CSSProperties} markerEnd={markerEnd as string | undefined} />
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          ...style,
+          strokeWidth: isHoveredFromPopover ? 4 : selected ? 3 : baseStrokeWidth,
+          stroke: isHoveredFromPopover ? hoverStroke : selected ? "#ff0073" : baseStroke,
+          filter: isHoveredFromPopover ? hoverGlow : baseFilter,
+          transition: "stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease",
+          ...edgeInsertAnim.style,
+        } as CSSProperties}
+        markerEnd={markerEnd as string | undefined}
+      />
 
       {/* SVG filters for glow effects */}
       <defs>
@@ -245,14 +277,14 @@ function AnimatedFlowEdgeComponent({
 
       {/* Blue animated dot: data flowing IN to the running node (input edges) */}
       {isInputRunning && !isRunning && (
-        <circle r="8" fill="#3b82f6" filter={`url(#${blueGlowFilterId})`}>
+        <circle r="8" fill={ACCENT_BLUE} filter={`url(#${blueGlowFilterId})`}>
           <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
         </circle>
       )}
 
       {/* Pink animated dot: data flowing OUT from the running node (output edges) */}
       {isRunning && (
-        <circle r="8" fill="#ff0073" filter={`url(#${pinkGlowFilterId})`}>
+        <circle r="8" fill={ACCENT_PINK} filter={`url(#${pinkGlowFilterId})`}>
           <animateMotion dur="2s" repeatCount="indefinite" path={edgePath} />
         </circle>
       )}

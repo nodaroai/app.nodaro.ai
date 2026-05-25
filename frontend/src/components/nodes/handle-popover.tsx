@@ -1,12 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useReactFlow } from "@xyflow/react"
 import { Plus, Unlink2, Link2, Crosshair, Image as ImageIcon } from "lucide-react"
 import {
   DndContext,
   closestCenter,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -14,6 +15,7 @@ import {
 } from "@dnd-kit/core"
 import {
   SortableContext,
+  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
@@ -21,11 +23,25 @@ import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
+import { isValidWorkflowConnection } from "@/lib/connection-validation"
+import { optimizedImageUrl } from "@/lib/image"
+import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import type { ReactNode } from "react"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 
 const SENSOR_OPTIONS = { activationConstraint: { distance: 4 } } as const
+/** Cap on rendered candidate rows. Workflows with many type-valid not-
+ *  yet-connected sources (50+ image generators all eligible as references)
+ *  would otherwise render a long list with portal hover-previews on each
+ *  row, juddering on mid-tier laptops. Beyond the cap we surface a count
+ *  + a hint that drag-to-connect handles the rest. */
+const MAX_CANDIDATES = 12
+/** Stop counting beyond this many omitted candidates — the UI shows
+ *  "{N}+" past this threshold so exact precision isn't useful, and
+ *  skipping the per-iteration global-validator call beyond it bounds the
+ *  memo cost during ~20Hz status ticks. */
+const OMITTED_BUDGET = 50
 
 interface HandlePopoverProps {
   readonly nodeId: string
@@ -52,7 +68,12 @@ interface CandidateNode {
   readonly nodeType: string
   readonly thumbnailUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
-  readonly outputHandle: string
+  /** Source's output handle id for target-direction popovers (always
+   *  defined — filter rejects candidates without static outputs). For
+   *  source-direction candidates this stays undefined; the connect path
+   *  uses the candidate's `inputs[0]` instead. Narrowing the type to
+   *  optional keeps the invariant visible to any future reader. */
+  readonly outputHandle: string | undefined
 }
 
 /**
@@ -87,6 +108,13 @@ export function HandlePopover({
   const setHoveredEdgeId = useWorkflowStore((s) => s.setHoveredEdgeId)
   const reorderHandleEdges = useWorkflowStore((s) => s.reorderHandleEdges)
   const disconnectAllHandleEdges = useWorkflowStore((s) => s.disconnectAllHandleEdges)
+  // Roving tabindex for sortable grips. When a user keyboard-reorders a
+  // row, focus stays on the moved grip (React preserves DOM via key=
+  // edgeId) — we move the tab-stop with it instead of having it return
+  // to the array-index-0 grip. Initial value `null` means "no grip has
+  // been focused yet"; first-row falls back to tabIndex=0 so Tab can
+  // still enter the list cold.
+  const [focusedGripEdgeId, setFocusedGripEdgeId] = useState<string | null>(null)
 
   // Clear any sticky hovered-edge highlight when the popover unmounts.
   // mouseleave doesn't fire on rows that unmount while the cursor is still
@@ -110,28 +138,108 @@ export function HandlePopover({
     })
   }, [connections, nodes])
 
-  // Candidate nodes: type-valid, not yet connected on this handle.
-  const candidates: CandidateNode[] = useMemo(() => {
-    if (!accepts) return []
+  // Candidate nodes: type-valid AND globally-valid, not yet connected on
+  // this handle. Capped to MAX_CANDIDATES rendered rows — workflows with
+  // many type-valid sources would otherwise render a long list with portal
+  // previews per row, juddering on mid-tier laptops.
+  //
+  // SOURCE-DIRECTION GATE: the `accepts` prop is documented as "valid
+  // upstream type for this handle" — a TARGET-direction semantic. Calling
+  // it on candidate target types in source-direction would feed flipped
+  // arguments into a wrong-direction predicate AND the global validator
+  // would probe `inputs[0]` arbitrarily for multi-input candidates. We
+  // gate source-direction here so future source-direction popovers don't
+  // silently inherit a broken candidate-filter contract. Use drag-to-
+  // connect (which routes through the canonical validator with the real
+  // target handle) until a direction-aware predicate is added.
+  //
+  // Performance: builds `nodeTypeMap` ONCE for O(1) type lookups inside
+  // the loop and inside `isValidWorkflowConnection`. The cap is checked
+  // BEFORE the global validator so the validator runs at most
+  // MAX_CANDIDATES + OMITTED_BUDGET times per memo pass (not once per
+  // type-valid node) — bounds re-render cost during ~20Hz status ticks
+  // when a popover is open mid-execution.
+  //
+  // Iteration order: REVERSE so newer nodes (appended at the end of the
+  // store array) appear first. When the user is actively building a
+  // workflow, the most-recently-created sources are far more likely
+  // targets than session-old ones.
+  const { candidates, omittedCount, hasDynamicOutputCandidates } = useMemo(() => {
+    if (!accepts) {
+      return { candidates: [] as CandidateNode[], omittedCount: 0, hasDynamicOutputCandidates: false }
+    }
+    if (direction === "source") {
+      return { candidates: [] as CandidateNode[], omittedCount: 0, hasDynamicOutputCandidates: false }
+    }
     const connectedIds = new Set(connections.map((c) => c.otherNodeId))
-    const out: CandidateNode[] = []
+    const nodeTypeMap = new Map<string, string>()
     for (const n of nodes) {
+      if (n.type) nodeTypeMap.set(n.id, n.type)
+    }
+    const nodeTypeById = (id: string) => nodeTypeMap.get(id)
+
+    // Detect dynamic-output candidates BEFORE the capped main loop. If
+    // we deferred this into the same loop, an early `break` (hit when
+    // rendered + omitted budgets are both saturated) could exit before
+    // reaching list/loop nodes deeper in the array, hiding the helpful
+    // hint exactly when the user has the most candidates to consider.
+    // Cheap pre-scan: stops as soon as one is found.
+    //
+    // Treats `outputs: undefined` the same as `outputs: []` so the
+    // convention isn't load-bearing (NODE_DEFINITIONS currently uses
+    // explicit empty arrays for list/loop, but a future contributor
+    // dropping the field shouldn't silently break this hint).
+    let dynamicOutputs = false
+    for (const n of nodes) {
+      if (n.id === nodeId) continue
+      if (connectedIds.has(n.id)) continue
+      const t = n.type
+      if (!t || !accepts(t)) continue
+      const def = NODE_DEF_MAP.get(t as never)
+      if (def && (!def.outputs || def.outputs.length === 0)) {
+        dynamicOutputs = true
+        break
+      }
+    }
+
+    const rendered: CandidateNode[] = []
+    let omitted = 0
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (rendered.length >= MAX_CANDIDATES && omitted >= OMITTED_BUDGET) break
+      const n = nodes[i]
       if (n.id === nodeId) continue                       // skip the consumer itself
       if (connectedIds.has(n.id)) continue                // already connected
       const t = (n.type ?? "") as string
       if (!t || !accepts(t)) continue                     // type-incompatible
       const def = NODE_DEF_MAP.get(t as never)
-      // Skip nodes whose registry has no static output handle. The Connect
-      // button can only wire to a known handle id; the `"out"` fallback used
-      // to be applied here, but for dynamic-output types like `list`/`loop`
-      // (outputs:[], real outputs are runtime col_<uuid>) that creates an
-      // edge with sourceHandle:"out" that has no matching <Handle> on the
-      // source — the edge renders from the node's default position and the
-      // backend can't resolve it. Drag-to-connect handles dynamic outputs
-      // natively; for the popover's Connect button we conservatively skip.
+      // Skip nodes whose registry has no static output handle. Drag-to-
+      // connect handles dynamic-output types (list/loop, outputs:[]) via
+      // runtime col_<uuid> handles — the popover Connect button can't.
+      // Tracking that they EXIST is handled by the pre-scan above.
       const outputHandle = def?.outputs?.[0]
-      if (!outputHandle) continue
-      out.push({
+      if (!outputHandle) {
+        continue
+      }
+      // Past the render cap: count toward `omittedCount` (bounded by
+      // OMITTED_BUDGET — beyond that the UI just says "50+") WITHOUT
+      // running the global validator. The candidates that DO render still
+      // run the validator below to ensure correctness.
+      if (rendered.length >= MAX_CANDIDATES) {
+        omitted++
+        continue
+      }
+      // GLOBAL connection rules (json→media, composition→render-video) —
+      // `accepts` is per-handle; this is what workflow-canvas runs during
+      // drag-to-connect. Without this, a future HandleWithPopover with a
+      // looser `accepts` predicate could silently wire an invalid edge.
+      const wouldBeConnection = {
+        source: n.id,
+        sourceHandle: outputHandle,
+        target: nodeId,
+        targetHandle: handleId,
+      }
+      if (!isValidWorkflowConnection(wouldBeConnection, nodeTypeById)) continue
+      rendered.push({
         nodeId: n.id,
         nodeLabel: ((n.data as { label?: string } | undefined)?.label ?? t) as string,
         nodeType: t,
@@ -140,8 +248,8 @@ export function HandlePopover({
         outputHandle,
       })
     }
-    return out
-  }, [accepts, connections, nodes, nodeId])
+    return { candidates: rendered, omittedCount: omitted, hasDynamicOutputCandidates: dynamicOutputs }
+  }, [accepts, connections, nodes, nodeId, handleId, direction])
 
   const handleJump = useCallback(
     (otherNodeId: string) => {
@@ -162,34 +270,33 @@ export function HandlePopover({
 
   const handleConnectCandidate = useCallback(
     (cand: CandidateNode) => {
-      if (direction === "target") {
-        onConnect({
-          source: cand.nodeId,
-          sourceHandle: cand.outputHandle,
-          target: nodeId,
-          targetHandle: handleId,
-        })
-      } else {
-        // Source-direction popover — rare, but support the mirror: we're the
-        // SOURCE, candidate is the target. Use the candidate's first input.
-        const def = NODE_DEF_MAP.get(cand.nodeType as never)
-        const targetHandle = (def?.inputs?.[0] ?? "in") as string
-        onConnect({
-          source: nodeId,
-          sourceHandle: handleId,
-          target: cand.nodeId,
-          targetHandle,
-        })
-      }
+      // Source-direction popovers are gated out of candidate enumeration
+      // (see the `direction === "source"` early return in the candidates
+      // useMemo). If a candidate reaches here, direction is "target" and
+      // `cand.outputHandle` is guaranteed defined by the filter.
+      if (!cand.outputHandle) return
+      onConnect({
+        source: cand.nodeId,
+        sourceHandle: cand.outputHandle,
+        target: nodeId,
+        targetHandle: handleId,
+      })
     },
-    [direction, onConnect, nodeId, handleId],
+    [onConnect, nodeId, handleId],
   )
 
   // DnD sensors — small distance threshold so quick clicks on inner buttons
   // / thumbnails don't accidentally start a drag. Options literal hoisted
   // (`SENSOR_OPTIONS`) so its identity is stable across renders — otherwise
   // useSensor's deps bust on every parent render and DndContext re-renders.
-  const sensors = useSensors(useSensor(PointerSensor, SENSOR_OPTIONS))
+  // KeyboardSensor + sortableKeyboardCoordinates pairs with the activator
+  // ref on the grip span (see SortableConnectionRow) so keyboard users can
+  // tab to a grip, press Space/Enter to pick up, then arrow up/down to
+  // reorder and Space/Enter to drop.
+  const sensors = useSensors(
+    useSensor(PointerSensor, SENSOR_OPTIONS),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const handleDragEnd = useCallback(
     (e: DragEndEvent) => {
@@ -203,11 +310,31 @@ export function HandlePopover({
     [enriched, reorderHandleEdges, nodeId, handleId, direction],
   )
 
+  // Model-effective limit for this (consumer, handle) pair — e.g.,
+  // generate-image's `references` handle is capped at the selected
+  // provider's max (REF_IMAGE_MAX_LIMITS). Connections past `limit` are
+  // still wired in the workflow but the runtime silently drops them — we
+  // surface that in the count label and gray out overflow rows so the
+  // user can see (and reorder) which refs will actually be used.
+  const consumerNode = getNode(nodeId)
+  const handleLimit = direction === "target"
+    ? getHandleConnectionLimit(consumerNode as WorkflowNode | undefined, handleId)
+    : null
+  const overflowFrom = handleLimit && enriched.length > handleLimit.limit ? handleLimit.limit : null
   const countLabel = enriched.length === 0
     ? "Nothing connected"
-    : `${enriched.length} connected`
+    : handleLimit
+      ? `${enriched.length} of ${handleLimit.limit} max`
+      : `${enriched.length} connected`
 
   const showCandidates = candidates.length > 0
+  // Display string for total eligible — switches to "{N}+" past the
+  // OMITTED_BUDGET cutoff so the user sees that more exist without
+  // claiming exact precision.
+  const omittedTotalLabel =
+    omittedCount > 0
+      ? `${candidates.length + omittedCount}${omittedCount >= OMITTED_BUDGET ? "+" : ""}`
+      : null
 
   // Boundary stopPropagation: when the popover sits visually over a canvas
   // node, an unbounded click can bubble through React's delegated event
@@ -265,28 +392,43 @@ export function HandlePopover({
               <SortableContext items={enriched.map((c) => c.edgeId)} strategy={verticalListSortingStrategy}>
                 <ul className="flex flex-col gap-0.5">
                   {enriched.map((c, i) => (
-                    <SortableConnectionRow
-                      key={c.edgeId}
-                      connection={c}
-                      position={i + 1}
-                      onJump={() => handleJump(c.otherNodeId)}
-                      onDisconnect={() => deleteEdge(c.edgeId)}
-                      onHoverEdge={setHoveredEdgeId}
-                    />
+                    <Fragment key={c.edgeId}>
+                      {overflowFrom !== null && i === overflowFrom && (
+                        <OverflowDivider providerLabel={handleLimit!.providerLabel} />
+                      )}
+                      <SortableConnectionRow
+                        connection={c}
+                        position={i + 1}
+                        isTabStop={
+                          focusedGripEdgeId === c.edgeId ||
+                          (focusedGripEdgeId === null && i === 0)
+                        }
+                        isOverflow={overflowFrom !== null && i >= overflowFrom}
+                        onGripFocus={setFocusedGripEdgeId}
+                        onJump={() => handleJump(c.otherNodeId)}
+                        onDisconnect={() => deleteEdge(c.edgeId)}
+                        onHoverEdge={setHoveredEdgeId}
+                      />
+                    </Fragment>
                   ))}
                 </ul>
               </SortableContext>
             </DndContext>
           ) : (
             <ul className="flex flex-col gap-0.5">
-              {enriched.map((c) => (
-                <ConnectionRow
-                  key={c.edgeId}
-                  connection={c}
-                  onJump={() => handleJump(c.otherNodeId)}
-                  onDisconnect={() => deleteEdge(c.edgeId)}
-                  onHoverEdge={setHoveredEdgeId}
-                />
+              {enriched.map((c, i) => (
+                <Fragment key={c.edgeId}>
+                  {overflowFrom !== null && i === overflowFrom && (
+                    <OverflowDivider providerLabel={handleLimit!.providerLabel} />
+                  )}
+                  <ConnectionRow
+                    connection={c}
+                    isOverflow={overflowFrom !== null && i >= overflowFrom}
+                    onJump={() => handleJump(c.otherNodeId)}
+                    onDisconnect={() => deleteEdge(c.edgeId)}
+                    onHoverEdge={setHoveredEdgeId}
+                  />
+                </Fragment>
               ))}
             </ul>
           )
@@ -296,7 +438,9 @@ export function HandlePopover({
           <>
             {enriched.length > 0 && <div className="border-t border-border my-2" />}
             <div className="px-1.5 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
-              Optional ({candidates.length})
+              {omittedTotalLabel
+                ? `Optional (${candidates.length} of ${omittedTotalLabel})`
+                : `Optional (${candidates.length})`}
             </div>
             <ul className="flex flex-col gap-0.5">
               {candidates.map((c) => (
@@ -308,6 +452,21 @@ export function HandlePopover({
                 />
               ))}
             </ul>
+            {(omittedCount > 0 || hasDynamicOutputCandidates) && (
+              <div className="px-1.5 pt-1.5 text-[10px] text-muted-foreground/70 italic">
+                {omittedCount > 0 && (
+                  <>
+                    +{omittedCount >= OMITTED_BUDGET ? `${OMITTED_BUDGET}+` : omittedCount} more — drag from the pip to connect.
+                  </>
+                )}
+                {hasDynamicOutputCandidates && (
+                  <>
+                    {omittedCount > 0 && " "}
+                    Drag from list/loop nodes for column outputs.
+                  </>
+                )}
+              </div>
+            )}
           </>
         )}
     </div>
@@ -327,12 +486,21 @@ interface ConnectionRowProps {
    *  pointer-down listeners on the whole row causes `preventDefault` to
    *  re-route synthetic click events away from inner buttons. */
   readonly dragHandle?: React.ReactNode
+  /** True when this row sits past the consumer model's effective limit
+   *  for the handle — the edge is still in the workflow, but the runtime
+   *  silently drops it for the currently-selected model. We dim the row
+   *  and add a hover hint so the user can reorder or switch models. */
+  readonly isOverflow?: boolean
 }
 
-function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHandle }: ConnectionRowProps) {
+function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHandle, isOverflow }: ConnectionRowProps) {
   return (
     <li
-      className="group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent"
+      className={cn(
+        "group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent",
+        isOverflow && "opacity-50",
+      )}
+      title={isOverflow ? "Past model's max — won't be used by the current model. Reorder above or switch model to include." : undefined}
       onMouseEnter={() => onHoverEdge(connection.edgeId)}
       onMouseLeave={() => onHoverEdge(null)}
     >
@@ -379,11 +547,25 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
   )
 }
 
-function SortableConnectionRow(props: ConnectionRowProps & { position: number }) {
-  const { position, ...rowProps } = props
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: props.connection.edgeId,
-  })
+function SortableConnectionRow(
+  props: ConnectionRowProps & {
+    position: number
+    isTabStop: boolean
+    onGripFocus: (edgeId: string) => void
+  },
+) {
+  const { position, isTabStop, onGripFocus, ...rowProps } = props
+  // `rowProps` already includes `isOverflow` via ConnectionRowProps spread.
+  const edgeId = props.connection.edgeId
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: edgeId })
   return (
     <div
       ref={setNodeRef}
@@ -392,15 +574,37 @@ function SortableConnectionRow(props: ConnectionRowProps & { position: number })
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      {...attributes}
     >
       <ConnectionRow
         {...rowProps}
         dragHandle={
+          // The grip carries BOTH the dnd-kit listeners AND the
+          // accessibility attributes — that pairs the announceable
+          // `role=button` + aria-roledescription="draggable" with the
+          // element that actually responds to Space/Enter activation.
+          // `setActivatorNodeRef` tells the KeyboardSensor which element
+          // is the keyboard activator (lets focus stay on the grip after
+          // pickup so arrow keys move the row).
+          //
+          // ROVING TABINDEX: exactly one grip in the list is tab-stoppable
+          // at a time, and the tab-stop FOLLOWS focus rather than being
+          // pinned to index 0. After a keyboard reorder (React preserves
+          // DOM identity via key=edgeId so focus stays on the moved grip),
+          // that grip keeps tabIndex=0 instead of dropping to -1. Without
+          // this, the user would lose tab-entry to the row they just
+          // moved.
+          //
+          // PROP ORDER: spread `attributes` FIRST so our explicit
+          // `aria-label` (with the position number) wins over any future
+          // generic aria-label dnd-kit might ship in attributes.
           <span
-            aria-label={`Drag to reorder (position ${position})`}
+            ref={setActivatorNodeRef}
+            {...attributes}
             {...listeners}
-            className="flex items-center gap-0.5 text-[10px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5"
+            tabIndex={isTabStop ? 0 : -1}
+            onFocus={() => onGripFocus(edgeId)}
+            aria-label={`Drag to reorder (position ${position})`}
+            className="flex items-center gap-0.5 text-[10px] leading-none text-muted-foreground/60 group-hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing select-none px-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
           >
             <span className="font-medium tabular-nums">{position}</span>
             <span aria-hidden className="opacity-60">⋮⋮</span>
@@ -458,6 +662,19 @@ function CandidateRow({ candidate, onJump, onConnect }: CandidateRowProps) {
           <Link2 className="w-3.5 h-3.5" />
         </button>
       </div>
+    </li>
+  )
+}
+
+// ─── Model-max overflow divider ────────────────────────────────────────────
+
+function OverflowDivider({ providerLabel }: { providerLabel: string }) {
+  return (
+    <li
+      aria-hidden
+      className="pointer-events-none px-1.5 py-1 text-[9.5px] uppercase tracking-wide text-muted-foreground/60 border-t border-dashed border-border/70 mt-1"
+    >
+      Beyond {providerLabel}'s max — won't be used
     </li>
   )
 }
@@ -532,8 +749,15 @@ function ThumbnailButton({
         onMouseLeave={() => setPreviewAnchor(null)}
       >
         {thumbnailUrl ? (
+          // Cloudflare image-resize transform for cdn.nodaro.ai URLs.
+          // Logical 32px × 3 (retina) = 96px wide variant; pass-through
+          // for non-R2 URLs (e.g., http(s) uploads still hosted directly).
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbnailUrl} alt="" className="w-full h-full object-cover pointer-events-none" />
+          <img
+            src={optimizedImageUrl(thumbnailUrl, { width: 96, quality: 80 })}
+            alt=""
+            className="w-full h-full object-cover pointer-events-none"
+          />
         ) : pickerVisual ? (
           <div className="w-full h-full pointer-events-none flex items-center justify-center [&>*]:max-w-full [&>*]:max-h-full">
             {pickerVisual}
@@ -577,9 +801,13 @@ function ThumbnailPreview({
       style={{ left, top }}
     >
       {url ? (
+        // Cloudflare image-resize transform for cdn.nodaro.ai URLs.
+        // Logical 240px max × 2 (retina) = 480px wide variant; pass-through
+        // for non-R2 URLs. Quality 85 (slight bump over thumb's 80) for the
+        // larger preview surface.
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={url}
+          src={optimizedImageUrl(url, { width: 480, quality: 85 })}
           alt={alt}
           className="rounded object-contain block"
           style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
