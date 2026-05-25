@@ -232,6 +232,7 @@ export function HandleWithPopover({
           direction={type === "target" ? "target" : "source"}
           label={label}
           orderMatters={orderMatters}
+          accepts={accepts}
           onAddNew={openPopup ? handleAddNew : undefined}
           onClose={() => setOpen(false)}
         />

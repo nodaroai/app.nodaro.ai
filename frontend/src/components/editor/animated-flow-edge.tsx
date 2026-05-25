@@ -91,6 +91,9 @@ function AnimatedFlowEdgeComponent({
 }: AnimatedFlowEdgeProps) {
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
+  // Edge hover state — driven by HandlePopover when the user hovers a
+  // connection row, so the corresponding canvas edge lights up briefly.
+  const isHoveredFromPopover = useWorkflowStore((s) => s.hoveredEdgeId === id)
   const zoom = useStore((s) => s.transform[2])
   const [showModeMenu, setShowModeMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -220,7 +223,7 @@ function AnimatedFlowEdgeComponent({
   return (
     <>
       {/* Base edge line */}
-      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: selected ? 3 : (style as CSSProperties)?.strokeWidth, stroke: selected ? "#ff0073" : (style as CSSProperties)?.stroke, ...edgeInsertAnim.style } as CSSProperties} markerEnd={markerEnd as string | undefined} />
+      <BaseEdge id={id} path={edgePath} style={{ ...style, strokeWidth: isHoveredFromPopover ? 4 : (selected ? 3 : (style as CSSProperties)?.strokeWidth), stroke: isHoveredFromPopover ? "#ff0073" : (selected ? "#ff0073" : (style as CSSProperties)?.stroke), filter: isHoveredFromPopover ? "drop-shadow(0 0 6px rgba(255, 0, 115, 0.55))" : ((style as CSSProperties) as { filter?: string })?.filter, transition: "stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease", ...edgeInsertAnim.style } as CSSProperties} markerEnd={markerEnd as string | undefined} />
 
       {/* SVG filters for glow effects */}
       <defs>
