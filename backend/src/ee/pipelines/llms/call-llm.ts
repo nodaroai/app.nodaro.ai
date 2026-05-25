@@ -44,7 +44,42 @@ export interface CallLLMArgs<T> {
    * applied to every retry attempt.
    */
   preprocess?: (raw: unknown) => unknown
+  /**
+   * Optional progress callback — when present, switches from non-streaming
+   * `messages.create` to streaming `messages.stream` and invokes the
+   * callback at observable boundaries (stream start, every ~1s of tool-use
+   * input-json deltas, stream complete). Used by the Stage 1 Showrunner so
+   * the pipeline panel can render a live "Drafting plan…" banner instead of
+   * a 2-minute spinner. Throttled at the call site to at most one event per
+   * `progressMinIntervalMs` (default 750ms) so a token-flood doesn't drown
+   * the SSE channel.
+   *
+   * The callback is best-effort — if a caller's callback throws, the LLM
+   * call still completes and writes its audit row; the exception is logged
+   * and swallowed.
+   */
+  onProgress?: (update: ProgressUpdate) => void
+  /**
+   * Minimum gap between `onProgress` invocations when streaming. Default
+   * 750ms. Lower = smoother but more SSE traffic; higher = chunkier UI.
+   */
+  progressMinIntervalMs?: number
 }
+
+/**
+ * Discriminated progress event emitted while a streaming LLM call is in
+ * flight. Phases map to observable stream boundaries:
+ *   - `starting`   — fires once before the stream request goes out
+ *   - `drafting`   — fires repeatedly as tool-use input_json deltas accumulate
+ *   - `finalizing` — fires once after the stream completes, before Zod parse
+ *
+ * Callers convert these into user-facing strings; the LLM layer doesn't
+ * know what phrasing the panel uses.
+ */
+export type ProgressUpdate =
+  | { phase: "starting" }
+  | { phase: "drafting"; bytesSoFar: number }
+  | { phase: "finalizing"; bytesSoFar: number }
 
 export interface CallLLMResult<T> {
   output: T
@@ -74,6 +109,8 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     schema,
     maxRetries = 2,
     cacheSystemPrompt = true,
+    onProgress,
+    progressMinIntervalMs = 750,
   } = args
 
   const anthropic = getAnthropicClient()
@@ -127,15 +164,34 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     // temperature control. Omit it for those models; Sonnet/Haiku still
     // accept it.
     const supportsTemperature = !TEMPERATURE_UNSUPPORTED_MODELS.has(modelId)
-    const resp = await anthropic.messages.create({
+    const createParams = {
       model: modelId,
       max_tokens: 8192,
       ...(supportsTemperature ? { temperature } : {}),
       system: systemBlock,
       tools: [toolDef],
-      tool_choice: { type: "tool", name: "emit" },
-      messages: [{ role: "user", content: userContent }],
-    })
+      tool_choice: { type: "tool", name: "emit" } as const,
+      messages: [{ role: "user" as const, content: userContent }],
+    }
+    // Streaming path: only when the caller wants progress events. The non-
+    // streaming path stays as the default so the dozens of other LLM helpers
+    // keep their existing 2 fewer hops + no event-emitter overhead.
+    //
+    // Fallback behavior: if `stream()` throws (network blip, SDK
+    // regression), we re-throw to the outer retry loop — same as the
+    // non-streaming path. We do NOT silently fall back to `create()`
+    // because that would mask streaming bugs behind a working pipeline.
+    let resp: Anthropic.Messages.Message
+    if (onProgress) {
+      resp = await runStreamingMessage(
+        anthropic,
+        createParams,
+        onProgress,
+        progressMinIntervalMs,
+      )
+    } else {
+      resp = await anthropic.messages.create(createParams)
+    }
 
     totalIn += resp.usage.input_tokens
     totalOut += resp.usage.output_tokens
@@ -262,4 +318,59 @@ function estimateCost(
 function normalizeModelId(modelId: string): string {
   // Strip optional date suffix: "claude-haiku-4-5-20251001" -> "claude-haiku-4-5"
   return modelId.replace(/-\d{8}$/, "")
+}
+
+/**
+ * Streaming variant of `messages.create`. Returns the same `Message` shape
+ * after the stream resolves; callers can extract `tool_use` content the
+ * same way as the non-streaming path.
+ *
+ * Emits `onProgress`:
+ *   - once with `phase: "starting"` immediately before the API call
+ *   - repeatedly with `phase: "drafting"` as tool-use input deltas arrive
+ *     (throttled to one event per `minIntervalMs`)
+ *   - once with `phase: "finalizing"` after `finalMessage()` resolves
+ *
+ * Callback exceptions are caught + logged so a buggy callback can't
+ * abort an otherwise-successful LLM call.
+ */
+async function runStreamingMessage(
+  anthropic: ReturnType<typeof getAnthropicClient>,
+  params: Anthropic.Messages.MessageCreateParamsNonStreaming,
+  onProgress: (update: ProgressUpdate) => void,
+  minIntervalMs: number,
+): Promise<Anthropic.Messages.Message> {
+  safeCall(onProgress, { phase: "starting" })
+
+  const stream = anthropic.messages.stream(params)
+
+  let bytesSoFar = 0
+  let lastEmitMs = 0
+  stream.on("inputJson", (delta: string) => {
+    bytesSoFar += delta.length
+    const now = Date.now()
+    if (now - lastEmitMs >= minIntervalMs) {
+      lastEmitMs = now
+      safeCall(onProgress, { phase: "drafting", bytesSoFar })
+    }
+  })
+
+  const finalMessage = await stream.finalMessage()
+  safeCall(onProgress, { phase: "finalizing", bytesSoFar })
+  return finalMessage
+}
+
+function safeCall(
+  cb: (update: ProgressUpdate) => void,
+  update: ProgressUpdate,
+): void {
+  try {
+    cb(update)
+  } catch (err) {
+    // eslint-disable-next-line no-console -- callback failure is a caller bug; surface it but don't abort the LLM call
+    console.error(
+      "[callLLM] onProgress callback threw:",
+      err instanceof Error ? err.message : String(err),
+    )
+  }
 }

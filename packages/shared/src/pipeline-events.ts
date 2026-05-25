@@ -147,3 +147,16 @@ export type PipelineEvent =
       shotId: string
       status: "approved" | "failed"
     }
+  // LLM-stream narrative progress, emitted by callLLM when a caller passes
+  // an `onProgress` callback. Currently used by the Stage 1 Showrunner so the
+  // pipeline panel can show a live "Drafting plan…" banner instead of a 2-
+  // minute spinner. The `message` is human-readable; `bytesSoFar` is a coarse
+  // proxy for stream progress (cumulative tool-use JSON delta bytes) that the
+  // frontend may format into a percent or just ignore.
+  | {
+      type: "stage:progress"
+      pipelineId: string
+      stageName: PipelineStageName
+      message: string
+      bytesSoFar?: number
+    }
