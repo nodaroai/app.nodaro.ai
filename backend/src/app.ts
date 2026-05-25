@@ -87,6 +87,7 @@ import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
 import { adminCreditAuditRoutes } from "./ee/routes/admin-credit-audit.js"
 import { adminCreditAnomalyRoutes } from "./ee/routes/admin-credit-anomalies.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
+import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminSubscriptionHealthRoutes } from "./ee/routes/admin-subscription-health.js"
 import { aiWriterRoutes } from "./routes/ai-writer.js"
 import { llmChatRoutes } from "./routes/llm-chat.js"
@@ -312,6 +313,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminCreditAuditRoutes)
   if (hasAdmin()) await app.register(adminCreditAnomalyRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
+  if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasCredits()) await app.register(adminSubscriptionHealthRoutes)  // getStripe + TIER_CREDITS
   await app.register(aiWriterRoutes)
   await app.register(llmChatRoutes)
