@@ -40,6 +40,7 @@ vi.mock("../../ee/pipelines/entity-description.js", () => ({
     newStatus: "approved",
     assetId: "asset-uuid-1",
   })),
+  skipEntity: vi.fn(async () => ({ ok: true })),
 }))
 
 vi.mock("../../ee/pipelines/events.js", () => ({
@@ -647,5 +648,87 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/approve-description", () =>
     })
     expect(res.statusCode).toBe(500)
     expect(res.json().error.code).toBe("asset_insert_failed")
+  })
+})
+
+// ─── Phase 3 — POST /entities/:entity_id/skip ───────────────────────────────
+
+describe("POST /v1/pipelines/:id/entities/:entity_id/skip", () => {
+  let app: Awaited<ReturnType<typeof makeApp>>
+
+  beforeAll(async () => {
+    app = await makeApp()
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "root_1",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+  })
+
+  afterAll(async () => {
+    await app.close()
+  })
+
+  it("flips entity to skipped and enqueues stage_advance", async () => {
+    const { skipEntity } = await import("../../ee/pipelines/entity-description.js")
+    const { enqueuePipelineRun } = await import("../../ee/pipelines/queue.js")
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/skip`,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ ok: true, status: "skipped" })
+    expect(skipEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineId: PIPELINE_ID,
+        entityId: "e1",
+      }),
+    )
+    expect(enqueuePipelineRun).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineId: PIPELINE_ID, reason: "stage_advance" }),
+    )
+  })
+
+  it("returns 404 when pipeline is owned by a different user", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/00000000-0000-0000-0000-000000000999/entities/e1/skip`,
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 409 when helper reports entity_not_pending_description", async () => {
+    const { skipEntity } = await import("../../ee/pipelines/entity-description.js")
+    ;(skipEntity as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "entity_not_pending_description",
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/skip`,
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("entity_not_pending_description")
+  })
+
+  it("returns 404 when helper reports entity_not_found", async () => {
+    const { skipEntity } = await import("../../ee/pipelines/entity-description.js")
+    ;(skipEntity as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "entity_not_found",
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/skip`,
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("entity_not_found")
   })
 })

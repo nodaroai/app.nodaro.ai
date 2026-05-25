@@ -221,6 +221,61 @@ export async function attachUploadedImageToEntity(
   return { ok: true, newStatus: "approved", assetId: asset.id as string }
 }
 
+// ─── skip ───────────────────────────────────────────────────────────────────
+
+export type SkipEntityResult =
+  | { ok: true }
+  | {
+      ok: false
+      reason: "entity_not_found" | "entity_not_pending_description"
+    }
+
+/**
+ * Phase 3 — Step A skip action. Flips a `pending_description` entity to
+ * terminal `skipped` state. No image generated, no critic, no asset row.
+ * CAS-guarded; concurrent re-click returns `entity_not_pending_description`.
+ *
+ * The frontend wizard surfaces a one-line warning at skip time when the
+ * character appears in `plan.scenes[].cast_keys` (D3 override) — that check
+ * is purely UI-side. The backend route does NOT block based on scene refs;
+ * downstream stages handle missing main_asset_id their own way.
+ */
+export async function skipEntity(args: BaseArgs): Promise<SkipEntityResult> {
+  const { supabase, pipelineId, entityId } = args
+
+  const { data: entity } = await supabase
+    .from("pipeline_entities")
+    .select("id, entity_type, entity_key, status")
+    .eq("id", entityId)
+    .eq("pipeline_id", pipelineId)
+    .maybeSingle()
+  if (!entity) return { ok: false, reason: "entity_not_found" }
+  if (entity.status !== "pending_description") {
+    return { ok: false, reason: "entity_not_pending_description" }
+  }
+
+  const { data: updated, error } = await supabase
+    .from("pipeline_entities")
+    .update({ status: "skipped" })
+    .eq("id", entityId)
+    .eq("status", "pending_description")
+    .select("id")
+  if (error || !updated || updated.length === 0) {
+    return { ok: false, reason: "entity_not_pending_description" }
+  }
+
+  pipelineEvents.publish({
+    type: "entity:status",
+    pipelineId,
+    entityId,
+    entityType: entity.entity_type as EntityType,
+    entityKey: entity.entity_key as string,
+    status: "skipped",
+  })
+
+  return { ok: true }
+}
+
 // ─── URL helpers ────────────────────────────────────────────────────────────
 
 function extractR2Key(url: string): string {

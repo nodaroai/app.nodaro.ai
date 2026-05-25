@@ -18,6 +18,7 @@ vi.mock("../events.js", () => ({
 import {
   approveDescriptionLlmOrEdited,
   attachUploadedImageToEntity,
+  skipEntity,
 } from "../entity-description.js"
 import { pipelineEvents } from "../events.js"
 
@@ -368,5 +369,60 @@ describe("attachUploadedImageToEntity", () => {
         runCritic: true,
       }),
     ).rejects.toThrow(/runCritic=true is not wired in Phase 3/)
+  })
+})
+
+// ─── skipEntity ─────────────────────────────────────────────────────────────
+
+describe("skipEntity", () => {
+  it("flips a pending_description entity to skipped and emits SSE", async () => {
+    const state = freshState()
+    const result = await skipEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+    })
+    expect(result.ok).toBe(true)
+    expect(state.entities[0]!.status).toBe("skipped")
+    expect(pipelineEvents.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "entity:status",
+        entityId: "entity-1",
+        status: "skipped",
+      }),
+    )
+  })
+
+  it("returns entity_not_found when no row matches", async () => {
+    const state = freshState({ entity: freshEntity({ id: "different-entity" }) })
+    const result = await skipEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("entity_not_found")
+  })
+
+  it("rejects when entity is already approved (not pending_description)", async () => {
+    const state = freshState({ entity: freshEntity({ initialStatus: "approved" }) })
+    const result = await skipEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("entity_not_pending_description")
+  })
+
+  it("returns entity_not_pending_description on CAS-lost race", async () => {
+    const state = freshState({ forceEntityCasMiss: true })
+    const result = await skipEntity({
+      supabase: makeSupabase(state) as never,
+      pipelineId: "pipeline-1",
+      entityId: "entity-1",
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("entity_not_pending_description")
   })
 })

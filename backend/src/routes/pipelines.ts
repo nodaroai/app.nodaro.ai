@@ -1747,6 +1747,57 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     },
   )
 
+  // ── POST /v1/pipelines/:id/entities/:entity_id/skip ─────────────────────
+  //
+  // Phase 3 (granular-pipeline-control spec) — Step A skip action. Flips a
+  // `pending_description` entity to terminal `skipped` state so it stops
+  // blocking stage advancement. No body required.
+  //
+  // The frontend wizard renders a one-line warning at skip time when the
+  // character is referenced in any scene's cast_keys (D3 override) — that
+  // check is purely UI-side. Backend permits any skip; downstream stages
+  // handle missing main_asset_id on their own.
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/skip",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { skipEntity } = await import("../ee/pipelines/entity-description.js")
+      const result = await skipEntity({
+        supabase,
+        pipelineId: req.params.id,
+        entityId: req.params.entity_id,
+      })
+      if (!result.ok) {
+        const status = result.reason === "entity_not_found" ? 404 : 409
+        return reply.status(status).send({ error: { code: result.reason } })
+      }
+
+      // Re-drive the engine so it re-evaluates the stage-completion gate
+      // (skipped entities count as "resolved" alongside approved).
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+
+      return reply.send({ ok: true, status: "skipped" })
+    },
+  )
+
   // ── POST /v1/pipelines/:id/entities/:entity_id/reject ────────────────────
   app.post<{
     Params: { id: string; entity_id: string }
