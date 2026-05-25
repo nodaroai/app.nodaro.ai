@@ -135,6 +135,24 @@ export type SceneHelperResult = {
   validate_match_cut: ValidateMatchCutResult
 }
 
+/**
+ * Phase 3 (granular-pipeline-control) — request body for the Character
+ * Wizard Step A `approve-description` route. Discriminated on `mode` so a
+ * caller can't pass an `asset_url` with `mode='llm'` or a `description` with
+ * `mode='upload'`. Mirrors the backend's Zod discriminated union in
+ * `backend/src/routes/pipelines.ts`.
+ */
+export type ApproveDescriptionBody =
+  | { mode: "llm" }
+  | { mode: "user_edited"; description: string }
+  | {
+      mode: "upload"
+      asset_url: string
+      filename?: string
+      mime_type?: string
+      size_bytes?: number
+    }
+
 export const pipelinesApi = {
   create: (body: PipelineInput) => postJson<{ id: string }>("/v1/pipelines", body),
   get: (id: string) => getJson<PipelineRecord>(`/v1/pipelines/${id}`),
@@ -204,6 +222,37 @@ export const pipelinesApi = {
     postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/approve`, {}),
   rejectEntity: (id: string, entityId: string, feedback: string) =>
     postJson<{ ok: true }>(`/v1/pipelines/${id}/entities/${entityId}/reject`, { feedback }),
+  /**
+   * Phase 3 (granular-pipeline-control) — Character Wizard Step A approve.
+   * Routes the entity from `pending_description` to its next state per mode:
+   *   - `llm`         → `pending` (engine generates the portrait next cycle)
+   *   - `user_edited` → `pending` + overwrites `metadata.visual_description`
+   *   - `upload`      → `approved` directly, with the user's uploaded image
+   *                     attached as the entity's `main_asset_id` (skips
+   *                     Step B per spec — no image gen, no critic by default)
+   *
+   * Backend CAS-gates on `status='pending_description'`; a second click loses
+   * the race and returns 409 `entity_not_pending_description`.
+   */
+  approveDescription: (
+    id: string,
+    entityId: string,
+    body: ApproveDescriptionBody,
+  ): Promise<{ ok: true; newStatus: "pending" | "approved"; assetId?: string }> =>
+    postJson(`/v1/pipelines/${id}/entities/${entityId}/approve-description`, body),
+  /**
+   * Phase 3 (granular-pipeline-control) — Character Wizard Step A skip.
+   * Flips the entity from `pending_description` to terminal `skipped`. No
+   * image, no critic, no asset. The variant-batch gate ignores skipped
+   * entities so the stage can still advance when every non-skipped entity
+   * is approved.
+   *
+   * The UI surfaces a warning at skip time when the character appears in
+   * `plan.scenes[].cast_keys` (D3 override) — that check is purely UI-side;
+   * this route does NOT block based on scene refs.
+   */
+  skipEntity: (id: string, entityId: string): Promise<{ ok: true }> =>
+    postJson(`/v1/pipelines/${id}/entities/${entityId}/skip`, {}),
   /**
    * Phase 1D.2c-a §7 (E1) follow-up — Skip button on the failed-entity surface.
    * Accept the image-critic-failed image AS-IS. Backend CAS-gates on

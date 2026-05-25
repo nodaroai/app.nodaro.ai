@@ -252,7 +252,15 @@ describe("runCharactersStage", () => {
       voice_source: "premade", voice_id: "ABC", reasoning: "fits",
     })
 
-    const supabase = makeSupabase()
+    // Phase 3 (granular-pipeline-control): pre-seed at `pending` to simulate
+    // the user having already clicked Approve in Step A wizard. The default
+    // post-ensureCharacterEntity status is `pending_description`, which would
+    // pause the engine waiting for the wizard.
+    const supabase = makeSupabase({
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+      ],
+    })
     await runCharactersStage({
       supabase, pipelineId: "p1", userId: "u1", userTier: "pro",
     })
@@ -447,7 +455,12 @@ describe("runCharactersStage", () => {
     })
     // Default critic mock (pass, score=9, no issues) is set in beforeEach.
 
-    const supabase = makeSupabase()
+    // Phase 3 — pre-seed at `pending` (user already approved Step A wizard).
+    const supabase = makeSupabase({
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+      ],
+    })
     await runCharactersStage({
       supabase, pipelineId: "p-crit-pass", userId: "u1", userTier: "pro",
     })
@@ -505,7 +518,12 @@ describe("runCharactersStage", () => {
         llmCallId: "llm-2",
       })
 
-    const supabase = makeSupabase()
+    // Phase 3 — pre-seed at `pending` (user already approved Step A wizard).
+    const supabase = makeSupabase({
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+      ],
+    })
     await runCharactersStage({
       supabase, pipelineId: "p-crit-retry-1", userId: "u1", userTier: "pro",
     })
@@ -558,7 +576,12 @@ describe("runCharactersStage", () => {
       llmCallId: "llm-fail",
     })
 
-    const supabase = makeSupabase()
+    // Phase 3 — pre-seed at `pending` (user already approved Step A wizard).
+    const supabase = makeSupabase({
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+      ],
+    })
     const sseEvents: Array<Record<string, unknown>> = []
     const unsub = pipelineEvents.subscribe("p-crit-cap", (e) =>
       sseEvents.push(e as unknown as Record<string, unknown>),
@@ -629,7 +652,12 @@ describe("runCharactersStage", () => {
         llmCallId: "llm-2",
       })
 
-    const supabase = makeSupabase()
+    // Phase 3 — pre-seed at `pending` (user already approved Step A wizard).
+    const supabase = makeSupabase({
+      seedEntities: [
+        { id: "e-hero", entity_key: "hero", status: "pending", metadata: {} },
+      ],
+    })
     await runCharactersStage({
       supabase, pipelineId: "p-crit-lowscore", userId: "u1", userTier: "pro",
     })
@@ -1128,5 +1156,169 @@ describe("runCharactersStage", () => {
     // assertion would fail with one stage update carrying status='approved'.
     const approvedPatch = refs._stageUpdates.find((p) => p.status === "approved")
     expect(approvedPatch).toBeUndefined()
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Phase 3 (granular-pipeline-control) — Character Wizard Step A
+  //
+  // New initial state: ensureCharacterEntity inserts at `pending_description`
+  // so manual/guided pipelines pause for the user's Step A click. Auto-mode
+  // bulk-flips to `pending` at stage start so the existing parallel-gen flow
+  // takes over with no behavioral change.
+  //
+  // Terminal state `skipped` opts the entity out — no image, no critic, no
+  // variant gen. The variant-batch-gate check filters out `skipped` entities
+  // so the stage can still advance when EVERY non-skipped entity is approved.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it("manual mode: fresh pending_description entity → engine pauses, no image gen, no stage advance", async () => {
+    // No seedEntities — production's ensureCharacterEntity creates the row at
+    // `pending_description`. Manual mode (default) must NOT bulk-flip; it
+    // pauses for the user's wizard click and skips image gen entirely.
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "j-unused", assetId: "a-unused", assetUrl: "https://r2/unused.png",
+      creditsSpent: 0,
+    })
+
+    const supabase = makeSupabase()
+    await runCharactersStage({
+      supabase, pipelineId: "p3-manual-fresh", userId: "u1", userTier: "pro",
+    })
+
+    // Engine paused at pending_description — no generation triggered.
+    expect(pipelineGenerateImage).not.toHaveBeenCalled()
+    expect(runVoiceMatcher).not.toHaveBeenCalled()
+    expect(runCharacterImageCritic).not.toHaveBeenCalled()
+
+    // Entity stays at `pending_description`.
+    const entityRow = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-hero")
+    expect(entityRow?.status).toBe("pending_description")
+
+    // Stage stays running (the pause sets anyAwaiting=true → early return
+    // BEFORE the variant-batch or step-6 stage-approval writes).
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeUndefined()
+    expect(stageUpdates.find((u) => u.status === "awaiting_approval")).toBeUndefined()
+
+    // No orchestrator re-enqueue.
+    expect(enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  it("auto mode: fresh pending_description entity → bulk-flip to pending → engine generates main image", async () => {
+    // No seedEntities — ensureCharacterEntity creates the row at
+    // `pending_description`. Auto-mode's bulk-flip (before the entity SELECT)
+    // must convert it to `pending` so generateCharacterMain runs.
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "j1", assetId: "a1", assetUrl: "https://r2/main.png", creditsSpent: 2,
+    })
+    ;(runVoiceMatcher as ReturnType<typeof vi.fn>).mockResolvedValue({
+      voice_source: "premade", voice_id: "ABC", reasoning: "fits",
+    })
+
+    const supabase = makeSupabase()
+    await runCharactersStage({
+      supabase, pipelineId: "p3-auto-fresh", userId: "u1", userTier: "pro", mode: "auto",
+    })
+
+    // Bulk-flip happened (pending_description → pending) before SELECT, so the
+    // task loop hit the `pending` branch and called generateCharacterMain.
+    expect(pipelineGenerateImage).toHaveBeenCalledTimes(1)
+    expect(runCharacterImageCritic).toHaveBeenCalledTimes(1)
+
+    // Auto-mode then bulk-approved the per-entity gate and re-enqueued.
+    const entityRow = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-hero")
+    expect(entityRow?.status).toBe("approved")
+    expect(enqueuePipelineRun).toHaveBeenCalledTimes(1)
+    expect(enqueuePipelineRun).toHaveBeenCalledWith({
+      pipelineId: "p3-auto-fresh",
+      userId: "u1",
+      reason: "stage_advance",
+    })
+  })
+
+  it("manual mode: skipped entity is filtered out of variant-batch gate → stage advances when all non-skipped are approved", async () => {
+    // Plan has 2 cast members: hero (skipped) + sidekick (approved with
+    // variants_awaiting_approval=true). The variant-batch gate must IGNORE
+    // hero and treat the stage as ready for the awaiting_approval pause —
+    // proving the `nonSkippedEntities` filter works.
+    const twoCastPlan = {
+      title: "x", logline: "x", target_duration_seconds: 60, format: "short_film",
+      output_resolution: "1080p", language: "en", genre: "drama", tone: [],
+      cast: [
+        {
+          key: "hero", name: "Hero", role: "protagonist",
+          visual_description: "tall, weathered", voice_profile: "deep",
+          has_dialogue: false, angle_count_hint: 2,
+          expression_set_hint: ["neutral", "determined"],
+        },
+        {
+          key: "sidekick", name: "Sidekick", role: "companion",
+          visual_description: "wiry, alert", voice_profile: "quick",
+          has_dialogue: false, angle_count_hint: 2,
+          expression_set_hint: ["neutral", "determined"],
+        },
+      ],
+      locations: [], objects: [], scenes: [], beats: [],
+      has_narrator: false, narrator_profile: null,
+      music_plan: { mood: "x", bpm_target: 120, genre_hints: [] },
+      global_style: { visual_style: "photoreal", color_palette: "warm", lighting: "golden", camera_language: "wide" },
+      total_duration_seconds: 60, estimated_scene_count: 0, warnings: [],
+    } as never
+
+    const supabase = makeSupabase({
+      plan: twoCastPlan,
+      seedEntities: [
+        // Hero is skipped — does NOT block the stage.
+        {
+          id: "e-hero",
+          entity_key: "hero",
+          status: "skipped",
+          metadata: { entity_type: "character", name: "Hero" },
+        },
+        // Sidekick is approved with variants already generated and ready for
+        // batch approval.
+        {
+          id: "e-sidekick",
+          entity_key: "sidekick",
+          status: "approved",
+          main_asset_id: "main-asset-sidekick",
+          metadata: {
+            entity_type: "character",
+            name: "Sidekick",
+            visual_description: "wiry, alert",
+            angle_count: 2,
+            variants_awaiting_approval: true,
+          },
+        },
+      ],
+    })
+
+    await runCharactersStage({
+      supabase, pipelineId: "p3-manual-skipped", userId: "u1", userTier: "pro",
+    })
+
+    // Skipped entity stays skipped (no image gen, no transition).
+    const heroRow = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities.get("e-hero")
+    expect(heroRow?.status).toBe("skipped")
+
+    // Stage transitioned to `awaiting_approval` for the variant batch — proving
+    // the nonSkippedEntities filter let sidekick's variants_awaiting_approval
+    // flag drive the gate.
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    const awaitingUpdate = stageUpdates.find((u) => u.status === "awaiting_approval")
+    expect(awaitingUpdate).toBeDefined()
+    expect((awaitingUpdate?.output as Record<string, unknown>)?.phase).toBe(
+      "variant_batch_approval",
+    )
   })
 })

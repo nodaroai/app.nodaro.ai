@@ -64,6 +64,38 @@ const ApproveStageBodySchema = z.object({
  * Phase 1 (path whitelist + op restriction further enforced inside
  * `saveStageEdit`).
  */
+/**
+ * Phase 3 (granular-pipeline-control spec) — body for Step A approval.
+ * Discriminated union on `mode`:
+ *
+ *   { mode: 'llm' }
+ *     → No additional fields. Approves the LLM-derived description as-is.
+ *
+ *   { mode: 'user_edited', description: <string> }
+ *     → User rewrote the description. The new text overwrites
+ *       metadata.visual_description before the entity is flipped to pending.
+ *       Cap at 2000 chars (the realistic ceiling for a character description
+ *       — much longer is a sign the user pasted a script).
+ *
+ *   { mode: 'upload', asset_url: <r2 URL>, filename?, mime_type?, size_bytes? }
+ *     → Client uploaded their own image via /v1/upload/image first. Optional
+ *       filename/mime_type/size_bytes are derived from the URL when omitted.
+ */
+const ApproveDescriptionBodySchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("llm") }),
+  z.object({
+    mode: z.literal("user_edited"),
+    description: z.string().min(1).max(2000),
+  }),
+  z.object({
+    mode: z.literal("upload"),
+    asset_url: z.string().url(),
+    filename: z.string().min(1).max(255).optional(),
+    mime_type: z.string().min(1).max(100).optional(),
+    size_bytes: z.number().int().min(0).optional(),
+  }),
+])
+
 const SaveStageEditBodySchema = z.object({
   edits: z
     .array(
@@ -1603,6 +1635,166 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         reason: "stage_advance",
       })
       return reply.send({ ok: true })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/approve-description ──────
+  //
+  // Phase 3 (granular-pipeline-control spec) — Step A of the Character
+  // Wizard. Three modes via discriminated body:
+  //
+  //   { mode: 'llm' }
+  //     → Approve the LLM-derived visual_description as-is. Flips entity
+  //       pending_description → pending so the engine picks up next cycle.
+  //
+  //   { mode: 'user_edited', description: <string> }
+  //     → User rewrote the description. Persists the new text into
+  //       metadata.visual_description, then flips to pending.
+  //
+  //   { mode: 'upload', asset_url: <r2 URL>, filename?, mime_type?, size_bytes? }
+  //     → User uploaded their own portrait (client posted to /v1/upload/image
+  //       first). Creates an assets row pointing at the R2 URL, sets it as
+  //       main_asset_id, flips entity directly to 'approved' (skips Step B
+  //       per spec line 86). NO image-critic call (D2 override — user owns
+  //       the choice, no 3cr LLM opinion they didn't ask for).
+  //
+  // CAS-guarded on `status='pending_description'`. Concurrent re-click
+  // returns 409 entity_not_pending_description.
+  app.post<{
+    Params: { id: string; entity_id: string }
+    Body: unknown
+  }>(
+    "/v1/pipelines/:id/entities/:entity_id/approve-description",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const body = ApproveDescriptionBodySchema.safeParse(req.body ?? {})
+      if (!body.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", issues: body.error.issues },
+        })
+      }
+
+      // Ownership check on the parent pipeline.
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const {
+        approveDescriptionLlmOrEdited,
+        attachUploadedImageToEntity,
+      } = await import("../ee/pipelines/entity-description.js")
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+
+      const data = body.data
+      let result: Awaited<ReturnType<typeof approveDescriptionLlmOrEdited>>
+      if (data.mode === "upload") {
+        result = await attachUploadedImageToEntity({
+          supabase,
+          pipelineId: req.params.id,
+          entityId: req.params.entity_id,
+          userId,
+          assetUrl: data.asset_url,
+          filename: data.filename,
+          mimeType: data.mime_type,
+          sizeBytes: data.size_bytes,
+        })
+      } else {
+        // mode === 'llm' || 'user_edited'
+        result = await approveDescriptionLlmOrEdited({
+          supabase,
+          pipelineId: req.params.id,
+          entityId: req.params.entity_id,
+          newDescription: data.mode === "user_edited" ? data.description : undefined,
+        })
+      }
+
+      if (!result.ok) {
+        const status =
+          result.reason === "entity_not_found"
+            ? 404
+            : result.reason === "asset_insert_failed"
+              ? 500
+              : 409
+        return reply
+          .status(status)
+          .send({ error: { code: result.reason, detail: result.detail } })
+      }
+
+      // Re-drive the engine: for mode='llm'/'user_edited' the entity is now
+      // `pending` and needs generateCharacterMain; for mode='upload' the
+      // entity is `approved` and needs ensureCharacterVariants.
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+
+      return reply.send({
+        ok: true,
+        mode: data.mode,
+        newStatus: result.newStatus,
+        ...(result.assetId ? { assetId: result.assetId } : {}),
+      })
+    },
+  )
+
+  // ── POST /v1/pipelines/:id/entities/:entity_id/skip ─────────────────────
+  //
+  // Phase 3 (granular-pipeline-control spec) — Step A skip action. Flips a
+  // `pending_description` entity to terminal `skipped` state so it stops
+  // blocking stage advancement. No body required.
+  //
+  // The frontend wizard renders a one-line warning at skip time when the
+  // character is referenced in any scene's cast_keys (D3 override) — that
+  // check is purely UI-side. Backend permits any skip; downstream stages
+  // handle missing main_asset_id on their own.
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/skip",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { skipEntity } = await import("../ee/pipelines/entity-description.js")
+      const result = await skipEntity({
+        supabase,
+        pipelineId: req.params.id,
+        entityId: req.params.entity_id,
+      })
+      if (!result.ok) {
+        const status = result.reason === "entity_not_found" ? 404 : 409
+        return reply.status(status).send({ error: { code: result.reason } })
+      }
+
+      // Re-drive the engine so it re-evaluates the stage-completion gate
+      // (skipped entities count as "resolved" alongside approved).
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+
+      return reply.send({ ok: true, status: "skipped" })
     },
   )
 
