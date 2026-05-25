@@ -42,7 +42,7 @@ export function startPipelineWorker(): Worker<PipelineOrchestrationJobData> {
         clearTimeout(timer)
       }
     },
-    { connection, concurrency: CONCURRENCY },
+    { connection, concurrency: CONCURRENCY, lockDuration: 3_600_000, stalledInterval: 900_000 },
   )
 
   worker.on("failed", (job, err) => {

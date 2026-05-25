@@ -43,15 +43,45 @@ function renderWithClient(ui: React.ReactNode) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>)
 }
 
+// Phase 1 (granular-pipeline-control) — extended with the fields ScriptPanel
+// reads at render time (`target_duration_seconds` for the duration meter;
+// scene-level `cast_keys` / `location_key` / `object_keys` / `dialogue` /
+// `narration` / `continuity_from_prev` for the editor card). 20+30 = 50s
+// keeps duration within ±10% of the 50s target so Approve plan is enabled.
 const fakeAwaiting = {
   status: "awaiting_approval",
   output: {
     plan: {
       title: "Mock Title",
       logline: "x",
+      target_duration_seconds: 50,
       scenes: [
-        { scene_index: 1, description: "open shot", duration_seconds: 20 },
-        { scene_index: 2, description: "climax", duration_seconds: 30 },
+        {
+          scene_index: 1,
+          description: "open shot",
+          duration_seconds: 20,
+          cast_keys: [],
+          location_key: "k",
+          object_keys: [],
+          dialogue: [],
+          narration: null,
+          emotional_beat: "setup",
+          shot_count_hint: 1,
+          continuity_from_prev: "hard_cut",
+        },
+        {
+          scene_index: 2,
+          description: "climax",
+          duration_seconds: 30,
+          cast_keys: [],
+          location_key: "k",
+          object_keys: [],
+          dialogue: [],
+          narration: null,
+          emotional_beat: "climax",
+          shot_count_hint: 1,
+          continuity_from_prev: "hard_cut",
+        },
       ],
     },
   },
@@ -61,7 +91,7 @@ const fakeAwaiting = {
 describe("PipelinePanel", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("renders Stage 1 in awaiting_approval with title + scenes + Approve/Reject", async () => {
+  it("renders ScriptPanel for Stage 1 awaiting_approval in manual mode (Phase 1)", async () => {
     ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "p1", status: "awaiting_approval", current_stage: "script",
       spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
@@ -71,12 +101,14 @@ describe("PipelinePanel", () => {
     renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
 
     await waitFor(() => expect(screen.getByText("Mock Title")).toBeInTheDocument())
-    expect(screen.getByText(/1\. Script/)).toBeInTheDocument()
-    expect(screen.getByText("Approve")).toBeInTheDocument()
-    expect(screen.getByText("Reject")).toBeInTheDocument()
+    // ScriptPanel UI: navigator chips + Approve plan button + Regenerate all
+    // escape hatch (preserves the old reject flow).
+    expect(screen.getByRole("tab", { name: /Scene 1/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Approve plan" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Regenerate all" })).toBeInTheDocument()
   })
 
-  it("calls approveStage on Approve click", async () => {
+  it("calls approveStage when ScriptPanel's Approve plan button is clicked", async () => {
     ;(pipelinesApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "p1", status: "awaiting_approval", current_stage: "script",
       spent_credits: 5, reserved_credits: 30, upfront_credit_estimate: 30,
@@ -85,8 +117,8 @@ describe("PipelinePanel", () => {
     ;(pipelinesApi.approveStage as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true })
 
     renderWithClient(<PipelinePanel pipelineId="p1" onClose={() => undefined} />)
-    await waitFor(() => screen.getByText("Approve"))
-    await userEvent.click(screen.getByText("Approve"))
+    await waitFor(() => screen.getByRole("button", { name: "Approve plan" }))
+    await userEvent.click(screen.getByRole("button", { name: "Approve plan" }))
     expect(pipelinesApi.approveStage).toHaveBeenCalledWith("p1", "script")
   })
 

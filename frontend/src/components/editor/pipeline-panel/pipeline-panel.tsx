@@ -16,6 +16,7 @@ import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { usePipelineEntities } from "@/hooks/use-pipeline-entities"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { StageRow } from "./stage-row"
+import { ScriptPanel } from "./script-panel"
 import { EntityGrid } from "./entity-grid"
 import { SceneGrid } from "./scene-grid"
 import { DriftBanner } from "./drift-banner"
@@ -603,14 +604,39 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       )}
 
       <div className="space-y-2">
-        <StageRow
-          stageLabel="1. Script"
-          status={status}
-          output={plan}
-          onApprove={handleApprove}
-          onReject={() => setRejectMode(true)}
-          mode={pipeline?.mode ?? undefined}
-        />
+        {/* Phase 1 (granular-pipeline-control) — when Stage 1 is awaiting
+            approval in a non-auto mode, render the inline-editing
+            ScriptPanel instead of the binary approve/reject StageRow. A
+            small "Regenerate all" link below preserves the reject escape
+            hatch (triggers the existing rejectMode feedback box). Auto
+            mode + every other state still falls through to StageRow. */}
+        {isScriptAwaitingApproval && plan && pipeline?.mode !== "auto" ? (
+          <>
+            <ScriptPanel
+              pipelineId={pipelineId}
+              plan={plan}
+              userEdits={(stage as { user_edits?: unknown[] | null } | undefined)?.user_edits ?? null}
+            />
+            <div className="flex justify-end pt-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setRejectMode(true)}
+                className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              >
+                Regenerate all
+              </button>
+            </div>
+          </>
+        ) : (
+          <StageRow
+            stageLabel="1. Script"
+            status={status}
+            output={plan}
+            onApprove={handleApprove}
+            onReject={() => setRejectMode(true)}
+            mode={pipeline?.mode ?? undefined}
+          />
+        )}
         {pipeline?.current_stage === "characters" && (
           <EntityGrid
             pipelineId={pipelineId}

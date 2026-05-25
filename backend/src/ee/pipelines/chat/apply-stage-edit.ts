@@ -58,7 +58,7 @@ import { checkReferenceIntegrity } from "./reference-integrity.js"
  * `null` = no envelope (bare value). Add entries for shot_list / post_merge
  * when 1D.2d enables their chat surfaces.
  */
-const STAGE_ENVELOPE_KEY: Record<PipelineStageName, string | null> = {
+export const STAGE_ENVELOPE_KEY: Record<PipelineStageName, string | null> = {
   script: "plan",
   characters: null,
   objects: null,

@@ -465,6 +465,28 @@ interface WorkflowState {
   readonly setOpenAddNodePopupForHandle: (
     fn: ((args: { nodeId: string; handleId: string; direction: "source" | "target"; nodeType: string }) => void) | null,
   ) => void
+  /** Edge id currently being hovered in a HandlePopover row — drives the
+   *  edge highlight visual via `AnimatedFlowEdge`. Null when no row is
+   *  hovered. */
+  readonly hoveredEdgeId: string | null
+  readonly setHoveredEdgeId: (id: string | null) => void
+  /** Reorders edges connected to a specific (node, handle, direction).
+   *  Used by HandlePopover for handles where order is semantically
+   *  meaningful (e.g., Generate Image References). */
+  readonly reorderHandleEdges: (
+    nodeId: string,
+    handleId: string,
+    direction: "source" | "target",
+    fromIndex: number,
+    toIndex: number,
+  ) => void
+  /** Disconnects ALL edges from a specific (node, handle, direction).
+   *  Used by HandlePopover's disconnect-all affordance. */
+  readonly disconnectAllHandleEdges: (
+    nodeId: string,
+    handleId: string,
+    direction: "source" | "target",
+  ) => void
   readonly generateSceneImage: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null
   readonly setGenerateSceneImage: (fn: ((scriptNodeId: string, sceneIndex: number) => Promise<void>) | null) => void
   readonly addCharacterDefinition: (char: CharacterDefinition) => void
@@ -1820,6 +1842,65 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   setRunSelected: (fn) => set({ runSelected: fn }),
   openAddNodePopupForHandle: null,
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
+  hoveredEdgeId: null,
+  setHoveredEdgeId: (id) => set({ hoveredEdgeId: id }),
+  reorderHandleEdges: (nodeId, handleId, direction, fromIndex, toIndex) =>
+    set((state) => {
+      // Collect indices of edges connected to this handle in original
+      // store order. Reorder them according to from/to; leave all other
+      // edges in place.
+      const matchingIndices: number[] = []
+      state.edges.forEach((e, i) => {
+        if (direction === "target" && e.target === nodeId && e.targetHandle === handleId) matchingIndices.push(i)
+        else if (direction === "source" && e.source === nodeId && e.sourceHandle === handleId) matchingIndices.push(i)
+      })
+      if (fromIndex < 0 || fromIndex >= matchingIndices.length) return state
+      if (toIndex < 0 || toIndex >= matchingIndices.length) return state
+      if (fromIndex === toIndex) return state
+      const reorderedMatching = matchingIndices.slice()
+      const [moved] = reorderedMatching.splice(fromIndex, 1)
+      reorderedMatching.splice(toIndex, 0, moved)
+      const newEdges = state.edges.slice()
+      matchingIndices.forEach((originalIdx, slot) => {
+        newEdges[originalIdx] = state.edges[reorderedMatching[slot]]
+      })
+
+      // Side-effect: Generate Image's `references` handle has a parallel
+      // per-node `referenceImageOrder` field that the runtime honors FIRST
+      // (payload-builder.ts:1372 / execute-node.ts equivalent). If we
+      // reorder edges without clearing it, the popover-reordered sequence
+      // is silently ignored at execution. Clear it so edge-array order
+      // (which we just updated) becomes authoritative again.
+      let newNodes = state.nodes
+      if (direction === "target" && handleId === "references") {
+        const target = state.nodes.find((n) => n.id === nodeId)
+        if (target?.type === "generate-image") {
+          const data = target.data as Record<string, unknown> | undefined
+          if (data && "referenceImageOrder" in data) {
+            const { referenceImageOrder: _drop, ...rest } = data
+            void _drop
+            newNodes = state.nodes.map((n) =>
+              n.id === nodeId ? { ...n, data: rest as typeof n.data } : n,
+            )
+          }
+        }
+      }
+
+      return { edges: newEdges, nodes: newNodes, isDirty: true }
+    }),
+  disconnectAllHandleEdges: (nodeId, handleId, direction) => {
+    // Route through `deleteEdge` per-edge so all downstream cleanup runs:
+    // fieldMappings teardown, loop column `connectedSourceId` clearing,
+    // collect `data.order` pruning, etc. A bulk-filter on edges would leave
+    // those references stale and cause subsequent reconnects to no-op the
+    // auto-fill (because `alreadyMapped === true` on a dead reference).
+    const matching = get().edges.filter((e) =>
+      direction === "target"
+        ? e.target === nodeId && e.targetHandle === handleId
+        : e.source === nodeId && e.sourceHandle === handleId,
+    )
+    for (const e of matching) get().deleteEdge(e.id)
+  },
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 

@@ -2,6 +2,7 @@ import type { EntityStatus } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { storyMomentLabel } from "@/lib/story-moment-labels"
 
 interface Props {
   entity: PipelineEntity
@@ -41,7 +42,7 @@ export function SceneCard({ entity, onApprove, onReject, disabled }: Props) {
       <div className="flex items-baseline justify-between gap-2">
         <div>
           <div className="text-xs uppercase text-zinc-500">
-            Scene {scene.scene_index ?? "?"} · {scene.emotional_beat ?? "?"}
+            Scene {scene.scene_index ?? "?"} · {storyMomentLabel(scene.emotional_beat) || "?"}
           </div>
           <div className="font-medium text-sm">{scene.description ?? "—"}</div>
         </div>

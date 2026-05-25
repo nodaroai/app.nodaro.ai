@@ -607,6 +607,11 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // this static row is a UI display fallback only — it's NOT the value
   // charged at run time.
   "generative-pipeline": 30,
+  // Phase 2 (granular-pipeline-control): per-call Showrunner refine of a
+  // single scene from the ScriptPanel "Regenerate this scene" button.
+  // Charged per click — flat 3 credits (1 LLM call, single-SceneSpec emit,
+  ***REDACTED-OSS-SCRUB***
+  "regenerate-scene": 3,
   // ── Scene-Context Helpers (Phase 1B.3, §6.11) ──
   // Per-call LLM micro-actions invoked from a SceneNode's context panel.
   // Reserve/refund via backend/src/ee/pipelines/scene-helper-credits.ts.
