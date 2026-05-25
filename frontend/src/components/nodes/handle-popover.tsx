@@ -31,17 +31,6 @@ import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { cn } from "@/lib/utils"
 
 const SENSOR_OPTIONS = { activationConstraint: { distance: 4 } } as const
-/** Cap on rendered candidate rows. Workflows with many type-valid not-
- *  yet-connected sources (50+ image generators all eligible as references)
- *  would otherwise render a long list with portal hover-previews on each
- *  row, juddering on mid-tier laptops. Beyond the cap we surface a count
- *  + a hint that drag-to-connect handles the rest. */
-const MAX_CANDIDATES = 12
-/** Stop counting beyond this many omitted candidates — the UI shows
- *  "{N}+" past this threshold so exact precision isn't useful, and
- *  skipping the per-iteration global-validator call beyond it bounds the
- *  memo cost during ~20Hz status ticks. */
-const OMITTED_BUDGET = 50
 
 interface HandlePopoverProps {
   readonly nodeId: string
@@ -139,37 +128,32 @@ export function HandlePopover({
   }, [connections, nodes])
 
   // Candidate nodes: type-valid AND globally-valid, not yet connected on
-  // this handle. Capped to MAX_CANDIDATES rendered rows — workflows with
-  // many type-valid sources would otherwise render a long list with portal
-  // previews per row, juddering on mid-tier laptops.
+  // this handle. No render cap — the popover scrolls within
+  // `max-h-[420px]`, image thumbnails are served from CDN-resized
+  // variants (~5KB each), and hover-previews are portaled on demand. If
+  // real-world workflows ever cross thousands of candidates and start to
+  // judder, add row virtualization (react-virtuoso) — a hard cap is the
+  // wrong tool because it hides legitimate connect candidates.
   //
-  // SOURCE-DIRECTION GATE: the `accepts` prop is documented as "valid
-  // upstream type for this handle" — a TARGET-direction semantic. Calling
-  // it on candidate target types in source-direction would feed flipped
-  // arguments into a wrong-direction predicate AND the global validator
-  // would probe `inputs[0]` arbitrarily for multi-input candidates. We
-  // gate source-direction here so future source-direction popovers don't
-  // silently inherit a broken candidate-filter contract. Use drag-to-
-  // connect (which routes through the canonical validator with the real
-  // target handle) until a direction-aware predicate is added.
+  // SOURCE-DIRECTION GATE: `accepts` is documented as "valid upstream
+  // type for this handle" — a TARGET-direction semantic. Calling it on
+  // candidate target types in source-direction would feed flipped args
+  // into the wrong-direction predicate AND the global validator would
+  // probe `inputs[0]` arbitrarily for multi-input candidates. Gate
+  // source-direction so future source-direction popovers don't silently
+  // inherit a broken filter contract — use drag-to-connect until a
+  // direction-aware predicate is added.
   //
   // Performance: builds `nodeTypeMap` ONCE for O(1) type lookups inside
-  // the loop and inside `isValidWorkflowConnection`. The cap is checked
-  // BEFORE the global validator so the validator runs at most
-  // MAX_CANDIDATES + OMITTED_BUDGET times per memo pass (not once per
-  // type-valid node) — bounds re-render cost during ~20Hz status ticks
-  // when a popover is open mid-execution.
+  // `isValidWorkflowConnection` calls — without it the validator would
+  // do an O(N) `nodes.find` per candidate.
   //
   // Iteration order: REVERSE so newer nodes (appended at the end of the
-  // store array) appear first. When the user is actively building a
-  // workflow, the most-recently-created sources are far more likely
-  // targets than session-old ones.
-  const { candidates, omittedCount, hasDynamicOutputCandidates } = useMemo(() => {
-    if (!accepts) {
-      return { candidates: [] as CandidateNode[], omittedCount: 0, hasDynamicOutputCandidates: false }
-    }
-    if (direction === "source") {
-      return { candidates: [] as CandidateNode[], omittedCount: 0, hasDynamicOutputCandidates: false }
+  // store array) appear first — most-recently-created sources are far
+  // more likely targets when the user is actively building.
+  const { candidates, hasDynamicOutputCandidates } = useMemo(() => {
+    if (!accepts || direction === "source") {
+      return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
     }
     const connectedIds = new Set(connections.map((c) => c.otherNodeId))
     const nodeTypeMap = new Map<string, string>()
@@ -178,54 +162,22 @@ export function HandlePopover({
     }
     const nodeTypeById = (id: string) => nodeTypeMap.get(id)
 
-    // Detect dynamic-output candidates BEFORE the capped main loop. If
-    // we deferred this into the same loop, an early `break` (hit when
-    // rendered + omitted budgets are both saturated) could exit before
-    // reaching list/loop nodes deeper in the array, hiding the helpful
-    // hint exactly when the user has the most candidates to consider.
-    // Cheap pre-scan: stops as soon as one is found.
-    //
-    // Treats `outputs: undefined` the same as `outputs: []` so the
-    // convention isn't load-bearing (NODE_DEFINITIONS currently uses
-    // explicit empty arrays for list/loop, but a future contributor
-    // dropping the field shouldn't silently break this hint).
-    let dynamicOutputs = false
-    for (const n of nodes) {
-      if (n.id === nodeId) continue
-      if (connectedIds.has(n.id)) continue
-      const t = n.type
-      if (!t || !accepts(t)) continue
-      const def = NODE_DEF_MAP.get(t as never)
-      if (def && (!def.outputs || def.outputs.length === 0)) {
-        dynamicOutputs = true
-        break
-      }
-    }
-
     const rendered: CandidateNode[] = []
-    let omitted = 0
+    let dynamicOutputs = false
     for (let i = nodes.length - 1; i >= 0; i--) {
-      if (rendered.length >= MAX_CANDIDATES && omitted >= OMITTED_BUDGET) break
       const n = nodes[i]
       if (n.id === nodeId) continue                       // skip the consumer itself
       if (connectedIds.has(n.id)) continue                // already connected
       const t = (n.type ?? "") as string
       if (!t || !accepts(t)) continue                     // type-incompatible
       const def = NODE_DEF_MAP.get(t as never)
-      // Skip nodes whose registry has no static output handle. Drag-to-
-      // connect handles dynamic-output types (list/loop, outputs:[]) via
-      // runtime col_<uuid> handles — the popover Connect button can't.
-      // Tracking that they EXIST is handled by the pre-scan above.
+      // Dynamic-output types (list/loop, outputs:[]) don't have a static
+      // handle id the Connect button can wire to — drag-to-connect handles
+      // them natively via runtime col_<uuid> handles. Flag that they EXIST
+      // so the hint can mention them, but don't render a row.
       const outputHandle = def?.outputs?.[0]
       if (!outputHandle) {
-        continue
-      }
-      // Past the render cap: count toward `omittedCount` (bounded by
-      // OMITTED_BUDGET — beyond that the UI just says "50+") WITHOUT
-      // running the global validator. The candidates that DO render still
-      // run the validator below to ensure correctness.
-      if (rendered.length >= MAX_CANDIDATES) {
-        omitted++
+        if (def && (!def.outputs || def.outputs.length === 0)) dynamicOutputs = true
         continue
       }
       // GLOBAL connection rules (json→media, composition→render-video) —
@@ -248,7 +200,7 @@ export function HandlePopover({
         outputHandle,
       })
     }
-    return { candidates: rendered, omittedCount: omitted, hasDynamicOutputCandidates: dynamicOutputs }
+    return { candidates: rendered, hasDynamicOutputCandidates: dynamicOutputs }
   }, [accepts, connections, nodes, nodeId, handleId, direction])
 
   const handleJump = useCallback(
@@ -328,13 +280,6 @@ export function HandlePopover({
       : `${enriched.length} connected`
 
   const showCandidates = candidates.length > 0
-  // Display string for total eligible — switches to "{N}+" past the
-  // OMITTED_BUDGET cutoff so the user sees that more exist without
-  // claiming exact precision.
-  const omittedTotalLabel =
-    omittedCount > 0
-      ? `${candidates.length + omittedCount}${omittedCount >= OMITTED_BUDGET ? "+" : ""}`
-      : null
 
   // Boundary stopPropagation: when the popover sits visually over a canvas
   // node, an unbounded click can bubble through React's delegated event
@@ -438,9 +383,7 @@ export function HandlePopover({
           <>
             {enriched.length > 0 && <div className="border-t border-border my-2" />}
             <div className="px-1.5 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
-              {omittedTotalLabel
-                ? `Optional (${candidates.length} of ${omittedTotalLabel})`
-                : `Optional (${candidates.length})`}
+              Optional ({candidates.length})
             </div>
             <ul className="flex flex-col gap-0.5">
               {candidates.map((c) => (
@@ -452,19 +395,9 @@ export function HandlePopover({
                 />
               ))}
             </ul>
-            {(omittedCount > 0 || hasDynamicOutputCandidates) && (
+            {hasDynamicOutputCandidates && (
               <div className="px-1.5 pt-1.5 text-[10px] text-muted-foreground/70 italic">
-                {omittedCount > 0 && (
-                  <>
-                    +{omittedCount >= OMITTED_BUDGET ? `${OMITTED_BUDGET}+` : omittedCount} more — drag from the pip to connect.
-                  </>
-                )}
-                {hasDynamicOutputCandidates && (
-                  <>
-                    {omittedCount > 0 && " "}
-                    Drag from list/loop nodes for column outputs.
-                  </>
-                )}
+                Drag from list/loop nodes for column outputs.
               </div>
             )}
           </>
