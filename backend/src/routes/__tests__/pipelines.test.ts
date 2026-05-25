@@ -33,6 +33,15 @@ vi.mock("../../ee/pipelines/entity-approval.js", () => ({
   rejectEntity: vi.fn(async () => ({ ok: true })),
 }))
 
+vi.mock("../../ee/pipelines/entity-description.js", () => ({
+  approveDescriptionLlmOrEdited: vi.fn(async () => ({ ok: true, newStatus: "pending" })),
+  attachUploadedImageToEntity: vi.fn(async () => ({
+    ok: true,
+    newStatus: "approved",
+    assetId: "asset-uuid-1",
+  })),
+}))
+
 vi.mock("../../ee/pipelines/events.js", () => ({
   pipelineEvents: {
     publish: vi.fn(),
@@ -456,5 +465,187 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/{approve,reject}", () => {
       }),
     )
     await app.close()
+  })
+})
+
+// ─── Phase 3 — POST /entities/:entity_id/approve-description ────────────────
+
+describe("POST /v1/pipelines/:id/entities/:entity_id/approve-description", () => {
+  let app: Awaited<ReturnType<typeof makeApp>>
+
+  beforeAll(async () => {
+    app = await makeApp()
+    // Seed a pipeline so the ownership check passes (POST creates the row
+    // with user_id = TEST_USER_ID via the auth preHandler).
+    await app.inject({
+      method: "POST",
+      url: "/v1/pipelines",
+      payload: {
+        root_node_id: "root_1",
+        story_prompt: "x",
+        target_duration_seconds: 60,
+        format: "short_film",
+      },
+    })
+  })
+
+  afterAll(async () => {
+    await app.close()
+  })
+
+  it("mode='llm' → calls approveDescriptionLlmOrEdited without newDescription, enqueues stage_advance", async () => {
+    const { approveDescriptionLlmOrEdited } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+    const { enqueuePipelineRun } = await import("../../ee/pipelines/queue.js")
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "llm" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ ok: true, mode: "llm", newStatus: "pending" })
+    expect(approveDescriptionLlmOrEdited).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipelineId: PIPELINE_ID,
+        entityId: "e1",
+        newDescription: undefined,
+      }),
+    )
+    expect(enqueuePipelineRun).toHaveBeenCalledWith(
+      expect.objectContaining({ pipelineId: PIPELINE_ID, reason: "stage_advance" }),
+    )
+  })
+
+  it("mode='user_edited' → passes new description through to the helper", async () => {
+    const { approveDescriptionLlmOrEdited } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "user_edited", description: "70s veteran, military haircut, scar on left cheek" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(approveDescriptionLlmOrEdited).toHaveBeenCalledWith(
+      expect.objectContaining({
+        newDescription: "70s veteran, military haircut, scar on left cheek",
+      }),
+    )
+  })
+
+  it("mode='upload' → calls attachUploadedImageToEntity, returns assetId", async () => {
+    const { attachUploadedImageToEntity } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: {
+        mode: "upload",
+        asset_url: "https://r2.example.com/uploads/abc.jpg",
+        filename: "captain.jpg",
+        mime_type: "image/jpeg",
+        size_bytes: 12345,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({
+      ok: true,
+      mode: "upload",
+      newStatus: "approved",
+      assetId: "asset-uuid-1",
+    })
+    expect(attachUploadedImageToEntity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assetUrl: "https://r2.example.com/uploads/abc.jpg",
+        filename: "captain.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 12345,
+      }),
+    )
+  })
+
+  it("rejects mode='user_edited' without description (Zod validation)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "user_edited" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects mode='upload' without asset_url (Zod validation)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "upload" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("rejects unknown mode (Zod discriminated-union validation)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "wrong" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+  })
+
+  it("returns 404 when pipeline is owned by a different user", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/00000000-0000-0000-0000-000000000999/entities/e1/approve-description`,
+      payload: { mode: "llm" },
+    })
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+  })
+
+  it("returns 409 when helper reports entity_not_pending_description", async () => {
+    const { approveDescriptionLlmOrEdited } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+    ;(approveDescriptionLlmOrEdited as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "entity_not_pending_description",
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: { mode: "llm" },
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("entity_not_pending_description")
+  })
+
+  it("returns 500 when upload helper reports asset_insert_failed", async () => {
+    const { attachUploadedImageToEntity } = await import(
+      "../../ee/pipelines/entity-description.js"
+    )
+    ;(attachUploadedImageToEntity as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      reason: "asset_insert_failed",
+      detail: "db down",
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/e1/approve-description`,
+      payload: {
+        mode: "upload",
+        asset_url: "https://r2.example.com/uploads/abc.jpg",
+      },
+    })
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("asset_insert_failed")
   })
 })
