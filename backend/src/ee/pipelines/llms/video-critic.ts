@@ -6,6 +6,14 @@ import {
   VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
 } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { truncateCriticFields } from "./_critic-truncate.js"
+
+// Per-field char caps for video-critic emits. MUST match the .max() values
+// for VideoCriticVerdictSchema in packages/shared/src/pipeline-types.ts.
+const VIDEO_CRITIC_FIELD_CAPS: Record<string, number> = {
+  identified_action: 500,
+  approved_summary: 500,
+}
 
 const _REDACTED_PROMPT_23 = `[REDACTED — moved to private plugin, S9 extraction]`
 
@@ -61,6 +69,12 @@ export async function runVideoCritic(
     userPrompt: blocks,
     schema: VideoCriticVerdictSchema,
     maxRetries: 1,
+    preprocess: (raw) =>
+      truncateCriticFields(
+        raw as Record<string, unknown>,
+        VIDEO_CRITIC_FIELD_CAPS,
+        { pipelineId: args.pipelineId, role: "video_critic" },
+      ),
   })
 
   return { verdict: result.output, llmCallId: result.llmCallId }

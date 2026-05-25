@@ -35,6 +35,15 @@ export interface CallLLMArgs<T> {
   schema: z.ZodType<T, z.ZodTypeDef, unknown>
   maxRetries?: number
   cacheSystemPrompt?: boolean
+  /**
+   * Optional preprocess hook — runs on the raw `toolUse.input` AFTER
+   * Anthropic returns it, BEFORE Zod safeParse. Used by critic helpers to
+   * truncate freeform string fields that occasionally overshoot their
+   * schema cap (see `_critic-truncate.ts`) so a single 503-char string
+   * from Sonnet doesn't fail the whole call after retries. Idempotent:
+   * applied to every retry attempt.
+   */
+  preprocess?: (raw: unknown) => unknown
 }
 
 export interface CallLLMResult<T> {
@@ -138,7 +147,10 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
       lastError = "Model did not call the emit tool."
       continue
     }
-    const parsed = schema.safeParse(toolUse.input)
+    // Optional preprocess (e.g., truncateCriticFields) runs before Zod so
+    // recoverable overshoots don't trigger needless retries.
+    const emitInput = args.preprocess ? args.preprocess(toolUse.input) : toolUse.input
+    const parsed = schema.safeParse(emitInput)
     if (!parsed.success) {
       lastError = parsed.error.issues
         .slice(0, 5)

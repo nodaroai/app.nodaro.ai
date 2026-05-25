@@ -3,6 +3,16 @@ import type Anthropic from "@anthropic-ai/sdk"
 import type { z } from "zod"
 import { IMAGE_CRITIC_MIN_ADHERENCE_SCORE } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { truncateCriticFields } from "./_critic-truncate.js"
+
+// Per-field char caps for image-critic emits. MUST match the .max() values
+// in `packages/shared/src/pipeline-types.ts` for
+// CharacterImageCriticVerdictSchema and LocationImageCriticVerdictSchema —
+// when the shared schema cap changes, change here too.
+const IMAGE_CRITIC_FIELD_CAPS: Record<string, number> = {
+  identified_subject: 500,
+  approved_summary: 500,
+}
 
 /**
  * Shared shape for the global_style block injected into the critic's
@@ -67,6 +77,15 @@ export async function runImageCritic<TVerdict>(
     userPrompt,
     schema: args.schema,
     maxRetries: 1,
+    // Liveness safety net — Sonnet occasionally emits an
+    // identified_subject/approved_summary over the 500-char schema cap;
+    // truncate-and-warn beats failing the entity. See _critic-truncate.ts.
+    preprocess: (raw) =>
+      truncateCriticFields(
+        raw as Record<string, unknown>,
+        IMAGE_CRITIC_FIELD_CAPS,
+        { pipelineId: args.pipelineId, role: args.task },
+      ),
   })
   return { verdict: result.output, llmCallId: result.llmCallId }
 }

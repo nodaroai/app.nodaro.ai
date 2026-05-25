@@ -350,7 +350,7 @@ export type LocationsCoverageCriticVerdict = z.infer<typeof LocationsCoverageCri
 export const CharacterImageCriticVerdictSchema = z.object({
   verdict: z.enum(["pass", "fail"]),
   prompt_adherence_score: z.number().int().min(0).max(10),
-  identified_subject: z.string().min(1).max(200),
+  identified_subject: z.string().min(1).max(500),
   issues: z.array(
     z.object({
       severity: z.enum(["blocking", "warning"]),
@@ -365,14 +365,14 @@ export const CharacterImageCriticVerdictSchema = z.object({
       suggested_fix: z.string().min(1).max(300),
     }),
   ),
-  approved_summary: z.string().min(1).max(200).optional(),
+  approved_summary: z.string().min(1).max(500).optional(),
 })
 export type CharacterImageCriticVerdict = z.infer<typeof CharacterImageCriticVerdictSchema>
 
 export const LocationImageCriticVerdictSchema = z.object({
   verdict: z.enum(["pass", "fail"]),
   prompt_adherence_score: z.number().int().min(0).max(10),
-  identified_subject: z.string().min(1).max(200),
+  identified_subject: z.string().min(1).max(500),
   issues: z.array(
     z.object({
       severity: z.enum(["blocking", "warning"]),
@@ -388,7 +388,7 @@ export const LocationImageCriticVerdictSchema = z.object({
       suggested_fix: z.string().min(1).max(300),
     }),
   ),
-  approved_summary: z.string().min(1).max(200).optional(),
+  approved_summary: z.string().min(1).max(500).optional(),
 })
 export type LocationImageCriticVerdict = z.infer<typeof LocationImageCriticVerdictSchema>
 
@@ -424,7 +424,7 @@ export const VideoCriticVerdictSchema = z.object({
   verdict: z.enum(["pass", "fail"]),
   prompt_adherence_score: z.number().int().min(0).max(10),
   continuity_score: z.number().int().min(0).max(10).nullable(),
-  identified_action: z.string().min(1).max(300),
+  identified_action: z.string().min(1).max(500),
   issues: z.array(
     z.object({
       severity: z.enum(["blocking", "warning"]),
@@ -441,7 +441,7 @@ export const VideoCriticVerdictSchema = z.object({
       suggested_fix: z.string().min(1).max(300),
     }),
   ).max(20),
-  approved_summary: z.string().min(1).max(200).optional(),
+  approved_summary: z.string().min(1).max(500).optional(),
 })
 export type VideoCriticVerdict = z.infer<typeof VideoCriticVerdictSchema>
 
