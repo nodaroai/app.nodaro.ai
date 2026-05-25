@@ -359,9 +359,14 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/force-approve-image-critic-
   })
 
   it("403 edition_required when not cloud edition", async () => {
+    // makeApp's route registration calls `hasCredits()` multiple times for
+    // edition-gated routes — using `mockReturnValueOnce` BEFORE makeApp lets
+    // registration consume the single `false`, leaving the request's
+    // gateEdition with the default `true`. Register first, then queue
+    // `false` for the SOLE next call (which will be the route's gateEdition).
+    const app = await makeApp()
     const config = await import("../../lib/config.js")
     ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    const app = await makeApp()
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/entities/${ENTITY_ID}/force-approve-image-critic-failure`,
@@ -527,9 +532,11 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/retry-image-generation", ()
   })
 
   it("403 edition_required when not cloud edition", async () => {
+    // See note on the previous force-approve test — register first, then
+    // queue the `false` so only the route's gateEdition consumes it.
+    const app = await makeApp()
     const config = await import("../../lib/config.js")
     ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    const app = await makeApp()
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/entities/${ENTITY_ID}/retry-image-generation`,

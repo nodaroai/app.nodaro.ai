@@ -68,6 +68,13 @@ const ALLOWLIST = new Set([
   // here because the call site is a synchronous one-shot collector.
   "backend/src/lib/collect-app-r2-keys.ts",                // ee/billing/cleanup-service
 
+  // PERMANENT — diagnostic probe script (manual `npx tsx` invocation only,
+  // never imported by core code at runtime). Probes an ee/ subsystem
+  // directly because that's its whole purpose — observing the live LLM
+  // critic against fixture plans. Won't ship in community builds because
+  // dev scripts aren't part of the runtime bundle.
+  "backend/src/scripts/probe-script-critic.ts",            // ee/pipelines/llms/script-critic
+
   // TODO Phase 4.5 — convert frontend imports of useModelCredits, CreditBalance,
   // GenerateButton, InsufficientCreditsModal, StorageExceededModal etc. into core
   // shims that return null/no-op when !hasCredits(). Most imports are useModelCredits

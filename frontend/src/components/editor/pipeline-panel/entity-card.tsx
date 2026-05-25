@@ -43,11 +43,16 @@ interface Props {
 // Same status-pill table as scene-card.tsx — kept in lock-step.
 const STATUS_PILL_COLORS: Record<EntityStatus, string> = {
   pending: "bg-zinc-100 text-zinc-700 dark:bg-[#2D2D2D] dark:text-zinc-300",
+  // Phase 3 — Step A is awaiting the user's description-approval click; cyan
+  // differentiates from `awaiting_approval` (post-generation review) blue.
+  pending_description: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
   generating: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
   awaiting_approval: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
   approved: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
   rejected: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
   failed: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
+  // Phase 3 — terminal "user opted out"; muted so it visually recedes.
+  skipped: "bg-zinc-100 text-zinc-500 dark:bg-zinc-900 dark:text-zinc-500",
 }
 
 /**

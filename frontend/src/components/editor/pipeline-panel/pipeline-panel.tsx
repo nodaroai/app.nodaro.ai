@@ -18,6 +18,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { StageRow } from "./stage-row"
 import { ScriptPanel } from "./script-panel"
 import { EntityGrid } from "./entity-grid"
+import { CharactersPanel } from "./characters-panel"
 import { SceneGrid } from "./scene-grid"
 import { DriftBanner } from "./drift-banner"
 import { ForkButton } from "./fork-button"
@@ -651,10 +652,15 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
           />
         )}
         {pipeline?.current_stage === "characters" && (
-          <EntityGrid
+          // Phase 3 (granular-pipeline-control) — CharactersPanel hosts the
+          // Step A wizard for manual/guided pipelines and falls through to
+          // the original EntityGrid when no entity is at `pending_description`
+          // (the Step B review surface). Auto mode never sees a
+          // `pending_description` row because the engine bulk-flips at stage
+          // start, so the same component renders EntityGrid for auto runs.
+          <CharactersPanel
             pipelineId={pipelineId}
-            entityType="character"
-            title="2. Characters"
+            plan={plan}
             mode={pipeline?.mode ?? undefined}
           />
         )}

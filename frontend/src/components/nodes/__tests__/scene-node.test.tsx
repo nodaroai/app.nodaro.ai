@@ -88,8 +88,9 @@ describe("SceneNode (Phase 1B.2 pipeline)", () => {
   it("renders the scripting view when view_mode='scripting'", () => {
     const data = makeData({ view_mode: "scripting" })
     renderNode(data)
-    // The scripting view shows the emotional_beat in its header row.
-    expect(screen.getByText("setup")).toBeInTheDocument()
+    // The scripting view shows the emotional_beat in its header row,
+    // rendered via `storyMomentLabel()` which maps "setup" → "Setup".
+    expect(screen.getByText("Setup")).toBeInTheDocument()
   })
 
   it("renders the video view when view_mode='video'", () => {

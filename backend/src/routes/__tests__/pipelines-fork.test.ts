@@ -215,9 +215,12 @@ describe("POST /v1/pipelines/:id/fork", () => {
   })
 
   it("returns 403 edition_required when hasCredits() is false", async () => {
+    // Register BEFORE queuing the `false` — makeApp's edition-gated
+    // route registrations call hasCredits multiple times and would
+    // otherwise consume the single mockReturnValueOnce.
+    const app = await makeApp()
     const config = await import("../../lib/config.js")
     ;(config.hasCredits as ReturnType<typeof vi.fn>).mockReturnValueOnce(false)
-    const app = await makeApp()
     const res = await app.inject({
       method: "POST",
       url: `/v1/pipelines/${PIPELINE_ID}/fork`,
