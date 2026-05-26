@@ -22,6 +22,16 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   }
 })
 
+// `EditableNodeLabel` subscribes to React Flow's zustand store for a
+// zoom-aware font-size floor. The test isn't wrapped in a
+// `ReactFlowProvider`, so stub the component to a no-op render — these
+// tests assert handle structure, not the label.
+vi.mock("@/components/nodes/editable-node-label", () => ({
+  EditableNodeLabel: ({ label }: { label?: string }) => (
+    <span data-testid="editable-node-label">{label}</span>
+  ),
+}))
+
 // CollectNode renders its functional handles through BaseNode's `handles`
 // array; stub BaseNode (like loop-node.test) so the handles surface as
 // `handle-<id>` testids without pulling in BaseNode's heavy dependencies.

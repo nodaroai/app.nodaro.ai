@@ -10,6 +10,17 @@ vi.mock("@xyflow/react", () => ({
   ),
 }))
 
+// `EditableNodeLabel` subscribes to React Flow's zustand store for a
+// zoom-aware font-size floor (`useStore(...)`). This test mocks
+// `@xyflow/react` without spreading `actual`, so `useStore` isn't on the
+// mock. Stub the label to a no-op render — these tests assert scene
+// structure, not the label.
+vi.mock("@/components/nodes/editable-node-label", () => ({
+  EditableNodeLabel: ({ label }: { label?: string }) => (
+    <span data-testid="editable-node-label">{label}</span>
+  ),
+}))
+
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: (selector: any) => selector({ updateNodeData: vi.fn() }),
 }))
