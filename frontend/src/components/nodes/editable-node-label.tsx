@@ -2,15 +2,13 @@
 import { useState, useRef, useEffect } from "react"
 import type { ReactNode } from "react"
 import { useStore } from "@xyflow/react"
+import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 
 interface EditableNodeLabelProps {
   label: string
   icon: ReactNode
   onSave: (newLabel: string) => void
 }
-
-// Floor for the visual scale at low zoom — see `useFloorScale` below.
-const TITLE_MIN_SCALE = 0.75
 
 export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProps) {
   const [editing, setEditing] = useState(false)
@@ -21,7 +19,7 @@ export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProp
   // (`visual = DOM × zoom`). When `zoom < MIN_SCALE`, we apply an additional
   // `scale(MIN_SCALE / zoom)` so the net visual size stays at the floor.
   const zoom = useStore((s) => s.transform[2])
-  const compensateScale = Math.max(1, TITLE_MIN_SCALE / Math.max(zoom, 0.01))
+  const compensateScale = Math.max(1, NODE_VISUAL_SCALE_FLOOR / Math.max(zoom, 0.01))
 
   useEffect(() => { setValue(label) }, [label])
   useEffect(() => { if (editing) inputRef.current?.select() }, [editing])

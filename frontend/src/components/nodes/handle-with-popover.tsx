@@ -7,6 +7,7 @@ import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { getDragAncestorSet } from "@/lib/connection-validation"
+import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 
 // HandlePopover transitively pulls the parameter-picker registry (and ~30
 // picker-preview components + ~30 catalogs) for in-node visuals on picker
@@ -117,8 +118,7 @@ export function HandleWithPopover({
   // `scale(MIN/zoom)` once we drop below the floor. Keeps the label
   // readable without making it dominant at zoom-in (`scale = 1` then).
   const zoom = useStore((s) => s.transform[2])
-  const HANDLE_MIN_SCALE = 0.75
-  const labelCompensateScale = Math.max(1, HANDLE_MIN_SCALE / Math.max(zoom, 0.01))
+  const labelCompensateScale = Math.max(1, NODE_VISUAL_SCALE_FLOOR / Math.max(zoom, 0.01))
 
   // Per-pip compatibility check for the in-progress drag. The pip lights up
   // as a valid candidate when ALL of these are true:

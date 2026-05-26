@@ -14,6 +14,7 @@ import { ModelSelectOption } from "@/components/editor/config-panels/model-selec
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 import type { GenerateImageData } from "@/types/nodes"
 
 interface GenerateImageQuickToolbarProps {
@@ -78,8 +79,7 @@ export function GenerateImageQuickToolbar({
   // the node's growth) while staying readable when zoomed out — so apply
   // `scale(max(MIN, zoom))`. transformOrigin top-center keeps the toolbar
   // anchored to the node's bottom edge as it scales.
-  const TOOLBAR_MIN_SCALE = 0.75
-  const toolbarScale = Math.max(TOOLBAR_MIN_SCALE, zoom)
+  const toolbarScale = Math.max(NODE_VISUAL_SCALE_FLOOR, zoom)
   const toolbarTransform = {
     transform: `scale(${toolbarScale})`,
     transformOrigin: "50% 0%",
