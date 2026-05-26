@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   executions: [] as ExecutionRow[],
   jobs: [] as JobRow[],
   updates: [] as Array<{ id: string; updates: Record<string, unknown> }>,
+  // BullMQ orchestration-job state per executionId. undefined = no job.
+  orchJob: new Map<string, { state: string } | undefined>(),
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -56,6 +58,16 @@ vi.mock("../../supabase.js", () => {
   return { supabase: { from } }
 })
 
+vi.mock("../../orchestration-queue.js", () => ({
+  orchestrationQueue: {
+    getJob: (jobId: string) => {
+      const j = mocks.orchJob.get(jobId)
+      if (!j) return Promise.resolve(null)
+      return Promise.resolve({ id: jobId, getState: () => Promise.resolve(j.state) })
+    },
+  },
+}))
+
 import { reconcileWorkflowExecutionsTick } from "../workflow-executions-cron.js"
 
 describe("reconcileWorkflowExecutionsTick", () => {
@@ -63,6 +75,7 @@ describe("reconcileWorkflowExecutionsTick", () => {
     mocks.executions.length = 0
     mocks.jobs.length = 0
     mocks.updates.length = 0
+    mocks.orchJob.clear()
   })
 
   it("marks an execution completed when all child jobs are completed in DB", async () => {
@@ -91,7 +104,7 @@ describe("reconcileWorkflowExecutionsTick", () => {
     })
   })
 
-  it("skips an execution when child jobs are still pending/processing in DB", async () => {
+  it("skips an execution when child jobs are still pending/processing in DB AND BullMQ orchestrator job is active", async () => {
     mocks.executions.push({
       id: "exec-2",
       started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
@@ -104,11 +117,30 @@ describe("reconcileWorkflowExecutionsTick", () => {
       { id: "j1", status: "completed", error_message: null },
       { id: "j2", status: "processing", error_message: null },
     )
+    // Orchestrator is alive — cron should NOT touch this row.
+    mocks.orchJob.set("exec-2", { state: "active" })
 
     await reconcileWorkflowExecutionsTick()
 
-    // No update because the execution is still mid-flight (j2 not terminal)
     expect(mocks.updates).toHaveLength(0)
+  })
+
+  it("marks an orphaned execution failed when no BullMQ orchestration job exists (the blind-spot path)", async () => {
+    mocks.executions.push({
+      id: "exec-orphan",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        // jobId is a placeholder that was never persisted to `jobs`
+        n1: { status: "running", jobId: "exec-node_1" },
+      },
+    })
+    // No matching `jobs` row → reconcileNodeStatesFromJobs returns unchanged
+    // No orchestration BullMQ job → orphan branch fires
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    expect(mocks.updates[0].updates.status).toBe("failed")
+    expect(mocks.updates[0].updates.error_message).toMatch(/orphaned/)
   })
 
   it("marks an execution failed when a child job failed and no others active", async () => {

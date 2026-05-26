@@ -13,6 +13,7 @@
  * See `specs/stuck-execution-prevention-plan.md` for the broader design.
  */
 import { supabase } from "../supabase.js"
+import { orchestrationQueue } from "../orchestration-queue.js"
 import { reconcileNodeStatesFromJobs } from "./node-states.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 
@@ -147,7 +148,42 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
       continue
     }
 
-    skipped++
+    // Final fallback: the execution is still "running" / "stopping" past
+    // the backoff window AND we couldn't infer terminality from child jobs.
+    // If BullMQ has no active orchestration job for it, the orchestrator
+    // died and left no recoverable state (e.g., node_states references
+    // placeholder jobIds like `exec-node_X` that were never persisted to
+    // the `jobs` table). Mark the execution failed so the user can re-run
+    // instead of waiting 4 hours for the abandon threshold.
+    //
+    // Safe-by-construction race analysis: a normally-completing execution
+    // updates `workflow_executions.status = 'completed'` BEFORE the BullMQ
+    // job is removed (the orchestrator's DB write happens inside the
+    // worker function; BullMQ only removes the job after the function
+    // returns). So if we see `status='running'` AND no live BullMQ job,
+    // the orchestrator is genuinely gone.
+    const orchJob = await orchestrationQueue.getJob(row.id)
+    if (orchJob) {
+      const state = await orchJob.getState()
+      if (state === "active" || state === "waiting" || state === "delayed") {
+        // Orchestrator alive (or BullMQ has a stalled lock that will
+        // expire). Leave alone — let the orchestrator (or BullMQ
+        // stalled-retry) handle it.
+        skipped++
+        continue
+      }
+    }
+
+    await supabase
+      .from("workflow_executions")
+      .update({
+        status: "failed",
+        error_message: "Execution orphaned — no orchestrator job in queue (reconciled by cron)",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", row.id)
+      .neq("status", "cancelled")
+    abandoned++
   }
 
   if (reconciledCompleted > 0 || reconciledFailed > 0 || abandoned > 0) {

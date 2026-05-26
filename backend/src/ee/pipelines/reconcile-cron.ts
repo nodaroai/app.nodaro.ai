@@ -67,11 +67,13 @@ export async function reconcilePipelinesTick(): Promise<void> {
   // pause state — the orchestrator is correctly not running. The user has
   // to click approve/reject to advance. Re-enqueuing those would clobber
   // the pause semantics.
+  // `pipelines` table has `created_at` (not `started_at` — that's on
+  // `pipeline_stages`). Use created_at for the backoff + abandon threshold.
   const { data: rows, error } = await supabase
     .from("pipelines")
-    .select("id, user_id, status, started_at")
+    .select("id, user_id, status, created_at")
     .in("status", ["running", "stopping"])
-    .lt("started_at", backoffCutoff)
+    .lt("created_at", backoffCutoff)
     .limit(BATCH_LIMIT)
 
   if (error) {
@@ -110,7 +112,7 @@ interface PipelineRow {
   id: string
   user_id: string
   status: string
-  started_at: string | null
+  created_at: string | null
 }
 
 async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
@@ -128,8 +130,8 @@ async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
   // Absolute abandon: pipeline has been "running" for absurd time with no
   // orchestrator presence. Fail + refund. Refund-only-on-failed is idempotent
   // via the `reservation_usage_log_id` CAS inside `refundPipelineCredits`.
-  const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
-  if (startedAt > 0 && now - startedAt > PIPELINE_STALE_THRESHOLD_MS) {
+  const createdAt = row.created_at ? new Date(row.created_at).getTime() : 0
+  if (createdAt > 0 && now - createdAt > PIPELINE_STALE_THRESHOLD_MS) {
     await supabase
       .from("pipelines")
       .update({ status: "failed", failure_reason: "stale_abandoned_by_cron" })
