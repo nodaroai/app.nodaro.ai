@@ -3,6 +3,7 @@ import { z } from "zod"
 import zodToJsonSchema from "zod-to-json-schema"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
+import { getPipelineSignal } from "../pipeline-context.js"
 
 export type LLMRole = "detection" | "showrunner" | "scene_director" | "critic" | "helper" | "specialist"
 
@@ -181,6 +182,15 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
     // regression), we re-throw to the outer retry loop — same as the
     // non-streaming path. We do NOT silently fall back to `create()`
     // because that would mask streaming bugs behind a working pipeline.
+    // Pluck the in-flight pipeline's abort signal from AsyncLocalStorage
+    // (set by pipeline-worker on each BullMQ job). When the user hits
+    // Cancel, the worker calls ctrl.abort() and this signal fires —
+    // the Anthropic SDK rejects the in-flight request with an
+    // AbortError that propagates out, exiting drivePipeline cleanly
+    // instead of burning 1-3 min on a now-irrelevant Showrunner
+    // generation. Outside the pipeline-worker (other callers, tests)
+    // signal is undefined and Anthropic gets the createParams unchanged.
+    const signal = getPipelineSignal()
     let resp: Anthropic.Messages.Message
     if (onProgress) {
       resp = await runStreamingMessage(
@@ -188,9 +198,13 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
         createParams,
         onProgress,
         progressMinIntervalMs,
+        signal,
       )
     } else {
-      resp = await anthropic.messages.create(createParams)
+      resp = await anthropic.messages.create(
+        createParams,
+        signal ? { signal } : undefined,
+      )
     }
 
     totalIn += resp.usage.input_tokens
@@ -339,10 +353,25 @@ async function runStreamingMessage(
   params: Anthropic.Messages.MessageCreateParamsNonStreaming,
   onProgress: (update: ProgressUpdate) => void,
   minIntervalMs: number,
+  signal: AbortSignal | undefined,
 ): Promise<Anthropic.Messages.Message> {
   safeCall(onProgress, { phase: "starting" })
 
   const stream = anthropic.messages.stream(params)
+
+  // Hard-interrupt on user cancel — wire the pipeline-context AbortSignal
+  // through to the SDK's stream.abort(). The SDK's stream object exposes
+  // its own abort() rather than taking a signal option, so we mirror the
+  // pattern used by lib/llm-client.ts:streamAnthropicDirect.
+  if (signal) {
+    if (signal.aborted) {
+      // Already aborted before we registered — abort immediately so the
+      // await below rejects fast instead of waiting on a doomed request.
+      stream.abort()
+    } else {
+      signal.addEventListener("abort", () => stream.abort(), { once: true })
+    }
+  }
 
   let bytesSoFar = 0
   let lastEmitMs = 0
