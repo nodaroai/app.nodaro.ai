@@ -425,21 +425,27 @@ html, body {
 
 /* During a drag-to-connect, also reveal labels on the source pip and on
  * every TYPE-COMPATIBLE candidate pip (driven by `.valid-candidate`,
- * NOT a wrapper-class blanket reveal). */
+ * NOT a wrapper-class blanket reveal). `.connectingto` (cursor-over-handle
+ * during drag) is intentionally excluded — React Flow applies it to any
+ * handle the cursor passes over, regardless of whether the connection
+ * would actually be valid; relying on it would light up incompatible pips
+ * and same-node pips. `.valid-candidate` already encodes the real "this
+ * is a drop target" predicate (type-compat + acyclic + no self-loop). */
 .handle-typed-pip.connectingfrom .handle-typed-pip-label,
-.handle-typed-pip.connectingto .handle-typed-pip-label,
 .handle-typed-pip.clickconnecting .handle-typed-pip-label,
 .handle-typed-pip.valid-candidate .handle-typed-pip-label {
   opacity: 1;
 }
 
 /* Connecting state: force the hollow-ring look on every typed pip that can
- * participate. `.valid-candidate` is set per-pip by HandleWithPopover when
- * the in-progress drag's source type passes the pip's `accepts` predicate,
- * so only TYPE-COMPATIBLE pips light up (not every target pip on the canvas
- * the way `.connecting-from-source` would). */
+ * actually accept the in-progress drag. `.valid-candidate` is set per-pip
+ * by HandleWithPopover with the FULL predicate (type-compat + acyclic +
+ * no self-loop), so non-droppable pips stay quiet even while the cursor
+ * passes over them. `.connectingto` (the cursor-over-handle hover class
+ * React Flow applies during a drag) is INTENTIONALLY NOT in this list —
+ * RF applies it indiscriminately to any handle the cursor crosses, so
+ * including it would re-introduce false-positive lit pips. */
 .handle-typed-pip.connectingfrom,
-.handle-typed-pip.connectingto,
 .handle-typed-pip.clickconnecting,
 .handle-typed-pip.valid-candidate {
   border-color: var(--pip-color) !important;
@@ -448,9 +454,9 @@ html, body {
 }
 
 /* Icon during connecting: full opacity, brand color (overrides the white
- * icon-on-fill of the connected state and the 35% dim of idle state). */
+ * icon-on-fill of the connected state and the 35% dim of idle state).
+ * Same `.connectingto` exclusion rationale as the body rule above. */
 .handle-typed-pip.connectingfrom .handle-typed-pip-icon,
-.handle-typed-pip.connectingto .handle-typed-pip-icon,
 .handle-typed-pip.clickconnecting .handle-typed-pip-icon,
 .handle-typed-pip.valid-candidate .handle-typed-pip-icon {
   opacity: 1 !important;

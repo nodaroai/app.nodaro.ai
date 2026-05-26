@@ -27,7 +27,7 @@ import { CanvasToolbar } from "./canvas-toolbar"
 import { ViewModeToggle } from "./canvas-toolbar/view-mode-toggle"
 import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
-import { isValidWorkflowConnection } from "@/lib/connection-validation"
+import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
@@ -773,9 +773,14 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setConnectingFromType(null)
   }, [])
 
+  // Memoize the adjacency index so drag-to-connect probes (React Flow
+  // calls isValidConnection on every cursor move during a drag) don't
+  // rebuild the entire source→targets map every probe — only when the
+  // edge list actually changes.
+  const adjacencyIndex = useMemo(() => buildAdjacency(edges), [edges])
   const isValidConnection = useCallback<IsValidConnection>(
-    (connection) => isValidWorkflowConnection(connection, (id) => getNode(id)?.type),
-    [getNode],
+    (connection) => isValidWorkflowConnection(connection, (id) => getNode(id)?.type, adjacencyIndex),
+    [getNode, adjacencyIndex],
   )
 
   // Transform edges to be animated when source or target node is running, or highlighted when dragging

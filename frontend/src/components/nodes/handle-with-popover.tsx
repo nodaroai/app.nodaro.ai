@@ -6,6 +6,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
+import { getDragAncestorSet } from "@/lib/connection-validation"
 
 // HandlePopover transitively pulls the parameter-picker registry (and ~30
 // picker-preview components + ~30 catalogs) for in-node visuals on picker
@@ -120,11 +121,25 @@ export function HandleWithPopover({
   const labelCompensateScale = Math.max(1, HANDLE_MIN_SCALE / Math.max(zoom, 0.01))
 
   // Per-pip compatibility check for the in-progress drag. The pip lights up
-  // as a valid candidate when: there's a drag, this pip is the right
-  // direction (target during from-source drag and vice versa), the drag
-  // didn't start from this pip itself, and `accepts(sourceType)` returns
-  // true. Drives the `.valid-candidate` class.
+  // as a valid candidate when ALL of these are true:
+  //  - there's a drag in progress
+  //  - this pip is the right direction (target during from-source drag and
+  //    vice versa)
+  //  - the drag didn't start from this pip itself
+  //  - the drag didn't start from this pip's node (no self-loops — the
+  //    workflow engine is a DAG and can't execute a node before itself)
+  //  - this pip's node isn't already an ancestor of the drag source
+  //    (no back-edges — same DAG reason)
+  //  - `accepts(sourceType)` returns true (per-handle type compat)
+  // Drives the `.valid-candidate` class.
   const connection = useConnection()
+  // Subscribe to edges so the cycle/ancestor check sees current state.
+  // Edges change rarely (only on actual edge add/remove), so the cost of
+  // an extra store subscription per pip is negligible relative to the
+  // correctness it buys. `getDragAncestorSet` caches the resulting set
+  // module-side, keyed on the edges ref + drag source — so the BFS only
+  // runs once per drag start regardless of how many pips are visible.
+  const edges = useWorkflowStore((s) => s.edges)
   const isValidCandidate = useMemo(() => {
     if (!connection.inProgress || !accepts) return false
     const from = connection.fromHandle
@@ -132,20 +147,27 @@ export function HandleWithPopover({
     if (!from || !fromType) return false
     // Skip the pip the drag started from — it already lights up via .connectingfrom.
     if (from.nodeId === nodeId && from.id === handleId) return false
+    // Self-loop: same node, any handle.
+    if (from.nodeId === nodeId) return false
     // Direction check: target pips light up during from-source drags only,
     // and source pips during from-target drags only.
     if (from.type === "source" && type !== "target") return false
     if (from.type === "target" && type !== "source") return false
-    return accepts(fromType)
-  }, [connection.inProgress, connection.fromHandle, connection.fromNode?.type, accepts, nodeId, handleId, type])
+    if (!accepts(fromType)) return false
+    // Cycle check: if this node is already an ancestor of the drag's
+    // source node, adding an edge from-source → this-node would close a
+    // directed cycle.
+    const ancestors = getDragAncestorSet(edges, from.nodeId)
+    if (ancestors.has(nodeId)) return false
+    return true
+  }, [connection.inProgress, connection.fromHandle, connection.fromNode?.type, accepts, nodeId, handleId, type, edges])
 
-  // Apply the "valid-candidate" hollow visual ONLY when the pip has no
-  // existing connections — keeps already-connected pips solid-filled during
-  // a drag so the user can visually distinguish "drop target with pre-existing
-  // wires" from "fresh target". Without this scoping, both look identical
-  // (hollow ring + counter badge hidden by default = no signal of existing
-  // connections during the drag).
-  const showValidCandidateVisual = isValidCandidate && !isConnected
+  // Highlight every type-compatible destination during a drag, regardless
+  // of whether it already has connections. The user wants to see ALL
+  // possible drop targets — the existing-wires signal comes from the
+  // connection counter badge (revealed on hover/selection), not from
+  // suppressing the candidate visual.
+  const showValidCandidateVisual = isValidCandidate
 
   const handleAddNew = useCallback(() => {
     openPopup?.({ nodeId, handleId, direction: type === "target" ? "target" : "source", nodeType })

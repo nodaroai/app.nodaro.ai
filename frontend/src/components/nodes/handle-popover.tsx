@@ -23,7 +23,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getNodeThumbnailUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
-import { isValidWorkflowConnection } from "@/lib/connection-validation"
+import { buildAdjacency, collectDescendants, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import type { ReactNode } from "react"
@@ -90,6 +90,7 @@ export function HandlePopover({
 }: HandlePopoverProps) {
   const connections = useHandleConnections(nodeId, handleId, direction)
   const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const { setCenter, getNode } = useReactFlow()
   const deleteEdge = useWorkflowStore((s) => s.deleteEdge)
@@ -162,12 +163,21 @@ export function HandlePopover({
     }
     const nodeTypeById = (id: string) => nodeTypeMap.get(id)
 
+    // Single O(V+E) descendant pass to filter every cycle-inducing
+    // candidate at once — instead of running an N-element cycle BFS
+    // inside isValidWorkflowConnection per candidate. Any node already
+    // downstream of the consumer (`nodeId`) would close a cycle if used
+    // as the source for a new edge into this handle.
+    const adj = buildAdjacency(edges)
+    const cycleInducingIds = collectDescendants(adj, nodeId)
+
     const rendered: CandidateNode[] = []
     let dynamicOutputs = false
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i]
       if (n.id === nodeId) continue                       // skip the consumer itself
       if (connectedIds.has(n.id)) continue                // already connected
+      if (cycleInducingIds.has(n.id)) continue            // would create a cycle
       const t = (n.type ?? "") as string
       if (!t || !accepts(t)) continue                     // type-incompatible
       const def = NODE_DEF_MAP.get(t as never)
@@ -184,6 +194,8 @@ export function HandlePopover({
       // `accepts` is per-handle; this is what workflow-canvas runs during
       // drag-to-connect. Without this, a future HandleWithPopover with a
       // looser `accepts` predicate could silently wire an invalid edge.
+      // Pass `undefined` for the graph since cycle filtering already
+      // happened above — re-running per candidate would be O(N×(V+E)).
       const wouldBeConnection = {
         source: n.id,
         sourceHandle: outputHandle,
@@ -201,7 +213,7 @@ export function HandlePopover({
       })
     }
     return { candidates: rendered, hasDynamicOutputCandidates: dynamicOutputs }
-  }, [accepts, connections, nodes, nodeId, handleId, direction])
+  }, [accepts, connections, nodes, edges, nodeId, handleId, direction])
 
   const handleJump = useCallback(
     (otherNodeId: string) => {
