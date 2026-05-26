@@ -335,7 +335,15 @@ export const LocationsCoverageCriticIssueSchema = CriticIssueSchema.extend({
     "description_too_short",
     "redundant_location",
   ]),
-  location_key: z.string().optional(),
+  // `nullish()` (= `.nullable().optional()`) instead of `.optional()` —
+  // Sonnet routinely emits `"location_key": null` for issue_types like
+  // `redundant_location` that flag a structural problem without pointing
+  // at a specific key. `.optional()` only accepted `undefined`, so those
+  // emits failed Zod validation, exhausted the critic retry budget, and
+  // killed the whole Stage 1 with `locations_coverage validation failed
+  // after 2 attempts: issues.N.location_key: Expected string, received
+  // null`. Same fix already in place on `scene_index` below.
+  location_key: z.string().nullish(),
   scene_index: z.number().int().nullish(),
 })
 
