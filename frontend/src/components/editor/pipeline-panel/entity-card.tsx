@@ -128,7 +128,39 @@ export function EntityCard({
     mutationFn: () => pipelinesApi.retryImageGeneration(pipelineId, entity.id),
     onSuccess: () => onRecovered?.(),
   })
-  const recovering = skipMutation.isPending || regenerateMutation.isPending
+  const retryVariantsMutation = useMutation({
+    mutationFn: () => pipelinesApi.retryVariants(pipelineId, entity.id),
+    onSuccess: () => onRecovered?.(),
+  })
+  const recovering =
+    skipMutation.isPending ||
+    regenerateMutation.isPending ||
+    retryVariantsMutation.isPending
+
+  // Variant-failure recovery surface. ensureCharacterVariants writes one of
+  // two failure shapes onto entity metadata:
+  //   - variant_generation_error (string) — outermost catch fired before
+  //     reaching the per-variant loop. Nothing was attempted.
+  //   - variants_failed_count (number > 0) — per-variant loop ran but some
+  //     individual variants threw. variants_total_count carries the
+  //     denominator for "X of Y" UI.
+  // Pre-fix entities (pipeline 65c57374 and earlier) carry neither flag —
+  // they just have status='approved' with no variants_awaiting_approval.
+  // The retry-variants route handles all three cases without gating on a
+  // specific marker, but the UI only auto-surfaces the Retry button when
+  // we have a positive signal that something failed.
+  const variantError = typeof metadata?.variant_generation_error === "string"
+    ? (metadata.variant_generation_error as string)
+    : null
+  const variantsFailedCount =
+    typeof metadata?.variants_failed_count === "number"
+      ? (metadata.variants_failed_count as number)
+      : 0
+  const variantsTotalCount =
+    typeof metadata?.variants_total_count === "number"
+      ? (metadata.variants_total_count as number)
+      : 0
+  const hasVariantFailure = variantError !== null || variantsFailedCount > 0
 
   // Phase 1D.2c-a §7 — image-critic surface.
   const { findings, isFailed, displayUrl } = readCriticState(
@@ -247,6 +279,42 @@ export function EntityCard({
             className="flex-1"
           >
             {regenerateMutation.isPending ? "Regenerating…" : "Regenerate"}
+          </Button>
+        </div>
+      )}
+      {/* Variant-failure recovery surface — separate from the image-critic
+       * recovery above. Shows when ensureCharacterVariants couldn't finish
+       * (either the function itself threw or some per-variant generations
+       * failed). Auto mode is excluded for the same reason as the
+       * image-critic surface: the orchestrator owns gating in auto. */}
+      {hasVariantFailure && mode !== "auto" && (
+        <div
+          className="border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 rounded p-2 flex flex-col gap-2"
+          data-testid="variant-failure-surface"
+        >
+          <div className="text-xs text-amber-800 dark:text-amber-200">
+            {variantError ? (
+              <>
+                <span className="font-medium">Variant generation failed:</span>{" "}
+                {variantError}
+              </>
+            ) : (
+              <>
+                <span className="font-medium">
+                  {variantsFailedCount} of {variantsTotalCount} variants failed.
+                </span>{" "}
+                Retry to regenerate the missing ones.
+              </>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => retryVariantsMutation.mutate()}
+            disabled={disabled || recovering}
+            data-testid="retry-variants-btn"
+          >
+            {retryVariantsMutation.isPending ? "Retrying…" : "Retry variants"}
           </Button>
         </div>
       )}
