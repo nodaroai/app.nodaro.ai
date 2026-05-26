@@ -2,6 +2,14 @@ import { config, hasCredits } from "./lib/config.js"
 import { buildApp } from "./app.js"
 import { startCleanupCron } from "./ee/billing/cleanup-cron.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
+import {
+  startWorkflowExecutionsReconcileCron,
+  stopWorkflowExecutionsReconcileCron,
+} from "./lib/reconcile/workflow-executions-cron.js"
+import {
+  startPipelinesReconcileCron,
+  stopPipelinesReconcileCron,
+} from "./ee/pipelines/reconcile-cron.js"
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
@@ -34,6 +42,20 @@ async function main() {
   // Start schedule cron for workflow triggers
   startScheduleCron()
 
+  // Periodic reconciler for stuck workflow_executions — catches executions
+  // that the orchestrator failed to advance (lost wake-ups, DB write
+  // failures, mid-flight crashes). Boot-time `cleanupStaleExecutions`
+  // handles the at-boot case; this fills the gap while the process stays
+  // alive. Worst-case stuck window is ~90s.
+  startWorkflowExecutionsReconcileCron()
+
+  // Same pattern for Film Director pipelines (Cloud only — pipelines are
+  // an EE feature). Catches pipelines whose BullMQ orchestration job was
+  // lost (see `ee/pipelines/reconcile-cron.ts` for root-cause taxonomy).
+  if (hasCredits()) {
+    startPipelinesReconcileCron()
+  }
+
   // Start orchestrator worker (workflow execution engine) in-process
   const orchestratorWorker = createOrchestratorWorker()
   console.log("[orchestrator] Worker started in-process")
@@ -57,6 +79,8 @@ async function main() {
   // Graceful shutdown
   const shutdown = async () => {
     stopScheduleCron()
+    stopWorkflowExecutionsReconcileCron()
+    stopPipelinesReconcileCron()
     await orchestratorWorker.close()
     await app.close()
     process.exit(0)
