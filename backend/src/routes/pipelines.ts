@@ -505,10 +505,45 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       ) {
         return reply.status(409).send({ error: { code: "already_terminal" } })
       }
+      const cancelledAt = new Date().toISOString()
       await supabase
         .from("pipelines")
-        .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+        .update({ status: "cancelled", cancelled_at: cancelledAt })
         .eq("id", pipeline.id)
+
+      // Propagate cancellation to in-flight pipeline_stages rows. Without
+      // this, any stage that was actively running at cancel time stays
+      // forever at `status='running'` in the DB — the worker can't update
+      // it (the worker only knows about the pipeline-level cancel when it
+      // re-enters drivePipeline for the next stage). Two visible symptoms
+      // before this fix:
+      //   - The admin /stuck-pipelines list keeps showing the pipeline
+      //     because its stage row is stuck "running" past the cutoff.
+      //   - If the user re-opens the pipeline panel, the script row says
+      //     "Running…" even though the pipeline-level status is cancelled.
+      // We also emit per-stage `stage:status cancelled` events so any open
+      // SSE subscriber sees the row flip in real time.
+      const { data: runningStages } = await supabase
+        .from("pipeline_stages")
+        .select("id, stage_name")
+        .eq("pipeline_id", pipeline.id)
+        .eq("status", "running")
+      if (runningStages && runningStages.length > 0) {
+        await supabase
+          .from("pipeline_stages")
+          .update({ status: "cancelled", completed_at: cancelledAt })
+          .eq("pipeline_id", pipeline.id)
+          .eq("status", "running")
+        for (const stage of runningStages) {
+          pipelineEvents.publish({
+            type: "stage:status",
+            pipelineId: pipeline.id,
+            stageName: stage.stage_name as never,
+            status: "cancelled",
+          })
+        }
+      }
+
       const refund = Math.max(0, pipeline.reserved_credits - pipeline.spent_credits)
       if (refund > 0) {
         await refundPipelineCredits({
