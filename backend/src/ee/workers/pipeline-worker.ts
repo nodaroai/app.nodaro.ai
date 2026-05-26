@@ -20,6 +20,8 @@ import { config } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 import { PIPELINE_HARD_TIMEOUT_MS } from "@nodaro/shared"
 import { drivePipeline } from "../pipelines/engine.js"
+import { pipelineEvents } from "../pipelines/events.js"
+import { pipelineContext } from "../pipelines/pipeline-context.js"
 import { pipelineOrchestrationQueue, type PipelineOrchestrationJobData } from "../pipelines/queue.js"
 import { resumeActiveOrchestrators } from "../pipelines/resume.js"
 
@@ -36,10 +38,49 @@ export function startPipelineWorker(): Worker<PipelineOrchestrationJobData> {
       const { pipelineId } = job.data
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), PIPELINE_HARD_TIMEOUT_MS)
+
+      // Hard-interrupt on user cancel. The API's POST /v1/pipelines/:id/cancel
+      // route publishes `pipeline:status cancelled` to pipelineEvents, which
+      // the cross-process Redis bridge (PR #2770) forwards into this
+      // process's local emitter. Subscribing here aborts the in-flight
+      // LLM call so we don't burn 1-3 min of Showrunner / image-critic
+      // compute after the user already gave up.
+      //
+      // Per-job subscription (not module-level) so concurrent jobs each
+      // have their own AbortController and one cancel doesn't ripple
+      // across unrelated pipelines.
+      const unsubscribeCancel = pipelineEvents.subscribe(pipelineId, (event) => {
+        if (event.type === "pipeline:status" && event.status === "cancelled") {
+          console.log(
+            `[pipeline-worker] cancel signal received for ${pipelineId} — aborting in-flight LLM calls`,
+          )
+          ctrl.abort()
+        }
+      })
+
       try {
-        await drivePipeline({ supabase, pipelineId })
+        // Run inside the pipeline context so downstream LLM callers
+        // (callLLM, future fetch wrappers, etc.) can pluck the signal
+        // via getPipelineSignal() without explicit threading.
+        await pipelineContext.run({ signal: ctrl.signal, pipelineId }, async () => {
+          await drivePipeline({ supabase, pipelineId })
+        })
+      } catch (err) {
+        // Distinguish user-cancel aborts from real failures. AbortError
+        // bubbles up from Anthropic SDK / fetch when ctrl.abort() fires.
+        // The cancel route already flipped the DB rows + emitted the
+        // user-facing event, so we exit cleanly and let BullMQ mark the
+        // job COMPLETED (not failed → no retry).
+        if (ctrl.signal.aborted) {
+          console.log(
+            `[pipeline-worker] job ${job.id} exited cleanly after cancel (pipeline ${pipelineId})`,
+          )
+          return
+        }
+        throw err
       } finally {
         clearTimeout(timer)
+        unsubscribeCancel()
       }
     },
     { connection, concurrency: CONCURRENCY, lockDuration: 3_600_000, stalledInterval: 900_000 },

@@ -75,6 +75,13 @@ const ALLOWLIST = new Set([
   // dev scripts aren't part of the runtime bundle.
   "backend/src/scripts/probe-script-critic.ts",            // ee/pipelines/llms/script-critic
 
+  // PERMANENT — one-shot admin cleanup script (manual `npx tsx` invocation
+  // only). Reproduces the cancel-pipeline transaction for pipelines stuck
+  // at status='running' past a cutoff; the credit-refund step requires
+  // ee/pipelines/credits.js by definition. Won't ship in community builds
+  // because dev scripts aren't part of the runtime bundle.
+  "backend/src/scripts/cleanup-stuck-pipelines.ts",        // ee/pipelines/credits
+
   // TODO Phase 4.5 — convert frontend imports of useModelCredits, CreditBalance,
   // GenerateButton, InsufficientCreditsModal, StorageExceededModal etc. into core
   // shims that return null/no-op when !hasCredits(). Most imports are useModelCredits
@@ -211,7 +218,10 @@ function listFiles(dir) {
 //    or ending with '.ee', and any compiled artifacts derived from such
 //    files"
 function isEnterprisePath(filePath) {
-  const segments = filePath.split(sep)
+  // Caller passes a forward-slash-normalized path so this works
+  // consistently on Windows (where path.sep is '\\') and Linux CI
+  // (where path.sep is '/'). Splitting on '/' here is portable.
+  const segments = filePath.split("/")
   // Directory segment named exactly "ee" or ending with ".ee"
   if (segments.slice(0, -1).some((s) => s === "ee" || s.endsWith(".ee"))) return true
   // Filename containing the ".ee." substring (any extension)
@@ -237,15 +247,21 @@ for (const root of ROOTS) {
   const files = listFiles(root)
   for (const file of files) {
     scanned++
-    if (isEnterprisePath(file)) continue
-    if (ALLOWLIST.has(file)) continue
+    // Normalize Windows backslash paths to forward-slash so the ALLOWLIST
+    // (forward-slash) matches against `node:path.join` output (which is
+    // backslash on Windows). Without this, allowlist entries are silently
+    // ignored on Windows dev machines while still working on Linux CI —
+    // a confusing dev/prod skew when adding new allowlist entries.
+    const norm = file.replace(/\\/g, "/")
+    if (isEnterprisePath(norm)) continue
+    if (ALLOWLIST.has(norm)) continue
     const src = readFileSync(file, "utf8")
     let match
     while ((match = importRe.exec(src))) {
       const spec = match[1]
       if (spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("@/")) {
         if (isEnterpriseImportSpecifier(spec)) {
-          violations.push({ file, spec })
+          violations.push({ file: norm, spec })
         }
       }
     }
