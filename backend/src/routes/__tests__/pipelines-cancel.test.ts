@@ -57,6 +57,7 @@ interface FakePipeline {
   reserved_credits: number
   spent_credits: number
   status: string
+  current_progress_message?: string | null
 }
 interface FakeStage {
   id: string
@@ -80,6 +81,8 @@ vi.mock("../../lib/supabase.js", () => {
     reserved_credits: 63,
     spent_credits: 12,
     status: "running",
+    // Simulate a streaming banner that was active when the user cancelled.
+    current_progress_message: "Drafting plan (3.4 KB so far)…",
   })
   pipelines.set(PIPELINE_AWAITING, {
     id: PIPELINE_AWAITING,
@@ -215,6 +218,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   // Reset pipeline statuses so each test gets a clean baseline.
   testPipelines.get(PIPELINE_ID)!.status = "running"
+  testPipelines.get(PIPELINE_ID)!.current_progress_message =
+    "Drafting plan (3.4 KB so far)…"
   testPipelines.get(PIPELINE_AWAITING)!.status = "awaiting_approval"
   testStages.get(PIPELINE_ID)![0]!.status = "running"
   testStages.get(PIPELINE_AWAITING)![0]!.status = "awaiting_approval"
@@ -232,6 +237,11 @@ describe("POST /v1/pipelines/:id/cancel", () => {
 
     // Pipeline row flipped.
     expect(testPipelines.get(PIPELINE_ID)!.status).toBe("cancelled")
+
+    // current_progress_message was cleared — otherwise a stale "Drafting
+    // plan…" banner would render forever for refresh-survivor viewers
+    // (the persistence column added in the same PR as this assertion).
+    expect(testPipelines.get(PIPELINE_ID)!.current_progress_message).toBeNull()
 
     // The in-flight stage row was flipped — this is the new behavior added
     // by this PR. Before, the stage stayed at `running` forever and the

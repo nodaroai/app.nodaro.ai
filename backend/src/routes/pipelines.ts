@@ -280,7 +280,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const { data, error } = await supabase
       .from("pipelines")
       .select(
-        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason",
+        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,user_id,branched_from_pipeline_id,branched_from_stage,mode,failure_reason,current_progress_message",
       )
       .eq("id", params.data.id)
       .maybeSingle()
@@ -508,7 +508,14 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       const cancelledAt = new Date().toISOString()
       await supabase
         .from("pipelines")
-        .update({ status: "cancelled", cancelled_at: cancelledAt })
+        .update({
+          status: "cancelled",
+          cancelled_at: cancelledAt,
+          // Clear the transient progress banner — otherwise a stale
+          // "Drafting plan…" message persists on the cancelled pipeline
+          // for any refresh-survivor viewer.
+          current_progress_message: null,
+        })
         .eq("id", pipeline.id)
 
       // Propagate cancellation to in-flight pipeline_stages rows. Without

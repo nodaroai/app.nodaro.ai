@@ -95,6 +95,16 @@ export interface PipelineRecord {
    * surface.
    */
   failure_reason?: string | null
+  /**
+   * Most-recent transient LLM-streaming progress message (e.g. "Drafting
+   * plan (3.4 KB so far)…"). Backed by `pipelines.current_progress_message`
+   * — written by callLLM's onProgress, cleared on stream finalize / cancel.
+   * Lets the panel render the StageProgressBanner on first mount or after
+   * a refresh while an LLM call is mid-stream, instead of waiting for the
+   * next live SSE event (~750ms throttle window). Null when no stream is
+   * active.
+   */
+  current_progress_message?: string | null
 }
 
 /**
