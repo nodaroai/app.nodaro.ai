@@ -102,17 +102,46 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     // spinner for the whole duration. The callback runs at observable
     // stream boundaries; the panel renders the latest message + a coarse
     // progress proxy (bytes received).
+    //
+    // Two delivery paths:
+    //   - SSE event (pipelineEvents.publish) for in-tab users watching
+    //     the panel in real time. Sub-second latency.
+    //   - DB persist (current_progress_message column) for users who
+    //     refresh mid-stream OR open the panel for the first time
+    //     during an in-flight LLM call. Without this they'd stare at
+    //     an empty panel until the next live event (~750ms throttle
+    //     window). The cleared NULL on the `finalizing` phase prevents
+    //     a stale "Drafting plan…" from outliving the stream.
     onProgress: (update) => {
+      const message = showrunnerProgressMessage(update, !!args.criticFeedback)
       pipelineEvents.publish({
         type: "stage:progress",
         pipelineId: args.pipelineId,
         stageName: "script",
-        message: showrunnerProgressMessage(update, !!args.criticFeedback),
+        message,
         bytesSoFar:
           update.phase === "drafting" || update.phase === "finalizing"
             ? update.bytesSoFar
             : undefined,
       })
+      // Fire-and-forget DB write. The `finalizing` phase clears the
+      // column back to NULL so the banner disappears for refresh-survivor
+      // viewers once the stream ends. Errors logged but not rethrown —
+      // a DB hiccup must not poison the LLM call.
+      const dbValue = update.phase === "finalizing" ? null : message
+      void args.supabase
+        .from("pipelines")
+        .update({ current_progress_message: dbValue })
+        .eq("id", args.pipelineId)
+        .then(({ error }) => {
+          if (error) {
+            // eslint-disable-next-line no-console
+            console.error(
+              "[showrunner] current_progress_message write failed:",
+              error.message,
+            )
+          }
+        })
     },
   })
   return result.output

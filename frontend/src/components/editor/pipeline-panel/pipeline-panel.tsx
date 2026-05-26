@@ -108,6 +108,19 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     queryKey: ["pipeline", pipelineId],
     queryFn: () => pipelinesApi.get(pipelineId),
     refetchInterval: (q) => (isTerminalPipelineStatus(q.state.data?.status) ? false : 3000),
+    // Don't waste 3 default retries when the pipeline genuinely doesn't
+    // exist (common case: stale `pipeline_id` baked into a saved node from
+    // a previous run that's since been deleted — every panel mount fires
+    // a doomed GET that 404s 4x in a row, spamming the console).
+    // Transient race (panel mounts in the ~50ms window between POST insert
+    // and replica visibility) is rare in practice; if it does happen the
+    // 3-second refetchInterval picks it up immediately. Skipping retries
+    // for 404 also makes the failure surface faster so the parent can
+    // clear the stale node ref.
+    retry: (failureCount, err) => {
+      if (err instanceof Error && err.message.startsWith("404")) return false
+      return failureCount < 1
+    },
   })
 
   const stageQuery = useQuery({
@@ -607,15 +620,29 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
 
       {/* LLM-stream progress banner — Stage 1 Showrunner today; same pattern
           extends to any future stage that calls callLLM with onProgress.
-          Mounted on the first stage:progress SSE event, auto-cleared when
-          the matching stage's status transitions out of `running`. */}
-      {stageProgress && (
+          Two sources, live SSE wins:
+            1. `stageProgress` from usePipelineEvents — sub-second live
+               updates while the user has the panel open.
+            2. `pipeline.current_progress_message` — persisted by the
+               backend showrunner's onProgress. Lets a refresh-survivor
+               viewer (or first-time panel mount during an in-flight stream)
+               see the banner immediately, instead of staring at an empty
+               panel until the next ~750ms SSE throttle window fires.
+          Both are auto-cleared when the matching stage transitions out
+          of `running` (SSE side) or when the stream finalizes / pipeline
+          is cancelled (DB side). */}
+      {stageProgress ? (
         <StageProgressBanner
           stageName={stageProgress.stageName}
           message={stageProgress.message}
           bytesSoFar={stageProgress.bytesSoFar}
         />
-      )}
+      ) : pipeline?.current_progress_message && pipeline?.current_stage ? (
+        <StageProgressBanner
+          stageName={pipeline.current_stage as PipelineStageName}
+          message={pipeline.current_progress_message}
+        />
+      ) : null}
 
       <div className="space-y-2">
         {/* Phase 1 (granular-pipeline-control) — when Stage 1 is awaiting
