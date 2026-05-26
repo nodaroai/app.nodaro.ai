@@ -630,19 +630,32 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
                panel until the next ~750ms SSE throttle window fires.
           Both are auto-cleared when the matching stage transitions out
           of `running` (SSE side) or when the stream finalizes / pipeline
-          is cancelled (DB side). */}
-      {stageProgress ? (
-        <StageProgressBanner
-          stageName={stageProgress.stageName}
-          message={stageProgress.message}
-          bytesSoFar={stageProgress.bytesSoFar}
-        />
-      ) : pipeline?.current_progress_message && pipeline?.current_stage ? (
-        <StageProgressBanner
-          stageName={pipeline.current_stage as PipelineStageName}
-          message={pipeline.current_progress_message}
-        />
-      ) : null}
+          is cancelled (DB side).
+          GUARD: never show the spinner+message banner when the pipeline
+          has reached a terminal status. The showrunner's onProgress can
+          race the cancel-route's UPDATE — the cancel clears the column at
+          T=0 but the worker takes ~50-200ms to receive the Redis-bridged
+          abort signal, during which one more "Drafting plan…" write can
+          slip through and re-populate the column. Polling then picks up
+          the stale value and renders a spinning banner on a cancelled
+          pipeline — confusing because the panel header next to it
+          already says "cancelled". Same race exists for `failed` and
+          `completed`. Gating on terminal status here makes the UI
+          consistent regardless of how the backend race lands. */}
+      {!isTerminalPipelineStatus(pipeline?.status) && (
+        stageProgress ? (
+          <StageProgressBanner
+            stageName={stageProgress.stageName}
+            message={stageProgress.message}
+            bytesSoFar={stageProgress.bytesSoFar}
+          />
+        ) : pipeline?.current_progress_message && pipeline?.current_stage ? (
+          <StageProgressBanner
+            stageName={pipeline.current_stage as PipelineStageName}
+            message={pipeline.current_progress_message}
+          />
+        ) : null
+      )}
 
       <div className="space-y-2">
         {/* Phase 1 (granular-pipeline-control) — when Stage 1 is awaiting
