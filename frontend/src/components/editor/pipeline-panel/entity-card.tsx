@@ -162,6 +162,34 @@ export function EntityCard({
       : 0
   const hasVariantFailure = variantError !== null || variantsFailedCount > 0
 
+  // Pre-fix stalled-variants surface — covers the case where the engine
+  // never wrote failure markers AND never wrote success markers (pipeline
+  // 65c57374 + acf01be1 on 2026-05-26). Symptoms: character entity sits at
+  // `approved` with NO variant rows AND no pending generations AND no
+  // variants_awaiting_approval flag. The function either wasn't called or
+  // returned silently on an early branch (e.g. main_asset_id missing at
+  // call time, or a swallowed exception before the outer try/catch I added
+  // could see it).
+  //
+  // We surface the Retry button regardless of WHY it stalled — the route
+  // is idempotent and handles all paths cleanly. Restricted to
+  // entity_type='character' since variants are character-only today.
+  //
+  // hasPendingVariants gates against showing Retry the moment an entity
+  // first reaches `approved` (the engine inserts pending rows ~immediately,
+  // so the false-positive window is ~50-200ms before the first INSERT lands
+  // — acceptable).
+  const hasPendingVariants = entity.variants.some((v) => v.status === "pending")
+  const variantsAwaiting =
+    metadata?.variants_awaiting_approval === true
+  const isStuckWithoutVariants =
+    entity.entity_type === "character" &&
+    entity.status === "approved" &&
+    entity.variants.length === 0 &&
+    !hasPendingVariants &&
+    !variantsAwaiting
+  const showRetryVariantsSurface = hasVariantFailure || isStuckWithoutVariants
+
   // Phase 1D.2c-a §7 — image-critic surface.
   const { findings, isFailed, displayUrl } = readCriticState(
     metadata,
@@ -287,7 +315,7 @@ export function EntityCard({
        * (either the function itself threw or some per-variant generations
        * failed). Auto mode is excluded for the same reason as the
        * image-critic surface: the orchestrator owns gating in auto. */}
-      {hasVariantFailure && mode !== "auto" && (
+      {showRetryVariantsSurface && mode !== "auto" && (
         <div
           className="border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950 rounded p-2 flex flex-col gap-2"
           data-testid="variant-failure-surface"
@@ -298,12 +326,18 @@ export function EntityCard({
                 <span className="font-medium">Variant generation failed:</span>{" "}
                 {variantError}
               </>
-            ) : (
+            ) : variantsFailedCount > 0 ? (
               <>
                 <span className="font-medium">
                   {variantsFailedCount} of {variantsTotalCount} variants failed.
                 </span>{" "}
                 Retry to regenerate the missing ones.
+              </>
+            ) : (
+              <>
+                <span className="font-medium">Variants not generated.</span>{" "}
+                The character is approved but no angle/expression variants
+                were created. Retry to attempt generation.
               </>
             )}
           </div>
