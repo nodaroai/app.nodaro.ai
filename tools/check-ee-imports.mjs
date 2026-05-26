@@ -82,6 +82,15 @@ const ALLOWLIST = new Set([
   // because dev scripts aren't part of the runtime bundle.
   "backend/src/scripts/cleanup-stuck-pipelines.ts",        // ee/pipelines/credits
 
+  // PERMANENT — one-shot admin recovery scripts (manual `npx tsx` invocation
+  // only). recover-stuck-variants re-enqueues variants whose generation
+  // stalled; recover-stuck-pipeline re-enqueues a pipeline whose BullMQ
+  // orchestration job was lost. Both call into ee/pipelines/queue.ts by
+  // definition (they ARE the pipeline-recovery primitive). Won't ship in
+  // community builds because dev scripts aren't part of the runtime bundle.
+  "backend/src/scripts/recover-stuck-variants.ts",         // ee/pipelines/queue
+  "backend/src/scripts/recover-stuck-pipeline.ts",         // ee/pipelines/queue
+
   // TODO Phase 4.5 — convert frontend imports of useModelCredits, CreditBalance,
   // GenerateButton, InsufficientCreditsModal, StorageExceededModal etc. into core
   // shims that return null/no-op when !hasCredits(). Most imports are useModelCredits
