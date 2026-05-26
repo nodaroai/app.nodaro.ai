@@ -30,6 +30,7 @@ import { AddNodePopup } from "./add-node-popup"
 import { isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
+const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
 import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
@@ -443,6 +444,25 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
   const [connectionContext, setConnectionContext] = useState<ConnectionContext | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
+  const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
+  // Esc-to-close for the lazy-loaded search modals — registers
+  // immediately when the modal opens (the modal's OWN Esc handler is
+  // only available after the lazy chunk finishes loading, which is why
+  // the first Esc used to fall through and a second press was needed
+  // for it to land). Window capture-phase fires before the modal's
+  // input gets the keystroke, so it works even with the input focused.
+  useEffect(() => {
+    if (!nodeSearchModalOpen && !searchModalOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      e.preventDefault()
+      e.stopPropagation()
+      if (nodeSearchModalOpen) setNodeSearchModalOpen(false)
+      else if (searchModalOpen) setSearchModalOpen(false)
+    }
+    window.addEventListener("keydown", handler, { capture: true })
+    return () => window.removeEventListener("keydown", handler, { capture: true })
+  }, [nodeSearchModalOpen, searchModalOpen])
   const [assetLibraryOpen, setAssetLibraryOpen] = useState(false)
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false)
   const [componentMarketplaceOpen, setComponentMarketplaceOpen] = useState(false)
@@ -1294,6 +1314,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Ctrl/Cmd+F - Quick node search inside the current workflow.
+      // Overrides browser's native find-in-page (the canvas isn't HTML
+      // text content the browser can search anyway). Skipped when an
+      // input/textarea has focus — the editable check at the top of
+      // this handler returns early before we reach here.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && !e.shiftKey && !e.altKey) {
+        e.preventDefault()
+        setNodeSearchModalOpen(true)
+        return
+      }
+
       // Ctrl+L - My Library
       if ((e.ctrlKey || e.metaKey) && e.key === "l") {
         e.preventDefault()
@@ -1820,6 +1851,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           <SearchModal
             open={searchModalOpen}
             onClose={() => setSearchModalOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {/* Quick Node Search Modal — Cmd/Ctrl+F. */}
+      {nodeSearchModalOpen && (
+        <Suspense fallback={null}>
+          <NodeSearchModal
+            open={nodeSearchModalOpen}
+            onClose={() => setNodeSearchModalOpen(false)}
           />
         </Suspense>
       )}
