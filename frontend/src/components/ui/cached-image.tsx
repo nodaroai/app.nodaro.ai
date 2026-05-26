@@ -92,6 +92,7 @@ export function CachedImage({
   thumbnail,
   thumbnailWidth,
   raw,
+  noPlaceholder,
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & {
   thumbnail?: boolean
@@ -100,6 +101,13 @@ export function CachedImage({
    *  exact original pixels are required — downloads should not use this
    *  component at all. */
   raw?: boolean
+  /** Disable the 320px low-res placeholder. Use in lightboxes/fullscreen
+   *  surfaces where the placeholder scales up 4-6× and looks blurry/small
+   *  for a moment until the hi-res decodes. With this set, the image stays
+   *  invisible (opacity 0 via the existing `loaded` gate) until the hi-res
+   *  paints — combined with hover-prefetch on the source thumbnail, the
+   *  hi-res is typically ready immediately and the user never sees a flash. */
+  noPlaceholder?: boolean
   /** Fires once per successful load with the rendered image's natural pixel
    *  size. Used by media nodes to capture and persist aspect ratio on the
    *  GeneratedResult so result-switching is synchronous. */
@@ -119,8 +127,13 @@ export function CachedImage({
   // effectiveSrc !== src), show a small ~320px version first, then swap in the
   // capped 2048 version once it has decoded. The 320px width matches the common
   // grid thumbnail tier, so it's usually already cached and paints instantly.
+  // Opted out via `noPlaceholder` for fullscreen lightboxes — the 320 scales up
+  // 4-6× there and looks blurry/small until the hi-res lands. With placeholder
+  // disabled, the img stays invisible (opacity 0 via the existing `loaded`
+  // gate) until hi-res paints; hover-prefetch on the source thumbnail
+  // typically eliminates any visible gap.
   const placeholderSrc =
-    src && effectiveSrc && effectiveSrc !== src && !thumbnail && !raw
+    src && effectiveSrc && effectiveSrc !== src && !thumbnail && !raw && !noPlaceholder
       ? optimizedImageUrl(src, { width: 320 })
       : null
 

@@ -63,6 +63,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
             src={src}
             alt={alt ?? "Preview"}
             className="w-full h-full object-contain"
+            noPlaceholder
           />
         </div>
       )}
