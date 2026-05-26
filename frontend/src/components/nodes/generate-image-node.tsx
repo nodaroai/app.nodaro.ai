@@ -22,7 +22,6 @@ const ACCEPTS_LOOK       = (t: string) => isValidGenerateImageConnection("look",
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -30,6 +29,7 @@ const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-re
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
+import { GenerateImageQuickToolbar } from "./generate-image-quick-toolbar"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 
@@ -42,7 +42,10 @@ import type { GenerateImageData, ExtractedReference } from "@/types/nodes"
 function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  // When a dropdown inside the bottom quick-toolbar is open, pin the
+  // toolbar visible so the cursor moving into the portaled menu doesn't
+  // dismiss it via the node-hover timer.
+  const [toolbarDropdownOpen, setToolbarDropdownOpen] = useState(false)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
@@ -143,8 +146,15 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       listProgressPercent={isNodeRunning ? listProgressPercent : undefined}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <GenerateImageQuickToolbar
+          nodeId={id}
+          data={nodeData}
+          credits={credits}
+          isRunning={status === "running"}
+          onAnyOpenChange={setToolbarDropdownOpen}
+        />
       }
+      keepTopToolbarVisible={toolbarDropdownOpen}
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
           <ResultsThumbnailsPanel
