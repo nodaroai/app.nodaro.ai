@@ -365,7 +365,7 @@ function BaseNodeComponent({
         setIsHovered(true)
       }}
       onMouseLeave={() => {
-        leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
+        leaveTimerRef.current = setTimeout(() => setIsHovered(false), 1200)
       }}
     >
       <div
@@ -548,7 +548,22 @@ function BaseNodeComponent({
       {/* Content below card (e.g. run button) */}
       {topToolbarContent && (
         <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible} position={Position.Bottom} offset={4}>
-          {topToolbarContent}
+          <div
+            // The bottom toolbar renders in a portal outside the node's DOM
+            // subtree, so hovering it doesn't trigger the node's
+            // onMouseEnter. Bridge the gap: keep `isHovered` true while the
+            // cursor sits over the toolbar itself, and start a fresh
+            // leave-timer when it exits.
+            onMouseEnter={() => {
+              if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current)
+              setIsHovered(true)
+            }}
+            onMouseLeave={() => {
+              leaveTimerRef.current = setTimeout(() => setIsHovered(false), 600)
+            }}
+          >
+            {topToolbarContent}
+          </div>
         </NodeToolbar>
       )}
 

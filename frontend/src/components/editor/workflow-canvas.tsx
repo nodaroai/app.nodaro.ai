@@ -954,8 +954,16 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       if (!node) return
       const w = (node.measured?.width ?? 220) as number
       const h = (node.measured?.height ?? 150) as number
-      // Place popup slightly offset from the node so it doesn't overlap.
-      const offsetX = direction === "target" ? -260 : w + 20
+      // Place the new node with a comfortable gap from the current node.
+      // The two sides are NOT symmetric: a target-side (input) handle wants
+      // an upstream node to the LEFT, so we have to budget for the new
+      // node's own width before the gap; a source-side (output) handle
+      // only needs the gap past the current node's right edge.
+      const NEW_NODE_EST_WIDTH = 280
+      const GAP = 80
+      const offsetX = direction === "target"
+        ? -(NEW_NODE_EST_WIDTH + GAP)
+        : w + GAP
       const flowX = node.position.x + offsetX
       const flowY = node.position.y + h / 2
       // Convert flow coordinates to screen for setAddNodePopupPosition,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
 import { Sparkles, Ratio, Maximize2, Settings2, Copy } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectItemWithMeta, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -90,12 +90,33 @@ export function GenerateImageQuickToolbar({
   // can pin the NodeToolbar visible past the cursor leaving the node
   // (Radix Select items render in a portal outside the node's hover
   // boundary — without this the bar disappears mid-pick).
+  //
+  // Closes are deferred to the next macrotask so that clicking directly
+  // from one open dropdown's trigger onto another's trigger keeps the
+  // count net positive. Without the defer, the close → open sequence
+  // produces two separate renders (count 1 → 0 → 1); the intermediate
+  // 0 fires the useEffect with `open=false`, the parent unpins the
+  // NodeToolbar, and since the cursor sits over the portaled menu
+  // (outside the node's hover boundary) the toolbar disappears mid-pick.
   const [openCount, setOpenCount] = useState(0)
+  const pendingCloseRef = useRef<number | null>(null)
   useEffect(() => {
     onAnyOpenChange?.(openCount > 0)
   }, [openCount, onAnyOpenChange])
+  useEffect(() => () => {
+    if (pendingCloseRef.current !== null) {
+      clearTimeout(pendingCloseRef.current)
+    }
+  }, [])
   const handleOpenChange = useCallback((open: boolean) => {
-    setOpenCount((c) => Math.max(0, c + (open ? 1 : -1)))
+    if (open) {
+      setOpenCount((c) => c + 1)
+    } else {
+      pendingCloseRef.current = window.setTimeout(() => {
+        pendingCloseRef.current = null
+        setOpenCount((c) => Math.max(0, c - 1))
+      }, 0)
+    }
   }, [])
 
   const providers = data.providers && data.providers.length > 0
