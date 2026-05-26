@@ -2109,6 +2109,91 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     },
   )
 
+  // ── POST /v1/pipelines/:id/entities/:entity_id/retry-variants ────────────
+  // Re-attempts variant generation for a character entity whose
+  // `ensureCharacterVariants` ran but either threw at the outermost level
+  // (variant_generation_error set) or finished with `variants_failed_count
+  // > 0`. Clears the failure markers, deletes any failed
+  // pipeline_entity_variants rows so they're regenerated fresh, and
+  // re-enqueues drivePipeline. The engine picks up the entity at its
+  // existing `approved` status and re-runs ensureCharacterVariants.
+  //
+  // Idempotent CAS: the UPDATE is gated only on entity ownership, NOT on a
+  // specific failure marker, so the route also recovers entities that
+  // pre-date this PR (no variant_*_error markers ever written for them,
+  // they just stalled silently — pipeline 65c57374 from 2026-05-26 is the
+  // motivating case). Filter the variants delete by status='failed' so we
+  // don't accidentally wipe a partial set of successful variants.
+  app.post<{ Params: { id: string; entity_id: string } }>(
+    "/v1/pipelines/:id/entities/:entity_id/retry-variants",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:approve")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: owner } = await supabase
+        .from("pipelines")
+        .select("user_id")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!owner || owner.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      const { data: entity } = await supabase
+        .from("pipeline_entities")
+        .select("id, entity_type, entity_key, status, metadata")
+        .eq("id", req.params.entity_id)
+        .eq("pipeline_id", req.params.id)
+        .maybeSingle()
+      if (!entity) return reply.status(404).send({ error: { code: "not_found" } })
+      if (entity.entity_type !== "character") {
+        return reply.status(409).send({ error: { code: "entity_not_character" } })
+      }
+      if (entity.status !== "approved") {
+        // Variants only generate after the main image was approved.
+        return reply
+          .status(409)
+          .send({ error: { code: "entity_not_approved" } })
+      }
+
+      // Clear failed variant rows so the engine regenerates them (instead
+      // of skipping them as "already exist"). Approved variants stay so
+      // we don't waste credits re-generating successful ones.
+      await supabase
+        .from("pipeline_entity_variants")
+        .delete()
+        .eq("entity_id", req.params.entity_id)
+        .eq("status", "failed")
+
+      // Strip the failure markers. The post-loop UPDATE in
+      // ensureCharacterVariants will re-set them if the new run also fails
+      // — same metadata, fresh values.
+      const meta = (entity.metadata ?? {}) as Record<string, unknown>
+      const cleared: Record<string, unknown> = { ...meta }
+      delete cleared.variants_failed_count
+      delete cleared.variants_total_count
+      delete cleared.variant_generation_error
+      delete cleared.variant_generation_error_at
+      await supabase
+        .from("pipeline_entities")
+        .update({ metadata: cleared })
+        .eq("id", req.params.entity_id)
+
+      // Re-enqueue the orchestrator. Same trigger pattern as the sibling
+      // retry-image-generation route — drivePipeline re-enters and the
+      // characters stage's per-entity loop picks the entity up.
+      const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
+      await enqueuePipelineRun({
+        pipelineId: req.params.id,
+        userId,
+        reason: "stage_advance",
+      })
+      return reply.send({ ok: true })
+    },
+  )
+
   // ── POST /v1/pipelines/:id/shots/:scene_id/:shot_id/skip-video-critic-failure ─
   // Phase 1D.2c-b-ii §9 (J1) — Skip button on the per-shot video-critic surface.
   //

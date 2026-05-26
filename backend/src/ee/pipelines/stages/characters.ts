@@ -266,6 +266,37 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
   const nonSkippedEntities = (refreshedEntities ?? []).filter(
     (e) => e.status !== "skipped",
   )
+
+  // If ANY non-skipped entity has a variant-generation failure marker
+  // (outermost catch wrote `variant_generation_error`, OR per-variant loop
+  // recorded `variants_failed_count > 0`), keep the stage in `running` and
+  // exit without re-enqueueing. The EntityCard surfaces a Retry button
+  // that hits POST /v1/pipelines/:id/entities/:eid/retry-variants, which
+  // clears the markers + re-enqueues. Without this guard the engine falls
+  // through to step 6 and marks the stage `approved` even though the
+  // failed entities have no variants, then Stage 3 starts referencing
+  // missing assets. This is exactly the failure mode pipeline 65c57374
+  // hit on 2026-05-26 (3 of 4 characters with no variant rows, stage
+  // silently stalled forever).
+  const anyVariantFailures = nonSkippedEntities.some((e) => {
+    const meta = (e.metadata ?? {}) as Record<string, unknown>
+    return (
+      typeof meta.variant_generation_error === "string" ||
+      (typeof meta.variants_failed_count === "number" && (meta.variants_failed_count as number) > 0)
+    )
+  })
+  if (anyVariantFailures && args.mode !== "auto") {
+    // Manual/guided: pause for user retry. SSE event lets any open
+    // EntityCard refresh its variant-error state immediately.
+    pipelineEvents.publish({
+      type: "stage:status",
+      pipelineId,
+      stageName: "characters",
+      status: "running",
+    })
+    return
+  }
+
   const allVariantsAwaiting =
     nonSkippedEntities.length > 0 &&
     nonSkippedEntities.every(
@@ -553,6 +584,21 @@ async function generateCharacterMain(
   }
 }
 
+/**
+ * Metadata keys this function reads/writes. Kept here so the retry route
+ * + the EntityCard recovery surface use the exact same key names.
+ *   - variants_awaiting_approval: set when every variant for this entity
+ *     succeeded. Drives the stage-level awaiting_approval transition.
+ *   - variants_failed_count: count of variants whose row ended at
+ *     status='failed'. When > 0 the entity needs user attention (retry).
+ *   - variants_total_count: total variants attempted this run (for the
+ *     "3 of 5 generated" UI surface).
+ *   - variant_generation_error: outermost catch — set when the function
+ *     itself threw before reaching the per-variant loop (e.g.
+ *     `assetUrlForId` SELECT failed, INSERT errored on something other
+ *     than `duplicate`). Distinct from per-variant failures.
+ *   - variant_generation_error_at: ISO timestamp of the outermost catch.
+ */
 async function ensureCharacterVariants(
   supabase: SupabaseClient,
   pipelineId: string,
@@ -568,117 +614,190 @@ async function ensureCharacterVariants(
   const cast = plan.cast.find((c) => c.key === entity.entity_key)
   if (!cast || !entity.main_asset_id) return
 
-  // Check existing variants.
-  const { data: existingVariants } = await supabase
-    .from("pipeline_entity_variants")
-    .select("variant_key")
-    .eq("entity_id", entity.id)
+  try {
+    // Check existing variants.
+    const { data: existingVariants } = await supabase
+      .from("pipeline_entity_variants")
+      .select("variant_key, status")
+      .eq("entity_id", entity.id)
 
-  const existingKeys = new Set((existingVariants ?? []).map((v) => v.variant_key))
+    // existingKeys counts only "approved" rows. Rows with status='failed' or
+    // 'pending' from a prior partial run should be retried — leaving them in
+    // existingKeys would silently skip them and the entity would forever
+    // appear "complete enough" without actually having all variants.
+    const existingKeys = new Set(
+      (existingVariants ?? [])
+        .filter((v) => v.status === "approved")
+        .map((v) => v.variant_key),
+    )
 
-  // Decide what to generate.
-  const angleCount = cast.angle_count_hint ?? DEFAULT_CHARACTER_ANGLE_COUNT
-  const expressions: readonly string[] =
-    cast.expression_set_hint.length > 0
-      ? [...cast.expression_set_hint]
-      : (["neutral", "smiling"].slice(0, DEFAULT_CHARACTER_EXPRESSION_COUNT) as readonly string[])
+    // Decide what to generate.
+    const angleCount = cast.angle_count_hint ?? DEFAULT_CHARACTER_ANGLE_COUNT
+    const expressions: readonly string[] =
+      cast.expression_set_hint.length > 0
+        ? [...cast.expression_set_hint]
+        : (["neutral", "smiling"].slice(0, DEFAULT_CHARACTER_EXPRESSION_COUNT) as readonly string[])
 
-  // Angle variants (profile, three_quarter, full_body, etc — generic labels).
-  const angleLabels = ["profile", "three_quarter", "full_body"].slice(0, Math.max(0, angleCount - 1))
-  const variantsToGen: Array<{ key: string; kind: "angle" | "expression"; prompt: string }> = []
-  for (const angle of angleLabels) {
-    const key = `angle_${angle}`
-    if (existingKeys.has(key)) continue
-    variantsToGen.push({
-      key,
-      kind: "angle",
-      prompt: `${cast.visual_description}, ${plan.global_style.visual_style}, ${angle} angle, neutral expression`,
-    })
-  }
-  for (const expr of expressions) {
-    const key = `expression_${expr}`
-    if (existingKeys.has(key)) continue
-    variantsToGen.push({
-      key,
-      kind: "expression",
-      prompt: `${cast.visual_description}, ${plan.global_style.visual_style}, ${expr} expression, front-facing`,
-    })
-  }
+    // Angle variants (profile, three_quarter, full_body, etc — generic labels).
+    const angleLabels = ["profile", "three_quarter", "full_body"].slice(0, Math.max(0, angleCount - 1))
+    const variantsToGen: Array<{ key: string; kind: "angle" | "expression"; prompt: string }> = []
+    for (const angle of angleLabels) {
+      const key = `angle_${angle}`
+      if (existingKeys.has(key)) continue
+      variantsToGen.push({
+        key,
+        kind: "angle",
+        prompt: `${cast.visual_description}, ${plan.global_style.visual_style}, ${angle} angle, neutral expression`,
+      })
+    }
+    for (const expr of expressions) {
+      const key = `expression_${expr}`
+      if (existingKeys.has(key)) continue
+      variantsToGen.push({
+        key,
+        kind: "expression",
+        prompt: `${cast.visual_description}, ${plan.global_style.visual_style}, ${expr} expression, front-facing`,
+      })
+    }
 
-  if (variantsToGen.length === 0) {
-    // All variants present — mark entity's metadata so the stage knows.
+    if (variantsToGen.length === 0) {
+      // All variants present — mark entity's metadata so the stage knows.
+      const meta = stripVariantFailureKeys(entity.metadata)
+      await supabase
+        .from("pipeline_entities")
+        .update({
+          variant_count: existingKeys.size,
+          metadata: { ...meta, variants_awaiting_approval: true },
+        })
+        .eq("id", entity.id)
+      return
+    }
+
+    // Resolve the main reference URL once — every variant uses the same image.
+    const mainUrl = entity.main_asset_id
+      ? await assetUrlForId(supabase, entity.main_asset_id)
+      : ""
+
+    // Per-variant outcome tracking — the post-loop metadata write surfaces
+    // partial failures so the user can hit Retry from the EntityCard.
+    let failedVariantCount = 0
+
+    // Generate sequentially (cheap parallelism risk: voice/credit reservation could spike).
+    for (const v of variantsToGen) {
+      // Upsert-like: insert at status='pending', then update to approved/failed.
+      // A duplicate-row error means a prior partial run left this variant in
+      // the table — overwrite its status by skipping the insert and letting
+      // the UPDATE below land.
+      const { error: insertErr } = await supabase
+        .from("pipeline_entity_variants")
+        .insert({
+          entity_id: entity.id,
+          variant_key: v.key,
+          variant_kind: v.kind,
+          status: "pending",
+        })
+      if (insertErr && !insertErr.message.includes("duplicate")) {
+        // Hard fail on the INSERT — surface via the outer catch.
+        throw insertErr
+      }
+      try {
+        const { assetId, assetUrl } = await pipelineGenerateImage({
+          supabase,
+          pipelineId,
+          pipelineEntityId: entity.id,
+          userId,
+          prompt: v.prompt,
+          referenceImageUrls: mainUrl ? [mainUrl] : undefined,
+        })
+        await supabase
+          .from("pipeline_entity_variants")
+          .update({ asset_id: assetId, status: "approved" })
+          .eq("entity_id", entity.id)
+          .eq("variant_key", v.key)
+        pipelineEvents.publish({
+          type: "entity:variant:added",
+          pipelineId,
+          entityId: entity.id,
+          variantKey: v.key,
+          assetUrl,
+        })
+      } catch (err) {
+        failedVariantCount += 1
+        await supabase
+          .from("pipeline_entity_variants")
+          .update({ status: "failed" })
+          .eq("entity_id", entity.id)
+          .eq("variant_key", v.key)
+        // Log + continue with other variants — one failed variant shouldn't
+        // block the entity from accumulating the others. The post-loop
+        // metadata write surfaces the partial-failure count.
+        console.error(
+          `[characters] Failed to generate variant ${v.key} for ${entity.entity_key}:`,
+          err,
+        )
+      }
+    }
+
+    // Post-loop metadata write. THREE cases:
+    //   - All succeeded → set variants_awaiting_approval=true and clear any
+    //     prior failure flags. Stage advance gate fires.
+    //   - All failed → variants_failed_count=N, no awaiting flag. The
+    //     engine's post-loop check (below) detects this and stays in running.
+    //   - Partial → same as all-failed: surface count, no awaiting flag,
+    //     user hits Retry to re-attempt the failed ones.
+    const total = variantsToGen.length + existingKeys.size
+    const meta = stripVariantFailureKeys(entity.metadata)
+    const nextMeta: Record<string, unknown> =
+      failedVariantCount === 0
+        ? { ...meta, variants_awaiting_approval: true }
+        : {
+            ...meta,
+            variants_failed_count: failedVariantCount,
+            variants_total_count: total,
+          }
+    await supabase
+      .from("pipeline_entities")
+      .update({ variant_count: total, metadata: nextMeta })
+      .eq("id", entity.id)
+  } catch (err) {
+    // Outermost catch — the function itself threw before reaching the loop
+    // (e.g. assetUrlForId SELECT failed, an INSERT errored unexpectedly).
+    // Without this, the exception propagates to the stage-handler's outer
+    // catch which only sets anyAwaiting=true and logs — the entity ends up
+    // approved with NO variants, NO error metadata, and the pipeline stalls
+    // forever. This is exactly the bug that produced the user-reported
+    // "Stage 2 silently stuck with 3 of 4 characters missing variants" on
+    // 2026-05-26 (pipeline 65c57374). Persisting the error here lets the
+    // EntityCard surface a Retry button.
+    const errMsg = err instanceof Error ? err.message : String(err)
+    const meta = stripVariantFailureKeys(entity.metadata)
     await supabase
       .from("pipeline_entities")
       .update({
-        variant_count: existingKeys.size,
         metadata: {
-          ...(entity.metadata ?? {}),
-          variants_awaiting_approval: true,
+          ...meta,
+          variant_generation_error: errMsg,
+          variant_generation_error_at: new Date().toISOString(),
         },
       })
       .eq("id", entity.id)
-    return
+    console.error(
+      `[characters] ensureCharacterVariants threw for ${entity.entity_key} (pipeline=${pipelineId}):`,
+      errMsg,
+    )
   }
+}
 
-  // Resolve the main reference URL once — every variant uses the same image.
-  const mainUrl = entity.main_asset_id
-    ? await assetUrlForId(supabase, entity.main_asset_id)
-    : ""
-
-  // Generate sequentially (cheap parallelism risk: voice/credit reservation could spike).
-  for (const v of variantsToGen) {
-    const { error: insertErr } = await supabase
-      .from("pipeline_entity_variants")
-      .insert({
-        entity_id: entity.id,
-        variant_key: v.key,
-        variant_kind: v.kind,
-        status: "pending",
-      })
-    if (insertErr && !insertErr.message.includes("duplicate")) throw insertErr
-    try {
-      const { assetId, assetUrl } = await pipelineGenerateImage({
-        supabase,
-        pipelineId,
-        pipelineEntityId: entity.id,
-        userId,
-        prompt: v.prompt,
-        referenceImageUrls: mainUrl ? [mainUrl] : undefined,
-      })
-      await supabase
-        .from("pipeline_entity_variants")
-        .update({ asset_id: assetId, status: "approved" })
-        .eq("entity_id", entity.id)
-        .eq("variant_key", v.key)
-      pipelineEvents.publish({
-        type: "entity:variant:added",
-        pipelineId,
-        entityId: entity.id,
-        variantKey: v.key,
-        assetUrl,
-      })
-    } catch (err) {
-      await supabase
-        .from("pipeline_entity_variants")
-        .update({ status: "failed" })
-        .eq("entity_id", entity.id)
-        .eq("variant_key", v.key)
-      // Log + continue with other variants — one failed variant shouldn't block the entity.
-      console.error(`[characters] Failed to generate variant ${v.key} for ${entity.entity_key}:`, err)
-    }
-  }
-
-  // Update entity metadata once all variants attempted.
-  await supabase
-    .from("pipeline_entities")
-    .update({
-      variant_count: variantsToGen.length + existingKeys.size,
-      metadata: {
-        ...(entity.metadata ?? {}),
-        variants_awaiting_approval: true,
-      },
-    })
-    .eq("id", entity.id)
+/** Remove the per-run failure markers so a successful retry re-shows as clean. */
+function stripVariantFailureKeys(
+  metadata: Record<string, unknown> | null,
+): Record<string, unknown> {
+  const next = { ...(metadata ?? {}) }
+  delete next.variants_failed_count
+  delete next.variants_total_count
+  delete next.variant_generation_error
+  delete next.variant_generation_error_at
+  return next
 }
 
 async function assetUrlForId(supabase: SupabaseClient, assetId: string): Promise<string> {

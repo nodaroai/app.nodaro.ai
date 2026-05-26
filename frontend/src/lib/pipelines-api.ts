@@ -290,6 +290,25 @@ export const pipelinesApi = {
       {},
     ),
   /**
+   * Retry character variant generation for an entity whose
+   * `ensureCharacterVariants` either threw at the outermost level
+   * (`variant_generation_error` metadata set) or finished with partial
+   * failures (`variants_failed_count > 0`). Backend clears the failure
+   * markers, deletes any rows in `pipeline_entity_variants` at
+   * `status='failed'`, and re-enqueues `drivePipeline`. Approved variants
+   * survive — only the failures regenerate.
+   *
+   * Gate: entity must be a character at `status='approved'`. The route
+   * intentionally doesn't gate on a specific failure marker, so it also
+   * recovers entities that pre-date the variant-failure-capture code —
+   * if Stage 2 stalled silently with missing variants, hit this route.
+   */
+  retryVariants: (id: string, entityId: string) =>
+    postJson<{ ok: true }>(
+      `/v1/pipelines/${id}/entities/${entityId}/retry-variants`,
+      {},
+    ),
+  /**
    * Phase 1D.2c-b-ii §9 (J1) — Skip button on the per-shot video-critic surface
    * (scene-configs.tsx). Accepts the failed clip AS-IS: backend flips
    * `video_critic_failed=false` on the target shot inside
