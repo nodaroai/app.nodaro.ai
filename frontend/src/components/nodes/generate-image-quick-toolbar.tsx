@@ -72,6 +72,19 @@ export function GenerateImageQuickToolbar({
   const visibleNodeWidth = nodeWidth * zoom
   const isCompact = TOOLBAR_NATURAL_WIDTH > visibleNodeWidth * 1.5
 
+  // NodeToolbar renders at fixed DOM scale (its portal sits outside the
+  // React Flow zoom transform), so its visual size doesn't track zoom by
+  // default. We want the toolbar to grow when the user zooms in (matches
+  // the node's growth) while staying readable when zoomed out — so apply
+  // `scale(max(MIN, zoom))`. transformOrigin top-center keeps the toolbar
+  // anchored to the node's bottom edge as it scales.
+  const TOOLBAR_MIN_SCALE = 0.75
+  const toolbarScale = Math.max(TOOLBAR_MIN_SCALE, zoom)
+  const toolbarTransform = {
+    transform: `scale(${toolbarScale})`,
+    transformOrigin: "50% 0%",
+  } as const
+
   // Open-state tracking: increment on each select/popover open, decrement
   // on close. While count > 0 we report `open=true` upward so the parent
   // can pin the NodeToolbar visible past the cursor leaving the node
@@ -143,7 +156,7 @@ export function GenerateImageQuickToolbar({
   // light mode is dark text on a near-transparent base with a faint hover;
   // dark mode is light text on the same.
   const ghostTriggerClass =
-    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[11px] " +
+    "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[10px] " +
     "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
     "rounded-md min-w-0 w-auto whitespace-nowrap [&_svg]:!size-3 [&_svg]:opacity-70 " +
     "[&[data-state=open]]:bg-black/10 dark:[&[data-state=open]]:bg-white/10"
@@ -171,13 +184,14 @@ export function GenerateImageQuickToolbar({
     return (
       <div
         className={`${containerClass} gap-1.5`}
+        style={toolbarTransform}
         onClick={(e) => e.stopPropagation()}
       >
         <Popover onOpenChange={handleOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 h-6 px-2 text-[11px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
+              className="flex items-center gap-1 h-6 px-2 text-[10px] rounded-md whitespace-nowrap text-neutral-900/85 hover:bg-black/10 dark:text-white/85 dark:hover:bg-white/10"
               title="Settings"
             >
               <Settings2 className="w-3 h-3 opacity-70" />
@@ -273,12 +287,13 @@ export function GenerateImageQuickToolbar({
   return (
     <div
       className={`${containerClass} gap-0.5`}
+      style={toolbarTransform}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Model selector */}
       {isMulti ? (
         <span
-          className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] cursor-default whitespace-nowrap text-neutral-900/70 dark:text-white/70"
+          className="flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] cursor-default whitespace-nowrap text-neutral-900/70 dark:text-white/70"
           title="Multi-provider — open settings to edit cohort"
         >
           <Sparkles className="w-3 h-3 opacity-70" />

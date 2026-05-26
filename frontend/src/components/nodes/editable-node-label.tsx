@@ -1,6 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import type { ReactNode } from "react"
+import { useStore } from "@xyflow/react"
 
 interface EditableNodeLabelProps {
   label: string
@@ -8,10 +9,19 @@ interface EditableNodeLabelProps {
   onSave: (newLabel: string) => void
 }
 
+// Floor for the visual scale at low zoom — see `useFloorScale` below.
+const TITLE_MIN_SCALE = 0.75
+
 export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProps) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(label)
   const inputRef = useRef<HTMLInputElement>(null)
+  // Compensate React Flow's canvas scale when we drop below the floor. The
+  // label is rendered inside the node, which is already CSS-scaled by RF
+  // (`visual = DOM × zoom`). When `zoom < MIN_SCALE`, we apply an additional
+  // `scale(MIN_SCALE / zoom)` so the net visual size stays at the floor.
+  const zoom = useStore((s) => s.transform[2])
+  const compensateScale = Math.max(1, TITLE_MIN_SCALE / Math.max(zoom, 0.01))
 
   useEffect(() => { setValue(label) }, [label])
   useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
@@ -24,7 +34,8 @@ export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProp
 
   return (
     <div
-      className={`absolute -top-6 left-0 flex items-center gap-1.5 text-[12px] font-medium text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
+      className={`absolute -top-6 left-0 flex items-center gap-1.5 text-[14px] font-medium text-foreground/70 dark:text-white/70 ${editing ? "nopan nodrag nowheel" : "select-none"}`}
+      style={{ transform: `scale(${compensateScale})`, transformOrigin: "0 100%" }}
     >
       {icon}
       {editing ? (
@@ -40,7 +51,7 @@ export function EditableNodeLabel({ label, icon, onSave }: EditableNodeLabelProp
             if (e.key === "Escape") { setValue(label); setEditing(false) }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-white border border-border rounded-md px-2 py-0.5 text-foreground outline-none min-w-[8rem] max-w-[20rem] text-[12px] focus:ring-1 focus:ring-[#ff0073]/40 focus:border-[#ff0073] dark:bg-zinc-900 dark:border-white/20 dark:text-white/90"
+          className="bg-white border border-border rounded-md px-2 py-0.5 text-foreground outline-none min-w-[8rem] max-w-[20rem] text-[14px] focus:ring-1 focus:ring-[#ff0073]/40 focus:border-[#ff0073] dark:bg-zinc-900 dark:border-white/20 dark:text-white/90"
           style={{ width: `${Math.max(8, value.length * 0.65 + 2)}ch` }}
         />
       ) : (

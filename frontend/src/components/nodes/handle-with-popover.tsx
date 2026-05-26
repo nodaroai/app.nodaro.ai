@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
-import { Handle, Position, useConnection } from "@xyflow/react"
+import { Handle, Position, useConnection, useStore } from "@xyflow/react"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -111,6 +111,13 @@ export function HandleWithPopover({
   const connections = useHandleConnections(nodeId, handleId, type === "target" ? "target" : "source")
   const openPopup = useWorkflowStore((s) => s.openAddNodePopupForHandle)
   const isConnected = connections.length > 0
+  // Floor the visual scale of the pip-side label when the canvas is zoomed
+  // out — compensates RF's `visual = DOM × zoom` by applying a counter
+  // `scale(MIN/zoom)` once we drop below the floor. Keeps the label
+  // readable without making it dominant at zoom-in (`scale = 1` then).
+  const zoom = useStore((s) => s.transform[2])
+  const HANDLE_MIN_SCALE = 0.75
+  const labelCompensateScale = Math.max(1, HANDLE_MIN_SCALE / Math.max(zoom, 0.01))
 
   // Per-pip compatibility check for the in-progress drag. The pip lights up
   // as a valid candidate when: there's a drag, this pip is the right
@@ -194,7 +201,7 @@ export function HandleWithPopover({
           tabIndex={0}
           role="button"
           aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}`}
-          className={`handle-typed-pip !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""}`}
+          className={`handle-typed-pip !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""} ${open ? "clickconnecting" : ""}`}
           style={{
             top,
             [side]: "-29px",
@@ -245,11 +252,12 @@ export function HandleWithPopover({
             // counter badge's outermost point (~10px out), so the label
             // position is consistent whether the badge is visible or not.
             // Hidden by default — see `.handle-typed-pip-label` CSS rules.
-            className="handle-typed-pip-label absolute text-[10px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground"
+            className="handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground"
             style={{
               top: "50%",
               [side === "left" ? "right" : "left"]: "calc(100% + 14px)",
-              transform: "translateY(-50%)",
+              transform: `translateY(-50%) scale(${labelCompensateScale})`,
+              transformOrigin: side === "left" ? "100% 50%" : "0% 50%",
             }}
           >
             {label}
