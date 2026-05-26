@@ -2,22 +2,23 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Sparkles, User } from "lucide-react"
+import { Sparkles, Users } from "lucide-react"
 import { getCharacterFx, getCharacterFxLabel, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { ACCEPTS_CHARACTER_REF } from "@/lib/target-handle-registry"
+import type { HandleConfig } from "./base-node"
 import type { CharacterFxData } from "@/types/nodes"
 
 const TARGET_TOP = "calc(100% - 25px)"
 
 // Hoisted so React Flow's reference equality on handles holds across renders.
-const INPUT_HANDLES = [
-  { id: "target", type: "target" as const, position: Position.Left, customStyle: { top: TARGET_TOP, left: "-29px" }, hideHandle: true },
+// `external: true` — BaseNode counts this for sizing but doesn't render it;
+// the typed pip is owned by <HandleWithPopover> below (matches the pattern in
+// camera-motion-node + transition-node + generate-image-node).
+const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
+  { id: "target", type: "target", position: Position.Left, customStyle: { top: TARGET_TOP, left: "-29px" }, hideHandle: true, external: true },
 ]
-
-const EXTRA_HANDLE_ICONS = (
-  <HandleIcon icon={<User />} color="indigo" side="left" top={TARGET_TOP} label="Target subject" />
-)
 
 function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterFxData
@@ -39,7 +40,25 @@ function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       fluidWidth
       inputHandles={INPUT_HANDLES}
-      extraHandleIcons={EXTRA_HANDLE_ICONS}
+      extraHandleIcons={
+        <HandleWithPopover
+          nodeId={id}
+          handleId="target"
+          nodeType="character-fx"
+          type="target"
+          position={Position.Left}
+          label="Target subject"
+          color="#F472B6"
+          icon={<Users className="w-3.5 h-3.5" />}
+          accepts={ACCEPTS_CHARACTER_REF}
+          side="left"
+          top={TARGET_TOP}
+          // Single ambiguous input pip — without the always-visible label
+          // it's unclear what wires connect here at rest (the picker
+          // accepts identity refs, not arbitrary upstream output).
+          alwaysShowLabel
+        />
+      }
     >
       <p className="text-foreground text-sm font-medium">{labelText}</p>
       {description && !isMulti && (

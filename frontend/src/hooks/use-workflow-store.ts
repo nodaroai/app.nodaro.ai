@@ -27,6 +27,7 @@ import { getCachedUserId } from "@/hooks/use-auth"
 import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
+import { migratePickerSourceHandle } from "@/lib/picker-handles"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -1323,16 +1324,37 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       // Only recreate edges whose BOTH endpoints are in the duplicated set.
       // Node ids remap via idMap; loop/list column handles via handleMap (other
       // handle ids like "out"/"image"/"characterRef" are stable and pass through).
+      //
+      // Picker source-handle migration: a legacy null/undefined sourceHandle
+      // on an edge originating from a picker node would otherwise carry
+      // through to the clone as-is — the load-time migration only runs in
+      // `loadWorkflow`, not on duplicate/Ctrl+V, so an in-memory legacy
+      // edge stays uncleanable after duplication. Run the same
+      // backfill here using the source node's type (read from the
+      // ORIGINAL source, which is what idMap was keyed off — the clone has
+      // the same type). `migratePickerSourceHandle` is a no-op when
+      // sourceHandle is already set, so it's safe to call unconditionally.
+      const sourceTypeById = new Map(sources.map((s) => [s.id, s.type ?? ""]))
+      const lookupSourceType = (cloneId: string): string | undefined => {
+        // Reverse-lookup: cloneId → original id → type.
+        for (const [origId, mappedId] of Object.entries(idMap)) {
+          if (mappedId === cloneId) return sourceTypeById.get(origId)
+        }
+        return undefined
+      }
       const newEdges: WorkflowEdge[] = state.edges
         .filter((e) => idSet.has(e.source) && idSet.has(e.target))
-        .map((e) => ({
-          ...e,
-          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-          source: idMap[e.source],
-          target: idMap[e.target],
-          sourceHandle: e.sourceHandle && handleMap[e.sourceHandle] ? handleMap[e.sourceHandle] : e.sourceHandle,
-          targetHandle: e.targetHandle && handleMap[e.targetHandle] ? handleMap[e.targetHandle] : e.targetHandle,
-        }))
+        .map((e) => {
+          const cloned: WorkflowEdge = {
+            ...e,
+            id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+            source: idMap[e.source],
+            target: idMap[e.target],
+            sourceHandle: e.sourceHandle && handleMap[e.sourceHandle] ? handleMap[e.sourceHandle] : e.sourceHandle,
+            targetHandle: e.targetHandle && handleMap[e.targetHandle] ? handleMap[e.targetHandle] : e.targetHandle,
+          }
+          return migratePickerSourceHandle(cloned, lookupSourceType)
+        })
 
       return {
         // Deselect the originals and select the clones, so the new copies become
@@ -1418,16 +1440,40 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       if (!removedEdge) return { edges: newEdges, isDirty: true }
 
+      // BOTH cleanups can apply in the same delete and they MUST compose:
+      //  1. Loop-column cleanup (clears `connectedSourceId` on the column
+      //     whose `_in` edge we just removed). Handle-specific — runs
+      //     regardless of any parallel edges between the same node pair on
+      //     OTHER handles.
+      //  2. fieldMappings cleanup (strips entries whose `sourceNodeId`
+      //     equals the now-disconnected source). Node-pair scoped — only
+      //     runs when the (source, target) pair has no other surviving
+      //     wires, since fieldMappings are keyed by sourceNodeId.
+      //
+      // A previous version early-returned after loop cleanup, which dropped
+      // fieldMappings cleanup when both arms applied to the same node
+      // (e.g. a single edge that's both the last wire AND a `_in` handle).
+      // The unified body below applies both edits to a single `mutated`
+      // node-data object so we touch the node at most once.
+      const isLoopColumnEdge =
+        removedEdge.targetHandle?.endsWith("_in") ?? false
+
       const stillConnected = newEdges.some(
-        (e) => e.target === removedEdge.target && e.source === removedEdge.source
+        (e) => e.target === removedEdge.target && e.source === removedEdge.source,
       )
-      if (stillConnected) return { edges: newEdges, isDirty: true }
+
+      // Fast path: neither arm applies — no node mutation needed.
+      if (!isLoopColumnEdge && stillConnected) {
+        return { edges: newEdges, isDirty: true }
+      }
 
       const nodes = state.nodes.map((node) => {
         if (node.id !== removedEdge.target) return node
 
-        // Clear loop column connection refs when edge is deleted
-        if ((node.type === "loop" || node.type === "list") && removedEdge.targetHandle?.endsWith("_in")) {
+        let mutated: typeof node.data | null = null
+
+        // (1) Loop column cleanup — unconditional when this is an `_in` edge.
+        if ((node.type === "loop" || node.type === "list") && isLoopColumnEdge && removedEdge.targetHandle) {
           const loopData = node.data as LoopNodeData
           const baseHandleId = loopColBaseHandle(removedEdge.targetHandle)
           const updatedColumns = (loopData.columns ?? []).map((col) =>
@@ -1435,17 +1481,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               ? { ...col, connectedSourceId: undefined, connectedSourceHandle: undefined }
               : col,
           )
-          return { ...node, data: { ...node.data, columns: updatedColumns } as SceneNodeData }
+          mutated = { ...node.data, columns: updatedColumns } as SceneNodeData
         }
 
-        const nodeData = node.data as Record<string, unknown>
-        const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
-        if (Object.keys(fieldMappings).length === 0) return node
+        // (2) fieldMappings cleanup — only when the node pair is fully
+        // disconnected (no parallel wires remain). Reads from `mutated`
+        // if loop cleanup already ran so the two edits compose.
+        if (!stillConnected) {
+          const nodeData = (mutated ?? node.data) as Record<string, unknown>
+          const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
+          if (Object.keys(fieldMappings).length > 0) {
+            const cleanedMappings = Object.fromEntries(
+              Object.entries(fieldMappings).filter(([, v]) => v.sourceNodeId !== removedEdge.source)
+            )
+            mutated = { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData
+          }
+        }
 
-        const cleanedMappings = Object.fromEntries(
-          Object.entries(fieldMappings).filter(([, v]) => v.sourceNodeId !== removedEdge.source)
-        )
-        return { ...node, data: { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData }
+        return mutated ? { ...node, data: mutated } : node
       })
 
       return { nodes, edges: newEdges, isDirty: true }
@@ -1620,6 +1673,49 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       migratedEdges = migratedEdges.map((e) =>
         aiWriterIds.has(e.target) && e.targetHandle === "in" ? { ...e, targetHandle: "prompt" } : e,
       )
+    }
+
+    // ============================================================
+    // Migration ordering invariant: type renames MUST run before any
+    // migration that reads `node.type`. The picker null-sourceHandle
+    // backfill below reads node.type to dispatch to
+    // `getPickerDefaultSourceHandle`, so it MUST run AFTER:
+    //   1. ai-writer → llm-chat (type rename, ~L1631 above)
+    //   2. Image-to-video field renames (data-only, no type read)
+    //   3. Generate Image handles v2 (edge-only, but reads node.type for
+    //      source classification — runs AFTER the picker backfill below
+    //      because its picker classification relies on the backfilled
+    //      sourceHandle).
+    // Do not reorder this block without auditing the chain. Keep these
+    // comments here next to the migration that depends on the ordering.
+    // ============================================================
+    //
+    // Migrate legacy null/undefined sourceHandle on picker outputs.
+    // Before typed source pips landed, picker nodes (tone, mood, lens,
+    // text-prompt, etc.) rendered an unidentified <Handle> — outgoing
+    // edges saved with `sourceHandle = null`. After the typed-pip
+    // migration the source is identified by an explicit handleId
+    // (`"prompt"` for text-prompt, `"tone"` for tone, `"out"` for most
+    // other pickers — see `getPickerDefaultSourceHandle`).
+    //
+    // The shared `useHandleConnections` hook does a strict handleId
+    // match, so a legacy null-sourceHandle edge would render on the
+    // canvas but be INVISIBLE to the popover's connected-rows list
+    // (uncleanable via the row's Disconnect button). Backfill the
+    // handle id here so every downstream consumer sees a uniform shape.
+    //
+    // The popover dedup (handle-popover.tsx) keeps a wildcard match for
+    // null as a safety net in case any path reaches it before the
+    // migration runs.
+    //
+    // Uses the shared `migratePickerSourceHandle` util — same backfill
+    // logic runs in `duplicateNodes` so Ctrl+D doesn't silently
+    // re-introduce null-sourceHandle edges that the load-time pass
+    // would have cleaned up.
+    {
+      const nodeTypeById = new Map(migratedNodes.map((n) => [n.id, n.type ?? ""]))
+      const lookup = (id: string): string | undefined => nodeTypeById.get(id)
+      migratedEdges = migratedEdges.map((e) => migratePickerSourceHandle(e, lookup))
     }
 
     // Migrate Generate Image handles v2: re-route legacy `in` / `cinematography`
@@ -1888,19 +1984,135 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       return { edges: newEdges, nodes: newNodes, isDirty: true }
     }),
-  disconnectAllHandleEdges: (nodeId, handleId, direction) => {
-    // Route through `deleteEdge` per-edge so all downstream cleanup runs:
-    // fieldMappings teardown, loop column `connectedSourceId` clearing,
-    // collect `data.order` pruning, etc. A bulk-filter on edges would leave
-    // those references stale and cause subsequent reconnects to no-op the
-    // auto-fill (because `alreadyMapped === true` on a dead reference).
-    const matching = get().edges.filter((e) =>
-      direction === "target"
-        ? e.target === nodeId && e.targetHandle === handleId
-        : e.source === nodeId && e.sourceHandle === handleId,
-    )
-    for (const e of matching) get().deleteEdge(e.id)
-  },
+  disconnectAllHandleEdges: (nodeId, handleId, direction) =>
+    // Batched mirror of `deleteEdge`'s per-edge cleanup. Previously this
+    // called `get().deleteEdge(e.id)` in a loop — N sequential `set()`s
+    // re-running React Flow's subscriptions N times per click. We replicate
+    // deleteEdge's three responsibilities in ONE set:
+    //   1. Filter the matching edges out of `state.edges`.
+    //   2. For each removed edge, populate the target's cleanup bucket.
+    //      Loop-column refs (cleared when `targetHandle.endsWith("_in")`)
+    //      are ALWAYS scheduled — the column is no longer wired through
+    //      that handle even if a parallel non-column wire from the same
+    //      source survives. fieldMappings entries (keyed by sourceNodeId)
+    //      are scheduled ONLY when the (source, target) pair is fully
+    //      disconnected by the batch — otherwise a still-valid mapping
+    //      would get dropped when one of several parallel wires is removed.
+    //   3. Mark dirty.
+    // The `stillConnected` check is computed against the FINAL newEdges
+    // (not the original edges or any intermediate state), so it stays
+    // consistent regardless of which edges we drop in this batch.
+    set((state) => {
+      const isMatch = (e: WorkflowEdge): boolean =>
+        direction === "target"
+          ? e.target === nodeId && e.targetHandle === handleId
+          : e.source === nodeId && e.sourceHandle === handleId
+      const removedEdges = state.edges.filter(isMatch)
+      if (removedEdges.length === 0) return state
+      const removedIds = new Set(removedEdges.map((e) => e.id))
+      const newEdges = state.edges.filter((e) => !removedIds.has(e.id))
+
+      // For each removed edge: collect loop-column cleanups unconditionally
+      // (handle-specific), and source-ids for fieldMappings cleanup only
+      // when the (source, target) pair is now fully disconnected.
+      // Group by target so we touch each node at most once.
+      //
+      // Cache node-type-by-id lookup so the loop-column heuristic below
+      // can gate its `_in` suffix check on the actual loop/list type
+      // instead of trusting that any "_in" suffix is a loop column.
+      // Without this gate, a future non-loop node that happens to expose
+      // a handle id ending in "_in" (e.g., a debug "data_in" handle)
+      // would have its handleId passed to loopColBaseHandle and added
+      // to the wrong-type cleanup set — silent no-op today but a sharp
+      // edge for the next person who defines such a handle.
+      const nodeTypeById = new Map(state.nodes.map((n) => [n.id, n.type]))
+      const targetCleanups = new Map<string, { sources: Set<string>; loopHandles: Set<string> }>()
+      // Helper: get-or-create-and-store the cleanup bucket for `target`.
+      // Only invoked from the two branches that actually have cleanup
+      // work to add — keeping the create+store paired with the
+      // first-write path eliminates the previous orphan-bucket pattern
+      // (allocate, maybe-store) that wasted GC on benign-disconnect
+      // batches where neither cleanup applied.
+      const bucketFor = (target: string) => {
+        let b = targetCleanups.get(target)
+        if (!b) {
+          b = { sources: new Set<string>(), loopHandles: new Set<string>() }
+          targetCleanups.set(target, b)
+        }
+        return b
+      }
+      for (const removed of removedEdges) {
+        // Loop column cleanup is handle-specific — schedule even if the
+        // node pair survives via another (non-column) wire. Gated on the
+        // target being an actual loop/list node so the `_in` suffix
+        // can't false-positive on other node types.
+        if (removed.targetHandle?.endsWith("_in")) {
+          const targetType = nodeTypeById.get(removed.target)
+          if (targetType === "loop" || targetType === "list") {
+            bucketFor(removed.target).loopHandles.add(loopColBaseHandle(removed.targetHandle))
+          }
+        }
+        // fieldMappings cleanup is node-pair scoped — only when nothing
+        // else remains between this (source, target).
+        const stillConnected = newEdges.some(
+          (e) => e.target === removed.target && e.source === removed.source,
+        )
+        if (!stillConnected) {
+          bucketFor(removed.target).sources.add(removed.source)
+        }
+      }
+
+      if (targetCleanups.size === 0) {
+        return { edges: newEdges, isDirty: true }
+      }
+
+      const newNodes = state.nodes.map((node) => {
+        const cleanup = targetCleanups.get(node.id)
+        if (!cleanup) return node
+
+        // BOTH cleanups can apply to the same node in a mixed-batch case:
+        // disconnecting a target's "in" handles strips loop column refs
+        // AND fieldMappings (the latter for the non-loop handles in the
+        // same batch). Track changes to a single `mutated` object so we
+        // touch each field at most once and return the same node identity
+        // when no cleanup applies.
+        let mutated: typeof node.data | null = null
+
+        // Loop / list column refs — clear `connectedSourceId` /
+        // `connectedSourceHandle` for any column whose handle was in this
+        // batch's removed _in edges.
+        if ((node.type === "loop" || node.type === "list") && cleanup.loopHandles.size > 0) {
+          const loopData = node.data as LoopNodeData
+          const updatedColumns = (loopData.columns ?? []).map((col) =>
+            cleanup.loopHandles.has(col.handleId)
+              ? { ...col, connectedSourceId: undefined, connectedSourceHandle: undefined }
+              : col,
+          )
+          mutated = { ...node.data, columns: updatedColumns } as SceneNodeData
+        }
+
+        // fieldMappings cleanup — strip every mapping whose sourceNodeId
+        // matches one of the removed-and-now-fully-disconnected sources.
+        // Reads from `mutated` if loop cleanup already ran so the two
+        // edits compose without overwriting each other. Empty `sources`
+        // (e.g. when only loop-column cleanup applies for this target)
+        // skips this branch entirely.
+        if (cleanup.sources.size > 0) {
+          const nodeData = (mutated ?? node.data) as Record<string, unknown>
+          const fieldMappings = (nodeData.fieldMappings ?? {}) as Record<string, { sourceNodeId: string }>
+          if (Object.keys(fieldMappings).length > 0) {
+            const cleanedMappings = Object.fromEntries(
+              Object.entries(fieldMappings).filter(([, v]) => !cleanup.sources.has(v.sourceNodeId)),
+            )
+            mutated = { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData
+          }
+        }
+
+        return mutated ? { ...node, data: mutated } : node
+      })
+
+      return { nodes: newNodes, edges: newEdges, isDirty: true }
+    }),
   generateSceneImage: null,
   setGenerateSceneImage: (fn) => set({ generateSceneImage: fn }),
 

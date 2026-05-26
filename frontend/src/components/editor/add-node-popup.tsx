@@ -116,7 +116,7 @@ import { clusterByGroup } from "@/lib/cluster-by-group";
 import { categoryRank } from "@/lib/node-category-order";
 import type { SceneNodeType } from "@/types/nodes";
 import type { ConnectionContext, NodeOption } from "@/lib/node-compatibility";
-import { getCompatibleNodes, resolveTargetHandle } from "@/lib/node-compatibility";
+import { getCompatibleNodes, resolveTargetHandle, TYPED_HANDLE_IDS } from "@/lib/node-compatibility";
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
@@ -1468,15 +1468,41 @@ export function AddNodePopup({
     [isAdmin],
   );
 
+  // Typed-handle pool: Parameter-category nodes are normally hidden from
+  // the popup browse view, but they MUST be available as candidates for
+  // typed-handle edge drops. Example: `tone` (Parameter) is a registered
+  // HINT_PRODUCER, so dragging from camera-motion's startState should
+  // surface tone in the suggestions. Without this opt-in, the
+  // `n.category !== "Parameter"` clause silently excludes tone from
+  // getCompatibleNodes' candidate set even though the canvas validator
+  // and target-handle-registry both accept it.
+  //
+  // Handle IDs sourced from `node-compatibility.ts`'s exported
+  // TYPED_HANDLE_IDS — the SAME set drives the dev-time warning for
+  // missing consumerNodeType, so the two stay in lock-step. (Previously
+  // duplicated as a local literal Set, which silently drifted when
+  // either side was edited alone.)
+  const typedHandlePool = useMemo(
+    () => NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin),
+    [isAdmin],
+  );
+
   // Compatibility filtering for smart edge-drop
   const { compatibilityNodes, isFiltered } = useMemo(() => {
     if (!connectionContext) return { compatibilityNodes: null, isFiltered: false };
-    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, visibleNodes, connectionContext.nodeType);
+    const usesTypedPool =
+      connectionContext.direction === "target" &&
+      TYPED_HANDLE_IDS.has(connectionContext.handleId);
+    const pool = usesTypedPool ? typedHandlePool : visibleNodes;
+    const result = getCompatibleNodes(connectionContext.handleId, connectionContext.direction, pool, connectionContext.nodeType);
     if (result.direct.length === 0 && result.compatible.length === 0) {
       return { compatibilityNodes: null, isFiltered: false };
     }
     return { compatibilityNodes: result, isFiltered: true };
-  }, [connectionContext, visibleNodes]);
+    // TYPED_HANDLE_IDS is a module-level const (imported from
+    // node-compatibility); referenced inside the memo but stable across
+    // renders so it doesn't need to be in the deps list.
+  }, [connectionContext, visibleNodes, typedHandlePool]);
 
   // Handle node selection — auto-connects edge when connectionContext is present
   const handleNodeSelect = useCallback(

@@ -1,18 +1,20 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar } from "@xyflow/react"
+import { Position, type NodeProps, NodeResizer, Handle, NodeToolbar, useUpdateNodeInternals } from "@xyflow/react"
 import { Type, FastForward } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
 import { TagTextarea } from "@/components/editor/config-panels/tag-textarea"
 import { SUNO_LYRICS_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { getUpstreamNodes } from "@/lib/node-refs"
 import { NODE_COLORS, getEffectiveColor } from "@/lib/node-colors"
 import { hasCredits } from "@/lib/edition"
 import { estimateNodeCredits, EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
+import { getPickerOutputMeta } from "@/lib/picker-handles"
 import type { TextPromptData } from "@/types/nodes"
 
 function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
@@ -116,6 +118,36 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
   const outputTarget: "text" | "voice" | "lyrics" =
     nodeData.outputTarget === "voice" || nodeData.outputTarget === "lyrics" ? nodeData.outputTarget : "text"
+
+  // Typed source pip — text-prompt registers as a hint-producer in
+  // picker-handles so it lights up Generate Image's `prompt` handle and
+  // camera-motion / transition state handles during drag-to-connect. The
+  // visible cyan pip is owned by HandleWithPopover.
+  //
+  // text-prompt is pinned in REGISTRY by an explicit drift-catcher test
+  // in `picker-handles.test.ts` (the "text-prompt is in REGISTRY"
+  // assertion), so in any reachable build pickerMeta is non-null. The
+  // explicit defaults below replace a previous `!` force-unwrap: even if
+  // a future REGISTRY refactor briefly leaves text-prompt missing, the
+  // node renders with sensible cyan/Text defaults instead of crashing
+  // the editor — the drift-test fails CI before that ships.
+  const pickerMeta = getPickerOutputMeta("text-prompt") ?? {
+    family: "text" as const,
+    color: "#22D3EE",
+    label: "Text",
+  }
+
+  // The typed pip's CSS position (`right: -29px` on the rendered
+  // <Handle>) shifted compared to the pre-typed-pip layout (`right: -43px`
+  // on the invisible Handle). React Flow caches per-handle pixel offsets
+  // for edge endpoint geometry — without an explicit `updateNodeInternals`
+  // call on mount, edges drawn against the pre-migration position would
+  // float for a frame after layout. Empty deps fires once on mount,
+  // recomputing handle positions for any cached layouts.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, updateNodeInternals])
 
   return (
     <div
@@ -273,21 +305,24 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         <Type className="w-3.5 h-3.5 text-white" />
       </div>
 
-      {/* Handle — fully invisible, interactive */}
-      <Handle
-        id="prompt"
+      {/* Typed source pip — HandleWithPopover renders the visible cyan pip,
+          the React Flow <Handle>, AND the popover for managing downstream
+          connections. text-prompt is pinned to REGISTRY by an explicit
+          drift-catcher test (see the pickerMeta declaration above); the
+          inline defaults there keep this branch safe even if the
+          registry briefly drifts. */}
+      <HandleWithPopover
+        nodeId={id}
+        handleId="prompt"
+        nodeType="text-prompt"
         type="source"
         position={Position.Right}
-        style={{ opacity: 0, width: 28, height: 28, minWidth: 0, minHeight: 0, background: "transparent", border: "none", top: "20px", right: "-43px", transform: "translateY(-50%)" }}
+        label={pickerMeta.label}
+        color={pickerMeta.color}
+        icon={<Type />}
+        side="right"
+        top="20px"
       />
-
-      {/* Output handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#38BDF8] shadow-lg shadow-sky-500/30"
-        style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Type className="w-3.5 h-3.5 text-white" />
-      </div>
 
     </div>
   )

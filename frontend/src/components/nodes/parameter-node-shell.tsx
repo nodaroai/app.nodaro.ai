@@ -7,10 +7,12 @@ import { getParameterPromptHint } from "@nodaro/shared"
 import { BaseNode, type HandleConfig } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
 import { useAutoMeasureForZoom } from "./use-auto-measure-for-zoom"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { cn } from "@/lib/utils"
+import { getPickerOutputMeta } from "@/lib/picker-handles"
 import {
   setStickyParameterDisplayMode,
   type ParameterDisplayMode as DisplayMode,
@@ -34,9 +36,16 @@ const DEFAULT_INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
   { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-6px' }, hideHandle: true },
 ]
 
-const makeHandles = (handleId: string, inputHandles?: ReadonlyArray<HandleConfig>): ReadonlyArray<HandleConfig> => [
+const makeHandles = (handleId: string, sourceIsExternal: boolean, inputHandles?: ReadonlyArray<HandleConfig>): ReadonlyArray<HandleConfig> => [
   ...(inputHandles ?? DEFAULT_INPUT_HANDLES),
-  { id: handleId, type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  // external: when the node type is a registered picker, BaseNode counts the
+  // entry for sizing but skips rendering — the pip is rendered by
+  // <HandleWithPopover> below for typed-color + popover UX. For non-picker
+  // fallback nodes (tone, provider, style-guide, duration, aspect-ratio,
+  // scene-count, motion) the visible "icon" is a pointer-events-none
+  // <HandleIcon> decoration, so we KEEP external:false to let BaseNode
+  // render a real (hidden) <Handle> — otherwise drag-to-connect breaks.
+  { id: handleId, type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true, external: sourceIsExternal },
 ]
 
 export function ParameterNodeShell({ id, label, icon, handleId, selected, children, fluidWidth, inputHandles, extraHandleIcons }: ParameterNodeShellProps) {
@@ -45,7 +54,6 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
-  const handles = useMemo(() => makeHandles(handleId, inputHandles), [handleId, inputHandles])
 
   // Only show "Run from here" when this parameter node feeds at least one
   // downstream node — running with no consumers is a no-op for the user.
@@ -53,6 +61,20 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
 
   const node = useMemo(() => nodes.find((n) => n.id === id), [nodes, id])
   const data = (node?.data ?? {}) as Record<string, unknown>
+  // Look up the source-handle visual for this picker's node type. Falls back
+  // to the indigo HandleIcon if the type isn't registered (forward-compat for
+  // legacy pickers).
+  const pickerMeta = getPickerOutputMeta(node?.type ?? "")
+  // When pickerMeta exists, the visible pip is owned by <HandleWithPopover>
+  // below — BaseNode must NOT also render a <Handle> (external:true skips
+  // it). When pickerMeta is null, the visible "icon" is a non-interactive
+  // <HandleIcon> decoration, so BaseNode MUST render the real (hidden)
+  // <Handle> to preserve drag-to-connect for the fallback path.
+  const sourceIsExternal = pickerMeta !== null
+  const handles = useMemo(
+    () => makeHandles(handleId, sourceIsExternal, inputHandles),
+    [handleId, sourceIsExternal, inputHandles],
+  )
   // Existing nodes keep whatever mode they were saved with; the localStorage
   // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
@@ -68,14 +90,17 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
     setStickyParameterDisplayMode(mode)
   }
 
-  // Tell ReactFlow to re-measure this node whenever the display mode changes.
-  // Switching between picks / prompt / both swaps content of very different
-  // heights — without this, the node's reported size lags one render and
-  // edges/handles can attach to stale positions.
+  // Tell ReactFlow to re-measure this node whenever the display mode OR
+  // the source-handle ownership changes. Switching between picks / prompt
+  // / both swaps content of very different heights, and the
+  // sourceIsExternal flip (pickerMeta null↔non-null) swaps the source pip
+  // between BaseNode-owned and HandleWithPopover-owned — both shifts can
+  // leave edges/handles attached to stale positions without an explicit
+  // re-measure.
   const updateNodeInternals = useUpdateNodeInternals()
   useEffect(() => {
     updateNodeInternals(id)
-  }, [id, displayMode, updateNodeInternals])
+  }, [id, displayMode, sourceIsExternal, updateNodeInternals])
 
   // When zoom != 1, React Flow's native auto-measure reads the wrapper's
   // CSS box at *logical* size — but visual = logical × zoom. The hook
@@ -215,7 +240,55 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
         </div>
       </BaseNode>
 
-      <HandleIcon icon={icon} color="indigo" top="20px" />
+      {/* Source pip rendering depends on whether the picker is registered
+          (HandleWithPopover takes ownership of the real <Handle>) vs not
+          (HandleIcon is a decoration; BaseNode renders the real <Handle>).
+          During the brief window where React Flow has scheduled this
+          component to render but the workflow store hasn't fully hydrated
+          yet, `node` is undefined and `pickerMeta` is null.
+
+          Rendering NOTHING during hydration is wrong: pre-PR the legacy
+          indigo HandleIcon decoration was ALWAYS visible, so the node
+          looked correct from first paint. Removing it caused a brief
+          missing-pip flicker on every initial mount.
+
+          Use HandleIcon as the hydration fallback — it's a
+          `pointer-events-none` decoration only, so it can't conflict with
+          any real <Handle>. BaseNode renders the real <Handle> during
+          hydration because `sourceIsExternal` is false (it depends on
+          pickerMeta, which is null until node is defined). Once
+          hydrated, the branch swaps to either HandleWithPopover (for
+          registered pickers — both the visible pip AND the real <Handle>)
+          or HandleIcon again (for non-picker fallbacks — decoration plus
+          BaseNode's real <Handle>). */}
+      {node ? (pickerMeta ? (
+        // The node component owns the glyph (via the `icon` prop) — we use
+        // it for BOTH the label (in EditableNodeLabel above) AND the source
+        // pip here. Previously the pip used `pickerMeta.icon` (Bot, Cloud,
+        // Wind, etc.) which drifted from the per-node icon (PawPrint, Smile,
+        // CloudFog) shown on the label, so node and pip looked semantically
+        // unrelated. Single source of truth = the node component.
+        <HandleWithPopover
+          nodeId={id}
+          handleId={handleId}
+          nodeType={node.type ?? ""}
+          type="source"
+          position={Position.Right}
+          label={pickerMeta.label}
+          color={pickerMeta.color}
+          icon={icon}
+          side="right"
+          top="20px"
+        />
+      ) : (
+        <HandleIcon icon={icon} color="indigo" top="20px" />
+      )) : (
+        // Hydration fallback: match the legacy always-on indigo decoration.
+        // Safe because HandleIcon is pointer-events-none — BaseNode owns
+        // the real <Handle> while sourceIsExternal=false (no
+        // duplicate-id warning possible).
+        <HandleIcon icon={icon} color="indigo" top="20px" />
+      )}
       {extraHandleIcons}
     </div>
   )

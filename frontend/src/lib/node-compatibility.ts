@@ -2,6 +2,8 @@ import type { SceneNodeType } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
+import { IDENTITY_TYPES } from "./generate-image-handles"
+import { ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
 
 export interface ConnectionContext {
   readonly nodeId: string
@@ -90,12 +92,47 @@ export interface CompatibleNodes {
   readonly directTypes: ReadonlySet<SceneNodeType>
 }
 
+/** Handle ids whose typed-handle branches in getCompatibleNodes require
+ *  `consumerNodeType` to disambiguate (camera-motion vs transition vs
+ *  character-fx). Dev-time warning when this is omitted — the branch
+ *  silently falls through to the generic HANDLE_COMPATIBILITY path and
+ *  the call site may not notice.
+ *
+ *  Single source of truth — also re-exported as TYPED_HANDLE_IDS for the
+ *  add-node popup's typed-pool inclusion check. Don't duplicate the
+ *  literal set inline elsewhere; import from here. */
+export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set(["startState", "endState", "target"])
+const CONSUMER_TYPE_DEPENDENT_HANDLES = TYPED_HANDLE_IDS
+
 export function getCompatibleNodes(
   handleId: string,
   direction: "source" | "target",
   nodeOptions: readonly NodeOption[],
   consumerNodeType?: string,
 ): CompatibleNodes {
+  // Dev-time warning: typed-handle branches below (camera-motion's
+  // startState/endState, character-fx's target) all require
+  // consumerNodeType to dispatch. Without it, we silently fall through
+  // to the generic HANDLE_COMPATIBILITY map — which has no entry for
+  // these IDs, so it produces the wrong candidate set. Warn loudly in
+  // dev so the call site can pass the missing arg.
+  if (
+    direction === "target" &&
+    !consumerNodeType &&
+    CONSUMER_TYPE_DEPENDENT_HANDLES.has(handleId) &&
+    // Dev-only warn — Vite sets MODE=development in dev, production in
+    // built artifacts. The previous `typeof import.meta !== "undefined"`
+    // check was dead (import.meta is always defined in Vite/ESM bundles
+    // and would be a static parse error otherwise), so it was removed.
+    import.meta.env?.DEV
+  ) {
+    console.warn(
+      `[getCompatibleNodes] handleId='${handleId}' requires consumerNodeType but none provided. ` +
+      `Typed-handle branches will be skipped, returning generic fallback. ` +
+      `Pass connectionContext.nodeType from the caller.`,
+    )
+  }
+
   // Special-case: the `cinematography` / `style` target handle accepts only
   // parameter-picker nodes. v2.1 splits this into `look` and `scene`, but
   // the legacy IDs still resolve here for backwards compat (pre-migration
@@ -213,6 +250,40 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!TEXT_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Camera Motion / Transition: startState + endState handles accept
+  // hint-producer nodes (visual pickers + tone + text-prompt). Mirrors
+  // ACCEPTS_PARAMETER_PICKER in target-handle-registry — the same
+  // predicate drives the canvas validator and the drag-glow.
+  if (
+    (consumerNodeType === "camera-motion" || consumerNodeType === "transition") &&
+    direction === "target" &&
+    (handleId === "startState" || handleId === "endState")
+  ) {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!ACCEPTS_PARAMETER_PICKER(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Character FX: the `target` handle accepts identity-locking ref nodes
+  // only (character / face / object / location). See ACCEPTS_CHARACTER_REF
+  // in target-handle-registry; the shared hint-builder reads characterName
+  // / faceName / objectName / locationName from the source.
+  if (consumerNodeType === "character-fx" && direction === "target" && handleId === "target") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!IDENTITY_TYPES.has(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }
