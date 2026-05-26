@@ -29,6 +29,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 const ExtractReferencesModal = lazy(() => import("@/components/editor/extract-references-modal").then(m => ({ default: m.ExtractReferencesModal })))
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { CachedImage } from "@/components/ui/cached-image"
+import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 
@@ -146,24 +147,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
-          <div className="flex gap-1.5 px-2 py-1.5 bg-black/60 backdrop-blur-sm rounded-xl border border-white/10">
-            {results.slice(0, 8).map((r, i) => (
-              <CachedImage
-                key={`${r.jobId}-${i}`}
-                src={r.url}
-                alt={`Result ${i + 1}`}
-                className={`w-12 h-12 object-cover rounded-lg cursor-pointer transition-all ${
-                  i === activeIndex ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
-                }`}
-                thumbnail
-                thumbnailWidth={96}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url })
-                }}
-              />
-            ))}
-          </div>
+          <ResultsThumbnailsPanel
+            results={results}
+            activeIndex={activeIndex}
+            // Either React Flow's `selected` (single-click in canvas) OR
+            // the settings panel being open (gear icon — sets
+            // `selectedNodeId` in Zustand independently of React Flow's
+            // selection state). Both signal "user is currently
+            // interacting with this node" → arrow keys browse results.
+            nodeSelected={!!selected || isSettingsOpen}
+            onSelect={(i) => updateNodeData(id, { activeResultIndex: i, generatedImageUrl: results[i].url })}
+          />
         ) : undefined
       }
       handles={[
@@ -193,9 +187,17 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
             {results.length > 1 && (
               <button
                 type="button"
-                className="absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-md z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                className={`absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
+                  showThumbnails
+                    // Active: brand pink + always visible so the user
+                    // sees it's the toggle and can press to turn off.
+                    ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                    // Idle: hover-revealed dark chip, default state.
+                    : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
+                }`}
                 onClick={(e) => { e.stopPropagation(); setShowThumbnails(v => !v) }}
-                title="Show versions"
+                title={showThumbnails ? "Hide versions" : "Show versions"}
+                aria-pressed={showThumbnails}
               >
                 <LayoutGrid className="w-3 h-3" />
                 <span className="text-[11px] font-medium">{results.length}</span>
