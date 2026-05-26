@@ -101,8 +101,8 @@ describe("KIE_VIDEO_DURATIONS", () => {
     expect(KIE_VIDEO_DURATIONS["minimax"]).toEqual([5])
   })
 
-  it("veo3 supports only 8s", () => {
-    expect(KIE_VIDEO_DURATIONS["veo3"]).toEqual([8])
+  it("veo3 supports 4/6/8s", () => {
+    expect(KIE_VIDEO_DURATIONS["veo3"]).toEqual([4, 6, 8])
   })
 
   it("kling supports 5 and 10s", () => {

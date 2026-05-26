@@ -632,9 +632,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
-            ? "VEO 3.1 produces ~8 second videos (not configurable)."
-            : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+          {`${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
       {supportsEndFrame && (
@@ -1716,9 +1714,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
-          {data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite"
-            ? "VEO 3.1 produces ~8 second videos (not configurable)."
-            : `${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+          {`${data.provider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
         </p>
       )}
       {(data.provider === "veo3" || data.provider === "veo3.1" || data.provider === "veo3_lite") && (

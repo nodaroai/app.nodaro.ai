@@ -27,7 +27,7 @@ describe("getKieModelConfig", () => {
     expect(config!.model).toBe("veo3")
     expect(config!.credits).toBe(250)
     expect(config!.cost).toBe(1.25)
-    expect(config!.allowedDurations).toEqual([8])
+    expect(config!.allowedDurations).toEqual([4, 6, 8])
   })
 
   it("returns config for tts model elevenlabs-turbo", () => {
@@ -78,8 +78,8 @@ describe("getAllowedDurations", () => {
     expect(getAllowedDurations("video", "kling")).toEqual([5, 10])
   })
 
-  it("returns [8] for veo3 video (fixed duration)", () => {
-    expect(getAllowedDurations("video", "veo3")).toEqual([8])
+  it("returns [4, 6, 8] for veo3 video", () => {
+    expect(getAllowedDurations("video", "veo3")).toEqual([4, 6, 8])
   })
 })
 

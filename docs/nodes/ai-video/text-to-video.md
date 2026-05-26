@@ -24,6 +24,7 @@ The Text to Video node creates video from a text prompt without requiring a sour
 | kling | Enable Sound checkbox |
 | kling-turbo | CFG Scale (0-1) |
 | kling-3.0 | Continuous 3-15s duration, Audio option, dedicated studio config |
+| veo3, veo3.1, veo3_lite | Duration (4/6/8s), Resolution (720p/1080p), Generate Audio toggle, Auto-translate |
 
 ## Inputs & Outputs
 
@@ -64,4 +65,4 @@ Provider notes:
 
 - Text-to-Video generally produces less controllable results than Image-to-Video — use I2V when you need specific visual consistency
 - Kling 3.0 is the only provider offering continuous duration control (3-15s)
-- VEO 3 generates audio by default — useful for scene-appropriate sound
+- VEO 3.1 generates audio by default — useful for scene-appropriate sound. Duration is selectable per generation (4/6/8s) at a flat per-generation price.

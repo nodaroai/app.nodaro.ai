@@ -25,7 +25,7 @@ The Image to Video node animates a still image into a video clip using state-of-
 | sora2, sora2-pro | Quality (standard/high), Remove Watermark (+4 CR) |
 | seedance | Resolution, Aspect Ratio (16:9/9:16/1:1/21:9), Camera Fixed, Generate Audio |
 | seedance-2, seedance-2-fast | Resolution (480p/720p/1080p), Aspect Ratio, Duration (4–15s), Generate Audio, Web Search, NSFW Filter, multimodal references (image/video/audio) |
-| veo3 | Generate Audio toggle |
+| veo3, veo3.1, veo3_lite | Duration (4/6/8s), Resolution (720p/1080p), Generate Audio toggle, Auto-translate |
 | wan-i2v, wan-turbo | Resolution |
 | hailuo | Resolution (512P/768P/1080P) |
 | bytedance | Resolution, Camera Fixed, Seed |
@@ -79,7 +79,7 @@ Provider notes:
 ## Tips
 
 - Runway is a good option for quick previews
-- VEO 3.1 Fast offers a good quality/speed balance at 8 seconds
+- VEO 3.1 Fast offers a good quality/speed balance with selectable 4/6/8s duration (pricing is flat per generation across durations)
 - Kling 3.0 with audio produces sound-enabled video
 - Connect a Camera Motion parameter node to control movement consistently across multiple I2V nodes
 

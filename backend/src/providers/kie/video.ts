@@ -494,7 +494,7 @@ export class KieVideoProvider
       )
     }
 
-    // VEO3 uses a special API endpoint
+    // VEO 3.1 uses a special API endpoint
     if (isVeoProvider(provider)) {
       let imageUrls: string[]
       if (options?.generationType === "REFERENCE_2_VIDEO" && options?.referenceImageUrls?.length) {
@@ -504,6 +504,9 @@ export class KieVideoProvider
           ? [imageUrl!, endFrameUrl]
           : [imageUrl!]
       }
+      const snappedDuration = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
         prompt ?? "smooth cinematic motion",
@@ -514,6 +517,7 @@ export class KieVideoProvider
           generationType: options?.generationType,
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
+          duration: snappedDuration,
         },
         reconcileOpts,
       )
@@ -772,8 +776,11 @@ export class KieVideoProvider
       )
     }
 
-    // VEO3/VEO3.1 uses a special API endpoint
+    // VEO 3.1 uses a special API endpoint
     if (isVeoProvider(provider)) {
+      const snappedDuration = duration
+        ? snapToAllowedDuration(duration, modelConfig.allowedDurations ?? [])
+        : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
         prompt,
@@ -783,6 +790,7 @@ export class KieVideoProvider
           seed: options?.seed,
           resolution: options?.resolution,
           enableTranslation: options?.enableTranslation,
+          duration: snappedDuration,
         },
         reconcileOpts,
       )
