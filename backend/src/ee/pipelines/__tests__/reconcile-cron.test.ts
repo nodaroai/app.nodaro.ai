@@ -4,7 +4,7 @@ interface PipelineRow {
   id: string
   user_id: string
   status: string
-  started_at: string | null
+  created_at: string | null
 }
 
 interface StageRow {
@@ -136,7 +136,7 @@ describe("reconcilePipelinesTick", () => {
       id: "p1",
       user_id: "u1",
       status: "running",
-      started_at: new Date(Date.now() - HOUR).toISOString(),
+      created_at: new Date(Date.now() - HOUR).toISOString(),
     })
     mocks.stages.push({
       id: "s1",
@@ -163,7 +163,7 @@ describe("reconcilePipelinesTick", () => {
       id: "p2",
       user_id: "u1",
       status: "running",
-      started_at: new Date(Date.now() - HOUR).toISOString(),
+      created_at: new Date(Date.now() - HOUR).toISOString(),
     })
     mocks.bullmqJob.set("p2", { state: "active" })
 
@@ -179,7 +179,7 @@ describe("reconcilePipelinesTick", () => {
       id: "p3",
       user_id: "u1",
       status: "running",
-      started_at: new Date(Date.now() - HOUR).toISOString(),
+      created_at: new Date(Date.now() - HOUR).toISOString(),
     })
     // At-cap: current=3, increment would be 4 → > MAX_RESUME (3)
     mocks.stages.push({
@@ -210,7 +210,7 @@ describe("reconcilePipelinesTick", () => {
       user_id: "u1",
       status: "running",
       // 7 hours old
-      started_at: new Date(Date.now() - 7 * HOUR).toISOString(),
+      created_at: new Date(Date.now() - 7 * HOUR).toISOString(),
     })
 
     await reconcilePipelinesTick()
@@ -230,7 +230,7 @@ describe("reconcilePipelinesTick", () => {
       id: "p5",
       user_id: "u1",
       status: "running",
-      started_at: new Date(Date.now() - HOUR).toISOString(),
+      created_at: new Date(Date.now() - HOUR).toISOString(),
     })
     // No stage rows — pipeline is "between stages"
 
