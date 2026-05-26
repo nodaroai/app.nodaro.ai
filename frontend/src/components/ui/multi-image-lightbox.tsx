@@ -140,6 +140,7 @@ export function MultiImageLightbox({ items, startIndex, onClose }: MultiImageLig
             src={current.url}
             alt={current.alt ?? "Preview"}
             className="w-full h-full object-contain"
+            noPlaceholder
           />
         </div>
       ) : null}

@@ -24,8 +24,10 @@ function parseRatio(value: string, label: string): { w: number; h: number } | nu
   return null
 }
 
-/** SVG icon showing a proportional rectangle for the given aspect ratio */
-function RatioIcon({ value, label }: { value: string; label: string }) {
+/** SVG icon showing a proportional rectangle for the given aspect ratio.
+ *  Exported so other surfaces (e.g., the generate-image quick-toolbar's
+ *  aspect-ratio dropdown items) can reuse the same visual. */
+export function RatioIcon({ value, label }: { value: string; label: string }) {
   const ratio = parseRatio(value, label)
   if (!ratio) return <Wand2 className="w-4 h-4 shrink-0" />
 

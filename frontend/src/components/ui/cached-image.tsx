@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { optimizedImageUrl } from "@/lib/image"
 
 // In-memory image cache — keeps decoded images in browser memory
@@ -8,11 +8,54 @@ const preloaded = new Set<string>()
 /** Track URLs that failed direct load and need proxy. */
 const proxyNeeded = new Set<string>()
 
+/** Cache the natural aspect ratio of every URL we've seen — populated as
+ *  a side-effect of any load (placeholder, hi-res, or explicit prefetch).
+ *  Consumed by `useImageAspect` to skip the 320px probe round-trip when
+ *  the lightbox opens for an already-prefetched image. */
+const aspectCache = new Map<string, number>()
+
 /** Default optimization for non-thumbnail (full-size) displays: cap width and
  *  transcode to AVIF/WebP via Cloudflare so the UI never ships a multi-MB
  *  original PNG. Downloads/originals don't use this component, so they're
  *  unaffected. Matches the "balanced" tier (~300–800KB on a 7MB source). */
 const FULL_VIEW_OPTS = { width: 2048, quality: 85 } as const
+
+/** Returns the cached natural aspect ratio (width / height) for a source
+ *  URL, or undefined if we haven't loaded it yet. Used by `useImageAspect`
+ *  to skip the probe round-trip after a successful prefetch. */
+export function getCachedImageAspect(url: string | null | undefined): number | undefined {
+  if (!url) return undefined
+  return aspectCache.get(url) ?? aspectCache.get(optimizedImageUrl(url, FULL_VIEW_OPTS))
+}
+
+/** Prefetch the full-size (FULL_VIEW_OPTS) variant of a source URL into
+ *  the browser cache + the in-memory `preloaded` Set. Safe to call
+ *  multiple times for the same URL — short-circuits on duplicate calls.
+ *  Use this on hover/focus of any thumbnail that opens a lightbox so the
+ *  hi-res is already decoded by the time the user clicks Enlarge. */
+export function prefetchFullSizeImage(url: string | null | undefined): void {
+  if (!url) return
+  const fullSrc = optimizedImageUrl(url, FULL_VIEW_OPTS)
+  if (preloaded.has(fullSrc)) return
+  if (isKnownCorpBlocked(fullSrc)) return  // proxy-required hosts skip direct prefetch
+  // Mark optimistically to avoid duplicate concurrent fetches; downgrade
+  // on error so a subsequent attempt can retry.
+  preloaded.add(fullSrc)
+  const img = new Image()
+  if (isInternalUrl(fullSrc)) img.crossOrigin = "anonymous"
+  else img.referrerPolicy = "no-referrer"
+  img.onload = () => {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      const aspect = img.naturalWidth / img.naturalHeight
+      aspectCache.set(url, aspect)
+      aspectCache.set(fullSrc, aspect)
+    }
+  }
+  img.onerror = () => {
+    preloaded.delete(fullSrc)
+  }
+  img.src = fullSrc
+}
 
 /** External hosts known to set Cross-Origin-Resource-Policy, which blocks
  *  direct browser loading. Skip the direct preload entirely for these and
@@ -49,6 +92,7 @@ export function CachedImage({
   thumbnail,
   thumbnailWidth,
   raw,
+  noPlaceholder,
   ...props
 }: React.ImgHTMLAttributes<HTMLImageElement> & {
   thumbnail?: boolean
@@ -57,6 +101,13 @@ export function CachedImage({
    *  exact original pixels are required — downloads should not use this
    *  component at all. */
   raw?: boolean
+  /** Disable the 320px low-res placeholder. Use in lightboxes/fullscreen
+   *  surfaces where the placeholder scales up 4-6× and looks blurry/small
+   *  for a moment until the hi-res decodes. With this set, the image stays
+   *  invisible (opacity 0 via the existing `loaded` gate) until the hi-res
+   *  paints — combined with hover-prefetch on the source thumbnail, the
+   *  hi-res is typically ready immediately and the user never sees a flash. */
+  noPlaceholder?: boolean
   /** Fires once per successful load with the rendered image's natural pixel
    *  size. Used by media nodes to capture and persist aspect ratio on the
    *  GeneratedResult so result-switching is synchronous. */
@@ -76,8 +127,13 @@ export function CachedImage({
   // effectiveSrc !== src), show a small ~320px version first, then swap in the
   // capped 2048 version once it has decoded. The 320px width matches the common
   // grid thumbnail tier, so it's usually already cached and paints instantly.
+  // Opted out via `noPlaceholder` for fullscreen lightboxes — the 320 scales up
+  // 4-6× there and looks blurry/small until the hi-res lands. With placeholder
+  // disabled, the img stays invisible (opacity 0 via the existing `loaded`
+  // gate) until hi-res paints; hover-prefetch on the source thumbnail
+  // typically eliminates any visible gap.
   const placeholderSrc =
-    src && effectiveSrc && effectiveSrc !== src && !thumbnail && !raw
+    src && effectiveSrc && effectiveSrc !== src && !thumbnail && !raw && !noPlaceholder
       ? optimizedImageUrl(src, { width: 320 })
       : null
 
@@ -92,6 +148,8 @@ export function CachedImage({
   // Preload the hi-res target and flip hiReady once it has decoded, so the
   // placeholder can be swapped out. Skips CORP-blocked hosts (routed through the
   // proxy below) and resets to show the placeholder again on a new uncached src.
+  // Also populates the aspect cache so a subsequent lightbox-open can skip its
+  // own probe.
   useEffect(() => {
     if (!effectiveSrc) return
     if (preloaded.has(effectiveSrc)) { setHiReady(true); return }
@@ -100,10 +158,18 @@ export function CachedImage({
     const img = new Image()
     if (isInternalUrl(effectiveSrc)) img.crossOrigin = "anonymous"
     else img.referrerPolicy = "no-referrer"
-    img.onload = () => { preloaded.add(effectiveSrc); setHiReady(true) }
+    img.onload = () => {
+      preloaded.add(effectiveSrc)
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const aspect = img.naturalWidth / img.naturalHeight
+        if (src) aspectCache.set(src, aspect)
+        aspectCache.set(effectiveSrc, aspect)
+      }
+      setHiReady(true)
+    }
     img.onerror = () => {}
     img.src = effectiveSrc
-  }, [effectiveSrc])
+  }, [effectiveSrc, src])
 
   // Check if already complete (memory cache hit)
   useEffect(() => {
@@ -124,6 +190,16 @@ export function CachedImage({
   const showSrc = placeholderSrc && !hiReady ? placeholderSrc : effectiveSrc
   const displaySrc = useProxy && effectiveSrc ? proxyUrl(effectiveSrc) : showSrc
 
+  // Auto-prefetch the full-size variant when the user hovers a clickable
+  // thumbnail. The typical pattern is "thumbnail with onClick → opens
+  // lightbox", so the hi-res should already be decoded by the time the
+  // user actually clicks Enlarge. Skip when raw/full-view (the visible
+  // image IS the hi-res already) or no onClick (no lightbox to optimize).
+  const shouldPrefetchOnHover = !raw && thumbnail && !!onClick && !!src
+  const handlePointerEnter = useCallback(() => {
+    if (shouldPrefetchOnHover && src) prefetchFullSizeImage(src)
+  }, [shouldPrefetchOnHover, src])
+
   return (
     <img
       ref={imgRef}
@@ -133,6 +209,7 @@ export function CachedImage({
       alt={alt}
       className={className}
       onClick={onClick}
+      onPointerEnter={shouldPrefetchOnHover ? handlePointerEnter : undefined}
       draggable={draggable}
       onLoad={(e) => {
         setLoaded(true)

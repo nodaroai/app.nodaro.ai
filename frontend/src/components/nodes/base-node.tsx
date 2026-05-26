@@ -45,6 +45,11 @@ interface BaseNodeProps {
   readonly hideHeader?: boolean
   readonly bottomToolbarContent?: ReactNode
   readonly topToolbarContent?: ReactNode
+  /** Force `topToolbarContent`'s NodeToolbar to stay visible regardless of
+   *  hover. Used when the toolbar contains dropdowns/popovers whose portaled
+   *  content lands outside the node's hover boundary — without this the
+   *  bar disappears mid-pick after the 600ms leave delay. */
+  readonly keepTopToolbarVisible?: boolean
   readonly className?: string
   readonly imageAspectRatio?: number
 }
@@ -120,6 +125,7 @@ function BaseNodeComponent({
   hideHeader = false,
   bottomToolbarContent,
   topToolbarContent,
+  keepTopToolbarVisible,
   className,
   imageAspectRatio,
 }: BaseNodeProps) {
@@ -541,7 +547,7 @@ function BaseNodeComponent({
     </div>
       {/* Content below card (e.g. run button) */}
       {topToolbarContent && (
-        <NodeToolbar align="center" isVisible={isHovered} position={Position.Bottom} offset={4}>
+        <NodeToolbar align="center" isVisible={isHovered || !!keepTopToolbarVisible} position={Position.Bottom} offset={4}>
           {topToolbarContent}
         </NodeToolbar>
       )}

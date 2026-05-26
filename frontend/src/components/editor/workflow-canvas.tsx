@@ -1235,16 +1235,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       }
 
       // Skip workflow shortcuts when a fullscreen overlay is open: config panel
-      // expanded, image edit, freecut, or any open dialog/lightbox. Lets the
-      // active overlay handle keys (arrow nav inside the modal, text selection
-      // copy, etc.) instead of moving nodes underneath. Radix Dialog unmounts
-      // on close, so a present `[role="dialog"]` indicates an open modal.
+      // expanded, image edit, freecut, or any open MODAL dialog/lightbox. Lets
+      // the active overlay handle keys (arrow nav inside the modal, text
+      // selection copy, etc.) instead of moving nodes underneath. Scope the
+      // DOM check to `[aria-modal="true"]` so non-modal Radix Popovers (handle
+      // popover, tooltips, dropdowns — all share `role="dialog"` by Radix
+      // default) DON'T trip the gate. Without the aria-modal scope, opening a
+      // handle popover would silently disable Cmd+Z / Cmd+Shift+Z and every
+      // other shortcut below.
       const storeState = useWorkflowStore.getState()
       const overlayOpen =
         storeState.configPanelFullscreen ||
         storeState.freecutEdit !== null ||
         storeState.imageEdit !== null ||
-        !!document.querySelector('[role="dialog"]')
+        !!document.querySelector('[role="dialog"][aria-modal="true"]')
       if (overlayOpen) return
 
       // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y — Redo
