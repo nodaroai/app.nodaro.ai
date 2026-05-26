@@ -26,6 +26,30 @@ export interface ConnectionShape {
   readonly targetHandle?: string | null
 }
 
+export interface EdgeShape {
+  readonly source: string
+  readonly target: string
+}
+
+/**
+ * Adjacency index: source-id → list of target-ids. Build once per
+ * connection-validation pass (memoize on the edges array) and reuse across
+ * every probe — the alternative, rescanning all edges per probe, is
+ * O(N×E) and gets very slow on large flows during drag-to-connect (React
+ * Flow probes isValidConnection on every cursor move).
+ */
+export type AdjacencyIndex = ReadonlyMap<string, readonly string[]>
+
+export function buildAdjacency(edges: readonly EdgeShape[]): AdjacencyIndex {
+  const adj = new Map<string, string[]>()
+  for (const e of edges) {
+    const arr = adj.get(e.source)
+    if (arr) arr.push(e.target)
+    else adj.set(e.source, [e.target])
+  }
+  return adj
+}
+
 /**
  * Pure validity check for a workflow connection. Mirrors the rules enforced
  * by `<ReactFlow isValidConnection>` in `workflow-canvas.tsx` so any code path
@@ -35,10 +59,16 @@ export interface ConnectionShape {
  * Pass `getNodeType(id)` so the helper stays decoupled from React Flow's
  * `getNode` API — call sites either reach into the store or the React Flow
  * instance and project to just the type string.
+ *
+ * Pass `graph` (a precomputed `AdjacencyIndex`) to enable acyclic-DAG
+ * enforcement (rejects self-loops and connections whose target already has
+ * a downstream path to the source). Optional so call sites without the
+ * edge list still get type-validation; every UI surface should pass it.
  */
 export function isValidWorkflowConnection(
   connection: ConnectionShape,
   getNodeType: (id: string) => string | undefined,
+  graph?: AdjacencyIndex,
 ): boolean {
   // Helper to resolve a connection endpoint to its node type. Uses the
   // ternary form (not `?? ""`) so we don't do a Map lookup with an empty-
@@ -46,6 +76,23 @@ export function isValidWorkflowConnection(
   // ternary makes the intent explicit and matches the pattern used below.
   const typeOf = (id: string | null | undefined): string | undefined =>
     id ? getNodeType(id) : undefined
+
+  // Reject self-loops outright (cycle of length 1). Also covers the case
+  // where the user drags an output handle back to a different input on the
+  // same node — the workflow engine is a DAG and cannot execute a node
+  // before itself.
+  if (connection.source && connection.target && connection.source === connection.target) {
+    return false
+  }
+
+  // Reject any connection that would close a directed cycle. Starting from
+  // the prospective target, DFS downstream along existing edges — if we
+  // reach the prospective source, adding source→target closes a cycle.
+  if (graph && connection.source && connection.target) {
+    if (wouldCreateCycle(graph, connection.source, connection.target)) {
+      return false
+    }
+  }
 
   // Composition output may ONLY target render-video. (Same rule as in
   // workflow-canvas.tsx::isValidConnection.)
@@ -73,4 +120,123 @@ export function isValidWorkflowConnection(
   }
 
   return true
+}
+
+/**
+ * DFS downstream from `newTarget` along the adjacency index. Returns true
+ * iff we can reach `newSource` — meaning a path `newTarget → … → newSource`
+ * already exists, and adding `newSource → newTarget` would close a cycle.
+ *
+ * DFS over BFS: `stack.pop()` is O(1) where `Array.prototype.shift()` is
+ * O(n) on a growing queue — a big deal on dense flows. Reachability is
+ * direction-agnostic, so DFS is equally correct here.
+ *
+ * Uses a visited set so dense graphs don't re-explore subtrees. Early-exits
+ * the moment `newSource` is hit (typical case: small bounce on a sink).
+ */
+function wouldCreateCycle(
+  adj: AdjacencyIndex,
+  newSource: string,
+  newTarget: string,
+): boolean {
+  const visited = new Set<string>()
+  const stack: string[] = [newTarget]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (current === newSource) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+    const outs = adj.get(current)
+    if (outs) {
+      for (const t of outs) {
+        if (!visited.has(t)) stack.push(t)
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Returns the set of nodes reachable downstream from `root` (inclusive).
+ * Run ONCE per consumer in callers that probe many candidate sources —
+ * any candidate whose id is in this set would create a cycle if used as
+ * the source of an edge into `root`, so candidate filtering collapses
+ * from O(N × cycle-BFS) to O(1) membership tests after a single O(V+E)
+ * traversal.
+ */
+export function collectDescendants(
+  adj: AdjacencyIndex,
+  root: string,
+): ReadonlySet<string> {
+  const visited = new Set<string>()
+  const stack: string[] = [root]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (visited.has(current)) continue
+    visited.add(current)
+    const outs = adj.get(current)
+    if (outs) {
+      for (const t of outs) {
+        if (!visited.has(t)) stack.push(t)
+      }
+    }
+  }
+  return visited
+}
+
+/**
+ * Reverse adjacency: target-id → list of source-ids. Together with
+ * `collectDescendants` this gives ancestor traversal — pass the reverse
+ * adjacency as the `adj` arg and the function walks UPSTREAM.
+ *
+ * Same one-pass build complexity as `buildAdjacency` (O(E)), so building
+ * both forward + reverse off a single edges array is still O(E) total.
+ */
+export function buildReverseAdjacency(edges: readonly EdgeShape[]): AdjacencyIndex {
+  const adj = new Map<string, string[]>()
+  for (const e of edges) {
+    const arr = adj.get(e.target)
+    if (arr) arr.push(e.source)
+    else adj.set(e.target, [e.source])
+  }
+  return adj
+}
+
+/**
+ * Single-entry memo of `collectDescendants(buildReverseAdjacency(edges), fromNodeId)`
+ * — the set of nodes that can reach `fromNodeId` upstream, i.e. the
+ * ancestors of `fromNodeId` (inclusive of itself).
+ *
+ * Why a module-level cache: during a drag-to-connect, every visible
+ * HandleWithPopover re-derives `isValidCandidate` and needs to ask
+ * "would my node create a cycle if I accept this drag?" The answer
+ * depends only on (edges ref, drag-source nodeId) — both stable for the
+ * duration of one drag. Without the cache, each handle (often dozens
+ * per visible viewport) would rebuild the same reverse adjacency + run
+ * the same DFS, O(V+E) per handle. With the cache, exactly one of them
+ * pays that cost; the rest hit the cache.
+ *
+ * Cache invalidates on any change to `edges` reference or `fromNodeId`,
+ * which matches every drag start/end and every edge mutation.
+ */
+let cachedAncestorsEdges: readonly EdgeShape[] | null = null
+let cachedAncestorsFromId: string | null = null
+let cachedAncestorsResult: ReadonlySet<string> | null = null
+
+export function getDragAncestorSet(
+  edges: readonly EdgeShape[],
+  fromNodeId: string,
+): ReadonlySet<string> {
+  if (
+    edges === cachedAncestorsEdges &&
+    fromNodeId === cachedAncestorsFromId &&
+    cachedAncestorsResult !== null
+  ) {
+    return cachedAncestorsResult
+  }
+  const result = collectDescendants(buildReverseAdjacency(edges), fromNodeId)
+  cachedAncestorsEdges = edges
+  cachedAncestorsFromId = fromNodeId
+  cachedAncestorsResult = result
+  return result
 }

@@ -1509,8 +1509,13 @@ export function buildPayload(
           // LoRA path emits zero refs — the trained LoRA + trigger word carry identity.
           referenceImageUrls: lora ? [] : result.referenceImageUrls,
           provider: effectiveProvider,
-          // Hand the synthetic model id to the Replicate provider when LoRA is active.
-          model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : (data.model as string | undefined),
+          // Hand the synthetic model id to the Replicate provider when LoRA is
+          // active. Otherwise pass `undefined` so the worker falls back to
+          // `provider` for routing — `data.model` is a frontend DISPLAY name
+          // (e.g. "gemini-2.5-flash-image" for "nano-banana") and is NOT a
+          // valid provider/router model identifier. Matches the single-node
+          // route at `routes/generate-image.ts:288`.
+          model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
           aspectRatio: data.aspectRatio,
           resolution: data.resolution,
           quality: data.quality,
