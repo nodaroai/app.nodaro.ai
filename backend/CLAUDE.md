@@ -177,8 +177,8 @@ backend/src/providers/
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
-| Video | veo3 | $1.25 | 8s fixed | imageUrls[] |
-| Video | veo3.1 | $0.30 | 8s fixed | imageUrls[] |
+***REDACTED-OSS-SCRUB***
+***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
 ***REDACTED-OSS-SCRUB***
@@ -203,7 +203,7 @@ backend/src/providers/
 All use **lowercase with hyphens** except VEO which uses **dot notation**: `veo3`, `veo3.1` (NOT `veo-3` or `veo_3.1`)
 
 ### Duration Validation
-- VEO3/VEO3.1: Fixed 8 seconds (no duration parameter)
+- VEO 3.1 (veo3 Quality, veo3.1 Fast, veo3_lite): 4 / 6 / 8 seconds (flat per-generation pricing)
 - Kling/Kling-Turbo/Kling-Master: 5 or 10 seconds
 - Kling 3.0: 3-15 seconds (3, 4, 5, 6, 7, 8, 9, 10, 15)
 - MiniMax: Fixed 5 seconds
@@ -566,17 +566,20 @@ Unified interface for all LLM calls across 7 models and 3 tiers:
 
 ---
 
-## VEO 3/3.1 Configuration
+## VEO 3.1 Configuration
 
-| Feature | VEO 3 (`veo3`) | VEO 3.1 (`veo3.1`) |
-|---------|----------------|---------------------|
-| KIE model | `veo3` | `veo3_fast` |
-| Duration | 8s fixed | 8s fixed |
-| Aspect ratio | Auto / 16:9 / 9:16 | Auto / 16:9 / 9:16 |
-| Seed | 10000-99999 | 10000-99999 |
-| Generate audio | N/A | Checkbox (default on) |
-| I2V support | `imageUrls: [start, end?]` | `imageUrls: [start, end?]` |
-| T2V support | Yes | Yes (added via VEO 3.1 Fast) |
+All three tiers are VEO 3.1 per [docs.kie.ai/veo3-api/generate-veo-3-video](https://docs.kie.ai/veo3-api/generate-veo-3-video). The bare `veo3` model id is legacy naming — it maps to VEO 3.1 Quality on KIE's endpoint. Existing workflows keep working; only the user-facing labels say "VEO 3.1".
+
+| Feature | Quality (`veo3` → `veo3`) | Fast (`veo3.1` → `veo3_fast`) | Lite (`veo3_lite` → `veo3_lite`) |
+|---------|----------------------------|--------------------------------|-----------------------------------|
+| Duration | 4 / 6 / 8s | 4 / 6 / 8s | 4 / 6 / 8s |
+| Pricing | Flat per generation (250 KIE cr) | Flat per generation (60 cr @ 720p, 65 @ 1080p) | Flat per generation (30 cr @ 720p, 35 @ 1080p) |
+| Resolution | 720p / 1080p (4K via upgrade node) | 720p / 1080p | 720p / 1080p |
+| Aspect ratio | Auto / 16:9 / 9:16 | Auto / 16:9 / 9:16 | Auto / 16:9 / 9:16 |
+| Seed | 10000-99999 | 10000-99999 | 10000-99999 |
+| Generate audio | Checkbox (default on) | Checkbox (default on) | Checkbox (default on) |
+| Start + end frame | `imageUrls: [start, end?]` | `imageUrls: [start, end?]` | `imageUrls: [start, end?]` |
+| T2V | Yes | Yes | Yes |
 
 ### Sora Watermark Removal
 - `sora-watermark-remove` in `KIE_SPECIAL_MODELS` (model: `sora-2-watermark-remove`, 10 KIE credits)

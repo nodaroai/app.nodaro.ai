@@ -74,6 +74,80 @@ export function getParallelismLimit(tier: string | undefined): number {
  */
 const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 
+/**
+ * Reconcile a single execution's `node_states` against the actual `jobs`
+ * table. The previous orchestrator process may have died AFTER a child
+ * job reached a terminal state but BEFORE persisting the matching
+ * node_state update — without this, `cleanupStaleExecutions` saw stale
+ * "running"/"pending" entries and left the workflow row sitting at
+ * `status='running'` indefinitely until BullMQ's stalled-job retry
+ * (15-60 min) or the 4-hour abandon threshold fired.
+ *
+ * Returns the reconciled states + a flag indicating whether any change
+ * was made (so the caller can decide whether to persist the new map).
+ *
+ * Only touches node_states entries whose current status is "running" or
+ * "pending" AND whose jobId(s) point to a terminal job in DB — leaves
+ * everything else alone (no false positives on actively-processing jobs).
+ */
+async function reconcileNodeStatesFromJobs(
+  states: Record<string, NodeExecutionState>,
+): Promise<{ next: Record<string, NodeExecutionState>; changed: boolean }> {
+  const jobIdToNodeId = new Map<string, string>()
+  for (const [nodeId, st] of Object.entries(states)) {
+    if (st?.status !== "running" && st?.status !== "pending") continue
+    if (typeof st.jobId === "string" && st.jobId) jobIdToNodeId.set(st.jobId, nodeId)
+    if (Array.isArray(st.jobIds)) {
+      for (const jid of st.jobIds) {
+        if (typeof jid === "string" && jid) jobIdToNodeId.set(jid, nodeId)
+      }
+    }
+  }
+  if (jobIdToNodeId.size === 0) return { next: states, changed: false }
+
+  // Single batched query — cheaper than N round-trips. Index on jobs.id (PK)
+  // makes the IN-list scan trivial.
+  const jobIds = Array.from(jobIdToNodeId.keys())
+  const { data: jobs } = await supabase
+    .from("jobs")
+    .select("id, status, error_message")
+    .in("id", jobIds)
+  if (!jobs || jobs.length === 0) return { next: states, changed: false }
+
+  // Shallow-copy state map + entries so we don't mutate the caller's input.
+  const next: Record<string, NodeExecutionState> = {}
+  for (const [nodeId, st] of Object.entries(states)) {
+    next[nodeId] = { ...st }
+  }
+  let changed = false
+
+  for (const job of jobs) {
+    const nodeId = jobIdToNodeId.get(job.id as string)
+    if (!nodeId) continue
+    const nodeSt = next[nodeId]
+    if (!nodeSt) continue
+    const jobStatus = job.status as string
+    if (jobStatus === "completed" && nodeSt.status !== "completed") {
+      nodeSt.status = "completed"
+      changed = true
+    } else if ((jobStatus === "failed" || jobStatus === "cancelled") && nodeSt.status !== "failed") {
+      // `NodeExecutionStatus` has no "cancelled" — the orchestrator
+      // collapses a cancelled child job into a failed node-state with the
+      // cancellation reason as the error message. Mirror that here.
+      nodeSt.status = "failed"
+      const errMsg = job.error_message
+      if (typeof errMsg === "string" && errMsg) nodeSt.error = errMsg
+      else if (jobStatus === "cancelled") nodeSt.error = "Job cancelled"
+      changed = true
+    }
+    // pending / processing → leave node_state alone; the orchestrator may
+    // still pick this up via BullMQ retry. Marking it terminal here would
+    // create a race against in-flight work.
+  }
+
+  return { next, changed }
+}
+
 async function cleanupStaleExecutions(): Promise<void> {
   const { data: rows, error } = await supabase
     .from("workflow_executions")
@@ -82,28 +156,60 @@ async function cleanupStaleExecutions(): Promise<void> {
 
   if (error || !rows || rows.length === 0) return
 
-  let reconciled = 0
+  let reconciledCompleted = 0
+  let reconciledFailed = 0
   let abandoned = 0
   const now = Date.now()
 
   for (const row of rows) {
-    const states = (row.node_states ?? {}) as Record<string, { status?: string }>
+    const rawStates = (row.node_states ?? {}) as Record<string, NodeExecutionState>
+
+    // Reconcile node_states from the jobs table before deciding what to do.
+    // If the previous orchestrator died after the worker marked a child
+    // job completed but before it could write node_states[X]="completed",
+    // this catches that case and lets us close out the execution cleanly.
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates)
+
     const nodeStatuses = Object.values(states).map((s) => s?.status)
     const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")
+    const anyFailed = nodeStatuses.some((s) => s === "failed")
+    const anyActive = nodeStatuses.some((s) => s === "pending" || s === "running")
 
     if (allCompleted) {
       // .neq("status", "cancelled") to avoid the same overwrite race during
       // stale-execution reconciliation: row was selected with status="running"
       // but the user could cancel between SELECT and this UPDATE.
+      const updates: Record<string, unknown> = {
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      }
+      if (changed) updates.node_states = states
       await supabase
         .from("workflow_executions")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-        })
+        .update(updates)
         .eq("id", row.id)
         .neq("status", "cancelled")
-      reconciled++
+      reconciledCompleted++
+      continue
+    }
+
+    // If reconciliation reveals a terminal failure AND no nodes are still
+    // pending/running in DB, mark the execution as failed. This recovers
+    // executions where the orchestrator died after a child failure but
+    // before propagating it to the execution row.
+    if (anyFailed && !anyActive) {
+      const updates: Record<string, unknown> = {
+        status: "failed",
+        error_message: "Execution failed — child job error (reconciled on orchestrator restart)",
+        completed_at: new Date().toISOString(),
+      }
+      if (changed) updates.node_states = states
+      await supabase
+        .from("workflow_executions")
+        .update(updates)
+        .eq("id", row.id)
+        .neq("status", "cancelled")
+      reconciledFailed++
       continue
     }
 
@@ -125,8 +231,12 @@ async function cleanupStaleExecutions(): Promise<void> {
     }
   }
 
+  const reconciled = reconciledCompleted + reconciledFailed
   if (reconciled > 0 || abandoned > 0) {
-    console.log(`[orchestrator] Startup reconcile: ${reconciled} completed, ${abandoned} abandoned, ${rows.length - reconciled - abandoned} left for retry`)
+    const leftForRetry = rows.length - reconciled - abandoned
+    console.log(
+      `[orchestrator] Startup reconcile: ${reconciledCompleted} completed, ${reconciledFailed} failed, ${abandoned} abandoned, ${leftForRetry} left for retry`,
+    )
   }
 }
 

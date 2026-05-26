@@ -525,7 +525,7 @@ export async function runVeoTask(
   model: string,
   prompt: string,
   imageUrls?: string[],
-  options?: { aspectRatio?: string; seed?: number; generationType?: string; resolution?: string; enableTranslation?: boolean },
+  options?: { aspectRatio?: string; seed?: number; generationType?: string; resolution?: string; enableTranslation?: boolean; duration?: number },
   reconcileOpts?: ReconcileOpts,
 ): Promise<{
   resultJson: KieResultJson
@@ -580,6 +580,11 @@ export async function runVeoTask(
   // /api/v1/veo/get-4k-video endpoint and is exposed via a dedicated node.
   if (options?.resolution) {
     requestBody.resolution = options.resolution
+  }
+  // Default 8s on KIE; we send only when caller specifies. Caller is
+  // responsible for snapping to allowed [4, 6, 8] via snapToAllowedDuration.
+  if (options?.duration !== undefined) {
+    requestBody.duration = options.duration
   }
   // Default true upstream. Surfaced so users with non-English prompts
   // can opt out of KIE's auto-translate (which can subtly rewrite the
