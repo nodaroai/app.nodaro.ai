@@ -26,7 +26,7 @@ import { settledWithLimit } from "../../lib/settled-with-limit.js"
  *     (stages are idempotent at the entity-key level — UNIQUE constraint on
  *     `pipeline_entities (pipeline_id, entity_key)` prevents duplicate inserts)
  */
-const MAX_RESUME = 3
+export const MAX_RESUME = 3
 
 /**
  * Concurrency cap for the per-job resume fan-out. Resume happens at worker

@@ -11,6 +11,7 @@ import { config, hasCredits } from "../lib/config.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
+import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
@@ -73,80 +74,6 @@ export function getParallelismLimit(tier: string | undefined): number {
  *      reasonably take (safety net for truly abandoned rows).
  */
 const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
-
-/**
- * Reconcile a single execution's `node_states` against the actual `jobs`
- * table. The previous orchestrator process may have died AFTER a child
- * job reached a terminal state but BEFORE persisting the matching
- * node_state update — without this, `cleanupStaleExecutions` saw stale
- * "running"/"pending" entries and left the workflow row sitting at
- * `status='running'` indefinitely until BullMQ's stalled-job retry
- * (15-60 min) or the 4-hour abandon threshold fired.
- *
- * Returns the reconciled states + a flag indicating whether any change
- * was made (so the caller can decide whether to persist the new map).
- *
- * Only touches node_states entries whose current status is "running" or
- * "pending" AND whose jobId(s) point to a terminal job in DB — leaves
- * everything else alone (no false positives on actively-processing jobs).
- */
-async function reconcileNodeStatesFromJobs(
-  states: Record<string, NodeExecutionState>,
-): Promise<{ next: Record<string, NodeExecutionState>; changed: boolean }> {
-  const jobIdToNodeId = new Map<string, string>()
-  for (const [nodeId, st] of Object.entries(states)) {
-    if (st?.status !== "running" && st?.status !== "pending") continue
-    if (typeof st.jobId === "string" && st.jobId) jobIdToNodeId.set(st.jobId, nodeId)
-    if (Array.isArray(st.jobIds)) {
-      for (const jid of st.jobIds) {
-        if (typeof jid === "string" && jid) jobIdToNodeId.set(jid, nodeId)
-      }
-    }
-  }
-  if (jobIdToNodeId.size === 0) return { next: states, changed: false }
-
-  // Single batched query — cheaper than N round-trips. Index on jobs.id (PK)
-  // makes the IN-list scan trivial.
-  const jobIds = Array.from(jobIdToNodeId.keys())
-  const { data: jobs } = await supabase
-    .from("jobs")
-    .select("id, status, error_message")
-    .in("id", jobIds)
-  if (!jobs || jobs.length === 0) return { next: states, changed: false }
-
-  // Shallow-copy state map + entries so we don't mutate the caller's input.
-  const next: Record<string, NodeExecutionState> = {}
-  for (const [nodeId, st] of Object.entries(states)) {
-    next[nodeId] = { ...st }
-  }
-  let changed = false
-
-  for (const job of jobs) {
-    const nodeId = jobIdToNodeId.get(job.id as string)
-    if (!nodeId) continue
-    const nodeSt = next[nodeId]
-    if (!nodeSt) continue
-    const jobStatus = job.status as string
-    if (jobStatus === "completed" && nodeSt.status !== "completed") {
-      nodeSt.status = "completed"
-      changed = true
-    } else if ((jobStatus === "failed" || jobStatus === "cancelled") && nodeSt.status !== "failed") {
-      // `NodeExecutionStatus` has no "cancelled" — the orchestrator
-      // collapses a cancelled child job into a failed node-state with the
-      // cancellation reason as the error message. Mirror that here.
-      nodeSt.status = "failed"
-      const errMsg = job.error_message
-      if (typeof errMsg === "string" && errMsg) nodeSt.error = errMsg
-      else if (jobStatus === "cancelled") nodeSt.error = "Job cancelled"
-      changed = true
-    }
-    // pending / processing → leave node_state alone; the orchestrator may
-    // still pick this up via BullMQ retry. Marking it terminal here would
-    // create a race against in-flight work.
-  }
-
-  return { next, changed }
-}
 
 async function cleanupStaleExecutions(): Promise<void> {
   const { data: rows, error } = await supabase
