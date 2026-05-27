@@ -20,6 +20,7 @@ import { ScriptPanel } from "./script-panel"
 import { EntityGrid } from "./entity-grid"
 import { CharactersPanel } from "./characters-panel"
 import { SceneGrid } from "./scene-grid"
+import { StageApproveBar } from "./stage-approve-bar"
 import { DriftBanner } from "./drift-banner"
 import { ForkButton } from "./fork-button"
 import { ModeSwitchButton } from "./mode-switch-button"
@@ -220,6 +221,30 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     },
     retry: false,
   })
+
+  // Entity-stage batch-approval gate (characters / objects / locations). These
+  // stages pause at a stage-level `awaiting_approval` once every entity has its
+  // variants generated (backend characters.ts variant-batch gate). Unlike
+  // script, the entity grids render only per-entity approve — so we surface the
+  // stage status here to drive the StageApproveBar, polling the current entity
+  // stage until it advances (approved).
+  const entityStageName: PipelineStageName | null =
+    pipelineQuery.data?.current_stage === "characters" ||
+    pipelineQuery.data?.current_stage === "objects" ||
+    pipelineQuery.data?.current_stage === "locations"
+      ? (pipelineQuery.data.current_stage as PipelineStageName)
+      : null
+  const entityStageQuery = useQuery({
+    queryKey: ["pipeline-stage", pipelineId, entityStageName ?? "none"],
+    queryFn: () =>
+      pipelinesApi.getStage(pipelineId, entityStageName as PipelineStageName),
+    enabled: entityStageName !== null,
+    refetchInterval: (q) => {
+      if (isTerminalPipelineStatus(pipelineQuery.data?.status)) return false
+      return q.state.data?.status === "approved" ? false : 4000
+    },
+    retry: false,
+  })
   const setActivePipelineStatus = useWorkflowStore((s) => s.setActivePipelineStatus)
   // SSE `pipeline:forked` flips `activePipelineStatus` to "forked"; reading
   // from the store wins over the polled value so the ForkButton hides
@@ -254,6 +279,7 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       void animateStageQuery.refetch()
       void sceneImagesStageQuery.refetch()
       void postMergeStageQuery.refetch()
+      void entityStageQuery.refetch()
     }
     // Stage-level events: only refetch the affected stage query (was
     // indiscriminately refetching every stage query on every `stage:status`
@@ -271,6 +297,13 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       }
       if (lastEvent.stageName === "post_merge") {
         void postMergeStageQuery.refetch()
+      }
+      if (
+        lastEvent.stageName === "characters" ||
+        lastEvent.stageName === "objects" ||
+        lastEvent.stageName === "locations"
+      ) {
+        void entityStageQuery.refetch()
       }
     }
     // Phase 1C.2 — sub-gate just opened; pull the latest stage output so
@@ -309,9 +342,9 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
     setVideoCriticDismissed(false)
   }, [pipelineId])
 
-  async function handleApprove() {
+  async function handleApproveStage(stage: PipelineStageName) {
     try {
-      await pipelinesApi.approveStage(pipelineId, "script")
+      await pipelinesApi.approveStage(pipelineId, stage)
     } catch (err) {
       // 409 `stage_already_advanced` means the stage was approved by a
       // prior click (or a concurrent path); the desired end state is
@@ -321,6 +354,12 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
       if (!msg.includes("stage_already_advanced")) throw err
     }
     void pipelineQuery.refetch()
+    void entityStageQuery.refetch()
+  }
+
+  // Script-stage approve (wired to the ScriptPanel / StageRow onApprove).
+  function handleApprove() {
+    void handleApproveStage("script")
   }
 
   async function handleReject() {
@@ -723,6 +762,19 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
         {pipeline?.current_stage === "shot_list" && (
           <SceneGrid pipelineId={pipelineId} title="5. Shot List" />
         )}
+        {/* Stage-level batch-approval gate for the entity stages. characters/
+            objects/locations pause at `awaiting_approval` after all variants
+            generate; the entity grids only do per-entity approve, so this bar
+            is the sole UI path to advance the stage (approveStage). Hidden in
+            auto mode — the orchestrator advances itself there. */}
+        {entityStageName &&
+          entityStageQuery.data?.status === "awaiting_approval" &&
+          pipeline?.mode !== "auto" && (
+            <StageApproveBar
+              stageLabel={STAGE_LABELS[entityStageName]}
+              onApprove={() => handleApproveStage(entityStageName)}
+            />
+          )}
       </div>
 
       {/* Phase 1D.2a §4.5 — Auto-mode critic-failure surface. Triggered when
