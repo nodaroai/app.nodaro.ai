@@ -6,10 +6,13 @@ import { Braces, FileText } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { ExtractFieldNodeData } from "@/types/nodes"
+import { isValidExtractFieldConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+
+const ACCEPTS_IN = (t: string) => isValidExtractFieldConnection("in", t)
 
 function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ExtractFieldNodeData
@@ -46,8 +49,8 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, external: true },
+          { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -68,8 +71,8 @@ function ExtractFieldNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={isJsonOutput ? <Braces /> : <FileText />} color={isJsonOutput ? "indigo" : "steel"} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="extract-field" handleId="in"   type="target" position={Position.Left}  label="Source" color={DATA_HANDLE_COLORS.json} icon={<Braces />}                                  side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="extract-field" handleId="text" type="source" position={Position.Right} label={isJsonOutput ? "JSON" : "Text"} color={isJsonOutput ? DATA_HANDLE_COLORS.json : DATA_HANDLE_COLORS.text} icon={isJsonOutput ? <Braces /> : <FileText />} side="right" top="20px" />
     </div>
   )
 }

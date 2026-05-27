@@ -6,15 +6,18 @@ import { Globe, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { estimateNodeCredits } from "@/components/editor/workflow-editor/types"
 import { SCRAPER_ACTOR_LABELS } from "@nodaro/shared"
 import type { WebScrapeNodeData } from "@/types/nodes"
+import { isValidWebScrapeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+
+const ACCEPTS_IN = (t: string) => isValidWebScrapeConnection("in", t)
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "json", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, external: true },
+  { id: "json", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, external: true },
 ] as const
 
 function getActorSummary(nodeData: WebScrapeNodeData): string {
@@ -72,8 +75,8 @@ function WebScrapeNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Globe />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Braces />} color="indigo" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="in"   type="target" position={Position.Left}  label="URL / Query" color={DATA_HANDLE_COLORS.text} icon={<Globe />}  side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="web-scrape" handleId="json" type="source" position={Position.Right} label="JSON"        color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="20px" />
     </div>
   )
 }

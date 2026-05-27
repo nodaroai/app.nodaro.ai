@@ -21,9 +21,12 @@ import { CSS } from "@dnd-kit/utilities"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { LOOP_COLUMN_TYPE_META, LOOP_COL_ADD_HANDLE, TEXT_CELL_CONTROLS_MIN_LINES, TEXT_CELL_DEFAULT_MAX_LINES, TEXT_FONT_SIZE_CLASS, TEXT_FONT_SIZE_DEFAULT, loopColBaseHandle, loopColInputHandle, resolveViewMode, type LoopNodeData, type LoopColumn, type WorkflowNode } from "@/types/nodes"
+import { isValidLoopColumnConnection, DATA_HANDLE_COLORS, type LoopColumnType } from "@/lib/data-handles"
+import { isVisualPickerType } from "@/lib/parameter-picker-types"
 import { CachedImage } from "@/components/ui/cached-image"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -32,12 +35,18 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { copyToClipboard } from "@/lib/utils"
 import { resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 
-const HANDLE_COLOR_MAP: Record<string, "pink" | "indigo" | "green" | "cyan"> = {
-  "image-url": "pink",
-  "video-url": "indigo",
-  "audio-url": "green",
-  json: "cyan",
-  "text": "cyan",
+/** Hex color per column type for the typed-handle pip. Single source of
+ *  truth lives in `DATA_HANDLE_COLORS` (data-handles.ts) — this map just
+ *  re-keys the camelCase brand entries to the kebab-case column type ids
+ *  used in node data. Mirrors the canvas palette used by Generate Image's
+ *  typed handles: rose for image refs, violet for motion/video, amber for
+ *  audio, indigo for json/elements, cyan for text. */
+const COLUMN_TYPE_HEX: Record<LoopColumnType, string> = {
+  "image-url": DATA_HANDLE_COLORS.imageUrl,
+  "video-url": DATA_HANDLE_COLORS.videoUrl,
+  "audio-url": DATA_HANDLE_COLORS.audioUrl,
+  json:        DATA_HANDLE_COLORS.json,
+  text:        DATA_HANDLE_COLORS.text,
 }
 
 const COLUMN_TYPE_ICON: Record<string, React.ReactElement> = {
@@ -46,6 +55,22 @@ const COLUMN_TYPE_ICON: Record<string, React.ReactElement> = {
   "audio-url": <Music />,
   json: <Braces />,
   text: <Type />,
+}
+
+// Stable, module-level `accepts` predicates per column type. Inline arrow
+// refs per render would bust HandleWithPopover's useConnection memo on every
+// frame — see playbook Feature 1, "Pitfalls already paid for".
+const ACCEPTS_IMAGE_URL = (t: string) => isValidLoopColumnConnection("image-url", t, isVisualPickerType)
+const ACCEPTS_VIDEO_URL = (t: string) => isValidLoopColumnConnection("video-url", t, isVisualPickerType)
+const ACCEPTS_AUDIO_URL = (t: string) => isValidLoopColumnConnection("audio-url", t, isVisualPickerType)
+const ACCEPTS_JSON      = (t: string) => isValidLoopColumnConnection("json",      t, isVisualPickerType)
+const ACCEPTS_TEXT      = (t: string) => isValidLoopColumnConnection("text",      t, isVisualPickerType)
+const ACCEPTS_BY_COLUMN_TYPE: Record<LoopColumnType, (t: string) => boolean> = {
+  "image-url": ACCEPTS_IMAGE_URL,
+  "video-url": ACCEPTS_VIDEO_URL,
+  "audio-url": ACCEPTS_AUDIO_URL,
+  "json":      ACCEPTS_JSON,
+  "text":      ACCEPTS_TEXT,
 }
 
 const DEFAULT_GALLERY_COLS = 3
@@ -106,10 +131,19 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
     position: typeof Position.Left | typeof Position.Right
     top?: string
     customStyle: Record<string, string>
-    hideHandle: boolean
+    /** Only set on the col_add quick-add handle (which BaseNode renders
+     *  transparently). Per-column handles are `external: true` and skip
+     *  BaseNode's render entirely — `hideHandle` is meaningless there. */
+    hideHandle?: boolean
+    /** When true, BaseNode skips rendering and the loop component renders a
+     *  HandleWithPopover instead. The entry still counts for node sizing. */
+    external?: boolean
   }
 
-  // Quick-add target handle — always present at top
+  // Quick-add target handle — always present at top. Stays as a HandleIcon
+  // decoration (no popover): its only role is "drop here to auto-create a
+  // new column", which is owned by the store's connection handler. A click
+  // popover would be meaningless when there's no existing wire to manage.
   const quickAdd: HandleDef = {
     id: LOOP_COL_ADD_HANDLE,
     type: "target" as const,
@@ -132,24 +166,25 @@ function buildHandles(columns: ReadonlyArray<LoopColumn>) {
       ? Math.round((startPct + endPct) / 2)
       : Math.round(startPct + (i / (columns.length - 1)) * (endPct - startPct))
 
-    // Per-column target handle (left side)
+    // Per-column target handle (left side) — external so the component owns
+    // rendering via HandleWithPopover (typed pip + click popover).
     handles.push({
       id: `${col.handleId}_in`,
       type: "target" as const,
       position: Position.Left,
       top: `${pct}%`,
       customStyle: { top: `${pct}%`, left: '-29px' },
-      hideHandle: true,
+      external: true,
     })
 
-    // Per-column source handle (right side) — existing behavior
+    // Per-column source handle (right side) — external, same reason.
     handles.push({
       id: col.handleId,
       type: "source" as const,
       position: Position.Right,
       top: `${pct}%`,
       customStyle: { top: `${pct}%`, right: '-29px' },
-      hideHandle: true,
+      external: true,
     })
   })
 
@@ -1078,30 +1113,54 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {/* Quick-add target icon (top-left) */}
+      {/* Quick-add target icon (top-left) — stays decorative; drop-only
+          handle that auto-creates a new column on connection (see
+          use-workflow-store.ts col_add branch). No popover. */}
       <HandleIcon icon={<Plus />} color="cyan" side="left" top="15%" />
-      {/* Per-column target icons (left side) */}
+      {/* Per-column target pips (left side) — typed handle with popover. */}
       {targetHandles.map((h) => {
         const handleBase = loopColBaseHandle(h.id)
         const col = columns.find((c) => c.handleId === handleBase)
-        const colType = col?.type ?? "text"
+        const colType = (col?.type ?? "text") as LoopColumnType
         const icon = COLUMN_TYPE_ICON[colType] ?? COLUMN_TYPE_ICON.text
+        const color = COLUMN_TYPE_HEX[colType] ?? COLUMN_TYPE_HEX.text
+        const accepts = ACCEPTS_BY_COLUMN_TYPE[colType] ?? ACCEPTS_TEXT
         return (
-          <HandleIcon key={h.id} icon={icon} color={HANDLE_COLOR_MAP[colType] ?? "cyan"} side="left" top={h.top} />
+          <HandleWithPopover
+            key={h.id}
+            nodeId={id}
+            nodeType={type ?? "loop"}
+            handleId={h.id}
+            type="target"
+            position={Position.Left}
+            label={col?.name?.trim() || "Column"}
+            color={color}
+            icon={icon}
+            side="left"
+            top={h.top ?? "50%"}
+            accepts={accepts}
+          />
         )
       })}
-      {/* Per-column source icons (right side) */}
+      {/* Per-column source pips (right side) — typed handle with popover. */}
       {sourceHandles.map((h) => {
         const col = columns.find((c) => c.handleId === h.id)
-        const colType = col?.type ?? "text"
+        const colType = (col?.type ?? "text") as LoopColumnType
         const icon = COLUMN_TYPE_ICON[colType] ?? COLUMN_TYPE_ICON.text
+        const color = COLUMN_TYPE_HEX[colType] ?? COLUMN_TYPE_HEX.text
         return (
-          <HandleIcon
+          <HandleWithPopover
             key={h.id}
+            nodeId={id}
+            nodeType={type ?? "loop"}
+            handleId={h.id}
+            type="source"
+            position={Position.Right}
+            label={col?.name?.trim() || "Column"}
+            color={color}
             icon={icon}
-            color={HANDLE_COLOR_MAP[colType] ?? "cyan"}
-            top={h.top}
-            label={col?.name}
+            side="right"
+            top={h.top ?? "50%"}
           />
         )
       })}

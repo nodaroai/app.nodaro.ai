@@ -1,9 +1,17 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
-import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
+import {
+  isValidListNodeConnection,
+  isValidWebScrapeConnection,
+  isValidExtractFieldConnection,
+  isValidFilterListConnection,
+  isValidDeduplicateConnection,
+  isValidMergeListsConnection,
+  isValidSortListConnection,
+  isValidLoopCoarse,
+} from "./data-handles"
+import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
-
-const isVisualPickerType = (t: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t)
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "image",
@@ -162,9 +170,71 @@ export function isValidWorkflowConnection(
       return isValidGenerateVideoConnection(
         connection.targetHandle,
         sourceType,
-        (t) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t),
+        isVisualPickerType,
       )
     }
+  }
+
+  // ─── Data root-category nodes ─────────────────────────────────────────
+  // Each predicate covers one node's full set of typed input handles. The
+  // loop-node case uses a coarse gate (any-column-type producer) because
+  // the per-column accepts depend on the column's type stored in node
+  // data — unreachable from `getNodeType`. Per-column refinement happens
+  // in `loop-node.tsx`'s per-pip `accepts` predicate (which drives the
+  // drag-glow visual and popover candidate filtering).
+  if (targetType === "list" && connection.targetHandle) {
+    return isValidListNodeConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+      isVisualPickerType,
+    )
+  }
+  if (targetType === "web-scrape" && connection.targetHandle) {
+    return isValidWebScrapeConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "extract-field" && connection.targetHandle) {
+    return isValidExtractFieldConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "filter-list" && connection.targetHandle) {
+    return isValidFilterListConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+      isVisualPickerType,
+    )
+  }
+  if (targetType === "deduplicate" && connection.targetHandle) {
+    return isValidDeduplicateConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "merge-lists" && connection.targetHandle) {
+    return isValidMergeListsConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "sort-list" && connection.targetHandle) {
+    return isValidSortListConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "loop" && connection.targetHandle) {
+    // Coarse gate applies to BOTH col_add and per-column handles. Identity
+    // refs (character/face/object/location) and other non-producer source
+    // types are rejected outright — they have no sensible mapping in
+    // detectLoopColumnType's type-inference. Pickers, media producers,
+    // and data producers pass; the col_add handler then auto-detects the
+    // column type from the source, and per-column refinement happens in
+    // the loop component's per-pip `accepts` predicate.
+    return isValidLoopCoarse(typeOf(connection.source) ?? "", isVisualPickerType)
   }
 
   return true

@@ -25,6 +25,14 @@ vi.mock("../handle-icon", () => ({
   ),
 }))
 
+vi.mock("../handle-with-popover", () => ({
+  HandleWithPopover: ({ handleId, label, type }: { handleId: string; label?: string; type: string }) => (
+    <div data-testid={`handle-with-popover-${handleId}`} data-label={label ?? ""} data-type={type}>
+      {label && <span data-testid="handle-with-popover-label">{label}</span>}
+    </div>
+  ),
+}))
+
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
     <div data-testid="base-node" data-label={label} data-category={category} data-credits={credits} data-id={id} data-is-running={isRunning}>
@@ -155,7 +163,7 @@ describe("LoopNode", () => {
       },
     })
     const handleLabels = screen
-      .getAllByTestId("handle-icon-label")
+      .getAllByTestId("handle-with-popover-label")
       .map((el) => el.textContent)
     expect(handleLabels).toContain("Prompt")
     expect(handleLabels).toContain("Hero image")
