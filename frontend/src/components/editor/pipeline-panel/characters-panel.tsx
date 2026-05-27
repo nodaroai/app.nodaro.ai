@@ -116,13 +116,27 @@ export function CharactersPanel({ pipelineId, plan, mode }: Props) {
   )
 }
 
+/**
+ * A 409 `entity_not_pending_description` means the entity already left the
+ * pending_description state — almost always a duplicate submit: a slow
+ * refetch, a stale read-replica re-showing the card, or an impatient
+ * re-click after the first request already succeeded. The backend CAS guard
+ * is idempotent by design (entity-description.ts), so from the user's point
+ * of view the action is already done. Treat it as success — refresh and let
+ * the wizard advance — instead of surfacing a scary error toast.
+ */
+function isAlreadyAdvanced(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return msg.includes("entity_not_pending_description")
+}
+
 // ─── single-character card ──────────────────────────────────────────────────
 
 interface StepACardProps {
   pipelineId: string
   entity: PipelineEntity
   plan: ShowrunnerPlan | null
-  onResolved: () => void
+  onResolved: () => void | Promise<unknown>
 }
 
 function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
@@ -161,10 +175,16 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         ? ({ mode: "user_edited", description: description.trim() } as const)
         : ({ mode: "llm" } as const)
       await pipelinesApi.approveDescription(pipelineId, entity.id, body)
-      onResolved()
+      await onResolved()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast.error(`Couldn't approve description: ${msg}`)
+      if (isAlreadyAdvanced(err)) {
+        // Duplicate submit — already approved. Refresh so the wizard
+        // advances to the next character; no error to show the user.
+        await onResolved()
+      } else {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast.error(`Couldn't approve description: ${msg}`)
+      }
     } finally {
       setBusy(null)
     }
@@ -185,10 +205,14 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
         mime_type: file.type || "image/jpeg",
         size_bytes: file.size,
       })
-      onResolved()
+      await onResolved()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast.error(`Upload failed: ${msg}`)
+      if (isAlreadyAdvanced(err)) {
+        await onResolved()
+      } else {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast.error(`Upload failed: ${msg}`)
+      }
     } finally {
       setBusy(null)
       if (fileInputRef.current) fileInputRef.current.value = ""
@@ -200,10 +224,15 @@ function StepACard({ pipelineId, entity, plan, onResolved }: StepACardProps) {
     try {
       await pipelinesApi.skipEntity(pipelineId, entity.id)
       setSkipConfirm(false)
-      onResolved()
+      await onResolved()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      toast.error(`Couldn't skip character: ${msg}`)
+      if (isAlreadyAdvanced(err)) {
+        setSkipConfirm(false)
+        await onResolved()
+      } else {
+        const msg = err instanceof Error ? err.message : String(err)
+        toast.error(`Couldn't skip character: ${msg}`)
+      }
     } finally {
       setBusy(null)
     }
