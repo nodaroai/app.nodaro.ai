@@ -30,7 +30,7 @@ import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
-import { isPickerNodeType } from "@/lib/picker-handles"
+import { isTileGridPickerType } from "@/lib/picker-handles"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
@@ -947,10 +947,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
       setAddNodeAtCenter(false)
-      // Pickers open in fullscreen settings so the user can immediately pick
-      // a value via the tile-grid catalog — the small node body isn't enough
-      // to interact with the picker meaningfully.
-      if (newNodeId && isPickerNodeType(type)) {
+      // Tile-grid pickers open in fullscreen settings so the user can
+      // immediately pick a value via the catalog — the small node body
+      // isn't enough to interact with the picker meaningfully. NOT every
+      // picker-node-type qualifies: `tone` and `text-prompt` are registered
+      // for typed-handle compatibility but have plain Input/Textarea UI and
+      // shouldn't auto-fullscreen. Use `isTileGridPickerType`.
+      if (newNodeId && isTileGridPickerType(type)) {
         selectNode(newNodeId)
         setConfigPanelFullscreen(true)
       }

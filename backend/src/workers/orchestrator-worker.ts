@@ -95,7 +95,7 @@ async function cleanupStaleExecutions(): Promise<void> {
     // If the previous orchestrator died after the worker marked a child
     // job completed but before it could write node_states[X]="completed",
     // this catches that case and lets us close out the execution cleanly.
-    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates)
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id)
 
     const nodeStatuses = Object.values(states).map((s) => s?.status)
     const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")

@@ -29,6 +29,7 @@ import { PresentationDisplayConfig } from "./config-panels/presentation-display-
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
+import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
 import {
   getConnectedSources,
@@ -668,14 +669,12 @@ export function ConfigPanel() {
   // Phase 1B.2: `expandSceneOpen` state removed along with SceneEditorModal —
   // the new SceneNode uses the pipeline panel for editing, not a legacy modal.
   const [expandDirectorOpen, setExpandDirectorOpen] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
   const isMobile = useIsMobile()
+  // `isExpanded` is sourced from the store so external code — e.g. picker-node
+  // creation in workflow-canvas / node-toolbar — can open the panel in fullscreen
+  // by calling `setConfigPanelFullscreen(true)`.
+  const isExpanded = useWorkflowStore((s) => s.configPanelFullscreen)
   const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
-
-  useEffect(() => {
-    setConfigPanelFullscreen(isExpanded)
-    return () => setConfigPanelFullscreen(false)
-  }, [isExpanded, setConfigPanelFullscreen])
 
   // Mobile bottom sheet: peek (collapsed) / expanded states with bidirectional drag
   const [sheetState, setSheetState] = useState<"peek" | "expanded">("peek")
@@ -753,8 +752,21 @@ export function ConfigPanel() {
   const refMap = isVisible ? liveRefMap : frozenRefMapRef.current
 
   useEffect(() => {
-    if (!isVisible) setIsExpanded(false)
-  }, [isVisible])
+    if (!isVisible) setConfigPanelFullscreen(false)
+  }, [isVisible, setConfigPanelFullscreen])
+
+  // Unmount-cleanup: configPanelFullscreen is a global Zustand flag that
+  // OTHER components read (workflow-editor-main.tsx hides the floating
+  // bottom action bar when it's true; workflow-canvas.tsx gates keyboard
+  // shortcuts). If ConfigPanel unmounts while the flag is true — e.g.,
+  // route change to a different workflow, editor remount — the flag would
+  // leak into the next mount and the UI would render with no panel but
+  // the bottom rail hidden / shortcuts dead.
+  useEffect(() => {
+    return () => {
+      setConfigPanelFullscreen(false)
+    }
+  }, [setConfigPanelFullscreen])
 
   const update = useCallback((data: Record<string, unknown>) => {
     if (!selectedNodeId) return
@@ -841,14 +853,23 @@ export function ConfigPanel() {
             variant="ghost"
             size="icon"
             className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]"
-            onClick={() => setIsExpanded((v) => !v)}
+            onClick={() => {
+              // Read from the store imperatively so rapid double-clicks in
+              // the same React batch still toggle correctly — `isExpanded`
+              // from the selector is captured at render time, so two clicks
+              // before the next render would both write the same value and
+              // collapse to a single toggle. Mirrors the prior local-state
+              // `setIsExpanded(v => !v)` functional-updater behavior.
+              const current = useWorkflowStore.getState().configPanelFullscreen
+              setConfigPanelFullscreen(!current)
+            }}
             title={isExpanded ? "Collapse to side panel" : "Expand to full screen"}
             aria-label={isExpanded ? "Collapse panel" : "Expand panel"}
           >
             {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         )}
-        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setIsExpanded(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
+        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -864,7 +885,7 @@ export function ConfigPanel() {
         : `absolute inset-0 z-10 bg-white dark:bg-[#1E1E1E] shadow-2xl flex flex-col sm:inset-auto sm:top-0 sm:right-0 sm:h-full sm:w-96 sm:border-l border-gray-200 dark:border-[#2D2D2D] transition-transform duration-200 ease-in-out ${isVisible ? "translate-x-0" : "translate-x-full pointer-events-none"}`
     }>
       {isExpanded && (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsExpanded(false)} />
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setConfigPanelFullscreen(false)} />
       )}
       <div className={isExpanded
         ? "relative w-full max-w-[900px] max-h-[90vh] mx-4 bg-white dark:bg-[#1E1E1E] rounded-xl shadow-2xl border border-gray-200 dark:border-[#2D2D2D] flex flex-col overflow-hidden min-h-0"
@@ -976,89 +997,120 @@ export function ConfigPanel() {
           )) as any /* TS JSX children inference limit */}
 
           <div className="flex flex-col gap-2 pt-2">
-            {GENERATE_BUTTON_TYPES.has(nodeType) && (
-              <GenerateButton
-                onClick={() => runSingleNode?.(selectedNode.id)}
-                modelIdentifier={getModelIdentifier(selectedNode)}
-                userId={userId ?? ""}
-                label="Run This Node"
-                isRunning={nodeData.executionStatus === "running"}
-                creditOverride={
-                  nodeType === "component"
-                    ? (nodeData.estimatedCredits as number) || undefined
-                    : _isMultiProviderNode && _providerSum > 0
-                      ? _providerSum
-                      : undefined
-                }
-                multiplier={_repeatMultiplier}
-              />
+            {/* Tile-grid pickers in fullscreen hide the Run button (pickers
+                emit a prompt fragment via fieldMappings — they never execute,
+                so a Run action is meaningless). Delete stays available next
+                to Close so the user can dismiss a just-auto-opened picker
+                without first leaving fullscreen to find the node on the
+                canvas. text-prompt / tone (registered as picker node types
+                for handle compatibility) keep the normal rail because their
+                config UI is a plain Input/Textarea, not a tile grid. */}
+            {isExpanded && isTileGridPickerType(nodeType) ? (
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setConfigPanelFullscreen(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                  onClick={handleDelete}
+                >
+                  Delete Node
+                </Button>
+              </div>
+            ) : (
+              <>
+                {GENERATE_BUTTON_TYPES.has(nodeType) && (
+                  <GenerateButton
+                    onClick={() => runSingleNode?.(selectedNode.id)}
+                    modelIdentifier={getModelIdentifier(selectedNode)}
+                    userId={userId ?? ""}
+                    label="Run This Node"
+                    isRunning={nodeData.executionStatus === "running"}
+                    creditOverride={
+                      nodeType === "component"
+                        ? (nodeData.estimatedCredits as number) || undefined
+                        : _isMultiProviderNode && _providerSum > 0
+                          ? _providerSum
+                          : undefined
+                    }
+                    multiplier={_repeatMultiplier}
+                  />
+                )}
+
+                {RUN_BUTTON_TYPES.has(nodeType) && (
+                  <button
+                    type="button"
+                    onClick={() => runSingleNode?.(selectedNode.id)}
+                    disabled={nodeData.executionStatus === "running"}
+                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                  >
+                    {nodeData.executionStatus === "running"
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Play className="w-4 h-4" />
+                    }
+                    {nodeData.executionStatus === "running" ? "Running..." : "Run"}
+                  </button>
+                )}
+
+                {RUN_FROM_HERE_TYPES.has(nodeType) && (
+                  <button
+                    type="button"
+                    onClick={() => runFromHere?.(selectedNode.id)}
+                    disabled={nodeData.executionStatus === "running"}
+                    className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
+                    title="Runs this node and all connected downstream nodes in sequence"
+                  >
+                    {nodeData.executionStatus === "running"
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <FastForward className="w-4 h-4" />
+                    }
+                    {nodeData.executionStatus === "running" ? "Running..." : "Run from here"}
+                  </button>
+                )}
+
+                {hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
+                  <button
+                    type="button"
+                    onClick={() => runFromHere?.(selectedNode.id)}
+                    disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
+                    className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
+                    title="Runs this node and all connected downstream nodes in sequence"
+                  >
+                    <FastForward className="w-3.5 h-3.5" />
+                    Run from here
+                  </button>
+                )}
+
+                {(() => {
+                  const d = nodeData
+                  const listResults = d.__listResults as string[] | undefined
+                  const listInputs = d.__listInputs as string[] | undefined
+                  // Only show iteration results when fan-out data exists AND the
+                  // node still has visible results (user may have deleted them).
+                  const hasResults = ((d.generatedResults ?? []) as unknown[]).length > 0
+                  if (!listResults || listResults.length <= 1 || !hasResults) return null
+                  return (
+                    <IterationResultsPanel
+                      nodeId={selectedNode.id}
+                      nodeType={nodeType}
+                      listResults={listResults}
+                      listInputs={listInputs ?? []}
+                    />
+                  )
+                })()}
+
+                <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
+                  Delete Node
+                </Button>
+              </>
             )}
-
-            {RUN_BUTTON_TYPES.has(nodeType) && (
-              <button
-                type="button"
-                onClick={() => runSingleNode?.(selectedNode.id)}
-                disabled={nodeData.executionStatus === "running"}
-                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
-              >
-                {nodeData.executionStatus === "running"
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Play className="w-4 h-4" />
-                }
-                {nodeData.executionStatus === "running" ? "Running..." : "Run"}
-              </button>
-            )}
-
-            {RUN_FROM_HERE_TYPES.has(nodeType) && (
-              <button
-                type="button"
-                onClick={() => runFromHere?.(selectedNode.id)}
-                disabled={nodeData.executionStatus === "running"}
-                className="w-full flex items-center justify-center gap-2 h-10 rounded-lg text-white font-medium bg-[#ff0073] hover:bg-[#e0005f] disabled:opacity-50 transition-colors"
-                title="Runs this node and all connected downstream nodes in sequence"
-              >
-                {nodeData.executionStatus === "running"
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <FastForward className="w-4 h-4" />
-                }
-                {nodeData.executionStatus === "running" ? "Running..." : "Run from here"}
-              </button>
-            )}
-
-            {hasDownstream && !RUN_FROM_HERE_TYPES.has(nodeType) && (
-              <button
-                type="button"
-                onClick={() => runFromHere?.(selectedNode.id)}
-                disabled={nodeData.executionStatus === "running" || nodeData.executionStatus === "pending"}
-                className="w-full flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-medium border border-[#ff0073]/30 text-[#ff0073] hover:bg-[#ff0073]/10 disabled:opacity-50 transition-colors"
-                title="Runs this node and all connected downstream nodes in sequence"
-              >
-                <FastForward className="w-3.5 h-3.5" />
-                Run from here
-              </button>
-            )}
-
-            {(() => {
-              const d = nodeData
-              const listResults = d.__listResults as string[] | undefined
-              const listInputs = d.__listInputs as string[] | undefined
-              // Only show iteration results when fan-out data exists AND the
-              // node still has visible results (user may have deleted them).
-              const hasResults = ((d.generatedResults ?? []) as unknown[]).length > 0
-              if (!listResults || listResults.length <= 1 || !hasResults) return null
-              return (
-                <IterationResultsPanel
-                  nodeId={selectedNode.id}
-                  nodeType={nodeType}
-                  listResults={listResults}
-                  listInputs={listInputs ?? []}
-                />
-              )
-            })()}
-
-            <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30" onClick={handleDelete}>
-              Delete Node
-            </Button>
           </div>
           {/* Presentation display settings */}
           {(nodeData.presentationInput || nodeData.presentationOutput) && (

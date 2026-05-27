@@ -120,6 +120,8 @@ import { getCompatibleNodes, resolveTargetHandle, TYPED_HANDLE_IDS } from "@/lib
 import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
+import { useWorkflowStore } from "@/hooks/use-workflow-store";
+import { isTileGridPickerType } from "@/lib/picker-handles";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -1443,6 +1445,8 @@ export function AddNodePopup({
 }: AddNodePopupProps) {
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
+  const selectNode = useWorkflowStore((s) => s.selectNode);
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen);
   const showRecentNodes = userSettings?.showRecentNodes ?? false;
   const showMostUsedNodes = userSettings?.showMostUsedNodes ?? false;
   const history = useNodeSelectionHistoryStore((s) => s.history);
@@ -1528,13 +1532,23 @@ export function AddNodePopup({
                 targetHandle: connectionContext.handleId,
               };
         storeOnConnect(connection);
+        // Tile-grid pickers open in fullscreen settings so the user can
+        // immediately pick a value via the catalog. Skip text-prompt / tone
+        // (registered for handle compatibility but have plain Input/Textarea
+        // UI). The popup's connectionContext branch creates the node via
+        // storeAddNode and bypasses workflow-canvas's handleAddNode, so the
+        // same hook has to be applied here.
+        if (isTileGridPickerType(type)) {
+          selectNode(newNodeId);
+          setConfigPanelFullscreen(true);
+        }
         onClose();
       } else {
         onAddNode(type);
         onClose();
       }
     },
-    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection],
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection, selectNode, setConfigPanelFullscreen],
   );
 
   // Handle component selected from marketplace modal

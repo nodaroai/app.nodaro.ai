@@ -318,7 +318,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...composed, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
       <p className="text-[10px] text-muted-foreground italic px-0.5">
         Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
       </p>

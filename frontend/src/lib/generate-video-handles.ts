@@ -20,7 +20,7 @@ export const GENERATE_VIDEO_INPUT_HANDLES = [
   // Audio cluster
   "audio", "audioReferences",
   // Pickers cluster
-  "assets", "look", "elements",
+  "assets", "elements", "look",
 ] as const
 
 export type GenerateVideoInputHandle = typeof GENERATE_VIDEO_INPUT_HANDLES[number]

@@ -15,6 +15,7 @@ import { useReactFlow } from "@xyflow/react"
 import { cn } from "@/lib/utils"
 import { clusterByGroup } from "@/lib/cluster-by-group"
 import { categoryRank } from "@/lib/node-category-order"
+import { isTileGridPickerType } from "@/lib/picker-handles"
 const UnifiedAssetLibraryButton = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryButton })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
 import type { ComponentSelection } from "./component-marketplace-modal"
@@ -306,6 +307,8 @@ interface NodeToolbarProps {
 
 export function NodeToolbar({ visible = false }: NodeToolbarProps) {
   const addNode = useWorkflowStore((s) => s.addNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const { getViewport } = useReactFlow()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [componentBrowserOpen, setComponentBrowserOpen] = useState(false)
@@ -330,10 +333,18 @@ export function NodeToolbar({ visible = false }: NodeToolbarProps) {
         return
       }
       const position = getViewportCenterPosition()
-      addNode(type, position)
+      const newNodeId = addNode(type, position)
       setSheetOpen(false)
+      // Tile-grid pickers open in fullscreen settings so the user can
+      // immediately pick a value via the catalog. Skip text-prompt / tone
+      // (registered as picker node types for handle compatibility but have
+      // plain Input/Textarea UI). Mirrors workflow-canvas.tsx.
+      if (newNodeId && isTileGridPickerType(type)) {
+        selectNode(newNodeId)
+        setConfigPanelFullscreen(true)
+      }
     },
-    [addNode, getViewportCenterPosition],
+    [addNode, getViewportCenterPosition, selectNode, setConfigPanelFullscreen],
   )
 
   const handleComponentSelect = useCallback(

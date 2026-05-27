@@ -67,7 +67,7 @@ const ACCEPTS_ELEMENTS        = (t: string) => isValidGenerateVideoConnection("e
 //   Text:    prompt(24) → negative(52)
 //   Image:   start(92) → end(120) → imgRefs(148) → vidRefs(176)   (gap 40 → 92)
 //   Audio:   audio(216) → audioRefs(244)                          (gap 40 → 216)
-//   Pickers: assets(284) → look(312) → elements(340)              (gap 40 → 284)
+//   Pickers: assets(284) → elements(312) → look(340)              (gap 40 → 284)
 const HANDLE_TOP = {
   prompt: "calc(100% - 24px)",
   negative: "calc(100% - 52px)",
@@ -78,8 +78,8 @@ const HANDLE_TOP = {
   audio: "calc(100% - 216px)",
   audioReferences: "calc(100% - 244px)",
   assets: "calc(100% - 284px)",
-  look: "calc(100% - 312px)",
-  elements: "calc(100% - 340px)",
+  elements: "calc(100% - 312px)",
+  look: "calc(100% - 340px)",
 } as const
 
 function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -217,7 +217,7 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         minWidth={240}
         // 11 input pips + 1 output. Bottom-most input ("Prompt") sits at
-        // top: calc(100% - 24px); top-most ("Elements") at calc(100% - 340px).
+        // top: calc(100% - 24px); top-most ("Look") at calc(100% - 340px).
         // We need at least ~368px of vertical space to keep all pips on the
         // visible body (28px headroom above the top pip). Floor-clamp to 368
         // OR derive from media aspect.
