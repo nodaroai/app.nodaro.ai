@@ -1038,4 +1038,5 @@ export type { AudioCrossfadeCurve } from "./audio-crossfade-curves.js"
 export {
   VIDEO_PRODUCER_TYPES,
   AUDIO_PRODUCER_TYPES,
+  DYNAMIC_PRODUCER_TYPES,
 } from "./producer-types.js"

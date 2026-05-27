@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
+import { isVideoUrl } from "@/lib/media-type"
 
 interface ResultsThumbnailsPanelProps<T extends { url: string; jobId?: string }> {
   readonly results: ReadonlyArray<T>
@@ -51,20 +52,6 @@ const PANEL_PAD_RIGHT_EXTRA = 4
  *    boundaries). The active result's page auto-scrolls to stay in
  *    view as the index moves between pages.
  */
-/** URLs whose extension marks them as a video file. Used to decide
- *  whether to render `<video>` or `<img>` for a given thumb when the
- *  caller is a video-producing node. Conservative — anything not matching
- *  falls through to `<img>` via CachedImage (which renders a broken-image
- *  icon for non-images but keeps DOM structure consistent).
- *  Covers the same extensions enumerated by save-to-storage.ts +
- *  download-video.ts on the backend so the predicate doesn't drift. */
-function looksLikeVideoUrl(url: string): boolean {
-  const m = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i)
-  if (!m) return false
-  const ext = m[1].toLowerCase()
-  return ext === "mp4" || ext === "mov" || ext === "webm" || ext === "m4v" || ext === "mkv" || ext === "avi" || ext === "flv"
-}
-
 /** Whether a URL is hosted on a domain we control (R2, our CDN) where
  *  CORS-credentialed requests are allowed. External hosts reject
  *  preflight with `crossOrigin="anonymous"` and the resource fails to
@@ -217,7 +204,7 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
         {visible.map((r, i) => {
           const absoluteIndex = pageStart + i
           const isActive = absoluteIndex === activeIndex
-          const useVideoTile = mediaType === "video" && looksLikeVideoUrl(r.url)
+          const useVideoTile = mediaType === "video" && isVideoUrl(r.url)
           const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
             isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
           }`

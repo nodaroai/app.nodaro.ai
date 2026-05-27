@@ -17,42 +17,7 @@
  *                 accept BOTH video AND audio (merge-video-audio's input,
  *                 adjust-volume's input)
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
-
-/**
- * Source types whose output media type can't be classified statically —
- * iterators, dynamic dispatchers, sub-workflow wrappers. Pre-PR the
- * validator returned `return true` for these because the type rules
- * fell through; ACCEPTS_VIDEO / ACCEPTS_AUDIO / ACCEPTS_MEDIA include
- * them explicitly so the prior permissiveness survives the strict
- * dispatch.
- *
- * Includes:
- *  - `loop` / `list` — per-row iteration; column type is dynamic at runtime.
- *  - `sub-workflow` — wrapped workflow's output type is its leaf type.
- *  - `adjust-volume` — emits video OR audio based on its `lastInputType`.
- *    Sits in AUDIO_PRODUCER_TYPES only (its default output is audio), but
- *    when wired downstream of a video source it legitimately produces
- *    video. Without this, the strict validator would reject every
- *    adjust-volume → video-ffmpeg edge after the user runs it on video.
- *  - `reduce` — reduces a list to a single value; type-dynamic.
- *
- * Intentionally OMITTED:
- *  - `webhook-trigger` / `schedule-trigger` — their outputs are user-
- *    defined JSON shapes, not media URLs. Allowing them as media
- *    producers at the canvas surfaces false-positive drops (the edge
- *    creates, but the orchestrator's resolver finds no videoUrl/audioUrl
- *    field and the worker fails with a cryptic shape mismatch). Users
- *    who want trigger → media flows should wire through an upload node
- *    that re-emits typed media output.
- */
-const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
-  "loop",
-  "list",
-  "sub-workflow",
-  "adjust-volume",
-  "reduce",
-])
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 
 /** Accepts any node whose output is a video stream (URL pointing at .mp4
  *  / .mov / etc.). Used by trim-video, combine-videos, extract-frame,

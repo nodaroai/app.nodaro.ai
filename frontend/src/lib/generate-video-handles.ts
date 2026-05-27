@@ -3,7 +3,7 @@
  * Order matches the visual BOTTOM-to-TOP layout on the node's left edge,
  * grouped into 4 clusters: text / image / audio / pickers.
  */
-import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES } from "@nodaro/shared"
+import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import {
   TEXT_PRODUCER_TYPES,
   IMAGE_PRODUCER_TYPES,
@@ -35,21 +35,24 @@ export function isValidGenerateVideoConnection(
 ): boolean {
   switch (targetHandle) {
     case "prompt":
-      return TEXT_PRODUCER_TYPES.has(sourceType) || isPickerType(sourceType)
+      return TEXT_PRODUCER_TYPES.has(sourceType) || isPickerType(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "negative":
       // Negative prompt is text-only — pickers like `mood: cheerful` would
       // invert the picker's intent if wired here. Matches the sibling
       // generate-image-handles.ts behavior.
-      return TEXT_PRODUCER_TYPES.has(sourceType)
+      return TEXT_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "startFrame":
     case "endFrame":
     case "imageReferences":
-      return IMAGE_PRODUCER_TYPES.has(sourceType)
+      // Dynamic producers (loop / list / sub-workflow / etc.) can emit
+      // image URLs at runtime — accept them at the canvas to match the
+      // orchestrator's runtime routing. Same escape hatch as ffmpeg.
+      return IMAGE_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "videoReferences":
-      return VIDEO_PRODUCER_TYPES.has(sourceType)
+      return VIDEO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "audio":
     case "audioReferences":
-      return AUDIO_PRODUCER_TYPES.has(sourceType)
+      return AUDIO_PRODUCER_TYPES.has(sourceType) || DYNAMIC_PRODUCER_TYPES.has(sourceType)
     case "assets":
       return IDENTITY_TYPES.has(sourceType)
     case "look":

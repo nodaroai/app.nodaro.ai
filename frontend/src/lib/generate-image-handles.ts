@@ -7,6 +7,8 @@
  * renamed from `subjects` → `assets`. Legacy edge handles (`style`,
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
+import { DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+
 export const GENERATE_IMAGE_INPUT_HANDLES = ["prompt", "negative", "references", "assets", "elements", "look"] as const
 
 export type GenerateImageInputHandle = typeof GENERATE_IMAGE_INPUT_HANDLES[number]
@@ -134,11 +136,14 @@ export function isValidGenerateImageConnection(
 ): boolean {
   switch (targetHandleId) {
     case "prompt":
-      return TEXT_PRODUCER_TYPES.has(sourceNodeType) || isPickerType(sourceNodeType)
+      // Dynamic producers (loop / list / sub-workflow iterating text columns,
+      // reduce returning a string) can emit text at runtime. Accept at canvas
+      // to match orchestrator's runtime routing.
+      return TEXT_PRODUCER_TYPES.has(sourceNodeType) || isPickerType(sourceNodeType) || DYNAMIC_PRODUCER_TYPES.has(sourceNodeType)
     case "negative":
-      return TEXT_PRODUCER_TYPES.has(sourceNodeType)
+      return TEXT_PRODUCER_TYPES.has(sourceNodeType) || DYNAMIC_PRODUCER_TYPES.has(sourceNodeType)
     case "references":
-      return IMAGE_PRODUCER_TYPES.has(sourceNodeType)
+      return IMAGE_PRODUCER_TYPES.has(sourceNodeType) || DYNAMIC_PRODUCER_TYPES.has(sourceNodeType)
     case "assets":
       return IDENTITY_TYPES.has(sourceNodeType)
     case "subjects":

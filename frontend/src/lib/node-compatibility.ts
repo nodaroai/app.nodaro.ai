@@ -105,15 +105,34 @@ export interface CompatibleNodes {
 
 /** Handle ids whose typed-handle branches in getCompatibleNodes require
  *  `consumerNodeType` to disambiguate (camera-motion vs transition vs
- *  character-fx). Dev-time warning when this is omitted — the branch
- *  silently falls through to the generic HANDLE_COMPATIBILITY path and
- *  the call site may not notice.
- *
- *  Single source of truth — also re-exported as TYPED_HANDLE_IDS for the
- *  add-node popup's typed-pool inclusion check. Don't duplicate the
- *  literal set inline elsewhere; import from here. */
+ *  character-fx vs the 11 ffmpeg consumers). Drives the dev-time warning
+ *  when the call site omits consumerNodeType — without it, the branches
+ *  fall through to generic HANDLE_COMPATIBILITY which produces the wrong
+ *  candidate set. */
 export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set(["startState", "endState", "target", "in"])
 const CONSUMER_TYPE_DEPENDENT_HANDLES = TYPED_HANDLE_IDS
+
+/** Subset of TYPED_HANDLE_IDS whose typed dispatch requires Parameter-
+ *  category candidates (tone, style-guide, person, lens, etc.) — which
+ *  are otherwise hidden from the add-node popup via `n.category !==
+ *  "Parameter"`. The add-node popup uses this narrower set to decide
+ *  whether to swap `visibleNodes` for the unfiltered `typedHandlePool`.
+ *
+ *  - `startState` / `endState` → camera-motion / transition; accept
+ *    visual pickers (Parameter category).
+ *  - `target` → character-fx; accepts identity refs (NOT Parameter, but
+ *    kept here for forward-compat since the previous behavior used the
+ *    broader set).
+ *
+ *  Crucially, `"in"` is OMITTED. ffmpeg consumers' `in` handle does not
+ *  accept Parameter-category nodes — its candidates are video/audio/
+ *  dynamic producers, all in core categories. Including "in" here would
+ *  surface tone / lens / mood / etc. as compatible suggestions on every
+ *  non-ffmpeg `in` handle (text-to-speech, voice-*, motion-graphics,
+ *  after-effects, transcribe, etc.) — false-positive UX. */
+export const PARAMETER_ACCEPTING_HANDLE_IDS: ReadonlySet<string> = new Set([
+  "startState", "endState", "target",
+])
 
 export function getCompatibleNodes(
   handleId: string,

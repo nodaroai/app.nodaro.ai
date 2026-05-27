@@ -630,7 +630,11 @@ function getParallelOrderField(
     case "combine-videos:in":           return "clipOrder"
     case "mix-audio:in":                return "trackOrder"
     case "combine-audio:in":            return "segmentOrder"
-    case "merge-video-audio:in":        return "trackOrder"
+    // merge-video-audio is INTENTIONALLY OMITTED. Its `data.trackSettings`
+    // is keyed by sourceNodeId (object), not order — the backend
+    // (payload-builder.ts) and frontend runtime (execute-node.ts:4401)
+    // iterate `audioSources` (edge-array order) and read trackSettings
+    // per-sourceNodeId. There is no parallel order array to clear.
     default:                            return undefined
   }
 }
