@@ -20,6 +20,7 @@ import { config } from "../../lib/config.js"
 import { supabase } from "../../lib/supabase.js"
 import { PIPELINE_HARD_TIMEOUT_MS } from "@nodaro/shared"
 import { drivePipeline } from "../pipelines/engine.js"
+import { driveWithRedriveLatch } from "../pipelines/redrive-latch.js"
 import { pipelineEvents } from "../pipelines/events.js"
 import { pipelineContext } from "../pipelines/pipeline-context.js"
 import { pipelineOrchestrationQueue, type PipelineOrchestrationJobData } from "../pipelines/queue.js"
@@ -63,7 +64,13 @@ export function startPipelineWorker(): Worker<PipelineOrchestrationJobData> {
         // (callLLM, future fetch wrappers, etc.) can pluck the signal
         // via getPipelineSignal() without explicit threading.
         await pipelineContext.run({ signal: ctrl.signal, pipelineId }, async () => {
-          await drivePipeline({ supabase, pipelineId })
+          // Drive inside the redrive latch so a re-enqueue dropped by the BullMQ
+          // jobId dedup (one that arrived while this drive was active) is
+          // coalesced into one more drive instead of being lost — the pipeline
+          // lost wake-up. See redrive-latch.ts + migration 158.
+          await driveWithRedriveLatch(supabase, pipelineId, () =>
+            drivePipeline({ supabase, pipelineId }),
+          )
         })
       } catch (err) {
         // Distinguish user-cancel aborts from real failures. AbortError
