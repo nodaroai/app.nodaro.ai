@@ -5,7 +5,7 @@ import { useReactFlow } from "@xyflow/react"
 import { Search, X, Cpu, MapPin } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
-import { getNodeThumbnailUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { RatioIcon } from "./config-panels/aspect-ratio-selector"
@@ -18,6 +18,7 @@ interface NodeSearchModalProps {
 interface NodeSearchHit {
   readonly node: WorkflowNode
   readonly thumbnailUrl: string | undefined
+  readonly videoUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
   readonly label: string
   readonly typeLabel: string
@@ -200,6 +201,7 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
       list.push({
         node: n,
         thumbnailUrl: getNodeThumbnailUrl(n),
+        videoUrl: getNodeVideoUrl(n),
         pickerVisual: getNodePickerVisual(n),
         label,
         typeLabel: typeLabel(n.type),
@@ -380,7 +382,18 @@ export function NodeSearchModal({ open, onClose }: NodeSearchModalProps) {
                     )}
                   >
                     <div className="w-12 h-12 rounded-md bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
-                      {hit.thumbnailUrl ? (
+                      {hit.videoUrl ? (
+                        <video
+                          src={hit.videoUrl}
+                          poster={hit.thumbnailUrl}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                      ) : hit.thumbnailUrl ? (
                         <CachedImage
                           src={hit.thumbnailUrl}
                           alt=""
@@ -462,7 +475,18 @@ function PreviewPane({ hit }: { hit: NodeSearchHit }) {
   return (
     <div className="flex-1 flex flex-col p-4 gap-3 min-h-0">
       <div className="aspect-square w-full max-h-[260px] rounded-lg bg-muted/30 dark:bg-[#222] flex items-center justify-center overflow-hidden">
-        {hit.thumbnailUrl ? (
+        {hit.videoUrl ? (
+          <video
+            src={hit.videoUrl}
+            poster={hit.thumbnailUrl}
+            className="w-full h-full object-contain"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+          />
+        ) : hit.thumbnailUrl ? (
           <CachedImage
             src={hit.thumbnailUrl}
             alt={hit.label}

@@ -67,6 +67,13 @@ interface HandleWithPopoverProps {
   /** CSS `top` value for vertical positioning relative to the node. */
   readonly top: string
   readonly orderMatters?: boolean
+  /** True when this handle has a per-provider cap of 0 for the consumer's
+   *  current model — meaning any edge wired to it would be silently dropped
+   *  at runtime. Renders the pip with a muted ring + dim icon + dim label
+   *  so users see at-a-glance which inputs are inactive for the chosen
+   *  provider. Independent of `isConnected`; a disabled-but-connected pip
+   *  shows both signals. */
+  readonly disabled?: boolean
   /** When true, the pip's label stays visible at rest (not just on hover /
    *  selection). Used for ambiguous input pips like camera-motion's
    *  startState/endState pair where the two pips are otherwise visually
@@ -114,6 +121,7 @@ export function HandleWithPopover({
   side,
   top,
   orderMatters,
+  disabled = false,
   alwaysShowLabel,
 }: HandleWithPopoverProps) {
   const [open, setOpen] = useState(false)
@@ -270,7 +278,8 @@ export function HandleWithPopover({
           tabIndex={0}
           role="button"
           aria-haspopup="dialog"
-          aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}`}
+          aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}${disabled ? " (not used by current model)" : ""}`}
+          title={disabled ? "Not used by the current model — any wired edge will be ignored at runtime." : undefined}
           // `touch-manipulation` disables double-tap zoom delay on iOS so
           // the click→popover-open feels instant on touch devices.
           // `nokey` opts out of React Flow's global keyboard shortcuts
@@ -287,12 +296,16 @@ export function HandleWithPopover({
             [side]: "-29px",
             transform: "translateY(-50%)",
             zIndex: 1002,
+            opacity: disabled ? 0.45 : 1,
             // `--pip-color` is read by CSS rules in globals.css to light up
             // the ring in brand color during a drag-to-connect (the
-            // `.handle-typed-pip.connectingfrom` block + variants).
-            ["--pip-color" as unknown as string]: color,
-            borderColor: isConnected ? color : UNCONNECTED_COLOR,
-            background: isConnected ? color : "var(--background)",
+            // `.handle-typed-pip.connectingfrom` block + variants). When
+            // disabled, the color is replaced by the muted border var so a
+            // valid-candidate flash during a drag still pulses *muted* —
+            // visually signaling "you can drop here but it won't be used."
+            ["--pip-color" as unknown as string]: disabled ? UNCONNECTED_COLOR : color,
+            borderColor: disabled ? UNCONNECTED_COLOR : isConnected ? color : UNCONNECTED_COLOR,
+            background: disabled ? "var(--background)" : isConnected ? color : "var(--background)",
             borderStyle: "solid",
           }}
         >
@@ -300,10 +313,13 @@ export function HandleWithPopover({
             // Connected → white icon over the solid color fill.
             // Idle → brand-color icon dimmed to 35%; CSS bumps it to 100%
             //   during a drag-to-connect so valid candidates light up.
+            // Disabled → muted-foreground icon at 50%, regardless of
+            //   connected state — overrides brand color so the inactive
+            //   signal is unmistakable.
             className="pointer-events-none [&>svg]:w-3.5 [&>svg]:h-3.5 flex items-center justify-center handle-typed-pip-icon"
             style={{
-              color: isConnected ? "white" : color,
-              opacity: isConnected ? 1 : 0.35,
+              color: disabled ? "var(--muted-foreground)" : isConnected ? "white" : color,
+              opacity: disabled ? 0.5 : isConnected ? 1 : 0.35,
             }}
           >
             {icon}
@@ -341,6 +357,11 @@ export function HandleWithPopover({
               [side === "left" ? "right" : "left"]: "calc(100% + 14px)",
               transform: `translateY(-50%) scale(${labelCompensateScale})`,
               transformOrigin: side === "left" ? "100% 50%" : "0% 50%",
+              // Disabled pip's label dims further so the row reads as
+              // inactive at a glance — the icon's muted-foreground color
+              // already carries the signal but the label is the lingering
+              // wordy bit on hover.
+              opacity: disabled ? 0.5 : 1,
             }}
           >
             {label}

@@ -27,6 +27,7 @@ import { getCachedUserId } from "@/hooks/use-auth"
 import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
+import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
 import { migratePickerSourceHandle } from "@/lib/picker-handles"
 
 /**
@@ -1739,6 +1740,18 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           }
         } catch { /* SSR or localStorage unavailable — silently skip */ }
       }
+    }
+
+    // Migrate image-to-video + text-to-video → generate-video (Task 4.2).
+    // One-way, idempotent: renames node.type, normalizes legacy data fields
+    // (connectedRefImageOrder, seedance2InputMode, kling3Mode/Sound), and
+    // renames target handle ids (references / in / etc → imageReferences /
+    // prompt / etc). Runs AFTER migrateGenerateImageHandles so its edge
+    // updates compose on top of the image-handle migration result.
+    {
+      const result = migrateGenerateVideoNodes(migratedNodes, migratedEdges)
+      migratedNodes = result.nodes
+      migratedEdges = result.edges
     }
 
     // Migrate legacy CharacterNodeData:

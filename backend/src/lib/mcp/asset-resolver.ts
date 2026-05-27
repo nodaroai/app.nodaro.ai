@@ -33,6 +33,7 @@ const IMAGE_TYPES = new Set<string>([
 const VIDEO_TYPES = new Set<string>([
   "image-to-video",
   "text-to-video",
+  "generate-video",
   "video-to-video",
   "lip-sync",
   "motion-transfer",

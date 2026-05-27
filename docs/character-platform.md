@@ -157,7 +157,7 @@ reason about and don't depend on the canvas wiring.
 ## Injected references list (canvas editor)
 
 Every consumer node config panel — generate-image, image-to-image,
-modify-image, image-to-video, text-to-video, video-to-video, lip-sync,
+modify-image, generate-video, video-to-video, lip-sync,
 face-swap, motion-transfer, speech-to-video — surfaces a unified
 **Injected References** list that mirrors exactly what the API will receive,
 including:

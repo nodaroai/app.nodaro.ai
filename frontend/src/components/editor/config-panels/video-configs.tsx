@@ -22,6 +22,7 @@ import type {
   ImageToVideoData,
   VideoToVideoData,
   TextToVideoData,
+  GenerateVideoNodeData,
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
@@ -31,7 +32,7 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
@@ -410,7 +411,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_I2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -1148,7 +1149,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_V2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -1641,7 +1642,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_T2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -1901,6 +1902,866 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           refMap={refMap}
         />
       </MappableField>
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// GenerateVideoConfig — unified i2v + t2v configuration panel for the
+// `generate-video` node (Task 7.2). Renders the structural superset of the
+// legacy ImageToVideoConfig + TextToVideoConfig controls, gated by the chosen
+// provider. The runtime path re-dispatches generate-video as i2v or t2v based
+// on whether an upstream image is wired (see execute-node.ts ~line 2014); the
+// config here just exposes every lever the chosen provider supports.
+//
+// Differences vs legacy i2v/t2v configs:
+//   - Provider dropdown uses VIDEO_GEN_MODELS (i2v ∪ t2v) instead of the
+//     per-mode sets.
+//   - Duration map: VIDEO_DURATION_OPTIONS — merged i2v + t2v per provider.
+//   - Reference handle ids match generate-video-handle-migration.ts:
+//     "imageReferences" / "videoReferences" / "audioReferences"
+//     (legacy nodes had "references" / "reference-videos" / "reference-audio").
+//   - Reference image ordering uses `data.referenceImageOrder` (legacy was
+//     `connectedRefImageOrder`).
+//   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
+// ---------------------------------------------------------------------------
+export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+  useEffect(() => { prefetchModelCredits(VIDEO_GEN_MODELS.map((m) => m.value)) }, [])
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  // GenerateVideoNodeData is structurally `ImageToVideoData & TextToVideoData`
+  // (with Omits to resolve conflicts) — but the Omit×2 intersection collapses
+  // field types into `{}` for TypeScript's narrowing. Treat the data as
+  // ImageToVideoData + the generate-video-only `referenceImageOrder` field
+  // here since the i2v shape is the structural superset that covers every
+  // control rendered below. The unified provider type is widened separately
+  // via `currentProvider`. This mirrors the t2v config which casts
+  // GenerateVideoNodeData → ImageToVideoData when dispatching to Kling3Studio.
+  type DataView = ImageToVideoData & { referenceImageOrder?: readonly string[] }
+  const data = rawData as unknown as DataView
+  const onUpdate = rawOnUpdate as unknown as (u: Partial<DataView>) => void
+
+  const currentProvider = (rawData.provider || "seedance-2-fast") as string
+
+  // Fail-safe: snap stale resolution + duration values that don't apply to the
+  // current provider. Same Provider-Enum-Sync step-12b pattern as i2v/t2v —
+  // without this, persisted values + admin defaults leak across provider
+  // changes and trigger backend Zod enum rejections at generate-time.
+  useEffect(() => {
+    const updates: Partial<ImageToVideoData> = {}
+    const opts = getVideoResolutionOptions(currentProvider)
+    if (opts) {
+      if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
+        updates.resolution = opts[0]?.value
+      }
+    } else if (data.resolution !== undefined) {
+      updates.resolution = undefined
+    }
+    const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
+    if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
+      updates.duration = baseDurations[0]
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates)
+    }
+  }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
+  // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
+  const allowedDurations = baseDurations && (currentProvider === "hailuo-2.3-pro" || currentProvider === "hailuo-2.3") && data.resolution === "1080P"
+    ? baseDurations.filter((d) => d <= 6)
+    : baseDurations
+  const supportsEndFrame = PROVIDERS_WITH_END_FRAME.includes(currentProvider)
+  const supportsReferences = PROVIDERS_WITH_REFERENCES.includes(currentProvider)
+  const isVeo = currentProvider === "veo3" || currentProvider === "veo3.1" || currentProvider === "veo3_lite"
+  const isVeoRefMode = isVeo && data.veoMode === "reference"
+  const isSeedance2 = isSeedance2Provider(currentProvider)
+
+  const connectedImages = useMemo(() => {
+    const imageTypes = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
+    return sources.filter((s) => imageTypes.includes(s.type) && s.targetHandle !== "imageReferences").map((s) => {
+      let displayLabel = s.label
+      if (s.targetHandle === "startFrame") {
+        displayLabel = `Start: ${s.label}`
+      } else if (s.targetHandle === "endFrame") {
+        displayLabel = `End: ${s.label}`
+      }
+
+      return {
+        id: s.id,
+        type: s.type,
+        label: displayLabel,
+        imageUrl: getSourceThumbnail(s),
+        targetHandle: s.targetHandle,
+      }
+    })
+  }, [sources])
+
+  const connectedRefImages = useMemo(() => {
+    return sources.filter((s) => s.targetHandle === "imageReferences").map((s) => ({
+      id: s.id, type: s.type, label: s.label, imageUrl: getSourceThumbnail(s),
+    }))
+  }, [sources])
+
+  // Sources wired specifically into the `imageReferences` handle. Pre-filtered
+  // here so `<ConnectedMediaList>` only sees (and reorders) the reference-image
+  // connections — start/end frame edges live in their own pre-existing media
+  // list above and have their own ordering field.
+  const refSources = useMemo(
+    () => sources.filter((s) => s.targetHandle === "imageReferences"),
+    [sources],
+  )
+
+  // Seedance-2 reference video / audio sources (t2v-only on the legacy node;
+  // generate-video accepts them under the renamed handle ids).
+  const connectedRefVideos = useMemo(
+    () => sources.filter((s) => s.targetHandle === "videoReferences"),
+    [sources],
+  )
+  const connectedRefAudio = useMemo(
+    () => sources.filter((s) => s.targetHandle === "audioReferences"),
+    [sources],
+  )
+
+  // Character @-mention autocomplete — same as i2v/t2v.
+  const refImagesForAutocomplete = useMemo<RefImageItem[]>(
+    () => toRefImageItems(buildVideoRefAutocomplete(sources)),
+    [sources],
+  )
+
+  const maxRefImages = currentProvider === "grok-i2v" ? 6 : currentProvider === "kling-3-omni" ? 7 : 3
+
+  const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
+  const seedance2Conflict = isSeedance2 && hasEndFrame && connectedRefImages.length > 0
+
+  if (currentProvider === "kling-3.0") {
+    return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate as (u: Partial<ImageToVideoData>) => void} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+      {connectedImages.length > 0 && (
+        <ConnectedMediaList
+          sources={sources}
+          mediaOrder={data.connectedImageOrder ?? []}
+          onUpdateOrder={(order) => onUpdate({ connectedImageOrder: order })}
+          acceptedTypes={new Set(["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"])}
+          mediaType="image"
+          primaryLabel="Start Frame"
+        />
+      )}
+
+      <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
+        <Select
+          value={currentProvider}
+          onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+        >
+          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {VIDEO_GEN_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
+            ))}
+          </SelectContent>
+        </Select>
+      </MappableField>
+      <ModelDescriptionHint modelId={currentProvider} />
+
+      {/* Seedance 2 input mode toggle — Frames (start/end images) and References
+          (image references) are mutually exclusive on the Seedance 2 family.
+          Mirror of the legacy ImageToVideoConfig toggle so the new generate-video
+          node exposes the same lever. */}
+      {isSeedance2 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Input Mode</Label>
+          <div className="flex rounded-md border border-border overflow-hidden">
+            {(["frames", "references"] as const).map((mode) => {
+              const active = (data.seedance2InputMode ?? "frames") === mode
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`flex-1 py-1 text-xs font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => { if (!active) onUpdate({ seedance2InputMode: mode }) }}
+                >
+                  {mode === "frames" ? "Frames" : "References"}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-muted-foreground px-1">
+            {(data.seedance2InputMode ?? "frames") === "references"
+              ? "References mode uses image references to guide generation (not as start/end frames)."
+              : "Frames mode uses start and optional end frame images."}
+          </p>
+        </div>
+      )}
+
+      {/* VEO mode toggle */}
+      {isVeo && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Generation Mode</Label>
+          <Select value={data.veoMode || "frame-to-frame"} onValueChange={(v) => onUpdate({ veoMode: v as "frame-to-frame" | "reference" })}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="frame-to-frame">Frame-to-Frame</SelectItem>
+              <SelectItem value="reference">Reference Mode</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground px-1">
+            {isVeoRefMode
+              ? "Reference mode uses 1-3 reference images to guide generation (not as start/end frames)."
+              : "Frame-to-frame mode uses start and optional end frame images."}
+          </p>
+        </div>
+      )}
+
+      {/* Reference images section (Grok / VEO reference mode / Seedance 2). */}
+      {(supportsReferences && (!isVeo || isVeoRefMode)) && connectedRefImages.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Reference Images ({connectedRefImages.length}/{isSeedance2 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages})</Label>
+          {seedance2Conflict && (
+            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
+              Reference images and end frame are mutually exclusive on Seedance 2. Disconnect the end frame <em>or</em> reference images before generating.
+            </div>
+          )}
+          <ConnectedMediaList
+            sources={refSources}
+            mediaOrder={data.referenceImageOrder ?? []}
+            onUpdateOrder={(order) => onUpdate({ referenceImageOrder: order })}
+            mediaType="image"
+          />
+          <p className="text-[10px] text-muted-foreground px-1">
+            Connect image nodes to the References handle. Up to {isSeedance2 ? SEEDANCE_2_REF_LIMITS.images : maxRefImages} additional reference images.
+          </p>
+        </div>
+      )}
+
+      {/* Seedance 2 reference videos */}
+      {isSeedance2 && connectedRefVideos.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Reference Videos ({connectedRefVideos.length}/{SEEDANCE_2_REF_LIMITS.videos})</Label>
+          <div className="flex flex-col gap-1">
+            {connectedRefVideos.map((s) => (
+              <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                {s.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Seedance 2 reference audio */}
+      {isSeedance2 && connectedRefAudio.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Reference Audio ({connectedRefAudio.length}/{SEEDANCE_2_REF_LIMITS.audio})</Label>
+          <div className="flex flex-col gap-1">
+            {connectedRefAudio.map((s) => (
+              <div key={s.id} className="text-[10px] px-2 py-1 rounded bg-muted/50 text-muted-foreground truncate">
+                {s.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
+        <PromptEditor
+          rows={3}
+          value={data.prompt || ""}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder={connectedImages.length > 0 ? "Describe the motion or animation you want..." : "Describe the video to generate..."}
+          referenceImages={refImagesForAutocomplete}
+          nodeRefs={nodeRefs}
+        />
+      </MappableField>
+
+      {/* Unified injected-references list */}
+      <InjectedReferenceList
+        connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
+        prompt={data.prompt || ""}
+        referenceOrder={data.referenceOrder}
+        suppressedCanonicalCharacterIds={data.suppressedCanonicalCharacterIds}
+        onUpdateReferenceOrder={(order) => onUpdate({ referenceOrder: order })}
+        onRemoveWiredSource={
+          nodeId
+            ? makeRemoveWiredSource(
+                nodeId,
+                edges ?? [],
+                useWorkflowStore.getState().deleteEdge,
+              )
+            : undefined
+        }
+        onRemoveMention={(token) => onUpdate({ prompt: removeMentionToken(data.prompt || "", token) })}
+        onSuppressCanonical={(slug) =>
+          onUpdate({ suppressedCanonicalCharacterIds: appendSuppressedSlug(data.suppressedCanonicalCharacterIds, slug) })
+        }
+        label="Injected references"
+      />
+
+      <ExtraRefsSection
+        extraRefs={data.extraRefs}
+        onChange={(next) => onUpdate({ extraRefs: next })}
+        consumerNodeId={nodeId}
+        nodes={nodes}
+        edges={edges ?? []}
+      />
+
+      {isVeo && (
+        <>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={[
+                { value: "Auto", label: "Auto (from image)" },
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+              ]}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          {(() => {
+            const opts = getVideoResolutionOptions(currentProvider)
+            return opts && opts.length > 0 ? (
+              <div>
+                <Label className="text-xs">Resolution</Label>
+                <Select
+                  value={(data.resolution as string) || opts[0].value}
+                  onValueChange={(v) => onUpdate({ resolution: v })}
+                >
+                  <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {opts.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  4K is available via the dedicated VEO upgrade node — it runs after the base 720p/1080p generation completes.
+                </p>
+              </div>
+            ) : null
+          })()}
+          <div>
+            <Label className="text-xs">Seed (optional)</Label>
+            <Input
+              type="number"
+              min={10000}
+              max={99999}
+              placeholder="10000–99999"
+              value={data.seed ?? ""}
+              onChange={(e) => onUpdate({ seed: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">Same seed produces similar results. Leave empty for random.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="gv-generateAudio"
+                checked={data.generateAudio !== false}
+                onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="gv-generateAudio" className="text-xs">Generate Audio</label>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">VEO 3.1 creates AI audio from the prompt. Disable for silent video, then use Add Audio node.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="gv-enableTranslation"
+                checked={data.enableTranslation !== false}
+                onChange={(e) => onUpdate({ enableTranslation: e.target.checked })}
+                className="rounded border-muted-foreground/40"
+              />
+              <label htmlFor="gv-enableTranslation" className="text-xs">Auto-translate prompt to English</label>
+            </div>
+            <p className="text-xs text-muted-foreground px-1">
+              Prompts are auto-translated to English before VEO sees them (default on). Disable to keep prompts verbatim — useful for non-English prompts or when exact wording matters (e.g. the perfect-loop seal phrase).
+            </p>
+          </div>
+        </>
+      )}
+      <MappableField field="duration" label="Duration (seconds)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        {allowedDurations ? (
+          <Select
+            value={String(allowedDurations.includes(data.duration as number) ? data.duration : allowedDurations[0])}
+            onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+          >
+            <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {allowedDurations.map((d) => (
+                <SelectItem key={d} value={String(d)}>{d} seconds</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            type="number"
+            min={1}
+            max={30}
+            value={data.duration ?? ""}
+            onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+          />
+        )}
+      </MappableField>
+      {allowedDurations && allowedDurations.length === 1 && (
+        <p className="text-xs text-muted-foreground px-1">
+          {`${currentProvider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
+        </p>
+      )}
+      {supportsEndFrame && (
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">End Frame (optional)</Label>
+          <p className="text-xs text-muted-foreground px-1">
+            Connect an image node to the &quot;End Frame&quot; handle for start-to-end frame video generation.
+          </p>
+        </div>
+      )}
+      {/* Loop trim — generic smart-loop-cut post-process */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-border">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="gv-loopTrim-enabled"
+            checked={data.loopTrim?.enabled ?? false}
+            onChange={(e) => onUpdate({
+              loopTrim: e.target.checked
+                ? { enabled: true, framesToTest: data.loopTrim?.framesToTest ?? 16, quality: data.loopTrim?.quality ?? "precise" }
+                : { enabled: false },
+            })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="gv-loopTrim-enabled" className="text-xs">Loop trim</label>
+        </div>
+        {data.loopTrim?.enabled && (
+          <>
+            <div className="px-1">
+              <label htmlFor="gv-loopTrim-frames" className="text-[10px] text-muted-foreground">
+                Frames to test: {data.loopTrim.framesToTest ?? 16}
+              </label>
+              <input
+                id="gv-loopTrim-frames"
+                type="range"
+                min={4}
+                max={64}
+                step={1}
+                value={data.loopTrim.framesToTest ?? 16}
+                onChange={(e) => onUpdate({
+                  loopTrim: { ...data.loopTrim!, framesToTest: parseInt(e.target.value, 10) },
+                })}
+                className="w-full h-1.5 rounded-lg cursor-pointer accent-[#ff0073]"
+              />
+            </div>
+            <div className="px-1">
+              <label htmlFor="gv-loopTrim-quality" className="text-[10px] text-muted-foreground">Quality</label>
+              <Select
+                value={data.loopTrim.quality ?? "precise"}
+                onValueChange={(v) => onUpdate({
+                  loopTrim: { ...data.loopTrim!, quality: v as "lossless" | "precise" },
+                })}
+              >
+                <SelectTrigger id="gv-loopTrim-quality" className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="precise">Precise — frame-precise, slight quality drop</SelectItem>
+                  <SelectItem value="lossless">Lossless — keyframe-only, byte-perfect</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {!connectedImages.some((img) => img.targetHandle === "endFrame") && (
+              <p className="px-1 text-[10px] text-amber-500/80 leading-snug">
+                Works best when start and end frames are pinned to the same image. Without an end frame, the algorithm picks the best loop point it can find but the result may not be seamless.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="gv-motionEnabled"
+            checked={!!data.motionEnabled}
+            onChange={(e) => onUpdate({ motionEnabled: e.target.checked, ...(!e.target.checked ? { motion: undefined } : {}) })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="gv-motionEnabled" className="text-xs">Motion hint (injected into prompt)</label>
+        </div>
+        {data.motionEnabled && (
+          <MappableField field="motion" label="Motion" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select
+              value={data.motion || "moderate"}
+              onValueChange={(v) => onUpdate({ motion: v as ImageToVideoData["motion"] })}
+            >
+              <SelectTrigger aria-label="Motion"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="subtle">Subtle</SelectItem>
+                <SelectItem value="moderate">Moderate</SelectItem>
+                <SelectItem value="dynamic">Dynamic</SelectItem>
+              </SelectContent>
+            </Select>
+          </MappableField>
+        )}
+      </div>
+
+      {currentProvider === "kling" && (
+        <div className="flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="gv-klingSound"
+            checked={(data as Record<string, unknown>).kling3Sound !== false}
+            onChange={(e) => onUpdate({ kling3Sound: e.target.checked })}
+            className="rounded border-muted-foreground/40"
+          />
+          <label htmlFor="gv-klingSound" className="text-xs">Enable Sound</label>
+        </div>
+      )}
+
+      {currentProvider === "kling-turbo" && (
+        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Textarea
+            rows={2}
+            value={(data as Record<string, unknown>).negativePrompt as string || ""}
+            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+            placeholder="Things to avoid..."
+          />
+        </MappableField>
+      )}
+
+      {(currentProvider === "kling-turbo" || currentProvider === "kling-master") && (
+        <div>
+          <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
+          <Input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={((data as Record<string, unknown>).cfgScale as number) ?? ""}
+            onChange={(e) => onUpdate({ cfgScale: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
+        </div>
+      )}
+
+      {currentProvider === "kling-master" && (
+        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Textarea
+            rows={2}
+            value={(data as Record<string, unknown>).negativePrompt as string || ""}
+            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+            placeholder="Things to avoid..."
+          />
+        </MappableField>
+      )}
+
+      {currentProvider === "kling-3-omni" && (
+        <>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={[
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "1:1", label: "1:1 (Square)" },
+              ]}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div>
+            <Label className="text-xs">Quality</Label>
+            <Select
+              value={data.resolution || "720p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Quality"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="720p">Standard (720p)</SelectItem>
+                <SelectItem value="1080p">Pro (1080p)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-kling3OmniAudio"
+              checked={data.generateAudio !== false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-kling3OmniAudio" className="text-xs">Generate Audio</label>
+          </div>
+          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Textarea
+              rows={2}
+              value={(data as Record<string, unknown>).negativePrompt as string || ""}
+              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+              placeholder="Things to avoid..."
+            />
+          </MappableField>
+        </>
+      )}
+
+      {currentProvider === "grok-i2v" && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Mode</Label>
+            <Select
+              value={data.grokMode || "normal"}
+              onValueChange={(v) => onUpdate({ grokMode: v as "fun" | "normal" | "spicy" })}
+            >
+              <SelectTrigger aria-label="Mode"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="fun">Fun</SelectItem>
+                <SelectItem value="spicy">Spicy</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      {currentProvider === "seedance" && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={[
+                { value: "16:9", label: "16:9 (Landscape)" },
+                { value: "9:16", label: "9:16 (Portrait)" },
+                { value: "1:1", label: "1:1 (Square)" },
+                { value: "21:9", label: "21:9 (Ultra-wide)" },
+              ]}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-seedanceFixedLens"
+              checked={data.cameraFixed || false}
+              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-seedanceFixedLens" className="text-xs">Fixed Lens (no camera movement)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-seedanceAudio"
+              checked={data.generateAudio || false}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-seedanceAudio" className="text-xs">Generate Audio</label>
+          </div>
+        </>
+      )}
+
+      {isSeedance2 && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={SEEDANCE_2_VIDEO_RATIOS}
+              value={data.aspectRatio || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-seedance2Audio"
+              checked={data.generateAudio ?? true}
+              onChange={(e) => onUpdate({ generateAudio: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-seedance2Audio" className="text-xs">Generate Audio (default on)</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-seedance2WebSearch"
+              checked={data.webSearch || false}
+              onChange={(e) => onUpdate({ webSearch: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-seedance2WebSearch" className="text-xs">Enable Web Search</label>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-seedance2Nsfw"
+              checked={data.nsfwChecker || false}
+              onChange={(e) => onUpdate({ nsfwChecker: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-seedance2Nsfw" className="text-xs">NSFW Content Filter</label>
+          </div>
+        </>
+      )}
+
+      {(currentProvider === "wan-i2v" || currentProvider === "wan-turbo") && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || (currentProvider === "wan-turbo" ? "480p" : "720p")}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {currentProvider === "wan-turbo" ? (
+                <>
+                  <SelectItem value="480p">480p</SelectItem>
+                  <SelectItem value="720p">720p</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="720p">720p</SelectItem>
+                  <SelectItem value="1080p">1080p</SelectItem>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {(currentProvider === "hailuo-2.3-pro" || currentProvider === "hailuo-2.3" || currentProvider === "hailuo-standard") && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || (currentProvider === "hailuo-standard" ? "512P" : "768P")}
+            onValueChange={(v) => {
+              const updates: Record<string, unknown> = { resolution: v }
+              // 1080P only supports 6s — snap duration if needed
+              if (v === "1080P" && data.duration && data.duration > 6) {
+                updates.duration = 6
+              }
+              onUpdate(updates)
+            }}
+          >
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {currentProvider === "hailuo-standard" ? (
+                <>
+                  <SelectItem value="512P">512P</SelectItem>
+                  <SelectItem value="768P">768P</SelectItem>
+                </>
+              ) : (
+                <>
+                  <SelectItem value="768P">768P</SelectItem>
+                  <SelectItem value="1080P">1080P (6s max)</SelectItem>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {(currentProvider === "bytedance-lite" || currentProvider === "bytedance-pro") && (
+        <>
+          <div>
+            <Label className="text-xs">Resolution</Label>
+            <Select
+              value={data.resolution || "480p"}
+              onValueChange={(v) => onUpdate({ resolution: v })}
+            >
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="480p">480p</SelectItem>
+                <SelectItem value="720p">720p</SelectItem>
+                <SelectItem value="1080p">1080p</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 px-1">
+            <input
+              type="checkbox"
+              id="gv-bytedanceCameraFixed"
+              checked={data.cameraFixed || false}
+              onChange={(e) => onUpdate({ cameraFixed: e.target.checked })}
+              className="rounded border-muted-foreground/40"
+            />
+            <label htmlFor="gv-bytedanceCameraFixed" className="text-xs">Camera Fixed</label>
+          </div>
+          <div>
+            <Label className="text-xs">Seed (-1 for random)</Label>
+            <Input
+              type="number"
+              min={-1}
+              max={2147483647}
+              value={data.seed ?? -1}
+              onChange={(e) => onUpdate({ seed: parseInt(e.target.value, 10) })}
+            />
+          </div>
+        </>
+      )}
+
+      {currentProvider === "bytedance-pro-fast" && (
+        <div>
+          <Label className="text-xs">Resolution</Label>
+          <Select
+            value={data.resolution || "720p"}
+            onValueChange={(v) => onUpdate({ resolution: v })}
+          >
+            <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="720p">720p</SelectItem>
+              <SelectItem value="1080p">1080p</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {lightboxImage && (
+        <ImageLightbox
+          src={lightboxImage}
+          alt="Connected image"
+          onClose={() => setLightboxImage(null)}
+        />
+      )}
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>

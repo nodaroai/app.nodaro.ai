@@ -112,6 +112,7 @@ const NODE_TYPE_TO_CATEGORIES: Record<string, readonly WizardCategory[]> = {
   "modify-image": IMAGE_WIZARD_CATEGORIES,
   "text-to-video": VIDEO_WIZARD_CATEGORIES,
   "image-to-video": VIDEO_WIZARD_CATEGORIES,
+  "generate-video": VIDEO_WIZARD_CATEGORIES,
   "video-to-video": VIDEO_WIZARD_CATEGORIES,
   "motion-transfer": VIDEO_WIZARD_CATEGORIES,
   "extend-video": VIDEO_WIZARD_CATEGORIES,

@@ -467,6 +467,82 @@ describe("resolveNodeInputs", () => {
 })
 
 // ---------------------------------------------------------------------------
+// generate-video typed handle routing
+// ---------------------------------------------------------------------------
+
+describe("resolveNodeInputs — generate-video typed handle routing", () => {
+  it("routes imageReferences edges into resolvedInputs.referenceImageUrls", () => {
+    const target = node("t", "generate-video")
+    const src = node("s", "generate-image")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", null, "imageReferences")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { imageUrl: "https://ref.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.referenceImageUrls).toEqual(["https://ref.png"])
+  })
+
+  it("routes videoReferences edges into resolvedInputs.referenceVideoUrls", () => {
+    const target = node("t", "generate-video")
+    const src = node("s", "image-to-video")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", null, "videoReferences")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { videoUrl: "https://ref.mp4" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.referenceVideoUrls).toEqual(["https://ref.mp4"])
+  })
+
+  it("routes audioReferences edges into resolvedInputs.referenceAudioUrls", () => {
+    const target = node("t", "generate-video")
+    const src = node("s", "text-to-speech")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", null, "audioReferences")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { audioUrl: "https://ref.mp3" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.referenceAudioUrls).toEqual(["https://ref.mp3"])
+  })
+
+  it("routes startFrame handle into resolvedInputs.startFrameUrl for generate-video", () => {
+    const target = node("t", "generate-video")
+    const src = node("s", "generate-image")
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", null, "startFrame")]
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { imageUrl: "https://start.png" } },
+    }
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.startFrameUrl).toBe("https://start.png")
+  })
+
+  // Regression: without explicit handle-id routing, the text-source default
+  // path lands the upstream text in `resolvedInputs.prompt` (the POSITIVE
+  // prompt slot). The handle visually says "Negative" but the text used to
+  // end up in the wrong field at execution. The `negative` targetHandle MUST
+  // route into `resolvedInputs.negativePrompt` instead, and MUST NOT leak
+  // into `resolvedInputs.prompt`.
+  it("negative handle on generate-video routes text into resolvedInputs.negativePrompt", () => {
+    const target = node("t", "generate-video")
+    const src = node("s", "text-prompt", { text: "blurry, low quality" })
+    const allNodes = [src, target]
+    const edges = [edge("s", "t", null, "negative")]
+    const states: Record<string, NodeExecutionState> = {}
+
+    const result = resolveNodeInputs(target, edges, states, allNodes)
+    expect(result.negativePrompt).toBe("blurry, low quality")
+    expect(result.prompt).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // getListInputForNode
 // ---------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ import {
   NODE_DEFINITIONS,
   type ImageToVideoData,
   type TextToVideoData,
+  type GenerateVideoNodeData,
   type FieldMappings,
   type PresentationDisplay,
 } from "@/types/nodes"
@@ -97,6 +98,7 @@ import {
   SpeechToVideoConfig,
   FaceSwapConfig,
   TextToVideoConfig,
+  GenerateVideoConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
   AudioIsolationConfig,
@@ -193,7 +195,7 @@ import {
   ResultsGallery,
 } from "./config-panels"
 
-const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap"])
+const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
 
 const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
@@ -258,6 +260,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "image-to-video": "Image to Video",
   "video-to-video": "Video to Video",
   "text-to-video": "Text to Video",
+  "generate-video": "Generate Video",
   "text-to-speech": "Text to Speech",
   "qa-check": "QA Check",
   "image-critic": "Image Critic",
@@ -353,7 +356,7 @@ export function getNodeTypeDisplayName(type: string): string {
 
 export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask",
-  "image-to-video", "video-to-video", "text-to-video", "text-to-speech",
+  "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
   "video-upscale", "extend-video", "face-swap", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
@@ -381,7 +384,7 @@ const RUN_FROM_HERE_TYPES: Set<string> = new Set([
   "preview", "loop", "list",
 ])
 
-const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video"])
+const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
 
 // Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
 const RESULT_PRODUCING_TYPES = new Set([
@@ -491,6 +494,21 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
       <>
         <TextToVideoConfig {...configProps} nodeId={selectedNodeId} />
         {(nodeData as TextToVideoData).provider === "kling-3.0" && (
+          <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
+            <Maximize2 className="w-4 h-4 mr-2" />
+            Expand Director
+          </Button>
+        )}
+      </>
+    )
+    // generate-video: unified i2v + t2v node (Task 7.1 + 7.2). Uses the
+    // GenerateVideoConfig union panel — Kling3 director button mirrors the
+    // t2v branch above so users keep the storyboard/element studio UX
+    // when targeting kling-3.0 from the unified node.
+    case "generate-video": return (
+      <>
+        <GenerateVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
+        {(nodeData as GenerateVideoNodeData).provider === "kling-3.0" && (
           <Button variant="outline" className="w-full mt-2" onClick={onExpandDirector}>
             <Maximize2 className="w-4 h-4 mr-2" />
             Expand Director

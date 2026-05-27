@@ -98,6 +98,7 @@ vi.mock("../types", () => ({
     const EXECUTABLE = new Set([
       "generate-image",
       "image-to-video",
+      "generate-video",
       "generate-script",
       "text-to-speech",
     ])
@@ -490,6 +491,28 @@ describe("handleRunFromHere", () => {
     )
   })
 
+  it("treats generate-video as a downstream executable in BFS (unified video node)", async () => {
+    const nodeA = makeNode("a", "generate-image")
+    const nodeB = makeNode("b", "generate-video")
+    const edgeAB = makeEdge("a", "b")
+
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [nodeA, nodeB],
+      edges: [edgeAB],
+    })
+
+    const ctx = makeCtx()
+    const save = vi.fn().mockResolvedValue(undefined)
+    const setIsRunning = vi.fn()
+
+    await handleRunFromHere("a", ctx, "p1", save, setIsRunning)
+
+    expect(mockRunWorkflow).toHaveBeenCalledWith(
+      "wf-mock-1",
+      expect.arrayContaining(["a", "b"]),
+    )
+  })
+
   it("shows error when no executable nodes downstream", async () => {
     const nonExec = makeNode("n1", "text-prompt")
     mockCollapseExpandedClones.mockReturnValue({
@@ -580,6 +603,27 @@ describe("handleRunSelected", () => {
     const calledIds = mockRunWorkflow.mock.calls[0][1]
     expect(calledIds).toHaveLength(2)
     expect(calledIds).not.toContain("b")
+  })
+
+  it("treats generate-video as executable in the selection set", async () => {
+    const nodeA = makeNode("a", "generate-image", { selected: true })
+    const nodeB = makeNode("b", "generate-video", { selected: true })
+
+    mockCollapseExpandedClones.mockReturnValue({
+      nodes: [nodeA, nodeB],
+      edges: [],
+    })
+
+    const ctx = makeCtx()
+    const save = vi.fn().mockResolvedValue(undefined)
+    const setIsRunning = vi.fn()
+
+    await handleRunSelected(ctx, "p1", save, setIsRunning)
+
+    expect(mockRunWorkflow).toHaveBeenCalledWith(
+      "wf-mock-1",
+      expect.arrayContaining(["a", "b"]),
+    )
   })
 
   it("shows error when no executable nodes in selection", async () => {

@@ -57,6 +57,10 @@ describe("isExecutableNode", () => {
     expect(isExecutableNode(makeNode("combine-videos"))).toBe(true)
   })
 
+  it("returns true for generate-video (unified video node)", () => {
+    expect(isExecutableNode(makeNode("generate-video"))).toBe(true)
+  })
+
   it("returns true for scene type", () => {
     expect(isExecutableNode(makeNode("scene"))).toBe(true)
   })
@@ -155,6 +159,10 @@ describe("EXECUTABLE_TYPES", () => {
 
   it("contains render-video", () => {
     expect(EXECUTABLE_TYPES.has("render-video")).toBe(true)
+  })
+
+  it("contains generate-video (unified video node)", () => {
+    expect(EXECUTABLE_TYPES.has("generate-video")).toBe(true)
   })
 
   it("does NOT contain text-prompt", () => {

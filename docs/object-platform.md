@@ -111,7 +111,7 @@ nodes or as B-roll loops in product cuts.
   catalogue aspect ratios.
 - **Credits** — depends on the i2v provider; matches the equivalent
   image-to-video generation on that provider. See
-  `docs/nodes/ai-video/image-to-video.md` for the per-provider table.
+  `docs/nodes/ai-video/generate-video.md` for the per-provider table.
 
 #### Refinement (video-to-video)
 
@@ -712,7 +712,7 @@ generation routes:
   motion clip. Provider defaults to `kling-turbo` (the fastest variant
   in the object set; ~15 credits / 5-second clip — cheaper than the
   cinematic kling default used by locations). See
-  `docs/nodes/ai-video/image-to-video.md` for the full per-provider
+  `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/objects/:id/approve-main-image` — currently free; the LLM
   caption is uncharged.

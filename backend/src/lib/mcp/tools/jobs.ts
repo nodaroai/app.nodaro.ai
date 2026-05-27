@@ -138,6 +138,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         video: [
           "image-to-video",
           "text-to-video",
+          "generate-video",
           "video-to-video",
           "lip-sync",
           "motion-transfer",

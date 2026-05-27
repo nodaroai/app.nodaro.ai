@@ -178,6 +178,124 @@ describe("buildPayload", () => {
     })
   })
 
+  // The unified generate-video node dispatches `jobName` dynamically at
+  // payload-build time based on the wiring shape. The downstream worker
+  // handlers + credit pricing key off the chosen `jobName`, so we verify
+  // both the mode-dispatch decision AND the payload shape passed through.
+  describe("generate-video", () => {
+    // 1. Pure text-only → `text-to-video` worker route + TEXT_2_VIDEO veo hint.
+    it("text-only mode → jobName text-to-video + TEXT_2_VIDEO generationType", () => {
+      const n = node("n1", "generate-video", { provider: "kling", prompt: "a dog" })
+      const result = buildPayload(n, jobId, {})
+      expect(result.jobName).toBe("text-to-video")
+      expect(result.payload.prompt).toBe("a dog")
+      expect(result.payload.imageUrl).toBeUndefined()
+      expect(result.payload.generationType).toBe("TEXT_2_VIDEO")
+    })
+
+    // 2. startFrame wired → `image-to-video` route + i2v credit identifier.
+    //    `buildVideoCreditModelIdentifier(...mode=image-to-video...)` mints a
+    //    Kling-i2v identifier; we only assert the provider name is present
+    //    rather than pinning the exact composite string (the helper has its
+    //    own coverage and changes shape across providers).
+    it("startFrame connected → jobName image-to-video + i2v credit identifier", () => {
+      const n = node("n1", "generate-video", { provider: "kling", duration: 5 })
+      const inputs: ResolvedInputs = { startFrameUrl: "https://cdn/frame.png" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.jobName).toBe("image-to-video")
+      expect(result.payload.imageUrl).toBe("https://cdn/frame.png")
+      expect(result.modelIdentifier).toMatch(/kling/)
+    })
+
+    // 3. Both frames wired → VEO-style first-and-last-frames generation hint.
+    it("startFrame + endFrame → FIRST_AND_LAST_FRAMES_2_VIDEO", () => {
+      const n = node("n1", "generate-video", { provider: "veo3" })
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://cdn/a.png",
+        endFrameUrl: "https://cdn/b.png",
+      }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.generationType).toBe("FIRST_AND_LAST_FRAMES_2_VIDEO")
+      expect(result.payload.imageUrl).toBe("https://cdn/a.png")
+      expect(result.payload.endFrameUrl).toBe("https://cdn/b.png")
+    })
+
+    // 4. endFrame wired but no startFrame — providers like veo3/minimax need
+    //    at least one image to anchor i2v, so endFrame is swapped into the
+    //    primary `imageUrl` slot and `endFrameUrl` is cleared (we'd otherwise
+    //    repeat the same image, confusing the worker).
+    it("endFrame only (no startFrame) → swap endFrame into imageUrl, leave endFrameUrl undefined", () => {
+      const n = node("n1", "generate-video", { provider: "veo3" })
+      const inputs: ResolvedInputs = { endFrameUrl: "https://cdn/only.png" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.imageUrl).toBe("https://cdn/only.png")
+      expect(result.payload.endFrameUrl).toBeUndefined()
+    })
+
+    // 5. Reference images only (no startFrame) → REFERENCE_2_VIDEO hint + the
+    //    worker route stays on `text-to-video` (no primary image input, refs
+    //    are conditioning only).
+    it("imageReferences only → REFERENCE_2_VIDEO + jobName text-to-video (no image input)", () => {
+      const n = node("n1", "generate-video", { provider: "seedance-2-fast" })
+      const inputs: ResolvedInputs = { referenceImageUrls: ["https://cdn/r1.png"] }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.jobName).toBe("text-to-video")
+      expect(result.payload.generationType).toBe("REFERENCE_2_VIDEO")
+      expect(result.payload.referenceImageUrls).toEqual(["https://cdn/r1.png"])
+      expect(result.payload.imageUrl).toBeUndefined()
+    })
+
+    // 6. Pre-merge audio handle → `audioUrl` flows through to the worker so
+    //    the post-process step can merge it into the rendered clip.
+    it("audio handle → audioUrl in payload (post-merge)", () => {
+      const n = node("n1", "generate-video", { provider: "kling" })
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://cdn/f.png",
+        audioUrl: "https://cdn/a.mp3",
+      }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.audioUrl).toBe("https://cdn/a.mp3")
+    })
+
+    // 7. Seedance-2 audio conditioning refs flow through as
+    //    `referenceAudioUrls` (separate from the post-merge `audioUrl`).
+    it("audioReferences → referenceAudioUrls in payload (S2 conditioning)", () => {
+      const n = node("n1", "generate-video", { provider: "seedance-2-fast" })
+      const inputs: ResolvedInputs = { referenceAudioUrls: ["https://cdn/cond.wav"] }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.referenceAudioUrls).toEqual(["https://cdn/cond.wav"])
+    })
+
+    // 8. The `negative` typed handle is resolved (in input-resolver) into
+    //    `resolvedInputs.negativePrompt`. It MUST take precedence over the
+    //    config-panel `data.negativePrompt` field, with that field as the
+    //    fallback — mirrors how `prompt` already works.
+    it("negative handle text reaches payload.negativePrompt", () => {
+      const n = node("n1", "generate-video", { provider: "kling", negativePrompt: "fallback" })
+      const inputs: ResolvedInputs = { negativePrompt: "blurry, low quality" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.negativePrompt).toBe("blurry, low quality")
+    })
+
+    // 9. Kling 3.0 mode/sound field-name desync (final-review finding):
+    //    the generate-video widget writes to the legacy `kling3Mode` /
+    //    `kling3Sound` field names. The payload-builder must accept those as
+    //    fallbacks for the canonical `mode`/`sound` so a fresh generate-video
+    //    node + Kling 3.0 doesn't silently drop the user's settings.
+    //    Mirrors the i2v case's existing legacy fallback chain.
+    it("generate-video falls back to legacy kling3Mode/kling3Sound field names", () => {
+      const n = node("n1", "generate-video", {
+        provider: "kling-3.0",
+        kling3Mode: "pro",
+        kling3Sound: true,
+      })
+      const inputs: ResolvedInputs = { startFrameUrl: "https://cdn/f.png" }
+      const result = buildPayload(n, jobId, inputs)
+      expect(result.payload.mode).toBe("pro")
+      expect(result.payload.sound).toBe(true)
+    })
+  })
+
   describe("video-to-video", () => {
     it("builds payload", () => {
       const n = node("n1", "video-to-video", { provider: "wan" })

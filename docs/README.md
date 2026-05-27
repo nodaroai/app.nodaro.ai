@@ -1,8 +1,9 @@
 # Nodaro Documentation
 
 Nodaro is an AI workflow editor. It lets you compose text-to-image,
-image-to-video, audio synthesis, video composition, and LLM nodes into
-multi-step DAGs that run autonomously on a server. The backend is
+AI video generation (text-to-video and image-to-video unified in the
+Generate Video node), audio synthesis, video composition, and LLM nodes
+into multi-step DAGs that run autonomously on a server. The backend is
 REST-first; the included visual editor is one of many possible clients.
 
 ## Quickstart by goal

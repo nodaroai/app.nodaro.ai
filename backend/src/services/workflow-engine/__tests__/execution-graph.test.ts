@@ -204,6 +204,14 @@ describe("media type sets", () => {
     expect(VIDEO_SOURCE_TYPES.has("combine-videos")).toBe(true)
   })
 
+  it("VIDEO_SOURCE_TYPES includes generate-video", () => {
+    // Unified video node — must be classified as a video source so
+    // getPrimaryOutput returns output.videoUrl for it. Without this, downstream
+    // video consumers (combine-videos, lip-sync, etc.) silently see no input
+    // when reading from a generate-video upstream.
+    expect(VIDEO_SOURCE_TYPES.has("generate-video")).toBe(true)
+  })
+
   it("AUDIO_SOURCE_TYPES includes key types", () => {
     expect(AUDIO_SOURCE_TYPES.has("text-to-speech")).toBe(true)
     expect(AUDIO_SOURCE_TYPES.has("generate-music")).toBe(true)

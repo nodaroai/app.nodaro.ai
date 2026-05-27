@@ -453,4 +453,38 @@ describe("POST /v1/generate-video", () => {
       expect(charIs).toHaveBeenCalledWith("deleted_at", null)
     })
   })
+
+  it("accepts t2v-only providers via the unified VIDEO_GEN_PROVIDERS enum", async () => {
+    // pick a provider that's in TEXT_TO_VIDEO_PROVIDERS but NOT IMAGE_TO_VIDEO_PROVIDERS
+    const { TEXT_TO_VIDEO_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS } = await import("@nodaro/shared")
+    const t2vOnly = TEXT_TO_VIDEO_PROVIDERS.find(
+      (p) => !(IMAGE_TO_VIDEO_PROVIDERS as readonly string[]).includes(p),
+    )
+    if (!t2vOnly) return  // no t2v-only providers — test passes vacuously
+
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://example.com/image.png",
+        prompt: "a cinematic wide shot",
+        userId: "00000000-0000-4000-8000-000000000001",
+        provider: t2vOnly,
+      },
+    })
+
+    // Must NOT be a 400 with a Zod "invalid_enum_value" error on `provider`.
+    if (res.statusCode === 400) {
+      const body = res.json()
+      const issues = (body?.error?.issues ?? []) as Array<{ path?: unknown[]; code?: string }>
+      const providerEnumRejection = issues.some(
+        (i) => Array.isArray(i.path) && i.path[0] === "provider" && i.code === "invalid_enum_value",
+      )
+      expect(providerEnumRejection, `provider="${t2vOnly}" rejected by Zod enum`).toBe(false)
+    }
+
+    expect(res.statusCode).toBe(200)
+  })
 })

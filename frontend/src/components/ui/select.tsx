@@ -173,11 +173,18 @@ function SelectItemWithMeta({
   children,
   badge,
   description,
+  tooltip,
   descriptionClassName,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item> & {
   badge?: string
   description?: string
+  /** Overrides what appears in the right-side hover tooltip. The inline
+   *  description below the label still renders unchanged. Use when the
+   *  inline text and the hover surface should differ — e.g., a model row
+   *  shows the marketing description inline but the tooltip surfaces
+   *  capability detail (durations / resolutions / ratios). */
+  tooltip?: string
   descriptionClassName?: string
 }) {
   const item = (
@@ -213,7 +220,8 @@ function SelectItemWithMeta({
     </SelectPrimitive.Item>
   )
 
-  if (!description) return item
+  const tooltipContent = tooltip ?? description
+  if (!tooltipContent) return item
 
   return (
     <TooltipPrimitive.Provider delayDuration={2000}>
@@ -225,9 +233,9 @@ function SelectItemWithMeta({
           <TooltipPrimitive.Content
             side="right"
             sideOffset={8}
-            className="bg-foreground text-background z-50 rounded-md px-3 py-1.5 text-xs max-w-[200px]"
+            className="bg-foreground text-background z-50 rounded-md px-3 py-1.5 text-xs max-w-[260px] whitespace-pre-line"
           >
-            {description}
+            {tooltipContent}
           </TooltipPrimitive.Content>
         </TooltipPrimitive.Portal>
       </TooltipPrimitive.Root>

@@ -304,6 +304,16 @@ const SELECTED_NODE_FALLBACKS: Record<string, Array<{ dataField: string; inputFi
     { dataField: "selectedEndFrameNodeId", inputField: "endFrameUrl" },
     { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
   ],
+  // Mirrors image-to-video — the generate-video node exposes the same
+  // selectedStartFrame/EndFrame/Audio dropdown fallbacks. New typed-handle
+  // edges (imageReferences, videoReferences, audioReferences, startFrame,
+  // endFrame, audio) are handled by REFERENCE_HANDLE_MAP + the generic
+  // targetHandle checks in routeOutput, so no extra entries here.
+  "generate-video": [
+    { dataField: "selectedStartFrameNodeId", inputField: "imageUrl", guard: (i) => !i.startFrameUrl && !i.imageUrl },
+    { dataField: "selectedEndFrameNodeId", inputField: "endFrameUrl" },
+    { dataField: "selectedAudioNodeId", inputField: "audioUrl" },
+  ],
   "lip-sync": [
     { dataField: "selectedImageNodeId", inputField: "imageUrl" },
     { dataField: "selectedVideoNodeId", inputField: "videoUrl" },
@@ -834,9 +844,15 @@ const ARRAY_ACCUMULATING_TYPES = new Set(["combine-videos", "mix-audio", "combin
 const FAN_IN_NODE_TYPES = new Set(["reduce"])
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
+  // Legacy / i2v single-name handle ids (kept for un-migrated workflows)
   "references": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
+  // New canonical typed-handle ids (Generate Video) — share the resolved-input
+  // keys with the legacy ids so payload-builder code doesn't fork.
+  "imageReferences": "referenceImageUrls",
+  "videoReferences": "referenceVideoUrls",
+  "audioReferences": "referenceAudioUrls",
 }
 
 const ENTITY_NODE_TYPES = new Set(["character", "face", "object", "location"])
@@ -845,6 +861,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "image-to-video",
   "video-to-video",
   "text-to-video",
+  "generate-video",
   "lip-sync",
   "speech-to-video",
   "motion-transfer",
@@ -1017,6 +1034,15 @@ function routeOutput(
   }
   if (edge.targetHandle === "system-prompt") {
     inputs.systemPrompt = output
+    return
+  }
+  // Generate-video exposes a `negative` typed handle alongside `prompt`. The
+  // `prompt` handle is already handled by the default text-source path below
+  // (TEXT_SOURCE_NODE_TYPES → inputs.prompt). `negative` diverts from that
+  // path and MUST be routed here, otherwise text-prompt sources wired to the
+  // Negative handle silently fall into `inputs.prompt` (positive slot).
+  if (edge.targetHandle === "negative") {
+    inputs.negativePrompt = output
     return
   }
   if (edge.targetHandle === "image") {

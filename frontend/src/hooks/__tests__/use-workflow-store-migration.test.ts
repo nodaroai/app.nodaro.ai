@@ -562,6 +562,34 @@ describe("loadWorkflow — ai-writer → llm-chat merge migration", () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// image-to-video + text-to-video → generate-video unification migration.
+// Wires migrateGenerateVideoNodes (Task 4.2) into loadWorkflow so legacy
+// workflows auto-migrate at load time.
+// ---------------------------------------------------------------------------
+
+describe("loadWorkflow — image-to-video + text-to-video → generate-video migration", () => {
+  it("loadWorkflow migrates image-to-video to generate-video", () => {
+    const nodes = [{
+      id: "v1", type: "image-to-video", position: { x: 0, y: 0 },
+      data: { label: "i2v", provider: "veo3.1", fieldMappings: {} },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "v1")
+    expect(loaded?.type).toBe("generate-video")
+  })
+
+  it("loadWorkflow migrates text-to-video to generate-video", () => {
+    const nodes = [{
+      id: "v2", type: "text-to-video", position: { x: 0, y: 0 },
+      data: { label: "t2v", provider: "veo3.1", fieldMappings: {} },
+    }] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, [])
+    const loaded = useWorkflowStore.getState().nodes.find((n) => n.id === "v2")
+    expect(loaded?.type).toBe("generate-video")
+  })
+})
+
 describe("loadWorkflow — legacy null-sourceHandle picker migration", () => {
   // Pre-typed-pip edges from picker outputs saved with `sourceHandle = null`.
   // The strict-handleId match in `useHandleConnections` would render them

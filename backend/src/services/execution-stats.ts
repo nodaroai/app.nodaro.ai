@@ -117,6 +117,7 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
     // -----------------------------------------------------------------------
     case "image-to-video":
     case "text-to-video":
+    case "generate-video":
     case "video-to-video":
     case "motion-transfer":
     case "speech-to-video":

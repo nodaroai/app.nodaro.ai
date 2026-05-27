@@ -158,6 +158,11 @@ export const EXECUTABLE_TYPES = new Set([
   "image-to-video",
   "video-to-video",
   "text-to-video",
+  // Unified video node — backend registers in NODE_REGISTRY + payload-builder
+  // (Tasks 3.1/3.4). Listed here ahead of the dedicated frontend wire-up
+  // (Task 5.1) so the backend's NODE_REGISTRY × EXECUTABLE_TYPES parity check
+  // (node-registry-sync.test.ts) stays green.
+  "generate-video",
   "text-to-speech",
   "generate-music",
   "text-to-audio",

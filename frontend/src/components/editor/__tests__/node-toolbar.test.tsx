@@ -119,9 +119,13 @@ describe("NODE_DEFINITIONS essential types", () => {
       "modify-image",
       "upscale-image",
       "remove-background",
+      // Task 7.1: generate-video collapses i2v + t2v in the popup/sidebar UI,
+      // but i2v + t2v remain in NODE_DEFINITIONS (the canonical registry checked
+      // here) until Task 13.2 deletes them. Backward-compat for unmigrated rows.
       "image-to-video",
       "video-to-video",
       "text-to-video",
+      "generate-video",
       "text-to-speech",
       "qa-check",
       "generate-music",

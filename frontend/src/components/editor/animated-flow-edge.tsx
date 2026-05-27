@@ -26,6 +26,11 @@ type AnimatedFlowEdgeData = {
   listExpression?: string   // List-mode expression: comma-separated indices/ranges, e.g. "1,3,5..last-1"
   sourceNodeType?: string   // Source node's type — used to hide modes that don't apply (e.g. Selected for list/loop)
   targetNodeType?: string   // Target node's type — used to hide Each when feeding into list/loop columns
+  /** True when the target handle has cap 0 for the consumer's current model
+   *  — i.e., the runtime will silently drop this connection. Drives the
+   *  dashed/grayed stroke styling. Set by `workflow-canvas.tsx`'s edge
+   *  enricher; the source of truth is `getHandleConnectionLimit`. */
+  disabledByProvider?: boolean
 }
 
 type AnimatedFlowEdgeProps = EdgeProps<Edge<AnimatedFlowEdgeData>>
@@ -240,6 +245,19 @@ function AnimatedFlowEdgeComponent({
   const hoverStroke = isExecuting ? baseStroke : accent.stroke
   const hoverGlow = accent.glow
 
+  // Disabled-by-provider: target handle has cap 0 for the consumer's current
+  // model. Override stroke to the muted-foreground CSS var + apply a dashed
+  // pattern so the edge reads as "wired but inert." Selection still wins
+  // (the pink select stroke remains so you can find + delete the edge),
+  // but otherwise the disabled style overrides execution color too — a
+  // disabled edge can't actually be running, so a stray running highlight
+  // would be misleading.
+  const disabledByProvider = edgeData?.disabledByProvider ?? false
+  const disabledStroke = "var(--muted-foreground)"
+  const effectiveStrokeBase = disabledByProvider ? disabledStroke : baseStroke
+  const effectiveDashArray = disabledByProvider ? "6 4" : undefined
+  const effectiveOpacity = disabledByProvider ? 0.5 : 1
+
   return (
     <>
       {/* Base edge line */}
@@ -249,9 +267,11 @@ function AnimatedFlowEdgeComponent({
         style={{
           ...style,
           strokeWidth: isHoveredFromPopover ? 4 : selected ? 3 : baseStrokeWidth,
-          stroke: isHoveredFromPopover ? hoverStroke : selected ? "#ff0073" : baseStroke,
+          stroke: isHoveredFromPopover ? hoverStroke : selected ? "#ff0073" : effectiveStrokeBase,
+          strokeDasharray: effectiveDashArray,
+          opacity: selected || isHoveredFromPopover ? 1 : effectiveOpacity,
           filter: isHoveredFromPopover ? hoverGlow : baseFilter,
-          transition: "stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease",
+          transition: "stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease, opacity 150ms ease",
           ...edgeInsertAnim.style,
         } as CSSProperties}
         markerEnd={markerEnd as string | undefined}

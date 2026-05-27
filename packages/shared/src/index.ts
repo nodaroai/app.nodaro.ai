@@ -33,6 +33,7 @@ export {
   IMAGE_EDIT_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
   FACE_SWAP_PROVIDERS,
   VIDEO_UPSCALE_PROVIDERS,
@@ -61,6 +62,7 @@ export {
   RENDERING_SPEED_SUPPORT,
   GUIDANCE_SCALE_SUPPORT,
   SEEDANCE_2_REF_LIMITS,
+  VIDEO_REF_LIMITS_BY_PROVIDER,
   isSeedance2Provider,
   CHARACTER_MOTION_PROVIDERS,
   LOCATION_ATMOSPHERE_PROVIDERS,
@@ -78,6 +80,7 @@ export type {
   ImageEditProvider,
   ImageToVideoProvider,
   TextToVideoProvider,
+  VideoGenProvider,
   VideoToVideoProvider,
   VideoUpscaleProvider,
   ExtendVideoProvider,
@@ -1031,3 +1034,8 @@ export {
   resolveAudioCrossfadeCurve,
 } from "./audio-crossfade-curves.js"
 export type { AudioCrossfadeCurve } from "./audio-crossfade-curves.js"
+
+export {
+  VIDEO_PRODUCER_TYPES,
+  AUDIO_PRODUCER_TYPES,
+} from "./producer-types.js"

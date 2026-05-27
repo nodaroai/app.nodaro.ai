@@ -291,6 +291,23 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("http://v1.mp4")
   })
 
+  it("returns active result for generate-video (unified video node)", () => {
+    const node = makeNode("1", "generate-video", {
+      generatedResults: [
+        { url: "http://gv.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    expect(extractNodeOutput(node)).toBe("http://gv.mp4")
+  })
+
+  it("falls back to generatedVideoUrl for generate-video when no results", () => {
+    const node = makeNode("1", "generate-video", {
+      generatedVideoUrl: "http://gv-fallback.mp4",
+    })
+    expect(extractNodeOutput(node)).toBe("http://gv-fallback.mp4")
+  })
+
   it("returns audio url from text-to-speech with generatedResults", () => {
     const node = makeNode("1", "text-to-speech", {
       generatedResults: [

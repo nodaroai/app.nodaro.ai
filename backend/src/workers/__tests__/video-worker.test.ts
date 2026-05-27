@@ -98,7 +98,15 @@ vi.mock("../handlers/image-ai.js", () => ({
   imageAIHandlers: { "generate-image": mocks.mockHandler },
 }))
 vi.mock("../handlers/video-ai.js", () => ({
-  videoAIHandlers: { "image-to-video": mocks.mockHandler },
+  // Two distinct job names live behind the unified generate-video node:
+  // its payload-builder dispatches `jobName` to either "image-to-video" or
+  // "text-to-video" based on whether a start frame is wired. The worker map
+  // therefore must route both names to the same handler family — we wire
+  // both keys to the controllable spy so a single test can drive either path.
+  videoAIHandlers: {
+    "image-to-video": mocks.mockHandler,
+    "text-to-video": mocks.mockHandler,
+  },
 }))
 vi.mock("../handlers/ffmpeg.js", () => ({
   ffmpegHandlers: { "combine-videos": mocks.mockHandler },
@@ -370,5 +378,40 @@ describe("video worker processor", () => {
     await expect(processor(job)).rejects.toThrow()
 
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", "crash")
+  })
+
+  // -------------------------------------------------------------------------
+  // Unified generate-video node — dispatch parity contract.
+  //
+  // The new node never emits its own `job.name`; payload-builder swaps in
+  // either "image-to-video" (start frame wired) or "text-to-video" (text-only).
+  // The worker must continue to route those job-name strings to the same i2v
+  // and t2v handlers it has always used — no new entries needed in the map,
+  // just confirmation that both names still resolve.
+  //
+  // Adding these guards prevents a future refactor (e.g., introducing a
+  // dedicated "generate-video" handler key) from silently breaking dispatch
+  // for the unified node while leaving the legacy single-node routes intact.
+  // -------------------------------------------------------------------------
+
+  it("dispatch parity: routes 'image-to-video' job.name through videoAIHandlers (generate-video start-frame mode)", async () => {
+    const job = makeBullJob("image-to-video", { provider: "kling" })
+    await processor(job)
+    expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
+  })
+
+  it("dispatch parity: routes 'text-to-video' job.name through videoAIHandlers (generate-video text-only mode)", async () => {
+    const job = makeBullJob("text-to-video", { provider: "kling" })
+    await processor(job)
+    expect(mocks.mockHandler).toHaveBeenCalledWith(job, expect.objectContaining({ jobId: "job-1" }))
+  })
+
+  it("dispatch parity: does NOT recognize 'generate-video' as a job name (payload-builder must rewrite it)", async () => {
+    // Regression net: if anyone removes the mode-dispatch swap in
+    // payload-builder.ts and lets the raw node type leak through to
+    // BullMQ, the worker has nothing to do with it. Surface that as a
+    // fast crash, not a silent stall on a queue with no handler.
+    const job = makeBullJob("generate-video")
+    await expect(processor(job)).rejects.toThrow("Unknown job type: generate-video")
   })
 })

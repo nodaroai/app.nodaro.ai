@@ -4,6 +4,7 @@ import {
   IMAGE_GEN_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
 } from "@nodaro/shared"
 
 export type NodeCategory =
@@ -122,6 +123,33 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       fields: [
         { key: "prompt", type: "text", required: true },
         { key: "provider", type: "select", options: [...TEXT_TO_VIDEO_PROVIDERS] },
+      ],
+    },
+  },
+  {
+    type: "generate-video",
+    label: "Generate Video",
+    category: "ai-video",
+    description:
+      "Unified video generation node — dispatches dynamically to image-to-video when a start frame is wired, otherwise text-to-video. One node, both modes, full VIDEO_GEN_PROVIDERS catalog.",
+    outputType: "video",
+    // Inherits the i2v/t2v range — payload-builder routes to the same worker
+    // handlers and STATIC_CREDIT_COSTS entries based on mode.
+    creditCost: "10-125",
+    providers: [...VIDEO_GEN_PROVIDERS],
+    capabilities: ["supports-end-frame", "supports-duration", "supports-reference-image", "supports-reference-video", "supports-reference-audio"],
+    inputSchema: {
+      fields: [
+        { key: "prompt", type: "text" },
+        { key: "negativePrompt", type: "text" },
+        { key: "startFrame", type: "image-url" },
+        { key: "endFrame", type: "image-url" },
+        { key: "imageReferences", type: "image-url-array" },
+        { key: "videoReferences", type: "video-url-array" },
+        { key: "audio", type: "audio-url" },
+        { key: "audioReferences", type: "audio-url-array" },
+        { key: "provider", type: "select", options: [...VIDEO_GEN_PROVIDERS] },
+        { key: "duration", type: "number" },
       ],
     },
   },

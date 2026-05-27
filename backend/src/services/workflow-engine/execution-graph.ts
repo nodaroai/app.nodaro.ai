@@ -3,7 +3,11 @@
  * Pure functions operating on SimpleNode/SimpleEdge arrays.
  */
 
-import { buildChildrenByParent } from "@nodaro/shared"
+import {
+  buildChildrenByParent,
+  VIDEO_PRODUCER_TYPES,
+  AUDIO_PRODUCER_TYPES,
+} from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
 /**
@@ -280,59 +284,17 @@ export const IMAGE_SOURCE_TYPES = new Set([
   "scene",
 ])
 
-export const VIDEO_SOURCE_TYPES = new Set([
-  "image-to-video",
-  "video-to-video",
-  "text-to-video",
-  "upload-video",
-  "youtube-video",
-  "combine-videos",
-  "lip-sync",
-  "speech-to-video",
-  "motion-transfer",
-  "video-upscale",
-  "extend-video",
-  "suno-music-video",
-  "merge-video-audio",
-  "add-captions",
-  "resize-video",
-  "social-media-format",
-  "trim-video",
-  "render-video",
-  "speed-ramp",
-  "loop-video",
-  "fade-video",
-  "transcode-video",
-  "manual-edit",
-])
-
-export const AUDIO_SOURCE_TYPES = new Set([
-  "text-to-speech",
-  "text-to-audio",
-  "generate-music",
-  "upload-audio",
-  "suno-generate",
-  "suno-cover",
-  "suno-extend",
-  "suno-separate",
-  "suno-mashup",
-  "suno-replace-section",
-  "suno-add-instrumental",
-  "suno-add-vocals",
-  "suno-convert-wav",
-  "suno-upload-extend",
-  "trim-audio",
-  "mix-audio",
-  "combine-audio",
-  "adjust-volume",
-  "reference-audio",
-  "audio-isolation",
-  "text-to-dialogue",
-  "voice-changer",
-  "dubbing",
-  "voice-remix",
-  "voice-design",
-])
+/**
+ * Re-exported from `@nodaro/shared` so the frontend handle validator
+ * (frontend/src/lib/generate-video-handles.ts) and this backend orchestrator
+ * dispatch share a single source of truth. The legacy `_SOURCE_TYPES` names
+ * are kept for backwards compatibility with the 4 backend call sites and
+ * the test suite that import these names directly.
+ *
+ * See packages/shared/src/producer-types.ts for the canonical lists.
+ */
+export const VIDEO_SOURCE_TYPES = VIDEO_PRODUCER_TYPES
+export const AUDIO_SOURCE_TYPES = AUDIO_PRODUCER_TYPES
 
 export const TEXT_SOURCE_TYPES = new Set([
   "text-prompt",

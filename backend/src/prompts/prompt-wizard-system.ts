@@ -41,6 +41,7 @@ const NODE_CATEGORY_MAP: Record<string, string> = {
   "image-to-image": "image",
   "text-to-video": "video",
   "image-to-video": "video",
+  "generate-video": "video",
   "video-to-video": "video",
   "motion-transfer": "video",
   "extend-video": "video",

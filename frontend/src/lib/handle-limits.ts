@@ -1,4 +1,15 @@
-import { REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, MODELS_WITH_REFERENCE_IMAGE_SUPPORT } from "@nodaro/shared"
+import {
+  REF_IMAGE_MAX_LIMITS,
+  DEFAULT_REF_IMAGE_MAX,
+  MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
+  VIDEO_REF_LIMITS_BY_PROVIDER,
+  getModel,
+  isSeedance2Provider,
+} from "@nodaro/shared"
+import {
+  PROVIDERS_WITH_END_FRAME,
+  PROVIDERS_WITH_REFERENCES,
+} from "@/components/editor/config-panels/model-options"
 import type { WorkflowNode } from "@/types/nodes"
 
 export interface HandleConnectionLimit {
@@ -61,6 +72,61 @@ export function getHandleConnectionLimit(
       limit: minLimit,
       providerLabel: refConsumers.length > 1 ? "selected models" : refConsumers[0],
       isMultiProviderMin: refConsumers.length > 1,
+    }
+  }
+
+  // `generate-video` isn't yet in the SceneNodeType union (added in a
+  // later task — Task 3.4 only widened EXECUTABLE_TYPES for the backend
+  // parity check). Compare against the runtime string until the union
+  // catches up.
+  if ((node.type as string) === "generate-video") {
+    const data = node.data as { provider?: string; seedance2InputMode?: "frames" | "references" } | undefined
+    const provider = data?.provider ?? "kling"
+    // Use the catalog label if available so the tooltip reads naturally
+    // ("Beyond Kling 2.6's max" rather than "Beyond kling's max"); fall
+    // back to the raw provider id when the catalog has no entry yet.
+    const providerLabel = getModel(provider)?.label ?? provider
+    const caps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
+    // Seedance 2 mode toggle is mutually exclusive between Frames (start/end)
+    // and References (image references). Force the inactive set's caps to 0
+    // so the disabled-handle visual lights up the right pips for the chosen
+    // mode. Default = "frames" (matches the seedance2InputMode fallback
+    // throughout the codebase).
+    const isS2 = isSeedance2Provider(provider)
+    const s2Mode = isS2 ? (data?.seedance2InputMode ?? "frames") : null
+    const s2FramesDisabled = s2Mode === "references"
+    const s2ReferencesDisabled = s2Mode === "frames"
+    switch (handleId) {
+      case "startFrame":
+        return s2FramesDisabled
+          ? { limit: 0, providerLabel, isMultiProviderMin: false }
+          : { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "endFrame":
+        if (s2FramesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
+        return PROVIDERS_WITH_END_FRAME.includes(provider)
+          ? { limit: 1, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      case "imageReferences":
+        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
+        return PROVIDERS_WITH_REFERENCES.includes(provider)
+          ? { limit: caps?.images ?? 1, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      case "videoReferences": {
+        const cap = caps?.videos
+        return cap != null
+          ? { limit: cap, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      }
+      case "audio":
+        return { limit: 1, providerLabel, isMultiProviderMin: false }
+      case "audioReferences": {
+        const cap = caps?.audio
+        return cap != null
+          ? { limit: cap, providerLabel, isMultiProviderMin: false }
+          : { limit: 0, providerLabel, isMultiProviderMin: false }
+      }
+      default:
+        return null
     }
   }
 

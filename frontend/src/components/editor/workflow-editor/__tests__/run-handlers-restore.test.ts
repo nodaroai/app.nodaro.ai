@@ -81,6 +81,7 @@ vi.mock("../types", () => ({
     const EXECUTABLE = new Set([
       "generate-image",
       "image-to-video",
+      "generate-video",
       "generate-script",
       "text-to-speech",
     ])
@@ -250,6 +251,34 @@ describe("restorePollingForRunningJobs", () => {
       expect.objectContaining({
         executionStatus: "completed",
         generatedVideoUrl: "https://cdn.example.com/vid.mp4",
+      }),
+    )
+  })
+
+  // 4b. Same as 4, but with generate-video (unified video node)
+  it("updates generate-video node with generatedVideoUrl when job completes with videoUrl", async () => {
+    mockNodes = [makeNode("n1", "generate-video", { generatedResults: [] })]
+    mockGetJobStatus.mockResolvedValue({
+      status: "completed",
+      output_data: { videoUrl: "https://cdn.example.com/gv.mp4" },
+    })
+
+    const ctx = makeCtx()
+    const setIsRunning = vi.fn()
+
+    restorePollingForRunningJobs(
+      [{ nodeId: "n1", jobId: "j1", nodeType: "generate-video" }],
+      ctx,
+      setIsRunning,
+    )
+
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({
+        executionStatus: "completed",
+        generatedVideoUrl: "https://cdn.example.com/gv.mp4",
       }),
     )
   })

@@ -339,6 +339,16 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
 ] as const
 export type TextToVideoProvider = typeof TEXT_TO_VIDEO_PROVIDERS[number]
 
+/** Unified video-generation providers (image-to-video ∪ text-to-video) for the generate-video node. */
+export const VIDEO_GEN_PROVIDERS = [
+  ...IMAGE_TO_VIDEO_PROVIDERS,
+  ...TEXT_TO_VIDEO_PROVIDERS.filter(
+    (p): p is typeof TEXT_TO_VIDEO_PROVIDERS[number] =>
+      !(IMAGE_TO_VIDEO_PROVIDERS as readonly string[]).includes(p),
+  ),
+] as const
+export type VideoGenProvider = typeof VIDEO_GEN_PROVIDERS[number]
+
 /** Video-to-video providers */
 export const VIDEO_TO_VIDEO_PROVIDERS = [
   "wan",
@@ -605,6 +615,28 @@ export const SEEDANCE_2_REF_LIMITS = {
   videos: 3,
   audio: 3,
 } as const
+
+/**
+ * Per-provider connection caps for the typed reference handles on Generate Video.
+ * - Seedance 2 providers: full multimodal caps from SEEDANCE_2_REF_LIMITS.
+ * - Other providers in PROVIDERS_WITH_REFERENCES: typically 1 image, no video/audio.
+ * - Providers absent from the map = 0 caps (popover dims the handle with
+ *   "Not supported by [Model]").
+ *
+ * Seeded conservatively. Add entries as new providers gain ref support.
+ */
+export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
+  string,
+  { images?: number; videos?: number; audio?: number } | undefined
+> = {
+  "seedance-2": { ...SEEDANCE_2_REF_LIMITS },
+  "seedance-2-fast": { ...SEEDANCE_2_REF_LIMITS },
+  "wan-i2v": { images: 1 },
+  "hailuo-2.3-pro": { images: 1 },
+  "hailuo-2.3": { images: 1 },
+  "bytedance-pro": { images: 1 },
+  "bytedance-pro-fast": { images: 1 },
+}
 
 /**
  * Video models where credit cost depends on resolution AND whether a video

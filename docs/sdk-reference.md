@@ -680,7 +680,7 @@ await client.characters.generateAsset({
 generateMotion(input: GenerateMotionInput): Promise<{ jobId: string }>
 ```
 
-Animates the character's portrait into a motion clip via image-to-video.
+Animates the character's portrait into a motion clip via Generate Video (image-to-video mode).
 The result is appended to the `motions[]` bucket when
 `attachToCharacterId` is set. The route can fall back to the row's anchor
 portrait when `sourceImageUrl` is omitted.
@@ -884,12 +884,13 @@ generateMotion(input: GenerateLocationMotionInput): Promise<{ jobId: string }>
 ```
 
 Fires `POST /v1/generate-location-motion` to animate the location's
-establishing shot into an atmospheric motion clip (image-to-video). The
-attach column is hardcoded server-side to `atmosphere_motions` (locations
-have a single motion bucket so callers don't supply `attachToColumn`).
+establishing shot into an atmospheric motion clip (Generate Video,
+image-to-video mode). The attach column is hardcoded server-side to
+`atmosphere_motions` (locations have a single motion bucket so callers
+don't supply `attachToColumn`).
 
 Pass `refineFromVideoUrl` to route through video-to-video using that clip
-as the source instead of running image-to-video from `sourceImageUrl` —
+as the source instead of running Generate Video from `sourceImageUrl` —
 use to iterate an existing clip with a new prompt without shifting
 composition.
 
@@ -1172,9 +1173,9 @@ generateMotion(input: GenerateObjectMotionInput): Promise<{ jobId: string }>
 ```
 
 Fires `POST /v1/generate-object-motion` to animate the object's main
-image into a motion clip (image-to-video). The attach column is hardcoded
-server-side to `motion_clips` (objects have a single motion bucket so
-callers don't supply `attachToColumn`).
+image into a motion clip (Generate Video, image-to-video mode). The
+attach column is hardcoded server-side to `motion_clips` (objects have
+a single motion bucket so callers don't supply `attachToColumn`).
 
 Object-specific defaults vs location:
 
@@ -1187,7 +1188,7 @@ Object-specific defaults vs location:
   character set to support classic product-catalogue aspect ratios.
 
 Pass `refineFromVideoUrl` to route through video-to-video using that clip
-as the source instead of running image-to-video from `sourceImageUrl` —
+as the source instead of running Generate Video from `sourceImageUrl` —
 use to iterate an existing clip with a new prompt without shifting
 composition.
 

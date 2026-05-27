@@ -120,8 +120,10 @@ describe("NODE_OPTIONS", () => {
       .filter((o) => o.category === "AI")
       .map((o) => o.type)
     expect(aiTypes).toContain("generate-image")
-    expect(aiTypes).toContain("image-to-video")
-    expect(aiTypes).toContain("text-to-video")
+    // Task 7.1: i2v + t2v collapsed into a single generate-video entry.
+    expect(aiTypes).toContain("generate-video")
+    expect(aiTypes).not.toContain("image-to-video")
+    expect(aiTypes).not.toContain("text-to-video")
     expect(aiTypes).toContain("text-to-speech")
     expect(aiTypes).toContain("llm-chat")
     expect(aiTypes).toContain("generate-music")

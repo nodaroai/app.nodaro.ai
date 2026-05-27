@@ -1,6 +1,6 @@
 # Nodaro
 
-> AI workflow editor: compose text-to-image, image-to-video, audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
+> AI workflow editor: compose text-to-image, AI video generation (text-to-video / image-to-video unified in the Generate Video node), audio synthesis, video composition, and LLM nodes into multi-step DAGs that run autonomously on a server.
 
 Nodaro is a Fastify backend + Vite/React frontend, source-available under the [Sustainable Use License](https://github.com/nodaroai/app.nodaro.ai/blob/main/LICENSE). The backend is REST-first; the included visual editor is one of many possible clients. A typed SDK (`@nodaro/client`) and OAuth 2.0 third-party-app system mean any developer can build alternative frontends, automations, or integrations on top of a hosted Nodaro instance.
 

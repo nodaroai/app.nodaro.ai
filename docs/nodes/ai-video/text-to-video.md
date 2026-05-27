@@ -1,68 +1,25 @@
-# Text to Video
+# Text to Video → Generate Video
 
-> Generate video directly from a text description using 15+ AI providers.
+> This node has been unified into **[Generate Video](./generate-video.md)**.
 
-## Overview
+The legacy `text-to-video` node type has been replaced by the unified [Generate Video](./generate-video.md) node, which drives by connection — text-only mode, image-to-video mode, first+last frame mode, or reference mode, all from one node. The provider catalog, parameter set, and credit pricing for text-to-video usage are unchanged.
 
-The Text to Video node creates video from a text prompt without requiring a source image. Ideal for generating original footage, abstract visuals, or scenes described entirely through text. Supports multiple providers with varying quality, duration, and cost.
+## Migration
 
-## Configuration
+Existing workflows continue to work — `text-to-video` nodes auto-migrate to `generate-video` the moment the workflow opens in the editor. Handle ids are renamed (the legacy `in` prompt handle becomes the typed `prompt` handle, `cinematography` becomes `look` / `elements`), and the node `type` is rewritten in-memory. The migration is idempotent.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Provider | Select | minimax | AI model for generation |
-| Prompt | Textarea | — | Description of the video to generate |
-| Duration | Select/Number | Provider-specific | Video length in seconds |
-| Aspect Ratio | Select | 16:9 | Output dimensions: 16:9, 9:16, 1:1 |
-| Negative Prompt | Textarea | — | Elements to avoid in the output |
+## What to do now
 
-### Provider-Specific Options
+- **New workflows** — use [Generate Video](./generate-video.md) directly.
+- **Existing workflows** — no action needed; they auto-migrate on load.
+- **External docs / links pointing here** — the redirect lives at this file path indefinitely; links keep working.
 
-| Provider | Extra Fields |
-|----------|-------------|
-| sora2, sora2-pro | Remove Watermark checkbox (+4 CR) |
-| kling | Enable Sound checkbox |
-| kling-turbo | CFG Scale (0-1) |
-| kling-3.0 | Continuous 3-15s duration, Audio option, dedicated studio config |
-| veo3, veo3.1, veo3_lite | Duration (4/6/8s), Resolution (720p/1080p), Generate Audio toggle, Auto-translate |
+## Pricing & parameters
 
-## Inputs & Outputs
+All text-to-video pricing examples (VEO 3.x, Kling, Seedance 2, Hailuo Standard, Bytedance, MiniMax, Sora 2, Wan, HappyHorse, Runway, …), per-provider parameter tables, and the dispatch rules that route a wireless node to `text-to-video` mode are documented on the [Generate Video](./generate-video.md) page.
 
-**Inputs:**
-- Text Prompt (optional) — from upstream Text Prompt node
-- Provider (optional) — from upstream Provider node
+## See also
 
-**Outputs:**
-- Generated video URL
-
-## Supported Providers
-
-minimax, veo3, kling, kling-turbo, kling-3.0, grok, sora2, sora2-pro, seedance, seedance-2, seedance-2-fast, wan, wan-turbo, hailuo-standard, bytedance-lite, bytedance-pro, wan-2.7-t2v, happyhorse.
-
-Provider notes:
-- **Wan 2.7** (`wan-2.7-t2v`) — 2–15s, 720p or 1080p
-- **HappyHorse** (`happyhorse`) — 3–15s, 720p or 1080p
-- **Seedance 2** (`seedance-2`) — ByteDance premium, 4–15s, 480p / 720p / 1080p. Per-second pricing scales with resolution. 8s @ 720p ≈ 82 cr; 1080p ≈ 123 cr (no reference). With multimodal references (image/video/audio): 720p ≈ 50 cr, 1080p ≈ 75 cr.
-- **Seedance 2 Fast** (`seedance-2-fast`) — cheaper / quicker tier. 8s @ 720p ≈ 66 cr; 1080p ≈ 99 cr (no ref). With references: 720p ≈ 40 cr, 1080p ≈ 60 cr.
-
-## Best Practices
-
-- Write detailed, cinematic prompts describing action, lighting, and mood
-- Use negative prompts to avoid common artifacts (blurry, distorted faces, etc.)
-- For consistent style across clips, use the same provider and similar prompt structure
-- Portrait (9:16) works best for social media content; landscape (16:9) for YouTube/presentations
-- Start with faster providers (Runway, Sora2 Standard) for prompt iteration
-
-## Common Use Cases
-
-- Generate original video content from written scripts
-- Create social media video ads from copy
-- Produce abstract or artistic video backgrounds
-- Generate stock footage alternatives
-- Rapid prototyping of video concepts
-
-## Tips
-
-- Text-to-Video generally produces less controllable results than Image-to-Video — use I2V when you need specific visual consistency
-- Kling 3.0 is the only provider offering continuous duration control (3-15s)
-- VEO 3.1 generates audio by default — useful for scene-appropriate sound. Duration is selectable per generation (4/6/8s) at a flat per-generation price.
+- [Generate Video](./generate-video.md) — the unified replacement node.
+- [Image to Video (legacy)](./image-to-video.md) — same migration applies.
+- [Video to Video](./video-to-video.md) — for modifying existing videos (separate node).

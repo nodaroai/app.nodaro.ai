@@ -123,6 +123,19 @@ describe("resolveNodeInputs — scene node source", () => {
     expect(inputs.imageUrl).toBe("http://scene-last.png")
   })
 
+  it("routes last_frame to imageUrl for generate-video target (unified node)", () => {
+    mockExtractNodeOutput.mockReturnValue("http://scene-last.png")
+
+    const sceneNode = makeNode("s1", "scene", {
+      last_frame: { url: "http://scene-last.png", type: "image" },
+    })
+    const target = makeNode("t1", "generate-video")
+    const edges = [makeEdge("s1", "t1", "last_frame")]
+
+    const inputs = resolveNodeInputs(target, [sceneNode, target], edges)
+    expect(inputs.imageUrl).toBe("http://scene-last.png")
+  })
+
   it("routes audio_track to audioUrl when target is a single-audio consumer", () => {
     mockExtractNodeOutput.mockReturnValue("http://scene.mp3")
 

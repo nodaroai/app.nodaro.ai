@@ -127,4 +127,36 @@ describe("collectComponentOutputs", () => {
       "out1::pZ": "https://cdn/v.mp4",
     })
   })
+
+  it("compound handle resolves from generate-video upstream (unified video node parity)", () => {
+    // The unified generate-video node lives in VIDEO_PRODUCER_TYPES, so
+    // `getPrimaryOutput(srcOutput, "generate-video", "video")` MUST return
+    // the videoUrl. Without that, components that wrap a generate-video
+    // node and expose its output port would silently return undefined and
+    // any downstream consumer would receive an empty value.
+    const out = collectComponentOutputs(
+      meta([{ id: "out1::pVid", name: "Result", type: "video", required: true, mediaPreview: true, fieldKey: "pVid" }]),
+      { n_gen: { output: { videoUrl: "https://cdn/gv.mp4" } } },
+      [
+        { id: "n_gen", type: "generate-video" },
+        { id: "out1", type: "sub-workflow-output" },
+      ],
+      [{ source: "n_gen", target: "out1", sourceHandle: "video", targetHandle: "pVid" }],
+    )
+    expect(out).toEqual({ "out1::pVid": "https://cdn/gv.mp4" })
+  })
+
+  it("plain handle reads videoUrl directly from generate-video output", () => {
+    // Plain-handle path: fieldKey="" falls through to OUTPUT_FIELD_MAP[type]
+    // (which maps "video" -> "videoUrl"). Confirms component metadata that
+    // points straight at a generate-video node (no sub-workflow-output
+    // indirection) still extracts the URL.
+    const out = collectComponentOutputs(
+      meta([{ id: "n_gen", name: "Result", type: "video", required: true, mediaPreview: true, fieldKey: "" }]),
+      { n_gen: { output: { videoUrl: "https://cdn/gv.mp4" } } },
+      [{ id: "n_gen", type: "generate-video" }],
+      [],
+    )
+    expect(out).toEqual({ n_gen: "https://cdn/gv.mp4" })
+  })
 })

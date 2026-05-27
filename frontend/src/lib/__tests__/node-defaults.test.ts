@@ -74,6 +74,24 @@ describe("pickRelevantFields", () => {
     })
   })
 
+  it("picks provider+aspectRatio+duration+resolution for generate-video (unified node)", () => {
+    expect(
+      pickRelevantFields("generate-video", {
+        provider: "kling",
+        aspectRatio: "9:16",
+        duration: 5,
+        resolution: "1080p",
+        prompt: "ignored",
+        model: "ignored-not-in-list",
+      }),
+    ).toEqual({
+      provider: "kling",
+      aspectRatio: "9:16",
+      duration: 5,
+      resolution: "1080p",
+    })
+  })
+
   it("falls back to provider+model for unknown node types", () => {
     expect(pickRelevantFields("not-in-registry", { provider: "x", model: "y", other: "z" })).toEqual({
       provider: "x",

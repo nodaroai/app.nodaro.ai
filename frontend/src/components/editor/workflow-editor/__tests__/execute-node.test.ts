@@ -1330,6 +1330,23 @@ describe("video-to-video", () => {
     expect(passedPrompt).toContain("The subject must remain exactly the same person")
     expect(passedPrompt).toContain("young woman, brown eyes")
   })
+
+  // Task 6.1 follow-up #2: typed `negative` handle wins over config-panel
+  // field for v2v's Wan video-edit param too (mirrors generate-video).
+  it("forwards inputs.negativePrompt (wired negative handle) to the executor options", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      videoUrl: "http://vid.mp4",
+      negativePrompt: "wired text",
+    })
+    mockRunVideoToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("video-to-video", { negativePrompt: "stale data field" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunVideoToVideoGeneration.mock.calls[0]
+    const passedOptions = callArgs[5] as { negativePrompt?: string }
+    expect(passedOptions.negativePrompt).toBe("wired text")
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -1502,6 +1519,82 @@ describe("text-to-video", () => {
     const passedPrompt = callArgs[1] as string
     expect(passedPrompt).toContain("kira")
     expect(passedPrompt).toContain("The subject must remain exactly the same person")
+  })
+
+  // Task 6.1 follow-up #2: typed `negative` handle wins over config-panel
+  // field. The resolver populates inputs.negativePrompt when a Text Prompt is
+  // wired to the `negative` typed handle. Single-node Run MUST honor that —
+  // mirrors backend payload-builder generate-video (commit b75b2127).
+  it("forwards inputs.negativePrompt (wired negative handle) to the executor", async () => {
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "a sunset",
+      negativePrompt: "wired text",
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("text-to-video", { negativePrompt: "stale data field" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedOptions = callArgs[4] as { negativePrompt?: string }
+    // Wired text wins; the stale data field is the fallback.
+    expect(passedOptions.negativePrompt).toBe("wired text")
+  })
+
+  it("falls back to data.negativePrompt when no negative handle wired", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "a sunset" })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("text-to-video", { negativePrompt: "blurry, low quality" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedOptions = callArgs[4] as { negativePrompt?: string }
+    expect(passedOptions.negativePrompt).toBe("blurry, low quality")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// generate-video (negative handle parity — synthetic alias to t2v/i2v)
+// ---------------------------------------------------------------------------
+
+describe("generate-video — negative handle parity", () => {
+  // generate-video is structurally aliased to text-to-video / image-to-video
+  // at execute-node.ts:2014–2021 — the synthetic-node branch rewrites
+  // `node.type` based on whether an image input was resolved. Both branches
+  // MUST honor inputs.negativePrompt over data.negativePrompt.
+
+  it("text-to-video branch: wired negative handle wins over data field", async () => {
+    // No image inputs → synthetic alias resolves to text-to-video.
+    mockResolveNodeInputs.mockReturnValue({
+      prompt: "a sunset",
+      negativePrompt: "wired text",
+    })
+    mockRunTextToVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { negativePrompt: "stale data field" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunTextToVideoGeneration.mock.calls[0]
+    const passedOptions = callArgs[4] as { negativePrompt?: string }
+    expect(passedOptions.negativePrompt).toBe("wired text")
+  })
+
+  it("image-to-video branch: wired negative handle wins over data field", async () => {
+    // Image input present → synthetic alias resolves to image-to-video.
+    mockResolveNodeInputs.mockReturnValue({
+      imageUrl: "http://frame.png",
+      negativePrompt: "wired text",
+    })
+    mockRunVideoGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-video", { negativePrompt: "stale data field" }),
+      makeCtx(),
+    )
+    const callArgs = mockRunVideoGeneration.mock.calls[0]
+    // runVideoGeneration positional arg: negativePrompt is index 15.
+    const passedNegative = callArgs[15] as string | undefined
+    expect(passedNegative).toBe("wired text")
   })
 })
 

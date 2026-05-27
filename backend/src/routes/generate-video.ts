@@ -9,7 +9,7 @@ import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { IMAGE_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -19,7 +19,7 @@ export const generateVideoBody = z.object({
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
   userPrompt: z.string().max(8000).optional(),
-  provider: z.enum(IMAGE_TO_VIDEO_PROVIDERS).optional(),
+  provider: z.enum(VIDEO_GEN_PROVIDERS).optional(),
   generateAudio: z.boolean().optional(),
   duration: z.number().int().min(1).max(60).optional(),
   mode: z.enum(["pro", "std", "4K"]).optional(),

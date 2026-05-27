@@ -175,6 +175,11 @@ export interface SimpleEdge {
 
 export interface ResolvedInputs {
   prompt?: string
+  /** Negative prompt wired through the `negative` typed handle on
+   *  generate-video. Distinct from `prompt` so the orchestrator can override
+   *  the config-panel `data.negativePrompt` without clobbering positive
+   *  prompt routing. */
+  negativePrompt?: string
   imageUrl?: string
   videoUrl?: string
   /** Upstream video duration (seconds) — used for accurate credit estimation

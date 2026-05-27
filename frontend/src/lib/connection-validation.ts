@@ -1,4 +1,5 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
+import { isValidGenerateVideoConnection } from "./generate-video-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
 
@@ -152,6 +153,18 @@ export function isValidWorkflowConnection(
   if (targetType === "character-fx" && connection.targetHandle) {
     if (connection.targetHandle !== "target") return true
     return ACCEPTS_CHARACTER_REF(typeOf(connection.source) ?? "")
+  }
+
+  // Generate Video — enforce typed-handle compatibility.
+  if (targetType === "generate-video" && connection.targetHandle) {
+    const sourceType = typeOf(connection.source)
+    if (sourceType) {
+      return isValidGenerateVideoConnection(
+        connection.targetHandle,
+        sourceType,
+        (t) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t),
+      )
+    }
   }
 
   return true

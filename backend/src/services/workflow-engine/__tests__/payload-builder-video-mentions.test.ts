@@ -351,6 +351,175 @@ describe("payload-builder video paths: @-mention resolution", () => {
       expect(prompt).not.toMatch(/@kira:1:smile\b/)
     })
   })
+
+  // -------------------------------------------------------------------------
+  // Unified generate-video node — mode-dispatch + @-mention parity.
+  //
+  // The new generate-video case in payload-builder dispatches `jobName` to
+  // either "image-to-video" or "text-to-video" depending on whether a start
+  // frame is wired. These tests confirm the @-mention resolution behaves
+  // identically to the legacy i2v / t2v cases AND that the dynamic dispatch
+  // picks the right downstream worker handler — both halves must hold for
+  // the new node to be a drop-in replacement for its predecessors.
+  // -------------------------------------------------------------------------
+  describe("generate-video", () => {
+    it("text-only mode + single mention: dispatches jobName='text-to-video' and backfills imageUrl from mention URL", () => {
+      const character = charNode("char-1")
+      const gv = node("gv-1", "generate-video", {
+        prompt: "@kira:1 dances across a moonlit dune",
+        provider: "kling",
+      })
+      const nodes = [character, gv]
+      const edges = [edge("char-1", "gv-1")]
+      // No start frame wired — mode dispatch lands on text-to-video, BUT
+      // the unified case backfills imageUrl from the first resolved mention
+      // URL when no start frame is wired (so providers that need an image
+      // anchor get one). This is the documented divergence from legacy t2v.
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        gv,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      // Dynamic dispatch picks text-to-video because no start frame is wired.
+      expect(result.jobName).toBe("text-to-video")
+      // First mention URL backfills imageUrl (unified-node-specific behavior).
+      expect(result.payload.imageUrl).toBe("https://r2/kira-portrait.png")
+      // Prompt token was expanded.
+      const prompt = result.payload.prompt as string
+      expect(prompt).toContain("Kira")
+      expect(prompt).not.toMatch(/@kira:1\b/)
+      // Identity directive present (canonical description ride-along).
+      expect(prompt).toContain("auburn shoulder-length hair")
+    })
+
+    it("image mode: upstream start frame flips dispatch to jobName='image-to-video' and preserves imageUrl", () => {
+      const character = charNode("char-1")
+      const gv = node("gv-1", "generate-video", {
+        prompt: "@kira:1:smile pose in the rain",
+        provider: "kling",
+      })
+      const nodes = [character, gv]
+      const edges = [edge("char-1", "gv-1")]
+      // Upstream image triggers image-to-video mode.
+      const inputs: ResolvedInputs = {
+        startFrameUrl: "https://r2/user-uploaded.png",
+      }
+
+      const result = buildPayload(
+        gv,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      // Dynamic dispatch landed on i2v.
+      expect(result.jobName).toBe("image-to-video")
+      // Upstream start frame won — mention URL went to referenceImageUrls.
+      expect(result.payload.imageUrl).toBe("https://r2/user-uploaded.png")
+      const refs = result.payload.referenceImageUrls as string[] | undefined
+      expect(refs).toBeDefined()
+      expect(refs).toContain("https://r2/kira-smile.png")
+      // Variant resolution swallowed the @-mention token.
+      const prompt = result.payload.prompt as string
+      expect(prompt).not.toMatch(/@kira:1:smile\b/)
+    })
+
+    it("variant mention with no wired start frame: backfills imageUrl from kira-smile.png and keeps text-only dispatch", () => {
+      const character = charNode("char-1")
+      const gv = node("gv-1", "generate-video", {
+        prompt: "@kira:1:smile dances in a forest",
+        provider: "kling",
+      })
+      const nodes = [character, gv]
+      const edges = [edge("char-1", "gv-1")]
+      // No upstream image — mode dispatch is computed BEFORE mention
+      // resolution, so it lands on text-to-video, but the imageUrl slot
+      // gets backfilled from the variant URL (kira-smile.png, not the
+      // canonical kira-portrait.png).
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        gv,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      expect(result.jobName).toBe("text-to-video")
+      // Variant URL wins over canonical because the mention specified `smile`.
+      expect(result.payload.imageUrl).toBe("https://r2/kira-smile.png")
+      const prompt = result.payload.prompt as string
+      // Mention token gone, name expanded.
+      expect(prompt).toContain("Kira")
+      expect(prompt).not.toMatch(/@kira:1:smile\b/)
+      // Canonical description directive (first mention).
+      expect(prompt).toContain("auburn shoulder-length hair")
+    })
+
+    it("canonical fallback: wired character without @-mention slots canonical URL into imageUrl + emits identity directive", () => {
+      const character = charNode("char-1")
+      const gv = node("gv-1", "generate-video", {
+        prompt: "a calm forest at dawn",
+        provider: "kling",
+      })
+      const nodes = [character, gv]
+      const edges = [edge("char-1", "gv-1")]
+      // No upstream image, character wired but not mentioned.
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        gv,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      // text-only dispatch (no start frame).
+      expect(result.jobName).toBe("text-to-video")
+      // Canonical URL fills the imageUrl slot (i2v-style backfill — the
+      // generate-video case routes mention/canonical URLs through imageUrl
+      // first, then spills overflow to referenceImageUrls).
+      expect(result.payload.imageUrl).toBe("https://r2/kira-portrait.png")
+      const prompt = result.payload.prompt as string
+      // Strong identity directive prepended.
+      expect(prompt).toContain("Use these characters:")
+      expect(prompt).toContain("auburn shoulder-length hair")
+      // Body text untouched.
+      expect(prompt).toContain("a calm forest at dawn")
+    })
+
+    it("no-mention text-only mode: dispatches text-to-video and leaves prompt body intact", () => {
+      const gv = node("gv-1", "generate-video", {
+        prompt: "a dog runs through a park",
+        provider: "kling",
+      })
+      const nodes = [gv]
+      const edges: SimpleEdge[] = []
+      const inputs: ResolvedInputs = {}
+
+      const result = buildPayload(
+        gv,
+        jobId,
+        inputs,
+        undefined,
+        { nodes, edges, nodeStates: {} },
+      )
+
+      expect(result.jobName).toBe("text-to-video")
+      const prompt = result.payload.prompt as string
+      expect(prompt).toContain("a dog runs through a park")
+      // No mentions → no "Use these characters:" header.
+      expect(prompt).not.toContain("Use these characters:")
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
