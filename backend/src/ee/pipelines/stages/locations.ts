@@ -319,6 +319,10 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
     stageName: "locations",
     status: "approved",
   })
+  // Drive the next stage (see objects.ts) — without this re-enqueue the manual
+  // completion path marks approved but never advances, stalling the pipeline.
+  const { enqueuePipelineRun } = await import("../queue.js")
+  await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
