@@ -2,12 +2,14 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Frame, Loader2, AlertCircle, X, Clapperboard, ImageIcon, Expand, Download, Link } from "lucide-react"
+import { Frame, Loader2, AlertCircle, X, Film, ImageIcon, Expand, Download, Link, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
+import { ACCEPTS_VIDEO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -22,6 +24,8 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
+  const selectNode = useWorkflowStore((s) => s.selectNode)
+  const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -30,6 +34,7 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [imgError, setImgError] = useState(false)
+  const [showThumbnails, setShowThumbnails] = useState(false)
 
   useEffect(() => { setImgError(false) }, [activeUrl])
 
@@ -47,9 +52,19 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
       <BaseNode id={id} label={nodeData.label} icon={<Frame className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
         hideHeader minWidth={220}
         topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
+        bottomToolbarContent={
+          showThumbnails && results.length > 1 ? (
+            <ResultsThumbnailsPanel
+              results={results}
+              activeIndex={activeIndex}
+              nodeSelected={!!selected || isSettingsOpen}
+              onSelect={(i) => updateNodeData(id, { activeResultIndex: i, generatedImageUrl: results[i].url })}
+            />
+          ) : undefined
+        }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "image", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "image", type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -62,6 +77,22 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
 
           {hasResult && (
             <div className="relative group">
+              {results.length > 1 && (
+                <button
+                  type="button"
+                  className={`absolute top-1 left-1 flex items-center gap-1 px-1.5 py-0.5 backdrop-blur-sm border rounded-md z-10 transition-opacity ${
+                    showThumbnails
+                      ? "bg-[#ff0073] hover:bg-[#ff0073]/90 border-[#ff0073] text-white opacity-100"
+                      : "bg-black/40 hover:bg-black/60 border-white/10 text-white opacity-0 group-hover:opacity-100"
+                  }`}
+                  onClick={(e) => { e.stopPropagation(); setShowThumbnails((v) => !v) }}
+                  title={showThumbnails ? "Hide versions" : "Show versions"}
+                  aria-pressed={showThumbnails}
+                >
+                  <LayoutGrid className="w-3 h-3" />
+                  <span className="text-[11px] font-medium">{results.length}</span>
+                </button>
+              )}
               <CachedImage src={activeUrl!} alt="Extracted frame" className="w-full rounded-md object-cover" thumbnail thumbnailWidth={320} onError={() => setImgError(true)} />
               <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1 rounded">{modeLabel}</div>
               <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -98,23 +129,12 @@ function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
 
-          {results.length > 1 && (
-            <div className="flex gap-1 overflow-x-auto">
-              {results.slice(0, 5).map((r, i) => (
-                <div key={`${r.jobId}-${i}`} className="relative group/thumb shrink-0">
-                  <CachedImage src={r.url} alt="" className={`w-10 h-10 object-cover rounded cursor-pointer transition-opacity ${i === activeIndex ? "opacity-100 ring-2 ring-primary" : "opacity-50 hover:opacity-80"}`} thumbnail thumbnailWidth={80} onClick={(e) => { e.stopPropagation(); updateNodeData(id, { activeResultIndex: i, generatedImageUrl: r.url }) }} />
-                  <button type="button" aria-label="Remove" className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setDeleteConfirm(i) }}><X className="w-2.5 h-2.5" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-
           {!hasResult && <p className="text-muted-foreground text-xs">{modeLabel}</p>}
         </div>
       </BaseNode>
 
-      <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<ImageIcon />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="extract-frame" handleId="in"    type="target" position={Position.Left}  label="Video" color={FFMPEG_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="extract-frame" handleId="image" type="source" position={Position.Right} label="Image" color={FFMPEG_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="image" url={activeUrl} results={results} initialIndex={activeIndex} />}
       <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

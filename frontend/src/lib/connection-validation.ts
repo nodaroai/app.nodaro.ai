@@ -1,5 +1,6 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
+import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -173,6 +174,21 @@ export function isValidWorkflowConnection(
         isVisualPickerType,
       )
     }
+  }
+
+  // FFmpeg / pure-processing nodes (trim-video, combine-videos,
+  // merge-video-audio, extract-frame, loop-video, resize-video,
+  // add-captions, trim-audio, adjust-volume, combine-audio, mix-audio).
+  // Shared validator in `ffmpeg-handles.ts` — all 11 nodes route through
+  // a single switch so the type rules stay co-located. `?? ""` so unknown
+  // / undefined source types route to the predicate's negative branch
+  // instead of falling through to default `return true`.
+  if (targetType && FFMPEG_NODE_TYPES.has(targetType) && connection.targetHandle) {
+    return isValidFfmpegConnection(
+      targetType,
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+    )
   }
 
   // ─── Data root-category nodes ─────────────────────────────────────────

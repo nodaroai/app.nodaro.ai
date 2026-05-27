@@ -345,4 +345,21 @@ describe("EntityCard", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument()
   })
+
+  it("opens the image lightbox when the main image is clicked", async () => {
+    renderWithClient(
+      <EntityCard
+        entity={buildEntity()}
+        pipelineId={PIPELINE_ID}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        mode="manual"
+      />,
+    )
+    // Closed by default — no lightbox dialog in the DOM.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    // Clicking the main image opens the MultiImageLightbox (portaled to body).
+    await userEvent.click(screen.getByAltText("Alice"))
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
 })

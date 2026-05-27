@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query"
+import { useMemo, useState } from "react"
 import type {
   CharacterImageCriticVerdict,
   EntityStatus,
@@ -8,6 +9,7 @@ import { IMAGE_CRITIC_UNRESOLVABLE } from "@nodaro/shared"
 import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { Button } from "@/components/ui/button"
+import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -196,14 +198,30 @@ export function EntityCard({
     entity.main_asset_url ?? undefined,
   )
 
+  // Lightbox: the main image plus every variant — click any thumbnail to
+  // enlarge with prev/next + keyboard nav (reuses MultiImageLightbox).
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const lightboxItems = useMemo(() => {
+    const items: { url: string; alt: string }[] = []
+    if (displayUrl) items.push({ url: displayUrl, alt: name })
+    for (const v of entity.variants) {
+      if (v.asset_url) {
+        items.push({ url: v.asset_url, alt: `${name} · ${v.variant_key}` })
+      }
+    }
+    return items
+  }, [displayUrl, entity.variants, name])
+
   return (
+    <>
     <div className="rounded border border-zinc-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-2 flex flex-col gap-2">
       <div className="aspect-square bg-zinc-100 dark:bg-[#2D2D2D] overflow-hidden rounded relative">
         {displayUrl ? (
           <img
             src={displayUrl}
             alt={name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover cursor-zoom-in"
+            onClick={() => setLightboxIndex(0)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500 dark:text-zinc-400">
@@ -232,7 +250,13 @@ export function EntityCard({
                 <img
                   src={v.asset_url}
                   alt={v.variant_key}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover cursor-zoom-in"
+                  onClick={() => {
+                    const i = lightboxItems.findIndex(
+                      (it) => it.url === v.asset_url,
+                    )
+                    if (i >= 0) setLightboxIndex(i)
+                  }}
                 />
               ) : null}
             </div>
@@ -353,5 +377,11 @@ export function EntityCard({
         </div>
       )}
     </div>
+      <MultiImageLightbox
+        items={lightboxItems}
+        startIndex={lightboxIndex}
+        onClose={() => setLightboxIndex(null)}
+      />
+    </>
   )
 }

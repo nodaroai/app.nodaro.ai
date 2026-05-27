@@ -869,6 +869,10 @@ const VIDEO_REF_IMAGE_SOURCE_TYPES = new Set([
   "edit-image",
   "image-to-image",
   "scene",
+  // extract-frame outputs a still image — must be reorderable alongside
+  // other image producers when wired into generate-video.imageReferences
+  // (mirrors the frontend IMAGE_PRODUCER_TYPES which already includes it).
+  "extract-frame",
 ])
 
 /** Re-derive `referenceImageUrls` from the workflow graph in user-defined
@@ -1374,7 +1378,7 @@ export function buildPayload(
       const chainRefs = resolvedInputs.referenceImageUrls
         ?? (resolvedInputs.imageUrl ? [resolvedInputs.imageUrl] : undefined)
       if (chainRefs) {
-        const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background"])
+        const imageSourceTypes = new Set(["upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background", "extract-frame"])
         const wiredSourceIds = (buildCtx?.edges ?? [])
           .filter((e) => e.target === node.id)
           .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))

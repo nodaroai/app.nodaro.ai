@@ -52,6 +52,39 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Source node types whose output media-type cannot be classified
+ * statically — iterators, dynamic dispatchers, sub-workflow wrappers.
+ * The orchestrator decides their actual output type at execution time
+ * based on what's wired upstream (loop iterates upstream column type;
+ * sub-workflow emits its leaf node's type; adjust-volume passes through
+ * video or audio based on its `lastInputType` runtime field).
+ *
+ * Typed-handle validators (frontend/src/lib/{generate-image,generate-
+ * video,ffmpeg}-handles.ts) must include these as acceptors on EVERY
+ * media-typed input handle — otherwise the canvas validator hard-
+ * rejects edges that the orchestrator would happily route at runtime.
+ *
+ * Lifted here from `frontend/src/lib/ffmpeg-handles.ts` (where the
+ * escape hatch was first added) so the same set drives ALL handle
+ * validators uniformly. Adding a new dynamic-output node type means
+ * one edit here instead of N across sibling validator files.
+ *
+ * Intentionally OMITTED:
+ *  - `webhook-trigger` / `schedule-trigger` — their outputs are
+ *    user-defined JSON shapes, not media URLs. Accepting them as
+ *    media producers creates false-positive drops at the canvas
+ *    that fail at execution. Users wanting trigger → media flows
+ *    should wire through an upload node.
+ */
+export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+  "loop",
+  "list",
+  "sub-workflow",
+  "adjust-volume",
+  "reduce",
+])
+
+/**
  * Source node types whose primary output is an audio URL.
  * Mirrors the backend execution-graph AUDIO_SOURCE_TYPES verbatim.
  */

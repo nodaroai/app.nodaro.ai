@@ -1,4 +1,5 @@
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
+import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, ACCEPTS_MEDIA } from "./ffmpeg-handles"
 import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
@@ -141,6 +142,22 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "character-fx": [
     { handleId: "target", label: "Target subject", accepts: ACCEPTS_CHARACTER_REF },
   ],
+
+  // FFmpeg / pure-processing nodes — every entry's accepts predicate
+  // mirrors `isValidFfmpegConnection` in ffmpeg-handles.ts. Source-
+  // direction popovers (drag from a producer's output pip) walk this
+  // map to find which ffmpeg consumers + handles light up.
+  "trim-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "combine-videos":     [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "extract-frame":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "loop-video":         [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "resize-video":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "add-captions":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
+  "trim-audio":         [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
+  "combine-audio":      [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
+  "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
+  "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
+  "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
 
   // ─── Data root-category nodes ─────────────────────────────────────────
   // Source-direction popovers walk this map; entries here let "drag from an

@@ -11,6 +11,7 @@ import { runShowrunner } from "../../llms/showrunner.js"
 import { runScriptCritic } from "../../llms/script-critic.js"
 import { runCastCoverageCritic } from "../../llms/cast-coverage-critic.js"
 import { runLocationsCoverageCritic } from "../../llms/locations-coverage-critic.js"
+import { pipelineEvents } from "../../events.js"
 import { runScriptStage } from "../script.js"
 
 function fakeSupabase() {
@@ -29,7 +30,10 @@ function fakeSupabase() {
     from: () => ({
       select: () => selectChain,
       insert: () => ({ select: () => ({ single: async () => ({ data: { id: "stage-1" }, error: null }) }) }),
-      update: () => ({ eq: () => ({ data: null }) }),
+      // `.update(...).eq(...)` must be thenable: runScriptStage's live-progress
+      // helpers (emitScriptProgress / clearScriptProgress) fire-and-forget a
+      // `.then(({ error }) => ...)` on it (mirrors showrunner.ts).
+      update: () => ({ eq: () => Promise.resolve({ data: null, error: null }) }),
     }),
   } as never
 }
@@ -240,6 +244,43 @@ describe("runScriptStage", () => {
       expect(result.reason).toBe("script_critic_unresolvable")
       expect(result.failure_detail).toBe("cast_coverage")
     }
+  })
+
+  it("emits live stage:progress through the draft → review → refine sequence", async () => {
+    const publishSpy = vi
+      .spyOn(pipelineEvents, "publish")
+      .mockImplementation(() => {})
+    ;(runDetection as ReturnType<typeof vi.fn>).mockResolvedValue(fakeDetection)
+    ;(runShowrunner as ReturnType<typeof vi.fn>).mockResolvedValue(fakePlan)
+    // First script-critic pass blocks → one refine revision, then passes.
+    ;(runScriptCritic as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(blockingScriptVerdict)
+      .mockResolvedValueOnce(passScriptVerdict)
+    ;(runCastCoverageCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passCastVerdict)
+    ;(runLocationsCoverageCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passLocationsVerdict)
+
+    const result = await runScriptStage({
+      supabase: fakeSupabase(), pipelineId: "p1", userId: "u1",
+      storyPrompt: "x", targetDurationSeconds: 60, format: "short_film",
+      outputResolution: "1080p", language: "en", mode: "manual",
+      activationMode: "interactive", userTier: "pro",
+    })
+
+    expect(result.status).toBe("awaiting_approval")
+
+    const progressMessages = publishSpy.mock.calls
+      .map((c) => c[0])
+      .filter((e) => e.type === "stage:progress")
+      .map((e) => (e as { message: string }).message)
+
+    // The whole point of this change: the steps between drafts are now narrated.
+    expect(progressMessages.some((m) => /Analyzing your story/i.test(m))).toBe(true)
+    expect(progressMessages.some((m) => /Reviewing the draft/i.test(m))).toBe(true)
+    // The refine revision carries its (incrementing) revision number.
+    expect(progressMessages.some((m) => /Refining the script \(revision 2\)/i.test(m))).toBe(true)
+    expect(progressMessages.some((m) => /Re-reviewing the revised draft/i.test(m))).toBe(true)
+
+    publishSpy.mockRestore()
   })
 
   it("returns failed after 2 critic retries on persistent blocking script verdict", async () => {
