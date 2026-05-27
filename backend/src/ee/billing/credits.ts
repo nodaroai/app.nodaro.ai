@@ -493,6 +493,25 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "motion-graphics:premium": 30,
   "composite": 0,
   "sub-workflow": 0,
+  // ── Inline / control nodes — pure in-process logic, no provider cost (0cr).
+  //    These mirror node-executor.ts INLINE_NODES. The 2026-05 hard-fail pricing
+  //    policy (getModelCreditBaseCost) throws on ANY unconfigured identifier, so
+  //    every free inline node needs an explicit 0 entry — otherwise a pipeline
+  //    path that prices the node by its bare type stalls with
+  //    PriceNotConfiguredError (prod 2026-05-27: shot-list scene generation hit
+  //    bare "split-text"). composite / router / sub-workflow are covered nearby.
+  "combine-text": 0,
+  "split-text": 0,
+  "extract-field": 0,
+  "json-process": 0,
+  "filter-list": 0,
+  "deduplicate": 0,
+  "merge-lists": 0,
+  "sort-list": 0,
+  "webhook-output": 0,
+  "preview": 0,
+  "teleport-send": 0,
+  "teleport-receive": 0,
   // ── Reduce (fan-in) — strategy-tiered pricing ──
   // Pure logic strategies are free; pick-best-llm pays for an LLM ranking call.
   // The composite key is built from the node's `data.strategyId` via the

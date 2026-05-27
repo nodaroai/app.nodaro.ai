@@ -220,3 +220,37 @@ describe("directly-emitted credit identifiers (not via buildCreditModelIdentifie
     },
   )
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Free inline / control nodes (node-executor.ts INLINE_NODES)
+//
+// These are pure in-process logic (0cr). A pipeline path prices some of them by
+// their BARE node type, so the 2026-05 hard-fail policy throws
+// PriceNotConfiguredError if an entry is missing — which stalled prod pipeline
+// e06d9ff3 at shot-list scene generation on bare "split-text" (2026-05-27).
+// Every free inline node MUST have an explicit 0 entry.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("free inline / control node identifiers price to 0 (must not hard-fail)", () => {
+  const FREE_INLINE_IDS = [
+    "combine-text",
+    "split-text",
+    "composite",
+    "extract-field",
+    "json-process",
+    "filter-list",
+    "deduplicate",
+    "merge-lists",
+    "sort-list",
+    "webhook-output",
+    "preview",
+    "teleport-send",
+    "teleport-receive",
+    "router",
+    "sub-workflow",
+  ] as const
+
+  it.each(FREE_INLINE_IDS)("%s is present in STATIC_CREDIT_COSTS as 0", (id) => {
+    expect(STATIC_CREDIT_COSTS[id]).toBe(0)
+  })
+})
