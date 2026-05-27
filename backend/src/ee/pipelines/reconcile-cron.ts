@@ -127,6 +127,21 @@ async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
     }
   }
 
+  // Guard against the manual-mode false positive. A manual/guided pipeline
+  // paused at a per-entity approval gate (character description, main image,
+  // or the variant batch) sits at pipelines.status='running' — the pause is
+  // recorded on the entity/stage rows, NOT the pipeline row (only the script
+  // stage flips the pipeline itself to 'awaiting_approval'). Between drives it
+  // has no BullMQ job, so it looks identical to a real stall. Re-enqueuing it
+  // is pointless (drivePipeline just re-pauses) and, repeated every tick,
+  // trips MAX_RESUME and FAILS a healthy run that was only ever waiting for
+  // the user. So skip any pipeline with a pending user action. A genuinely
+  // stuck pipeline (lost wake-up) has NONE — every entity already 'approved'
+  // with no open gate — so it still gets re-enqueued below.
+  if (await hasPendingUserAction(row.id)) {
+    return "skipped"
+  }
+
   // Absolute abandon: pipeline has been "running" for absurd time with no
   // orchestrator presence. Fail + refund. Refund-only-on-failed is idempotent
   // via the `reservation_usage_log_id` CAS inside `refundPipelineCredits`.
@@ -194,4 +209,36 @@ async function reconcileOne(row: PipelineRow, now: number): Promise<Outcome> {
     reason: "resume",
   })
   return "reenqueued"
+}
+
+/**
+ * True when the pipeline is legitimately paused for user input rather than
+ * stalled. Covers the per-entity gates (a character entity at
+ * `awaiting_approval` = main image waiting for approval, or
+ * `pending_description` = Step-A description waiting for the user's click) and
+ * the stage-level batch gate (`pipeline_stages.status='awaiting_approval'`).
+ *
+ * Deliberately does NOT treat `pending` / `generating` / `rejected` as a user
+ * wait — those are orchestrator-work states, so a pipeline stuck on one of
+ * them with no live job SHOULD be re-enqueued. This check is the line between
+ * "waiting for a human" (leave alone) and "waiting for nobody" (rescue).
+ */
+async function hasPendingUserAction(pipelineId: string): Promise<boolean> {
+  const { data: entity } = await supabase
+    .from("pipeline_entities")
+    .select("id")
+    .eq("pipeline_id", pipelineId)
+    .in("status", ["awaiting_approval", "pending_description"])
+    .limit(1)
+    .maybeSingle()
+  if (entity) return true
+
+  const { data: stage } = await supabase
+    .from("pipeline_stages")
+    .select("id")
+    .eq("pipeline_id", pipelineId)
+    .eq("status", "awaiting_approval")
+    .limit(1)
+    .maybeSingle()
+  return Boolean(stage)
 }

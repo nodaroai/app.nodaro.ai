@@ -52,8 +52,20 @@ async function main() {
   // Same pattern for Film Director pipelines (Cloud only — pipelines are
   // an EE feature). Catches pipelines whose BullMQ orchestration job was
   // lost (see `ee/pipelines/reconcile-cron.ts` for root-cause taxonomy).
-  if (hasCredits()) {
+  //
+  // DISABLED BY DEFAULT — opt in via PIPELINE_RECONCILE_CRON_ENABLED=true.
+  // This cron previously failed healthy manual-mode pipelines paused waiting
+  // for user approval (they sit at status='running', which it mistook for a
+  // stall, re-enqueued to MAX_RESUME, then marked failed). The false-positive
+  // guard now lives in reconcile-cron.ts (hasPendingUserAction); this env flag
+  // is the kill-switch so the cron can be toggled off without a code rollback
+  // if it ever regresses again.
+  if (hasCredits() && process.env.PIPELINE_RECONCILE_CRON_ENABLED === "true") {
     startPipelinesReconcileCron()
+  } else if (hasCredits()) {
+    console.log(
+      "[reconcile/pipelines] disabled (set PIPELINE_RECONCILE_CRON_ENABLED=true to enable)",
+    )
   }
 
   // Start orchestrator worker (workflow execution engine) in-process
