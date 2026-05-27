@@ -859,7 +859,9 @@ export async function executeWebhookOutput(
         user_id: ctx.userId,
         status: "pending",
         provider: "webhook-output",
-        input_data: { url, payload, type: "webhook-output" },
+        // `node_id` lets the reconcile cron map this row back to its node
+        // when the orchestrator dies before persisting node_states[X].jobId.
+        input_data: { url, payload, type: "webhook-output", node_id: node.id },
       })
       .select("id")
       .single()

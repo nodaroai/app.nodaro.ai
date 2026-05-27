@@ -95,7 +95,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
   for (const row of rows) {
     scanned++
     const rawStates = (row.node_states ?? {}) as Record<string, NodeExecutionState>
-    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates)
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id)
 
     const statuses = Object.values(states).map((s) => s?.status)
     const allCompleted = statuses.length > 0 && statuses.every((s) => s === "completed" || s === "skipped")

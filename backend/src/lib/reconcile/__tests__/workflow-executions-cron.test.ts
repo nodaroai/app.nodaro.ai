@@ -4,6 +4,8 @@ interface JobRow {
   id: string
   status: string
   error_message: string | null
+  workflow_execution_id?: string | null
+  input_data?: Record<string, unknown> | null
 }
 
 interface ExecutionRow {
@@ -43,13 +45,37 @@ vi.mock("../../supabase.js", () => {
       }
     }
     if (table === "jobs") {
+      // Path-2's select uses `node_id:input_data->>node_id` to project the
+      // JSON field. The mock surfaces it as a top-level `node_id` so the
+      // reconciler's `job.node_id` access matches production behavior.
+      const project = (j: JobRow) => ({
+        id: j.id,
+        status: j.status,
+        error_message: j.error_message,
+        node_id: (j.input_data as Record<string, unknown> | null | undefined)?.node_id ?? null,
+      })
       return {
         select: () => ({
+          // Path-1 query: .select("id, status, error_message").in("id", [...])
           in: (_col: string, ids: string[]) =>
             Promise.resolve({
-              data: mocks.jobs.filter((j) => ids.includes(j.id)),
+              data: mocks.jobs.filter((j) => ids.includes(j.id)).map(project),
               error: null,
             }),
+          // Path-2 query: .select(...).eq("workflow_execution_id", X).in("status", [...])
+          eq: (eqCol: string, eqVal: string) => ({
+            in: (inCol: string, inVals: string[]) =>
+              Promise.resolve({
+                data: mocks.jobs
+                  .filter((j) => {
+                    if (eqCol === "workflow_execution_id" && j.workflow_execution_id !== eqVal) return false
+                    if (inCol === "status" && !inVals.includes(j.status)) return false
+                    return true
+                  })
+                  .map(project),
+                error: null,
+              }),
+          }),
         }),
       }
     }
@@ -186,5 +212,149 @@ describe("reconcileWorkflowExecutionsTick", () => {
   it("emits no updates when there are no stuck rows", async () => {
     await reconcileWorkflowExecutionsTick()
     expect(mocks.updates).toHaveLength(0)
+  })
+
+  it("recovers via jobs.workflow_execution_id + input_data.node_id when node_states.jobId was never persisted", async () => {
+    // Simulates the orchestrator dying between `INSERT INTO jobs` and the
+    // fire-and-forget `updateExecution` that flushes node_states.jobId.
+    // node_states says "running" with NO jobId, but a completed jobs row
+    // tagged with `input_data.node_id === "n1"` exists for this execution.
+    mocks.executions.push({
+      id: "exec-recovered",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "running" },
+      },
+    })
+    mocks.jobs.push({
+      id: "j-anon",
+      status: "completed",
+      error_message: null,
+      workflow_execution_id: "exec-recovered",
+      input_data: { type: "generate-video", node_id: "n1" },
+    })
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    expect(mocks.updates[0].updates.status).toBe("completed")
+    expect(mocks.updates[0].updates.node_states).toMatchObject({
+      n1: { status: "completed" },
+    })
+  })
+
+  it("backfills node_states.jobId on Path-2 recovery so downstream lookups can trace the job", async () => {
+    mocks.executions.push({
+      id: "exec-backfill",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "running" },
+      },
+    })
+    mocks.jobs.push({
+      id: "j-recovered",
+      status: "completed",
+      error_message: null,
+      workflow_execution_id: "exec-backfill",
+      input_data: { type: "generate-video", node_id: "n1" },
+    })
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    const node_states = mocks.updates[0].updates.node_states as Record<string, { status: string; jobId?: string }>
+    expect(node_states.n1.status).toBe("completed")
+    // jobId is filled in from the recovered jobs row so a future
+    // `reopenWorkflowExecutionIfSoleCause`-style lookup keyed on jobId can
+    // still find the owning node.
+    expect(node_states.n1.jobId).toBe("j-recovered")
+  })
+
+  it("preserves user cancellation — cancelled child jobs become 'skipped' node_states, not 'failed'", async () => {
+    // User clicked Cancel mid-flight. Orchestrator marked child jobs
+    // cancelled but died before writing execution.status='cancelled'. The
+    // cron picks up the row; Path-2 must NOT collapse cancelled jobs into
+    // a "failed" execution — that would surface as a misleading failure
+    // for a deliberate user action.
+    mocks.executions.push({
+      id: "exec-cancel",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "running" },
+      },
+    })
+    mocks.jobs.push({
+      id: "j-cancelled",
+      status: "cancelled",
+      error_message: "User cancellation",
+      workflow_execution_id: "exec-cancel",
+      input_data: { type: "generate-video", node_id: "n1" },
+    })
+
+    await reconcileWorkflowExecutionsTick()
+
+    // Cancelled→skipped means allCompleted is true (completed/skipped both
+    // count) and the execution row is marked completed, not failed.
+    expect(mocks.updates).toHaveLength(1)
+    expect(mocks.updates[0].updates.status).toBe("completed")
+    expect(mocks.updates[0].updates.error_message).toBeUndefined()
+    const node_states = mocks.updates[0].updates.node_states as Record<string, { status: string; error?: string }>
+    expect(node_states.n1.status).toBe("skipped")
+    expect(node_states.n1.error).toBe("User cancellation")
+  })
+
+  it("fan-out determinism: failed > cancelled > completed precedence regardless of row order", async () => {
+    // Same node has multiple jobs (list iteration / retries). Without
+    // per-node aggregation, the LAST iterated job's status wins and the
+    // outcome depends on Supabase's row order. Verify that with mixed
+    // statuses the precedence is failed > cancelled > completed.
+    mocks.executions.push({
+      id: "exec-fanout",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "running" },
+      },
+    })
+    // Push in this order: cancelled, completed, failed. The pre-aggregation
+    // logic would have ended with whichever was iterated last.
+    mocks.jobs.push(
+      { id: "j-a", status: "cancelled", error_message: null, workflow_execution_id: "exec-fanout", input_data: { type: "generate-video", node_id: "n1" } },
+      { id: "j-b", status: "completed", error_message: null, workflow_execution_id: "exec-fanout", input_data: { type: "generate-video", node_id: "n1" } },
+      { id: "j-c", status: "failed", error_message: "Provider 500", workflow_execution_id: "exec-fanout", input_data: { type: "generate-video", node_id: "n1" } },
+    )
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    const node_states = mocks.updates[0].updates.node_states as Record<string, { status: string; error?: string }>
+    expect(node_states.n1.status).toBe("failed")
+    expect(node_states.n1.error).toBe("Provider 500")
+    // Execution is marked failed because n1 is failed and no others active.
+    expect(mocks.updates[0].updates.status).toBe("failed")
+  })
+
+  it("fan-out: cancelled overrides completed but not failed (precedence holds in arbitrary order)", async () => {
+    mocks.executions.push({
+      id: "exec-fanout-cancel",
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      node_states: {
+        n1: { status: "running" },
+      },
+    })
+    mocks.jobs.push(
+      { id: "j-x", status: "completed", error_message: null, workflow_execution_id: "exec-fanout-cancel", input_data: { type: "generate-video", node_id: "n1" } },
+      { id: "j-y", status: "cancelled", error_message: null, workflow_execution_id: "exec-fanout-cancel", input_data: { type: "generate-video", node_id: "n1" } },
+    )
+
+    await reconcileWorkflowExecutionsTick()
+
+    expect(mocks.updates).toHaveLength(1)
+    const node_states = mocks.updates[0].updates.node_states as Record<string, { status: string }>
+    // cancelled > completed in precedence — the user-cancel signal wins
+    // over partial successes from earlier iterations.
+    expect(node_states.n1.status).toBe("skipped")
+    // Execution still marks completed (skipped + completed both count as
+    // "done" for allCompleted).
+    expect(mocks.updates[0].updates.status).toBe("completed")
   })
 })

@@ -469,8 +469,34 @@ async function executeSyncHttpNode(
   const result = await response.json() as Record<string, unknown>
 
   if (result.jobId) {
+    // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can
+    // recover sync-HTTP orphans the same way it does worker-queued ones.
+    // Sync-HTTP routes call `buildJobInputData(body, type)` which doesn't
+    // know orchestrator-internal context; doing this stamp here covers all
+    // ~22 sync-HTTP node types from one call site without touching every
+    // route's Zod schema. RMW pattern is safe because input_data is written
+    // by the route INSERT then only updated by the worker writing
+    // output_data (a different field) — no concurrent writers contend on
+    // input_data after this point. Best-effort: a failed stamp only
+    // degrades reconciler recovery (back to the 4h abandon threshold for
+    // this job), so we log + continue rather than fail the workflow.
+    const stampJobId = result.jobId as string
+    try {
+      const { data: jobRow } = await supabase
+        .from("jobs")
+        .select("input_data")
+        .eq("id", stampJobId)
+        .single()
+      const existing = (jobRow?.input_data as Record<string, unknown>) ?? {}
+      await supabase
+        .from("jobs")
+        .update({ input_data: { ...existing, node_id: node.id } })
+        .eq("id", stampJobId)
+    } catch (err) {
+      console.warn(`[orchestrator] Failed to stamp node_id on sync-HTTP job ${stampJobId}:`, err)
+    }
     // Route created a job — poll for completion
-    return pollJobToCompletion(result.jobId as string, node.type, ctx)
+    return pollJobToCompletion(stampJobId, node.type, ctx)
   }
 
   // Normalize generatedText -> text for ai-writer responses
@@ -773,7 +799,12 @@ async function executeWorkerNode(
   nodeStates?: Record<string, NodeExecutionState>,
   userPromptTemplate?: string,
 ): Promise<ExecuteNodeResult> {
-  // 1. Create placeholder job record (we need the jobId for payload building)
+  // 1. Create placeholder job record (we need the jobId for payload building).
+  // `node_id` is recorded in `input_data` so the reconcile cron can map a
+  // `jobs` row back to its owning node even when the orchestrator died
+  // before `ctx.onJobCreated` got to persist `node_states[X].jobId`. Without
+  // this, a mid-flight orchestrator crash leaves the execution stuck and
+  // eventually marked "orphaned" even though the child job succeeded.
   const isUploadDescendant = ctx.uploadDescendantIds?.has(node.id) ?? false
   const { data: job, error: jobError } = await supabase
     .from("jobs")
@@ -782,7 +813,7 @@ async function executeWorkerNode(
       workflow_execution_id: ctx.executionId,
       user_id: ctx.userId,
       status: "pending",
-      input_data: { type: node.type },
+      input_data: { type: node.type, node_id: node.id },
       ...(isUploadDescendant && { force_private: true }),
     })
     .select("id")
@@ -816,7 +847,12 @@ async function executeWorkerNode(
   // Store all payload fields so the execution detail modal can show complete inputs.
   // Internal fields (jobId, userId, usageLogId) are kept — useful for admin debugging;
   // regular users never see raw input_data anyway (sanitizeJobForPublic strips sensitive job fields).
-  const inputData: Record<string, unknown> = { type: node.type, ...payload }
+  // Build the post-payload-build input_data. `type` and `node_id` are
+  // listed AFTER the spread so a future payload field that happens to share
+  // either key can't silently override them — the reconciler's Path-2 relies
+  // on `node_id` matching `node.id` exactly to map orphan-recovered rows
+  // back to their owning node.
+  const inputData: Record<string, unknown> = { ...payload, type: node.type, node_id: node.id }
   // Backfill resolved inputs that payload may not carry (e.g. upstream media URLs)
   if (!inputData.imageUrl && resolvedInputs.imageUrl) inputData.imageUrl = resolvedInputs.imageUrl
   if (!inputData.videoUrl && resolvedInputs.videoUrl) inputData.videoUrl = resolvedInputs.videoUrl

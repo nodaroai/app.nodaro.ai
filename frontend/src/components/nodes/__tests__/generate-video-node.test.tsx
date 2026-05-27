@@ -225,7 +225,7 @@ describe("GenerateVideoNode", () => {
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
         "audio", "audioReferences",
-        "assets", "look", "elements",
+        "assets", "elements", "look",
       ]
       for (const id of inputIds) {
         const pip = screen.getByTestId(`pip-${id}`)
@@ -244,7 +244,7 @@ describe("GenerateVideoNode", () => {
         "prompt", "negative",
         "startFrame", "endFrame", "imageReferences", "videoReferences",
         "audio", "audioReferences",
-        "assets", "look", "elements",
+        "assets", "elements", "look",
       ]
       for (const id of inputIds) {
         const h = screen.getByTestId(`handle-config-${id}`)
@@ -270,10 +270,10 @@ describe("GenerateVideoNode", () => {
       // Audio cluster (40 gap → 216)
       expect(screen.getByTestId("pip-audio")).toHaveAttribute("data-top", "calc(100% - 216px)")
       expect(screen.getByTestId("pip-audioReferences")).toHaveAttribute("data-top", "calc(100% - 244px)")
-      // Pickers cluster (40 gap → 284)
+      // Pickers cluster (40 gap → 284); look on top, elements in middle
       expect(screen.getByTestId("pip-assets")).toHaveAttribute("data-top", "calc(100% - 284px)")
-      expect(screen.getByTestId("pip-look")).toHaveAttribute("data-top", "calc(100% - 312px)")
-      expect(screen.getByTestId("pip-elements")).toHaveAttribute("data-top", "calc(100% - 340px)")
+      expect(screen.getByTestId("pip-elements")).toHaveAttribute("data-top", "calc(100% - 312px)")
+      expect(screen.getByTestId("pip-look")).toHaveAttribute("data-top", "calc(100% - 340px)")
       // Output handle pinned to 24px from top — symmetric with bottom-most input
       expect(screen.getByTestId("pip-video")).toHaveAttribute("data-top", "24px")
     })
