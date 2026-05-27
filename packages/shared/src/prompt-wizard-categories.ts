@@ -227,6 +227,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "runway-kie": "Runway via KIE, strong cinematic quality",
     "wan-2.7-t2v": "Wan 2.7 T2V — 2–15s, 720p/1080p",
     "happyhorse":   "HappyHorse T2V — 3–15s, 720p/1080p",
+    "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — text/image/audio→video, 6–10s, up to 4K",
+    "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — text/image→video, 6–20s, up to 4K",
   },
   "image-to-video": {
     "minimax": "Versatile animation from still images",
@@ -253,6 +255,8 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "wan-2.7-i2v":    "Wan 2.7 I2V — 2–15s, 720p/1080p, start+end frame",
     "happyhorse-i2v":  "HappyHorse I2V — 3–15s, 720p/1080p",
     "happyhorse-ref2v": "HappyHorse Ref2V — multi-ref image to video, 3–15s",
+    "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — start/end frame i2v + audio→video, 6–10s, up to 4K",
+    "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — start/end frame i2v, 6–20s, up to 4K",
   },
   "video-to-video": {
     "wan": "Style transfer and video transformation",

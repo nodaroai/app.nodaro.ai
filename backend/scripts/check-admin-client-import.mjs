@@ -188,6 +188,14 @@ const ALLOWED_PATHS = [
   // reads or writes possible.
   /^src\/routes\/image-critic\.ts$/,
 
+  // Video Retake (LTX 2.3 Pro): creates a jobs row tagged with
+  // `user_id: req.userId` (line 93). Service-role required because
+  // reserveCreditsForJob runs under the same client and the worker reads
+  // the job by `job.id` out-of-band. Mirrors generate-video / extend-video
+  // (baselined). No cross-user reads or writes — all queries scope by
+  // req.userId at insert time.
+  /^src\/routes\/video-retake\.ts$/,
+
   // Collect: inline-HTTP route — needs service-role to insert the jobs row +
   // reserve credits before strategy dispatch, then commit/refund on completion.
   // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`

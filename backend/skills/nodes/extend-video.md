@@ -1,7 +1,7 @@
 ---
 node_type: extend-video
-generated_at: 2026-05-18T13:23:37.687Z
-generated_from: cb1e786d
+generated_at: 2026-05-27T21:40:46.962Z
+generated_from: 88c5df99
 ---
 
 # Extend Video
@@ -24,6 +24,8 @@ generated_from: cb1e786d
 - `model?: "fast" | "quality"`
 - `seeds?: number`
 - `quality?: "720p" | "1080p"`
+- `extendMode?: "start" | "end"`
+- `duration?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`

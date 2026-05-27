@@ -1782,6 +1782,33 @@ export type VideoToVideoData = {
   pausedAtTime?: number
 }
 
+export type VideoRetakeData = {
+  [key: string]: unknown
+  label: string
+  provider: "ltx-2.3-pro"
+  prompt?: string
+  retakeStartTime: number
+  retakeDuration: number
+  retakeMode: "replace_audio" | "replace_video" | "replace_audio_and_video"
+  resolution: "1080p"
+  aspectRatio?: "16:9" | "9:16"
+  fps?: 24 | 25 | 48 | 50
+  generateAudio?: boolean
+  repeatCount?: number
+  fieldMappings: FieldMappings
+  selectedVideoNodeId?: string
+  videoDurationSec?: number
+  generatedVideoUrl?: string
+  generatedResults?: GeneratedResult[]
+  activeResultIndex?: number
+  currentJobId?: string
+  currentJobProgress?: number
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 export type LipSyncData = {
   [key: string]: unknown
   label: string
@@ -1915,6 +1942,8 @@ export type ExtendVideoData = {
   model?: "fast" | "quality"      // VEO only
   seeds?: number                   // VEO only
   quality?: "720p" | "1080p"      // Runway only
+  extendMode?: "start" | "end"    // LTX 2.3 Pro only — default "end"
+  duration?: number                // LTX 2.3 Pro only — seconds to add (1-20)
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -4120,6 +4149,7 @@ export type SceneNodeData =
   | RemoveBackgroundData
   | ImageToVideoData
   | VideoToVideoData
+  | VideoRetakeData
   | TextToVideoData
   | GenerateVideoNodeData
   | VideoSfxNodeData
@@ -4283,6 +4313,7 @@ export type SceneNodeType =
   | "remove-background"
   | "image-to-video"
   | "video-to-video"
+  | "video-retake"
   | "text-to-video"
   | "generate-video"
   | "video-sfx"
@@ -5177,6 +5208,26 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["in"],
     outputs: ["video"],
     defaultData: { label: "Video to Video", prompt: "", duration: 5, fieldMappings: {} },
+  },
+  {
+    type: "video-retake",
+    label: "Retake Video",
+    category: "ai",
+    creditCost: 25,
+    inputs: ["in"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Retake Video",
+      provider: "ltx-2.3-pro",
+      retakeStartTime: 0,
+      retakeDuration: 2,
+      retakeMode: "replace_audio_and_video",
+      resolution: "1080p",
+      aspectRatio: "16:9",
+      fps: 25,
+      generateAudio: true,
+      fieldMappings: {},
+    } as VideoRetakeData,
   },
   {
     type: "text-to-video",

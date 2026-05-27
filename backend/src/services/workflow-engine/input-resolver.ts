@@ -867,6 +867,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "suno-music-video",
   "combine-videos",
   "merge-video-audio",

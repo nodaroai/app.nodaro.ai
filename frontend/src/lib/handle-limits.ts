@@ -46,6 +46,12 @@ export function getHandleConnectionLimit(
 ): HandleConnectionLimit | null {
   if (!node) return null
 
+  // video-retake's `video` target accepts exactly one source clip — the LTX
+  // 2.3 Pro endpoint replaces a time-window in a single uploaded video.
+  if (node.type === "video-retake" && handleId === "video") {
+    return { limit: 1, providerLabel: "Retake", isMultiProviderMin: false }
+  }
+
   if (node.type === "generate-image" && handleId === "references") {
     const data = node.data as { provider?: string; providers?: readonly string[] } | undefined
     const providers: readonly string[] =
@@ -118,6 +124,9 @@ export function getHandleConnectionLimit(
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       }
       case "audio":
+        if (provider === "ltx-2.3-fast") {
+          return { limit: 0, providerLabel, isMultiProviderMin: false }
+        }
         return { limit: 1, providerLabel, isMultiProviderMin: false }
       case "audioReferences": {
         const cap = caps?.audio

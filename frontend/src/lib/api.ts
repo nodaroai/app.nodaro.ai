@@ -3703,8 +3703,13 @@ export async function videoUpscaleApi(opts: {
 // --- Extend Video ---
 
 export async function extendVideo(params: {
-  kieTaskId: string
-  prompt: string
+  // KIE-based providers (veo-extend, runway-extend) require kieTaskId + prompt
+  kieTaskId?: string
+  prompt?: string
+  // LTX 2.3 Pro requires videoUrl; extendMode + duration are LTX-only
+  videoUrl?: string
+  extendMode?: "start" | "end"
+  duration?: number
   provider: string
   model?: string
   seeds?: number
@@ -3719,6 +3724,32 @@ export async function extendVideo(params: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start extend video")
+  }
+  return res.json()
+}
+
+// --- Video Retake (LTX 2.3 Pro) ---
+
+export async function runVideoRetake(params: {
+  videoUrl: string
+  prompt?: string
+  retakeStartTime: number
+  retakeDuration: number
+  retakeMode: "replace_audio" | "replace_video" | "replace_audio_and_video"
+  aspectRatio: "16:9" | "9:16"
+  fps: number
+  generateAudio: boolean
+  cameraMotion?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/video-retake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start video retake")
   }
   return res.json()
 }

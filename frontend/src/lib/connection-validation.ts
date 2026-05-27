@@ -1,5 +1,6 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
+import { isValidVideoRetakeConnection, type VideoRetakeHandleId } from "./video-retake-handles"
 import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import {
@@ -207,6 +208,14 @@ export function isValidWorkflowConnection(
         isVisualPickerType,
       )
     }
+  }
+
+  // Video Retake — enforce typed-handle compatibility.
+  if (targetType === "video-retake" && connection.targetHandle) {
+    const handleId = connection.targetHandle as VideoRetakeHandleId | null
+    if (!handleId) return false
+    const sourceType = typeOf(connection.source) ?? ""
+    return isValidVideoRetakeConnection(handleId, sourceType, isVisualPickerType)
   }
 
   // Video SFX — enforce typed-handle compatibility. Mirrors generate-video

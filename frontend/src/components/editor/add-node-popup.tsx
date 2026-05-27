@@ -713,6 +713,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "Video",
   },
   {
+    type: "video-retake",
+    label: "Retake Video",
+    icon: <Scissors className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["retake", "replace audio", "replace video", "ltx", "ltx-2.3"],
+  },
+  {
     type: "face-swap",
     label: "Face Swap",
     icon: <ScanFace className="h-4 w-4" />,

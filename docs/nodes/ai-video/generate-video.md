@@ -63,16 +63,29 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | HappyHorse | `happyhorse-i2v`, `happyhorse-ref2v`, `happyhorse` | I2V, reference, T2V | 3–15s; 720p / 1080p |
 | Runway (KIE) | `runway-kie` | T2V, I2V | Fixed configurations |
 | Kling 3 Omni | `kling-3-omni` | I2V | — |
+| LTX 2.3 | `ltx-2.3-pro`, `ltx-2.3-fast` | T2V, I2V, audio→V (Pro only) | Pro: 6 / 8 / 10s; Fast: 6–20s; 1080p / 2k / 4k; aspect 16:9 / 9:16; fps 24 / 25 / 48 / 50; supports `last_frame_image` (end-frame interpolation). Fast does not accept audio. |
 
 Source of truth: `IMAGE_TO_VIDEO_PROVIDERS` + `TEXT_TO_VIDEO_PROVIDERS` in `packages/shared/src/model-constants.ts`. Full per-provider pricing and parameters: `/admin/models` in the admin panel, or the `model_pricing` table.
 
 ### End-frame support
 
-Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`imageUrls: [start, end]`), `minimax` (`end_image_url`), `hailuo-standard` (`end_image_url`), `bytedance-lite` (`end_image_url`), `kling-turbo` (`tail_image_url`), `kling-3.0`, `wan-2.7-i2v`. Other providers ignore the `endFrame` handle.
+Providers that accept a paired last frame: `veo3`, `veo3.1`, `veo3_lite` (`imageUrls: [start, end]`), `minimax` (`end_image_url`), `hailuo-standard` (`end_image_url`), `bytedance-lite` (`end_image_url`), `kling-turbo` (`tail_image_url`), `kling-3.0`, `wan-2.7-i2v`, `ltx-2.3-pro` / `ltx-2.3-fast` (`last_frame_image`). Other providers ignore the `endFrame` handle.
 
 ### Multimodal references
 
 Seedance 2 (`seedance-2` / `seedance-2-fast`) accepts up to 9 image refs, 3 video refs, and 3 audio refs in a single call. HappyHorse Ref2V accepts 1–9 image refs. VEO 3.1 (`veo3.1`) supports `REFERENCE_2_VIDEO` mode when image references are wired without a start frame.
+
+### LTX 2.3 — auto-dispatch by wired inputs
+
+LTX 2.3 exposes five task modes on Replicate; Generate Video picks one automatically based on which input handles are wired, so users never see a task toggle:
+
+| Wired inputs | LTX task | Variants |
+|---|---|---|
+| No `startFrame`, no `audio` | `text_to_video` | Pro + Fast |
+| `startFrame` (optionally `endFrame`) | `image_to_video` (with `last_frame_image` when `endFrame` set) | Pro + Fast |
+| `audio` connected (no `startFrame`) | `audio_to_video` | Pro only |
+
+LTX 2.3 Fast has its audio handle visually muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
 
 ## Credit pricing
 

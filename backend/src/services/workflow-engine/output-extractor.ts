@@ -697,6 +697,7 @@ const VIDEO_RESULT_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "suno-music-video",
   "render-video",
   "combine-videos",

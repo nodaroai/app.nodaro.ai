@@ -15,6 +15,13 @@ import { runRunwayExtendTask } from "../../providers/kie/runway-client.js"
 import { replicateLipSync } from "../../providers/replicate/lip-sync.js"
 import { replicateFaceSwap } from "../../providers/replicate/face-swap.js"
 import { runGroundedSam } from "../../providers/replicate/grounded-sam.js"
+import {
+  runLtxTextToVideo,
+  runLtxImageToVideo,
+  runLtxAudioToVideo,
+  runLtxExtend,
+  runLtxRetake,
+} from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
 import { REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
@@ -73,6 +80,109 @@ import {
 } from "../../lib/reconcile/provider-kind.js"
 import type { ProviderKind } from "../../lib/reconcile/types.js"
 
+/**
+ * Lightricks LTX 2.3 dispatch.
+ *
+ * Submits a Replicate prediction (one model id per variant — the `task` field
+ * in the input switches behavior between text/image/audio inputs) and waits
+ * synchronously via `replicate.wait()` for terminal state. On success,
+ * uploads the resulting video to R2 (with watermark when applicable),
+ * generates a thumbnail, and finalises the job row.
+ *
+ * The payload-builder (`services/workflow-engine/payload-builder.ts`) emits
+ * a flat snake_case shape that mirrors the LTX provider's input fields, so
+ * we can forward each field directly without re-deriving the task.
+ *
+ * `jobType` distinguishes the i2v ("image-to-video") vs t2v ("text-to-video")
+ * caller so finalize records the right job type — matches the surrounding
+ * handler that invoked us.
+ *
+ * Returns true when the LTX path handled the job (caller must return early);
+ * false when the provider is not LTX (caller continues with default routing).
+ */
+async function dispatchLtxIfRequested(
+  job: { data: unknown; updateProgress: (p: number) => Promise<void> },
+  ctx: { jobId: string; jobUserId: string | undefined; shouldWatermark: boolean },
+  jobType: "image-to-video" | "text-to-video",
+): Promise<boolean> {
+  const d = job.data as Record<string, unknown>
+  const provider = d.provider as string | undefined
+  if (provider !== "ltx-2.3-pro" && provider !== "ltx-2.3-fast") return false
+  const variant: "ltx-2.3-pro" | "ltx-2.3-fast" = provider
+
+  const task = (d.task as "text_to_video" | "image_to_video" | "audio_to_video" | undefined) ?? "text_to_video"
+  const reconcileOpts = {
+    onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForVideoModel(variant)),
+  }
+  const common = {
+    variant,
+    prompt: (d.prompt as string | undefined) ?? "",
+    resolution: d.resolution as "1080p" | "2k" | "4k",
+    duration: d.duration as number,
+    aspectRatio: d.aspect_ratio as "16:9" | "9:16",
+    fps: d.fps as 24 | 25 | 48 | 50,
+    generateAudio: (d.generate_audio as boolean | undefined) ?? true,
+    cameraMotion: (d.camera_motion as
+      | "dolly_in" | "dolly_out" | "dolly_left" | "dolly_right"
+      | "jib_up" | "jib_down" | "static" | "focus_shift" | "none") ?? "none",
+    reconcileOpts,
+  }
+
+  // Best-effort progress nudge so the widget shows movement; we ramp toward
+  // 90% during the long Replicate wait, then snap to 100% on upload.
+  await setJobProgress(job, ctx.jobId, 5)
+  const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 85 })
+
+  console.log(
+    `[worker] ltx ${ctx.jobId} (variant: ${variant}, task: ${task})`,
+  )
+
+  let result
+  try {
+    if (task === "audio_to_video" && variant === "ltx-2.3-pro") {
+      result = await runLtxAudioToVideo({ ...common, variant, audio: d.audio as string })
+    } else if (task === "image_to_video") {
+      result = await runLtxImageToVideo({
+        ...common,
+        image: d.image as string,
+        lastFrameImage: d.last_frame_image as string | undefined,
+      })
+    } else {
+      result = await runLtxTextToVideo(common)
+    }
+  } finally {
+    ramp.stop()
+  }
+
+  const r2Url = await uploadVideoMaybeWatermark(
+    result.videoUrl,
+    ctx.jobId,
+    ctx.jobUserId,
+    ctx.shouldWatermark,
+  )
+  await setJobProgress(job, ctx.jobId, 100)
+
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType,
+    result: {
+      url: result.videoUrl,
+      cost: result.cost,
+      providerUsed: variant,
+    },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl },
+  })
+  if (ok) {
+    console.log(
+      `[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${variant}, cost: $${result.cost?.toFixed(6) ?? "N/A"})`,
+    )
+  }
+  return true
+}
+
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
   const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation } = job.data as {
     jobId: string
@@ -110,6 +220,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     }
     enableTranslation?: boolean
   }
+
+  // LTX 2.3 short-circuits the i2v router — it has its own Replicate
+  // prediction shape (single model id, `task` discriminator in input) and
+  // finalises synchronously via `replicate.wait()` inside the dispatcher,
+  // not through the KIE poll loop.
+  if (await dispatchLtxIfRequested(job, ctx, "image-to-video")) return
+
   console.log(`[worker] image-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${endFrameUrl ? " [with end frame]" : ""}${audioUrl ? " [with audio]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
@@ -327,6 +444,13 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     nsfwChecker?: boolean
     enableTranslation?: boolean
   }
+
+  // LTX 2.3 short-circuits the t2v router — same prediction-shape rationale
+  // as the i2v handler above. Covers both `text_to_video` and (Pro-only)
+  // `audio_to_video` tasks; payload-builder emits jobName "text-to-video"
+  // for both.
+  if (await dispatchLtxIfRequested(job, ctx, "text-to-video")) return
+
   console.log(`[worker] text-to-video ${ctx.jobId} (provider: ${provider ?? "minimax"})${removeWatermark ? " [remove watermark]" : ""}`)
 
   // Map frontend shots/elements to provider format for Kling 3.0
@@ -714,7 +838,63 @@ const handleVideoUpscale: HandlerFn = async function handleVideoUpscale(job, ctx
 }
 
 const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) {
-  const { kieTaskId, prompt, provider, model, seeds, quality } = job.data as {
+  const d = job.data as Record<string, unknown>
+  const provider = d.provider as "veo-extend" | "runway-extend" | "ltx-2.3-pro"
+
+  // ─── LTX 2.3 Pro extend ────────────────────────────────────────────────
+  // Synchronous `replicate.wait()` — the prediction id is persisted on the
+  // job row by makeOnTaskCreated so the 20-min reconcile cron acts as a
+  // safety net if the worker process dies mid-wait.
+  if (provider === "ltx-2.3-pro") {
+    console.log(`[worker] extend-video ${ctx.jobId} (provider: ltx-2.3-pro)`)
+    await setJobProgress(job, ctx.jobId, 5)
+    const ltxExtendRamp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 85 })
+    let ltxExtendResult
+    try {
+      ltxExtendResult = await runLtxExtend({
+        variant: "ltx-2.3-pro",
+        video: d.video as string,
+        duration: d.duration as number,
+        extendMode: (d.extend_mode as "start" | "end" | undefined) ?? "end",
+        reconcileOpts: {
+          onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForVideoModel("ltx-2.3-pro")),
+        },
+      })
+    } finally {
+      ltxExtendRamp.stop()
+    }
+    const ltxExtendR2Url = await uploadVideoMaybeWatermark(
+      ltxExtendResult.videoUrl,
+      ctx.jobId,
+      ctx.jobUserId,
+      ctx.shouldWatermark,
+    )
+    await setJobProgress(job, ctx.jobId, 100)
+    const ltxExtendThumbUrl = await generateAndUploadThumbnail(
+      ltxExtendR2Url,
+      ctx.jobId,
+      ctx.jobUserId,
+    )
+    const { ok: ltxExtendOk } = await finalizeJobWithMedia({
+      jobId: ctx.jobId,
+      jobType: "extend-video",
+      result: {
+        url: ltxExtendResult.videoUrl,
+        cost: ltxExtendResult.cost,
+        providerUsed: "ltx-2.3-pro",
+      },
+      mediaUrl: ltxExtendR2Url,
+      extraOutputData: { thumbnailUrl: ltxExtendThumbUrl },
+    })
+    if (ltxExtendOk) {
+      console.log(
+        `[worker] Job ${ctx.jobId} completed: ${ltxExtendR2Url} (provider: ltx-2.3-pro, cost: $${ltxExtendResult.cost?.toFixed(6) ?? "N/A"})`,
+      )
+    }
+    return
+  }
+
+  const { kieTaskId, prompt, model, seeds, quality } = job.data as {
     jobId: string
     kieTaskId: string
     prompt: string
@@ -768,6 +948,66 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
   })
   if (!ok) return
   console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
+}
+
+const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) {
+  const d = job.data as Record<string, unknown>
+  console.log(`[worker] video-retake ${ctx.jobId} (provider: ltx-2.3-pro)`)
+  // Best-effort progress nudge so the widget bar moves while the long
+  // Replicate wait blocks. The 20-min reconcile cron is the safety net
+  // if this worker dies mid-wait — the prediction id is persisted by
+  // makeOnTaskCreated before we begin waiting.
+  await setJobProgress(job, ctx.jobId, 5)
+  const ramp = startProgressRamp(job, ctx.jobId, { start: 5, cap: 85 })
+  let result
+  try {
+    result = await runLtxRetake({
+      variant: "ltx-2.3-pro",
+      video: d.video as string,
+      prompt: (d.prompt as string | undefined) ?? "",
+      retakeStartTime: d.retake_start_time as number,
+      retakeDuration: d.retake_duration as number,
+      retakeMode: d.retake_mode as "replace_audio" | "replace_video" | "replace_audio_and_video",
+      resolution: "1080p",
+      aspectRatio: (d.aspect_ratio as "16:9" | "9:16" | undefined) ?? "16:9",
+      fps: (d.fps as 24 | 25 | 48 | 50 | undefined) ?? 25,
+      generateAudio: (d.generate_audio as boolean | undefined) ?? true,
+      cameraMotion: (d.camera_motion as
+        | "dolly_in" | "dolly_out" | "dolly_left" | "dolly_right"
+        | "jib_up" | "jib_down" | "static" | "focus_shift" | "none"
+        | undefined) ?? "none",
+      reconcileOpts: {
+        onTaskCreated: makeOnTaskCreated(ctx.jobId, providerKindForVideoModel("ltx-2.3-pro")),
+      },
+    })
+  } finally {
+    ramp.stop()
+  }
+
+  const r2Url = await uploadVideoMaybeWatermark(
+    result.videoUrl,
+    ctx.jobId,
+    ctx.jobUserId,
+    ctx.shouldWatermark,
+  )
+  await setJobProgress(job, ctx.jobId, 100)
+  const thumbUrl = await generateAndUploadThumbnail(r2Url, ctx.jobId, ctx.jobUserId)
+  const { ok } = await finalizeJobWithMedia({
+    jobId: ctx.jobId,
+    jobType: "video-retake",
+    result: {
+      url: result.videoUrl,
+      cost: result.cost,
+      providerUsed: "ltx-2.3-pro",
+    },
+    mediaUrl: r2Url,
+    extraOutputData: { thumbnailUrl: thumbUrl },
+  })
+  if (ok) {
+    console.log(
+      `[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ltx-2.3-pro, cost: $${result.cost?.toFixed(6) ?? "N/A"})`,
+    )
+  }
 }
 
 const handleFaceSwap: HandlerFn = async function handleFaceSwap(job, ctx) {
@@ -847,6 +1087,7 @@ export const videoAIHandlers: Record<string, HandlerFn> = {
   "motion-transfer": handleMotionTransfer,
   "video-upscale": handleVideoUpscale,
   "extend-video": handleExtendVideo,
+  "video-retake": handleVideoRetake,
   "face-swap": handleFaceSwap,
   "generate-mask": handleGenerateMask,
 }

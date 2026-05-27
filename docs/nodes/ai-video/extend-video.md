@@ -19,30 +19,44 @@ The Extend Video node continues a previously generated video by appending new co
 |----------|-------------|
 | veo-extend | Model: fast (VEO 3.1 Fast) or quality (VEO 3.1 Quality) |
 | runway-extend | Quality: 720p or 1080p |
+| ltx-2.3-pro | Extend mode: `start` (prepend before clip) or `end` (append after clip, default); duration: 1–20s of new footage to add |
 
 ## Inputs & Outputs
 
 **Inputs:**
-- Video (required) — upstream VEO or Runway generated video (must come from a VEO or Runway generation node)
+- Video (required) — upstream VEO, Runway, or LTX 2.3 Pro generated video. VEO and Runway extends require the original provider task ID (so the source must come from the corresponding generation node). LTX 2.3 Pro accepts any video URL.
 
 **Outputs:**
 - Extended video URL
+
+## Providers
+
+| Provider | Source video must come from | Extend mode | Duration cap | Resolution |
+|---|---|---|---|---|
+| `veo-extend` | VEO generation node | append-only | provider-fixed | 720p / 1080p |
+| `runway-extend` | Runway generation node | append-only | provider-fixed | 720p / 1080p |
+| `ltx-2.3-pro` | Any video URL | `start` or `end` | +1–20s of new footage per run (no cumulative cap; chain extends to go further) | 1080p |
+
+LTX 2.3 Fast does **not** support extend mode — only Pro extends. The `extend_mode` field controls whether the new footage is prepended (`start`) or appended (`end`, default).
+
 ## Best Practices
 
-- The source video must come from a VEO or Runway generation node — this node cannot extend arbitrary uploaded videos
-- Write prompts that describe the continuation, not the original content
-- Use "fast" mode for iteration, "quality" for final output
-- Chain multiple Extend Video nodes to create progressively longer content
+- For VEO / Runway: the source video must come from the matching generation node — this node cannot extend arbitrary uploaded videos for those providers.
+- For LTX 2.3 Pro: any video URL works; use `extend_mode: "start"` to add a lead-in, `extend_mode: "end"` (default) to add a continuation.
+- Write prompts that describe the continuation, not the original content.
+- Use "fast" mode for iteration, "quality" for final output (VEO).
+- Chain multiple Extend Video nodes to create progressively longer content — each LTX extend adds up to 20s, so two chained runs give +40s.
 
 ## Common Use Cases
 
-- Extend a 5-second VEO clip into a 15+ second video
-- Continue a scene with a new action or direction change
-- Build longer narratives by chaining extensions
-- Create variations of how a scene continues
+- Extend a 5-second VEO clip into a 15+ second video.
+- Continue a scene with a new action or direction change.
+- Build longer narratives by chaining extensions.
+- Prepend an establishing shot in front of a hero clip (LTX 2.3 Pro with `extend_mode: "start"`).
+- Create variations of how a scene continues.
 
 ## Tips
 
-- Use "fast" mode for draft iterations and "quality" for final renders
-- The prompt for extension should describe what happens next, not repeat what already exists
-- Each extension adds roughly the same duration as the original clip
+- Use "fast" mode for draft iterations and "quality" for final renders (VEO).
+- The prompt for extension should describe what happens next (or, for `start` mode, what happens before).
+- Each VEO/Runway extension adds roughly the same duration as the original clip; LTX 2.3 Pro extensions add exactly the user-specified duration (up to +20s per run).

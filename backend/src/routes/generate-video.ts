@@ -16,6 +16,7 @@ import { formatZodError } from "../lib/zod-error.js"
 export const generateVideoBody = z.object({
   imageUrl: safeUrlSchema.optional(),  // Optional in VEO REFERENCE_2_VIDEO mode
   endFrameUrl: safeUrlSchema.optional(),
+  last_frame_image: safeUrlSchema.optional(),  // LTX image_to_video end-frame URL (snake_case)
   audioUrl: safeUrlSchema.optional(),
   prompt: z.string().max(2500).optional(),
   userPrompt: z.string().max(8000).optional(),
@@ -209,12 +210,19 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     )
 
     const mcpClient = extractMcpClient(req.body)
+    // job_type is required for the reconcile cron to finalise the job
+    // correctly — `lib/reconcile/replicate.ts` reads job_type to dispatch
+    // into the right VIDEO_TYPES bucket in job-finalize.ts. Without it,
+    // reconcile defaults to "generate-image" and tries to upload an LTX
+    // video as an image. Always "image-to-video" here — this route only
+    // serves i2v; the t2v route is `/v1/text-to-video`.
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
+        job_type: "image-to-video",
         status: "pending",
         input_data: buildJobInputData(parsed.data, "image-to-video"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),

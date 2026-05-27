@@ -187,7 +187,8 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
 | [Sora Storyboard](./ai-video/sora-storyboard.md) | Multi-shot video from scene descriptions | Create multi-scene video with per-shot control |
 | [Motion Transfer](./ai-video/motion-transfer.md) | Apply video motion to static character | Transfer movement from reference video to character image |
-| [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO or Runway-generated video with new directions |
+| [Extend Video](./ai-video/extend-video.md) | Continue video generation with new prompt | Extend VEO, Runway, or LTX 2.3 Pro video with new footage at the start or end |
+| [Video Retake](./ai-video/video-retake.md) | Replace a time window of an existing video — audio, video, or both (LTX 2.3 Pro) | Surgically fix a few seconds of dialogue, repaint a botched shot, or re-score a specific beat |
 
 ---
 

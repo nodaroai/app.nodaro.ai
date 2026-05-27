@@ -109,6 +109,14 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // not the KIE registry. It's in IMAGE_TO_VIDEO_PROVIDERS for Zod/UI but
   // dispatched via the replicate provider directly in the i2v worker.
   "kling-3-omni",
+  // Lightricks LTX 2.3 (Pro + Fast) — one Replicate model id per variant
+  // with a `task` field switching text/image/audio. Dispatched explicitly
+  // at the top of handleImageToVideo / handleTextToVideo via
+  // `dispatchLtxIfRequested` in backend/src/workers/handlers/video-ai.ts.
+  // Listed in both IMAGE_TO_VIDEO_PROVIDERS and TEXT_TO_VIDEO_PROVIDERS for
+  // Zod/UI but NOT registered in KIE_VIDEO_MODELS / KIE_TEXT_TO_VIDEO_MODELS.
+  "ltx-2.3-pro",
+  "ltx-2.3-fast",
 ])
 
 /**

@@ -83,12 +83,16 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     )
 
     const mcpClient = extractMcpClient(req.body)
+    // job_type powers the reconcile cron's correct finalization path —
+    // see lib/reconcile/replicate.ts (defaults to "generate-image" when
+    // null, which mis-uploads videos as images).
     const { data: job, error } = await supabase
       .from("jobs")
       .insert({
         workflow_id: extractWorkflowId(req.body),
         force_private: extractForcePrivate(req.body) || undefined,
         user_id: userId,
+        job_type: "text-to-video",
         status: "pending",
         input_data: buildJobInputData(parsed.data, "text-to-video"),
         ...(mcpClient ? { mcp_client: mcpClient } : {}),

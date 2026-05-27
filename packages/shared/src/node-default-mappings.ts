@@ -189,6 +189,10 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "happyhorse-edit":     { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "kling-3-omni":        { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "wan-videoedit":       { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
+  // Lightricks LTX 2.3 — 1080p / 2k / 4k (lowercase, matching VIDEO_RESOLUTION_OPTIONS).
+  // `field: "resolution"` is mandatory — see Provider Enum Sync pitfall 4.
+  "ltx-2.3-pro":         { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
+  "ltx-2.3-fast":        { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
 }
 
 const ASPECT_PASSTHROUGH_PROVIDERS = new Set([

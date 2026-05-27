@@ -31,6 +31,7 @@ import {
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
+  runVideoRetake,
   faceSwapApi,
   videoSfx,
   generateMask,
@@ -111,6 +112,7 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
+  VideoRetakeData,
   FaceSwapData,
   VideoSfxNodeData,
   GenerateMaskData,
@@ -4142,6 +4144,37 @@ export function executeNode(
 
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
+    const isLtx = evData.provider === "ltx-2.3-pro";
+
+    // ─── LTX 2.3 Pro path ───────────────────────────────────────────────
+    // Replicate-hosted, takes a raw videoUrl + extendMode + duration. No
+    // kieTaskId, no prompt requirement (LTX retake takes optional prompt
+    // for guidance only). Matches the orchestrator's payload-builder LTX
+    // branch (services/workflow-engine/payload-builder.ts case "extend-video"
+    // -> LTX branch).
+    if (isLtx) {
+      const videoUrl = inputs.videoUrl as string | undefined;
+      if (!videoUrl) {
+        toast.error(`Node "${evData.label}": no upstream video. Wire a video into the left handle.`);
+        return Promise.reject(new Error("No videoUrl for LTX extend"));
+      }
+      return runProcessingNode(
+        node.id,
+        () =>
+          extendVideo({
+            videoUrl,
+            provider: "ltx-2.3-pro",
+            extendMode: evData.extendMode ?? "end",
+            duration: evData.duration ?? 8,
+            userId: ctx.userId,
+          }),
+        "generatedVideoUrl",
+        "Extend Video",
+        ctx,
+      );
+    }
+
+    // ─── KIE-based path (veo-extend, runway-extend) ───────────────────
     // Manual wins — see gen-image note above.
     let prompt = overridePrompt ?? resolveTextRefs(evData.prompt, refMap) ?? inputs.prompt;
 
@@ -4179,6 +4212,53 @@ export function executeNode(
         }),
       "generatedVideoUrl",
       "Extend Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "video-retake") {
+    const vrData = node.data as unknown as VideoRetakeData;
+    const videoUrl = inputs.videoUrl as string | undefined;
+    if (!videoUrl) {
+      toast.error(`Node "${vrData.label}": no upstream video. Wire a video into the left handle.`);
+      return Promise.reject(new Error("video-retake requires a video input"));
+    }
+    // Manual prompt wins (mirror extend-video); fall back to text-ref resolution
+    // then to the inputs.prompt wired from upstream text/picker sources.
+    let prompt = overridePrompt ?? resolveTextRefs(vrData.prompt, refMap) ?? inputs.prompt;
+    // Look/camera-motion pickers wired to the `look` target handle are
+    // parameter nodes (PARAMETER_NODE_TYPES) — the resolver intentionally
+    // skips them so they don't overwrite the user's manual prompt. The
+    // cinematography helper composes them into structured hint clauses
+    // here, matching extend-video / generate-video behavior.
+    {
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
+        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
+    setUserPromptTemplate(vrData.prompt?.trim() || undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        runVideoRetake({
+          videoUrl,
+          prompt: prompt || "",
+          retakeStartTime: vrData.retakeStartTime,
+          retakeDuration: vrData.retakeDuration,
+          retakeMode: vrData.retakeMode,
+          aspectRatio: vrData.aspectRatio ?? "16:9",
+          fps: vrData.fps ?? 25,
+          generateAudio: vrData.generateAudio ?? true,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Retake Video",
       ctx,
     );
   }

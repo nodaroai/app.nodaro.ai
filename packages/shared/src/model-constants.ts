@@ -304,6 +304,8 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "happyhorse-ref2v",
   "runway-kie",
   "kling-3-omni",
+  "ltx-2.3-pro",
+  "ltx-2.3-fast",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -332,6 +334,8 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "wan-2.7-t2v",
   "happyhorse",
   "runway-kie",
+  "ltx-2.3-pro",
+  "ltx-2.3-fast",
   // Replicate disabled
   // "runway",
   // "pika",
@@ -378,6 +382,7 @@ export type VideoUpscaleProvider = typeof VIDEO_UPSCALE_PROVIDERS[number]
 export const EXTEND_VIDEO_PROVIDERS = [
   "veo-extend",
   "runway-extend",
+  "ltx-2.3-pro",
 ] as const
 export type ExtendVideoProvider = typeof EXTEND_VIDEO_PROVIDERS[number]
 

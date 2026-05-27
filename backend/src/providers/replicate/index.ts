@@ -11,6 +11,8 @@ import type { ProviderInfo } from "../provider.interface.js"
 import { ReplicateImageProvider, REPLICATE_IMAGE_MODEL_IDS } from "./image.js"
 import { ReplicateVideoProvider } from "./video.js"
 
+const LTX_VIDEO_MODEL_IDS = ["ltx-2.3-pro", "ltx-2.3-fast"] as const
+
 const replicateInfo: ProviderInfo = {
   id: "replicate",
   name: "Replicate",
@@ -18,8 +20,8 @@ const replicateInfo: ProviderInfo = {
   supportedModels: {
     "image-generation": REPLICATE_IMAGE_MODEL_IDS,
     "image-editing": [],
-    "image-to-video": [],
-    "text-to-video": [],
+    "image-to-video": [...LTX_VIDEO_MODEL_IDS],
+    "text-to-video": [...LTX_VIDEO_MODEL_IDS],
     "video-to-video": [],
     "motion-transfer": [],
     "video-upscale": [],
@@ -39,3 +41,20 @@ export function registerReplicateProviders(): void {
     video: new ReplicateVideoProvider(),
   })
 }
+
+// Re-export LTX 2.3 task functions so other backend code can import them
+// from "./providers/replicate/index.js"
+export {
+  runLtxTextToVideo,
+  runLtxImageToVideo,
+  runLtxAudioToVideo,
+  runLtxExtend,
+  runLtxRetake,
+} from "./ltx-video.js"
+export type {
+  LtxTextToVideoArgs,
+  LtxImageToVideoArgs,
+  LtxAudioToVideoArgs,
+  LtxExtendArgs,
+  LtxRetakeArgs,
+} from "./ltx-video.js"

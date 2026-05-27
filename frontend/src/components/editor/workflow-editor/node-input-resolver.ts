@@ -387,6 +387,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "face-swap",
   "suno-music-video",
   "combine-videos",
@@ -567,7 +568,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
   // entries so llm-chat reference routing treats its output as video.
   "generate-video",
-  "extend-video", "face-swap", "trim-video", "combine-videos", "upload-video",
+  "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
   "video-upscale", "video-composer", "merge-video-audio",

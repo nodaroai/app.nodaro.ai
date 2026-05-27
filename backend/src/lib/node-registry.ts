@@ -232,6 +232,32 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
+  {
+    type: "video-retake",
+    label: "Retake Video",
+    category: "ai-video",
+    description:
+      "Replace a portion of an existing video — audio only, video only, or both — using Lightricks LTX 2.3 Pro's `retake` task. Billed per second of replaced material.",
+    outputType: "video",
+    // Dynamic: `ltx-2.3-pro-retake:per-second × retakeDuration`. The route
+    // computes the final reservation; this range covers 2s (minimum) to
+    // ~10s of replacement at the seeded per-second rate.
+    creditCost: "100-500",
+    providers: ["ltx-2.3-pro"],
+    capabilities: ["partial-replace", "audio-only", "video-only", "audio-and-video"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text" },
+        { key: "retakeStartTime", type: "number", required: true },
+        { key: "retakeDuration", type: "number", required: true },
+        { key: "retakeMode", type: "select", required: true, options: ["replace_audio", "replace_video", "replace_audio_and_video"] },
+        { key: "aspectRatio", type: "select", options: ["16:9", "9:16"] },
+        { key: "fps", type: "select", options: ["24", "25", "48", "50"] },
+        { key: "generateAudio", type: "boolean" },
+      ],
+    },
+  },
 
   {
     type: "generate-mask",

@@ -314,6 +314,37 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-3-omni:5s": 32,         // ~$0.50 est
   "kling-3-omni:10s": 63,        // ~$1.00 est
   "kling-3-omni:15s": 94,        // ~$1.50 est
+  // ── Lightricks LTX 2.3 (Replicate) — placeholder credit values, replace with Replicate $/sec rate before merge ──
+  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-pro": 300,            // placeholder default = 1080p:6s
+  "ltx-2.3-pro:1080p:6s": 300,
+  "ltx-2.3-pro:1080p:8s": 400,
+  "ltx-2.3-pro:1080p:10s": 500,
+  "ltx-2.3-pro:2k:6s": 600,
+  "ltx-2.3-pro:2k:8s": 800,
+  "ltx-2.3-pro:2k:10s": 1000,
+  "ltx-2.3-pro:4k:6s": 1200,
+  "ltx-2.3-pro:4k:8s": 1600,
+  "ltx-2.3-pro:4k:10s": 2000,
+  // Fast: text/image→video, 1080p/2k/4k, durations 6–20s (1080p only past 10s). Base = 1080p:6s.
+  "ltx-2.3-fast": 150,           // placeholder default = 1080p:6s
+  "ltx-2.3-fast:1080p:6s": 150,
+  "ltx-2.3-fast:1080p:8s": 200,
+  "ltx-2.3-fast:1080p:10s": 250,
+  "ltx-2.3-fast:1080p:12s": 300,
+  "ltx-2.3-fast:1080p:14s": 350,
+  "ltx-2.3-fast:1080p:16s": 400,
+  "ltx-2.3-fast:1080p:18s": 450,
+  "ltx-2.3-fast:1080p:20s": 500,
+  "ltx-2.3-fast:2k:6s": 300,
+  "ltx-2.3-fast:2k:8s": 400,
+  "ltx-2.3-fast:2k:10s": 500,
+  "ltx-2.3-fast:4k:6s": 600,
+  "ltx-2.3-fast:4k:8s": 800,
+  "ltx-2.3-fast:4k:10s": 1000,
+  // LTX extend + retake (Pro only): credit math is `per-second × duration` at credit-guard time.
+  "ltx-2.3-pro-extend:per-second": 50,
+  "ltx-2.3-pro-retake:per-second": 50,
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
   // ── Video Extend ──
   ***REDACTED-OSS-SCRUB***
@@ -557,6 +588,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sadtalker": 9,
   "video-upscale": 19,
   "extend-video": 40,
+  // LTX 2.3 Pro retake — fallback for node-registry display and any
+  // defensive lookups when the route's computeCredits hook isn't reached.
+  // Real reservation uses `ltx-2.3-pro-retake:per-second × retakeDuration`.
+  "video-retake": 100,
   "roop-face-swap": 16,           // $0.25 Replicate × 1.25 / $0.02
   "generate-mask": 2,             // adirik/grounded-sam (Replicate) — segmentation mask
   "transcribe": 4,

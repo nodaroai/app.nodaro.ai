@@ -98,6 +98,7 @@ import {
   ExtendVideoConfig,
   SpeechToVideoConfig,
   FaceSwapConfig,
+  VideoRetakeConfig,
   TextToVideoConfig,
   GenerateVideoConfig,
   VideoSfxConfig,
@@ -310,6 +311,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "transcode-video": "Transcode Video",
   "manual-edit": "Manual Edit",
   "extend-video": "Extend Video",
+  "video-retake": "Retake Video",
   "face-swap": "Face Swap",
   "video-sfx": "Video SFX",
   "speech-to-video": "Speech to Video",
@@ -361,7 +363,7 @@ export const GENERATE_BUTTON_TYPES = new Set([
   "generate-script", "generate-image", "modify-image", "upscale-image", "remove-background", "generate-mask",
   "image-to-video", "video-to-video", "text-to-video", "generate-video", "text-to-speech",
   "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "forced-alignment", "generate-music", "motion-transfer", "lip-sync", "speech-to-video",
-  "video-upscale", "extend-video", "face-swap", "video-sfx", "suno-generate", "suno-cover", "suno-extend",
+  "video-upscale", "extend-video", "video-retake", "face-swap", "video-sfx", "suno-generate", "suno-cover", "suno-extend",
   "suno-lyrics", "suno-separate", "suno-music-video",
   "suno-mashup", "suno-replace-section", "suno-style-boost", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend",
   "llm-chat", "web-scrape",
@@ -553,6 +555,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "llm-chat": return <LLMChatConfig {...configProps} />
     case "video-upscale": return <VideoUpscaleConfig {...configProps} />
     case "extend-video": return <ExtendVideoConfig {...configProps} nodeId={selectedNodeId} />
+    case "video-retake": return <VideoRetakeConfig {...configProps} nodeId={selectedNodeId} />
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
     case "video-sfx": return <VideoSfxConfig {...configProps} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />

@@ -185,6 +185,7 @@ export const EXECUTABLE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "face-swap",
   "video-sfx",
   "generate-mask",
