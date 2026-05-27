@@ -403,6 +403,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro:60s": 240,    // 60s × 4 cr/sec
   "kling-avatar-pro:120s": 480,   // 120s × 4 cr/sec
   "kling-avatar-pro:300s": 1200,  // 300s × 4 cr/sec — 5-min ceiling
+  // ── Replicate MMAudio (video-sfx node) ──
+  // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "replicate-mmaudio":       1,  // base/legacy default (8s bucket)
+  "replicate-mmaudio:8s":    1,
+  "replicate-mmaudio:15s":   1,
+  "replicate-mmaudio:30s":   2,
+  "replicate-mmaudio:60s":   3,
+  "replicate-mmaudio:120s":  5,
+  "replicate-mmaudio:300s": 11,
   ***REDACTED-OSS-SCRUB***
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05

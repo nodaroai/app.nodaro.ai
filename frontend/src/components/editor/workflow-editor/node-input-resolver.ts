@@ -401,6 +401,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  "video-sfx",
 ]);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
@@ -572,6 +573,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "video-upscale", "video-composer", "merge-video-audio",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
+  "video-sfx",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([

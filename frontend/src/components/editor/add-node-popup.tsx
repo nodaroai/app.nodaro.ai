@@ -719,6 +719,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "AI",
     group: "Video",
   },
+  {
+    type: "video-sfx",
+    label: "Video SFX",
+    icon: <AudioWaveform className="h-4 w-4" />,
+    category: "AI",
+    group: "Video",
+    keywords: ["sfx", "foley", "sound effects", "mmaudio", "audio", "sound"],
+  },
   // AI — Audio & Speech
   {
     type: "text-to-speech",

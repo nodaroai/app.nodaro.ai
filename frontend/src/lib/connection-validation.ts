@@ -1,5 +1,6 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
+import { isValidVideoSfxConnection } from "./video-sfx-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import {
   isValidTextToSpeechConnection,
@@ -206,6 +207,19 @@ export function isValidWorkflowConnection(
         isVisualPickerType,
       )
     }
+  }
+
+  // Video SFX — enforce typed-handle compatibility. Mirrors generate-video
+  // wiring but uses the narrower predicate from video-sfx-handles.ts:
+  // prompt/negative accept text producers OR pickers; video accepts video
+  // producers; unknown handles return false.
+  if (targetType === "video-sfx" && connection.targetHandle) {
+    const sourceType = typeOf(connection.source)
+    return isValidVideoSfxConnection(
+      connection.targetHandle,
+      sourceType ?? "",
+      isVisualPickerType,
+    )
   }
 
   // FFmpeg / pure-processing nodes (trim-video, combine-videos,

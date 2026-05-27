@@ -26,7 +26,7 @@ const replicateInfo: ProviderInfo = {
     "lip-sync": [],
     "music-generation": [],
     "text-to-speech": [],
-    "sound-effect": [],
+    "sound-effect": ["replicate-mmaudio"],
     "audio-isolation": [],
     "transcription": [],
     "dialogue": [],

@@ -344,6 +344,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "video-upscale" ||
     type === "extend-video" ||
     type === "face-swap" ||
+    type === "video-sfx" ||
     type === "suno-music-video" ||
     type === "render-video"
   ) {
@@ -842,6 +843,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  "video-sfx",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",

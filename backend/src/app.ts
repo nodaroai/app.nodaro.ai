@@ -18,6 +18,7 @@ import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { mergeVideoAudioRoutes } from "./routes/merge-video-audio.js"
+import videoSfxRoutes from "./routes/video-sfx.js"
 import { trimAudioRoutes } from "./routes/trim-audio.js"
 import { trimVideoRoutes } from "./routes/trim-video.js"
 import { extractFrameRoutes } from "./routes/extract-frame.js"
@@ -243,6 +244,7 @@ export async function buildApp() {
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
   await app.register(mergeVideoAudioRoutes)
+  await app.register(videoSfxRoutes)
   await app.register(trimAudioRoutes)
   await app.register(trimVideoRoutes)
   await app.register(extractFrameRoutes)

@@ -2358,6 +2358,45 @@ export function buildPayload(
       }
     }
 
+    // Replicate MMAudio — generates synchronized SFX/foley/ambient audio for a
+    // video clip and merges it into the original. Three typed input handles:
+    // `video` (required, the clip to score), `prompt` (text describing the
+    // sound — text-prompt source or literal data field), `negative` (sounds
+    // to suppress; defaults to "music" so MMAudio doesn't synthesize a
+    // soundtrack instead of foley).
+    //
+    // `versions` (1-4) is the multi-take batch knob. The standalone route
+    // (`POST /v1/video-sfx`) fans this out into N jobs rows up front; here in
+    // the orchestrator we keep it in the payload so the worker layer can
+    // honor it the same way the standalone route does once orchestrator-side
+    // batching lands. node-executor creates ONE job per node — the worker
+    // re-reads `input_data` from the row, so writing `versions` into the
+    // payload propagates it via the input_data backfill in node-executor.
+    case "video-sfx": {
+      return {
+        jobName: "video-sfx",
+        queueName: "video-generation",
+        modelIdentifier: "replicate-mmaudio",
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined),
+          prompt: resolvedInputs.prompt ?? (data.prompt as string | undefined),
+          // `negative` handle takes precedence over the config field; default
+          // to "music" so MMAudio synthesizes SFX/foley rather than a score
+          // (mirrors the route's Zod default at `routes/video-sfx.ts:18`).
+          negativePrompt:
+            resolvedInputs.negativePrompt
+            ?? (data.negativePrompt as string | undefined)
+            ?? "music",
+          cfgStrength: (data.cfgStrength as number | undefined) ?? 4.5,
+          numSteps: (data.numSteps as number | undefined) ?? 25,
+          seed: data.seed as number | undefined,
+          versions: (data.versions as number | undefined) ?? 1,
+          usageLogId,
+        },
+      }
+    }
+
     case "video-to-video": {
       const v2vProvider = (data.provider as string) ?? "wan"
       // Resolve @-mentions in the v2v prompt. v2v has only a single

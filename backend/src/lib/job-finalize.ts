@@ -39,6 +39,7 @@ export type FinalizeJobType =
   | "generate-image" | "image-to-image" | "edit-image"
   | "image-to-video" | "text-to-video" | "video-to-video"
   | "motion-transfer" | "video-upscale" | "lip-sync" | "extend-video"
+  | "video-sfx"
   | "text-to-speech" | "text-to-audio" | "generate-music" | "voice-clone"
   | "audio-isolation" | "speech-to-text" | "generate-dialogue"
 
@@ -65,6 +66,7 @@ const IMAGE_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
 const VIDEO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([
   "image-to-video", "text-to-video", "video-to-video",
   "motion-transfer", "video-upscale", "lip-sync", "extend-video",
+  "video-sfx",
 ])
 
 const AUDIO_TYPES: ReadonlySet<FinalizeJobType> = new Set<FinalizeJobType>([

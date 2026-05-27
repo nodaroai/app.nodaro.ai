@@ -3,6 +3,7 @@ export { ToneConfig, StyleGuideConfig, ProviderConfig, SceneCountConfig, Duratio
 export { GenerateScriptConfig, QACheckConfig, ImageToTextConfig, ImageCriticConfig } from "./script-configs"
 export { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig, RemoveBackgroundConfig, GenerateMaskConfig } from "./image-configs"
 export { ImageToVideoConfig, VideoToVideoConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig, GenerateVideoConfig, ExtendVideoConfig, SpeechToVideoConfig, FaceSwapConfig } from "./video-configs"
+export { VideoSfxConfig } from "./video-sfx-config"
 export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDialogueConfig, VoiceChangerConfig, DubbingConfig, VoiceRemixConfig, VoiceDesignConfig, ForcedAlignmentConfig, SunoVoiceConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, SunoMusicVideoConfig, SunoMashupConfig, SunoReplaceSectionConfig, SunoStyleBoostConfig, SunoAddInstrumentalConfig, SunoAddVocalsConfig, SunoConvertWavConfig, SunoUploadExtendConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
 export { GenerateMusicConfig } from "./music-config"
 export { CombineVideosConfig, AddCaptionsConfig, ResizeVideoConfig, SocialMediaFormatConfig, TrimAudioConfig, SplitMediaConfig, MixAudioConfig, AdjustVolumeConfig, TrimVideoConfig, ExtractFrameConfig, SpeedRampConfig, LoopVideoConfig, FadeVideoConfig, TranscodeVideoConfig, ManualEditConfig } from "./processing-configs"

@@ -130,5 +130,14 @@ export function getHandleConnectionLimit(
     }
   }
 
+  // Video SFX — single video producer feeds the SFX generator. The prompt
+  // and negative handles accept multiple producers (text/picker fragments
+  // are concatenated upstream), so they are NOT capped here. MMAudio is the
+  // only provider today; if more providers are added, switch to a per-
+  // provider table the same way generate-video does above.
+  if (node.type === "video-sfx" && handleId === "video") {
+    return { limit: 1, providerLabel: "MMAudio", isMultiProviderMin: false }
+  }
+
   return null
 }

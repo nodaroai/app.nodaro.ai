@@ -8,6 +8,7 @@ import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
+import { videoSfxHandlers } from "./handlers/video-sfx.js"
 import { ffmpegHandlers } from "./handlers/ffmpeg.js"
 import { audioAIHandlers } from "./handlers/audio-ai.js"
 import { sunoHandlers } from "./handlers/suno.js"
@@ -18,6 +19,7 @@ import { tryInlineReconcile } from "./inline-reconcile.js"
 const allHandlers: Record<string, HandlerFn> = {
   ...imageAIHandlers,
   ...videoAIHandlers,
+  ...videoSfxHandlers,
   ...ffmpegHandlers,
   ...audioAIHandlers,
   ...sunoHandlers,

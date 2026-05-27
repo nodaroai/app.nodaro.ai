@@ -1684,6 +1684,62 @@ export type GenerateVideoNodeData =
     referenceImageOrder?: readonly string[]
   }
 
+/** Video SFX (Foley/Ambient) — Replicate mmaudio.
+ *
+ *  Generates synchronized SFX / foley / ambient audio for an input video clip
+ *  using zsxkib/mmaudio (single-shot Replicate dispatch — see
+ *  `backend/src/providers/replicate/sfx.ts`).
+ *
+ *  Pricing: duration-bucketed BASE credits (1cr ≤15s → 11cr ≤300s, pre-markup)
+ *  scaled by `versions` (1-4). The route's `probeDurationPreHandler` ffprobes
+ *  the resolved video URL up front; credit reservation uses
+ *  `bucketBaseCreditsFor(duration) * versions`. Backend Zod schema is
+ *  `VideoSfxBody` in `backend/src/routes/video-sfx.ts`.
+ *
+ *  Input wiring: `videoUrl` is NOT user-typed — it's resolved at execution
+ *  time from the connected video edge (mirrors how `lip-sync`/`video-to-video`
+ *  resolve their inputs). Empty string when no upstream is wired; the route
+ *  rejects on `z.string().url()`.
+ *
+ *  No upstream `provider` choice — `replicate-mmaudio` is the only model.
+ */
+export interface VideoSfxNodeData {
+  [key: string]: unknown
+  label: string
+  /** Fixed to `"replicate-mmaudio"` (only supported model). Reserved as a field
+   *  so future MMAudio variants can join without breaking workflow JSON. */
+  provider: "replicate-mmaudio"
+  /** Number of distinct SFX takes to generate (1-4). Linear credit multiplier
+   *  applied by `creditGuard.computeCredits` in the route. */
+  versions: number
+  /** Free-form description of the desired SFX. Optional in the route schema
+   *  (max 2000 chars) — empty/omitted = pure foley driven by the video. */
+  prompt: string
+  /** Negative prompt — defaults to "music" (Replicate-side default) to keep
+   *  the model from sneaking a soundtrack in. Max 500 chars. */
+  negativePrompt: string
+  /** Classifier-free guidance strength (1-10, default 4.5). Higher = closer
+   *  to prompt; lower = more grounded in the video. */
+  cfgStrength: number
+  /** Diffusion steps (10-50, default 25). Higher = slower + cleaner. */
+  numSteps: number
+  /** Optional deterministic seed (int). Omitted = random per generation. */
+  seed?: number
+  /** Resolved at execution time from the connected video edge — NEVER persisted
+   *  on the node; only present transiently in the payload sent to the route. */
+  videoUrl?: string
+  activeResultIndex?: number
+  generatedResults?: GeneratedResult[]
+  generatedVideoUrl?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings: FieldMappings
+  videoPlayState?: "loop" | "paused" | "stopped"
+  pausedAtTime?: number
+}
+
 export type VideoToVideoData = {
   [key: string]: unknown
   label: string
@@ -4066,6 +4122,7 @@ export type SceneNodeData =
   | VideoToVideoData
   | TextToVideoData
   | GenerateVideoNodeData
+  | VideoSfxNodeData
   | TextToSpeechData
   | QACheckData
   | ImageCriticData
@@ -4228,6 +4285,7 @@ export type SceneNodeType =
   | "video-to-video"
   | "text-to-video"
   | "generate-video"
+  | "video-sfx"
   | "text-to-speech"
   | "qa-check"
   | "image-critic"
@@ -5083,6 +5141,33 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
     ],
+  },
+  {
+    // Replicate mmaudio — synchronized SFX/foley for a video clip.
+    // Duration-bucketed credit cost (1cr ≤15s → 11cr ≤300s pre-markup, ×versions).
+    // The `creditCost: 2` here is a coarse popup-time display fallback only;
+    // real cost is computed at run-time by the route's `creditGuard.computeCredits`
+    // (see `backend/src/routes/video-sfx.ts`) and surfaced via `useModelCredits()`.
+    type: "video-sfx",
+    label: "Video SFX",
+    category: "ai",
+    creditCost: 2,
+    inputs: ["prompt", "negative", "video"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Video SFX",
+      provider: "replicate-mmaudio",
+      versions: 1,
+      prompt: "",
+      negativePrompt: "music",
+      cfgStrength: 4.5,
+      numSteps: 25,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoSfxNodeData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
   },
   {
     type: "video-to-video",

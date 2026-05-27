@@ -154,6 +154,27 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "video-sfx",
+    label: "Video SFX",
+    category: "ai-video",
+    description:
+      "Generate synchronized SFX / foley / ambient audio for a video clip using Replicate's mmaudio. Credit cost scales with input clip duration (1cr ≤15s → 11cr ≤300s, pre-markup).",
+    outputType: "video",
+    // Duration-bucketed pricing — see `STATIC_CREDIT_COSTS["replicate-mmaudio:*"]`
+    // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
+    // Range is pre-markup; user-visible cost is bucket × (1 + cost_markup_percent/100) × versions.
+    creditCost: "1-11",
+    providers: ["replicate-mmaudio"],
+    capabilities: ["sound-effect"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text" },
+        { key: "negativePrompt", type: "text" },
+      ],
+    },
+  },
+  {
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",

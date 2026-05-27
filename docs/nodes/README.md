@@ -182,6 +182,7 @@ Generate video from images, text, or other video using state-of-the-art models.
 | [Text to Video](./ai-video/text-to-video.md) (legacy) | Redirects to Generate Video; legacy `text-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |
 | [Lip Sync](./ai-video/lip-sync.md) | Sync audio to character face | Create talking head videos from portrait + audio |
+| [Video SFX](./ai-video/video-sfx.md) | Generate synced sound effects, foley, or ambience for a video (replaces existing audio) | Add SFX or atmosphere to silent or AI-generated clips via Replicate's mmaudio |
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |
 | [Speech to Video](./ai-video/speech-to-video.md) | Generate video from speech (Wan 2.2) | Create video driven by speech audio input |
 | [Sora Storyboard](./ai-video/sora-storyboard.md) | Multi-shot video from scene descriptions | Create multi-scene video with per-shot control |
