@@ -180,6 +180,44 @@ exports[`per-node skill file snapshots > generate-music.md auto-gen blocks match
 }
 `;
 
+exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match snapshot 1`] = `
+{
+  "examples": "## Worked example
+
+\`\`\`json
+{
+  "id": "generate-video-1",
+  "type": "generate-video",
+  "position": {
+    "x": 0,
+    "y": 0
+  },
+  "data": {
+    "label": "Generate Video",
+    "provider": "seedance-2-fast",
+    "duration": 5,
+    "fieldMappings": {}
+  }
+}
+\`\`\`",
+  "node-data-shape": "**Type:** \`generate-video\`
+**Category:** ai
+**Credit cost:** 20
+**Inputs (target handles):** \`startFrame\`, \`endFrame\`, \`audio\`
+**Outputs (source handles):** \`video\`
+
+**Default data:**
+\`\`\`json
+{
+  "label": "Generate Video",
+  "provider": "seedance-2-fast",
+  "duration": 5,
+  "fieldMappings": {}
+}
+\`\`\`",
+}
+`;
+
 exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match snapshot 1`] = `
 {
   "examples": "## Worked example

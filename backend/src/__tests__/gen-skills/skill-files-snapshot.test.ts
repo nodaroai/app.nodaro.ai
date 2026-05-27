@@ -8,6 +8,10 @@ describe("per-node skill file snapshots", () => {
   const representativeTypes = [
     "generate-image",
     "image-to-video",
+    // Unified video node — pinned alongside i2v so its auto-gen blocks are
+    // checked on every run. Drift on the data-shape / mcp-call / examples
+    // sections gets caught even though it isn't in NODE_TYPE_TO_TOOL.
+    "generate-video",
     "generate-music",
     "loop",
     "trim-video",

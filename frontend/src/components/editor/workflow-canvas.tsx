@@ -29,6 +29,7 @@ import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
+import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { isPickerNodeType } from "@/lib/picker-handles"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
@@ -833,11 +834,21 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const edgeModeLabel = getOutputModeLabel(edge, sourceNode, targetNode)
       const edgeRangeLabel = getEdgeRangeLabel(edge)
 
+      // "Disabled by provider" — true when the target handle has cap 0 for
+      // the consumer's current model. Drives the dashed/grayed edge styling
+      // in AnimatedFlowEdge. Recomputes every time `nodes` changes (which
+      // includes provider switches via updateNodeData), so the live state
+      // tracks the panel selection without explicit edge data writes.
+      const targetHandleLimit = edge.targetHandle
+        ? getHandleConnectionLimit(targetNode, edge.targetHandle)
+        : null
+      const disabledByProvider = targetHandleLimit?.limit === 0
+
       return {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: resolveEffectiveOutputMode(edge, sourceNode, targetNode), sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: resolveEffectiveOutputMode(edge, sourceNode, targetNode), sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,

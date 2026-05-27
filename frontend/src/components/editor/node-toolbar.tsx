@@ -114,9 +114,8 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "generate-mask", label: "Generate Mask", icon: <VenetianMask className="h-4 w-4" />, category: "AI", group: "Image" },
   { type: "image-to-text", label: "Describe Image", icon: <Eye className="h-4 w-4" />, category: "AI", group: "Image" },
   // AI — Video
-  { type: "image-to-video", label: "Image to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
+  { type: "generate-video", label: "Generate Video", icon: <Clapperboard className="h-4 w-4" />, category: "AI", group: "Video", keywords: ["image-to-video", "text-to-video", "i2v", "t2v", "video"] },
   { type: "video-to-video", label: "Video to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
-  { type: "text-to-video", label: "Text to Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "generative-pipeline", label: "Story → Video", icon: <Film className="h-4 w-4" />, category: "AI", group: "Pipeline", keywords: ["story", "pipeline", "trailer", "short film", "music video", "reel", "commercial", "cinematic"] },
   { type: "lip-sync", label: "Lip Sync", icon: <Users className="h-4 w-4" />, category: "AI", group: "Video" },
   { type: "speech-to-video", label: "Speech to Video", icon: <AudioLines className="h-4 w-4" />, category: "AI", group: "Video" },

@@ -174,6 +174,7 @@ describe("expandLoopResults — output URL field mapping", () => {
       "image-to-video",
       "video-to-video",
       "text-to-video",
+      "generate-video",
       "video-upscale",
       "motion-transfer",
       "lip-sync",

@@ -19,7 +19,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render } from "@testing-library/react"
 import { GenerateImageConfig, ModifyImageConfig } from "../image-configs"
-import { ImageToVideoConfig, TextToVideoConfig } from "../video-configs"
+import { ImageToVideoConfig, TextToVideoConfig, GenerateVideoConfig } from "../video-configs"
 import { LipSyncConfig } from "../audio-configs"
 
 // =============================================================================
@@ -242,6 +242,17 @@ function baseImageToVideoData(overrides: Partial<any> = {}): any {
 function baseTextToVideoData(overrides: Partial<any> = {}): any {
   return {
     label: "Text to Video",
+    prompt: "test",
+    provider: "seedance-2-fast",
+    duration: 5,
+    fieldMappings: {},
+    ...overrides,
+  }
+}
+
+function baseGenerateVideoData(overrides: Partial<any> = {}): any {
+  return {
+    label: "Generate Video",
     prompt: "test",
     provider: "seedance-2-fast",
     duration: 5,
@@ -632,5 +643,57 @@ describe("LipSyncConfig — provider-snap useEffect", () => {
     expect(onUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ resolution: expect.anything() }),
     )
+  })
+})
+
+// =============================================================================
+// GenerateVideoConfig — unified i2v + t2v config panel (Task 7.2)
+// =============================================================================
+
+describe("GenerateVideoConfig — provider-snap useEffect", () => {
+  it("snaps duration when invalid for current provider (minimax → 5)", () => {
+    // minimax supports [5] only — stale duration=10 must snap to 5.
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "minimax", duration: 10 })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.duration).toBe(5)
+  })
+
+  it("snaps invalid resolution to first valid for the current provider (veo3 480p → 720p)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "veo3", resolution: "480p" })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ resolution: "720p" }))
+  })
+
+  it("clears resolution when provider has no resolution lever (minimax)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "minimax", resolution: "1080p" })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ resolution: undefined }))
+  })
+
+  it("preserves resolution when valid for the current provider (veo3 + 1080p)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "veo3", resolution: "1080p" })
+    render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resolution: expect.anything() }),
+    )
+  })
+
+  it("renders without crashing for t2v-only providers in the unified picker (grok)", () => {
+    // `grok` only appears in VIDEO_T2V_MODELS; verify GenerateVideoConfig (which
+    // uses VIDEO_GEN_MODELS = i2v ∪ t2v) still mounts and reads its provider.
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "grok", duration: 6 })
+    expect(() => render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)).not.toThrow()
+  })
+
+  it("renders without crashing for i2v-only providers (kling-master)", () => {
+    const onUpdate = vi.fn()
+    const data = baseGenerateVideoData({ provider: "kling-master", duration: 5 })
+    expect(() => render(<GenerateVideoConfig {...commonProps(onUpdate, data)} />)).not.toThrow()
   })
 })

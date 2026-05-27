@@ -269,11 +269,15 @@ export function getModelIdentifier(node: WorkflowNode): string {
     )
   }
 
-  // Video nodes with duration/audio-based variable pricing or T2V cost overrides
-  if (nodeType === "image-to-video" || nodeType === "text-to-video") {
+  // Video nodes with duration/audio-based variable pricing or T2V cost overrides.
+  // generate-video uses i2v as the FE display default — the backend
+  // payload-builder swaps for t2v dynamically at execution based on connected
+  // inputs (matches generate-video-node.tsx's credit-estimate behavior).
+  if (nodeType === "image-to-video" || nodeType === "text-to-video" || nodeType === "generate-video") {
     const duration = data.duration as number | string | undefined
     const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
-    const videoNodeType = nodeType as "image-to-video" | "text-to-video"
+    const videoNodeType: "image-to-video" | "text-to-video" =
+      nodeType === "text-to-video" ? "text-to-video" : "image-to-video"
     const resolution = data.resolution as string | undefined
     const refVideos = data.referenceVideoUrls as string[] | undefined
     const hasVideoRef = Array.isArray(refVideos) && refVideos.length > 0

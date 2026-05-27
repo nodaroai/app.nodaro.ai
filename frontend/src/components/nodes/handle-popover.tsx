@@ -22,7 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import { useHandleConnections, type HandleConnection } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getNodeThumbnailUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
+import { getNodeThumbnailUrl, getNodeVideoUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
 import { buildAdjacency, collectDescendants, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
@@ -51,6 +51,7 @@ interface HandlePopoverProps {
 
 interface EnrichedConnection extends HandleConnection {
   readonly thumbnailUrl: string | undefined
+  readonly videoUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
 }
 
@@ -63,6 +64,7 @@ interface CandidateNode {
   readonly nodeLabel: string
   readonly nodeType: string
   readonly thumbnailUrl: string | undefined
+  readonly videoUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
   /** Human-readable chip label for source-direction rows — e.g. "Start state"
    *  rather than the raw handleId "startState". Falls back to the raw
@@ -177,6 +179,7 @@ export function HandlePopover({
       return {
         ...c,
         thumbnailUrl: consumerIsTileGridPicker ? undefined : getNodeThumbnailUrl(n),
+        videoUrl: consumerIsTileGridPicker ? undefined : getNodeVideoUrl(n),
         pickerVisual: consumerIsTileGridPicker
           ? <Workflow className="w-4 h-4 text-muted-foreground" aria-hidden />
           : getNodePickerVisual(n),
@@ -331,6 +334,7 @@ export function HandlePopover({
             nodeLabel: ((n.data as { label?: string } | undefined)?.label ?? t) as string,
             nodeType: t,
             thumbnailUrl: candidateIsTileGridPicker ? undefined : getNodeThumbnailUrl(n),
+            videoUrl: candidateIsTileGridPicker ? undefined : getNodeVideoUrl(n),
             pickerVisual,
             targetHandleLabel: labelByHandle.get(`${t}:${targetHandleId}`),
             source: nodeId,
@@ -393,6 +397,7 @@ export function HandlePopover({
         nodeLabel: ((n.data as { label?: string } | undefined)?.label ?? t) as string,
         nodeType: t,
         thumbnailUrl: getNodeThumbnailUrl(n),
+        videoUrl: getNodeVideoUrl(n),
         pickerVisual: getNodePickerVisual(n),
         source: n.id,
         sourceHandle: outputHandle,
@@ -649,6 +654,7 @@ function ConnectionRow({ connection, onJump, onDisconnect, onHoverEdge, dragHand
       {dragHandle}
       <ThumbnailButton
         thumbnailUrl={connection.thumbnailUrl}
+        videoUrl={connection.videoUrl}
         pickerVisual={connection.pickerVisual}
         label={connection.otherNodeLabel}
         onJump={onJump}
@@ -769,6 +775,7 @@ function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowP
     <li className="group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent/60 opacity-60 hover:opacity-100 transition-opacity">
       <ThumbnailButton
         thumbnailUrl={candidate.thumbnailUrl}
+        videoUrl={candidate.videoUrl}
         pickerVisual={candidate.pickerVisual}
         label={candidate.nodeLabel}
         onJump={onJump}
@@ -838,11 +845,13 @@ function OverflowDivider({ providerLabel }: { providerLabel: string }) {
 
 function ThumbnailButton({
   thumbnailUrl,
+  videoUrl,
   pickerVisual,
   label,
   onJump,
 }: {
   thumbnailUrl: string | undefined
+  videoUrl: string | undefined
   pickerVisual: ReactNode | undefined
   label: string
   onJump: () => void
@@ -897,13 +906,24 @@ function ThumbnailButton({
         }}
         onMouseEnter={() => {
           // Only show preview when there's actual visual content to preview.
-          if (!thumbnailUrl && !pickerVisual) return
+          if (!thumbnailUrl && !videoUrl && !pickerVisual) return
           const rect = btnRef.current?.getBoundingClientRect()
           if (rect) setPreviewAnchor(rect)
         }}
         onMouseLeave={() => setPreviewAnchor(null)}
       >
-        {thumbnailUrl ? (
+        {videoUrl ? (
+          <video
+            src={videoUrl}
+            poster={thumbnailUrl}
+            className="w-full h-full object-cover pointer-events-none"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : thumbnailUrl ? (
           // Cloudflare image-resize transform for cdn.nodaro.ai URLs.
           // Logical 32px × 3 (retina) = 96px wide variant; pass-through
           // for non-R2 URLs (e.g., http(s) uploads still hosted directly).
@@ -921,9 +941,15 @@ function ThumbnailButton({
           <ImageIcon className="w-3.5 h-3.5 text-muted-foreground/60 pointer-events-none" />
         )}
       </button>
-      {previewAnchor && (thumbnailUrl || pickerVisual) && typeof document !== "undefined" &&
+      {previewAnchor && (thumbnailUrl || videoUrl || pickerVisual) && typeof document !== "undefined" &&
         createPortal(
-          <ThumbnailPreview anchor={previewAnchor} url={thumbnailUrl} pickerVisual={pickerVisual} alt={label} />,
+          <ThumbnailPreview
+            anchor={previewAnchor}
+            url={thumbnailUrl}
+            videoUrl={videoUrl}
+            pickerVisual={pickerVisual}
+            alt={label}
+          />,
           document.body,
         )}
     </div>
@@ -933,18 +959,21 @@ function ThumbnailButton({
 function ThumbnailPreview({
   anchor,
   url,
+  videoUrl,
   pickerVisual,
   alt,
 }: {
   anchor: DOMRect
   url: string | undefined
+  videoUrl: string | undefined
   pickerVisual: ReactNode | undefined
   alt: string
 }) {
   // Render to the right of the thumbnail by default; flip to the left if
   // there isn't enough room before the viewport edge. Clamp vertically so
-  // tall previews stay on screen. Renders either an image (for media nodes)
-  // or the picker's in-node visual scaled up (for parameter pickers).
+  // tall previews stay on screen. Renders an autoplaying <video> for media
+  // nodes whose result is a video, otherwise an image, otherwise the
+  // picker's in-node visual scaled up (for parameter pickers).
   const PREVIEW_MAX = 240
   const GAP = 8
   const fitsRight = anchor.right + GAP + PREVIEW_MAX <= window.innerWidth
@@ -955,7 +984,19 @@ function ThumbnailPreview({
       className="fixed pointer-events-none z-[9999] bg-popover border border-border shadow-lg rounded p-1"
       style={{ left, top }}
     >
-      {url ? (
+      {videoUrl ? (
+        <video
+          src={videoUrl}
+          poster={url}
+          className="rounded object-contain block"
+          style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+        />
+      ) : url ? (
         // Cloudflare image-resize transform for cdn.nodaro.ai URLs.
         // Logical 240px max × 2 (retina) = 480px wide variant; pass-through
         // for non-R2 URLs. Quality 85 (slight bump over thumb's 80) for the

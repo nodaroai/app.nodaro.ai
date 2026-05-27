@@ -104,7 +104,7 @@ downstream i2v nodes or as B-roll loops.
   via the `aspectRatio` field (`1:1` / `3:4` / `16:9` / `9:16`). Reuses the
   4-value `CharacterAspectRatio` union — the supported ratios are identical.
 - **Credits** — depends on the i2v provider; matches the equivalent
-  image-to-video generation on that provider. See `docs/nodes/ai-video/image-to-video.md`
+  image-to-video generation on that provider. See `docs/nodes/ai-video/generate-video.md`
   for the per-provider table.
 
 #### Refinement (video-to-video)
@@ -687,7 +687,7 @@ generation routes:
   variant. Same per-provider table as `generate-image`.
 - `POST /v1/generate-location-motion` — `creditCost(provider)` credits per
   motion clip. Provider defaults to `kling` (~22 credits / 5-second clip).
-  See `docs/nodes/ai-video/image-to-video.md` for the full per-provider
+  See `docs/nodes/ai-video/generate-video.md` for the full per-provider
   table.
 - `POST /v1/locations/:id/approve-main-image` — currently free; the LLM
   caption is uncharged.

@@ -29,7 +29,7 @@ const GROUPS: ReadonlyArray<{ title: string; nodeTypes: readonly NodeDefaultType
   },
   {
     title: "Video & Composition",
-    nodeTypes: ["text-to-video", "image-to-video", "lip-sync"],
+    nodeTypes: ["text-to-video", "image-to-video", "generate-video", "lip-sync"],
   },
   {
     title: "Audio",

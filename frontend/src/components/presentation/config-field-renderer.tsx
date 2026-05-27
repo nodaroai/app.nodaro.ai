@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react"
 import {
   IMAGE_GEN_MODELS,
   VIDEO_T2V_MODELS,
+  VIDEO_GEN_MODELS,
   IMAGE_STYLE_PRESETS,
   getAspectRatiosForModel,
   IMAGE_QUALITY_OPTIONS,
@@ -425,6 +426,62 @@ function renderTextToVideo(
   }
 }
 
+function renderGenerateVideo(
+  props: ConfigFieldRendererProps,
+): React.ReactNode | null {
+  const { field, value, onChange, allowedValues, readOnly, customLabel } = props
+
+  switch (field) {
+    case "provider":
+      return (
+        <OptionSelect
+          label={customLabel ?? "Model"}
+          options={VIDEO_GEN_MODELS}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          showDesc
+        />
+      )
+    case "aspectRatio":
+      return (
+        <AspectRatioField
+          label={customLabel ?? "Aspect Ratio"}
+          options={VIDEO_RATIOS}
+          value={value}
+          onChange={onChange}
+          allowedValues={allowedValues}
+          readOnly={readOnly}
+          autoReset
+        />
+      )
+    case "motion":
+      return (
+        <SliderField
+          label={customLabel ?? "Motion Amount"}
+          value={value}
+          onChange={onChange}
+          min={1}
+          max={255}
+          step={1}
+          readOnly={readOnly}
+        />
+      )
+    case "generateAudio":
+      return (
+        <ToggleField
+          label={customLabel ?? "Generate Audio"}
+          value={value}
+          onChange={onChange}
+          readOnly={readOnly}
+        />
+      )
+    default:
+      return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fallback: delegate to generic FieldInputCard using NODE_DEF_MAP metadata
 // ---------------------------------------------------------------------------
@@ -458,6 +515,7 @@ const NODE_RENDERERS: Record<
 > = {
   "generate-image": renderGenerateImage,
   "text-to-video": renderTextToVideo,
+  "generate-video": renderGenerateVideo,
 }
 
 export function ConfigFieldRenderer(

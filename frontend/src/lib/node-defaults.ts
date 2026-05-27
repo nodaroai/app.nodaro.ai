@@ -73,6 +73,7 @@ const RELEVANT_FIELDS: Record<string, readonly string[]> = {
   "upscale-image":    ["provider"],
   "text-to-video":    ["provider", "aspectRatio", "duration", "resolution"],
   "image-to-video":   ["provider", "aspectRatio", "duration", "resolution"],
+  "generate-video":   ["provider", "aspectRatio", "duration", "resolution"],
   "lip-sync":         ["provider"],
   "text-to-speech":   ["provider", "voiceId"],
   "generate-music":   ["provider", "modelVersion"],

@@ -57,6 +57,7 @@ const AUDIO_OUTPUT_TYPES = [
 const VIDEO_OUTPUT_TYPES = [
   "image-to-video",
   "text-to-video",
+  "generate-video",
   "video-to-video",
   "upload-video",
   "speech-to-video",

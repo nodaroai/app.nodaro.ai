@@ -63,6 +63,15 @@ describe("resolveNodeInputs", () => {
     expect(inputs.imageUrl).toBe("http://img.png")
   })
 
+  it("resolves upload-image as imageUrl for generate-video target (unified node)", () => {
+    const uploadNode = makeNode("u1", "upload-image", { url: "http://img.png" })
+    const target = makeNode("t1", "generate-video")
+    const edges = [makeEdge("u1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [uploadNode, target], edges)
+    expect(inputs.imageUrl).toBe("http://img.png")
+  })
+
   it("resolves character node as referenceImageUrls", () => {
     const charNode = makeNode("c1", "character", {
       sourceImageUrl: "http://char.png",
@@ -135,6 +144,15 @@ describe("resolveNodeInputs", () => {
     expect(inputs.videoUrl).toBe("http://v1.mp4")
   })
 
+  it("resolves upload-video as videoUrl for generate-video target (unified node)", () => {
+    const vid = makeNode("v1", "upload-video", { url: "http://gv-src.mp4" })
+    const target = makeNode("t1", "generate-video")
+    const edges = [makeEdge("v1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [vid, target], edges)
+    expect(inputs.videoUrl).toBe("http://gv-src.mp4")
+  })
+
   it("resolves text-to-speech as audioSources for merge-video-audio", () => {
     const ttsNode = makeNode("tts", "text-to-speech", {
       generatedResults: [
@@ -189,6 +207,20 @@ describe("resolveNodeInputs", () => {
     expect(inputs.imageUrl).toBe("http://gen.png")
   })
 
+  it("resolves generate-image as imageUrl for generate-video target (unified node)", () => {
+    const genImage = makeNode("g1", "generate-image", {
+      generatedResults: [
+        { url: "http://gen.png", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "generate-video")
+    const edges = [makeEdge("g1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [genImage, target], edges)
+    expect(inputs.imageUrl).toBe("http://gen.png")
+  })
+
   it("resolves generate-image as referenceImageUrls for another generate-image", () => {
     const genImage = makeNode("g1", "generate-image", {
       generatedResults: [
@@ -215,6 +247,20 @@ describe("resolveNodeInputs", () => {
 
     const inputs = resolveNodeInputs(target, [i2v, target], edges)
     expect(inputs.videoUrl).toBe("http://video.mp4")
+  })
+
+  it("resolves generate-video as videoUrl for merge-video-audio (unified node)", () => {
+    const gv = makeNode("gv1", "generate-video", {
+      generatedResults: [
+        { url: "http://gv.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "merge-video-audio")
+    const edges = [makeEdge("gv1", "t1")]
+
+    const inputs = resolveNodeInputs(target, [gv, target], edges)
+    expect(inputs.videoUrl).toBe("http://gv.mp4")
   })
 
   it("resolves ai-writer output as prompt", () => {
@@ -399,6 +445,28 @@ describe("resolveNodeInputs", () => {
     expect(inputs.videoUrls).toHaveLength(2)
   })
 
+  it("resolves generate-video sources into videoUrls for combine-videos (unified node)", () => {
+    const gv1 = makeNode("gv1", "generate-video", {
+      generatedResults: [
+        { url: "http://gv1.mp4", timestamp: "t1", jobId: "j1" },
+      ],
+      activeResultIndex: 0,
+    })
+    const gv2 = makeNode("gv2", "generate-video", {
+      generatedResults: [
+        { url: "http://gv2.mp4", timestamp: "t1", jobId: "j2" },
+      ],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "combine-videos")
+    const edges = [makeEdge("gv1", "t1"), makeEdge("gv2", "t1")]
+
+    const inputs = resolveNodeInputs(target, [gv1, gv2, target], edges)
+    expect(inputs.videoUrls).toContain("http://gv1.mp4")
+    expect(inputs.videoUrls).toContain("http://gv2.mp4")
+    expect(inputs.videoUrls).toHaveLength(2)
+  })
+
   it("resolves list node output as prompt", () => {
     const listNode = makeNode("l1", "list", {
       items: "first item\nsecond item",
@@ -532,6 +600,93 @@ describe("resolveNodeInputs", () => {
 
     const inputs = resolveNodeInputs(target, [styleBoost, target], edges)
     expect(inputs.prompt).toBe("boosted style text")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// generate-video typed handle routing — FE parity with backend Task 3.2
+// ---------------------------------------------------------------------------
+
+describe("resolveNodeInputs — generate-video typed handle routing", () => {
+  it("routes imageReferences edges into resolvedInputs.referenceImageUrls", () => {
+    const src = makeNode("s1", "generate-image", {
+      generatedResults: [{ url: "https://ref.png", timestamp: "t", jobId: "j" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "generate-video")
+    const edges = [{
+      id: "s1->t1", source: "s1", target: "t1",
+      sourceHandle: null, targetHandle: "imageReferences",
+    }]
+
+    const inputs = resolveNodeInputs(target, [src, target], edges as any)
+    expect(inputs.referenceImageUrls).toEqual(["https://ref.png"])
+  })
+
+  it("routes videoReferences edges into resolvedInputs.referenceVideoUrls", () => {
+    const src = makeNode("s1", "image-to-video", {
+      generatedResults: [{ url: "https://ref.mp4", timestamp: "t", jobId: "j" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "generate-video")
+    const edges = [{
+      id: "s1->t1", source: "s1", target: "t1",
+      sourceHandle: null, targetHandle: "videoReferences",
+    }]
+
+    const inputs = resolveNodeInputs(target, [src, target], edges as any)
+    expect(inputs.referenceVideoUrls).toEqual(["https://ref.mp4"])
+  })
+
+  it("routes audioReferences edges into resolvedInputs.referenceAudioUrls", () => {
+    const src = makeNode("s1", "text-to-speech", {
+      generatedResults: [{ url: "https://ref.mp3", timestamp: "t", jobId: "j" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "generate-video")
+    const edges = [{
+      id: "s1->t1", source: "s1", target: "t1",
+      sourceHandle: null, targetHandle: "audioReferences",
+    }]
+
+    const inputs = resolveNodeInputs(target, [src, target], edges as any)
+    expect(inputs.referenceAudioUrls).toEqual(["https://ref.mp3"])
+  })
+
+  // Regression: without explicit handle-id routing, the text-source default
+  // path lands the upstream text in `resolvedInputs.prompt` (the POSITIVE
+  // prompt slot). The handle visually says "Negative" but the text used to
+  // end up in the wrong field at execution. The `negative` targetHandle MUST
+  // route into `resolvedInputs.negativePrompt` instead, and MUST NOT leak
+  // into `resolvedInputs.prompt`. Mirrors backend Task 3.2 (b75b2127).
+  it("negative handle on generate-video routes text into resolvedInputs.negativePrompt", () => {
+    const src = makeNode("s1", "text-prompt", { text: "blurry, low quality" })
+    const target = makeNode("t1", "generate-video")
+    const edges = [{
+      id: "s1->t1", source: "s1", target: "t1",
+      sourceHandle: null, targetHandle: "negative",
+    }]
+
+    const inputs = resolveNodeInputs(target, [src, target], edges as any)
+    expect(inputs.negativePrompt).toBe("blurry, low quality")
+    expect(inputs.prompt).toBeUndefined()
+  })
+
+  // Backwards-compat: the legacy "references" handle (i2v single name) must
+  // still land in referenceImageUrls so un-migrated workflows keep working.
+  it("legacy references handle still routes into resolvedInputs.referenceImageUrls", () => {
+    const src = makeNode("s1", "generate-image", {
+      generatedResults: [{ url: "https://legacy.png", timestamp: "t", jobId: "j" }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "image-to-video")
+    const edges = [{
+      id: "s1->t1", source: "s1", target: "t1",
+      sourceHandle: null, targetHandle: "references",
+    }]
+
+    const inputs = resolveNodeInputs(target, [src, target], edges as any)
+    expect(inputs.referenceImageUrls).toEqual(["https://legacy.png"])
   })
 })
 

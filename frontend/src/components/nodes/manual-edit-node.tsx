@@ -16,7 +16,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ManualEditData } from "@/types/nodes"
 
 const VIDEO_TYPES = new Set([
-  "image-to-video", "text-to-video", "video-to-video", "upload-video",
+  "image-to-video", "text-to-video", "generate-video", "video-to-video", "upload-video",
   "speech-to-video", "lip-sync", "render-video", "combine-videos",
   "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
   "loop-video", "fade-video", "extend-video", "motion-transfer",

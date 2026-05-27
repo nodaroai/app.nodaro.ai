@@ -163,12 +163,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (!jobId) return parseFailure(res.body)
       return jobResultWithWidget({
         jobId,
-        label: "text-to-video",
+        label: "generate-video",
         session,
         widgetKind: "video",
         widgetData: {
           prompt: compositePrompt,
-          model: args.model ?? "text-to-video",
+          model: args.model ?? "generate-video",
           aspectRatio: args.aspect_ratio,
           duration: args.duration,
         },
@@ -461,12 +461,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       if (!jobId) return parseFailure(res.body)
       return jobResultWithWidget({
         jobId,
-        label: "image-to-video",
+        label: "generate-video",
         session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt ?? "(animate image)",
-          model: args.model ?? "image-to-video",
+          model: args.model ?? "generate-video",
           aspectRatio: args.aspect_ratio,
           duration: args.duration,
         },

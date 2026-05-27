@@ -1750,6 +1750,17 @@ function getNodeModelIdentifier(node: { type: string; data?: Record<string, unkn
     return buildVideoCreditModelIdentifier(provider, duration, sound, nodeType as "image-to-video" | "text-to-video", (data.videoSize ?? data.mode) as string | undefined)
   }
 
+  // Unified generate-video node — mode dispatch (i2v vs t2v) happens at
+  // execution time based on the wiring shape, which the pre-execution
+  // estimate doesn't see. Default to the i2v identifier so display estimates
+  // reflect the more common path; the runtime reservation in payload-builder
+  // computes the correct identifier from the resolved inputs.
+  if (nodeType === "generate-video") {
+    const duration = data.duration as number | string | undefined
+    const sound = (data.sound ?? data.kling3Sound) as boolean | undefined
+    return buildVideoCreditModelIdentifier(provider, duration, sound, "image-to-video", (data.videoSize ?? data.mode ?? data.kling3Mode) as string | undefined)
+  }
+
   // Image/edit nodes with quality/resolution variable pricing
   return buildCreditModelIdentifier(
     provider,

@@ -177,8 +177,9 @@ Generate video from images, text, or other video using state-of-the-art models.
 
 | Node | Description | When to Use |
 |------|-------------|-------------|
-| [Image to Video](./ai-video/image-to-video.md) | Generate video from static image (21 providers) | Animate images with VEO, Kling, Sora, Minimax, Runway, and more |
-| [Text to Video](./ai-video/text-to-video.md) | Generate video from text prompt (15 providers) | Create video directly from text descriptions |
+| [Generate Video](./ai-video/generate-video.md) | Unified video producer — text-only, image-to-video, first+last frame, or reference mode driven by which inputs are wired (`VIDEO_GEN_PROVIDERS` catalog) | Animate images, generate from text, or run reference-driven multimodal mode (Seedance 2, VEO 3.x) — one node, all modes |
+| [Image to Video](./ai-video/image-to-video.md) (legacy) | Redirects to Generate Video; legacy `image-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
+| [Text to Video](./ai-video/text-to-video.md) (legacy) | Redirects to Generate Video; legacy `text-to-video` workflows auto-migrate on load | New workflows: use Generate Video instead |
 | [Video to Video](./ai-video/video-to-video.md) | Transform video with text prompt | Style transfer or content modification on existing video |
 | [Lip Sync](./ai-video/lip-sync.md) | Sync audio to character face | Create talking head videos from portrait + audio |
 | [Face Swap](./ai-video/face-swap.md) | Replace face in video with reference image | Character replacement and creative remixing |

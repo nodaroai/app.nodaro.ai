@@ -680,6 +680,12 @@ const VIDEO_RESULT_TYPES = new Set([
   "image-to-video",
   "video-to-video",
   "text-to-video",
+  // Unified video node — its payload-builder case dispatches dynamically to the
+  // i2v/t2v worker handlers, which write the same `generatedVideoUrl` / per-result
+  // `url` fields back onto node.data. extractSavedNodeOutput must therefore
+  // recognise the type so "Run from here" / DAG resume hydrates downstream nodes
+  // from a previously-executed generate-video without re-running.
+  "generate-video",
   "lip-sync",
   "speech-to-video",
   "motion-transfer",

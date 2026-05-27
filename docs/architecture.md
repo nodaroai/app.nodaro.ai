@@ -109,7 +109,7 @@ Postgres (`workflow_executions.node_states`).
 ### Workers
 
 - **Video worker** (`backend/src/worker.ts`) handles 40+ "single-node"
-  job types: image generation, image-to-video, FFmpeg processing,
+  job types: image generation, video generation (image-to-video / text-to-video), FFmpeg processing,
   audio nodes, etc. Concurrency `VIDEO_WORKER_CONCURRENCY` (default
   50) — these are I/O-bound on external API calls.
 - **Render worker** (`backend/src/render-worker.ts`) handles Remotion
@@ -206,7 +206,7 @@ The orchestrator does:
 
 | Category | Where | Example node types | Why |
 |---|---|---|---|
-| **Worker-queued** | BullMQ → video/render worker | `generate-image`, `image-to-video`, `text-to-speech`, `combine-videos`, `render-video`, … (40+) | Long-running or external API calls. Decoupled from the orchestrator process for backpressure. |
+| **Worker-queued** | BullMQ → video/render worker | `generate-image`, `generate-video` (dispatches to the `image-to-video` / `text-to-video` worker handlers), `text-to-speech`, `combine-videos`, `render-video`, … (40+) | Long-running or external API calls. Decoupled from the orchestrator process for backpressure. |
 | **Sync HTTP** | Internal `fetch` to backend route | `llm-chat` (Generate Text — routes via `/v1/llm-chat`; the legacy `/v1/ai-writer` route remains for back-compat), `after-effects-ai`, `motion-graphics-ai`, `prompt-helper`, social-publish nodes (~15) | Cheap, sub-second LLM calls. No queueing overhead. |
 | **Inline** | Run inside the orchestrator process | `combine-text`, `split-text`, `composite` | Pure JS, no external I/O, no need to queue. |
 

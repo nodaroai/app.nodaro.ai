@@ -1,4 +1,4 @@
-import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoToVideoProvider } from "@nodaro/shared"
+import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, TextToVideoProvider, VideoGenProvider, VideoToVideoProvider } from "@nodaro/shared"
 import {
   aspectRatioOptionsByKind,
   resolutionOptionsByKind,
@@ -126,6 +126,24 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "happyhorse",   label: "HappyHorse", desc: "3–15s, 720p/1080p" },
 ]
 
+/** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,
+ *  deduplicated by id. The generate-video node accepts either an upstream
+ *  image (i2v path) or pure text (t2v path) per provider's modes, so the
+ *  picker exposes every provider that participates in at least one mode.
+ *  I2V entries win on collision because their label/desc is the more
+ *  general "image-or-text" descriptor in most cases. */
+export const VIDEO_GEN_MODELS: readonly { value: VideoGenProvider; label: string; desc: string }[] =
+  (() => {
+    const seen = new Set<string>()
+    const out: { value: VideoGenProvider; label: string; desc: string }[] = []
+    for (const m of [...VIDEO_I2V_MODELS, ...VIDEO_T2V_MODELS]) {
+      if (seen.has(m.value)) continue
+      seen.add(m.value)
+      out.push(m as { value: VideoGenProvider; label: string; desc: string })
+    }
+    return out
+  })()
+
 export const VIDEO_V2V_MODELS: readonly { value: VideoToVideoProvider; label: string; desc: string }[] = [
   { value: "luma-modify", label: "Luma Modify", desc: "Luma video modification" },
   { value: "runway-aleph", label: "Runway Aleph", desc: "Runway AI video-to-video conversion" },
@@ -228,6 +246,65 @@ export function getVideoResolutionOptions(
   provider: string,
 ): readonly LabeledOption[] | undefined {
   return VIDEO_RESOLUTION_OPTIONS[provider]
+}
+
+// =============================================================================
+// VIDEO MODEL DURATIONS — derived from MODEL_CATALOG via durationsByMode().
+// Merges i2v + t2v durations per provider so the generate-video node can
+// expose the full union (a provider that supports both modes uses the same
+// duration list under one id). Labels are "Ns" suffix; the catalog stores
+// raw numbers. Single source of truth — add a new provider's durations to
+// `packages/shared/src/model-catalog.ts` and both the dropdown and the
+// audit tooling pick it up.
+// =============================================================================
+const _I2V_DURATIONS = durationsByMode("i2v")
+const _T2V_DURATIONS = durationsByMode("t2v")
+
+export const VIDEO_DURATION_OPTIONS: Record<string, ReadonlyArray<{ value: number; label: string }>> =
+  (() => {
+    const ids = new Set<string>([
+      ...Object.keys(_I2V_DURATIONS),
+      ...Object.keys(_T2V_DURATIONS),
+    ])
+    const out: Record<string, ReadonlyArray<{ value: number; label: string }>> = {}
+    for (const id of ids) {
+      const merged = new Set<number>([
+        ...(_I2V_DURATIONS[id] ?? []),
+        ...(_T2V_DURATIONS[id] ?? []),
+      ])
+      const sorted = Array.from(merged).sort((a, b) => a - b)
+      if (sorted.length > 0) {
+        out[id] = sorted.map((n) => ({ value: n, label: `${n}s` }))
+      }
+    }
+    return out
+  })()
+
+/** Duration `{value, label}` options for a video model. Returns `[]` for
+ *  providers without a duration lever (fixed-duration models that derive
+ *  duration from input, like Wan V2V). */
+export function getDurationsForVideoModel(
+  provider: string,
+): ReadonlyArray<{ value: number; label: string }> {
+  return VIDEO_DURATION_OPTIONS[provider] ?? []
+}
+
+// =============================================================================
+// VIDEO MODEL ASPECT RATIOS — derived from MODEL_CATALOG. Providers without
+// an `aspectRatios` entry fall through to the generic VIDEO_RATIOS default
+// (16:9 / 9:16 / 1:1) used by the legacy video-configs panels.
+// =============================================================================
+const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> =
+  aspectRatioOptionsByKind("video")
+
+/** Per-provider aspect ratio options for video models. Falls back to the
+ *  generic VIDEO_RATIOS triplet (16:9 / 9:16 / 1:1) when the catalog entry
+ *  doesn't declare an `aspectRatios` field — matches the legacy
+ *  video-configs behavior. */
+export function getAspectRatiosForVideoModel(
+  provider: string,
+): readonly LabeledOption[] {
+  return _VIDEO_ASPECT_BY_PROVIDER[provider] ?? (VIDEO_RATIOS as readonly LabeledOption[])
 }
 
 // Image qualities — derived from MODEL_CATALOG.

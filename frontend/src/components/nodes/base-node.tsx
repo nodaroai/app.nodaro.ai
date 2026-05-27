@@ -157,9 +157,12 @@ function BaseNodeComponent({
   //      mismatched). Without explicit width: promote to 320px, derive
   //      height. In either branch, floor-clamp height up to
   //      `effectiveMinHeight` so handle stacks stay visible. The width side
-  //      of the floor-clamp only kicks in for non-resized nodes (avoids
-  //      ballooning a user's deliberately compact width); it also respects
-  //      `minWidth` so portrait images don't write a sub-minimum box.
+  //      of the floor-clamp ALWAYS runs (even when an explicit width is
+  //      persisted), because any width below `effectiveMinHeight × aspect`
+  //      would force the height clamp into a letterboxed dead-space layout
+  //      — never a useful state. Width is bumped to the proportional
+  //      minimum, respecting `minWidth` so portrait images don't write a
+  //      sub-minimum box.
   //
   //   2. No aspect ratio yet → just ensure stored height ≥ effectiveMinHeight
   //      for nodes the user hasn't explicitly resized (no `rf-resized`).
@@ -178,15 +181,25 @@ function BaseNodeComponent({
     const hasExplicitWidth = typeof node.width === "number"
 
     if (imageAspectRatio) {
-      let w = hasExplicitWidth ? node.width! : 320
-      let correctH = w / imageAspectRatio
-      if (correctH < effectiveMinHeight) {
-        correctH = effectiveMinHeight
-        if (!hasExplicitWidth) {
-          w = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
-        }
-      }
-      if (hasExplicitWidth && typeof node.height === "number" && Math.abs(node.height - correctH) < 2 && Math.abs((node.width ?? 0) - w) < 2) return
+      // Proportional minimum width — the narrowest a box can be while keeping
+      // both `effectiveMinHeight` AND the requested aspect. Anything narrower
+      // would either clip handles (height < minHeight) or letterbox the
+      // result (height stays at minHeight, width too small for aspect).
+      const proportionalMinWidth = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
+      const baseW = hasExplicitWidth ? node.width! : 320
+      // Always floor-clamp width to the proportional minimum. Existing nodes
+      // that were persisted at the OLD minWidth (e.g., legacy 240px) get
+      // bumped here even though they have a stored width — without this, a
+      // 240×368 box on a 16:9 result stays 240 wide and the result area
+      // letterboxes with vertical dead space.
+      const w = Math.max(baseW, proportionalMinWidth)
+      const correctH = Math.max(effectiveMinHeight, w / imageAspectRatio)
+      if (
+        typeof node.width === "number" &&
+        typeof node.height === "number" &&
+        Math.abs(node.width - w) < 2 &&
+        Math.abs(node.height - correctH) < 2
+      ) return
       const cls = node.className?.includes("rf-resized")
         ? node.className
         : ((node.className ?? "") + " rf-resized").trim()

@@ -39,6 +39,7 @@ const IMAGE_JOBS = new Set([
 const VIDEO_JOBS = new Set([
   "image-to-video",
   "text-to-video",
+  "generate-video",
   "video-to-video",
   "lip-sync",
   "motion-transfer",

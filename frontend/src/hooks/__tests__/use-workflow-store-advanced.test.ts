@@ -418,6 +418,16 @@ describe("useWorkflowStore advanced", () => {
       expect((node.data as Record<string, unknown>).generatedVideoUrl).toBe("https://example.com/vid.mp4")
     })
 
+    it("updates generatedVideoUrl on a generate-video node (unified video node)", () => {
+      useWorkflowStore.getState().addNode("generate-video", { x: 0, y: 0 })
+      const nodeId = useWorkflowStore.getState().nodes[0].id
+
+      useWorkflowStore.getState().updateNodeData(nodeId, { generatedVideoUrl: "https://example.com/gv.mp4" })
+
+      const node = useWorkflowStore.getState().nodes[0]
+      expect((node.data as Record<string, unknown>).generatedVideoUrl).toBe("https://example.com/gv.mp4")
+    })
+
     it("marks isDirty when updating non-execution keys like prompt", () => {
       useWorkflowStore.getState().addNode("text-prompt", { x: 0, y: 0 })
       const nodeId = useWorkflowStore.getState().nodes[0].id

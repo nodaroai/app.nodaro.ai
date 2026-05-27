@@ -421,6 +421,14 @@ describe("extractSavedNodeOutput", () => {
     expect(extractSavedNodeOutput(n)?.videoUrl).toBe("vid.mp4")
   })
 
+  it("extracts videoUrl from generate-video", () => {
+    // Unified video node — saved output must be readable identically to i2v/t2v
+    // so "Run from here" / DAG resume can hydrate downstream nodes that consume
+    // a previously-executed generate-video output without re-running the job.
+    const n = node("1", "generate-video", { generatedVideoUrl: "vid.mp4" })
+    expect(extractSavedNodeOutput(n)?.videoUrl).toBe("vid.mp4")
+  })
+
   it("extracts audioUrl from text-to-speech", () => {
     const n = node("1", "text-to-speech", { generatedAudioUrl: "speech.mp3" })
     expect(extractSavedNodeOutput(n)?.audioUrl).toBe("speech.mp3")

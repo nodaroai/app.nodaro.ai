@@ -5,6 +5,7 @@ import {
   UPSCALE_IMAGE_PROVIDERS,
   TEXT_TO_VIDEO_PROVIDERS,
   IMAGE_TO_VIDEO_PROVIDERS,
+  VIDEO_GEN_PROVIDERS,
   LIP_SYNC_PROVIDERS,
   TTS_PROVIDERS,
   VOICE_DESIGN_MODELS,
@@ -27,6 +28,7 @@ export const NODE_DEFAULT_TYPES = [
   // Video
   "text-to-video",
   "image-to-video",
+  "generate-video",
   // Composition
   "lip-sync",
   // Audio / Music
@@ -85,6 +87,7 @@ const META: Record<NodeDefaultType, NodeTypeMeta> = {
   "upscale-image":    { field: "provider", validValues: UPSCALE_IMAGE_PROVIDERS, hasQuality: false, hasAspectRatio: false },
   "text-to-video":    { field: "provider", validValues: TEXT_TO_VIDEO_PROVIDERS, hasQuality: true, hasAspectRatio: true },
   "image-to-video":   { field: "provider", validValues: IMAGE_TO_VIDEO_PROVIDERS, hasQuality: true, hasAspectRatio: true },
+  "generate-video":   { field: "provider", validValues: VIDEO_GEN_PROVIDERS,   hasQuality: true, hasAspectRatio: true },
   "lip-sync":         { field: "provider", validValues: LIP_SYNC_PROVIDERS,    hasQuality: false, hasAspectRatio: false },
   "text-to-speech":   { field: "provider", validValues: TTS_PROVIDERS,         hasQuality: false, hasAspectRatio: false },
   "generate-music":   { field: "provider", validValues: MUSIC_PROVIDERS_FOR_VALIDATION, hasQuality: false, hasAspectRatio: false },

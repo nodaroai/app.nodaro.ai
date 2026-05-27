@@ -1298,6 +1298,40 @@ function collectIdentityLockClause(consumerNodeId: string, ctx: PayloadBuildCont
   return sharedCollectIdentityLockClause(consumerNodeId, ctx.nodes, ctx.edges)
 }
 
+/**
+ * Compose a video-generation prompt: merge user prompt + cinematography hints
+ * + identity-lock clause. Used by both the legacy image-to-video / text-to-video
+ * cases AND the new generate-video case so all three emit identical text.
+ *
+ * The optional `motionHint` is prepended to the cinematography hint list before
+ * joining — so an i2v node with `motion="zoom"` and a connected camera hint
+ * "tracking shot" emits `"<user>. zoom motion, tracking shot"` (single sentence,
+ * comma-separated). Without the motion hint, behaviour matches t2v exactly:
+ * `"<user>. <cine1>, <cine2>"`.
+ *
+ * Caller is responsible for any provider-specific motion/data fallback chains
+ * (e.g. i2v's `data.motionPrompt` initial fallback) — pass them as `rawPrompt`.
+ */
+function composeVideoPrompt(args: {
+  rawPrompt: string | undefined
+  nodeId: string
+  buildCtx: PayloadBuildContext | undefined
+  motionHint?: string | undefined
+}): string | undefined {
+  let p = args.rawPrompt
+  const hints: string[] = []
+  if (args.motionHint) hints.push(args.motionHint)
+  const cinematographyHints = collectCinematographyHints(args.nodeId, args.buildCtx)
+  for (const h of cinematographyHints) hints.push(h)
+  if (hints.length > 0) {
+    const joined = hints.join(", ")
+    p = p ? `${p}. ${joined}` : joined
+  }
+  const identityClause = collectIdentityLockClause(args.nodeId, args.buildCtx)
+  if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
+  return p
+}
+
 export function buildPayload(
   node: SimpleNode,
   jobId: string,
@@ -1994,18 +2028,13 @@ export function buildPayload(
       // it before the worker sees the final string. The mention pass swaps
       // `@kira-smile` for "Kira" + prepends a "Use these characters:" block
       // + returns variant/canonical URLs to slot into the worker payload.
-      let i2vPrompt: string | undefined = (() => {
-        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
-        const hints: string[] = []
-        if (data.motionEnabled && data.motion) hints.push(`${data.motion} motion`)
-        const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-        for (const h of cinematographyHints) hints.push(h)
-        if (hints.length > 0 && p) p = `${p}. ${hints.join(", ")}`
-        else if (hints.length > 0) p = hints.join(", ")
-        const identityClause = collectIdentityLockClause(node.id, buildCtx)
-        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-        return p
-      })()
+      const i2vRawPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap) || resolveRefs(data.motionPrompt as string | undefined, refMap)
+      let i2vPrompt = composeVideoPrompt({
+        rawPrompt: i2vRawPrompt,
+        nodeId: node.id,
+        buildCtx,
+        motionHint: data.motionEnabled && data.motion ? `${data.motion} motion` : undefined,
+      })
       const i2vMention = resolveVideoPromptMentions(i2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
@@ -2116,19 +2145,8 @@ export function buildPayload(
       // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
       // `referenceImageUrls`, merged with whatever upstream already provided.
-      let t2vPrompt: string | undefined = (() => {
-        let p = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
-        {
-          const cinematographyHints = collectCinematographyHints(node.id, buildCtx)
-          if (cinematographyHints.length > 0) {
-            const joined = cinematographyHints.join(", ")
-            p = p ? `${p}. ${joined}` : joined
-          }
-        }
-        const identityClause = collectIdentityLockClause(node.id, buildCtx)
-        if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-        return p
-      })()
+      const t2vRawPrompt = resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)
+      let t2vPrompt = composeVideoPrompt({ rawPrompt: t2vRawPrompt, nodeId: node.id, buildCtx })
       const t2vMention = resolveVideoPromptMentions(t2vPrompt, node.id, buildCtx, readExtraRefs(data), {
         referenceOrder: readStringArray(data.referenceOrder),
         suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
@@ -2192,6 +2210,144 @@ export function buildPayload(
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           webSearch: data.webSearch,
           nsfwChecker: data.nsfwChecker,
+          enableTranslation: data.enableTranslation,
+          usageLogId,
+        },
+      }
+    }
+
+    // Unified video node — dispatches `jobName` dynamically based on whether
+    // any image input is wired. Reuses the existing i2v + t2v worker handlers
+    // and credit pricing without modifying them. The case lives next to its
+    // legacy siblings so future provider routing tweaks stay co-located.
+    case "generate-video": {
+      const provider = (data.provider as string) ?? "kling"
+      const isS2 = isSeedance2Provider(provider)
+
+      // EndFrame-only swap: if user wired endFrame but no startFrame, use
+      // endFrame as the start so providers (veo3, minimax, kling-turbo, etc.)
+      // get at least one image in their primary slot. We then clear
+      // endFrameUrl to avoid the worker repeating the same image twice.
+      const startFrameUrl = resolvedInputs.startFrameUrl ?? resolvedInputs.imageUrl ?? resolvedInputs.endFrameUrl
+      const endFrameUrl = (resolvedInputs.startFrameUrl || resolvedInputs.imageUrl)
+        ? resolvedInputs.endFrameUrl
+        : undefined
+      const hasStart = !!startFrameUrl
+      const hasImageRef = (resolvedInputs.referenceImageUrls?.length ?? 0) > 0
+      const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
+
+      // Mode dispatch — decides BOTH jobName and credit identifier so the
+      // existing worker handlers + STATIC_CREDIT_COSTS entries keep working
+      // without modification.
+      const mode: "image-to-video" | "text-to-video" = hasStart ? "image-to-video" : "text-to-video"
+
+      // Prompt composition: prefer upstream → data.prompt → data.motionPrompt
+      // (legacy field still emitted by the inline picker). composeVideoPrompt
+      // appends cinematography hints + optional motion-hint + identity-lock.
+      const rawPrompt = resolvedInputs.prompt
+        || resolveRefs(data.prompt as string | undefined, refMap)
+        || resolveRefs(data.motionPrompt as string | undefined, refMap)
+      const motionHint = data.motionEnabled && typeof data.motion === "string" && data.motion
+        ? `${data.motion} motion`
+        : undefined
+      let composedPrompt = composeVideoPrompt({ rawPrompt, motionHint, nodeId: node.id, buildCtx })
+
+      // Mention resolution + ref-image merging (mirrors i2v case). Extras /
+      // suppressed-canonicals stay opt-in via the same node-data fields.
+      const mentionResult = resolveVideoPromptMentions(
+        composedPrompt,
+        node.id,
+        buildCtx,
+        readExtraRefs(data),
+        {
+          referenceOrder: readStringArray(data.referenceImageOrder),
+          suppressedCanonicalCharacterIds: readStringArray(data.suppressedCanonicalCharacterIds),
+        },
+      )
+      composedPrompt = mentionResult.prompt
+
+      // Apply user-defined reorder (drag-to-reorder writes referenceImageOrder
+      // on the new node — the rename migration normalizes the legacy
+      // connectedRefImageOrder field). The handle filter accepts all three
+      // typed-handle ids the new node exposes for image inputs.
+      const orderedRefs = applyOrderToReferenceUrls(
+        node.id,
+        data.referenceImageOrder as string[] | undefined,
+        buildCtx,
+        (e) => e.targetHandle === "imageReferences" || e.targetHandle === "references" || e.targetHandle === "reference-images",
+      )
+      let referenceImageUrls = orderedRefs ?? resolvedInputs.referenceImageUrls
+      let imageUrl = startFrameUrl
+      if (mentionResult.additionalUrls.length > 0) {
+        let remaining = mentionResult.additionalUrls
+        if (!imageUrl) {
+          imageUrl = remaining[0]
+          remaining = remaining.slice(1)
+        }
+        if (remaining.length > 0) {
+          const existing = referenceImageUrls ?? []
+          const merged: string[] = []
+          const seen = new Set<string>()
+          for (const u of existing) if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          for (const u of remaining) if (u && !seen.has(u)) { seen.add(u); merged.push(u) }
+          referenceImageUrls = merged
+        }
+      }
+
+      // VEO-specific generationType hint — derived from the wiring shape so
+      // the worker doesn't have to inspect the resolved inputs itself.
+      let generationType: "TEXT_2_VIDEO" | "FIRST_AND_LAST_FRAMES_2_VIDEO" | "REFERENCE_2_VIDEO" | undefined
+      if (!hasStart && !hasImageRef && !hasVideoRef) generationType = "TEXT_2_VIDEO"
+      else if (hasStart && !!endFrameUrl) generationType = "FIRST_AND_LAST_FRAMES_2_VIDEO"
+      else if (hasImageRef || hasVideoRef) generationType = "REFERENCE_2_VIDEO"
+
+      return {
+        jobName: mode,
+        queueName: "video-generation",
+        modelIdentifier: buildVideoCreditModelIdentifier(
+          provider,
+          data.duration as number | string | undefined,
+          (data.sound ?? data.kling3Sound) as boolean | undefined,
+          mode,
+          (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
+          data.resolution as string | undefined,
+          hasVideoRef,
+        ),
+        payload: {
+          jobId,
+          provider,
+          prompt: composedPrompt,
+          // Typed `negative` handle takes precedence over the config-panel
+          // field, with the config field as fallback (parallel to `prompt`).
+          negativePrompt: resolvedInputs.negativePrompt ?? (data.negativePrompt as string | undefined),
+          imageUrl,            // swap-aware
+          endFrameUrl,         // gated on having a startFrame to pair with
+          referenceImageUrls,
+          referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          referenceAudioUrls: resolvedInputs.referenceAudioUrls,
+          audioUrl: resolvedInputs.audioUrl,
+          duration: data.duration,
+          mode: data.mode ?? data.kling3Mode,
+          sound: data.sound ?? data.kling3Sound,
+          generateAudio: data.generateAudio,
+          cfgScale: data.cfgScale,
+          // Seedance 2 config pickers render defaults in the UI without
+          // persisting them to data until the user explicitly picks; fill
+          // them in here so the worker request matches the visible UI state.
+          aspectRatio: (data.aspectRatio as string | undefined) ?? (isS2 ? "16:9" : undefined),
+          resolution: (data.resolution as string | undefined) ?? (isS2 ? MODEL_CATALOG[provider]?.resolutions?.[0] : undefined),
+          seed: data.seed,
+          cameraFixed: data.cameraFixed,
+          multiShot: data.multiShot,
+          shots: data.shots,
+          elements: data.elements,
+          grokMode: data.grokMode,
+          videoSize: data.videoSize,
+          removeWatermark: data.removeWatermark,
+          webSearch: data.webSearch,
+          nsfwChecker: data.nsfwChecker,
+          generationType,
+          loopTrim: data.loopTrim,
           enableTranslation: data.enableTranslation,
           usageLogId,
         },

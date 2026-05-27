@@ -1176,4 +1176,90 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
     // Restore the module-level mock impl so other tests aren't affected.
     if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
   })
+
+  it("falls back to jobs for standalone generate-video single-node job (parity with i2v fallback)", async () => {
+    // The unified generate-video node also lands at /stream as a standalone
+    // job (the executions-list endpoint merges component-less jobs into the
+    // surface). Even though the worker job name is "image-to-video" /
+    // "text-to-video" after payload-builder dispatch, the `input_data.type`
+    // field is the node-type label and stays "generate-video" on the row.
+    // Confirm the SSE fallback path doesn't choke on the new type string.
+    const sendEventSpy = vi.fn()
+    const { createSSEStream } = await import("@/lib/sse.js")
+    const originalImpl = vi.mocked(createSSEStream).getMockImplementation()
+    vi.mocked(createSSEStream).mockImplementationOnce((_req, reply) => {
+      return {
+        sendEvent: sendEventSpy,
+        sendComment: vi.fn(),
+        close: () => { (reply as { send: () => void }).send() },
+        isClosed: false,
+      } as never
+    })
+
+    const wfChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: null,
+              error: { code: "PGRST116", message: "not found" },
+            }),
+          }),
+        }),
+      }),
+    }
+    const jobRow = {
+      id: TEST_EXEC_ID,
+      workflow_id: "wf-1",
+      user_id: "test-user-id",
+      workflow_execution_id: null,
+      status: "completed",
+      provider: null,
+      mcp_client: null,
+      input_data: { type: "generate-video" },
+      credits: 30,
+      error_message: null,
+      started_at: "2026-05-25T20:00:00Z",
+      completed_at: "2026-05-25T20:05:00Z",
+      created_at: "2026-05-25T20:00:00Z",
+      updated_at: "2026-05-25T20:05:00Z",
+    }
+    const jobsChain = {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            is: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: jobRow, error: null }),
+            }),
+          }),
+        }),
+      }),
+    }
+    const mockFrom = vi.mocked(supabase.from)
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "workflow_executions") return wfChain as never
+      if (table === "jobs") return jobsChain as never
+      return wfChain as never
+    })
+
+    const res = await authedGet(`/v1/workflow-executions/${TEST_EXEC_ID}/stream`)
+    expect(res.statusCode).not.toBe(404)
+    expect(sendEventSpy).toHaveBeenCalledTimes(2)
+    // The metadata event must carry the generate-video nodeType through the
+    // jobToExecutionResponse projection so the editor's running-job overlay
+    // can paint the correct node card.
+    expect(sendEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "metadata",
+        data: expect.objectContaining({
+          nodeStates: expect.objectContaining({
+            [TEST_EXEC_ID]: expect.objectContaining({ nodeType: "generate-video" }),
+          }),
+        }),
+      }),
+    )
+    expect(sendEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "done" }))
+
+    if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
+  })
 })

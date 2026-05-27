@@ -71,6 +71,7 @@ import { ASPECT_RATIO_DIMENSIONS, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVID
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates";
 import { buildScenePrompt } from "@/lib/prompt-builder";
 import type {
+  SceneNodeType,
   WorkflowNode,
   WorkflowEdge,
   GenerateScriptData,
@@ -2003,6 +2004,22 @@ export function executeNode(
     return text.replace(/\{image:\d+(?::([a-zA-Z0-9_-]+))?\}/gi, (_, label) => label ?? "").replace(/\s{2,}/g, " ").trim() || undefined
   }
 
+  // Generate Video — unified video node (Task 6.1). Dispatch by re-typing
+  // the node and re-entering executeNode: the existing i2v + t2v handlers
+  // already cover every parameter shape generate-video exposes (its data
+  // type is a structural superset of both, normalized via the load-time
+  // migration in `generate-video-handle-migration.ts`). Mode selection
+  // mirrors the backend payload-builder — any resolved image input wins
+  // (start/end frame + legacy `imageUrl`); otherwise fall to t2v.
+  if (node.type === "generate-video") {
+    const hasImage = Boolean(
+      inputs.startFrameUrl || inputs.endFrameUrl || inputs.imageUrl || overrideMediaUrl,
+    );
+    const syntheticType = (hasImage ? "image-to-video" : "text-to-video") as SceneNodeType;
+    const syntheticNode = { ...node, type: syntheticType } as WorkflowNode;
+    return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
+  }
+
   if (node.type === "image-to-video") {
     const i2vData = node.data as ImageToVideoData;
     const nodeProvider = i2vData.provider;
@@ -2159,14 +2176,23 @@ export function executeNode(
       return Promise.reject(new Error("No start frame image"));
     }
 
-    const kling3Mode = (i2vData as Record<string, unknown>).kling3Mode as
-      | string
-      | undefined;
-    const kling3Sound = (i2vData as Record<string, unknown>).kling3Sound as
-      | boolean
-      | undefined;
-    const i2vNegativePrompt = (i2vData as Record<string, unknown>)
-      .negativePrompt as string | undefined;
+    // Read canonical `mode`/`sound` first, fall back to legacy
+    // `kling3Mode`/`kling3Sound`. The generate-video widget writes to the
+    // legacy field names; the i2v config panel writes to the canonical
+    // names. The synthetic re-entry must accept both so a fresh
+    // generate-video node + Kling 3.0 doesn't silently drop the user's
+    // mode/sound settings.
+    const kling3Mode =
+      ((i2vData as Record<string, unknown>).mode as string | undefined) ??
+      ((i2vData as Record<string, unknown>).kling3Mode as string | undefined);
+    const kling3Sound =
+      ((i2vData as Record<string, unknown>).sound as boolean | undefined) ??
+      ((i2vData as Record<string, unknown>).kling3Sound as boolean | undefined);
+    // Typed `negative` handle wins; config-panel field is the fallback —
+    // mirrors backend payload-builder generate-video (commit b75b2127).
+    const i2vNegativePrompt =
+      inputs.negativePrompt ??
+      ((i2vData as Record<string, unknown>).negativePrompt as string | undefined);
     const i2vCfgScale = (i2vData as Record<string, unknown>).cfgScale as
       | number
       | undefined;
@@ -2293,7 +2319,9 @@ export function executeNode(
         seed: v2vData.seed,
         referenceImageUrl: v2vReferenceImageUrl,
         // Wan video edit (wan-videoedit) params
-        negativePrompt: v2vData.negativePrompt,
+        // Typed `negative` handle wins; config-panel field is the fallback —
+        // mirrors backend payload-builder generate-video (commit b75b2127).
+        negativePrompt: inputs.negativePrompt ?? v2vData.negativePrompt,
         videoEditDuration: v2vData.videoEditDuration,
         audioSetting: v2vData.audioSetting,
         promptExtend: v2vData.promptExtend,
@@ -2420,12 +2448,19 @@ export function executeNode(
     // silently submits without aspectRatio/resolution. Fill the defaults
     // explicitly so the request matches what the user sees.
     const effectiveT2vAspect = (t2vData.aspectRatio as string | undefined) ?? (isSeedance2T2V ? "16:9" : undefined)
+    // Typed `negative` handle wins; config-panel field is the fallback —
+    // mirrors backend payload-builder generate-video (commit b75b2127).
+    const t2vNegativePrompt = inputs.negativePrompt ?? (t2vData.negativePrompt || undefined);
     const t2vOptions = isKlingVariant
       ? {
           duration: t2vData.duration,
-          mode: t2vRaw.kling3Mode as string | undefined,
-          sound: t2vRaw.kling3Sound as boolean | undefined,
-          negativePrompt: t2vData.negativePrompt || undefined,
+          // Canonical `mode`/`sound` first, legacy `kling3Mode`/`kling3Sound`
+          // as fallback. Mirrors the i2v synthetic path above so the unified
+          // generate-video widget's legacy field names route correctly when
+          // dispatched into the t2v path.
+          mode: (t2vRaw.mode as string | undefined) ?? (t2vRaw.kling3Mode as string | undefined),
+          sound: (t2vRaw.sound as boolean | undefined) ?? (t2vRaw.kling3Sound as boolean | undefined),
+          negativePrompt: t2vNegativePrompt,
           cfgScale: t2vRaw.cfgScale as number | undefined,
           aspectRatio: effectiveT2vAspect,
           multiShot: t2vRaw.multiShot as boolean | undefined,
@@ -2450,7 +2485,7 @@ export function executeNode(
       : {
           duration: t2vData.duration,
           aspectRatio: effectiveT2vAspect,
-          negativePrompt: t2vData.negativePrompt || undefined,
+          negativePrompt: t2vNegativePrompt,
           seed: t2vRaw.seed as number | undefined,
           enableTranslation: t2vData.enableTranslation,
           ...seedance2Extras,

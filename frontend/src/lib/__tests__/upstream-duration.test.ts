@@ -53,6 +53,23 @@ describe("getUpstreamDuration", () => {
     const edges = [makeEdge("u1", "t1")]
     expect(getUpstreamDuration("t1", [upstream, target], edges)).toBe(3)
   })
+
+  it("reads generatedResults[activeResultIndex].duration for generate-video upstream", () => {
+    const upstream = makeNode("u1", "generate-video", {
+      generatedResults: [{ url: "x", timestamp: "", jobId: "j1", duration: 11 }],
+      activeResultIndex: 0,
+    })
+    const target = makeNode("t1", "loop-video", {})
+    const edges = [makeEdge("u1", "t1")]
+    expect(getUpstreamDuration("t1", [upstream, target], edges)).toBe(11)
+  })
+
+  it("falls back to data.duration for generate-video upstream when no generated results", () => {
+    const upstream = makeNode("u1", "generate-video", { duration: 8 })
+    const target = makeNode("t1", "loop-video", {})
+    const edges = [makeEdge("u1", "t1")]
+    expect(getUpstreamDuration("t1", [upstream, target], edges)).toBe(8)
+  })
 })
 
 describe("getCombineUpstreamDurations", () => {

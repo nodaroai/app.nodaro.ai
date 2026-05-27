@@ -360,9 +360,16 @@ const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list",
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
 
 const REFERENCE_HANDLE_MAP: Record<string, "referenceImageUrls" | "referenceVideoUrls" | "referenceAudioUrls"> = {
+  // Legacy / i2v single-name handle ids (kept for un-migrated workflows)
   "references": "referenceImageUrls",
   "reference-videos": "referenceVideoUrls",
   "reference-audio": "referenceAudioUrls",
+  // New canonical typed-handle ids (Generate Video — Task 6.1). Share the
+  // resolved-input keys with the legacy ids so downstream consumers don't
+  // fork. Mirrors backend REFERENCE_HANDLE_MAP in input-resolver.ts.
+  "imageReferences": "referenceImageUrls",
+  "videoReferences": "referenceVideoUrls",
+  "audioReferences": "referenceAudioUrls",
 };
 
 /** VIDEO_OUTPUT_NODE_TYPES — used for kieTaskId passthrough */
@@ -370,6 +377,11 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "image-to-video",
   "video-to-video",
   "text-to-video",
+  // Generate Video — unified video node (Task 6.1). Mirrors the backend
+  // VIDEO_OUTPUT_NODE_TYPES so kieTaskId passthrough resolves identically
+  // when an upstream generate-video feeds e.g. a sora-watermark-remove or
+  // upscale node.
+  "generate-video",
   "lip-sync",
   "speech-to-video",
   "motion-transfer",
@@ -394,6 +406,11 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
 export interface FrontendResolvedInputs {
   prompt?: string;
+  /** Negative prompt wired via the `negative` typed handle (Generate Video).
+   *  Without this, text-prompt sources wired to the Negative handle silently
+   *  fall into `inputs.prompt` (positive slot). Mirrors backend
+   *  FrontendResolvedInputs.negativePrompt added in Task 3.2. */
+  negativePrompt?: string;
   imageUrl?: string;
   videoUrl?: string;
   faceImageUrl?: string;
@@ -546,6 +563,9 @@ const LLM_REF_IMAGE_NODE_TYPES = new Set<string>([
  *  this set is purposefully scoped to llm-chat reference routing.) */
 const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "image-to-video", "text-to-video", "video-to-video",
+  // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
+  // entries so llm-chat reference routing treats its output as video.
+  "generate-video",
   "extend-video", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
@@ -1055,6 +1075,16 @@ export function resolveNodeInputs(
     }
     if (srcEdge.targetHandle === "reference" && node.type === "image-critic") {
       inputs.referenceImageUrl = output;
+      continue;
+    }
+    // Generate-video exposes a `negative` typed handle alongside `prompt`.
+    // The `prompt` handle is already handled by the default text-source path
+    // below (text sources → inputs.prompt). `negative` diverts from that
+    // path and MUST be routed here, otherwise text-prompt sources wired to
+    // the Negative handle silently fall into `inputs.prompt` (positive slot).
+    // Mirrors backend input-resolver.ts (Task 3.2, commit b75b2127).
+    if (srcEdge.targetHandle === "negative") {
+      inputs.negativePrompt = output;
       continue;
     }
     const refHandleKey = REFERENCE_HANDLE_MAP[srcEdge.targetHandle ?? ""];

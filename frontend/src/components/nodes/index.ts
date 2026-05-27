@@ -59,9 +59,12 @@ import { GenerateMaskNode } from "./generate-mask-node";
 import { ModifyImageNode } from "./modify-image-node";
 import { UpscaleImageNode } from "./upscale-image-node";
 import { RemoveBackgroundNode } from "./remove-background-node";
-import { ImageToVideoNode } from "./image-to-video-node";
+// The unified `GenerateVideoNode` handles `image-to-video`, `text-to-video`,
+// and `generate-video` via the aliases below. The legacy component files
+// (`image-to-video-node.tsx`, `text-to-video-node.tsx`) were deleted in
+// Task 13.2 after staging verified migration parity.
 import { VideoToVideoNode } from "./video-to-video-node";
-import { TextToVideoNode } from "./text-to-video-node";
+import { GenerateVideoNode } from "./generate-video-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
 import { ImageCriticNode } from "./image-critic-node";
@@ -221,9 +224,15 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "modify-image": ModifyImageNode,
   "upscale-image": UpscaleImageNode,
   "remove-background": RemoveBackgroundNode,
-  "image-to-video": ImageToVideoNode,
+  // The legacy i2v + t2v entries alias to GenerateVideoNode — load-time
+  // migration (see `generate-video-handle-migration.ts`) rewrites their data
+  // to a strict subset of GenerateVideoNodeData, so the unified renderer
+  // produces identical output. Task 13.2 will delete the legacy component
+  // files once staging confirms parity.
+  "image-to-video": GenerateVideoNode,
   "video-to-video": VideoToVideoNode,
-  "text-to-video": TextToVideoNode,
+  "text-to-video": GenerateVideoNode,
+  "generate-video": GenerateVideoNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
   "image-critic": ImageCriticNode,

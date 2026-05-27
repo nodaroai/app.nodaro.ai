@@ -3,6 +3,7 @@ import type {
   ImageI2IProvider, ImageGenProvider, ImageEditProvider,
   ModifyImageProvider, UpscaleImageProvider,
   ImageToVideoProvider, TextToVideoProvider, VideoToVideoProvider,
+  VideoGenProvider,
   VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider,
   TextToAudioProvider, MusicProvider, TranscribeProvider,
   LipSyncProvider, ScriptProvider, QaCheckProvider,
@@ -1511,6 +1512,7 @@ export type RemoveBackgroundData = {
   currentJobProgress?: number
 }
 
+/** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
 export type ImageToVideoData = {
   [key: string]: unknown
   label: string
@@ -1613,6 +1615,7 @@ export type TextToSpeechData = {
   activeResultIndex?: number
 }
 
+/** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
 export type TextToVideoData = {
   [key: string]: unknown
   label: string
@@ -1655,6 +1658,31 @@ export type TextToVideoData = {
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
 }
+
+/** Generate Video node data — superset of ImageToVideoData ∪ TextToVideoData.
+ *  Normalized via load-time migration (generate-video-handle-migration.ts) to
+ *  drop kling3Mode/Sound, seedance2InputMode, and connectedRefImageOrder.
+ *
+ *  The intersection `ImageToVideoData & TextToVideoData` narrows `provider`
+ *  to the overlap of both provider unions (which is too restrictive) and
+ *  collides on required-vs-optional fields. We instead Omit the conflicting
+ *  fields from each side and re-declare them with the unified, looser shape.
+ */
+export type GenerateVideoNodeData =
+  & Omit<ImageToVideoData, "provider" | "aspectRatio" | "connectedRefImageOrder" | "seedance2InputMode">
+  & Omit<TextToVideoData, "provider" | "aspectRatio" | "prompt" | "negativePrompt" | "connectedRefImageOrder">
+  & {
+    provider: VideoGenProvider
+    /** Unified aspect ratio — superset of i2v and t2v values. */
+    aspectRatio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4" | "21:9" | "adaptive" | "Auto"
+    /** Loosened from required (text-to-video) to optional, matching i2v. */
+    prompt?: string
+    /** Loosened from required (text-to-video) to optional, matching i2v. */
+    negativePrompt?: string
+    /** Reorder field for the imageReferences typed handle.
+     *  Replaces the legacy `connectedRefImageOrder` field (migrated on load). */
+    referenceImageOrder?: readonly string[]
+  }
 
 export type VideoToVideoData = {
   [key: string]: unknown
@@ -4037,6 +4065,7 @@ export type SceneNodeData =
   | ImageToVideoData
   | VideoToVideoData
   | TextToVideoData
+  | GenerateVideoNodeData
   | TextToSpeechData
   | QACheckData
   | ImageCriticData
@@ -4198,6 +4227,7 @@ export type SceneNodeType =
   | "image-to-video"
   | "video-to-video"
   | "text-to-video"
+  | "generate-video"
   | "text-to-speech"
   | "qa-check"
   | "image-critic"
@@ -4991,6 +5021,42 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["startFrame", "endFrame", "audio"],
     outputs: ["video"],
     defaultData: { label: "Image to Video", provider: "seedance-2-fast", duration: 5, fieldMappings: {} },
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    exposableFields: [
+      {
+        key: "provider", label: "Model", type: "select" as const,
+        options: [
+          { value: "bytedance-lite", label: "Bytedance Lite" },
+          { value: "bytedance-pro", label: "Bytedance Pro" },
+          { value: "bytedance-pro-fast", label: "Bytedance Pro Fast" },
+          { value: "grok-i2v", label: "Grok" },
+          { value: "hailuo-2.3", label: "Hailuo 2.3" },
+          { value: "hailuo-2.3-pro", label: "Hailuo 2.3 Pro" },
+          { value: "hailuo-standard", label: "Hailuo Standard" },
+          { value: "kling", label: "Kling" },
+          { value: "kling-3.0", label: "Kling 3.0" },
+          { value: "kling-master", label: "Kling Master" },
+          { value: "kling-turbo", label: "Kling Turbo" },
+          { value: "minimax", label: "MiniMax" },
+          { value: "runway-kie", label: "Runway" },
+          { value: "seedance", label: "Seedance" },
+          { value: "veo3", label: "VEO 3.1 (Quality)" },
+          { value: "veo3.1", label: "VEO 3.1 (Fast)" },
+          { value: "wan-i2v", label: "Wan 2.6" },
+          { value: "wan-turbo", label: "Wan Turbo" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "generate-video",
+    label: "Generate Video",
+    category: "ai",
+    creditCost: 20,
+    width: 220,
+    inputs: ["startFrame", "endFrame", "audio"],
+    outputs: ["video"],
+    defaultData: { label: "Generate Video", provider: "seedance-2-fast", duration: 5, fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     exposableFields: [
       {
