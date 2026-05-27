@@ -30,7 +30,6 @@ import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
-import { isTileGridPickerType } from "@/lib/picker-handles"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
@@ -407,10 +406,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
-  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
+  const addNodeAndOpenPicker = useWorkflowStore((s) => s.addNodeAndOpenPicker)
   const updateEdgeData = useWorkflowStore((s) => s.updateEdgeData)
   const replaceEdgeWithTeleporter = useWorkflowStore((s) => s.replaceEdgeWithTeleporter)
   const { screenToFlowPosition, setNodes, setEdges, getNode, getNodes, getEdges, setCenter, fitView, getViewport, setViewport } = useReactFlow()
@@ -943,22 +942,15 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const position = addNodeAtCenter || !addNodePopupPosition
         ? screenToFlowPosition(getViewportCenter())
         : screenToFlowPosition(addNodePopupPosition)
-      const newNodeId = addNode(type, position, initialData)
+      // Picker auto-open is owned by the store action so every add-node
+      // entry point (this popup, sidebar toolbar, handle-popover, future
+      // ones) gets the behavior automatically.
+      addNodeAndOpenPicker(type, position, initialData)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
       setAddNodeAtCenter(false)
-      // Tile-grid pickers open in fullscreen settings so the user can
-      // immediately pick a value via the catalog — the small node body
-      // isn't enough to interact with the picker meaningfully. NOT every
-      // picker-node-type qualifies: `tone` and `text-prompt` are registered
-      // for typed-handle compatibility but have plain Input/Textarea UI and
-      // shouldn't auto-fullscreen. Use `isTileGridPickerType`.
-      if (newNodeId && isTileGridPickerType(type)) {
-        selectNode(newNodeId)
-        setConfigPanelFullscreen(true)
-      }
     },
-    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter, selectNode, setConfigPanelFullscreen]
+    [addNodeAndOpenPicker, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter]
   )
 
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
@@ -1869,6 +1861,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onAddNode={handleAddNode}
         position={addNodePopupPosition}
         connectionContext={connectionContext}
+        // Pass plain `addNode` (not `addNodeAndOpenPicker`) so the popup
+        // can sequence: create node → wire edge → THEN open the picker.
+        // Opening the picker BEFORE the edge would mount the panel against
+        // a state that's missing the new edge, breaking previews that read
+        // upstream context on first render (CameraMotionConfig).
         storeAddNode={addNode}
         storeOnConnect={useCallback((connection: import("@xyflow/react").Connection) => {
           onConnect(connection)

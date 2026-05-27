@@ -318,7 +318,7 @@ export function CameraMotionConfig({ data, onUpdate, nodes, edges, nodeId }: Con
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText]} />
       <p className="text-[10px] text-muted-foreground italic px-0.5">
         Connect parameter nodes to startState / endState input handles to add "beginning with…" / "ending with…" clauses to this preview.
       </p>
@@ -345,7 +345,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildFramingHints(data), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildFramingHints(data), data.postText]} />
       <CustomTextRows
         idPrefix="framing"
         preText={data.preText}
@@ -393,7 +393,7 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getLensPromptHint(data.lens), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getLensPromptHint(data.lens), data.postText]} />
       <CustomTextRows
         idPrefix="lens"
         preText={data.preText}
@@ -416,7 +416,7 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getCameraFormatPromptHint(data.cameraFormat), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getCameraFormatPromptHint(data.cameraFormat), data.postText]} />
       <CustomTextRows
         idPrefix="camera-format"
         preText={data.preText}
@@ -440,7 +440,7 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildLightingHints(data), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildLightingHints(data), data.postText]} />
       <CustomTextRows
         idPrefix="lighting"
         preText={data.preText}
@@ -488,7 +488,7 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getColorLookPromptHint(data.colorLook), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getColorLookPromptHint(data.colorLook), data.postText]} />
       <CustomTextRows
         idPrefix="color-look"
         preText={data.preText}
@@ -511,7 +511,7 @@ export function AtmosphereConfig({ data, onUpdate }: ConfigProps<AtmosphereData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildAtmosphereHints(data.atmosphere), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildAtmosphereHints(data.atmosphere), data.postText]} />
       <CustomTextRows
         idPrefix="atmosphere"
         preText={data.preText}
@@ -535,7 +535,7 @@ export function ActionFxConfig({ data, onUpdate }: ConfigProps<ActionFxData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildActionFxHints(data.actionFx), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildActionFxHints(data.actionFx), data.postText]} />
       <CustomTextRows
         idPrefix="action-fx"
         preText={data.preText}
@@ -559,7 +559,7 @@ export function StyleConfig({ data, onUpdate }: ConfigProps<StyleData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getStylePromptHint(data.style), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getStylePromptHint(data.style), data.postText]} />
       <CustomTextRows
         idPrefix="style"
         preText={data.preText}
@@ -582,7 +582,7 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getSettingPromptHint(data.setting), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getSettingPromptHint(data.setting), data.postText]} />
       <CustomTextRows
         idPrefix="setting"
         preText={data.preText}
@@ -605,7 +605,7 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getLoopSubjectPromptHint(data.loopSubject), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getLoopSubjectPromptHint(data.loopSubject), data.postText]} />
       <CustomTextRows
         idPrefix="loop-subject"
         preText={data.preText}
@@ -768,7 +768,7 @@ export function PhotographerConfig({ data, onUpdate }: ConfigProps<PhotographerD
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, buildPhotographerHints(data.photographer), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildPhotographerHints(data.photographer), data.postText]} />
       <CustomTextRows
         idPrefix="photographer"
         preText={data.preText}
@@ -792,7 +792,7 @@ export function AestheticConfig({ data, onUpdate }: ConfigProps<AestheticData>) 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, buildAestheticHints(data.aesthetic), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildAestheticHints(data.aesthetic), data.postText]} />
       <CustomTextRows
         idPrefix="aesthetic"
         preText={data.preText}
@@ -816,7 +816,7 @@ export function EraConfig({ data, onUpdate }: ConfigProps<EraData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getEraPromptHint(data.era), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getEraPromptHint(data.era), data.postText]} />
       <CustomTextRows
         idPrefix="era"
         preText={data.preText}
@@ -967,7 +967,7 @@ export function TemporalConfig({ data, onUpdate }: ConfigProps<TemporalData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildTemporalHints(data), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildTemporalHints(data), data.postText]} />
       <CustomTextRows
         idPrefix="temporal"
         preText={data.preText}
@@ -1014,7 +1014,7 @@ export function MaterialConfig({ data, onUpdate }: ConfigProps<MaterialData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, buildMaterialHints(data.material), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildMaterialHints(data.material), data.postText]} />
       <CustomTextRows
         idPrefix="material"
         preText={data.preText}
@@ -1040,7 +1040,7 @@ export function AnimalConfig({ data, onUpdate }: ConfigProps<AnimalData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText]} />
       <CustomTextRows
         idPrefix="animal"
         preText={data.preText}
@@ -1065,7 +1065,7 @@ export function VehicleConfig({ data, onUpdate }: ConfigProps<VehicleData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText]} />
       <CustomTextRows
         idPrefix="vehicle"
         preText={data.preText}
@@ -1090,7 +1090,7 @@ export function WeaponConfig({ data, onUpdate }: ConfigProps<WeaponData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, hint, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, hint, data.postText]} />
       <CustomTextRows
         idPrefix="weapon"
         preText={data.preText}
@@ -1113,7 +1113,7 @@ export function PhotoGenreConfig({ data, onUpdate }: ConfigProps<PhotoGenreData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getPhotoGenrePromptHint(data.photoGenre), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getPhotoGenrePromptHint(data.photoGenre), data.postText]} />
       <CustomTextRows
         idPrefix="photo-genre"
         preText={data.preText}
@@ -1136,7 +1136,7 @@ export function BackdropConfig({ data, onUpdate }: ConfigProps<BackdropData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getBackdropPromptHint(data.backdrop), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getBackdropPromptHint(data.backdrop), data.postText]} />
       <CustomTextRows
         idPrefix="backdrop"
         preText={data.preText}
@@ -1159,7 +1159,7 @@ export function HeldPropConfig({ data, onUpdate }: ConfigProps<HeldPropData>) {
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildHeldPropHints(data.heldProp), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildHeldPropHints(data.heldProp), data.postText]} />
       <CustomTextRows
         idPrefix="held-prop"
         preText={data.preText}
@@ -1183,7 +1183,7 @@ export function ExposureSettingsConfig({ data, onUpdate }: ConfigProps<ExposureS
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildExposureHints(data), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildExposureHints(data), data.postText]} />
       <CustomTextRows
         idPrefix="exposure-settings"
         preText={data.preText}
@@ -1206,7 +1206,7 @@ export function RenderQualityConfig({ data, onUpdate }: ConfigProps<RenderQualit
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getRenderQualityPromptHint(data.renderQuality), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getRenderQualityPromptHint(data.renderQuality), data.postText]} />
       <CustomTextRows
         idPrefix="render-quality"
         preText={data.preText}
@@ -1229,7 +1229,7 @@ export function CompositionEffectsConfig({ data, onUpdate }: ConfigProps<Composi
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, getCompositionEffectPromptHint(data.compositionEffect), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, getCompositionEffectPromptHint(data.compositionEffect), data.postText]} />
       <CustomTextRows
         idPrefix="composition-effects"
         preText={data.preText}
@@ -1252,7 +1252,7 @@ export function PostProcessEffectsConfig({ data, onUpdate }: ConfigProps<PostPro
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, ...buildPostProcessHints(data.postProcess), data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, buildPostProcessHints(data.postProcess), data.postText]} />
       <CustomTextRows
         idPrefix="post-process-effects"
         preText={data.preText}
@@ -1302,7 +1302,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText]} />
       <CustomTextRows
         idPrefix="transition"
         preText={data.preText}
@@ -1347,7 +1347,7 @@ export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxDat
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
-      <PromptInjectionPreview hints={[data.preText, composed, data.postText].filter(Boolean) as string[]} />
+      <PromptInjectionPreview hints={[data.preText, composed, data.postText]} />
       <CustomTextRows
         idPrefix="character-fx"
         preText={data.preText}

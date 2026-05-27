@@ -28,7 +28,7 @@ import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
-import { migratePickerSourceHandle } from "@/lib/picker-handles"
+import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 
 /**
  * Migrate legacy image node types to the new split types.
@@ -416,6 +416,25 @@ interface WorkflowState {
   readonly onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void
   readonly onConnect: (connection: Connection) => void
   readonly addNode: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
+  /**
+   * Select a node and open its config panel in fullscreen — but only for
+   * tile-grid picker node types. No-op for non-pickers (text-prompt / tone /
+   * generate-image / etc.). Use after `addNode` returns a fresh node id when
+   * the caller wants the picker UX without bundling the create + open into
+   * one step (e.g., the add-node popup's connectionContext branch needs to
+   * create the node, wire the edge, THEN open the picker so the panel mounts
+   * with the upstream context already present).
+   */
+  readonly openPickerForNode: (nodeId: string, type: SceneNodeType) => void
+  /**
+   * `addNode` + `openPickerForNode`, in one call. Returns the new node id
+   * (or undefined if creation failed). Convenience combo for add-node entry
+   * points that don't need to wire an edge between create and open (popup
+   * `handleAddNode` in workflow-canvas, sidebar `handleAddNode` in
+   * node-toolbar). The popup's connectionContext branch uses the two
+   * actions separately so the edge lands before the picker mounts.
+   */
+  readonly addNodeAndOpenPicker: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   /**
@@ -1124,6 +1143,25 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     return id
   },
 
+  openPickerForNode: (nodeId, type) => {
+    if (!isTileGridPickerType(type)) return
+    // Reuse the canonical selectNode so React Flow's `node.selected` flags
+    // and `selectedNodeId` stay in lockstep (selectNode is the only place
+    // that handles already-selected fast-path + clears other selections).
+    // Subsequent set() for the fullscreen flag is intentionally a separate
+    // transition — Zustand subscribers in this codebase already tolerate
+    // selectNode emitting its own update, and inlining the logic would
+    // duplicate the very contract we're trying to reuse.
+    get().selectNode(nodeId)
+    set({ configPanelFullscreen: true })
+  },
+
+  addNodeAndOpenPicker: (type, position, initialData) => {
+    const id = get().addNode(type, position, initialData)
+    if (id) get().openPickerForNode(id, type)
+    return id
+  },
+
   updateNode: (nodeId, updates) =>
     set((state) => ({
       nodes: state.nodes.map((node) =>
@@ -1518,8 +1556,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
       const target = state.nodes.find((n) => n.id === nodeId)
       if (target?.selected) {
-        // React Flow already handled selection — just sync selectedNodeId
-        return { selectedNodeId: nodeId }
+        // Target already selected. When called from React Flow's
+        // onNodesChange handler, the batch already deselected siblings, so
+        // a scalar-id sync is enough (fast path). But for programmatic
+        // callers (openPickerForNode, scripts, future entry points) that
+        // bypass React Flow's selection batching, sibling nodes may still
+        // carry `selected: true` from a prior shift-multi-select.
+        // selectNode's contract is "select THIS node, deselect all others"
+        // — so when other nodes are still selected, we have to clear them
+        // even on the already-selected branch.
+        const othersSelected = state.nodes.some((n) => n.id !== nodeId && n.selected)
+        if (!othersSelected) return { selectedNodeId: nodeId }
+        return {
+          selectedNodeId: nodeId,
+          nodes: state.nodes.map((n) => (n.id === nodeId ? n : n.selected ? { ...n, selected: false } : n)),
+        }
       }
 
       // Target not yet selected (e.g. stopPropagation prevented React Flow) — select it, deselect others
