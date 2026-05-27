@@ -7,7 +7,7 @@ import type { PipelineEntity } from "@/hooks/use-pipeline-entities"
 
 // ─── Mocks (vi.mock is hoisted; share state via vi.hoisted) ─────────────────
 
-const { mockEntities, refetchMock, apiMocks, uploadImageMock } = vi.hoisted(() => ({
+const { mockEntities, refetchMock, apiMocks, uploadImageMock, toastMock } = vi.hoisted(() => ({
   mockEntities: { current: [] as PipelineEntity[] },
   refetchMock: vi.fn(),
   apiMocks: {
@@ -19,6 +19,7 @@ const { mockEntities, refetchMock, apiMocks, uploadImageMock } = vi.hoisted(() =
   uploadImageMock: vi.fn(async (_file: File) => ({
     url: "https://r2.example.com/uploads/abc.jpg",
   })),
+  toastMock: { error: vi.fn(), success: vi.fn() },
 }))
 
 vi.mock("@/hooks/use-pipeline-entities", () => ({
@@ -35,6 +36,10 @@ vi.mock("@/lib/pipelines-api", () => ({
 
 vi.mock("@/lib/api", () => ({
   uploadImage: uploadImageMock,
+}))
+
+vi.mock("sonner", () => ({
+  toast: toastMock,
 }))
 
 // ─── Imports (after mocks) ──────────────────────────────────────────────────
@@ -373,5 +378,47 @@ describe("CharactersPanel — Step A wizard", () => {
     // Resolve → buttons re-enable (refetch fires before the disabled state clears).
     resolveApprove()
     await waitFor(() => expect(refetchMock).toHaveBeenCalled())
+  })
+
+  it("treats a 409 entity_not_pending_description as success — no error toast, wizard refetches", async () => {
+    const user = userEvent.setup()
+    // Duplicate submit: the entity already advanced, so the CAS guard 409s.
+    // The API surfaces it as `Error("409: {...entity_not_pending_description...}")`.
+    apiMocks.approveDescription.mockRejectedValueOnce(
+      new Error('409: {"error":{"code":"entity_not_pending_description"}}'),
+    )
+    mockEntities.current = [buildEntity()]
+    renderWithClient(
+      <CharactersPanel pipelineId="p1" plan={buildPlan()} mode="manual" />,
+    )
+
+    await user.click(screen.getByTestId("step-a-approve"))
+
+    await waitFor(() =>
+      expect(apiMocks.approveDescription).toHaveBeenCalledTimes(1),
+    )
+    // Benign — the wizard still refetches so it advances…
+    await waitFor(() => expect(refetchMock).toHaveBeenCalled())
+    // …and NO scary error toast is shown for an already-done action.
+    expect(toastMock.error).not.toHaveBeenCalled()
+  })
+
+  it("surfaces a genuine (non-409) approve failure as an error toast", async () => {
+    const user = userEvent.setup()
+    apiMocks.approveDescription.mockRejectedValueOnce(
+      new Error('500: {"error":{"code":"internal_error"}}'),
+    )
+    mockEntities.current = [buildEntity()]
+    renderWithClient(
+      <CharactersPanel pipelineId="p1" plan={buildPlan()} mode="manual" />,
+    )
+
+    await user.click(screen.getByTestId("step-a-approve"))
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        expect.stringContaining("Couldn't approve description"),
+      ),
+    )
   })
 })
