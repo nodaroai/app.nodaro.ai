@@ -121,7 +121,6 @@ import { useAuth } from "@/hooks/use-auth";
 import { useUserSettings } from "@/hooks/queries/use-user-settings-queries";
 import { useNodeSelectionHistoryStore, type HistoryEntry } from "@/hooks/use-node-selection-history-store";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { isTileGridPickerType } from "@/lib/picker-handles";
 
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })));
 import type { ComponentSelection } from "./component-marketplace-modal";
@@ -1445,8 +1444,7 @@ export function AddNodePopup({
 }: AddNodePopupProps) {
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
-  const selectNode = useWorkflowStore((s) => s.selectNode);
-  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen);
+  const openPickerForNode = useWorkflowStore((s) => s.openPickerForNode);
   const showRecentNodes = userSettings?.showRecentNodes ?? false;
   const showMostUsedNodes = userSettings?.showMostUsedNodes ?? false;
   const history = useNodeSelectionHistoryStore((s) => s.history);
@@ -1511,6 +1509,12 @@ export function AddNodePopup({
       }
       recordSelection(type);
       if (connectionContext && storeAddNode && storeOnConnect) {
+        // Sequence: create node → wire edge → open picker. Opening the
+        // picker AFTER `storeOnConnect` is intentional — config panels for
+        // tile-grid pickers (e.g. CameraMotionConfig) read `edges` on mount
+        // to compose preview hints; if the panel opens before the edge
+        // lands, the first render is missing the upstream context and the
+        // user sees a one-frame flash of an incomplete preview.
         const newNodeId = storeAddNode(type, connectionContext.dropPosition);
         if (!newNodeId) {
           onClose();
@@ -1532,23 +1536,14 @@ export function AddNodePopup({
                 targetHandle: connectionContext.handleId,
               };
         storeOnConnect(connection);
-        // Tile-grid pickers open in fullscreen settings so the user can
-        // immediately pick a value via the catalog. Skip text-prompt / tone
-        // (registered for handle compatibility but have plain Input/Textarea
-        // UI). The popup's connectionContext branch creates the node via
-        // storeAddNode and bypasses workflow-canvas's handleAddNode, so the
-        // same hook has to be applied here.
-        if (isTileGridPickerType(type)) {
-          selectNode(newNodeId);
-          setConfigPanelFullscreen(true);
-        }
+        openPickerForNode(newNodeId, type);
         onClose();
       } else {
         onAddNode(type);
         onClose();
       }
     },
-    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection, selectNode, setConfigPanelFullscreen],
+    [connectionContext, storeAddNode, storeOnConnect, onAddNode, onClose, recordSelection, openPickerForNode],
   );
 
   // Handle component selected from marketplace modal
