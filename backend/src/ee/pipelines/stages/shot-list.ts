@@ -163,6 +163,10 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
       stageName: "shot_list",
       status: "approved",
     })
+    // Drive the next stage (see objects.ts) — manual completion previously
+    // returned here without re-enqueueing, stalling shot_list → scene_images.
+    const { enqueuePipelineRun } = await import("../queue.js")
+    await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
     return
   }
 
