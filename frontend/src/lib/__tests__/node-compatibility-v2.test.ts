@@ -152,10 +152,19 @@ describe("getCompatibleNodes — typed-handle branches (camera-motion, transitio
 // added to the registry without being added to TYPED_HANDLE_IDS, the
 // add-node popup silently hides Parameter-category candidates on it.
 describe("TYPED_HANDLE_IDS contract", () => {
-  it("matches every non-generate-image handle in TARGET_HANDLE_ACCEPTS", () => {
+  it("matches every typed-pool-gating handle in TARGET_HANDLE_ACCEPTS", () => {
+    // Node types whose registry entries describe DATA-producer inputs (not
+    // parameter-picker inputs) and therefore aren't typed-pool gates — the
+    // add-node popup should surface data-producer nodes on these, not the
+    // Parameter-category pickers.
+    const NON_TYPED_POOL_NODE_TYPES = new Set([
+      "generate-image", // owns 6 handle ids that aren't typed-pool gates
+      "list", "loop", "web-scrape", "extract-field", "filter-list",
+      "deduplicate", "merge-lists", "sort-list",
+    ])
     const registryHandles = new Set<string>()
     for (const [nodeType, entries] of Object.entries(TARGET_HANDLE_ACCEPTS)) {
-      if (nodeType === "generate-image") continue // owns 6 handle ids that aren't typed-pool gates
+      if (NON_TYPED_POOL_NODE_TYPES.has(nodeType)) continue
       for (const e of entries) registryHandles.add(e.handleId)
     }
     expect(new Set(TYPED_HANDLE_IDS)).toEqual(registryHandles)

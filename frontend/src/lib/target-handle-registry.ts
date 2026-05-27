@@ -1,5 +1,15 @@
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
-import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
+import {
+  isValidListNodeConnection,
+  isValidWebScrapeConnection,
+  isValidExtractFieldConnection,
+  isValidFilterListConnection,
+  isValidDeduplicateConnection,
+  isValidMergeListsConnection,
+  isValidSortListConnection,
+  isValidLoopCoarse,
+} from "./data-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
 
 export interface TargetHandleEntry {
   readonly handleId: string
@@ -10,14 +20,6 @@ export interface TargetHandleEntry {
   readonly label?: string
   readonly accepts: (sourceType: string) => boolean
 }
-
-/** Predicate that matches the validator's notion of "is a visual picker" —
- *  excludes audio pickers (music-genre / music-mood / instrumentation /
- *  voice-*) which never feed visual targets. Used by both the registry's
- *  generate-image entry AND the canvas validator (connection-validation.ts)
- *  so the pip "valid candidate" highlight and the drop predicate never
- *  diverge. */
-const isVisualPickerType = (t: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t)
 
 /**
  * Sources whose output contributes a USABLE prompt-hint clause to
@@ -138,6 +140,45 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   // nothing.
   "character-fx": [
     { handleId: "target", label: "Target subject", accepts: ACCEPTS_CHARACTER_REF },
+  ],
+
+  // ─── Data root-category nodes ─────────────────────────────────────────
+  // Source-direction popovers walk this map; entries here let "drag from an
+  // output pip" enumerate data-node target handles as candidates. The
+  // loop-node case is omitted intentionally — its per-column accepts depend
+  // on the column type stored in node data, which this registry's static
+  // shape can't reach. The loop component's own per-pip accepts predicate
+  // handles target-direction visual filtering.
+  "list": [
+    { handleId: "in", label: "Items", accepts: (s) => isValidListNodeConnection("in", s, isVisualPickerType) },
+  ],
+  "web-scrape": [
+    { handleId: "in", label: "URL / Query", accepts: (s) => isValidWebScrapeConnection("in", s) },
+  ],
+  "extract-field": [
+    { handleId: "in", label: "Source", accepts: (s) => isValidExtractFieldConnection("in", s) },
+  ],
+  "filter-list": [
+    { handleId: "in", label: "List", accepts: (s) => isValidFilterListConnection("in", s, isVisualPickerType) },
+    { handleId: "variables", label: "Variables", accepts: (s) => isValidFilterListConnection("variables", s, isVisualPickerType) },
+  ],
+  "deduplicate": [
+    { handleId: "in", label: "List", accepts: (s) => isValidDeduplicateConnection("in", s) },
+  ],
+  "merge-lists": [
+    { handleId: "in", label: "Lists", accepts: (s) => isValidMergeListsConnection("in", s) },
+  ],
+  "sort-list": [
+    { handleId: "in", label: "List", accepts: (s) => isValidSortListConnection("in", s) },
+  ],
+  // Loop's per-column input handles have dynamic ids (`col_<uuid>_in`) so
+  // they can't be enumerated statically. Expose the col_add quick-add
+  // handle instead — source-direction popovers will offer loop as a
+  // candidate, and the col_add handler in use-workflow-store auto-detects
+  // the column type from the source. This is the only way to surface loop
+  // in TARGET_HANDLE_ACCEPTS without threading node data through.
+  "loop": [
+    { handleId: "col_add", label: "New column", accepts: (s) => isValidLoopCoarse(s, isVisualPickerType) },
   ],
 }
 

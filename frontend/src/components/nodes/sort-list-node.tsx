@@ -6,10 +6,13 @@ import { ArrowUpDown, FileText, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SortListNodeData } from "@/types/nodes"
+import { isValidSortListConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+
+const ACCEPTS_IN = (t: string) => isValidSortListConnection("in", t)
 
 const SORT_TYPE_LABELS: Record<NonNullable<SortListNodeData["sortType"]>, string> = {
   auto: "Auto",
@@ -57,8 +60,8 @@ function SortListNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -79,8 +82,8 @@ function SortListNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="sort-list" handleId="in"  type="target" position={Position.Left}  label="List"   color={DATA_HANDLE_COLORS.list} icon={<Braces />}   side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="sort-list" handleId="out" type="source" position={Position.Right} label="Sorted" color={DATA_HANDLE_COLORS.list} icon={<FileText />} side="right" top="20px" />
     </div>
   )
 }

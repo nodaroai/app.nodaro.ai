@@ -6,10 +6,13 @@ import { CopyMinus, FileText, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { DeduplicateNodeData } from "@/types/nodes"
+import { isValidDeduplicateConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+
+const ACCEPTS_IN = (t: string) => isValidDeduplicateConnection("in", t)
 
 function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as DeduplicateNodeData
@@ -46,8 +49,8 @@ function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -68,8 +71,8 @@ function DeduplicateNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="deduplicate" handleId="in"  type="target" position={Position.Left}  label="List"   color={DATA_HANDLE_COLORS.list} icon={<Braces />}   side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="deduplicate" handleId="out" type="source" position={Position.Right} label="Unique" color={DATA_HANDLE_COLORS.list} icon={<FileText />} side="right" top="20px" />
     </div>
   )
 }

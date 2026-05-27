@@ -34,3 +34,11 @@ export const AUDIO_PARAMETER_PICKER_NODE_TYPES: ReadonlySet<string> = new Set([
 export const VISUAL_PARAMETER_PICKER_NODE_TYPES: ReadonlySet<string> = new Set(
   Array.from(PARAMETER_PICKER_NODE_TYPES).filter((t) => !AUDIO_PARAMETER_PICKER_NODE_TYPES.has(t)),
 )
+
+/** Single-source predicate for "is this node a visual parameter picker?".
+ *  Exported so every consumer (typed-handle accepts predicates, source-pip
+ *  candidate enumeration, popover validators) shares ONE definition — the
+ *  earlier pattern of redeclaring this one-liner per file caused the
+ *  `scene → elements` typo regression documented in the migration playbook. */
+export const isVisualPickerType = (sourceType: string): boolean =>
+  VISUAL_PARAMETER_PICKER_NODE_TYPES.has(sourceType)

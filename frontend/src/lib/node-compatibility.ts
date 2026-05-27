@@ -3,7 +3,17 @@ import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
 import { IDENTITY_TYPES } from "./generate-image-handles"
-import { ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
+import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
+
+/** Source node types whose source-direction candidate enumeration must
+ *  consult the typed accepts predicates in `target-handle-registry.ts`
+ *  rather than the loose `HANDLE_COMPATIBILITY` map. Keeping these two
+ *  paths in sync prevents the add-node popup from suggesting targets the
+ *  drop-time validator then rejects. */
+const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
+  "list", "loop", "web-scrape", "extract-field", "filter-list",
+  "deduplicate", "merge-lists", "sort-list",
+])
 
 export interface ConnectionContext {
   readonly nodeId: string
@@ -131,6 +141,38 @@ export function getCompatibleNodes(
       `Typed-handle branches will be skipped, returning generic fallback. ` +
       `Pass connectionContext.nodeType from the caller.`,
     )
+  }
+
+  // Data-category sources (list, loop, web-scrape, extract-field,
+  // filter-list, deduplicate, merge-lists, sort-list): walk
+  // TARGET_HANDLE_ACCEPTS to find every option whose typed target handle
+  // accepts this source type. Aligns the add-node popup with the canvas
+  // validator + popover candidate enumeration (which both consult the
+  // same registry). Without this branch, the popup would fall through to
+  // HANDLE_COMPATIBILITY which has loose entries like
+  // `json: ["json","in","text","prompt"]` and would suggest media nodes
+  // that the new data-handles.ts predicates then reject at drop time.
+  if (direction === "source" && consumerNodeType && TYPED_SOURCE_NODE_TYPES.has(consumerNodeType)) {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      // Skip the source node's own type — self-loops are rejected by the
+      // cycle guard anyway and surfacing them in the popup is just noise.
+      if (option.type === consumerNodeType) continue
+      const entries = TARGET_HANDLE_ACCEPTS[option.type]
+      if (!entries) continue
+      if (entries.some((e) => e.accepts(consumerNodeType))) {
+        direct.push(option)
+        directTypes.add(option.type)
+      }
+    }
+    // `compatible: []` is intentional — strict typing for data-category
+    // sources. Any node that legitimately consumes a data-node output
+    // MUST be registered in TARGET_HANDLE_ACCEPTS to appear in this
+    // popup. The pre-fix HANDLE_COMPATIBILITY fallthrough populated a
+    // fuzzy "compatible" tier that included media nodes the validator
+    // then rejected at drop time; removing it eliminates that mismatch.
+    return { direct, compatible: [], directTypes }
   }
 
   // Special-case: the `cinematography` / `style` target handle accepts only
@@ -331,7 +373,15 @@ export function resolveTargetHandle(
   const compatible = HANDLE_COMPATIBILITY[sourceHandleId] ?? [sourceHandleId]
 
   if (direction === "source") {
-    // Loop/list nodes use "col_add" quick-add handle (not static "in")
+    // Loop AND list nodes use "col_add" quick-add. The col_add handler in
+    // use-workflow-store auto-detects the column type from the source AND
+    // sets column[0].connectedSourceId / type / name. Routing to the
+    // static "in" pip instead would leave column metadata unset, which
+    // breaks clearConnectedListRows (run-handlers.ts) on subsequent runs
+    // and confuses any later col_add drop (soleEmptyCol check would still
+    // see col[0] as empty and clobber it). The popover Connect button
+    // still wires to "in" directly (via TARGET_HANDLE_ACCEPTS) — that
+    // path is the passthrough flow and doesn't need column metadata.
     if (nodeType === "loop" || nodeType === "list") return "col_add"
     return def.inputs.find((h) => compatible.includes(h)) ?? "in"
   } else {

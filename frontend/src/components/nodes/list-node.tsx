@@ -5,15 +5,22 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { List } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { TEXT_CELL_DEFAULT_MAX_LINES, TEXT_FONT_SIZE_CLASS, TEXT_FONT_SIZE_DEFAULT, type ListNodeData, type WorkflowNode } from "@/types/nodes"
 import { extractNodeOutputAsList, resolveEdgeValuesForTableColumn } from "@/components/editor/workflow-editor/node-input-resolver"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { isValidListNodeConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { isVisualPickerType } from "@/lib/parameter-picker-types"
+
+// Module-level accepts predicate — defining inside the component would
+// create a fresh arrow ref on every render and bust HandleWithPopover's
+// useConnection memo. See playbook Feature 1, "Pitfalls already paid for".
+const ACCEPTS_IN = (t: string) => isValidListNodeConnection("in", t, isVisualPickerType)
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "list", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, external: true },
+  { id: "list", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, external: true },
 ] as const
 
 function ListNodeComponent({ id, data, selected }: NodeProps) {
@@ -41,6 +48,7 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
   const textMaxLines = Math.max(1, nodeData.textMaxLines ?? TEXT_CELL_DEFAULT_MAX_LINES)
   const textFontSize = nodeData.textFontSize ?? TEXT_FONT_SIZE_DEFAULT
   const textFontClass = TEXT_FONT_SIZE_CLASS[textFontSize]
+  const listLabel = nodeData.columns?.[0]?.name?.trim() || "List"
 
   return (
     <div className="relative max-w-[220px]">
@@ -93,8 +101,8 @@ function ListNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<List />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<List />} top="20px" label={nodeData.columns?.[0]?.name} />
+      <HandleWithPopover nodeId={id} nodeType="list" handleId="in"   type="target" position={Position.Left}  label="In"   color={DATA_HANDLE_COLORS.list} icon={<List />} side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="list" handleId="list" type="source" position={Position.Right} label={listLabel} color={DATA_HANDLE_COLORS.list} icon={<List />} side="right" top="20px" />
     </div>
   )
 }

@@ -60,6 +60,12 @@ vi.mock("../handle-icon", () => ({
   HandleIcon: ({ icon }: any) => <div data-testid="handle-icon">{icon}</div>,
 }))
 
+vi.mock("../handle-with-popover", () => ({
+  HandleWithPopover: ({ handleId, label, type }: any) => (
+    <div data-testid={`handle-with-popover-${handleId}`} data-label={label} data-type={type} />
+  ),
+}))
+
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {
     id: "node-1",

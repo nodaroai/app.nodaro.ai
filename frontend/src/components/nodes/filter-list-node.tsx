@@ -6,11 +6,16 @@ import { ListFilter, FileText, Braces, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
 import type { FilterListNodeData } from "@/types/nodes"
+import { isValidFilterListConnection, DATA_HANDLE_COLORS } from "@/lib/data-handles"
+import { isVisualPickerType } from "@/lib/parameter-picker-types"
+
+const ACCEPTS_IN        = (t: string) => isValidFilterListConnection("in", t, isVisualPickerType)
+const ACCEPTS_VARIABLES = (t: string) => isValidFilterListConnection("variables", t, isVisualPickerType)
 
 function FilterListNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FilterListNodeData
@@ -47,9 +52,11 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
-          { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, customStyle: { top: "20px", left: "-29px" }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, external: true },
+          // Variables stays at top:20px to preserve edge geometry on
+          // pre-migration saved workflows.
+          { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, customStyle: { top: "20px", left: "-29px" }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -76,9 +83,9 @@ function FilterListNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Variable />} color="orange" side="left" top="20px" label="Variables" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="filter-list" handleId="in"                  type="target" position={Position.Left}  label="List"      color={DATA_HANDLE_COLORS.list}      icon={<Braces />}   side="left"  top="calc(100% - 20px)" accepts={ACCEPTS_IN} />
+      <HandleWithPopover nodeId={id} nodeType="filter-list" handleId={VARIABLES_HANDLE_ID} type="target" position={Position.Left}  label="Variables" color={DATA_HANDLE_COLORS.variables} icon={<Variable />} side="left"  top="20px"             accepts={ACCEPTS_VARIABLES} />
+      <HandleWithPopover nodeId={id} nodeType="filter-list" handleId="out"                 type="source" position={Position.Right} label="Filtered"  color={DATA_HANDLE_COLORS.list}      icon={<FileText />} side="right" top="20px" />
     </div>
   )
 }
