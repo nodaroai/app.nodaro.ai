@@ -32,7 +32,7 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
@@ -411,7 +411,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_I2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -1149,7 +1149,7 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_V2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -1642,7 +1642,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_T2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>
@@ -2061,7 +2061,7 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
           <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
           <SelectContent>
             {VIDEO_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
             ))}
           </SelectContent>
         </Select>

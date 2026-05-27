@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useStore } from "@xyflow/react"
-import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy } from "lucide-react"
+import { Sparkles, Ratio, Maximize2, Clock, Settings2, Copy, Layers } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -10,12 +10,14 @@ import {
   VIDEO_RESOLUTION_OPTIONS,
   getAspectRatiosForVideoModel,
   getDurationsForVideoModel,
+  getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
 import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
+import { isSeedance2Provider } from "@nodaro/shared"
 import type { GenerateVideoNodeData } from "@/types/nodes"
 
 interface GenerateVideoQuickToolbarProps {
@@ -180,6 +182,20 @@ export function GenerateVideoQuickToolbar({
     updateNodeData(nodeId, { resolution: value })
   }
 
+  // Seedance 2 input mode — mutually exclusive between Frames (start/end
+  // images) and References (image references). Visible only when the
+  // chosen provider is in the Seedance 2 family; drives the disabled-handle
+  // styling via `getHandleConnectionLimit`.
+  const isSeedance2 = isSeedance2Provider(currentProvider)
+  const currentSeedance2Mode: "frames" | "references" =
+    (data.seedance2InputMode as "frames" | "references" | undefined) ?? "frames"
+  const handleSeedance2ModeChange = (value: string) => {
+    if (value === "frames" || value === "references") {
+      updateNodeData(nodeId, { seedance2InputMode: value })
+    }
+  }
+  const seedance2ModeLabel = currentSeedance2Mode === "frames" ? "Frames" : "Refs"
+
   // Ghost select trigger — no border, no background by default, subtle
   // hover only. Icon prefix + value + small chevron. `!` modifiers beat
   // shadcn's data-[size]:* attribute defaults. Light + dark mode variants:
@@ -212,6 +228,7 @@ export function GenerateVideoQuickToolbar({
   if (isCompact) {
     const summary = [
       modelShort,
+      isSeedance2 ? seedance2ModeLabel : null,
       aspectShort || currentAspect,
       durationShort,
       resolutionShort,
@@ -250,11 +267,30 @@ export function GenerateVideoQuickToolbar({
                 </SelectTrigger>
                 <SelectContent>
                   {VIDEO_GEN_MODELS.map((m) => (
-                    <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+                    <ModelSelectOption
+                      key={m.value}
+                      value={m.value}
+                      label={m.label}
+                      desc={m.desc}
+                      tooltip={getVideoModelCapabilitiesTooltip(m.value)}
+                    />
                   ))}
                 </SelectContent>
               </Select>
             </ToolbarSetting>
+            {isSeedance2 && (
+              <ToolbarSetting label="Mode" icon={<Layers className="w-3 h-3" />}>
+                <Select value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
+                  <SelectTrigger className={ghostPopoverTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
+                    <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </ToolbarSetting>
+            )}
             {aspectOptions.length > 0 && (
               <ToolbarSetting label="Aspect" icon={<Ratio className="w-3 h-3" />}>
                 <Select value={currentAspect} onValueChange={handleAspectChange} onOpenChange={handleOpenChange}>
@@ -351,6 +387,20 @@ export function GenerateVideoQuickToolbar({
           ))}
         </SelectContent>
       </Select>
+
+      {/* Seedance 2 input mode (Frames vs References) — only when relevant */}
+      {isSeedance2 && (
+        <Select value={currentSeedance2Mode} onValueChange={handleSeedance2ModeChange} onOpenChange={handleOpenChange}>
+          <SelectTrigger className={ghostTriggerClass} title="Input mode (Seedance 2)">
+            <Layers className="opacity-70" />
+            <SelectValue>{seedance2ModeLabel}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="frames" className="text-xs">Frames (start/end images)</SelectItem>
+            <SelectItem value="references" className="text-xs">References (image refs)</SelectItem>
+          </SelectContent>
+        </Select>
+      )}
 
       {/* Aspect ratio selector */}
       {aspectOptions.length > 0 && (

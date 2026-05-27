@@ -4,6 +4,7 @@ import {
   MODELS_WITH_REFERENCE_IMAGE_SUPPORT,
   VIDEO_REF_LIMITS_BY_PROVIDER,
   getModel,
+  isSeedance2Provider,
 } from "@nodaro/shared"
 import {
   PROVIDERS_WITH_END_FRAME,
@@ -79,21 +80,34 @@ export function getHandleConnectionLimit(
   // parity check). Compare against the runtime string until the union
   // catches up.
   if ((node.type as string) === "generate-video") {
-    const data = node.data as { provider?: string } | undefined
+    const data = node.data as { provider?: string; seedance2InputMode?: "frames" | "references" } | undefined
     const provider = data?.provider ?? "kling"
     // Use the catalog label if available so the tooltip reads naturally
     // ("Beyond Kling 2.6's max" rather than "Beyond kling's max"); fall
     // back to the raw provider id when the catalog has no entry yet.
     const providerLabel = getModel(provider)?.label ?? provider
     const caps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
+    // Seedance 2 mode toggle is mutually exclusive between Frames (start/end)
+    // and References (image references). Force the inactive set's caps to 0
+    // so the disabled-handle visual lights up the right pips for the chosen
+    // mode. Default = "frames" (matches the seedance2InputMode fallback
+    // throughout the codebase).
+    const isS2 = isSeedance2Provider(provider)
+    const s2Mode = isS2 ? (data?.seedance2InputMode ?? "frames") : null
+    const s2FramesDisabled = s2Mode === "references"
+    const s2ReferencesDisabled = s2Mode === "frames"
     switch (handleId) {
       case "startFrame":
-        return { limit: 1, providerLabel, isMultiProviderMin: false }
+        return s2FramesDisabled
+          ? { limit: 0, providerLabel, isMultiProviderMin: false }
+          : { limit: 1, providerLabel, isMultiProviderMin: false }
       case "endFrame":
+        if (s2FramesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         return PROVIDERS_WITH_END_FRAME.includes(provider)
           ? { limit: 1, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }
       case "imageReferences":
+        if (s2ReferencesDisabled) return { limit: 0, providerLabel, isMultiProviderMin: false }
         return PROVIDERS_WITH_REFERENCES.includes(provider)
           ? { limit: caps?.images ?? 1, providerLabel, isMultiProviderMin: false }
           : { limit: 0, providerLabel, isMultiProviderMin: false }

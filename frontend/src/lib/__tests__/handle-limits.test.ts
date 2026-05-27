@@ -61,15 +61,37 @@ describe("getHandleConnectionLimit (generate-video)", () => {
     expect(getHandleConnectionLimit(node, "videoReferences")?.limit).toBe(0)
   })
 
-  it("returns imageReferences cap for seedance-2-fast (multimodal references)", () => {
+  it("returns imageReferences cap for seedance-2-fast in references mode (multimodal references)", () => {
     // seedance-2-fast is in PROVIDERS_WITH_REFERENCES AND has caps.images = 9.
+    // Mode must be "references" — in the default "frames" mode the
+    // mutually-exclusive toggle forces imageReferences to 0.
     const node = {
       id: "n",
       type: "generate-video",
-      data: { provider: "seedance-2-fast" },
+      data: { provider: "seedance-2-fast", seedance2InputMode: "references" },
     } as unknown as WorkflowNode
     const result = getHandleConnectionLimit(node, "imageReferences")
     expect(result?.limit).toBeGreaterThan(1)
+  })
+
+  it("seedance-2 frames mode disables imageReferences (mutually exclusive with start/end frames)", () => {
+    const node = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "seedance-2-fast", seedance2InputMode: "frames" },
+    } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(node, "imageReferences")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(node, "startFrame")?.limit).toBe(1)
+  })
+
+  it("seedance-2 references mode disables startFrame + endFrame", () => {
+    const node = {
+      id: "n",
+      type: "generate-video",
+      data: { provider: "seedance-2-fast", seedance2InputMode: "references" },
+    } as unknown as WorkflowNode
+    expect(getHandleConnectionLimit(node, "startFrame")?.limit).toBe(0)
+    expect(getHandleConnectionLimit(node, "endFrame")?.limit).toBe(0)
   })
 
   it("returns null for unknown handle on generate-video", () => {

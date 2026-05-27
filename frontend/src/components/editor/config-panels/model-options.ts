@@ -307,6 +307,29 @@ export function getAspectRatiosForVideoModel(
   return _VIDEO_ASPECT_BY_PROVIDER[provider] ?? (VIDEO_RATIOS as readonly LabeledOption[])
 }
 
+/** Builds the capability tooltip for a video model — Durations, Resolutions,
+ *  Aspect ratios on three short lines. Used by the model dropdowns in the
+ *  generate-video config panel + quick toolbar so hover surfaces what each
+ *  model supports without duplicating the marketing description that already
+ *  renders inline. Returns `undefined` when no capability info is available
+ *  (caller falls back to the marketing description). */
+export function getVideoModelCapabilitiesTooltip(provider: string): string | undefined {
+  const durations = getDurationsForVideoModel(provider)
+  const resolutions = VIDEO_RESOLUTION_OPTIONS[provider]
+  const ratios = getAspectRatiosForVideoModel(provider)
+  const parts: string[] = []
+  if (durations.length > 0) {
+    parts.push(`Durations: ${durations.map((d) => `${d.value}s`).join(", ")}`)
+  }
+  if (resolutions && resolutions.length > 0) {
+    parts.push(`Resolutions: ${resolutions.map((r) => r.value).join(", ")}`)
+  }
+  if (ratios.length > 0) {
+    parts.push(`Aspect ratios: ${ratios.map((r) => r.value).join(", ")}`)
+  }
+  return parts.length > 0 ? parts.join("\n") : undefined
+}
+
 // Image qualities — derived from MODEL_CATALOG.
 export const IMAGE_QUALITY_OPTIONS: Record<string, readonly LabeledOption[]> =
   qualityOptionsByKind("image")
