@@ -2,9 +2,10 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Mic, AlertCircle, Settings2, CheckCircle2, Loader2 } from "lucide-react"
+import { Mic, AlertCircle, Settings2, CheckCircle2, Loader2, User } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { Button } from "@/components/ui/button"
 import { SunoVoiceSetupModal } from "./suno-voice-setup-modal"
@@ -34,13 +35,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
         selected={selected}
         hideHeader
         handles={[
-          {
-            id: "voicePersona",
-            type: "source",
-            position: Position.Right,
-            customStyle: { top: "calc(50% - 4px)", right: "-29px" },
-            hideHandle: true,
-          },
+          { id: "voicePersona", type: "source", position: Position.Right, customStyle: { top: "calc(50% - 4px)", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-3 p-3" style={{ minHeight: 140 }}>
@@ -101,13 +96,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      {/* Output handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/30"
-        style={{ top: "calc(50% - 4px)", right: "-29px", transform: "translateY(-50%)" }}
-      >
-        <Mic className="w-3.5 h-3.5 text-white" />
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="suno-voice" handleId="voicePersona" type="source" position={Position.Right} label="Voice persona" color="#F472B6" icon={<User />} side="right" top="calc(50% - 4px)" />
 
       <SunoVoiceSetupModal
         nodeId={id}

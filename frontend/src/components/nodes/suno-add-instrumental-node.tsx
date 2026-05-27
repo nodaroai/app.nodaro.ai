@@ -2,11 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Piano, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Piano, Loader2, AlertCircle, Volume2, LayoutGrid, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoAddInstrumentalConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +16,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoAddInstrumentalData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO = (t: string) => isValidSunoAddInstrumentalConnection("audio", t)
 
 function SunoAddInstrumentalNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoAddInstrumentalData
@@ -71,8 +75,8 @@ function SunoAddInstrumentalNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -100,8 +104,8 @@ function SunoAddInstrumentalNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Add Instrumental</span>
       </div>
     </BaseNode>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}><Volume2 className="w-3.5 h-3.5 text-white" /></div>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}><Piano className="w-3.5 h-3.5 text-white" /></div>
+    <HandleWithPopover nodeId={id} nodeType="suno-add-instrumental" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<Music />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-add-instrumental" handleId="audio" type="source" position={Position.Right} label="Audio" color="#F59E0B" icon={<Music />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

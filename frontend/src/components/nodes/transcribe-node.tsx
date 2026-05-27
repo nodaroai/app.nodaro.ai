@@ -2,18 +2,21 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { FileText, Loader2, AlertCircle, X, Type, Volume2, Copy, Download } from "lucide-react"
+import { FileText, Loader2, AlertCircle, X, Type, AudioWaveform, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidTranscribeConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import type { TranscribeData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO = (t: string) => isValidTranscribeConnection("audio", t)
 
 function TranscriptPreviewModal({
   isOpen,
@@ -104,8 +107,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
                           <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
           }
           handles={[
-            { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-            { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+            { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+            { id: "text",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
           ]}
         >
           <div className="flex flex-col gap-1 h-full">
@@ -229,8 +232,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
 
           </div>
         </BaseNode>
-        <HandleIcon icon={<Volume2 />} color="pink" side="left" top="calc(100% - 20px)" />
-        <HandleIcon icon={<Type />} color="pink" side="right" top="20px" />
+        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="text"  type="source" position={Position.Right} label="Text"  color="#22D3EE" icon={<Type />}          side="right" top="24px" />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

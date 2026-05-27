@@ -2,15 +2,19 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, Film, Volume2, LayoutGrid } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, Video, AudioWaveform, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSplitMediaConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { SplitMediaData } from "@/types/nodes"
+
+const ACCEPTS_VIDEO = (t: string) => isValidSplitMediaConnection("video", t)
+const ACCEPTS_AUDIO = (t: string) => isValidSplitMediaConnection("audio", t)
 
 function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as SplitMediaData | undefined
@@ -44,10 +48,10 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "video-in", type: "target", position: Position.Left, customStyle: { top: "40%", left: "-29px" }, hideHandle: true },
-          { id: "audio-in", type: "target", position: Position.Left, customStyle: { top: "70%", left: "-29px" }, hideHandle: true },
-          { id: "video-out", type: "source", position: Position.Right, customStyle: { top: "40%", right: "-29px" }, hideHandle: true },
-          { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: "70%", right: "-29px" }, hideHandle: true },
+          { id: "video", type: "target", position: Position.Left, customStyle: { top: "40%", left: "-29px" }, external: true },
+          { id: "audio", type: "target", position: Position.Left, customStyle: { top: "70%", left: "-29px" }, external: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: "30%", right: "-29px" }, external: true },
+          { id: "audio", type: "source", position: Position.Right, customStyle: { top: "70%", right: "-29px" }, external: true },
         ]}
       >
         <div className="flex flex-col gap-2 p-3" style={{ minHeight: 140 }}>
@@ -112,10 +116,10 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           </span>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Film />} color="steel" side="left" top="40%" />
-      <HandleIcon icon={<Volume2 />} color="steel" side="left" top="70%" />
-      <HandleIcon icon={<Film />} color="steel" top="40%" />
-      <HandleIcon icon={<Volume2 />} color="steel" top="70%" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="target" position={Position.Left}  label="Video" color="#3B82F6" icon={<Video />}          side="left"  top="40%" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="left"  top="70%" accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="source" position={Position.Right} label="Video" color="#3B82F6" icon={<Video />}          side="right" top="30%" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="source" position={Position.Right} label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="right" top="70%" />
     </div>
   )
 }

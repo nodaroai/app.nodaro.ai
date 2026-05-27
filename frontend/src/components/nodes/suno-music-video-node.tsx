@@ -2,11 +2,13 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, Volume2, Clapperboard, LayoutGrid } from "lucide-react"
+import { Film, Loader2, AlertCircle, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoMusicVideoConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -14,6 +16,8 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SunoMusicVideoData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO = (t: string) => isValidSunoMusicVideoConnection("audio", t)
 
 function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoMusicVideoData
@@ -47,7 +51,6 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative group/node" style={{ maxWidth: '220px' }}>
-      {/* Floating label above node */}
       <EditableNodeLabel
         label={nodeData.label}
         icon={<Film className="w-3.5 h-3.5" />}
@@ -64,7 +67,7 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         className={hasResult ? "!border-0 !shadow-none !bg-transparent" : undefined}
         hideHeader
         topToolbarContent={
-                      <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+          <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         bottomToolbarContent={
           showThumbnails && results && results.length > 1 ? (
@@ -89,8 +92,8 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "video-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         {hasResult ? null : (
@@ -153,20 +156,8 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {/* Input handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Volume2 className="w-3.5 h-3.5 text-white" />
-      </div>
-      {/* Output handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Clapperboard className="w-3.5 h-3.5 text-white" />
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="video" type="source" position={Position.Right} label="Video" color="#3B82F6" icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

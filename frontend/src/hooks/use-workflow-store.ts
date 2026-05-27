@@ -1870,6 +1870,134 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       migratedEdges = result.edges
     }
 
+    // Migrate legacy audio/text output handle ids to the normalized
+    // single-word form, AND rewrite target ids for audio nodes whose
+    // primary input was the overloaded `in`. Idempotent. Runs after the
+    // generate-video pass so its edge updates compose on top.
+    //
+    // Source rewrites are gated on the SOURCE node's type so we don't
+    // rewrite ids for nodes whose execution-graph reader still expects the
+    // legacy id. Target rewrites are gated on the TARGET node's type so
+    // renaming an unrelated future node's `in` handle never collides with
+    // this pass.
+    //
+    // NOTE: The 5 ffmpeg-overlapping nodes (merge-video-audio, trim-audio,
+    // mix-audio, combine-audio, adjust-volume) are NOT migrated here —
+    // their ids were shipped via the #2809 ffmpeg migration with a
+    // different design (single `in` retained) and dev's loadWorkflow
+    // already handles them via the ffmpeg migration block (if any). Do
+    // NOT add entries for them — would silently double-rewrite.
+    {
+      const SOURCE_REWRITES_BY_TYPE: Record<string, Record<string, string>> = {
+        // Batch 1
+        "generate-music": { "audio-out": "audio" },
+        // Batch 2 — Suno output id normalization
+        "suno-add-instrumental": { "audio-out": "audio" },
+        "suno-add-vocals":       { "audio-out": "audio" },
+        "suno-convert-wav":      { "audio-out": "audio" },
+        "suno-mashup":           { "audio-out": "audio" },
+        "suno-replace-section":  { "audio-out": "audio" },
+        "suno-upload-extend":    { "audio-out": "audio" },
+        "suno-music-video":      { "video-out": "video" },
+        "suno-style-boost":      { "text-out":  "text"  },
+        "suno-separate":         { "vocal-out": "vocals", "instrumental-out": "instrumental" },
+        // Batch 4 — Processing output id normalization (non-ffmpeg ones only)
+        "split-text":            { "out": "text" },
+        // split-media produces dual-typed outputs; map each leg of the
+        // legacy `*-out` pair to the new single-word form.
+        "split-media":           { "audio-out": "audio", "video-out": "video" },
+      }
+      const TARGET_REWRITES: Record<string, Record<string, string>> = {
+        // Batch 1
+        "text-to-speech":   { "in": "prompt" },
+        "text-to-audio":    { "in": "prompt" },
+        "generate-music":   { "in": "prompt" },
+        "audio-isolation":  { "in": "audio" },
+        "text-to-dialogue": { "in": "prompt" },
+        "voice-changer":    { "in": "audio" },
+        "dubbing":          { "in": "audio" },
+        // voice-remix / voice-design keep the legacy `audio-style` target id
+        // intact — that name is hard-coded in the runtime hint composers
+        // (`audio-style-hints.ts`, `sound-aggregator.ts`,
+        // `connected-audio-sources.tsx`). Only the legacy `in` migrates.
+        "voice-remix":      { "in": "audio" },
+        "voice-design":     { "in": "prompt" },
+        "forced-alignment": { "in": "audio" },
+        // Batch 2 — Suno target id normalization
+        "suno-generate":    { "in": "prompt" },
+        "suno-lyrics":      { "in": "prompt" },
+        "suno-style-boost": { "text": "prompt" },
+        // Batch 3 — Script & Text target id normalization
+        "generate-script":  { "in": "prompt" },
+        "transcribe":       { "in": "audio" },
+        // Batch 4 — Processing target id normalization (non-ffmpeg only)
+        "combine-text":     { "in": "text" },
+        "split-text":       { "in": "text" },
+        // split-media: rename legacy `video-in`/`audio-in` → `video`/`audio`.
+        "split-media":      { "video-in": "video", "audio-in": "audio" },
+      }
+      // Source-type-driven classifier for legacy `in` handles on Suno nodes
+      // whose new typed shape splits `in` into `audio` + `prompt`.
+      const SUNO_IN_CLASSIFIER_TARGETS: ReadonlySet<string> = new Set([
+        "suno-cover", "suno-extend", "suno-replace-section", "suno-upload-extend",
+      ])
+      // Suno nodes that have a typed `voice` target — used to route legacy
+      // suno-voice → suno-* edges to the right slot. Matches the set of
+      // resolvers that wire personaId in input-resolver.ts (excludes
+      // suno-upload-extend whose payload-builder doesn't accept personaId).
+      const SUNO_VOICE_CAPABLE_TARGETS: ReadonlySet<string> = new Set([
+        "suno-generate", "suno-cover", "suno-extend",
+      ])
+      const AUDIO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
+        // Mirrors AUDIO_PRODUCER_TYPES — kept local to avoid circular import
+        // from `@nodaro/shared` into the store (which is loaded very early).
+        "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
+        "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup",
+        "suno-replace-section", "suno-add-instrumental", "suno-add-vocals",
+        "suno-convert-wav", "suno-upload-extend", "trim-audio", "mix-audio",
+        "combine-audio", "adjust-volume", "reference-audio", "audio-isolation",
+        "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design",
+        "youtube-video", // backend treats as audio-extractable per input-resolver
+      ])
+      const nodeTypeById = new Map(migratedNodes.map((n) => [n.id, n.type ?? ""]))
+      migratedEdges = migratedEdges.map((e) => {
+        let next = e
+        const sourceType = nodeTypeById.get(e.source) ?? ""
+        const sourceRewrites = SOURCE_REWRITES_BY_TYPE[sourceType]
+        if (sourceRewrites) {
+          const sh = next.sourceHandle ?? ""
+          const newSh = sourceRewrites[sh]
+          if (newSh) next = { ...next, sourceHandle: newSh }
+        }
+        const targetType = nodeTypeById.get(e.target) ?? ""
+        const targetRewrites = TARGET_REWRITES[targetType]
+        if (targetRewrites) {
+          const th = next.targetHandle ?? ""
+          const newTh = targetRewrites[th]
+          if (newTh) next = { ...next, targetHandle: newTh }
+        }
+        // Classifier: when the source is suno-voice and the target has a
+        // typed `voice` handle (suno-generate / suno-cover / suno-extend),
+        // route the persona ref to that handle. Runs after TARGET_REWRITES
+        // so even if `in` was already rewritten to `prompt`, we re-route to
+        // `voice` for the suno-voice case.
+        if (
+          sourceType === "suno-voice" &&
+          SUNO_VOICE_CAPABLE_TARGETS.has(targetType) &&
+          (next.targetHandle === "in" || next.targetHandle === "prompt" || next.targetHandle == null)
+        ) {
+          next = { ...next, targetHandle: "voice" }
+        } else if (SUNO_IN_CLASSIFIER_TARGETS.has(targetType) && (next.targetHandle === "in" || next.targetHandle == null)) {
+          // Legacy `in` on suno-cover / suno-extend / suno-replace /
+          // suno-upload-extend → `audio` (if source emits audio) else
+          // `prompt`. Doesn't fire for suno-voice (handled above).
+          const newTh = AUDIO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType) ? "audio" : "prompt"
+          next = { ...next, targetHandle: newTh }
+        }
+        return next
+      })
+    }
+
     // Migrate legacy CharacterNodeData:
     //  - Backfill the Phase-1 Character Studio fields (motions / motionStatus /
     //    voice / personality) on character nodes saved before they existed.

@@ -5,12 +5,15 @@ import { LLMChatNode } from "../llm-chat-node"
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
   ),
   NodeResizer: () => null,
+  NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
   useUpdateNodeInternals: vi.fn(() => () => {}),
+  useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
 }))
 
 vi.mock("../base-node", () => ({
@@ -23,12 +26,25 @@ vi.mock("../base-node", () => ({
       data-id={id}
       data-is-running={isRunning}
     >
-      {/* Render the declared handles so tests can assert on handle ids */}
-      {(handles ?? []).map((h: any) => (
-        <div key={h.id} data-testid={`handle-${h.id}`} data-type={h.type} data-position={h.position} />
+      {/* Render only non-external handles (the external ones come via HandleWithPopover mocks) */}
+      {(handles ?? []).filter((h: any) => !h.external).map((h: any) => (
+        <div key={`${h.type}-${h.id}`} data-testid={`handle-${h.type}-${h.id}`} data-type={h.type} data-position={h.position} />
       ))}
       {children}
     </div>
+  ),
+}))
+
+vi.mock("../handle-with-popover", () => ({
+  HandleWithPopover: ({ nodeType, handleId, type, color, label }: any) => (
+    <div
+      data-testid={`handle-popover-${type}-${handleId}`}
+      data-node-type={nodeType}
+      data-handle-id={handleId}
+      data-type={type}
+      data-color={color}
+      data-label={label}
+    />
   ),
 }))
 
@@ -36,7 +52,7 @@ vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
   return {
     MessageSquare: I, Type: I, Loader2: I, AlertCircle: I, X: I, FileText: I,
-    Copy: I, Download: I, BookOpen: I, AlignLeft: I, List: I, Layers: I, ListOrdered: I,
+    Copy: I, Download: I, BookOpen: I, ImageIcon: I, List: I, Layers: I, ListOrdered: I,
   }
 })
 
@@ -93,14 +109,14 @@ describe("LLMChatNode", () => {
 
   it("renders the text source handle", () => {
     renderNode()
-    const handle = screen.getByTestId("handle-text")
+    const handle = screen.getByTestId("handle-popover-source-text")
     expect(handle).toBeInTheDocument()
     expect(handle).toHaveAttribute("data-type", "source")
   })
 
   it("renders the items source handle (fan-out list output)", () => {
     renderNode()
-    const handle = screen.getByTestId("handle-items")
+    const handle = screen.getByTestId("handle-popover-source-items")
     expect(handle).toBeInTheDocument()
     expect(handle).toHaveAttribute("data-type", "source")
   })

@@ -8,11 +8,15 @@ import { render, screen } from "@testing-library/react"
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
   ),
   NodeResizer: () => null,
+  NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
+  useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+  useUpdateNodeInternals: vi.fn(() => vi.fn()),
+  useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
 }))
 
 vi.mock("../base-node", () => ({
@@ -25,16 +29,29 @@ vi.mock("../base-node", () => ({
       data-id={id}
       data-is-running={isRunning}
     >
-      {handles?.map((h: any) => (
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
         <div
-          key={h.id}
-          data-testid={`handle-${h.id}`}
+          key={`${h.type}-${h.id}`}
+          data-testid={`handle-${h.type}-${h.id}`}
           data-type={h.type}
           data-position={h.position}
         />
       ))}
       {children}
     </div>
+  ),
+}))
+
+vi.mock("../handle-with-popover", () => ({
+  HandleWithPopover: ({ nodeType, handleId, type, color, label }: any) => (
+    <div
+      data-testid={`handle-popover-${type}-${handleId}`}
+      data-node-type={nodeType}
+      data-handle-id={handleId}
+      data-type={type}
+      data-color={color}
+      data-label={label}
+    />
   ),
 }))
 
@@ -156,22 +173,20 @@ describe("GenerateMusicNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-id", "music-99")
   })
 
-  it("has correct handles", () => {
+  it("has correct typed handles (prompt + ref-audio + audio-style targets, audio source)", () => {
     renderNode()
-    const inHandle = screen.getByTestId("handle-in")
-    expect(inHandle).toHaveAttribute("data-type", "target")
-    expect(inHandle).toHaveAttribute("data-position", "left")
+    const prompt = screen.getByTestId("handle-popover-target-prompt")
+    expect(prompt).toHaveAttribute("data-node-type", "generate-music")
+    expect(prompt).toHaveAttribute("data-color", "#ff0073")
 
-    const refAudioHandle = screen.getByTestId("handle-ref-audio")
-    expect(refAudioHandle).toHaveAttribute("data-type", "target")
-    expect(refAudioHandle).toHaveAttribute("data-position", "left")
+    const refAudio = screen.getByTestId("handle-popover-target-ref-audio")
+    expect(refAudio).toHaveAttribute("data-color", "#F59E0B")
 
-    const audioStyleHandle = screen.getByTestId("handle-audio-style")
-    expect(audioStyleHandle).toHaveAttribute("data-type", "target")
-    expect(audioStyleHandle).toHaveAttribute("data-position", "left")
+    const audioStyle = screen.getByTestId("handle-popover-target-audio-style")
+    expect(audioStyle).toHaveAttribute("data-color", "#F59E0B")
 
-    const outHandle = screen.getByTestId("handle-audio-out")
-    expect(outHandle).toHaveAttribute("data-type", "source")
-    expect(outHandle).toHaveAttribute("data-position", "right")
+    const audio = screen.getByTestId("handle-popover-source-audio")
+    expect(audio).toHaveAttribute("data-type", "source")
+    expect(audio).toHaveAttribute("data-color", "#F59E0B")
   })
 })

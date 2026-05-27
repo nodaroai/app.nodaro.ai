@@ -2,11 +2,14 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ArrowRight, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { ArrowRight, Loader2, AlertCircle, Volume2, LayoutGrid, FastForward, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoUploadExtendConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +17,10 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoUploadExtendData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_AUDIO  = (t: string) => isValidSunoUploadExtendConnection("audio",  t, isVisualPicker)
+const ACCEPTS_PROMPT = (t: string) => isValidSunoUploadExtendConnection("prompt", t, isVisualPicker)
 
 function SunoUploadExtendNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoUploadExtendData
@@ -71,8 +78,9 @@ function SunoUploadExtendNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -100,8 +108,9 @@ function SunoUploadExtendNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Upload Extend</span>
       </div>
     </BaseNode>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}><Volume2 className="w-3.5 h-3.5 text-white" /></div>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}><ArrowRight className="w-3.5 h-3.5 text-white" /></div>
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color="#F59E0B" icon={<FastForward />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}        side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="suno-upload-extend" handleId="audio"  type="source" position={Position.Right} label="Audio"  color="#F59E0B" icon={<FastForward />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

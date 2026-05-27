@@ -2,16 +2,21 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { AlignLeft, Loader2, AlertCircle, Volume2, Copy, X } from "lucide-react"
+import { AlignLeft, Loader2, AlertCircle, AudioWaveform, FileText, Copy, X } from "lucide-react"
 import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidForcedAlignmentConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { ForcedAlignmentData, AlignmentWord } from "@/types/nodes"
+
+const ACCEPTS_AUDIO      = (t: string) => isValidForcedAlignmentConnection("audio",      t)
+const ACCEPTS_TRANSCRIPT = (t: string) => isValidForcedAlignmentConnection("transcript", t)
 
 function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ForcedAlignmentData
@@ -43,8 +48,9 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "data", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "transcript", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "data",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -122,20 +128,9 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    {/* Input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <AlignLeft className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="audio"      type="target" position={Position.Left}  label="Audio"      color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color="#22D3EE" icon={<FileText />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TRANSCRIPT} />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="data"       type="source" position={Position.Right} label="Data"       color="#A78BFA" icon={<AlignLeft />}     side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm}
       onClose={() => setDeleteConfirm(false)}

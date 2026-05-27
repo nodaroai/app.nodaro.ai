@@ -7,7 +7,9 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidTextToAudioConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -15,6 +17,10 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToAudioData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT      = (t: string) => isValidTextToAudioConnection("prompt",      t, isVisualPicker)
+const ACCEPTS_AUDIO_STYLE = (t: string) => isValidTextToAudioConnection("audio-style", t, isVisualPicker)
 
 function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TextToAudioData
@@ -79,9 +85,9 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "prompt",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "audio-style", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -141,22 +147,9 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    {/* Input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Type className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Audio style input handle icon */}
-    <HandleIcon icon={<Sparkles />} color="indigo" side="left" top="calc(100% - 50px)" label="Audio style" />
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color="#ff0073" icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color="#F59E0B" icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="text-to-audio" handleId="audio"       type="source" position={Position.Right} label="Audio"       color="#F59E0B" icon={<Volume2 />}  side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

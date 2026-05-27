@@ -34,8 +34,12 @@ describe("target-handle-registry", () => {
     expect(pairs).toContain("generate-image:references")
   })
 
-  it("getTargetHandlesAccepting('nonexistent') returns []", () => {
-    expect(getTargetHandlesAccepting("nonexistent")).toEqual([])
+  it("getTargetHandlesAccepting('nonexistent') returns only the preview pass-through", () => {
+    // preview accepts ANY source by design — it's an inspector. So a
+    // synthetic "nonexistent" source still matches preview's `in` handle.
+    // No other consumer should match.
+    const matches = getTargetHandlesAccepting("nonexistent")
+    expect(matches).toEqual([{ nodeType: "preview", handleId: "in" }])
   })
 
   // Regression: audio pickers must NOT match the visual generate-image

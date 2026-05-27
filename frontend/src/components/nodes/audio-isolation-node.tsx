@@ -2,11 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { AudioWaveform, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { AudioWaveform, Loader2, AlertCircle, LayoutGrid, Volume2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidAudioIsolationConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +16,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { AudioIsolationData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO = (t: string) => isValidAudioIsolationConnection("audio", t)
 
 function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as AudioIsolationData
@@ -35,7 +39,6 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
-    {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
       icon={<AudioWaveform className="w-3.5 h-3.5" />}
@@ -51,7 +54,7 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -78,8 +81,8 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -132,26 +135,10 @@ function AudioIsolationNodeComponent({ id, data, selected }: NodeProps) {
             <AudioWaveform className="w-5 h-5" />
           </div>
         )}
-
-        <div className="flex justify-between text-muted-foreground">
-          <span>Voice Extractor</span>
-        </div>
       </div>
     </BaseNode>
-    {/* Input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <AudioWaveform className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="audio-isolation" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="audio-isolation" handleId="audio" type="source" position={Position.Right} label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

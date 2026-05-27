@@ -2,6 +2,38 @@ import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { isValidGenerateVideoConnection } from "./generate-video-handles"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 import {
+  isValidTextToSpeechConnection,
+  isValidTextToAudioConnection,
+  isValidGenerateMusicConnection,
+  isValidAudioIsolationConnection,
+  isValidTextToDialogueConnection,
+  isValidVoiceChangerConnection,
+  isValidDubbingConnection,
+  isValidVoiceRemixConnection,
+  isValidVoiceDesignConnection,
+  isValidForcedAlignmentConnection,
+  isValidSunoGenerateConnection,
+  isValidSunoCoverConnection,
+  isValidSunoExtendConnection,
+  isValidSunoLyricsConnection,
+  isValidSunoSeparateConnection,
+  isValidSunoMusicVideoConnection,
+  isValidSunoMashupConnection,
+  isValidSunoReplaceSectionConnection,
+  isValidSunoStyleBoostConnection,
+  isValidSunoAddInstrumentalConnection,
+  isValidSunoAddVocalsConnection,
+  isValidSunoConvertWavConnection,
+  isValidSunoUploadExtendConnection,
+  isValidGenerateScriptConnection,
+  isValidLlmChatConnection,
+  isValidTranscribeConnection,
+  isValidSplitMediaConnection,
+  isValidCombineTextConnection,
+  isValidSplitTextConnection,
+  isValidPreviewConnection,
+} from "./audio-text-handles"
+import {
   isValidListNodeConnection,
   isValidWebScrapeConnection,
   isValidExtractFieldConnection,
@@ -253,7 +285,69 @@ export function isValidWorkflowConnection(
     return isValidLoopCoarse(typeOf(connection.source) ?? "", isVisualPickerType)
   }
 
+  // Audio & Speech, Suno Music, Script & Text, and Processing (Audio + Text)
+  // — 31 nodes covered by audio-text-handles.ts predicates. The dispatch
+  // table keeps this list flat: adding a new node here means one tuple
+  // entry instead of another `if (targetType === "...") { ... }` branch.
+  // Predicates own their per-handle switch.
+  //
+  // NOTE: the 5 ffmpeg-overlapping nodes (merge-video-audio, trim-audio,
+  // mix-audio, combine-audio, adjust-volume) are NOT in this table — they
+  // already route through `isValidFfmpegConnection` above (shipped in #2809).
+  if (connection.targetHandle) {
+    const validator = AUDIO_TEXT_VALIDATORS[targetType ?? ""]
+    if (validator) {
+      const sourceType = typeOf(connection.source) ?? ""
+      return validator(connection.targetHandle, sourceType, isVisualPickerType)
+    }
+  }
+
   return true
+}
+
+type AudioTextValidator = (
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker: (t: string) => boolean,
+) => boolean
+
+const AUDIO_TEXT_VALIDATORS: Record<string, AudioTextValidator> = {
+  // Batch 1: AI > Audio & Speech
+  "text-to-speech":    isValidTextToSpeechConnection,
+  "text-to-audio":     isValidTextToAudioConnection,
+  "generate-music":    isValidGenerateMusicConnection,
+  // Predicates that don't take isVisualPicker get a thin adapter so the
+  // dispatch table is homogeneous (Record<string, AudioTextValidator>).
+  "audio-isolation":   (h, s) => isValidAudioIsolationConnection(h, s),
+  "text-to-dialogue":  isValidTextToDialogueConnection,
+  "voice-changer":     (h, s) => isValidVoiceChangerConnection(h, s),
+  "dubbing":           (h, s) => isValidDubbingConnection(h, s),
+  "voice-remix":       (h, s) => isValidVoiceRemixConnection(h, s),
+  "voice-design":      isValidVoiceDesignConnection,
+  "forced-alignment":  (h, s) => isValidForcedAlignmentConnection(h, s),
+  // Batch 2: AI > Suno Music
+  "suno-generate":         isValidSunoGenerateConnection,
+  "suno-cover":            isValidSunoCoverConnection,
+  "suno-extend":           isValidSunoExtendConnection,
+  "suno-lyrics":           isValidSunoLyricsConnection,
+  "suno-separate":         (h, s) => isValidSunoSeparateConnection(h, s),
+  "suno-music-video":      (h, s) => isValidSunoMusicVideoConnection(h, s),
+  "suno-mashup":           (h, s) => isValidSunoMashupConnection(h, s),
+  "suno-replace-section":  isValidSunoReplaceSectionConnection,
+  "suno-style-boost":      isValidSunoStyleBoostConnection,
+  "suno-add-instrumental": (h, s) => isValidSunoAddInstrumentalConnection(h, s),
+  "suno-add-vocals":       (h, s) => isValidSunoAddVocalsConnection(h, s),
+  "suno-convert-wav":      (h, s) => isValidSunoConvertWavConnection(h, s),
+  "suno-upload-extend":    isValidSunoUploadExtendConnection,
+  // Batch 3: AI > Script & Text
+  "generate-script": isValidGenerateScriptConnection,
+  "llm-chat":        isValidLlmChatConnection,
+  "transcribe":      (h, s) => isValidTranscribeConnection(h, s),
+  // Batch 4: Processing > Audio + Text (only non-ffmpeg-overlapping ones)
+  "split-media":     (h, s) => isValidSplitMediaConnection(h, s),
+  "combine-text":    isValidCombineTextConnection,
+  "split-text":      (h, s) => isValidSplitTextConnection(h, s),
+  "preview":         (h) => isValidPreviewConnection(h),
 }
 
 /**

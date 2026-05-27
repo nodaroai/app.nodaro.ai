@@ -500,10 +500,16 @@ export function getPrimaryOutput(
     return output.plan ? "plan-ready" : undefined
   }
 
-  // Suno-separate: support stem routing via sourceHandle
+  // Suno-separate: support stem routing via sourceHandle. The Batch 2 rename
+  // normalized `vocal-out` → `vocals` and `instrumental-out` → `instrumental`;
+  // the load-time edge migration rewrites legacy ids on workflow load. Both
+  // the new (`vocals`/`instrumental`) AND the singular pre-migration form
+  // (`vocal`/`instrumental`) are accepted here as a safety net for any edge
+  // that bypassed the migration (e.g. an MCP-built workflow that didn't go
+  // through `loadWorkflow`).
   if (sourceType === "suno-separate" && sourceHandle) {
-    if (sourceHandle === "vocal") return output.vocalUrl || output.audioUrl
-    if (sourceHandle === "instrumental") return output.instrumentalUrl || output.audioUrl
+    if (sourceHandle === "vocals" || sourceHandle === "vocal" || sourceHandle === "vocal-out") return output.vocalUrl || output.audioUrl
+    if (sourceHandle === "instrumental" || sourceHandle === "instrumental-out") return output.instrumentalUrl || output.audioUrl
   }
 
   // Voice-design: support voiceId routing via sourceHandle

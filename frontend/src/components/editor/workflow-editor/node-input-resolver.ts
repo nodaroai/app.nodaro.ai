@@ -1679,9 +1679,21 @@ export function resolveNodeInputs(
         inputs.personaModel =
           (srcData.personaModel as string | undefined) ?? "voice_persona"
       }
-    } else if (src.type === "suno-separate" && (srcEdge.sourceHandle === "instrumental-out" || srcEdge.sourceHandle === "vocal-out")) {
+    } else if (
+      src.type === "suno-separate" &&
+      (srcEdge.sourceHandle === "instrumental" ||
+        srcEdge.sourceHandle === "instrumental-out" ||
+        srcEdge.sourceHandle === "vocals" ||
+        srcEdge.sourceHandle === "vocal-out")
+    ) {
+      // Suno-separate emits two stems; route the right one based on the
+      // edge's sourceHandle. Batch 2 rename normalized `vocal-out` →
+      // `vocals` and `instrumental-out` → `instrumental` — both spellings
+      // accepted here as a safety net for edges that bypass loadWorkflow's
+      // migration (MCP-built / scripted workflows).
       const srcData = src.data as Record<string, unknown>;
-      if (srcEdge.sourceHandle === "instrumental-out") {
+      const isInstrumental = srcEdge.sourceHandle === "instrumental" || srcEdge.sourceHandle === "instrumental-out"
+      if (isInstrumental) {
         const instrumentalUrl = srcData.instrumentalUrl as string | undefined;
         if (instrumentalUrl) {
           if (node.type === "merge-video-audio") {
@@ -1690,7 +1702,7 @@ export function resolveNodeInputs(
             inputs.audioUrl = instrumentalUrl;
           }
         }
-      } else if (srcEdge.sourceHandle === "vocal-out") {
+      } else {
         const vocalUrl = srcData.vocalUrl as string | undefined;
         if (vocalUrl) {
           if (node.type === "merge-video-audio") {

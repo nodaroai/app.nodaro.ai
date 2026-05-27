@@ -3,12 +3,14 @@
 import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
-import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy } from "lucide-react"
+import { BookOpen, Loader2, AlertCircle, X, FileText, Sparkles, ImageIcon, Film, Maximize2, Type, MessageSquare, Music, Volume2, User, MapPin, Copy, Braces } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidGenerateScriptConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import type { ExpandOptions } from "@/components/editor/expand-storyboard-dialog"
 const ScriptPreviewModal = lazy(() => import("@/components/editor/script-preview-modal").then(m => ({ default: m.ScriptPreviewModal })))
 const ExpandStoryboardDialog = lazy(() => import("@/components/editor/expand-storyboard-dialog").then(m => ({ default: m.ExpandStoryboardDialog })))
@@ -19,6 +21,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { GenerateScriptData, GeneratedScriptResult } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT = (t: string) => isValidGenerateScriptConnection("prompt", t, isVisualPicker)
 
 function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateScriptData
@@ -65,14 +70,14 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "scenes", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-        { id: "images", type: "source", position: Position.Right, customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
-        { id: "dialogue", type: "source", position: Position.Right, customStyle: { top: '80px', right: '-29px' }, hideHandle: true },
-        { id: "music", type: "source", position: Position.Right, customStyle: { top: '110px', right: '-29px' }, hideHandle: true },
-        { id: "sfx", type: "source", position: Position.Right, customStyle: { top: '140px', right: '-29px' }, hideHandle: true },
-        { id: "characters", type: "source", position: Position.Right, customStyle: { top: '170px', right: '-29px' }, hideHandle: true },
-        { id: "locations", type: "source", position: Position.Right, customStyle: { top: '200px', right: '-29px' }, hideHandle: true },
+        { id: "prompt",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "scenes",     type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "images",     type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
+        { id: "dialogue",   type: "source", position: Position.Right, customStyle: { top: '88px',              right: '-29px' }, external: true },
+        { id: "music",      type: "source", position: Position.Right, customStyle: { top: '120px',             right: '-29px' }, external: true },
+        { id: "sfx",        type: "source", position: Position.Right, customStyle: { top: '152px',             right: '-29px' }, external: true },
+        { id: "characters", type: "source", position: Position.Right, customStyle: { top: '184px',             right: '-29px' }, external: true },
+        { id: "locations",  type: "source", position: Position.Right, customStyle: { top: '216px',             right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -252,14 +257,14 @@ function GenerateScriptNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
-    <HandleIcon icon={<BookOpen />} color="pink" side="right" top="20px" label="scenes" />
-    <HandleIcon icon={<ImageIcon />} color="cyan" side="right" top="50px" label="images" />
-    <HandleIcon icon={<MessageSquare />} color="orange" side="right" top="80px" label="dialogue" />
-    <HandleIcon icon={<Music />} color="purple" side="right" top="110px" label="music" />
-    <HandleIcon icon={<Volume2 />} color="emerald" side="right" top="140px" label="sfx" />
-    <HandleIcon icon={<User />} color="pink" side="right" top="170px" label="characters" />
-    <HandleIcon icon={<MapPin />} color="cyan" side="right" top="200px" label="locations" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color="#ff0073" icon={<Type />}          side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="scenes"     type="source" position={Position.Right} label="Scenes"     color="#A78BFA" icon={<Braces />}        side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="images"     type="source" position={Position.Right} label="Images"     color="#22D3EE" icon={<ImageIcon />}     side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="dialogue"   type="source" position={Position.Right} label="Dialogue"   color="#22D3EE" icon={<MessageSquare />} side="right" top="88px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="music"      type="source" position={Position.Right} label="Music"      color="#F59E0B" icon={<Music />}         side="right" top="120px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="sfx"        type="source" position={Position.Right} label="SFX"        color="#F59E0B" icon={<Volume2 />}       side="right" top="152px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="characters" type="source" position={Position.Right} label="Characters" color="#F472B6" icon={<User />}          side="right" top="184px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-script" handleId="locations"  type="source" position={Position.Right} label="Locations"  color="#F472B6" icon={<MapPin />}        side="right" top="216px" />
     {activeScript && showFullscreen && (
       <Suspense fallback={null}>
       <ScriptPreviewModal
