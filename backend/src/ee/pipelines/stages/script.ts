@@ -20,6 +20,65 @@ import { runLocationsCoverageCritic } from "../llms/locations-coverage-critic.js
 import { pipelineEvents } from "../events.js"
 import { ensureStageRow, incrementCriticRetry } from "../stage-utils.js"
 
+/**
+ * Stage 1 live-progress narration. The Showrunner LLM streams its own
+ * "Drafting plan…" updates (showrunner.ts `onProgress`), but the
+ * Detection -> Critic-review -> refine-loop steps between drafts were
+ * invisible — the panel showed a bare spinner through the entire review and
+ * revision phase. Emitting the same `stage:progress` event the banner already
+ * renders turns the draft -> review -> refine pipeline into a live, legible
+ * sequence (the whole point of surfacing the refinement process to the user).
+ *
+ * Mirrors showrunner.ts's dual delivery:
+ *   - SSE (pipelineEvents.publish) for in-tab viewers — sub-second latency.
+ *   - DB persist (current_progress_message) for refresh-survivors / first
+ *     open mid-stage. clearScriptProgress NULLs it once the stage settles so a
+ *     stale "Reviewing…" can't outlive the run (the banner falls back to this
+ *     column when no live SSE event is in hand).
+ */
+function emitScriptProgress(
+  supabase: SupabaseClient,
+  pipelineId: string,
+  message: string,
+): void {
+  pipelineEvents.publish({
+    type: "stage:progress",
+    pipelineId,
+    stageName: "script",
+    message,
+  })
+  void supabase
+    .from("pipelines")
+    .update({ current_progress_message: message })
+    .eq("id", pipelineId)
+    .then(({ error }) => {
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[script-stage] current_progress_message write failed:",
+          error.message,
+        )
+      }
+    })
+}
+
+/** Clears the live-progress banner once Stage 1 settles (see emitScriptProgress). */
+function clearScriptProgress(supabase: SupabaseClient, pipelineId: string): void {
+  void supabase
+    .from("pipelines")
+    .update({ current_progress_message: null })
+    .eq("id", pipelineId)
+    .then(({ error }) => {
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error(
+          "[script-stage] current_progress_message clear failed:",
+          error.message,
+        )
+      }
+    })
+}
+
 export interface RunScriptStageArgs {
   supabase: SupabaseClient
   pipelineId: string
@@ -72,6 +131,12 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       status: "running",
     })
 
+    emitScriptProgress(
+      args.supabase,
+      args.pipelineId,
+      "Analyzing your story — identifying characters, locations, and props…",
+    )
+
     // 1. Detection.
     const detection = await runDetection({
       supabase: args.supabase,
@@ -103,6 +168,12 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       styleDirectives: args.styleDirectives,
     })
 
+    emitScriptProgress(
+      args.supabase,
+      args.pipelineId,
+      "Reviewing the draft — story structure, cast, and locations…",
+    )
+
     let [scriptVerdict, castVerdict, locationsVerdict] = await Promise.all([
       runScriptCritic({
         supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
@@ -123,6 +194,11 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
     ) {
       criticRetryCount++
       await incrementCriticRetry(args.supabase, stageId)
+      emitScriptProgress(
+        args.supabase,
+        args.pipelineId,
+        `Refining the script (revision ${criticRetryCount + 1}) from the review notes…`,
+      )
       plan = await runShowrunner({
         supabase: args.supabase,
         pipelineId: args.pipelineId,
@@ -141,6 +217,11 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
         styleDirectives: args.styleDirectives,
         criticFeedback: { scriptVerdict, castVerdict, locationsVerdict, objectsVerdict },
       })
+      emitScriptProgress(
+        args.supabase,
+        args.pipelineId,
+        "Re-reviewing the revised draft…",
+      )
       ;[scriptVerdict, castVerdict, locationsVerdict] = await Promise.all([
         runScriptCritic({
           supabase: args.supabase, pipelineId: args.pipelineId, stageId, userId: args.userId, plan,
@@ -154,6 +235,8 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       ])
       objectsVerdict = validateObjects(plan.objects, plan)
     }
+
+    clearScriptProgress(args.supabase, args.pipelineId)
 
     // Cap-reached failure guard. Note: previously this branch was prefixed with
     // `scriptVerdict.verdict === "fail" &&`, which silently let a blocking-only
@@ -176,6 +259,7 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       objectsValidation: objectsVerdict,
     }
   } catch (err) {
+    clearScriptProgress(args.supabase, args.pipelineId)
     const reason = err instanceof Error ? err.message : String(err)
     return { status: "failed", reason }
   }
