@@ -14,6 +14,16 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     useStore: vi.fn(() => 1),
     useNodeId: vi.fn(() => "test-node"),
     useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+    // useConnection is invoked by HandleWithPopover (now rendered for the
+    // typed source pip on text-prompt). Stub to "no drag in progress" so
+    // the validity-check returns false without touching the React Flow
+    // store-provider, which isn't mounted in these isolated tests.
+    useConnection: vi.fn(() => ({ inProgress: false })),
+    // useUpdateNodeInternals is invoked on mount to recompute the pip
+    // position after the migration from invisible Handle to HandleWithPopover.
+    // Stub to a no-op so the hook returns without touching the React Flow
+    // store-provider, which isn't mounted in these isolated tests.
+    useUpdateNodeInternals: vi.fn(() => () => {}),
   }
 })
 

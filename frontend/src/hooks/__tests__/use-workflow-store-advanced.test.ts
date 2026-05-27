@@ -753,6 +753,324 @@ describe("useWorkflowStore advanced", () => {
       expect(mappings.prompt).toBeDefined()
       expect(mappings.prompt.sourceNodeId).toBe("nodeA")
     })
+
+    // ─── Regression: dangling loop column when a parallel non-column edge
+    //                exists between the same source+target ───
+    //
+    // Bug: `deleteEdge` early-returned on `stillConnected` (a node-pair check
+    // that ignores handles), which skipped loop-column cleanup when the
+    // source had another wire into a NON-column handle on the same target.
+    //
+    // Setup: a source-A wired to BOTH a loop's col1_in (loop column edge)
+    // AND a non-column field on the loop (e.g. `someField`). Deleting the
+    // _in edge MUST clear columns[0].connectedSourceId — the column is no
+    // longer wired even though source-A still has a wire to the loop.
+    it("REGRESSION: clears loop column connectedSourceId even when parallel non-column edge survives", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "sourceA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
+          {
+            id: "loopB",
+            type: "loop",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "Loop",
+              columns: [{ handleId: "col1", connectedSourceId: "sourceA", connectedSourceHandle: "out" }],
+              rows: [],
+            },
+          } as any,
+        ],
+        edges: [
+          // e1: column input wire — the one being deleted.
+          { id: "e1", source: "sourceA", sourceHandle: "out", target: "loopB", targetHandle: "col1_in" } as any,
+          // e2: parallel wire to a non-column field. Triggers the
+          // stillConnected guard if we only check (source, target) pairs.
+          { id: "e2", source: "sourceA", sourceHandle: "out", target: "loopB", targetHandle: "someField" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().deleteEdge("e1")
+
+      const state = useWorkflowStore.getState()
+      // Only e1 removed; e2 still wired.
+      expect(state.edges.map((e) => e.id)).toEqual(["e2"])
+      const loop = state.nodes.find((n) => n.id === "loopB")!
+      const columns = (loop.data as Record<string, unknown>).columns as Array<{ handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }>
+      // The column reference is cleared even though the node pair is still
+      // connected via e2.
+      expect(columns[0].connectedSourceId).toBeUndefined()
+      expect(columns[0].connectedSourceHandle).toBeUndefined()
+    })
+  })
+
+  // ---------------------------------------------------------------
+  // 10b. disconnectAllHandleEdges — batched mirror of deleteEdge
+  //
+  // The implementation re-creates deleteEdge's three responsibilities
+  // (edge filter + per-edge `stillConnected` guard + node cleanup) in a
+  // SINGLE set() call. These tests pin the contract so a future refactor
+  // can't silently regress to the old per-edge loop or skip the
+  // fieldMappings/loop-column cleanup.
+  // ---------------------------------------------------------------
+  describe("disconnectAllHandleEdges", () => {
+    it("removes all edges matching (node, handle, direction='target') AND cleans up fieldMappings", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "nodeA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
+          { id: "nodeC", type: "text-prompt", position: { x: 0, y: 200 }, data: { label: "C" } } as any,
+          {
+            id: "nodeB",
+            type: "generate-image",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "GI",
+              fieldMappings: {
+                prompt: { sourceNodeId: "nodeA", sourceField: "text" },
+                seed: { sourceNodeId: "nodeC", sourceField: "text" },
+              },
+            },
+          } as any,
+        ],
+        edges: [
+          { id: "e1", source: "nodeA", target: "nodeB", targetHandle: "prompt" } as any,
+          { id: "e2", source: "nodeC", target: "nodeB", targetHandle: "prompt" } as any,
+          { id: "e_other", source: "nodeC", target: "nodeB", targetHandle: "negative" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("nodeB", "prompt", "target")
+
+      const state = useWorkflowStore.getState()
+      // Both e1 and e2 should be gone; e_other survives.
+      expect(state.edges.map((e) => e.id).sort()).toEqual(["e_other"])
+
+      const target = state.nodes.find((n) => n.id === "nodeB")!
+      const mappings = (target.data as Record<string, unknown>).fieldMappings as Record<string, { sourceNodeId: string }>
+      // nodeA fully disconnected → its mapping is stripped.
+      expect(mappings.prompt).toBeUndefined()
+      // nodeC is still wired via e_other on `negative`; the stillConnected
+      // guard keeps its mapping in place.
+      expect(mappings.seed).toBeDefined()
+      expect(mappings.seed.sourceNodeId).toBe("nodeC")
+    })
+
+    it("removes all edges matching (node, handle, direction='source') without touching fieldMappings on the source", () => {
+      // Source-direction: the OWNER of disconnectAll is the source pip.
+      // Cleanup applies to TARGET nodes whose source is now fully removed.
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "nodeA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
+          {
+            id: "nodeB",
+            type: "generate-image",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "GI",
+              fieldMappings: { prompt: { sourceNodeId: "nodeA", sourceField: "text" } },
+            },
+          } as any,
+          {
+            id: "nodeC",
+            type: "generate-image",
+            position: { x: 400, y: 0 },
+            data: {
+              label: "GI2",
+              fieldMappings: { prompt: { sourceNodeId: "nodeA", sourceField: "text" } },
+            },
+          } as any,
+        ],
+        edges: [
+          { id: "e1", source: "nodeA", sourceHandle: "out", target: "nodeB", targetHandle: "prompt" } as any,
+          { id: "e2", source: "nodeA", sourceHandle: "out", target: "nodeC", targetHandle: "prompt" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("nodeA", "out", "source")
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges).toEqual([])
+      // Both target nodes lose their nodeA mapping.
+      const nodeB = state.nodes.find((n) => n.id === "nodeB")!
+      const nodeC = state.nodes.find((n) => n.id === "nodeC")!
+      const mappingsB = (nodeB.data as Record<string, unknown>).fieldMappings as Record<string, unknown>
+      const mappingsC = (nodeC.data as Record<string, unknown>).fieldMappings as Record<string, unknown>
+      expect(mappingsB.prompt).toBeUndefined()
+      expect(mappingsC.prompt).toBeUndefined()
+    })
+
+    it("is a no-op when no edges match (no spurious state changes)", () => {
+      const before = {
+        nodes: [{ id: "nodeA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any],
+        edges: [{ id: "e1", source: "nodeA", target: "nodeB", targetHandle: "prompt" } as any],
+      }
+      useWorkflowStore.setState(before)
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("nodeA", "missing-handle", "target")
+
+      // Edges + nodes unchanged.
+      expect(useWorkflowStore.getState().edges).toEqual(before.edges)
+    })
+
+    it("removes ALL matching edges in a single set call (batching invariant)", () => {
+      // Stress test: 5 parallel edges on the same handle. The old per-edge
+      // loop ran 5 sequential set()s; the batched implementation does 1.
+      // We can't directly observe the set() count but we CAN assert all 5
+      // are gone in one synchronous call (the user-visible behavior).
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "tgt", type: "generate-image", position: { x: 0, y: 0 }, data: { label: "GI", fieldMappings: {} } } as any,
+          ...Array.from({ length: 5 }, (_, i) => ({
+            id: `src${i}`,
+            type: "text-prompt",
+            position: { x: 0, y: i * 100 },
+            data: { label: `S${i}` },
+          })) as any[],
+        ],
+        edges: Array.from({ length: 5 }, (_, i) => ({
+          id: `e${i}`,
+          source: `src${i}`,
+          target: "tgt",
+          targetHandle: "prompt",
+        })) as any[],
+      })
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("tgt", "prompt", "target")
+
+      expect(useWorkflowStore.getState().edges).toEqual([])
+    })
+
+    it("clears loop column connectedSourceId when disconnecting a _in handle", () => {
+      // Loop / list nodes track per-column `connectedSourceId` /
+      // `connectedSourceHandle`. The single-edge `deleteEdge` clears it
+      // when a column's _in edge goes away — the batched version must too.
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "S" } } as any,
+          {
+            id: "loop",
+            type: "loop",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "Loop",
+              columns: [{ handleId: "col1", connectedSourceId: "src", connectedSourceHandle: "out" }],
+              rows: [],
+            },
+          } as any,
+        ],
+        edges: [
+          // Match the `col1_in` pattern that loopColInputHandle creates so
+          // the targetHandle.endsWith("_in") guard fires.
+          { id: "e1", source: "src", sourceHandle: "out", target: "loop", targetHandle: "col1_in" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("loop", "col1_in", "target")
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges).toEqual([])
+      const loop = state.nodes.find((n) => n.id === "loop")!
+      const columns = (loop.data as Record<string, unknown>).columns as Array<{ handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }>
+      expect(columns[0].connectedSourceId).toBeUndefined()
+      expect(columns[0].connectedSourceHandle).toBeUndefined()
+    })
+
+    // ─── Regression: disconnectAllHandleEdges with parallel non-column edge ───
+    //
+    // Bug: the per-edge `stillConnected` guard early-continued for any
+    // edge whose (source, target) pair survived in newEdges. That meant a
+    // loop column's _in edge wasn't cleaned up when the same source had a
+    // parallel wire into a NON-column handle on the same loop — leaving
+    // `connectedSourceId` pointing at a node no longer wired through the
+    // column.
+    it("REGRESSION: clears loop column connectedSourceId even when parallel non-column edge survives (batched)", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "srcA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
+          {
+            id: "loopB",
+            type: "loop",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "Loop",
+              columns: [{ handleId: "col1", connectedSourceId: "srcA", connectedSourceHandle: "out" }],
+              rows: [],
+            },
+          } as any,
+        ],
+        edges: [
+          // e1: column input wire — the one being removed by disconnectAll.
+          { id: "e1", source: "srcA", sourceHandle: "out", target: "loopB", targetHandle: "col1_in" } as any,
+          // e2: parallel wire to a non-column field on the SAME node pair.
+          // The (srcA, loopB) pair survives — old code skipped column
+          // cleanup entirely.
+          { id: "e2", source: "srcA", sourceHandle: "out", target: "loopB", targetHandle: "someField" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().disconnectAllHandleEdges("loopB", "col1_in", "target")
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges.map((e) => e.id)).toEqual(["e2"])
+      const loop = state.nodes.find((n) => n.id === "loopB")!
+      const columns = (loop.data as Record<string, unknown>).columns as Array<{ handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }>
+      expect(columns[0].connectedSourceId).toBeUndefined()
+      expect(columns[0].connectedSourceHandle).toBeUndefined()
+    })
+  })
+
+  // ---------------------------------------------------------------
+  // 10c. deleteEdge — composition: loop column + fieldMappings cleanup
+  //                   both apply on the same removal
+  //
+  // Bug: an earlier deleteEdge body early-returned after running loop
+  // column cleanup, which meant a single edge that was BOTH the last
+  // wire to its target AND a `_in` (loop column) handle never ran the
+  // fieldMappings cleanup — leaving a dangling entry pointing at the
+  // removed source.
+  // ---------------------------------------------------------------
+  describe("deleteEdge — loop+fieldMappings composition", () => {
+    it("REGRESSION: clears BOTH loop column ref AND fieldMappings when a single _in edge is the only wire", () => {
+      useWorkflowStore.setState({
+        nodes: [
+          { id: "srcA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
+          {
+            id: "loopB",
+            type: "loop",
+            position: { x: 200, y: 0 },
+            data: {
+              label: "Loop",
+              // Loop holds both: a column referencing srcA via `_in`...
+              columns: [{ handleId: "col1", connectedSourceId: "srcA", connectedSourceHandle: "out" }],
+              rows: [],
+              // ...AND a fieldMappings entry keyed by sourceNodeId.
+              fieldMappings: {
+                someParam: { sourceNodeId: "srcA", sourceField: "text" },
+              },
+            },
+          } as any,
+        ],
+        edges: [
+          // SINGLE edge — its removal triggers both arms:
+          //   - isLoopColumnEdge=true (handle ends with "_in")
+          //   - stillConnected=false (no parallel wires)
+          { id: "e1", source: "srcA", sourceHandle: "out", target: "loopB", targetHandle: "col1_in" } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().deleteEdge("e1")
+
+      const state = useWorkflowStore.getState()
+      expect(state.edges).toEqual([])
+      const loop = state.nodes.find((n) => n.id === "loopB")!
+      const data = loop.data as Record<string, unknown>
+      const columns = data.columns as Array<{ handleId: string; connectedSourceId?: string; connectedSourceHandle?: string }>
+      const mappings = data.fieldMappings as Record<string, { sourceNodeId: string }>
+      // Loop column ref cleared.
+      expect(columns[0].connectedSourceId).toBeUndefined()
+      expect(columns[0].connectedSourceHandle).toBeUndefined()
+      // fieldMappings entry stripped (sourceNodeId === srcA was the only entry).
+      expect(mappings.someParam).toBeUndefined()
+    })
   })
 
   // ---------------------------------------------------------------

@@ -360,6 +360,16 @@ a provider whose env var is unset. Add `KIE_API_KEY` /
 `REPLICATE_API_TOKEN` / `ANTHROPIC_API_KEY` / `ELEVENLABS_API_KEY` per
 your needs and restart.
 
+**Film Director pipelines (Cloud) stall at "running" and never
+resume.** A pipeline's orchestration job can be lost — a re-drive that
+arrives while the previous drive is still active is deduped away by
+BullMQ, or a restart lands between drives — leaving the row at
+`status='running'` with no worker scheduled. A periodic reconciler can
+re-drive these automatically. It is **off by default**; enable it with
+`PIPELINE_RECONCILE_CRON_ENABLED=true` on the API service. The
+reconciler only re-drives pipelines with no pending user action, so
+manual-mode runs paused at an approval gate are left untouched.
+
 If you're still stuck, file an issue with the Docker logs at
 <https://github.com/nodaroai/app.nodaro.ai/issues>.
 

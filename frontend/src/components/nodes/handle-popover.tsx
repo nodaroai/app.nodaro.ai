@@ -26,6 +26,9 @@ import { getNodeThumbnailUrl, getNodePickerVisual } from "@/lib/node-thumbnail"
 import { buildAdjacency, collectDescendants, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { optimizedImageUrl } from "@/lib/image"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
+import { TARGET_HANDLE_ACCEPTS, getTargetHandlesAccepting } from "@/lib/target-handle-registry"
+import { isTileGridPickerType } from "@/lib/picker-handles"
+import { Workflow } from "lucide-react"
 import type { ReactNode } from "react"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 import { cn } from "@/lib/utils"
@@ -52,17 +55,31 @@ interface EnrichedConnection extends HandleConnection {
 }
 
 interface CandidateNode {
+  /** The OTHER node — i.e. the one shown in the row. For target-direction
+   *  popovers this is the candidate SOURCE (upstream producer); for
+   *  source-direction popovers this is the candidate TARGET (downstream
+   *  consumer). The row UI displays this node's label/thumbnail/type. */
   readonly nodeId: string
   readonly nodeLabel: string
   readonly nodeType: string
   readonly thumbnailUrl: string | undefined
   readonly pickerVisual: ReactNode | undefined
-  /** Source's output handle id for target-direction popovers (always
-   *  defined — filter rejects candidates without static outputs). For
-   *  source-direction candidates this stays undefined; the connect path
-   *  uses the candidate's `inputs[0]` instead. Narrowing the type to
-   *  optional keeps the invariant visible to any future reader. */
-  readonly outputHandle: string | undefined
+  /** Human-readable chip label for source-direction rows — e.g. "Start state"
+   *  rather than the raw handleId "startState". Falls back to the raw
+   *  `targetHandle` in the UI when undefined (kept optional so target-
+   *  direction rows don't need it). */
+  readonly targetHandleLabel?: string
+  /** Full connection args for the Connect button — passed verbatim to
+   *  `onConnect`. Source = upstream producer node + its output handle;
+   *  Target = downstream consumer node + its input handle. For
+   *  target-direction popovers, target is the popover's own (nodeId,
+   *  handleId); for source-direction popovers, source is the popover's
+   *  own (nodeId, handleId). Carrying the full shape keeps the connect
+   *  handler direction-agnostic. */
+  readonly source: string
+  readonly sourceHandle: string
+  readonly target: string
+  readonly targetHandle: string
 }
 
 /**
@@ -114,19 +131,58 @@ export function HandlePopover({
     return () => setHoveredEdgeId(null)
   }, [setHoveredEdgeId])
 
+  // Build a `nodesById` Map ONCE per `nodes` change for O(1) lookups
+  // across both the `enriched` memo and the `candidates` memo. Cost is
+  // O(N) per nodes change (typically once per store update, often on
+  // every drag frame for a small subset of nodes); previously each memo
+  // built its own scoped Map by walking ALL nodes — same cost, but the
+  // enriched-inner loop also called `nodes.find` for the candidates path
+  // which is O(N) per candidate. Hoisting once keeps both memos O(1)
+  // per access without changing the dep shape.
+  const nodesById = useMemo(() => {
+    const m = new Map<string, WorkflowNode>()
+    for (const n of nodes) m.set(n.id, n)
+    return m
+  }, [nodes])
+
   // Enrich connected rows with the upstream node's thumbnail URL (image
   // nodes) OR picker visual (parameter pickers).
+  //
+  // Direction-aware visual heuristic — mirrors the candidate-row logic
+  // below: for source-direction popovers (this node is the upstream,
+  // the row shows the DOWNSTREAM consumer), if the consumer is itself
+  // a picker, its picker-value glyph is misleading because that glyph
+  // represents the consumer's OUTPUT, not its INPUT — and we're showing
+  // it as an INPUT here. Use a generic Workflow icon instead, matching
+  // what `candidates` does.
+  //
+  // text-prompt and tone are registered as pickers for handle-coloring
+  // purposes but don't have tile-grid value glyphs (their visuals are
+  // content-driven), so they're allowed through the heuristic via
+  // `isTileGridPickerType`.
+  //
+  // PERF: depends on `nodesById` (rebuilt only when `nodes` changes),
+  // NOT directly on the full `nodes` array. Per-connection cost is O(1)
+  // via Map.get instead of the previous O(connections × N) inner walk
+  // through every node looking for `c.otherNodeId`. On a drag frame
+  // that mutates an unrelated node, nodesById's identity DOES change
+  // (Map rebuilt) but the cost is bounded by node count, not by the
+  // number of connections × nodes.
   const enriched: EnrichedConnection[] = useMemo(() => {
-    const nodeById = new Map(nodes.map((n) => [n.id, n]))
+    if (connections.length === 0) return []
     return connections.map((c) => {
-      const n = nodeById.get(c.otherNodeId)
+      const n = nodesById.get(c.otherNodeId)
+      const consumerIsTileGridPicker =
+        direction === "source" && isTileGridPickerType(n?.type ?? "")
       return {
         ...c,
-        thumbnailUrl: getNodeThumbnailUrl(n),
-        pickerVisual: getNodePickerVisual(n),
+        thumbnailUrl: consumerIsTileGridPicker ? undefined : getNodeThumbnailUrl(n),
+        pickerVisual: consumerIsTileGridPicker
+          ? <Workflow className="w-4 h-4 text-muted-foreground" aria-hidden />
+          : getNodePickerVisual(n),
       }
     })
-  }, [connections, nodes])
+  }, [connections, nodesById, direction])
 
   // Candidate nodes: type-valid AND globally-valid, not yet connected on
   // this handle. No render cap — the popover scrolls within
@@ -136,14 +192,10 @@ export function HandlePopover({
   // judder, add row virtualization (react-virtuoso) — a hard cap is the
   // wrong tool because it hides legitimate connect candidates.
   //
-  // SOURCE-DIRECTION GATE: `accepts` is documented as "valid upstream
-  // type for this handle" — a TARGET-direction semantic. Calling it on
-  // candidate target types in source-direction would feed flipped args
-  // into the wrong-direction predicate AND the global validator would
-  // probe `inputs[0]` arbitrarily for multi-input candidates. Gate
-  // source-direction so future source-direction popovers don't silently
-  // inherit a broken filter contract — use drag-to-connect until a
-  // direction-aware predicate is added.
+  // Source-direction popovers enumerate candidates by reversing
+  // `TARGET_HANDLE_ACCEPTS`: walk every in-graph target node, find handles
+  // whose accepts(sourceType) returns true, surface each as a Connect row.
+  // See lib/target-handle-registry.ts.
   //
   // Performance: builds `nodeTypeMap` ONCE for O(1) type lookups inside
   // `isValidWorkflowConnection` calls — without it the validator would
@@ -153,16 +205,149 @@ export function HandlePopover({
   // store array) appear first — most-recently-created sources are far
   // more likely targets when the user is actively building.
   const { candidates, hasDynamicOutputCandidates } = useMemo(() => {
-    if (!accepts || direction === "source") {
-      return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
-    }
-    const connectedIds = new Set(connections.map((c) => c.otherNodeId))
     const nodeTypeMap = new Map<string, string>()
     for (const n of nodes) {
       if (n.type) nodeTypeMap.set(n.id, n.type)
     }
     const nodeTypeById = (id: string) => nodeTypeMap.get(id)
 
+    if (direction === "source") {
+      // Source-direction: walk TARGET_HANDLE_ACCEPTS reverse map for this
+      // picker's node type. Each (consumer-node-type, target-handle) pair
+      // that accepts becomes a candidate consumer ROW per in-graph node of
+      // that type. Dedup by already-wired (target-node-id, target-handle).
+      const sourceNode = nodes.find((n) => n.id === nodeId)
+      if (!sourceNode) {
+        return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
+      }
+      const sourceType = sourceNode.type ?? ""
+      if (!sourceType) {
+        return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
+      }
+      const matches = getTargetHandlesAccepting(sourceType)
+      if (matches.length === 0) {
+        return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
+      }
+      // Group accepted handle ids by consumer node type. `labelByHandle`
+      // is keyed "<consumerType>:<handleId>" so the per-row lookup below
+      // is O(1).
+      //
+      // Build the label map in TWO PASSES instead of looking up each
+      // match's label via an inner `find` on the consumer-type's entries:
+      //
+      //   Pass A — group handle ids by consumer type AND collect unique
+      //            matched consumer types into `seenTypes`.
+      //   Pass B — for each unique matched consumer type, iterate its
+      //            full entries[] ONCE and write every (type, handleId)
+      //            label.
+      //
+      // Cost: O(matches + unique-matched-types × handles-per-type).
+      // Previous per-match `find` was O(matches × handles-per-type),
+      // which is worse when a single consumer type is matched many
+      // times (e.g., several picker→generate-image candidates).
+      const handlesByType = new Map<string, string[]>()
+      const seenTypes = new Set<string>()
+      for (const m of matches) {
+        const list = handlesByType.get(m.nodeType)
+        if (list) list.push(m.handleId)
+        else handlesByType.set(m.nodeType, [m.handleId])
+        seenTypes.add(m.nodeType)
+      }
+      const labelByHandle = new Map<string, string>()
+      for (const t of seenTypes) {
+        const entries = TARGET_HANDLE_ACCEPTS[t] ?? []
+        for (const e of entries) {
+          if (e.label) labelByHandle.set(`${t}:${e.handleId}`, e.label)
+        }
+      }
+      // Per-(target-node-id, target-handle) dedup. Walk store edges
+      // directly for the (source-pip) → (target-node, target-handle)
+      // pairs. A node-only dedup would suppress legitimate candidate rows
+      // when a single picker matches MULTIPLE handles on the same consumer
+      // (e.g. mood → generate-image's `look` AND `prompt`).
+      //
+      // SKIP malformed edges with null/undefined targetHandle entirely:
+      // their dedup key `"<target>:"` would NOT match candidate keys with
+      // real handleIds (`"<target>:look"`) anyway, but excluding them
+      // documents that malformed edges shouldn't suppress legitimate
+      // candidates.
+      const connectedPairs = new Set<string>()
+      for (const e of edges) {
+        if (e.source !== nodeId) continue
+        // Legacy edges can have sourceHandle=null/undefined/"" from pre-
+        // typed-handles workflows (some persisters round-trip null as
+        // empty string). Treat ANY falsy sourceHandle as wildcard against
+        // this popover's own handleId so we don't surface the SAME legacy
+        // edge as both a connected row AND a candidate. (Edges with an
+        // explicit, different sourceHandle are still excluded — only
+        // falsy values match.)
+        if (e.sourceHandle && e.sourceHandle !== handleId) continue
+        if (!e.targetHandle) continue
+        connectedPairs.add(`${e.target}:${e.targetHandle}`)
+      }
+      const rendered: CandidateNode[] = []
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i]
+        if (n.id === nodeId) continue                     // skip self
+        const t = n.type ?? ""
+        // Same-type wiring is ALLOWED here for symmetry with the other
+        // three paths that already permit it (target-direction popover,
+        // drag-glow `isValidCandidate`, canvas validator). Cycle safety
+        // for picker→same-type-picker chains is enforced at runtime by
+        // `getParameterPromptHint(src)` in
+        // `packages/shared/src/parameter-prompt-hint.ts` — the nested
+        // resolution is called WITHOUT `ctx`, so a self-cycle short-
+        // circuits at the bare hint and never recurses further.
+        const acceptedHandles = handlesByType.get(t)
+        if (!acceptedHandles) continue                    // type not a consumer
+        for (const targetHandleId of acceptedHandles) {
+          if (connectedPairs.has(`${n.id}:${targetHandleId}`)) continue   // already wired on this handle
+          const wouldBeConnection = {
+            source: nodeId,
+            sourceHandle: handleId,
+            target: n.id,
+            targetHandle: targetHandleId,
+          }
+          if (!isValidWorkflowConnection(wouldBeConnection, nodeTypeById)) continue
+          // For source-direction rows, the consumer is the candidate. If the
+          // candidate is itself a TILE-GRID picker (e.g. camera-motion's
+          // startState), showing the candidate's picker-value glyph
+          // (dolly-zoom Film, etc.) is misleading — that visual belongs to
+          // the OUTPUT of the candidate, not its INPUT. Use a simple
+          // consumer-handle glyph instead so the row's icon reflects the
+          // wiring direction.
+          //
+          // `isTileGridPickerType` excludes tone + text-prompt which are
+          // registered as pickers (for typed-pip coloring) but have
+          // content-driven visuals, not tile-grid value glyphs. Those
+          // SHOULD show their actual content thumbnail when they appear
+          // as candidates.
+          const candidateIsTileGridPicker = isTileGridPickerType(t)
+          const pickerVisual = candidateIsTileGridPicker
+            ? <Workflow className="w-3.5 h-3.5 text-muted-foreground" aria-hidden />
+            : getNodePickerVisual(n)
+          rendered.push({
+            nodeId: n.id,
+            nodeLabel: ((n.data as { label?: string } | undefined)?.label ?? t) as string,
+            nodeType: t,
+            thumbnailUrl: candidateIsTileGridPicker ? undefined : getNodeThumbnailUrl(n),
+            pickerVisual,
+            targetHandleLabel: labelByHandle.get(`${t}:${targetHandleId}`),
+            source: nodeId,
+            sourceHandle: handleId,
+            target: n.id,
+            targetHandle: targetHandleId,
+          })
+        }
+      }
+      return { candidates: rendered, hasDynamicOutputCandidates: false }
+    }
+
+    // Target-direction (existing behavior).
+    if (!accepts) {
+      return { candidates: [] as CandidateNode[], hasDynamicOutputCandidates: false }
+    }
+    const connectedIds = new Set(connections.map((c) => c.otherNodeId))
     // Single O(V+E) descendant pass to filter every cycle-inducing
     // candidate at once — instead of running an N-element cycle BFS
     // inside isValidWorkflowConnection per candidate. Any node already
@@ -209,11 +394,14 @@ export function HandlePopover({
         nodeType: t,
         thumbnailUrl: getNodeThumbnailUrl(n),
         pickerVisual: getNodePickerVisual(n),
-        outputHandle,
+        source: n.id,
+        sourceHandle: outputHandle,
+        target: nodeId,
+        targetHandle: handleId,
       })
     }
     return { candidates: rendered, hasDynamicOutputCandidates: dynamicOutputs }
-  }, [accepts, connections, nodes, edges, nodeId, handleId, direction])
+  }, [accepts, connections, edges, nodes, nodeId, handleId, direction])
 
   const handleJump = useCallback(
     (otherNodeId: string) => {
@@ -234,19 +422,18 @@ export function HandlePopover({
 
   const handleConnectCandidate = useCallback(
     (cand: CandidateNode) => {
-      // Source-direction popovers are gated out of candidate enumeration
-      // (see the `direction === "source"` early return in the candidates
-      // useMemo). If a candidate reaches here, direction is "target" and
-      // `cand.outputHandle` is guaranteed defined by the filter.
-      if (!cand.outputHandle) return
+      // The row carries its full (source, sourceHandle, target,
+      // targetHandle) tuple — direction-agnostic. Target-direction rows
+      // set source = candidate, target = popover-owner; source-direction
+      // rows set source = popover-owner, target = candidate.
       onConnect({
-        source: cand.nodeId,
-        sourceHandle: cand.outputHandle,
-        target: nodeId,
-        targetHandle: handleId,
+        source: cand.source,
+        sourceHandle: cand.sourceHandle,
+        target: cand.target,
+        targetHandle: cand.targetHandle,
       })
     },
-    [onConnect, nodeId, handleId],
+    [onConnect],
   )
 
   // DnD sensors — small distance threshold so quick clicks on inner buttons
@@ -273,6 +460,11 @@ export function HandlePopover({
     },
     [enriched, reorderHandleEdges, nodeId, handleId, direction],
   )
+
+  // Stable reference for SortableContext's `items` prop. Without this,
+  // every render of HandlePopover allocates a new array, busting
+  // SortableContext's identity check and re-mounting the sortable tree.
+  const sortableItems = useMemo(() => enriched.map((c) => c.edgeId), [enriched])
 
   // Model-effective limit for this (consumer, handle) pair — e.g.,
   // generate-image's `references` handle is capped at the selected
@@ -346,7 +538,7 @@ export function HandlePopover({
           // can't be reordered, so the drag affordance is meaningless.
           orderMatters && enriched.length > 1 ? (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={enriched.map((c) => c.edgeId)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
                 <ul className="flex flex-col gap-0.5">
                   {enriched.map((c, i) => (
                     <Fragment key={c.edgeId}>
@@ -400,8 +592,13 @@ export function HandlePopover({
             <ul className="flex flex-col gap-0.5">
               {candidates.map((c) => (
                 <CandidateRow
-                  key={c.nodeId}
+                  // Source-direction rows can emit multiple candidates per
+                  // target node (one per accepted handle on the same
+                  // consumer — e.g. mood → generate-image's `look` AND
+                  // `prompt`), so include targetHandle in the key.
+                  key={`${c.nodeId}:${c.targetHandle}`}
                   candidate={c}
+                  direction={direction}
                   onJump={() => handleJump(c.nodeId)}
                   onConnect={() => handleConnectCandidate(c)}
                 />
@@ -562,11 +759,12 @@ function SortableConnectionRow(
 
 interface CandidateRowProps {
   readonly candidate: CandidateNode
+  readonly direction: "source" | "target"
   readonly onJump: () => void
   readonly onConnect: () => void
 }
 
-function CandidateRow({ candidate, onJump, onConnect }: CandidateRowProps) {
+function CandidateRow({ candidate, direction, onJump, onConnect }: CandidateRowProps) {
   return (
     <li className="group flex items-center gap-2 px-1.5 py-1 text-xs rounded hover:bg-accent/60 opacity-60 hover:opacity-100 transition-opacity">
       <ThumbnailButton
@@ -576,8 +774,20 @@ function CandidateRow({ candidate, onJump, onConnect }: CandidateRowProps) {
         onJump={onJump}
       />
       <div className="flex-1 min-w-0">
-        <div className="truncate text-foreground" title={candidate.nodeLabel}>
-          {candidate.nodeLabel}
+        <div className="truncate text-foreground flex items-baseline gap-1" title={`${candidate.nodeLabel}${direction === "source" ? ` → ${candidate.targetHandleLabel ?? candidate.targetHandle}` : ""}`}>
+          <span className="truncate">{candidate.nodeLabel}</span>
+          {direction === "source" && candidate.targetHandle && (
+            // Source-direction rows can produce multiple candidates for
+            // the same consumer node (one per accepted target handle).
+            // Without this chip the rows are visually identical and the
+            // user can't tell which handle a given Connect button will
+            // wire to. Prefer the registry's friendly label (e.g. "Start
+            // state", "Look"); fall back to the raw handle id when the
+            // entry has no label.
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              → {candidate.targetHandleLabel ?? candidate.targetHandle}
+            </span>
+          )}
         </div>
         <div className="text-[10px] text-muted-foreground truncate">{candidate.nodeType}</div>
       </div>

@@ -1,5 +1,8 @@
 import { isValidGenerateImageConnection } from "./generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
+import { ACCEPTS_CHARACTER_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
+
+const isVisualPickerType = (t: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t)
 
 const MEDIA_ONLY_HANDLES: ReadonlySet<string> = new Set([
   "image",
@@ -110,13 +113,45 @@ export function isValidWorkflowConnection(
   const targetType = typeOf(connection.target)
   if (targetType === "generate-image" && connection.targetHandle) {
     const sourceType = typeOf(connection.source)
-    if (sourceType) {
-      return isValidGenerateImageConnection(
-        connection.targetHandle,
-        sourceType,
-        (t) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(t),
-      )
+    // Use `?? ""` and let the predicate's switch reject unknown source
+    // types — safer than `if (sourceType) ... else fall through to true`,
+    // which silently allows malformed connections with an undefined source.
+    return isValidGenerateImageConnection(
+      connection.targetHandle,
+      sourceType ?? "",
+      isVisualPickerType,
+    )
+  }
+
+  // Camera Motion — startState/endState only accept hint-producer nodes
+  // (their wires carry prompt fragments, not image frames; see
+  // packages/shared/src/parameter-prompt-hint.ts:195-307). Other handles
+  // (legacy/external) are not validated here.
+  if (targetType === "camera-motion" && connection.targetHandle) {
+    if (connection.targetHandle !== "startState" && connection.targetHandle !== "endState") {
+      return true
     }
+    // `?? ""` so unknown / undefined source types route to the predicate's
+    // negative branch instead of falling through to default `return true`.
+    return ACCEPTS_PARAMETER_PICKER(typeOf(connection.source) ?? "")
+  }
+
+  // Transition — same semantics as camera-motion. startState/endState wires
+  // carry prompt hints, not image frames; see
+  // packages/shared/src/parameter-prompt-hint.ts:150-176.
+  if (targetType === "transition" && connection.targetHandle) {
+    if (connection.targetHandle !== "startState" && connection.targetHandle !== "endState") {
+      return true
+    }
+    return ACCEPTS_PARAMETER_PICKER(typeOf(connection.source) ?? "")
+  }
+
+  // Character-fx — `target` accepts ONLY identity refs (character/face/
+  // object/location). The shared hint-builder reads `characterName` etc.
+  // from the source; see packages/shared/src/parameter-prompt-hint.ts:178-202.
+  if (targetType === "character-fx" && connection.targetHandle) {
+    if (connection.targetHandle !== "target") return true
+    return ACCEPTS_CHARACTER_REF(typeOf(connection.source) ?? "")
   }
 
   return true

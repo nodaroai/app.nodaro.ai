@@ -6,6 +6,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
+import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
 import { getDragAncestorSet } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 
@@ -66,6 +67,12 @@ interface HandleWithPopoverProps {
   /** CSS `top` value for vertical positioning relative to the node. */
   readonly top: string
   readonly orderMatters?: boolean
+  /** When true, the pip's label stays visible at rest (not just on hover /
+   *  selection). Used for ambiguous input pips like camera-motion's
+   *  startState/endState pair where the two pips are otherwise visually
+   *  identical without their labels. Source-direction (right-side) pips
+   *  shouldn't need this — they're unambiguous one-per-node. */
+  readonly alwaysShowLabel?: boolean
 }
 
 const CLICK_PX_THRESHOLD = 5
@@ -107,6 +114,7 @@ export function HandleWithPopover({
   side,
   top,
   orderMatters,
+  alwaysShowLabel,
 }: HandleWithPopoverProps) {
   const [open, setOpen] = useState(false)
   const downRef = useRef<{ x: number; y: number; t: number } | null>(null)
@@ -129,8 +137,11 @@ export function HandleWithPopover({
   //  - the drag didn't start from this pip's node (no self-loops — the
   //    workflow engine is a DAG and can't execute a node before itself)
   //  - this pip's node isn't already an ancestor of the drag source
-  //    (no back-edges — same DAG reason)
-  //  - `accepts(sourceType)` returns true (per-handle type compat)
+  //    (no back-edges — same DAG reason; check is direction-aware)
+  //  - the per-direction accepts predicate returns true:
+  //    - target pip: this pip's own `accepts(sourceType)` (target-direction)
+  //    - source pip: the drag-target's TARGET_HANDLE_ACCEPTS entry accepts
+  //      THIS picker's nodeType (source-direction reverse lookup)
   // Drives the `.valid-candidate` class.
   const connection = useConnection()
   // Subscribe to edges so the cycle/ancestor check sees current state.
@@ -141,26 +152,41 @@ export function HandleWithPopover({
   // runs once per drag start regardless of how many pips are visible.
   const edges = useWorkflowStore((s) => s.edges)
   const isValidCandidate = useMemo(() => {
-    if (!connection.inProgress || !accepts) return false
+    if (!connection.inProgress) return false
     const from = connection.fromHandle
     const fromType = connection.fromNode?.type
     if (!from || !fromType) return false
     // Skip the pip the drag started from — it already lights up via .connectingfrom.
     if (from.nodeId === nodeId && from.id === handleId) return false
-    // Self-loop: same node, any handle.
+    // Self-loop: same node, any handle. The workflow engine is a DAG;
+    // a node cannot execute before itself.
     if (from.nodeId === nodeId) return false
-    // Direction check: target pips light up during from-source drags only,
-    // and source pips during from-target drags only.
-    if (from.type === "source" && type !== "target") return false
-    if (from.type === "target" && type !== "source") return false
-    if (!accepts(fromType)) return false
-    // Cycle check: if this node is already an ancestor of the drag's
-    // source node, adding an edge from-source → this-node would close a
-    // directed cycle.
-    const ancestors = getDragAncestorSet(edges, from.nodeId)
-    if (ancestors.has(nodeId)) return false
-    return true
-  }, [connection.inProgress, connection.fromHandle, connection.fromNode?.type, accepts, nodeId, handleId, type, edges])
+    // Target-direction branch: drag started from a source pip; light this
+    // target pip if our own accepts predicate accepts the drag's source type,
+    // AND the resulting edge wouldn't close a directed cycle.
+    if (type === "target" && from.type === "source") {
+      if (!accepts || !accepts(fromType)) return false
+      // Cycle check: would-be edge is (from.nodeId → nodeId). Cycle iff
+      // nodeId is already an ancestor of from.nodeId.
+      const ancestors = getDragAncestorSet(edges, from.nodeId)
+      if (ancestors.has(nodeId)) return false
+      return true
+    }
+    // Source-direction branch: drag started from a target pip; light this
+    // source pip if THAT target's accepts predicate accepts this picker's
+    // node type, AND the resulting edge wouldn't close a directed cycle.
+    if (type === "source" && from.type === "target") {
+      const entries = TARGET_HANDLE_ACCEPTS[fromType] ?? []
+      const entry = entries.find((e) => e.handleId === from.id)
+      if (!entry?.accepts(nodeType)) return false
+      // Would-be edge is (nodeId → from.nodeId). Cycle iff from.nodeId is
+      // already an ancestor of nodeId.
+      const ancestors = getDragAncestorSet(edges, nodeId)
+      if (ancestors.has(from.nodeId)) return false
+      return true
+    }
+    return false
+  }, [connection.inProgress, connection.fromHandle, connection.fromNode?.type, accepts, nodeId, handleId, type, nodeType, edges])
 
   // Highlight every type-compatible destination during a drag, regardless
   // of whether it already has connections. The user wants to see ALL
@@ -205,6 +231,19 @@ export function HandleWithPopover({
       e.preventDefault()
       setOpen((v) => !v)
     }
+    // Backspace / Delete defense: React Flow's useKeyPress attaches its
+    // keydown listener directly to `document` via native addEventListener
+    // (see @xyflow/react/dist/esm/index.js useKeyPress), so React's
+    // synthetic `e.stopPropagation()` does NOT reach it. The pip wears the
+    // `nokey` class below, which @xyflow/system's `isInputDOMNode` checks
+    // via `target.closest('.nokey')` to opt out — that's the primary
+    // defense. We keep both stopPropagation AND stopImmediatePropagation
+    // as belt-and-suspenders in case a third-party listener attaches at a
+    // higher capture phase.
+    if (e.key === "Backspace" || e.key === "Delete") {
+      e.stopPropagation()
+      e.nativeEvent.stopImmediatePropagation()
+    }
   }, [])
 
   return (
@@ -220,10 +259,29 @@ export function HandleWithPopover({
           onPointerCancel={cancelDown}
           onPointerLeave={cancelDown}
           onKeyDown={onKeyDown}
+          // A11y: pips are tab-stoppable AND announce as buttons that open
+          // a dialog (the popover). The trade-off: a node with 6-7 typed
+          // pips adds that many tab stops, but the alternative — tabIndex
+          // -1 + role="img" — left keyboard-only users with no way to
+          // discover or operate the popover at all. The popover's
+          // Connect/Disconnect/Focus buttons remain reachable from
+          // inside Radix as before; this just gives the pip itself a way
+          // in via Tab → Enter/Space.
           tabIndex={0}
           role="button"
+          aria-haspopup="dialog"
           aria-label={`${label}${isConnected ? ` (${connections.length} connected)` : ""}`}
-          className={`handle-typed-pip !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""} ${open ? "clickconnecting" : ""}`}
+          // `touch-manipulation` disables double-tap zoom delay on iOS so
+          // the click→popover-open feels instant on touch devices.
+          // `nokey` opts out of React Flow's global keyboard shortcuts
+          // (Backspace/Delete delete the node, Cmd+A select all, etc.)
+          // when the pip is focused — @xyflow/system's `isInputDOMNode`
+          // returns true for any element matched by `.closest('.nokey')`,
+          // and React Flow's useKeyPress short-circuits in that case.
+          // `clickconnecting` is added while the popover is open so CSS
+          // can light the pip in brand color (mirrors React Flow's
+          // built-in `.connectingfrom` state during drags).
+          className={`handle-typed-pip nokey !w-7 !h-7 !rounded-full !border-2 flex items-center justify-center cursor-pointer touch-manipulation ${isConnected ? "shadow-lg" : ""} ${showValidCandidateVisual ? "valid-candidate" : ""} ${open ? "clickconnecting" : ""}`}
           style={{
             top,
             [side]: "-29px",
@@ -274,7 +332,10 @@ export function HandleWithPopover({
             // counter badge's outermost point (~10px out), so the label
             // position is consistent whether the badge is visible or not.
             // Hidden by default — see `.handle-typed-pip-label` CSS rules.
-            className="handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground"
+            // `--always` modifier keeps the label visible at rest (used for
+            // ambiguous input pips like camera-motion's startState/endState
+            // which look identical without their labels).
+            className={`handle-typed-pip-label absolute text-[12px] font-medium whitespace-nowrap pointer-events-none text-muted-foreground${alwaysShowLabel ? " handle-typed-pip-label--always" : ""}`}
             style={{
               top: "50%",
               [side === "left" ? "right" : "left"]: "calc(100% + 14px)",

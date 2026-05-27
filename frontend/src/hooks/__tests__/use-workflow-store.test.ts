@@ -446,6 +446,37 @@ describe("duplicateNodes", () => {
     expect(col.connectedSourceHandle).toBe("out")
   })
 
+  it("backfills picker null/undefined sourceHandle on duplicated edges (parity with loadWorkflow)", () => {
+    // Round-4 #2 regression: pre-fix, duplicating a picker→consumer pair
+    // with a legacy null-sourceHandle edge produced a clone edge with the
+    // SAME null sourceHandle. The load-time picker migration only runs
+    // in loadWorkflow, so the in-memory legacy edge stayed uncleanable
+    // after duplication (popover's strict handleId lookup misses null).
+    // Fix: apply migratePickerSourceHandle inside duplicateNodes too.
+    useWorkflowStore.setState({
+      nodes: [
+        { id: "p", type: "mood", position: { x: 0, y: 0 }, data: { label: "Mood" }, selected: true },
+        { id: "c", type: "generate-image", position: { x: 100, y: 0 }, data: { label: "Image" }, selected: true },
+      ],
+      // Legacy edge: no sourceHandle. Should be backfilled to "out" on
+      // the clone (mood is in the look family with `out` default).
+      edges: [
+        { id: "e-pc", source: "p", target: "c", sourceHandle: null as unknown as string, targetHandle: "look" },
+      ],
+      selectedNodeId: null,
+      isDirty: false,
+    } as unknown as Partial<ReturnType<typeof useWorkflowStore.getState>>)
+
+    useWorkflowStore.getState().duplicateNodes(["p", "c"])
+    const { nodes, edges } = useWorkflowStore.getState()
+    const cloneIds = new Set(nodes.filter((n) => !["p", "c"].includes(n.id)).map((n) => n.id))
+    const clonedEdge = edges.find((e) => cloneIds.has(e.source) && cloneIds.has(e.target))
+    expect(clonedEdge).toBeDefined()
+    // Mood is registered in PICKER_DEFAULT_SOURCE_HANDLE with "out".
+    expect(clonedEdge!.sourceHandle).toBe("out")
+    expect(clonedEdge!.targetHandle).toBe("look")
+  })
+
   it("clears a loop column's connectedSourceId when only the loop (not its source) is duplicated", () => {
     useWorkflowStore.setState({
       nodes: [

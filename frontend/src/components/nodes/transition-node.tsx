@@ -5,7 +5,9 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { GitBranch, Frame, Sparkles } from "lucide-react"
 import { getTransition, getTransitionLabel, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { ACCEPTS_PARAMETER_PICKER } from "@/lib/target-handle-registry"
+import type { HandleConfig } from "./base-node"
 import type { TransitionData } from "@/types/nodes"
 
 // Bottom-left input handle vertical positions (offset from the node's bottom edge).
@@ -13,17 +15,13 @@ const END_STATE_TOP   = "calc(100% - 25px)"
 const START_STATE_TOP = "calc(100% - 60px)"
 
 // Hoisted so React Flow's reference equality on handles holds across renders.
-const INPUT_HANDLES = [
-  { id: "startState", type: "target" as const, position: Position.Left, customStyle: { top: START_STATE_TOP, left: "-29px" }, hideHandle: true },
-  { id: "endState",   type: "target" as const, position: Position.Left, customStyle: { top: END_STATE_TOP,   left: "-29px" }, hideHandle: true },
+// `external: true` — BaseNode counts these for sizing but doesn't render them;
+// the typed pip is owned by <HandleWithPopover> below (matches the pattern in
+// camera-motion-node + generate-image-node + parameter-node-shell's source handle).
+const INPUT_HANDLES: ReadonlyArray<HandleConfig> = [
+  { id: "startState", type: "target", position: Position.Left, customStyle: { top: START_STATE_TOP, left: "-29px" }, hideHandle: true, external: true },
+  { id: "endState",   type: "target", position: Position.Left, customStyle: { top: END_STATE_TOP,   left: "-29px" }, hideHandle: true, external: true },
 ]
-
-const EXTRA_HANDLE_ICONS = (
-  <>
-    <HandleIcon icon={<Sparkles />} color="indigo" side="left" top={START_STATE_TOP} label="Start state" />
-    <HandleIcon icon={<Frame />}    color="indigo" side="left" top={END_STATE_TOP}   label="End state" />
-  </>
-)
 
 function TransitionNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as TransitionData
@@ -45,7 +43,40 @@ function TransitionNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       fluidWidth
       inputHandles={INPUT_HANDLES}
-      extraHandleIcons={EXTRA_HANDLE_ICONS}
+      extraHandleIcons={
+        <>
+          <HandleWithPopover
+            nodeId={id}
+            handleId="startState"
+            nodeType="transition"
+            type="target"
+            position={Position.Left}
+            label="Start state"
+            color="#818CF8"
+            icon={<Sparkles className="w-3.5 h-3.5" />}
+            accepts={ACCEPTS_PARAMETER_PICKER}
+            side="left"
+            top={START_STATE_TOP}
+            // Two input pips are visually identical without their labels.
+            // Pin labels visible so users can tell start vs end at rest.
+            alwaysShowLabel
+          />
+          <HandleWithPopover
+            nodeId={id}
+            handleId="endState"
+            nodeType="transition"
+            type="target"
+            position={Position.Left}
+            label="End state"
+            color="#818CF8"
+            icon={<Frame className="w-3.5 h-3.5" />}
+            accepts={ACCEPTS_PARAMETER_PICKER}
+            side="left"
+            top={END_STATE_TOP}
+            alwaysShowLabel
+          />
+        </>
+      }
     >
       <p className="text-foreground text-sm font-medium">{labelText}</p>
       {description && !isMulti && (

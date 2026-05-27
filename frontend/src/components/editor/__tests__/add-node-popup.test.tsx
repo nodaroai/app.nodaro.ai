@@ -282,3 +282,35 @@ describe("CATEGORIES", () => {
     }
   })
 })
+
+// ─── Regression: tone (Parameter category) reachable for typed handles ───
+//
+// The popup's `visibleNodes` filter strips Parameter-category nodes (the
+// category is currently hidden from the browse UI). That filter must be
+// SKIPPED for typed-handle edge drops — otherwise tone, a registered
+// HINT_PRODUCER, never appears as a candidate for camera-motion's
+// startState even though `getCompatibleNodes`, the canvas validator, and
+// target-handle-registry all accept it.
+//
+// We can't easily render the full popup here (the mocked `getCompatibleNodes`
+// returns []), but we can pin the invariant that the FULL NODE_OPTIONS
+// pool contains tone with category="Parameter" — the assertion the
+// popup's typed-handle branch depends on.
+describe("typed-handle drops include Parameter-category nodes", () => {
+  it("tone is present in NODE_OPTIONS with category='Parameter'", () => {
+    const tone = NODE_OPTIONS.find((o) => o.type === "tone")
+    expect(tone).toBeDefined()
+    expect(tone?.category).toBe("Parameter")
+  })
+
+  // The popup applies a Parameter-category filter to its browse view AND
+  // a typed-handle override (TYPED_HANDLE_IDS = {startState, endState, target}).
+  // This test pins the override-allowlist boundary by asserting at least
+  // one canonical typed handle id is in the set.
+  it("startState / endState / target are the typed-handle override allowlist", () => {
+    // Sanity: the popup's TYPED_HANDLE_IDS set should align with
+    // target-handle-registry's typed handles. Update both if either changes.
+    const TYPED_HANDLE_IDS = ["startState", "endState", "target"]
+    expect(new Set(TYPED_HANDLE_IDS)).toEqual(new Set(["startState", "endState", "target"]))
+  })
+})

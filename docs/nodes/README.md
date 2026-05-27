@@ -54,6 +54,8 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 
 Configure shared settings that feed into multiple downstream nodes. These control generation behavior.
 
+Parameter picker nodes have a typed colored output pip — click it to see which downstream nodes are connected to this picker, manage connections (disconnect, focus, connect to a new consumer), and drag-reorder where applicable.
+
 ### Generation parameters
 
 Free-form or enum settings that feed AI / video / audio generation nodes via FieldMappings or direct text wiring.

@@ -561,3 +561,56 @@ describe("loadWorkflow — ai-writer → llm-chat merge migration", () => {
     expect(e1?.targetHandle).toBe("in")
   })
 })
+
+describe("loadWorkflow — legacy null-sourceHandle picker migration", () => {
+  // Pre-typed-pip edges from picker outputs saved with `sourceHandle = null`.
+  // The strict-handleId match in `useHandleConnections` would render them
+  // invisible to the popover (uncleanable). Backfill the picker's default
+  // source handle id so every downstream lookup sees a uniform shape.
+  it("backfills sourceHandle on legacy edges from picker sources", () => {
+    const nodes = [
+      { id: "picker", type: "mood", position: { x: 0, y: 0 }, data: { label: "Mood" } },
+      { id: "tgt", type: "generate-image", position: { x: 200, y: 0 }, data: { label: "GI", fieldMappings: {} } },
+      { id: "tp", type: "text-prompt", position: { x: 0, y: 200 }, data: { label: "TP" } },
+    ] as any
+    const edges = [
+      // Legacy: null sourceHandle on a mood node's output
+      { id: "e1", source: "picker", sourceHandle: null, target: "tgt", targetHandle: "elements" },
+      // Legacy: null sourceHandle on a text-prompt node's output
+      { id: "e2", source: "tp", sourceHandle: null, target: "tgt", targetHandle: "prompt" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+    const loaded = useWorkflowStore.getState().edges
+    expect(loaded.find((e) => e.id === "e1")?.sourceHandle).toBe("out")
+    expect(loaded.find((e) => e.id === "e2")?.sourceHandle).toBe("prompt")
+  })
+
+  it("leaves non-null sourceHandle untouched", () => {
+    const nodes = [
+      { id: "picker", type: "mood", position: { x: 0, y: 0 }, data: { label: "Mood" } },
+      { id: "tgt", type: "generate-image", position: { x: 200, y: 0 }, data: { label: "GI", fieldMappings: {} } },
+    ] as any
+    const edges = [
+      { id: "e1", source: "picker", sourceHandle: "out", target: "tgt", targetHandle: "elements" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+    const e = useWorkflowStore.getState().edges.find((edge) => edge.id === "e1")
+    expect(e?.sourceHandle).toBe("out")
+  })
+
+  it("leaves non-picker source edges with null sourceHandle untouched", () => {
+    const nodes = [
+      // An image producer (NOT a picker) — its legacy null sourceHandle is
+      // handled by other migration paths if needed; we don't touch it here.
+      { id: "img", type: "generate-image", position: { x: 0, y: 0 }, data: { label: "GI", fieldMappings: {} } },
+      { id: "tgt", type: "image-to-video", position: { x: 200, y: 0 }, data: { label: "I2V", fieldMappings: {} } },
+    ] as any
+    const edges = [
+      { id: "e1", source: "img", sourceHandle: null, target: "tgt", targetHandle: "image" },
+    ] as any
+    useWorkflowStore.getState().loadWorkflow("w1", "test", nodes, edges)
+    const e = useWorkflowStore.getState().edges.find((edge) => edge.id === "e1")
+    // sourceHandle stays null (or whatever generate-image-handle-migration set it to)
+    expect(e?.sourceHandle).not.toBe("out")
+  })
+})

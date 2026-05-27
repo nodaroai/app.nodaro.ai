@@ -14,6 +14,10 @@ vi.mock("@xyflow/react", () => ({
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
   useUpdateNodeInternals: vi.fn(() => vi.fn()),
+  // HandleWithPopover (rendered for camera-motion's startState/endState typed
+  // pips via extraHandleIcons) calls useConnection() to drive the per-pip
+  // valid-candidate visual during drag-to-connect.
+  useConnection: vi.fn(() => ({ inProgress: false })),
 }))
 
 vi.mock("../editable-node-label", () => ({
@@ -46,6 +50,10 @@ vi.mock("lucide-react", () => {
     Rss: I, Webhook: I, HardDrive: I, Scissors: I, FileText: I,
     Type: I, ImageIcon: I, Check: I, X: I, Frame: I, Aperture: I, Film: I, Lightbulb: I, SwatchBook: I, CloudFog: I, Sparkles: I,
     Eye: I, Layers: I, Play: I, Square: I, FastForward: I,
+    // picker-handles registry icons (transitively loaded via parameter-node-shell)
+    Music: I, Mic: I, Wind: I, Camera: I, Box: I, Car: I, Crosshair: I,
+    Bot: I, Sofa: I, Hand: I, Repeat: I, Zap: I, Cloud: I, Shirt: I,
+    PersonStanding: I, MapPin: I, Sparkle: I,
   }
 })
 

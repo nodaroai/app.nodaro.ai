@@ -423,6 +423,15 @@ html, body {
   opacity: 1;
 }
 
+/* Opt-in modifier: always-visible label for ambiguous input pips (e.g.
+ * camera-motion's startState/endState pair, which look identical without
+ * their labels). `!important` so it wins over the base `opacity: 0` rule
+ * regardless of hover / selection state. Source-direction (right-side)
+ * pips are unambiguous (one per node) and don't need this. */
+.handle-typed-pip-label.handle-typed-pip-label--always {
+  opacity: 1 !important;
+}
+
 /* During a drag-to-connect, also reveal labels on the source pip and on
  * every TYPE-COMPATIBLE candidate pip (driven by `.valid-candidate`,
  * NOT a wrapper-class blanket reveal). `.connectingto` (cursor-over-handle

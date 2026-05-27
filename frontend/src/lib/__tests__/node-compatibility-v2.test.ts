@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { getCompatibleNodes, type NodeOption } from "../node-compatibility"
+import { getCompatibleNodes, TYPED_HANDLE_IDS, type NodeOption } from "../node-compatibility"
+import { TARGET_HANDLE_ACCEPTS } from "../target-handle-registry"
 import type { SceneNodeType } from "@/types/nodes"
 
 const opt = (type: string): NodeOption => ({
@@ -77,5 +78,86 @@ describe("getCompatibleNodes — Generate Image v2 handles", () => {
     expect(out.direct.length).toBeGreaterThan(0)
     const directTypes = new Set(out.direct.map((o) => o.type))
     expect(directTypes.has("text-prompt")).toBe(false)
+  })
+})
+
+describe("getCompatibleNodes — typed-handle branches (camera-motion, transition, character-fx)", () => {
+  it("camera-motion's startState shows hint-producers (pickers + tone + text-prompt)", () => {
+    const pool = [
+      opt("mood"),
+      opt("lens"),
+      opt("tone"),
+      opt("text-prompt"),
+      opt("upload-image"),
+      opt("character"),
+    ]
+    const out = getCompatibleNodes("startState", "target", pool, "camera-motion")
+    const direct = new Set(out.direct.map((o) => o.type))
+    // Visual pickers + tone + text-prompt → direct
+    expect(direct.has("mood")).toBe(true)
+    expect(direct.has("lens")).toBe(true)
+    expect(direct.has("tone")).toBe(true)
+    expect(direct.has("text-prompt")).toBe(true)
+    // Image / identity sources → not direct
+    expect(direct.has("upload-image")).toBe(false)
+    expect(direct.has("character")).toBe(false)
+    expect(out.compatible).toEqual([])
+  })
+
+  it("camera-motion's endState mirrors startState", () => {
+    const pool = [opt("mood"), opt("character")]
+    const out = getCompatibleNodes("endState", "target", pool, "camera-motion")
+    const direct = new Set(out.direct.map((o) => o.type))
+    expect(direct.has("mood")).toBe(true)
+    expect(direct.has("character")).toBe(false)
+  })
+
+  it("transition's startState behaves identically to camera-motion's", () => {
+    const pool = [opt("mood"), opt("tone"), opt("character"), opt("music-genre")]
+    const out = getCompatibleNodes("startState", "target", pool, "transition")
+    const direct = new Set(out.direct.map((o) => o.type))
+    expect(direct.has("mood")).toBe(true)
+    expect(direct.has("tone")).toBe(true)
+    // audio picker → excluded by VISUAL_PARAMETER_PICKER_NODE_TYPES
+    expect(direct.has("music-genre")).toBe(false)
+    expect(direct.has("character")).toBe(false)
+  })
+
+  it("character-fx's target shows identity refs only", () => {
+    const pool = [
+      opt("character"),
+      opt("face"),
+      opt("object"),
+      opt("location"),
+      opt("mood"),
+      opt("upload-image"),
+      opt("text-prompt"),
+    ]
+    const out = getCompatibleNodes("target", "target", pool, "character-fx")
+    const direct = new Set(out.direct.map((o) => o.type))
+    expect(direct).toEqual(new Set(["character", "face", "object", "location"]))
+    expect(out.compatible).toEqual([])
+  })
+})
+
+// TYPED_HANDLE_IDS is the single source of truth — exported from
+// node-compatibility.ts and consumed by both (a) the dev-time warning
+// in getCompatibleNodes for missing consumerNodeType, AND (b) the
+// add-node popup's typed-handle pool inclusion check (which surfaces
+// Parameter-category nodes only on these handles).
+//
+// Drift catcher: TYPED_HANDLE_IDS must match every non-generate-image
+// entry in TARGET_HANDLE_ACCEPTS (the registry that drives the canvas
+// validator and source-direction popovers). If a new typed handle is
+// added to the registry without being added to TYPED_HANDLE_IDS, the
+// add-node popup silently hides Parameter-category candidates on it.
+describe("TYPED_HANDLE_IDS contract", () => {
+  it("matches every non-generate-image handle in TARGET_HANDLE_ACCEPTS", () => {
+    const registryHandles = new Set<string>()
+    for (const [nodeType, entries] of Object.entries(TARGET_HANDLE_ACCEPTS)) {
+      if (nodeType === "generate-image") continue // owns 6 handle ids that aren't typed-pool gates
+      for (const e of entries) registryHandles.add(e.handleId)
+    }
+    expect(new Set(TYPED_HANDLE_IDS)).toEqual(registryHandles)
   })
 })

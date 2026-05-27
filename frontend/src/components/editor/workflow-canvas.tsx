@@ -29,6 +29,7 @@ import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
+import { isPickerNodeType } from "@/lib/picker-handles"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
 import { AnimatedFlowEdge } from "./animated-flow-edge"
@@ -405,6 +406,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
+  const setConfigPanelFullscreen = useWorkflowStore((s) => s.setConfigPanelFullscreen)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const addNode = useWorkflowStore((s) => s.addNode)
@@ -930,12 +932,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       const position = addNodeAtCenter || !addNodePopupPosition
         ? screenToFlowPosition(getViewportCenter())
         : screenToFlowPosition(addNodePopupPosition)
-      addNode(type, position, initialData)
+      const newNodeId = addNode(type, position, initialData)
       setAddNodePopupOpen(false)
       setAddNodePopupPosition(undefined)
       setAddNodeAtCenter(false)
+      // Pickers open in fullscreen settings so the user can immediately pick
+      // a value via the tile-grid catalog — the small node body isn't enough
+      // to interact with the picker meaningfully.
+      if (newNodeId && isPickerNodeType(type)) {
+        selectNode(newNodeId)
+        setConfigPanelFullscreen(true)
+      }
     },
-    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter]
+    [addNode, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter, selectNode, setConfigPanelFullscreen]
   )
 
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
