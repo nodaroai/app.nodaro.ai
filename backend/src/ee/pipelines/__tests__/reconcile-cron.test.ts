@@ -14,9 +14,16 @@ interface StageRow {
   status: string
 }
 
+interface EntityRow {
+  id: string
+  pipeline_id: string
+  status: string
+}
+
 const mocks = vi.hoisted(() => ({
   pipelines: [] as PipelineRow[],
   stages: [] as StageRow[],
+  entities: [] as EntityRow[],
   pipelineUpdates: [] as Array<{ id: string; updates: Record<string, unknown> }>,
   stageUpdates: [] as Array<{ id: string; updates: Record<string, unknown> }>,
   stageAttemptInserts: [] as Array<Record<string, unknown>>,
@@ -80,6 +87,30 @@ vi.mock("../../../lib/supabase.js", () => {
         },
       }
     }
+    if (table === "pipeline_entities") {
+      const filters: Record<string, unknown> = {}
+      const builder: any = {
+        select: () => builder,
+        eq: (col: string, val: unknown) => {
+          filters[col] = val
+          return builder
+        },
+        in: (col: string, vals: unknown[]) => {
+          filters[`${col}__in`] = vals
+          return builder
+        },
+        limit: () => builder,
+        maybeSingle: () => {
+          const statuses = (filters["status__in"] as string[] | undefined) ?? []
+          const entity = mocks.entities.find(
+            (e) =>
+              e.pipeline_id === filters.pipeline_id && statuses.includes(e.status),
+          )
+          return Promise.resolve({ data: entity ?? null, error: null })
+        },
+      }
+      return builder
+    }
     throw new Error(`Unexpected table: ${table}`)
   }
   return { supabase: { from } }
@@ -123,6 +154,7 @@ describe("reconcilePipelinesTick", () => {
   beforeEach(() => {
     mocks.pipelines.length = 0
     mocks.stages.length = 0
+    mocks.entities.length = 0
     mocks.pipelineUpdates.length = 0
     mocks.stageUpdates.length = 0
     mocks.stageAttemptInserts.length = 0
@@ -240,5 +272,74 @@ describe("reconcilePipelinesTick", () => {
     // No stage updates / audit row when no running stage exists
     expect(mocks.stageUpdates).toHaveLength(0)
     expect(mocks.stageAttemptInserts).toHaveLength(0)
+  })
+
+  // ── User-wait guard: manual-mode pipelines paused for approval sit at
+  // status='running' but must NOT be treated as stuck. Regression net for the
+  // 2026-05-27 incident where the cron failed healthy pipelines mid-approval.
+  it("skips a manual pipeline paused at a per-entity gate (entity awaiting_approval)", async () => {
+    mocks.pipelines.push({
+      id: "pu1",
+      user_id: "u1",
+      status: "running",
+      created_at: new Date(Date.now() - HOUR).toISOString(),
+    })
+    // Stage is 'running' (manual entity pauses never flip it to awaiting_approval).
+    mocks.stages.push({ id: "su1", pipeline_id: "pu1", resume_count: 0, status: "running" })
+    mocks.entities.push({ id: "e1", pipeline_id: "pu1", status: "awaiting_approval" })
+
+    await reconcilePipelinesTick()
+
+    expect(mocks.enqueueCalls).toHaveLength(0)
+    expect(mocks.stageUpdates).toHaveLength(0)
+    expect(mocks.pipelineUpdates).toHaveLength(0)
+    expect(mocks.refundCalls).toHaveLength(0)
+  })
+
+  it("skips a manual pipeline waiting on description approval (entity pending_description)", async () => {
+    mocks.pipelines.push({
+      id: "pu2",
+      user_id: "u1",
+      status: "running",
+      created_at: new Date(Date.now() - HOUR).toISOString(),
+    })
+    mocks.entities.push({ id: "e2", pipeline_id: "pu2", status: "pending_description" })
+
+    await reconcilePipelinesTick()
+
+    expect(mocks.enqueueCalls).toHaveLength(0)
+    expect(mocks.pipelineUpdates).toHaveLength(0)
+  })
+
+  it("does NOT abandon a user-waiting pipeline even past the 6-hour threshold", async () => {
+    mocks.pipelines.push({
+      id: "pu3",
+      user_id: "u1",
+      status: "running",
+      created_at: new Date(Date.now() - 7 * HOUR).toISOString(),
+    })
+    mocks.entities.push({ id: "e3", pipeline_id: "pu3", status: "awaiting_approval" })
+
+    await reconcilePipelinesTick()
+
+    // Guard runs before the abandon check → no fail, no refund, no enqueue.
+    expect(mocks.pipelineUpdates).toHaveLength(0)
+    expect(mocks.refundCalls).toHaveLength(0)
+    expect(mocks.enqueueCalls).toHaveLength(0)
+  })
+
+  it("skips a pipeline paused at the variant batch gate (stage awaiting_approval)", async () => {
+    mocks.pipelines.push({
+      id: "pu4",
+      user_id: "u1",
+      status: "running",
+      created_at: new Date(Date.now() - HOUR).toISOString(),
+    })
+    mocks.stages.push({ id: "su4", pipeline_id: "pu4", resume_count: 0, status: "awaiting_approval" })
+
+    await reconcilePipelinesTick()
+
+    expect(mocks.enqueueCalls).toHaveLength(0)
+    expect(mocks.pipelineUpdates).toHaveLength(0)
   })
 })
