@@ -168,6 +168,14 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
     stageName: "objects",
     status: "approved",
   })
+  // Drive the next stage. Manual mode previously marked the stage approved
+  // here but never re-enqueued, so the pipeline stalled at
+  // `objects approved / current_stage=NULL` — the lost-wakeup. enqueue both
+  // stamps the redrive latch and adds the job; driveWithRedriveLatch coalesces
+  // the dedup'd add() from inside this active drive into one more drive that
+  // advances to locations. (Auto mode already did this via autoApproveObjectsStage.)
+  const { enqueuePipelineRun } = await import("../queue.js")
+  await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
 }
 
 /**

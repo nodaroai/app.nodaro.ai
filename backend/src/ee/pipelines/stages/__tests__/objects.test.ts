@@ -229,6 +229,71 @@ describe("runObjectsStage", () => {
     })
   })
 
+  it("manual-mode: when all objects are approved, marks stage approved AND re-enqueues to advance (regression: lost-wakeup stall)", async () => {
+    // Seed the object entity already approved (the user just approved the last
+    // object). The stage must finalize AND drive the next stage. Previously the
+    // manual path marked the stage approved but never enqueued, stalling the
+    // pipeline at `objects approved / current_stage=NULL` (prod pipeline
+    // e06d9ff3, 2026-05-27).
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-helmet",
+          entity_key: "helmet",
+          pipeline_id: "p1-manual-done",
+          entity_type: "object",
+          status: "approved",
+          metadata: { entity_type: "object", name: "Helmet", visual_description: "x" },
+        },
+      ],
+    })
+
+    await runObjectsStage({
+      supabase, pipelineId: "p1-manual-done", userId: "u1", userTier: "pro", mode: "manual",
+    })
+
+    // Stage finalized…
+    const stageUpdates = (supabase as never as {
+      _stageUpdates: Array<Record<string, unknown>>
+    })._stageUpdates
+    expect(stageUpdates.find((u) => u.status === "approved")).toBeDefined()
+    // …AND the orchestrator was re-enqueued to advance to locations.
+    expect(enqueuePipelineRun).toHaveBeenCalledTimes(1)
+    expect(enqueuePipelineRun).toHaveBeenCalledWith({
+      pipelineId: "p1-manual-done",
+      userId: "u1",
+      reason: "stage_advance",
+    })
+  })
+
+  it("guided-mode: also advances + re-enqueues on completion (guided shares the non-auto path)", async () => {
+    // The stage handlers only special-case `mode === "auto"`; guided falls
+    // through the same non-auto branch as manual, so it had the identical
+    // stall bug and is covered by the same fix. This test pins that contract.
+    const supabase = makeSupabase({
+      seedEntities: [
+        {
+          id: "e-helmet",
+          entity_key: "helmet",
+          pipeline_id: "p1-guided-done",
+          entity_type: "object",
+          status: "approved",
+          metadata: { entity_type: "object", name: "Helmet", visual_description: "x" },
+        },
+      ],
+    })
+
+    await runObjectsStage({
+      supabase, pipelineId: "p1-guided-done", userId: "u1", userTier: "pro", mode: "guided",
+    })
+
+    expect(enqueuePipelineRun).toHaveBeenCalledWith({
+      pipelineId: "p1-guided-done",
+      userId: "u1",
+      reason: "stage_advance",
+    })
+  })
+
   it("manual-mode: existing behavior unchanged — pauses after generation", async () => {
     ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
       jobId: "j1", assetId: "a1", assetUrl: "https://r2/helmet.png", creditsSpent: 2,
