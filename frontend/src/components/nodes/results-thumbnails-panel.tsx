@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, X } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 
 interface ResultsThumbnailsPanelProps<T extends { url: string; jobId?: string }> {
@@ -17,6 +17,17 @@ interface ResultsThumbnailsPanelProps<T extends { url: string; jobId?: string }>
   /** Thumbnail edge length in pixels (square). Default 48. Larger sizes
    *  fit fewer items per page. */
   readonly thumbSize?: number
+  /** Media type — `"image"` (default) renders thumbnails via CachedImage
+   *  (`<img>`). `"video"` renders a muted/playsInline `<video>` for any
+   *  thumb whose url ISN'T an obvious image src — handles the case where
+   *  the ffmpeg backend's `generateAndUploadThumbnail` returned null and
+   *  the caller fell back to the raw video url. */
+  readonly mediaType?: "image" | "video"
+  /** Per-thumbnail delete affordance (hover-revealed red X on each tile).
+   *  Omit to disable. Matches the legacy inline strip behavior — without
+   *  it, removing non-active results becomes a two-click detour through
+   *  the result overlay. */
+  readonly onDelete?: (index: number) => void
 }
 
 const GAP_PX = 6
@@ -40,12 +51,51 @@ const PANEL_PAD_RIGHT_EXTRA = 4
  *    boundaries). The active result's page auto-scrolls to stay in
  *    view as the index moves between pages.
  */
+/** URLs whose extension marks them as a video file. Used to decide
+ *  whether to render `<video>` or `<img>` for a given thumb when the
+ *  caller is a video-producing node. Conservative — anything not matching
+ *  falls through to `<img>` via CachedImage (which renders a broken-image
+ *  icon for non-images but keeps DOM structure consistent).
+ *  Covers the same extensions enumerated by save-to-storage.ts +
+ *  download-video.ts on the backend so the predicate doesn't drift. */
+function looksLikeVideoUrl(url: string): boolean {
+  const m = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i)
+  if (!m) return false
+  const ext = m[1].toLowerCase()
+  return ext === "mp4" || ext === "mov" || ext === "webm" || ext === "m4v" || ext === "mkv" || ext === "avi" || ext === "flv"
+}
+
+/** Whether a URL is hosted on a domain we control (R2, our CDN) where
+ *  CORS-credentialed requests are allowed. External hosts reject
+ *  preflight with `crossOrigin="anonymous"` and the resource fails to
+ *  load — same gate `CachedImage` uses internally. Inline here to avoid
+ *  pulling in CachedImage's full module surface. */
+function isInternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin)
+    const host = parsed.hostname
+    return (
+      host === window.location.hostname ||
+      host.endsWith(".nodaro.ai") ||
+      host.endsWith(".r2.cloudflarestorage.com") ||
+      host.endsWith(".r2.dev") ||
+      host === "cdn.nodaro.ai" ||
+      host === "next.nodaro.ai" ||
+      host === "app.nodaro.ai"
+    )
+  } catch {
+    return false
+  }
+}
+
 export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }>({
   results,
   activeIndex,
   onSelect,
   nodeSelected,
   thumbSize = 48,
+  mediaType = "image",
+  onDelete,
 }: ResultsThumbnailsPanelProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState<number>(0)
@@ -167,28 +217,60 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
         {visible.map((r, i) => {
           const absoluteIndex = pageStart + i
           const isActive = absoluteIndex === activeIndex
+          const useVideoTile = mediaType === "video" && looksLikeVideoUrl(r.url)
+          const tileClass = `w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
+            isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
+          }`
+          const handleClick = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            onSelect(absoluteIndex)
+          }
           return (
             <div
               key={`${r.jobId ?? "result"}-${absoluteIndex}`}
-              className="relative shrink-0"
+              className="relative shrink-0 group/thumb"
               style={{ width: thumbSize, height: thumbSize }}
             >
-              <CachedImage
-                src={r.url}
-                alt={`Result ${absoluteIndex + 1}`}
-                className={`w-full h-full object-cover rounded-lg cursor-pointer transition-all ${
-                  isActive ? "ring-2 ring-[#ff0073]" : "opacity-60 hover:opacity-100"
-                }`}
-                thumbnail
-                thumbnailWidth={96}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSelect(absoluteIndex)
-                }}
-              />
+              {useVideoTile ? (
+                // iOS Safari intercepts taps on <video> without controls
+                // to play/pause; React's synthetic onClick fires
+                // unreliably as a result. Transparent overlay div above
+                // the video captures the click cleanly. The video itself
+                // sets pointer-events: none so it never sees the tap.
+                // `crossOrigin` is gated on `isInternalUrl` because
+                // external hosts (e.g. external preview URLs that flow
+                // through pre-R2-mirror code paths) reject CORS-
+                // credentialed requests — mirrors CachedImage's logic.
+                <>
+                  <video
+                    src={r.url}
+                    crossOrigin={isInternalUrl(r.url) ? "anonymous" : undefined}
+                    className={tileClass}
+                    style={{ pointerEvents: "none" }}
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                  <button
+                    type="button"
+                    aria-label={`Switch to result ${absoluteIndex + 1}`}
+                    className="absolute inset-0 cursor-pointer bg-transparent border-0 p-0"
+                    onClick={handleClick}
+                  />
+                </>
+              ) : (
+                <CachedImage
+                  src={r.url}
+                  alt={`Result ${absoluteIndex + 1}`}
+                  className={tileClass}
+                  thumbnail
+                  thumbnailWidth={96}
+                  onClick={handleClick}
+                />
+              )}
               <span
                 aria-hidden
-                className={`absolute top-0.5 left-0.5 text-[9px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm ${
+                className={`absolute top-0.5 left-0.5 text-[9px] leading-none font-semibold px-1 py-0.5 rounded-sm tabular-nums shadow-sm pointer-events-none ${
                   isActive
                     ? "bg-[#ff0073] text-white"
                     : "bg-black/70 text-white/85"
@@ -196,6 +278,20 @@ export function ResultsThumbnailsPanel<T extends { url: string; jobId?: string }
               >
                 {absoluteIndex + 1}
               </span>
+              {onDelete && (
+                <button
+                  type="button"
+                  aria-label={`Delete result ${absoluteIndex + 1}`}
+                  title="Delete this result"
+                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover/thumb:opacity-100 transition-opacity shadow"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(absoluteIndex)
+                  }}
+                >
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              )}
             </div>
           )
         })}

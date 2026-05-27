@@ -1,13 +1,14 @@
 "use client"
 
-import { memo, useState } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
-import { Volume1, Loader2, AlertCircle, X, AudioLines, Video } from "lucide-react"
+import { memo, useEffect, useState } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { Volume1, Loader2, AlertCircle, X, AudioLines, Video, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { ACCEPTS_MEDIA, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -39,14 +40,25 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
   const outputLabel = isVideoOutput ? "Video" : "Audio"
   const outputHandleId = isVideoOutput ? "video-out" : "audio-out"
 
+  // When lastInputType flips between audio↔video, the source pip's
+  // HandleWithPopover unmounts (with the old id) and a new one mounts
+  // (with the new id). React Flow caches handle bounds — without this
+  // ping it doesn't re-measure on the swap, leaving downstream edges
+  // anchored to the OLD handle position. The deps include outputHandleId
+  // so the call only fires on actual id transitions.
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, outputHandleId, updateNodeInternals])
+
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
     <EditableNodeLabel label={nodeData.label} icon={<Volume1 className="w-3.5 h-3.5" />} onSave={(newLabel) => updateNodeData(id, { label: newLabel })} />
     <BaseNode id={id} label={nodeData.label} icon={<Volume1 className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"} hideHeader minWidth={220}
       topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
-        { id: outputHandleId, type: "source", position: Position.Right, label: outputLabel, hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
+        { id: "in", type: "target", position: Position.Left, label: "Input", external: true, customStyle: { top: 'calc(100% - 24px)', left: '-29px' } },
+        { id: outputHandleId, type: "source", position: Position.Right, label: outputLabel, external: true, customStyle: { top: '24px', right: '-29px' } },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -108,8 +120,12 @@ function AdjustVolumeNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.volume}%{nodeData.normalize ? " (normalized)" : ""}</p>
       </div>
     </BaseNode>
-    <HandleIcon icon={<AudioLines />} color="steel" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<AudioLines />} color="steel" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="adjust-volume" handleId="in" type="target" position={Position.Left} label="Media" color={FFMPEG_COLORS.media} icon={<AudioLines />} side="left" top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} />
+    {isVideoOutput ? (
+      <HandleWithPopover nodeId={id} nodeType="adjust-volume" handleId="video-out" type="source" position={Position.Right} label="Video" color={FFMPEG_COLORS.video} icon={<Film />}       side="right" top="24px" />
+    ) : (
+      <HandleWithPopover nodeId={id} nodeType="adjust-volume" handleId="audio-out" type="source" position={Position.Right} label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="right" top="24px" />
+    )}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     {activeUrl && !isVideoOutput && (
       <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />

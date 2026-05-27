@@ -86,6 +86,11 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *  `imageSourceTypes` in payload-builder.ts:1328). */
 export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
+  // extract-frame produces a single still image extracted from a video source.
+  // Without this entry, its typed source pip's popover returned zero target
+  // candidates and downstream image consumers couldn't enumerate it as a
+  // valid producer.
+  "extract-frame",
 ])
 
 /** Identity-locking source node types that feed Subjects. */

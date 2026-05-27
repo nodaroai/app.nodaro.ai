@@ -606,6 +606,36 @@ function generateNodeId(): string {
 }
 
 /**
+ * Per-(nodeType, handleId) parallel-order field name. Several consumers
+ * keep a separate `data.<field>Order: string[]` populated by their
+ * config-panel's ConnectedMediaList drag UI; the runtime preferentially
+ * reads from this array ahead of edge-array order (see execute-node.ts
+ * applyMediaOrder call sites + payload-builder.ts for generate-image's
+ * `references`). When the typed popover reorders edges, we must clear
+ * the parallel field or the user's reorder is silently no-op.
+ *
+ * Returns the data field name to clear, or undefined when no parallel
+ * field exists for this (type, handle, direction) tuple.
+ */
+function getParallelOrderField(
+  nodeType: string | undefined,
+  handleId: string,
+  direction: "source" | "target",
+): string | undefined {
+  if (direction !== "target") return undefined
+  if (!nodeType) return undefined
+  if (handleId !== "references" && handleId !== "in") return undefined
+  switch (`${nodeType}:${handleId}`) {
+    case "generate-image:references":   return "referenceImageOrder"
+    case "combine-videos:in":           return "clipOrder"
+    case "mix-audio:in":                return "trackOrder"
+    case "combine-audio:in":            return "segmentOrder"
+    case "merge-video-audio:in":        return "trackOrder"
+    default:                            return undefined
+  }
+}
+
+/**
  * Build the cloned `data` for a duplicated node: strips live execution state
  * and regenerates per-type fresh UUIDs (sub-workflow ports/routeId, router
  * route ids, loop/list column ids + handleIds). When `handleMap` is supplied,
@@ -1501,8 +1531,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         (e) => e.target === removedEdge.target && e.source === removedEdge.source,
       )
 
+      // (3) Parallel-order field cleanup. combine-videos / combine-audio /
+      // mix-audio / merge-video-audio / generate-image carry a parallel
+      // `data.<field>Order` of source nodeIds that the runtime honors at
+      // execution. When we delete an edge AND no other edge between the
+      // same (source, target) survives on the same handle, the deleted
+      // source's nodeId becomes a stale entry — handled gracefully at
+      // runtime (skipped), but if enough entries become stale the
+      // resulting ordered list may drop below the 2-entry minimum and
+      // fall back to default order. Filter the nodeId out proactively.
+      const targetNode = state.nodes.find((n) => n.id === removedEdge.target)
+      const parallelOrderField = removedEdge.targetHandle
+        ? getParallelOrderField(targetNode?.type, removedEdge.targetHandle, "target")
+        : undefined
+      const shouldStripParallelOrderEntry =
+        parallelOrderField !== undefined && !stillConnected
+
       // Fast path: neither arm applies — no node mutation needed.
-      if (!isLoopColumnEdge && stillConnected) {
+      if (!isLoopColumnEdge && stillConnected && !shouldStripParallelOrderEntry) {
         return { edges: newEdges, isDirty: true }
       }
 
@@ -1534,6 +1580,21 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               Object.entries(fieldMappings).filter(([, v]) => v.sourceNodeId !== removedEdge.source)
             )
             mutated = { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData
+          }
+        }
+
+        // (3) Parallel-order entry strip — array is sourceNodeId[]; drop
+        // the deleted edge's source from it. Preserves the relative order
+        // of surviving entries (unlike reorderHandleEdges which clears
+        // the whole field because edge-array order becomes authoritative).
+        if (shouldStripParallelOrderEntry && parallelOrderField) {
+          const nodeData = (mutated ?? node.data) as Record<string, unknown>
+          const existingOrder = nodeData[parallelOrderField]
+          if (Array.isArray(existingOrder)) {
+            const filtered = (existingOrder as string[]).filter((id) => id !== removedEdge.source)
+            if (filtered.length !== existingOrder.length) {
+              mutated = { ...nodeData, [parallelOrderField]: filtered } as SceneNodeData
+            }
           }
         }
 
@@ -2025,24 +2086,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         newEdges[originalIdx] = state.edges[reorderedMatching[slot]]
       })
 
-      // Side-effect: Generate Image's `references` handle has a parallel
-      // per-node `referenceImageOrder` field that the runtime honors FIRST
-      // (payload-builder.ts:1372 / execute-node.ts equivalent). If we
-      // reorder edges without clearing it, the popover-reordered sequence
-      // is silently ignored at execution. Clear it so edge-array order
-      // (which we just updated) becomes authoritative again.
+      // Side-effect: several consumers carry parallel "order" arrays
+      // (populated by their per-node config panel's ConnectedMediaList UI)
+      // that the runtime honors FIRST, ahead of edge-array order. If we
+      // reorder edges without clearing the parallel array, the popover-
+      // reordered sequence is silently ignored at execution. Clear the
+      // relevant array so edge-array order (which we just updated)
+      // becomes authoritative again.
       let newNodes = state.nodes
-      if (direction === "target" && handleId === "references") {
-        const target = state.nodes.find((n) => n.id === nodeId)
-        if (target?.type === "generate-image") {
-          const data = target.data as Record<string, unknown> | undefined
-          if (data && "referenceImageOrder" in data) {
-            const { referenceImageOrder: _drop, ...rest } = data
-            void _drop
-            newNodes = state.nodes.map((n) =>
-              n.id === nodeId ? { ...n, data: rest as typeof n.data } : n,
-            )
-          }
+      const target = state.nodes.find((n) => n.id === nodeId)
+      const parallelOrderField = getParallelOrderField(target?.type, handleId, direction)
+      if (parallelOrderField && target) {
+        const data = target.data as Record<string, unknown> | undefined
+        if (data && parallelOrderField in data) {
+          const next = { ...data }
+          delete next[parallelOrderField]
+          newNodes = state.nodes.map((n) =>
+            n.id === nodeId ? { ...n, data: next as typeof n.data } : n,
+          )
         }
       }
 
@@ -2126,6 +2187,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         }
       }
 
+      // Parallel-order field cleanup — when the disconnected handle has a
+      // clipOrder / trackOrder / segmentOrder / referenceImageOrder field
+      // on its consumer, force the target into the cleanups map so the
+      // post-loop node walk applies the field-clear branch below. Without
+      // this, the early-return at targetCleanups.size === 0 would skip
+      // disconnects that ONLY need parallel-order cleanup.
+      if (direction === "target") {
+        const targetType = nodeTypeById.get(nodeId)
+        const parallelOrderField = getParallelOrderField(targetType, handleId, direction)
+        if (parallelOrderField) {
+          bucketFor(nodeId) // ensure cleanup pass visits this node
+        }
+      }
+
       if (targetCleanups.size === 0) {
         return { edges: newEdges, isDirty: true }
       }
@@ -2169,6 +2244,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
               Object.entries(fieldMappings).filter(([, v]) => !cleanup.sources.has(v.sourceNodeId)),
             )
             mutated = { ...nodeData, fieldMappings: cleanedMappings } as SceneNodeData
+          }
+        }
+
+        // Parallel-order field cleanup — when this disconnect targeted a
+        // handle whose consumer carries a clipOrder / trackOrder /
+        // segmentOrder / referenceImageOrder array, the array is now
+        // entirely stale (no edges left on the handle). Clear the field
+        // so the next time edges land, fresh edge-array order is
+        // authoritative.
+        if (direction === "target") {
+          const parallelOrderField = getParallelOrderField(node.type, handleId, direction)
+          if (parallelOrderField) {
+            const nodeData = (mutated ?? node.data) as Record<string, unknown>
+            if (parallelOrderField in nodeData) {
+              const next = { ...nodeData }
+              delete next[parallelOrderField]
+              mutated = next as SceneNodeData
+            }
           }
         }
 

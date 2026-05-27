@@ -7,7 +7,8 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { ACCEPTS_AUDIO, FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -40,8 +41,8 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode id={id} label={nodeData.label} icon={<Headphones className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"} hideHeader minWidth={220}
       topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       handles={[
-        { id: "in", type: "target", position: Position.Left, label: "Input", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
-        { id: "audio-out", type: "source", position: Position.Right, label: "Audio", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
+        { id: "in", type: "target", position: Position.Left, label: "Input", external: true, customStyle: { top: 'calc(100% - 24px)', left: '-29px' } },
+        { id: "audio-out", type: "source", position: Position.Right, label: "Audio", external: true, customStyle: { top: '24px', right: '-29px' } },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -89,8 +90,8 @@ function MixAudioNodeComponent({ id, data, selected }: NodeProps) {
         <p className="text-muted-foreground">{nodeData.trackCount} tracks</p>
       </div>
     </BaseNode>
-    <HandleIcon icon={<AudioLines />} color="steel" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<AudioLines />} color="steel" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="in"        type="target" position={Position.Left}  label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="mix-audio" handleId="audio-out" type="source" position={Position.Right} label="Audio" color={FFMPEG_COLORS.audio} icon={<AudioLines />} side="right" top="24px" />
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     {activeUrl && (
       <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="audio" url={activeUrl} results={results} initialIndex={activeIndex} />

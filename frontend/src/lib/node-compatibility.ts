@@ -2,8 +2,9 @@ import type { SceneNodeType } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
-import { IDENTITY_TYPES } from "./generate-image-handles"
+import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
+import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
 
 /** Source node types whose source-direction candidate enumeration must
  *  consult the typed accepts predicates in `target-handle-registry.ts`
@@ -111,7 +112,7 @@ export interface CompatibleNodes {
  *  Single source of truth — also re-exported as TYPED_HANDLE_IDS for the
  *  add-node popup's typed-pool inclusion check. Don't duplicate the
  *  literal set inline elsewhere; import from here. */
-export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set(["startState", "endState", "target"])
+export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set(["startState", "endState", "target", "in"])
 const CONSUMER_TYPE_DEPENDENT_HANDLES = TYPED_HANDLE_IDS
 
 export function getCompatibleNodes(
@@ -231,15 +232,14 @@ export function getCompatibleNodes(
   }
 
   // Generate Image v2: References accepts only image-producing nodes.
+  // Uses the shared IMAGE_PRODUCER_TYPES (single source of truth — same
+  // set drives isValidGenerateImageConnection at the canvas validator) so
+  // popup candidates and drag-to-connect can't diverge.
   if (handleId === "references" && direction === "target") {
-    const IMAGE_TYPES: ReadonlySet<string> = new Set([
-      "upload-image", "generate-image", "edit-image", "image-to-image",
-      "modify-image", "upscale-image", "remove-background",
-    ])
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
-      if (!IMAGE_TYPES.has(option.type)) continue
+      if (!IMAGE_PRODUCER_TYPES.has(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }
@@ -247,9 +247,11 @@ export function getCompatibleNodes(
   }
 
   // Generate Image v2.1: Assets handle accepts only identity-locking nodes.
-  // (Legacy alias `subjects` also matched here pre-v2.1 rename.)
+  // (Legacy alias `subjects` also matched here pre-v2.1 rename.) Uses the
+  // shared IDENTITY_TYPES from generate-image-handles for single-source-
+  // of-truth — previously had a local literal that shadowed the import
+  // and would silently drift if new identity types landed in the canonical set.
   if ((handleId === "assets" || handleId === "subjects") && direction === "target") {
-    const IDENTITY_TYPES: ReadonlySet<string> = new Set(["character", "location", "object", "face"])
     const direct: NodeOption[] = []
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
@@ -326,6 +328,27 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!IDENTITY_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // FFmpeg consumers' `in` handle — dispatch through
+  // isValidFfmpegConnection so the popup's typed-candidate list agrees
+  // with the canvas validator (no "popup suggests X, drag rejects X"
+  // inconsistency). The 11 ffmpeg target types each route a single
+  // `in` handle through ACCEPTS_VIDEO / ACCEPTS_AUDIO / ACCEPTS_MEDIA.
+  if (
+    consumerNodeType !== undefined
+    && FFMPEG_NODE_TYPES.has(consumerNodeType)
+    && direction === "target"
+    && handleId === "in"
+  ) {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!isValidFfmpegConnection(consumerNodeType, handleId, option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }
