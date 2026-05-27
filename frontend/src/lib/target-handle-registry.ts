@@ -11,6 +11,39 @@ import {
   isValidLoopCoarse,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
+import {
+  AUDIO_TEXT_HANDLE_LABELS,
+  isValidTextToSpeechConnection,
+  isValidTextToAudioConnection,
+  isValidGenerateMusicConnection,
+  isValidAudioIsolationConnection,
+  isValidTextToDialogueConnection,
+  isValidVoiceChangerConnection,
+  isValidDubbingConnection,
+  isValidVoiceRemixConnection,
+  isValidVoiceDesignConnection,
+  isValidForcedAlignmentConnection,
+  isValidSunoGenerateConnection,
+  isValidSunoCoverConnection,
+  isValidSunoExtendConnection,
+  isValidSunoLyricsConnection,
+  isValidSunoSeparateConnection,
+  isValidSunoMusicVideoConnection,
+  isValidSunoMashupConnection,
+  isValidSunoReplaceSectionConnection,
+  isValidSunoStyleBoostConnection,
+  isValidSunoAddInstrumentalConnection,
+  isValidSunoAddVocalsConnection,
+  isValidSunoConvertWavConnection,
+  isValidSunoUploadExtendConnection,
+  isValidGenerateScriptConnection,
+  isValidLlmChatConnection,
+  isValidTranscribeConnection,
+  isValidSplitMediaConnection,
+  isValidCombineTextConnection,
+  isValidSplitTextConnection,
+  isValidPreviewConnection,
+} from "./audio-text-handles"
 
 export interface TargetHandleEntry {
   readonly handleId: string
@@ -158,6 +191,127 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "mix-audio":          [{ handleId: "in", label: "Audio", accepts: ACCEPTS_AUDIO }],
   "merge-video-audio":  [{ handleId: "in", label: "Video + Audio", accepts: ACCEPTS_MEDIA }],
   "adjust-volume":      [{ handleId: "in", label: "Video or Audio", accepts: ACCEPTS_MEDIA }],
+
+  // ─── Audio & Speech (Batch 1 of audio/text typed-handles migration) ───
+  // Each predicate's accepts is built inline from the per-handle predicate
+  // in audio-text-handles.ts so source-direction popover candidate
+  // enumeration uses the SAME rules as drag-to-connect validation.
+  "text-to-speech": [
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["text-to-speech"].prompt, accepts: (s) => isValidTextToSpeechConnection("prompt", s, isVisualPickerType) },
+  ],
+  "text-to-audio": [
+    { handleId: "prompt",       label: AUDIO_TEXT_HANDLE_LABELS["text-to-audio"].prompt,         accepts: (s) => isValidTextToAudioConnection("prompt",       s, isVisualPickerType) },
+    { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["text-to-audio"]["audio-style"], accepts: (s) => isValidTextToAudioConnection("audio-style",  s, isVisualPickerType) },
+  ],
+  "generate-music": [
+    { handleId: "prompt",       label: AUDIO_TEXT_HANDLE_LABELS["generate-music"].prompt,         accepts: (s) => isValidGenerateMusicConnection("prompt",       s, isVisualPickerType) },
+    { handleId: "ref-audio",    label: AUDIO_TEXT_HANDLE_LABELS["generate-music"]["ref-audio"],   accepts: (s) => isValidGenerateMusicConnection("ref-audio",    s, isVisualPickerType) },
+    { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["generate-music"]["audio-style"], accepts: (s) => isValidGenerateMusicConnection("audio-style",  s, isVisualPickerType) },
+  ],
+  "audio-isolation": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["audio-isolation"].audio, accepts: (s) => isValidAudioIsolationConnection("audio", s) },
+  ],
+  "text-to-dialogue": [
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["text-to-dialogue"].prompt, accepts: (s) => isValidTextToDialogueConnection("prompt", s, isVisualPickerType) },
+  ],
+  "voice-changer": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["voice-changer"].audio, accepts: (s) => isValidVoiceChangerConnection("audio", s) },
+  ],
+  "dubbing": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["dubbing"].audio, accepts: (s) => isValidDubbingConnection("audio", s) },
+  ],
+  "voice-remix": [
+    { handleId: "audio",        label: AUDIO_TEXT_HANDLE_LABELS["voice-remix"].audio,           accepts: (s) => isValidVoiceRemixConnection("audio",        s) },
+    { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["voice-remix"]["audio-style"],  accepts: (s) => isValidVoiceRemixConnection("audio-style",  s) },
+  ],
+  "voice-design": [
+    { handleId: "prompt",       label: AUDIO_TEXT_HANDLE_LABELS["voice-design"].prompt,           accepts: (s) => isValidVoiceDesignConnection("prompt",      s, isVisualPickerType) },
+    { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["voice-design"]["audio-style"],   accepts: (s) => isValidVoiceDesignConnection("audio-style", s, isVisualPickerType) },
+  ],
+  "forced-alignment": [
+    { handleId: "audio",      label: AUDIO_TEXT_HANDLE_LABELS["forced-alignment"].audio,      accepts: (s) => isValidForcedAlignmentConnection("audio",      s) },
+    { handleId: "transcript", label: AUDIO_TEXT_HANDLE_LABELS["forced-alignment"].transcript, accepts: (s) => isValidForcedAlignmentConnection("transcript", s) },
+  ],
+
+  // ─── AI > Suno Music (Batch 2 of audio/text typed-handles migration) ──
+  "suno-generate": [
+    { handleId: "prompt",       label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"].prompt,         accepts: (s) => isValidSunoGenerateConnection("prompt",       s, isVisualPickerType) },
+    { handleId: "audio-style",  label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"]["audio-style"], accepts: (s) => isValidSunoGenerateConnection("audio-style",  s, isVisualPickerType) },
+    { handleId: "voice",        label: AUDIO_TEXT_HANDLE_LABELS["suno-generate"].voice,          accepts: (s) => isValidSunoGenerateConnection("voice",        s, isVisualPickerType) },
+  ],
+  "suno-cover": [
+    { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-cover"].audio,  accepts: (s) => isValidSunoCoverConnection("audio",  s, isVisualPickerType) },
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-cover"].prompt, accepts: (s) => isValidSunoCoverConnection("prompt", s, isVisualPickerType) },
+    { handleId: "voice",  label: AUDIO_TEXT_HANDLE_LABELS["suno-cover"].voice,  accepts: (s) => isValidSunoCoverConnection("voice",  s, isVisualPickerType) },
+  ],
+  "suno-extend": [
+    { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-extend"].audio,  accepts: (s) => isValidSunoExtendConnection("audio",  s, isVisualPickerType) },
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-extend"].prompt, accepts: (s) => isValidSunoExtendConnection("prompt", s, isVisualPickerType) },
+    { handleId: "voice",  label: AUDIO_TEXT_HANDLE_LABELS["suno-extend"].voice,  accepts: (s) => isValidSunoExtendConnection("voice",  s, isVisualPickerType) },
+  ],
+  "suno-lyrics": [
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-lyrics"].prompt, accepts: (s) => isValidSunoLyricsConnection("prompt", s, isVisualPickerType) },
+  ],
+  "suno-separate": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-separate"].audio, accepts: (s) => isValidSunoSeparateConnection("audio", s) },
+  ],
+  "suno-music-video": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-music-video"].audio, accepts: (s) => isValidSunoMusicVideoConnection("audio", s) },
+  ],
+  "suno-mashup": [
+    { handleId: "audio1", label: AUDIO_TEXT_HANDLE_LABELS["suno-mashup"].audio1, accepts: (s) => isValidSunoMashupConnection("audio1", s) },
+    { handleId: "audio2", label: AUDIO_TEXT_HANDLE_LABELS["suno-mashup"].audio2, accepts: (s) => isValidSunoMashupConnection("audio2", s) },
+  ],
+  "suno-replace-section": [
+    { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-replace-section"].audio,  accepts: (s) => isValidSunoReplaceSectionConnection("audio",  s, isVisualPickerType) },
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-replace-section"].prompt, accepts: (s) => isValidSunoReplaceSectionConnection("prompt", s, isVisualPickerType) },
+  ],
+  "suno-style-boost": [
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-style-boost"].prompt, accepts: (s) => isValidSunoStyleBoostConnection("prompt", s, isVisualPickerType) },
+  ],
+  "suno-add-instrumental": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-add-instrumental"].audio, accepts: (s) => isValidSunoAddInstrumentalConnection("audio", s) },
+  ],
+  "suno-add-vocals": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-add-vocals"].audio, accepts: (s) => isValidSunoAddVocalsConnection("audio", s) },
+  ],
+  "suno-convert-wav": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["suno-convert-wav"].audio, accepts: (s) => isValidSunoConvertWavConnection("audio", s) },
+  ],
+  "suno-upload-extend": [
+    { handleId: "audio",  label: AUDIO_TEXT_HANDLE_LABELS["suno-upload-extend"].audio,  accepts: (s) => isValidSunoUploadExtendConnection("audio",  s, isVisualPickerType) },
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["suno-upload-extend"].prompt, accepts: (s) => isValidSunoUploadExtendConnection("prompt", s, isVisualPickerType) },
+  ],
+
+  // ─── AI > Script & Text (Batch 3 of audio/text typed-handles migration) ──
+  "generate-script": [
+    { handleId: "prompt", label: AUDIO_TEXT_HANDLE_LABELS["generate-script"].prompt, accepts: (s) => isValidGenerateScriptConnection("prompt", s, isVisualPickerType) },
+  ],
+  "llm-chat": [
+    { handleId: "prompt",        label: AUDIO_TEXT_HANDLE_LABELS["llm-chat"].prompt,            accepts: (s) => isValidLlmChatConnection("prompt",        s, isVisualPickerType) },
+    { handleId: "references",    label: AUDIO_TEXT_HANDLE_LABELS["llm-chat"].references,        accepts: (s) => isValidLlmChatConnection("references",    s, isVisualPickerType) },
+    { handleId: "system-prompt", label: AUDIO_TEXT_HANDLE_LABELS["llm-chat"]["system-prompt"],  accepts: (s) => isValidLlmChatConnection("system-prompt", s, isVisualPickerType) },
+  ],
+  "transcribe": [
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["transcribe"].audio, accepts: (s) => isValidTranscribeConnection("audio", s) },
+  ],
+
+  // ─── Processing > Audio + Text (Batch 4, non-ffmpeg-overlapping only) ─
+  // merge-video-audio, trim-audio, mix-audio, combine-audio, adjust-volume
+  // are already registered above under the FFmpeg block (shipped in #2809).
+  "split-media": [
+    { handleId: "video", label: AUDIO_TEXT_HANDLE_LABELS["split-media"].video, accepts: (s) => isValidSplitMediaConnection("video", s) },
+    { handleId: "audio", label: AUDIO_TEXT_HANDLE_LABELS["split-media"].audio, accepts: (s) => isValidSplitMediaConnection("audio", s) },
+  ],
+  "combine-text": [
+    { handleId: "text", label: AUDIO_TEXT_HANDLE_LABELS["combine-text"].text, accepts: (s) => isValidCombineTextConnection("text", s, isVisualPickerType) },
+  ],
+  "split-text": [
+    { handleId: "text", label: AUDIO_TEXT_HANDLE_LABELS["split-text"].text, accepts: (s) => isValidSplitTextConnection("text", s) },
+  ],
+  "preview": [
+    { handleId: "in", label: AUDIO_TEXT_HANDLE_LABELS["preview"].in, accepts: (_s) => isValidPreviewConnection("in") },
+  ],
 
   // ─── Data root-category nodes ─────────────────────────────────────────
   // Source-direction popovers walk this map; entries here let "drag from an

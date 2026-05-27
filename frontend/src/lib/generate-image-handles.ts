@@ -79,9 +79,21 @@ export function classifyPickerForGenerateImage(sourceType: string): "look" | "el
   return "elements"
 }
 
-/** Source node types whose output text feeds Prompt / Negative. */
+/** Source node types whose output text feeds Prompt / Negative. Mirrors
+ *  backend `TEXT_SOURCE_NODE_TYPES` in `input-resolver.ts:817` — a node
+ *  type that's a text producer at runtime MUST be in this frontend set, or
+ *  drag-to-connect on any `prompt` / `negative` / `text` / `transcript`
+ *  handle will silently reject the source while the backend would have
+ *  happily routed its output. */
 export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "text-prompt", "ai-writer", "llm-chat", "generate-script", "combine-text", "image-to-text", "split-text",
+  // Audio/Suno text producers (added with the audio+text typed-handle migration).
+  "transcribe", "suno-lyrics", "suno-style-boost",
+  // List/data text producers — emit a single text string at runtime per
+  // input-resolver.ts:1252 (TEXT_SOURCE_NODE_TYPES dispatch into
+  // inputs.prompt). Without these, qa-check/image-critic outputs and
+  // list/loop/extract-field text values can't feed any typed prompt.
+  "extract-field", "qa-check", "image-critic", "forced-alignment", "list", "loop",
 ])
 
 /** Source node types whose output image feeds References (mirrors backend

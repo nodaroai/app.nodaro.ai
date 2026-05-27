@@ -2,16 +2,21 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Merge, FileText, X, Copy } from "lucide-react"
+import { Merge, FileText, X, Copy, Type } from "lucide-react"
 import { createPortal } from "react-dom"
 import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidCombineTextConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { CombineTextNodeData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_TEXT = (t: string) => isValidCombineTextConnection("text", t, isVisualPicker)
 
 const SEPARATOR_LABELS: Record<string, string> = {
   newline: "\\n",
@@ -100,8 +105,8 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "text", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "text", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -146,8 +151,8 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleIcon icon={<FileText />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="target" position={Position.Left}  label="Text" color="#22D3EE" icon={<FileText />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_TEXT} />
+      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="source" position={Position.Right} label="Text" color="#22D3EE" icon={<Type />}     side="right" top="24px" />
       <TextPreviewModal
         isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}

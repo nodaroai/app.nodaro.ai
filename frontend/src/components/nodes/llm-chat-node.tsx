@@ -3,18 +3,25 @@
 import { memo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, AlignLeft, List } from "lucide-react"
+import { MessageSquare, Type, Loader2, AlertCircle, X, FileText, Copy, Download, BookOpen, ImageIcon, List } from "lucide-react"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidLlmChatConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { getGenerateTextTemplate } from "@/lib/generate-text-templates"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { LLMChatData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT        = (t: string) => isValidLlmChatConnection("prompt",        t, isVisualPicker)
+const ACCEPTS_REFERENCES    = (t: string) => isValidLlmChatConnection("references",    t, isVisualPicker)
+const ACCEPTS_SYSTEM_PROMPT = (t: string) => isValidLlmChatConnection("system-prompt", t, isVisualPicker)
 
 function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as LLMChatData
@@ -71,11 +78,11 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "references", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-          { id: "system-prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-          { id: "text", type: "source", position: Position.Right, label: "Text", customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-          { id: "items", type: "source", position: Position.Right, label: "Items", customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
+          { id: "prompt",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "references",    type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+          { id: "system-prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+          { id: "text",          type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+          { id: "items",         type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1 h-full">
@@ -272,13 +279,11 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
             </>
         </div>
       </BaseNode>
-      {/* Input handle icons */}
-      <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
-      <HandleIcon icon={<BookOpen />} color="pink" side="left" top="calc(100% - 50px)" label="refs" />
-      <HandleIcon icon={<AlignLeft />} color="pink" side="left" top="calc(100% - 80px)" label="system" />
-      {/* Output handle icons: text = full generated output; items = fan-out list */}
-      <HandleIcon icon={<Type />} color="pink" side="right" top="20px" label="text" />
-      <HandleIcon icon={<List />} color="pink" side="right" top="50px" label="items" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="prompt"        type="target" position={Position.Left}  label="Prompt"        color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="System prompt" color="#22D3EE" icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color="#22D3EE" icon={<Type />}      side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color="#A78BFA" icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"

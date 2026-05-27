@@ -2,15 +2,18 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, FileText } from "lucide-react"
+import { Scissors, FileText, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSplitTextConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { SplitTextData } from "@/types/nodes"
 import { SEPARATOR_DISPLAY } from "@nodaro/shared"
+
+const ACCEPTS_TEXT = (t: string) => isValidSplitTextConnection("text", t)
 
 function resolveSeparatorLabel(separator: string | undefined, customSeparator: string | undefined): string {
   const raw = separator || "newline"
@@ -50,8 +53,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "text", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "text", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -75,8 +78,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleIcon icon={<FileText />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="target" position={Position.Left}  label="Text" color="#22D3EE" icon={<FileText />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_TEXT} />
+      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="source" position={Position.Right} label="Text" color="#22D3EE" icon={<Type />}     side="right" top="24px" />
     </div>
   )
 }

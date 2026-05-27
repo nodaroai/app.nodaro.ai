@@ -2,25 +2,31 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { FastForward, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { FastForward, Loader2, AlertCircle, Volume2, LayoutGrid, Type, Mic } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoExtendConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoExtendData } from "@/types/nodes"
 
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_AUDIO  = (t: string) => isValidSunoExtendConnection("audio",  t, isVisualPicker)
+const ACCEPTS_PROMPT = (t: string) => isValidSunoExtendConnection("prompt", t, isVisualPicker)
+const ACCEPTS_VOICE  = (t: string) => isValidSunoExtendConnection("voice",  t, isVisualPicker)
+
 function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoExtendData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -38,7 +44,6 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
-    {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
       icon={<FastForward className="w-3.5 h-3.5" />}
@@ -54,7 +59,7 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -81,8 +86,10 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "voice",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+        { id: "audio",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -143,24 +150,10 @@ function SunoExtendNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    {/* Input handle icon with + badge */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center pointer-events-none">{inConnectionCount}</div>
-      )}
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <FastForward className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="suno-extend" handleId="audio"  type="target" position={Position.Left}  label="Audio"  color="#F59E0B" icon={<FastForward />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-extend" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}        side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="suno-extend" handleId="voice"  type="target" position={Position.Left}  label="Voice"  color="#F472B6" icon={<Mic />}         side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_VOICE} />
+    <HandleWithPopover nodeId={id} nodeType="suno-extend" handleId="audio"  type="source" position={Position.Right} label="Audio"  color="#F59E0B" icon={<FastForward />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

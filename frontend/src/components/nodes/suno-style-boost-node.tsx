@@ -8,10 +8,16 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoStyleBoostConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import type { SunoStyleBoostData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT = (t: string) => isValidSunoStyleBoostConnection("prompt", t, isVisualPicker)
 
 function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoStyleBoostData
@@ -39,11 +45,11 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "text", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "text-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "text",   type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -107,12 +113,8 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Style Boost</span>
       </div>
     </BaseNode>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}>
-      <Type className="w-3.5 h-3.5 text-white" />
-    </div>
-    <div className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30" style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}>
-      <Sparkles className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="text"   type="source" position={Position.Right} label="Text"   color="#22D3EE" icon={<Sparkles />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm}
       onClose={() => setDeleteConfirm(false)}

@@ -2,11 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Scissors, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Scissors, Loader2, AlertCircle, Volume2, LayoutGrid, Mic, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoSeparateConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +16,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoSeparateData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO = (t: string) => isValidSunoSeparateConnection("audio", t)
 
 function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoSeparateData
@@ -36,7 +40,6 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ maxWidth: '220px' }}>
-    {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Scissors className="w-3.5 h-3.5" />}
@@ -52,7 +55,7 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -79,9 +82,9 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "vocal-out", type: "source", position: Position.Right, customStyle: { top: '30%', right: '-29px' }, hideHandle: true },
-        { id: "instrumental-out", type: "source", position: Position.Right, customStyle: { top: '70%', right: '-29px' }, hideHandle: true },
+        { id: "audio",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "vocals",       type: "source", position: Position.Right, customStyle: { top: '30%',               right: '-29px' }, external: true },
+        { id: "instrumental", type: "source", position: Position.Right, customStyle: { top: '70%',               right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -153,27 +156,9 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    {/* Input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Vocal output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '30%', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Instrumental output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '70%', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Scissors className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="audio"        type="target" position={Position.Left}  label="Audio"        color="#F59E0B" icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color="#F59E0B" icon={<Mic />}      side="right" top="30%" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color="#F59E0B" icon={<Music />}    side="right" top="70%" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

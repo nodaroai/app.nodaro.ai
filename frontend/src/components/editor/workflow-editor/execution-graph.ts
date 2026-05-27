@@ -355,13 +355,17 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedVideoUrl as string | undefined)
     );
   }
-  // Suno-separate: support stem routing via sourceHandle (matches backend)
+  // Suno-separate: support stem routing via sourceHandle (matches backend).
+  // The Batch 2 rename normalized vocal-out → vocals and
+  // instrumental-out → instrumental; accept both spellings as a safety net
+  // for edges that bypass loadWorkflow's migration (MCP-built workflows
+  // etc.).
   if (type === "suno-separate") {
-    if (sourceHandle === "vocal") {
+    if (sourceHandle === "vocals" || sourceHandle === "vocal" || sourceHandle === "vocal-out") {
       return (data.vocalUrl as string | undefined) ??
         (data.generatedAudioUrl as string | undefined);
     }
-    if (sourceHandle === "instrumental") {
+    if (sourceHandle === "instrumental" || sourceHandle === "instrumental-out") {
       return (data.instrumentalUrl as string | undefined) ??
         (data.generatedAudioUrl as string | undefined);
     }

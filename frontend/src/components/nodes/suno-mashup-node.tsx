@@ -2,11 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Combine, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Combine, Loader2, AlertCircle, Volume2, LayoutGrid, Music, Merge } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSunoMashupConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +16,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { SunoMashupData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO1 = (t: string) => isValidSunoMashupConnection("audio1", t)
+const ACCEPTS_AUDIO2 = (t: string) => isValidSunoMashupConnection("audio2", t)
 
 function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as SunoMashupData
@@ -50,7 +55,7 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -77,9 +82,9 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "audio1", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "audio2", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio1", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "audio2", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -139,26 +144,9 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    {/* Input handle icons */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Combine className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio1" type="target" position={Position.Left}  label="Audio 1" color="#F59E0B" icon={<Music />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO1} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio2" type="target" position={Position.Left}  label="Audio 2" color="#F59E0B" icon={<Music />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_AUDIO2} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio"  type="source" position={Position.Right} label="Audio"   color="#F59E0B" icon={<Merge />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

@@ -534,13 +534,17 @@ export function handleExpandStoryboard(
       },
     } as WorkflowNode);
 
-    // Edges
+    // Edges. Target handle ids reflect the typed-handles migration:
+    // text-to-speech now has `prompt`. merge-video-audio still uses single
+    // `in` (owned by ffmpeg-handles.ts, shipped via #2809). (batchAddNodes-
+    // AndEdges bypasses loadWorkflow's migration pass, so these have to be
+    // written in the post-migration shape directly.)
     newEdges.push({
       id: `edge_${Date.now()}_${i}_txt_tts`,
       source: textNodeId,
       sourceHandle: "prompt",
       target: ttsNodeId,
-      targetHandle: "in",
+      targetHandle: "prompt",
     } as WorkflowEdge);
 
     newEdges.push({
@@ -588,7 +592,9 @@ export function handleExpandStoryboard(
           source: imageNodeIds[indices[j - 1]],
           sourceHandle: "image",
           target: imageNodeIds[indices[j]],
-          targetHandle: "in",
+          // Generate Image's v2.1 typed handle for upstream image refs.
+          // Pre-migration this was the catch-all `in` target.
+          targetHandle: "references",
         } as WorkflowEdge);
       }
     }

@@ -2,11 +2,13 @@
 
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Mic, Loader2, AlertCircle, Volume2, LayoutGrid } from "lucide-react"
+import { Mic, Loader2, AlertCircle, Volume2, AudioWaveform, LayoutGrid, Sparkles } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidVoiceRemixConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -14,6 +16,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { VoiceRemixData } from "@/types/nodes"
+
+const ACCEPTS_AUDIO       = (t: string) => isValidVoiceRemixConnection("audio",       t)
+const ACCEPTS_AUDIO_STYLE = (t: string) => isValidVoiceRemixConnection("audio-style", t)
 
 function VoiceRemixNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VoiceRemixData
@@ -78,12 +83,9 @@ function VoiceRemixNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        // audio-style handle accepts upstream voice-character / voice-delivery
-        // parameter pickers — their composed prompt fills the voiceDescription
-        // field at run time. Same handle convention as voice-design.
-        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "audio-style", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -142,20 +144,9 @@ function VoiceRemixNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    {/* Input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Mic className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="voice-remix" handleId="audio"       type="target" position={Position.Left}  label="Audio"       color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="voice-remix" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color="#F59E0B" icon={<Sparkles />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="voice-remix" handleId="audio"       type="source" position={Position.Right} label="Audio"       color="#F59E0B" icon={<Mic />}           side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

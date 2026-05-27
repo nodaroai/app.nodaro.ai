@@ -7,7 +7,9 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidGenerateMusicConnection } from "@/lib/audio-text-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -15,6 +17,11 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { GenerateMusicData } from "@/types/nodes"
+
+const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT      = (t: string) => isValidGenerateMusicConnection("prompt",      t, isVisualPicker)
+const ACCEPTS_REF_AUDIO   = (t: string) => isValidGenerateMusicConnection("ref-audio",   t, isVisualPicker)
+const ACCEPTS_AUDIO_STYLE = (t: string) => isValidGenerateMusicConnection("audio-style", t, isVisualPicker)
 
 function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GenerateMusicData
@@ -36,7 +43,6 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative" style={{ width: 220, minHeight: 220, overflow: 'visible' }}>
-    {/* Floating label above node */}
     <EditableNodeLabel
       label={nodeData.label}
       icon={<Music className="w-3.5 h-3.5" />}
@@ -50,9 +56,12 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
       credits={credits}
       selected={selected}
       isRunning={status === "running"}
+      // 3 stacked input handles at top: calc(100% - 24/56/88) — node body
+      // needs ~110px of vertical real estate to keep all pips visible.
+      minHeight={180}
       hideHeader
       topToolbarContent={
-                  <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
+        <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -79,10 +88,10 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "ref-audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-style", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-        { id: "audio-out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px', left: 'auto' }, hideHandle: true },
+        { id: "prompt",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "ref-audio",   type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "audio-style", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+        { id: "audio",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -143,10 +152,10 @@ function GenerateMusicNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 50px)" />
-    <HandleIcon icon={<Volume2 />} color="pink" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<Sparkles />} color="indigo" side="left" top="calc(100% - 80px)" label="Audio style" />
-    <HandleIcon icon={<Music />} color="pink" side="right" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="prompt"      type="target" position={Position.Left}  label="Prompt"      color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="ref-audio"   type="target" position={Position.Left}  label="Ref audio"   color="#F59E0B" icon={<Music />}     side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REF_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color="#F59E0B" icon={<Sparkles />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-music" handleId="audio"       type="source" position={Position.Right} label="Audio"       color="#F59E0B" icon={<Music />}     side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

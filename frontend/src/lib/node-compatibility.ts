@@ -2,9 +2,17 @@ import type { SceneNodeType } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { XYPosition } from "@xyflow/react"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "./parameter-picker-types"
-import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
+import { IDENTITY_TYPES, IMAGE_PRODUCER_TYPES, TEXT_PRODUCER_TYPES } from "./generate-image-handles"
 import { ACCEPTS_PARAMETER_PICKER, TARGET_HANDLE_ACCEPTS } from "./target-handle-registry"
 import { FFMPEG_NODE_TYPES, isValidFfmpegConnection } from "./ffmpeg-handles"
+import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PICKER_TYPES, VOICE_PERSONA_TYPES } from "./audio-text-handles"
+
+// `voice` target accepts voice-persona producers (suno-voice, voice-design's
+// voiceId output) AND voice-character (a parameter picker — surfaced as
+// direct match in the add-node popup so the user sees it as a primary
+// candidate).
+const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSONA_TYPES, "voice-character"])
 
 /** Source node types whose source-direction candidate enumeration must
  *  consult the typed accepts predicates in `target-handle-registry.ts`
@@ -105,12 +113,34 @@ export interface CompatibleNodes {
 
 /** Handle ids whose typed-handle branches in getCompatibleNodes require
  *  `consumerNodeType` to disambiguate (camera-motion vs transition vs
- *  character-fx vs the 11 ffmpeg consumers). Drives the dev-time warning
- *  when the call site omits consumerNodeType — without it, the branches
- *  fall through to generic HANDLE_COMPATIBILITY which produces the wrong
- *  candidate set. */
-export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set(["startState", "endState", "target", "in"])
-const CONSUMER_TYPE_DEPENDENT_HANDLES = TYPED_HANDLE_IDS
+ *  character-fx vs the 11 ffmpeg consumers), AND handle ids whose dispatch
+ *  doesn't need consumer-type discrimination but still goes through a
+ *  typed branch instead of the generic HANDLE_COMPATIBILITY map (Batch 1-4
+ *  of the audio/text typed-handles migration). The popup uses the full
+ *  set to decide which handle ids are "typed" enough to bypass the
+ *  Parameter-category filter; the dev-time warning uses the narrower
+ *  consumer-type-dependent subset below. */
+export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
+  // Camera-motion / transition + character-fx handles (consumer-type-
+  // dependent dispatch; requires `consumerNodeType`).
+  "startState", "endState", "target", "in",
+  // Audio & Speech handles (Batch 1 of audio/text typed-handles migration).
+  "prompt", "audio", "audio-style", "ref-audio", "voice", "transcript",
+  // Suno mashup ordered audio inputs (Batch 2).
+  "audio1", "audio2",
+  // llm-chat secondary inputs (Batch 3).
+  "references", "system-prompt",
+  // Processing handles (Batch 4, non-ffmpeg-overlapping). `text` is
+  // combine-text / split-text; `video` is split-media; `media` already
+  // covered by ffmpeg's adjust-volume entry.
+  "text", "video",
+])
+/** Subset that requires consumer-type dispatch — the dev-time warning in
+ *  getCompatibleNodes triggers when one of these is passed without a
+ *  consumerNodeType, because their branches dispatch on consumer type to
+ *  return the right candidate set. The rest of TYPED_HANDLE_IDS dispatch
+ *  uniformly (no consumer-type discrimination needed). */
+const CONSUMER_TYPE_DEPENDENT_HANDLES: ReadonlySet<string> = new Set(["startState", "endState", "target", "in"])
 
 /** Subset of TYPED_HANDLE_IDS whose typed dispatch requires Parameter-
  *  category candidates (tone, style-guide, person, lens, etc.) — which
@@ -368,6 +398,145 @@ export function getCompatibleNodes(
     const directTypes = new Set<SceneNodeType>()
     for (const option of nodeOptions) {
       if (!isValidFfmpegConnection(consumerNodeType, handleId, option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // Audio & Speech typed-handle dispatch (Batch 1 of audio/text migration).
+  // For nodes whose `audio` target accepts audio-or-video producers
+  // (dubbing, transcribe — both backends extract audio from video
+  // transparently), the consumer-type discriminator widens the candidate
+  // pool; otherwise audio-only producers.
+  if (direction === "target" && handleId === "audio") {
+    const includeVideo = consumerNodeType === "dubbing" || consumerNodeType === "transcribe"
+    // suno-cover also accepts youtube-video as audio (backend extracts the
+    // audio track per input-resolver.ts:1287). youtube-video is in
+    // VIDEO_PRODUCER_TYPES so the video toggle wouldn't catch it for
+    // suno-cover; special-case here.
+    const includeYouTube = consumerNodeType === "suno-cover"
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      const isAudio = AUDIO_PRODUCER_TYPES.has(option.type)
+      const isVideo = includeVideo && VIDEO_PRODUCER_TYPES.has(option.type)
+      const isYouTube = includeYouTube && option.type === "youtube-video"
+      if (!isAudio && !isVideo && !isYouTube) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `ref-audio` accepts audio producers only — used by generate-music's
+  // reference-audio slot.
+  if (direction === "target" && handleId === "ref-audio") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!AUDIO_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `audio-style` accepts audio-domain pickers (music-genre / music-mood /
+  // instrumentation / voice-character / voice-delivery) plus tone +
+  // text-prompt — same set as AUDIO_PICKER_TYPES in audio-text-handles.ts.
+  if (direction === "target" && handleId === "audio-style") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!AUDIO_PICKER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `voice` (suno-generate / suno-cover / suno-extend) accepts voice-
+  // persona producers (suno-voice, voice-character, voice-design's voiceId
+  // output). voice-character is a picker AND a producer — treated as a
+  // direct match here so the popup surfaces it.
+  if (direction === "target" && handleId === "voice") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!VOICE_TARGET_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `text` (Batch 4: combine-text + split-text). combine-text accepts
+  // text producers + visual pickers (as text-fragment producers);
+  // split-text only accepts text producers. The popup can't distinguish
+  // by consumer type here without consumerNodeType, so we return the
+  // permissive set (text + visual pickers). The canvas validator's
+  // per-consumer predicate enforces the stricter split-text rule.
+  if (direction === "target" && handleId === "text") {
+    const direct: NodeOption[] = []
+    const compatible: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (TEXT_PRODUCER_TYPES.has(option.type)) {
+        direct.push(option)
+        directTypes.add(option.type)
+      } else if (VISUAL_PARAMETER_PICKER_NODE_TYPES.has(option.type)) {
+        compatible.push(option)
+      }
+    }
+    return { direct, compatible, directTypes }
+  }
+
+  // `video` (Batch 4: split-media's video input) accepts video producers
+  // only. (merge-video-audio's video slot is owned by ffmpeg-handles.ts.)
+  if (direction === "target" && handleId === "video") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!VIDEO_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `audio1` + `audio2` (suno-mashup) accept audio producers only.
+  if (direction === "target" && (handleId === "audio1" || handleId === "audio2")) {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!AUDIO_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `system-prompt` (llm-chat) accepts text producers only. Pickers are
+  // excluded — system messages are full-prompt context, not value
+  // substitution. Mirrors the canvas validator's branch.
+  if (direction === "target" && handleId === "system-prompt") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!TEXT_PRODUCER_TYPES.has(option.type)) continue
+      direct.push(option)
+      directTypes.add(option.type)
+    }
+    return { direct, compatible: [], directTypes }
+  }
+
+  // `transcript` (forced-alignment) accepts text producers only.
+  if (direction === "target" && handleId === "transcript") {
+    const direct: NodeOption[] = []
+    const directTypes = new Set<SceneNodeType>()
+    for (const option of nodeOptions) {
+      if (!TEXT_PRODUCER_TYPES.has(option.type)) continue
       direct.push(option)
       directTypes.add(option.type)
     }

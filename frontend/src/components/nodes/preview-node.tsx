@@ -6,7 +6,7 @@ import { Eye, FileText, ImageIcon, Film, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isMediaUrl } from "@/lib/media-type"
 import { getPreviewItemKey } from "@/lib/preview-items"
@@ -23,6 +23,9 @@ const TYPE_ICON: Record<PreviewItem["type"], React.ReactNode> = {
   audio: <Music className="w-3 h-3 shrink-0 text-amber-400" />,
   data: <FileText className="w-3 h-3 shrink-0 text-slate-400" />,
 }
+
+// Preview is a neutral pass-through that accepts ANY source type.
+const ACCEPTS_ANY = () => true
 
 function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
   return (
@@ -124,8 +127,8 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "in",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         {visibleItems.length > 0 ? (
@@ -151,8 +154,8 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
       </BaseNode>
-      <HandleIcon icon={<Eye />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Eye />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="in"  type="target" position={Position.Left}  label="Input"  color="#94A3B8" icon={<Eye />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_ANY} />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="out" type="source" position={Position.Right} label="Output" color="#94A3B8" icon={<Eye />} side="right" top="24px" />
     </div>
   )
 }

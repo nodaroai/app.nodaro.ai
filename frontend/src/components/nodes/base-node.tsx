@@ -581,7 +581,10 @@ function BaseNodeComponent({
       )}
 
       {handles.map((h) => (
-        <div key={h.id}>
+        // Composite key: a node can legitimately have the same handle id on
+        // both sides (e.g. audio-isolation's input `audio` + output `audio`),
+        // so keying by id alone would collide in React's keyed reconciliation.
+        <div key={`${h.type}-${h.id}`}>
           {!h.external && <Handle
             id={h.id}
             type={h.type}
