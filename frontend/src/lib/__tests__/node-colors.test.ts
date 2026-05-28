@@ -12,8 +12,13 @@ describe("NODE_COLORS", () => {
   })
 
   it("all entries are valid hex format", () => {
+    // Accept 6-digit (#RRGGBB) or 8-digit (#RRGGBBAA) hex — the last 3
+    // palette entries use an alpha channel so the bright brand tints
+    // blend onto the canvas in dark mode (case-insensitive to allow
+    // both lowercase and the uppercase used for capitalized hex like
+    // `#A855F740`).
     for (const color of NODE_COLORS) {
-      expect(color).toMatch(/^#[0-9a-f]{6}$/)
+      expect(color).toMatch(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/)
     }
   })
 })
