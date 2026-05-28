@@ -148,6 +148,7 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     case "speech-to-video":
     case "motion-transfer":
     case "extend-video":
+    case "video-retake":
       return pick("prompt")
 
     // --- Entity / scene ---

@@ -154,6 +154,27 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "video-sfx",
+    label: "Video SFX",
+    category: "ai-video",
+    description:
+      "Generate synchronized SFX / foley / ambient audio for a video clip using Replicate's mmaudio. Credit cost scales with input clip duration (1cr ≤15s → 11cr ≤300s, pre-markup).",
+    outputType: "video",
+    // Duration-bucketed pricing — see `STATIC_CREDIT_COSTS["replicate-mmaudio:*"]`
+    // in `ee/billing/credits.ts` and `bucketBaseCreditsFor` in `routes/video-sfx.ts`.
+    // Range is pre-markup; user-visible cost is bucket × (1 + cost_markup_percent/100) × versions.
+    creditCost: "1-11",
+    providers: ["replicate-mmaudio"],
+    capabilities: ["sound-effect"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text" },
+        { key: "negativePrompt", type: "text" },
+      ],
+    },
+  },
+  {
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",
@@ -208,6 +229,32 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       fields: [
         { key: "faceImageUrl", type: "image-url", required: true },
         { key: "videoUrl", type: "video-url", required: true },
+      ],
+    },
+  },
+  {
+    type: "video-retake",
+    label: "Retake Video",
+    category: "ai-video",
+    description:
+      "Replace a portion of an existing video — audio only, video only, or both — using Lightricks LTX 2.3 Pro's `retake` task. Billed per second of replaced material.",
+    outputType: "video",
+    // Dynamic: `ltx-2.3-pro-retake:per-second × retakeDuration`. The route
+    // computes the final reservation; this range covers 2s (minimum) to
+    // ~10s of replacement at the seeded per-second rate.
+    creditCost: "100-500",
+    providers: ["ltx-2.3-pro"],
+    capabilities: ["partial-replace", "audio-only", "video-only", "audio-and-video"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text" },
+        { key: "retakeStartTime", type: "number", required: true },
+        { key: "retakeDuration", type: "number", required: true },
+        { key: "retakeMode", type: "select", required: true, options: ["replace_audio", "replace_video", "replace_audio_and_video"] },
+        { key: "aspectRatio", type: "select", options: ["16:9", "9:16"] },
+        { key: "fps", type: "select", options: ["24", "25", "48", "50"] },
+        { key: "generateAudio", type: "boolean" },
       ],
     },
   },

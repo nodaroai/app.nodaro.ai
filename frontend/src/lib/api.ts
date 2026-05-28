@@ -3703,8 +3703,13 @@ export async function videoUpscaleApi(opts: {
 // --- Extend Video ---
 
 export async function extendVideo(params: {
-  kieTaskId: string
-  prompt: string
+  // KIE-based providers (veo-extend, runway-extend) require kieTaskId + prompt
+  kieTaskId?: string
+  prompt?: string
+  // LTX 2.3 Pro requires videoUrl; extendMode + duration are LTX-only
+  videoUrl?: string
+  extendMode?: "start" | "end"
+  duration?: number
   provider: string
   model?: string
   seeds?: number
@@ -3723,6 +3728,32 @@ export async function extendVideo(params: {
   return res.json()
 }
 
+// --- Video Retake (LTX 2.3 Pro) ---
+
+export async function runVideoRetake(params: {
+  videoUrl: string
+  prompt?: string
+  retakeStartTime: number
+  retakeDuration: number
+  retakeMode: "replace_audio" | "replace_video" | "replace_audio_and_video"
+  aspectRatio: "16:9" | "9:16"
+  fps: number
+  generateAudio: boolean
+  cameraMotion?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const res = await fetch(`${API_BASE_URL}/v1/video-retake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(params)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start video retake")
+  }
+  return res.json()
+}
+
 export async function faceSwapApi(params: {
   faceImageUrl: string
   videoUrl: string
@@ -3736,6 +3767,49 @@ export async function faceSwapApi(params: {
   if (!res.ok) {
     const err = await res.json().catch(() => null)
     throwApiError(err, "Failed to start face swap")
+  }
+  return res.json()
+}
+
+// --- Video SFX (Replicate MMAudio) ---
+
+/**
+ * Start a Video SFX generation (MMAudio via Replicate). The route generates
+ * `versions` (1-4) synchronized SFX takes for the supplied video clip; each
+ * take becomes its own `jobs` row so the user can audition them independently.
+ *
+ * Response shape (load-bearing — see `backend/src/routes/video-sfx.ts`):
+ *
+ *   versions === 1                   → { jobId: string }
+ *   versions  >  1                   → { jobIds: string[] }
+ *   anti-double-click dedup hit (10s window, all versions) → { jobId: string, deduped: true }
+ *
+ * The `deduped: true` branch is set by the core `creditGuard` preHandler
+ * (see `backend/src/middleware/credit-guard.ts`) when an identical POST
+ * arrives within 10s of a still-pending job from the same user. The route
+ * NEVER reaches its own handler in that case, so credits are not reserved
+ * twice and the worker is not enqueued. Callers MUST treat this as success
+ * and attach polling to the returned `jobId` (the existing in-flight job) —
+ * showing an error here would be wrong: the user's original click already
+ * succeeded, this is just the dedup short-circuit for a rapid second click.
+ */
+export async function videoSfx(payload: {
+  videoUrl: string
+  prompt?: string
+  negativePrompt?: string
+  cfgStrength?: number
+  numSteps?: number
+  seed?: number
+  versions?: number
+}): Promise<{ jobId: string; jobIds?: string[]; deduped?: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/v1/video-sfx`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    body: JSON.stringify(withWorkflowId(payload)),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "Failed to start video SFX")
   }
   return res.json()
 }

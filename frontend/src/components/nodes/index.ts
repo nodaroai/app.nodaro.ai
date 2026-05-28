@@ -65,6 +65,8 @@ import { RemoveBackgroundNode } from "./remove-background-node";
 // Task 13.2 after staging verified migration parity.
 import { VideoToVideoNode } from "./video-to-video-node";
 import { GenerateVideoNode } from "./generate-video-node";
+import { VideoRetakeNode } from "./video-retake-node";
+import { VideoSfxNode } from "./video-sfx-node";
 import { TextToSpeechNode } from "./text-to-speech-node";
 import { QACheckNode } from "./qa-check-node";
 import { ImageCriticNode } from "./image-critic-node";
@@ -233,6 +235,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "video-to-video": VideoToVideoNode,
   "text-to-video": GenerateVideoNode,
   "generate-video": GenerateVideoNode,
+  "video-retake": VideoRetakeNode,
+  "video-sfx": VideoSfxNode,
   "text-to-speech": TextToSpeechNode,
   "qa-check": QACheckNode,
   "image-critic": ImageCriticNode,

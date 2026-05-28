@@ -387,6 +387,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "face-swap",
   "suno-music-video",
   "combine-videos",
@@ -401,6 +402,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  "video-sfx",
 ]);
 
 /** Resolved inputs from upstream node outputs — shared return type for resolveNodeInputs */
@@ -566,12 +568,13 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   // Generate Video — unified video node (Task 6.1). Mirrors the i2v/t2v
   // entries so llm-chat reference routing treats its output as video.
   "generate-video",
-  "extend-video", "face-swap", "trim-video", "combine-videos", "upload-video",
+  "extend-video", "video-retake", "face-swap", "trim-video", "combine-videos", "upload-video",
   "render-video", "after-effects", "motion-graphics", "lip-sync",
   "motion-transfer", "suno-music-video", "speech-to-video",
   "video-upscale", "video-composer", "merge-video-audio",
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
+  "video-sfx",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([

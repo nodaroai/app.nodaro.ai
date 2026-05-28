@@ -31,7 +31,9 @@ import {
   motionTransferApi,
   videoUpscaleApi,
   extendVideo,
+  runVideoRetake,
   faceSwapApi,
+  videoSfx,
   generateMask,
   generateSceneGraph,
   renderVideoWithSceneGraph,
@@ -110,7 +112,9 @@ import type {
   MotionTransferData,
   VideoUpscaleData,
   ExtendVideoData,
+  VideoRetakeData,
   FaceSwapData,
+  VideoSfxNodeData,
   GenerateMaskData,
   VideoComposerData,
   AfterEffectsData,
@@ -4140,6 +4144,37 @@ export function executeNode(
 
   if (node.type === "extend-video") {
     const evData = node.data as unknown as ExtendVideoData;
+    const isLtx = evData.provider === "ltx-2.3-pro";
+
+    // ─── LTX 2.3 Pro path ───────────────────────────────────────────────
+    // Replicate-hosted, takes a raw videoUrl + extendMode + duration. No
+    // kieTaskId, no prompt requirement (LTX retake takes optional prompt
+    // for guidance only). Matches the orchestrator's payload-builder LTX
+    // branch (services/workflow-engine/payload-builder.ts case "extend-video"
+    // -> LTX branch).
+    if (isLtx) {
+      const videoUrl = inputs.videoUrl as string | undefined;
+      if (!videoUrl) {
+        toast.error(`Node "${evData.label}": no upstream video. Wire a video into the left handle.`);
+        return Promise.reject(new Error("No videoUrl for LTX extend"));
+      }
+      return runProcessingNode(
+        node.id,
+        () =>
+          extendVideo({
+            videoUrl,
+            provider: "ltx-2.3-pro",
+            extendMode: evData.extendMode ?? "end",
+            duration: evData.duration ?? 8,
+            userId: ctx.userId,
+          }),
+        "generatedVideoUrl",
+        "Extend Video",
+        ctx,
+      );
+    }
+
+    // ─── KIE-based path (veo-extend, runway-extend) ───────────────────
     // Manual wins — see gen-image note above.
     let prompt = overridePrompt ?? resolveTextRefs(evData.prompt, refMap) ?? inputs.prompt;
 
@@ -4179,6 +4214,253 @@ export function executeNode(
       "Extend Video",
       ctx,
     );
+  }
+
+  if (node.type === "video-retake") {
+    const vrData = node.data as unknown as VideoRetakeData;
+    const videoUrl = inputs.videoUrl as string | undefined;
+    if (!videoUrl) {
+      toast.error(`Node "${vrData.label}": no upstream video. Wire a video into the left handle.`);
+      return Promise.reject(new Error("video-retake requires a video input"));
+    }
+    // Manual prompt wins (mirror extend-video); fall back to text-ref resolution
+    // then to the inputs.prompt wired from upstream text/picker sources.
+    let prompt = overridePrompt ?? resolveTextRefs(vrData.prompt, refMap) ?? inputs.prompt;
+    // Look/camera-motion pickers wired to the `look` target handle are
+    // parameter nodes (PARAMETER_NODE_TYPES) — the resolver intentionally
+    // skips them so they don't overwrite the user's manual prompt. The
+    // cinematography helper composes them into structured hint clauses
+    // here, matching extend-video / generate-video behavior.
+    {
+      const cinematographyHints = collectCinematographyHints(node.id, nodes, edges);
+      if (cinematographyHints.length > 0) {
+        const joined = cinematographyHints.join(", ");
+        prompt = prompt ? `${prompt}. ${joined}` : joined;
+      }
+    }
+    {
+      const identityClause = collectIdentityLockClause(node.id, nodes, edges);
+      if (identityClause) prompt = prompt ? `${prompt} ${identityClause}` : identityClause;
+    }
+    setUserPromptTemplate(vrData.prompt?.trim() || undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        runVideoRetake({
+          videoUrl,
+          prompt: prompt || "",
+          retakeStartTime: vrData.retakeStartTime,
+          retakeDuration: vrData.retakeDuration,
+          retakeMode: vrData.retakeMode,
+          aspectRatio: vrData.aspectRatio ?? "16:9",
+          fps: vrData.fps ?? 25,
+          generateAudio: vrData.generateAudio ?? true,
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Retake Video",
+      ctx,
+    );
+  }
+
+  if (node.type === "video-sfx") {
+    const sfxData = node.data as unknown as VideoSfxNodeData;
+    // `videoUrl` is wired via the typed `video` target handle — never user-typed
+    // on the node (see VideoSfxNodeData docstring). Falls back to legacy field
+    // for in-progress JSON migrations.
+    const videoUrl = (inputs.videoUrl as string | undefined) ?? sfxData.videoUrl;
+    if (!videoUrl) {
+      toast.error(`Node "${sfxData.label}": no video connected. Use the purple video handle.`);
+      return Promise.reject(new Error("No video"));
+    }
+    // Prompt + negative resolution: upstream-wired handles win; otherwise fall
+    // back to node-config text. Mirrors the backend payload-builder for
+    // video-sfx (see backend/src/services/workflow-engine/payload-builder.ts).
+    const prompt = (inputs.prompt as string | undefined)?.trim() || (sfxData.prompt ?? "").trim();
+    const negativePrompt =
+      (inputs.negativePrompt as string | undefined)?.trim()
+      || (sfxData.negativePrompt ?? "").trim()
+      || undefined;
+    const versions = Math.max(1, Math.min(4, sfxData.versions ?? 1));
+    setUserPromptTemplate(sfxData.prompt?.trim() || undefined);
+
+    const { updateNodeData } = useWorkflowStore.getState();
+    updateNodeData(node.id, {
+      executionStatus: "running",
+      generatedVideoUrl: undefined,
+      currentJobId: undefined,
+      currentJobProgress: 0,
+    });
+
+    return new Promise<string>((resolve, reject) => {
+      videoSfx({
+        videoUrl,
+        prompt: prompt || undefined,
+        negativePrompt,
+        cfgStrength: sfxData.cfgStrength,
+        numSteps: sfxData.numSteps,
+        seed: sfxData.seed,
+        versions,
+      })
+        .then((res) => {
+          // Three response shapes (see videoSfx() docstring in lib/api.ts):
+          //   versions === 1            → { jobId }
+          //   versions  >  1            → { jobIds: [a, b, ...] }
+          //   anti-double-click dedup   → { jobId, deduped: true }
+          // The deduped branch is success — the original click already
+          // reserved credits and enqueued the worker. Attach to that jobId
+          // exactly like a fresh single-job response (no error toast).
+          const jobIds: ReadonlyArray<string> = res.jobIds && res.jobIds.length > 0
+            ? res.jobIds
+            : [res.jobId];
+          if (jobIds.length === 0) {
+            const errMsg = "Video SFX: backend returned no job id";
+            updateNodeData(node.id, {
+              executionStatus: "failed",
+              errorMessage: errMsg,
+              currentJobId: undefined,
+              currentJobProgress: undefined,
+            });
+            guardedToast.error("Failed to start Video SFX", { description: errMsg });
+            reject(new Error(errMsg));
+            return;
+          }
+
+          if (res.deduped) {
+            guardedToast.info("Video SFX attached to in-flight job", {
+              description: `Job ID: ${jobIds[0]}`,
+            });
+          } else {
+            guardedToast.info(
+              jobIds.length > 1
+                ? `Video SFX started (${jobIds.length} takes)`
+                : "Video SFX started",
+              { description: `Job ID: ${jobIds[0]}` },
+            );
+          }
+          // currentJobId tracks the FIRST job so the UI's progress badge has
+          // something to show — the per-take aggregate UI is the Studio's
+          // problem (the canvas executor only renders a single status pill).
+          updateNodeData(node.id, { currentJobId: jobIds[0] });
+
+          // Per-job poll: resolves to { url, thumbnailUrl, jobId } on success,
+          // rejects with the job's error_message on failure. Each interval is
+          // tracked via ctx so workflow cancel/stale tears them down.
+          const pollOne = (jobId: string): Promise<{ url: string; thumbnailUrl?: string; jobId: string }> => {
+            return new Promise((res, rej) => {
+              let pollFailures = 0;
+              const interval = ctx.trackInterval(
+                setInterval(async () => {
+                  if (ctx.isWorkflowStale()) {
+                    ctx.untrackInterval(interval);
+                    rej(new WorkflowStaleError());
+                    return;
+                  }
+                  try {
+                    const job = await getJobStatus(jobId);
+                    pollFailures = 0;
+                    if (job.status === "processing" && job.progress != null) {
+                      // Surface the first job's progress only — multi-version
+                      // aggregate progress would need a dedicated reducer.
+                      if (jobId === jobIds[0]) {
+                        updateProgressIfChanged(node.id, job.progress, updateNodeData);
+                      }
+                    }
+                    if (job.status === "completed") {
+                      ctx.untrackInterval(interval);
+                      const od = (job.output_data ?? {}) as Record<string, unknown>;
+                      const url = (od.videoUrl as string | undefined)?.trim();
+                      const thumbnailUrl = od.thumbnailUrl as string | undefined;
+                      if (!url) {
+                        rej(new Error(`Video SFX job ${jobId}: missing videoUrl in output`));
+                        return;
+                      }
+                      res({ url, thumbnailUrl, jobId });
+                    } else if (job.status === "failed") {
+                      ctx.untrackInterval(interval);
+                      rej(new Error(job.error_message ?? "Unknown error"));
+                    }
+                  } catch (err) {
+                    pollFailures++;
+                    if (pollFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+                      ctx.untrackInterval(interval);
+                      // Final verification: completion may have raced the
+                      // network blip — re-fetch once before giving up.
+                      try {
+                        const finalJob = await getJobStatus(jobId);
+                        if (finalJob.status === "completed") {
+                          const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
+                          const url = (od.videoUrl as string | undefined)?.trim();
+                          if (url) {
+                            res({ url, thumbnailUrl: od.thumbnailUrl as string | undefined, jobId });
+                            return;
+                          }
+                        }
+                      } catch { /* ignore — fall through to failure */ }
+                      rej(err instanceof Error ? err : new Error("Video SFX poll failed"));
+                    }
+                  }
+                }, 2000),
+              );
+            });
+          };
+
+          // Fan-out poll. `Promise.all` rejects on first failure, which is the
+          // correct DAG semantic — a partial multi-take result isn't a valid
+          // downstream input. Successful takes are dropped on the floor on
+          // failure; the route already reserved credits for all N and the
+          // failed take(s) will be refunded by the worker's standard flow.
+          Promise.all(jobIds.map(pollOne))
+            .then((results) => {
+              const primary = results[0];
+              const newResults: GeneratedResult[] = results.map((r) => ({
+                url: r.url,
+                thumbnailUrl: r.thumbnailUrl,
+                timestamp: new Date().toISOString(),
+                jobId: r.jobId,
+              }));
+              const existingResults =
+                ((useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
+                  ?.generatedResults as readonly GeneratedResult[] | undefined) ?? [];
+              updateNodeData(node.id, {
+                executionStatus: "completed",
+                generatedVideoUrl: primary.url,
+                generatedResults: [...newResults, ...existingResults],
+                activeResultIndex: 0,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              guardedToast.success(
+                results.length > 1 ? `Video SFX complete (${results.length} takes)` : "Video SFX complete",
+              );
+              resolve(primary.url);
+            })
+            .catch((err) => {
+              const errMsg = err instanceof Error ? err.message : "Unknown error";
+              updateNodeData(node.id, {
+                executionStatus: "failed",
+                errorMessage: errMsg,
+                currentJobId: undefined,
+                currentJobProgress: undefined,
+              });
+              guardedToast.error("Video SFX failed", { description: errMsg });
+              reject(err instanceof Error ? err : new Error(errMsg));
+            });
+        })
+        .catch((err) => {
+          updateNodeData(node.id, {
+            executionStatus: "failed",
+            currentJobId: undefined,
+            currentJobProgress: undefined,
+          });
+          if (!checkStorageError(err, ctx)) {
+            guardedToast.error("Failed to start Video SFX", {
+              description: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
+          reject(err);
+        });
+    });
   }
 
   if (node.type === "face-swap") {

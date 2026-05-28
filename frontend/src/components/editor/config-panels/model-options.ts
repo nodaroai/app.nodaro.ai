@@ -102,6 +102,8 @@ export const VIDEO_I2V_MODELS = [
   { value: "happyhorse-i2v",  label: "HappyHorse I2V",    desc: "3–15s, 720p/1080p, single start frame" },
   { value: "happyhorse-ref2v", label: "HappyHorse Ref2V", desc: "1–9 reference images to video, 3–15s" },
   { value: "kling-3-omni", label: "Kling 3 Omni", desc: "Replicate, 3–15s, 720p/1080p, end frame + up to 7 reference images" },
+  { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
+  { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -124,6 +126,8 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "wan-turbo", label: "Wan Turbo", desc: "Fast generation, 5s clips" },
   { value: "wan-2.7-t2v", label: "Wan 2.7",    desc: "Wan 2.7 T2V, 2–15s, 720p/1080p" },
   { value: "happyhorse",   label: "HappyHorse", desc: "3–15s, 720p/1080p" },
+  { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
+  { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,
@@ -239,8 +243,21 @@ export const TOPAZ_IMAGE_RESOLUTIONS: readonly LabeledOption[] =
 // `valueLabels` field. Case-sensitive: hailuo uses uppercase ("768P",
 // "1080P"), everything else is lowercase ("720p", "1080p").
 // =============================================================================
-export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> =
-  resolutionOptionsByKind("video")
+export const VIDEO_RESOLUTION_OPTIONS: Record<string, readonly LabeledOption[]> = {
+  ...resolutionOptionsByKind("video"),
+  // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
+  // option lists are spliced in here. Both Pro and Fast support 1080p/2K/4K.
+  "ltx-2.3-pro": [
+    { value: "1080p", label: "1080p" },
+    { value: "2k", label: "2K" },
+    { value: "4k", label: "4K" },
+  ],
+  "ltx-2.3-fast": [
+    { value: "1080p", label: "1080p" },
+    { value: "2k", label: "2K" },
+    { value: "4k", label: "4K" },
+  ],
+}
 
 export function getVideoResolutionOptions(
   provider: string,
@@ -277,6 +294,19 @@ export const VIDEO_DURATION_OPTIONS: Record<string, ReadonlyArray<{ value: numbe
         out[id] = sorted.map((n) => ({ value: n, label: `${n}s` }))
       }
     }
+    // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
+    // duration menus are spliced in here. Pro caps at 10s; Fast goes to 20s.
+    // The "Fast >10s implies 1080p / 24-25fps only" constraint is enforced by
+    // the config panel's snap-stale useEffect, not by this list.
+    out["ltx-2.3-pro"] = [6, 8, 10].map((n) => ({ value: n, label: `${n}s` }))
+    out["ltx-2.3-fast"] = [6, 8, 10, 12, 14, 16, 18, 20].map((n) => ({ value: n, label: `${n}s` }))
+    // Grok t2v alias — KIE_T2V_DURATIONS keys grok image-mode under "grok" but
+    // MODEL_CATALOG only tracks the i2v durations under "grok-i2v". Mirror the
+    // alias here so the legacy TextToVideoConfig snap-stale effect doesn't
+    // silently skip when reading VIDEO_DURATION_OPTIONS["grok"].
+    if (!out["grok"] && out["grok-i2v"]) {
+      out["grok"] = out["grok-i2v"]
+    }
     return out
   })()
 
@@ -294,8 +324,40 @@ export function getDurationsForVideoModel(
 // an `aspectRatios` entry fall through to the generic VIDEO_RATIOS default
 // (16:9 / 9:16 / 1:1) used by the legacy video-configs panels.
 // =============================================================================
-const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> =
-  aspectRatioOptionsByKind("video")
+const _VIDEO_ASPECT_BY_PROVIDER: Record<string, readonly LabeledOption[]> = {
+  ...aspectRatioOptionsByKind("video"),
+  // LTX 2.3 — Lightricks via Replicate. Not yet in MODEL_CATALOG, so the
+  // aspect-ratio menus are spliced in here. Both variants are 16:9 / 9:16.
+  "ltx-2.3-pro": [
+    { value: "16:9", label: "16:9 (Landscape)" },
+    { value: "9:16", label: "9:16 (Portrait)" },
+  ],
+  "ltx-2.3-fast": [
+    { value: "16:9", label: "16:9 (Landscape)" },
+    { value: "9:16", label: "9:16 (Portrait)" },
+  ],
+}
+
+/**
+ * Per-provider VIDEO_ASPECT_RATIOS export — re-exposes the per-provider map
+ * for callers that need direct access (provider-aware dropdowns, audit
+ * tooling). Use `getAspectRatiosForVideoModel(provider)` for the
+ * fallback-aware accessor.
+ */
+export const VIDEO_ASPECT_RATIOS: Record<string, readonly LabeledOption[]> = _VIDEO_ASPECT_BY_PROVIDER
+
+/**
+ * Per-provider VIDEO_FPS_OPTIONS — most providers in MODEL_CATALOG don't yet
+ * expose an fps lever (the catalog doesn't track it), so this map currently
+ * only contains LTX 2.3 entries. Add other providers here as fps becomes a
+ * user-facing setting on their config panels. The "Fast >10s implies
+ * 24-25fps only" constraint is enforced by the config panel's snap-stale
+ * useEffect, not by this list.
+ */
+export const VIDEO_FPS_OPTIONS: Record<string, ReadonlyArray<{ value: number; label: string }>> = {
+  "ltx-2.3-pro": [24, 25, 48, 50].map((n) => ({ value: n, label: `${n} fps` })),
+  "ltx-2.3-fast": [24, 25, 48, 50].map((n) => ({ value: n, label: `${n} fps` })),
+}
 
 /** Per-provider aspect ratio options for video models. Falls back to the
  *  generic VIDEO_RATIOS triplet (16:9 / 9:16 / 1:1) when the catalog entry

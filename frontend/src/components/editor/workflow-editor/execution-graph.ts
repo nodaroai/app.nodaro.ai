@@ -343,7 +343,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "motion-transfer" ||
     type === "video-upscale" ||
     type === "extend-video" ||
+    type === "video-retake" ||
     type === "face-swap" ||
+    type === "video-sfx" ||
     type === "suno-music-video" ||
     type === "render-video"
   ) {
@@ -829,6 +831,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "face-swap",
   "suno-music-video",
   "merge-video-audio",
@@ -842,6 +845,7 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  "video-sfx",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",

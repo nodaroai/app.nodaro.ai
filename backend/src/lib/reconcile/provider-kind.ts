@@ -38,6 +38,10 @@ export function providerKindForImageModel(model: string): ProviderKind {
 const VIDEO_REPLICATE_MODELS: ReadonlySet<string> = new Set([
   "runway",
   "pika",
+  // Lightricks LTX 2.3 — predictions via `lightricks/ltx-2.3-{pro,fast}`,
+  // completion via standard Replicate prediction reconcile path.
+  "ltx-2.3-pro",
+  "ltx-2.3-fast",
 ])
 
 export function providerKindForVideoModel(model: string): ProviderKind {

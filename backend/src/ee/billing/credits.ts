@@ -314,6 +314,40 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-3-omni:5s": 32,         // ~$0.50 est
   "kling-3-omni:10s": 63,        // ~$1.00 est
   "kling-3-omni:15s": 94,        // ~$1.50 est
+  // ── Lightricks LTX 2.3 (Replicate) — official pricing from replicate.com/lightricks/ltx-2.3-{pro,fast} ──
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "ltx-2.3-pro": 30,             // default = 1080p:6s
+  "ltx-2.3-pro:1080p:6s": 30,    // $0.08 × 6 = $0.48 → ceil(0.48 × 62.5) = 30
+  "ltx-2.3-pro:1080p:8s": 40,
+  "ltx-2.3-pro:1080p:10s": 50,
+  "ltx-2.3-pro:2k:6s": 60,       // $0.16 × 6 = $0.96 → 60
+  "ltx-2.3-pro:2k:8s": 80,
+  "ltx-2.3-pro:2k:10s": 100,
+  "ltx-2.3-pro:4k:6s": 120,      // $0.32 × 6 = $1.92 → 120
+  "ltx-2.3-pro:4k:8s": 160,
+  "ltx-2.3-pro:4k:10s": 200,
+  // Fast: text/image→video, 1080p/2k/4k, durations 6–20s (1080p only past 10s). Base = 1080p:6s.
+  "ltx-2.3-fast": 23,            // default = 1080p:6s
+  "ltx-2.3-fast:1080p:6s": 23,   // ceil(0.06 × 6 × 62.5) = ceil(22.5)
+  "ltx-2.3-fast:1080p:8s": 30,
+  "ltx-2.3-fast:1080p:10s": 38,
+  "ltx-2.3-fast:1080p:12s": 45,
+  "ltx-2.3-fast:1080p:14s": 53,
+  "ltx-2.3-fast:1080p:16s": 60,
+  "ltx-2.3-fast:1080p:18s": 68,
+  "ltx-2.3-fast:1080p:20s": 75,
+  "ltx-2.3-fast:2k:6s": 45,      // ceil(0.12 × 6 × 62.5) = 45
+  "ltx-2.3-fast:2k:8s": 60,
+  "ltx-2.3-fast:2k:10s": 75,
+  "ltx-2.3-fast:4k:6s": 90,      // ceil(0.24 × 6 × 62.5) = 90
+  "ltx-2.3-fast:4k:8s": 120,
+  "ltx-2.3-fast:4k:10s": 150,
+  // LTX extend + retake (Pro only, 1080p): per-second × duration at credit-guard time.
+  // 5 cr/sec matches Pro:1080p rate (extend output is at the input's resolution; retake is locked 1080p).
+  "ltx-2.3-pro-extend:per-second": 5,
+  "ltx-2.3-pro-retake:per-second": 5,
   "runway-kie": 4,               // 12 KIE cr, $0.06 (5s, 720p)
   // ── Video Extend ──
   ***REDACTED-OSS-SCRUB***
@@ -403,6 +437,17 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "kling-avatar-pro:60s": 240,    // 60s × 4 cr/sec
   "kling-avatar-pro:120s": 480,   // 120s × 4 cr/sec
   "kling-avatar-pro:300s": 1200,  // 300s × 4 cr/sec — 5-min ceiling
+  // ── Replicate MMAudio (video-sfx node) ──
+  // BASE credits (pre-markup). creditGuard applies cost_markup_percent at request time.
+  ***REDACTED-OSS-SCRUB***
+  ***REDACTED-OSS-SCRUB***
+  "replicate-mmaudio":       1,  // base/legacy default (8s bucket)
+  "replicate-mmaudio:8s":    1,
+  "replicate-mmaudio:15s":   1,
+  "replicate-mmaudio:30s":   2,
+  "replicate-mmaudio:60s":   3,
+  "replicate-mmaudio:120s":  5,
+  "replicate-mmaudio:300s": 11,
   ***REDACTED-OSS-SCRUB***
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 4,             // direct ElevenLabs API, $0.05
@@ -546,6 +591,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "sadtalker": 9,
   "video-upscale": 19,
   "extend-video": 40,
+  // LTX 2.3 Pro retake — fallback for node-registry display and any
+  // defensive lookups when the route's computeCredits hook isn't reached.
+  // Real reservation uses `ltx-2.3-pro-retake:per-second × retakeDuration`.
+  "video-retake": 100,
   "roop-face-swap": 16,           // $0.25 Replicate × 1.25 / $0.02
   "generate-mask": 2,             // adirik/grounded-sam (Replicate) — segmentation mask
   "transcribe": 4,

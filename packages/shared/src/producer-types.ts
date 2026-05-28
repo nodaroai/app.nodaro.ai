@@ -37,6 +37,7 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "suno-music-video",
   "merge-video-audio",
   "add-captions",

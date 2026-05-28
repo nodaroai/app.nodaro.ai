@@ -79,6 +79,7 @@ const NODE_TO_STYLES: Record<string, readonly PromptStyle[]> = {
   "generate-music": MUSIC_PROMPT_STYLES,
   "suno-generate": MUSIC_PROMPT_STYLES,
   "text-to-audio": AUDIO_PROMPT_STYLES,
+  "video-sfx": AUDIO_PROMPT_STYLES,
 }
 
 export function getStylesForNodeType(nodeType: string): readonly PromptStyle[] {

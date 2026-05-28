@@ -28,11 +28,12 @@ import type {
   ExtendVideoData,
   SpeechToVideoData,
   FaceSwapData,
+  VideoRetakeData,
   GeneratedScript,
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
@@ -44,6 +45,8 @@ import { PromptEditor } from "./prompt-editor"
 import { Kling3StudioConfig } from "./kling3-studio-config"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ConnectedMediaList, getSourceThumbnail } from "./connected-media-list"
 import { InjectedReferenceList } from "./injected-reference-list"
 import { removeMentionToken, makeRemoveWiredSource, appendSuppressedSlug } from "./injected-reference-helpers"
@@ -309,6 +312,8 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   // duration — the rendered Select defaults to allowedDurations[0] when
   // data.duration is invalid, but without a snap data.duration carries the
   // stale value into the request and into credit pricing.
+  // Note: reads from VIDEO_DURATION_OPTIONS (not KIE_VIDEO_DURATIONS) so
+  // providers spliced in outside MODEL_CATALOG (LTX 2.3) are also covered.
   useEffect(() => {
     const updates: Partial<ImageToVideoData> = {}
     const opts = getVideoResolutionOptions(currentI2VProvider)
@@ -319,7 +324,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
     }
-    const baseDurations = KIE_VIDEO_DURATIONS[currentI2VProvider] || null
+    const baseDurations = VIDEO_DURATION_OPTIONS[currentI2VProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
       updates.duration = baseDurations[0]
     }
@@ -1575,6 +1580,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   // Fail-safe: keep `data.resolution` and `data.duration` consistent with
   // the current provider's valid sets, or clear/snap when invalid.
   // See ImageToVideoConfig for the rationale.
+  // Note: reads from VIDEO_DURATION_OPTIONS (not KIE_T2V_DURATIONS) so
+  // providers spliced in outside MODEL_CATALOG (LTX 2.3) are also covered.
   useEffect(() => {
     const updates: Partial<TextToVideoData> = {}
     const opts = getVideoResolutionOptions(currentProvider)
@@ -1585,7 +1592,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
     } else if (data.resolution !== undefined) {
       updates.resolution = undefined
     }
-    const baseDurations = KIE_T2V_DURATIONS[currentProvider] || null
+    const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
       updates.duration = baseDurations[0]
     }
@@ -1944,12 +1951,12 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
 
   const currentProvider = (rawData.provider || "seedance-2-fast") as string
 
-  // Fail-safe: snap stale resolution + duration values that don't apply to the
-  // current provider. Same Provider-Enum-Sync step-12b pattern as i2v/t2v —
-  // without this, persisted values + admin defaults leak across provider
-  // changes and trigger backend Zod enum rejections at generate-time.
+  // Fail-safe: snap stale resolution + duration + fps values that don't apply
+  // to the current provider. Same Provider-Enum-Sync step-12b pattern as
+  // i2v/t2v — without this, persisted values + admin defaults leak across
+  // provider changes and trigger backend Zod enum rejections at generate-time.
   useEffect(() => {
-    const updates: Partial<ImageToVideoData> = {}
+    const updates: Partial<ImageToVideoData> & { fps?: unknown } = {}
     const opts = getVideoResolutionOptions(currentProvider)
     if (opts) {
       if (data.resolution && !opts.some((o) => o.value === data.resolution)) {
@@ -1962,10 +1969,45 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
     if (baseDurations && data.duration && !baseDurations.includes(data.duration)) {
       updates.duration = baseDurations[0]
     }
+    // fps lever — only providers in VIDEO_FPS_OPTIONS (LTX 2.3 Pro/Fast today)
+    // expose fps. Snap or clear when switching providers so stale values from
+    // LTX don't leak into providers without an fps lever.
+    const fpsOpts = VIDEO_FPS_OPTIONS[currentProvider]
+    const currentFps = data.fps as number | undefined
+    if (fpsOpts) {
+      if (currentFps !== undefined && !fpsOpts.some((o) => o.value === currentFps)) {
+        updates.fps = fpsOpts[0]?.value
+      }
+    } else if (currentFps !== undefined) {
+      updates.fps = undefined
+    }
     if (Object.keys(updates).length > 0) {
-      onUpdate(updates)
+      onUpdate(updates as Partial<ImageToVideoData>)
     }
   }, [currentProvider]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // LTX 2.3 Fast: when duration > 10s, the model only supports 1080p output at
+  // 24 or 25 fps. Snap resolution + fps when the user lands in that band so
+  // backend Zod doesn't reject the stale 2k/4k/48/50 values that were valid at
+  // shorter durations. Runs on both provider AND duration changes — the
+  // constraint depends on duration so the provider-only effect above can't
+  // catch the case where the user bumps duration from 8s -> 16s while on Fast.
+  const currentDuration = data.duration
+  useEffect(() => {
+    if (currentProvider !== "ltx-2.3-fast") return
+    if (currentDuration === undefined || currentDuration <= 10) return
+    const updates: Partial<ImageToVideoData> & { fps?: unknown } = {}
+    if (data.resolution !== "1080p") {
+      updates.resolution = "1080p"
+    }
+    const currentFps = data.fps as number | undefined
+    if (currentFps !== undefined && currentFps !== 24 && currentFps !== 25) {
+      updates.fps = 25
+    }
+    if (Object.keys(updates).length > 0) {
+      onUpdate(updates as Partial<ImageToVideoData>)
+    }
+  }, [currentProvider, currentDuration]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const baseDurations = VIDEO_DURATION_OPTIONS[currentProvider]?.map((o) => o.value) ?? null
   // Hailuo 2.3 Pro/Standard: 1080P only supports 6s duration
@@ -2781,6 +2823,7 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
           <SelectContent>
             <SelectItem value="runway-extend">Runway Extend</SelectItem>
             <SelectItem value="veo-extend">VEO Extend</SelectItem>
+            <SelectItem value="ltx-2.3-pro">LTX 2.3 Pro</SelectItem>
           </SelectContent>
         </Select>
       </MappableField>
@@ -2845,8 +2888,45 @@ export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
         </div>
       )}
 
+      {data.provider === "ltx-2.3-pro" && (
+        <>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Extend Mode</Label>
+            <RadioGroup
+              value={data.extendMode || "end"}
+              onValueChange={(v) => onUpdate({ extendMode: v as "start" | "end" })}
+              className="flex gap-4"
+            >
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="end" id="extend-mode-end" />
+                <Label htmlFor="extend-mode-end" className="text-xs cursor-pointer">
+                  End (continue forward)
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <RadioGroupItem value="start" id="extend-mode-start" />
+                <Label htmlFor="extend-mode-start" className="text-xs cursor-pointer">
+                  Start (prepend backwards)
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <MappableField field="duration" label="Duration (seconds to add)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Input
+              type="number"
+              min={1}
+              max={20}
+              placeholder="1–20"
+              value={data.duration ?? ""}
+              onChange={(e) => onUpdate({ duration: e.target.value === "" ? undefined : parseInt(e.target.value, 10) })}
+            />
+          </MappableField>
+        </>
+      )}
+
       <p className="text-xs text-muted-foreground px-1">
-        Extends a VEO or Runway video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
+        Extends a VEO, Runway, or LTX video with a new prompt. Connect an upstream Image to Video or Text to Video node that produces a kieTaskId.
       </p>
 
       <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
@@ -3057,6 +3137,143 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
         }
         label="Injected references"
       />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// VideoRetakeConfig — "full settings" surface for the video-retake node.
+// The canvas toolbar exposes the common levers (aspect / mode / versions);
+// this panel surfaces the complete set: prompt, retake mode, start time +
+// duration, aspect ratio, fps, and generate-audio toggle. Resolution is
+// locked at 1080p for retake (LTX 2.3 Pro contract).
+// ---------------------------------------------------------------------------
+export function VideoRetakeConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoRetakeData> & { nodeId?: string }) {
+  useEffect(() => { prefetchModelCredits(["ltx-2.3-pro"]) }, [])
+  return (
+    <div className="flex flex-col gap-3">
+      <FinalPromptPreview userPrompt={data.prompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
+
+      <MappableField
+        field="prompt"
+        label="Prompt"
+        sources={sources}
+        fieldMappings={fieldMappings}
+        onMapField={onMapField}
+        labelAction={
+          <PromptHelperButton
+            nodeType="video-retake"
+            currentPrompt={data.prompt || ""}
+            provider={data.provider}
+            aspectRatio={data.aspectRatio}
+            onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })}
+          />
+        }
+      >
+        <TagTextarea
+          value={data.prompt || ""}
+          onChange={(v) => onUpdate({ prompt: v })}
+          placeholder="Describe what should change in the selected range..."
+          rows={3}
+          nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
+        />
+      </MappableField>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Retake Mode</Label>
+        <RadioGroup
+          value={data.retakeMode || "replace_audio_and_video"}
+          onValueChange={(v) => onUpdate({ retakeMode: v as VideoRetakeData["retakeMode"] })}
+          className="flex flex-col gap-1"
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="replace_audio_and_video" id="retake-mode-both" />
+            <Label htmlFor="retake-mode-both" className="text-xs cursor-pointer">Replace both (audio + video)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="replace_audio" id="retake-mode-audio" />
+            <Label htmlFor="retake-mode-audio" className="text-xs cursor-pointer">Replace audio only</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="replace_video" id="retake-mode-video" />
+            <Label htmlFor="retake-mode-video" className="text-xs cursor-pointer">Replace video only</Label>
+          </div>
+        </RadioGroup>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <MappableField field="retakeStartTime" label="Start time (s)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            type="number"
+            step={0.1}
+            min={0}
+            value={data.retakeStartTime ?? 0}
+            onChange={(e) => onUpdate({ retakeStartTime: parseFloat(e.target.value) || 0 })}
+          />
+        </MappableField>
+        <MappableField field="retakeDuration" label="Duration (s, min 2)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <Input
+            type="number"
+            step={0.1}
+            min={2}
+            value={data.retakeDuration ?? 2}
+            onChange={(e) => onUpdate({ retakeDuration: Math.max(2, parseFloat(e.target.value) || 2) })}
+          />
+        </MappableField>
+      </div>
+
+      <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <AspectRatioSelector
+          value={data.aspectRatio || "16:9"}
+          onValueChange={(v) => onUpdate({ aspectRatio: v as VideoRetakeData["aspectRatio"] })}
+          options={[
+            { value: "16:9", label: "16:9" },
+            { value: "9:16", label: "9:16" },
+          ]}
+        />
+      </MappableField>
+
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs">Resolution</Label>
+        <Select value="1080p" disabled>
+          <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1080p">1080p (locked for retake)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <MappableField field="fps" label="FPS" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Select
+          value={String(data.fps ?? 25)}
+          onValueChange={(v) => onUpdate({ fps: parseInt(v, 10) as VideoRetakeData["fps"] })}
+        >
+          <SelectTrigger aria-label="FPS"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="24">24</SelectItem>
+            <SelectItem value="25">25</SelectItem>
+            <SelectItem value="48">48</SelectItem>
+            <SelectItem value="50">50</SelectItem>
+          </SelectContent>
+        </Select>
+      </MappableField>
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="retake-gen-audio"
+          checked={data.generateAudio ?? true}
+          onCheckedChange={(v) => onUpdate({ generateAudio: !!v })}
+        />
+        <Label htmlFor="retake-gen-audio" className="text-xs cursor-pointer">Generate audio</Label>
+      </div>
+
+      <p className="text-xs text-muted-foreground px-1">
+        Re-renders a segment of an upstream video using LTX 2.3 Pro. Connect a video source to the pink handle, then choose the segment to replace. Minimum duration is 2 seconds.
+      </p>
+
+      <ConnectedCinematographySources consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
     </div>
   )
 }

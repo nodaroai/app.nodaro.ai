@@ -227,6 +227,11 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   "happyhorse-i2v":   { provider: "KIE.ai", providerCostUsd: 0.250, markupPct: 25 },  // 50 KIE cr, 5s 720p
   "happyhorse-ref2v": { provider: "KIE.ai", providerCostUsd: 0.300, markupPct: 25 },  // 60 KIE cr, 5s 720p
   "happyhorse-edit":  { provider: "KIE.ai", providerCostUsd: 0.400, markupPct: 25 },  // 80 KIE cr
+  // Lightricks LTX 2.3 — Replicate. Placeholder USD costs derived from the
+  // placeholder credit values in STATIC_CREDIT_COSTS; replace with the actual
+  // Replicate $/sec rate before merge (Phase 5).
+  "ltx-2.3-pro":  { provider: "Replicate", providerCostUsd: 4.800, markupPct: 25 },  // 300 cr placeholder (1080p:6s)
+  "ltx-2.3-fast": { provider: "Replicate", providerCostUsd: 2.400, markupPct: 25 },  // 150 cr placeholder (1080p:6s)
   "luma-modify":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (upscale 1x/2x/4x)
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)

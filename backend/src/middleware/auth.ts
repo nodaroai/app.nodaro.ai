@@ -21,6 +21,10 @@ declare module "fastify" {
      *  creditGuard for anti-double-click dedup. Route handlers should write
      *  it to the `input_fingerprint` column on the jobs INSERT. */
     inputFingerprint?: string
+    /** Set by route-level pre-handlers that ffprobe an input video URL before
+     *  credit reservation, so creditGuard.computeCredits can pick a duration
+     *  bucket without re-probing. Currently used by video-sfx. */
+    probedDuration?: number
     /** Set when the request is authenticated via a developer-app OAuth token. */
     appAuthorization?: {
       appId: string

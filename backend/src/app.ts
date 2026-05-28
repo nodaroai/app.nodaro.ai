@@ -18,6 +18,7 @@ import { textToSpeechRoutes } from "./routes/text-to-speech.js"
 import { generateScriptRoutes } from "./routes/generate-script.js"
 import { combineVideosRoutes } from "./routes/combine-videos.js"
 import { mergeVideoAudioRoutes } from "./routes/merge-video-audio.js"
+import videoSfxRoutes from "./routes/video-sfx.js"
 import { trimAudioRoutes } from "./routes/trim-audio.js"
 import { trimVideoRoutes } from "./routes/trim-video.js"
 import { extractFrameRoutes } from "./routes/extract-frame.js"
@@ -120,6 +121,7 @@ import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { pipelinesRoutes } from "./routes/pipelines.js"
 import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
 import { extendVideoRoutes } from "./routes/extend-video.js"
+import { videoRetakeRoutes } from "./routes/video-retake.js"
 import { speechToVideoRoutes } from "./routes/speech-to-video.js"
 import { socialMediaFormatRoutes } from "./routes/social-media-format.js"
 import { webhookOutputRoutes } from "./routes/webhook-output.js"
@@ -243,6 +245,7 @@ export async function buildApp() {
   await app.register(generateScriptRoutes)
   await app.register(combineVideosRoutes)
   await app.register(mergeVideoAudioRoutes)
+  await app.register(videoSfxRoutes)
   await app.register(trimAudioRoutes)
   await app.register(trimVideoRoutes)
   await app.register(extractFrameRoutes)
@@ -346,6 +349,7 @@ export async function buildApp() {
   await app.register(pipelinesRoutes)
   await app.register(sceneHelpersRoutes)
   await app.register(extendVideoRoutes)
+  await app.register(videoRetakeRoutes)
   await app.register(speechToVideoRoutes)
   await app.register(socialMediaFormatRoutes)
   await app.register(webhookOutputRoutes)

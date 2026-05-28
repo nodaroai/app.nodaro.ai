@@ -41,6 +41,7 @@ import {
 } from "@nodaro/shared"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
+import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields } from "@nodaro/shared"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNode } from "./execution-graph.js"
@@ -2228,6 +2229,65 @@ export function buildPayload(
       const provider = (data.provider as string) ?? "kling"
       const isS2 = isSeedance2Provider(provider)
 
+      // ─── LTX 2.3 task dispatch ───────────────────────────────────────────
+      // LTX has a single Replicate endpoint per variant that switches behavior
+      // via a `task` discriminator in the input. Dispatch the right task based
+      // on which input handles are wired, emit a flat snake_case payload that
+      // mirrors the LTX provider's input shape (so the worker can forward
+      // directly to `runLtxTextToVideo` / `runLtxImageToVideo` /
+      // `runLtxAudioToVideo` without re-deriving the task).
+      //
+      // Fast variant lacks audio_to_video — wiring audio against Fast falls
+      // back to text_to_video (Task 1.3 already disables the audio handle in
+      // the UI, but the orchestrator may still receive payloads from older
+      // workflows or webhook triggers, so we degrade gracefully here).
+      if (provider === "ltx-2.3-pro" || provider === "ltx-2.3-fast") {
+        const hasAudio = !!resolvedInputs.audioUrl && provider === "ltx-2.3-pro"
+        const hasStart = !!resolvedInputs.startFrameUrl
+        const hasEnd = !!resolvedInputs.endFrameUrl
+
+        let task: "text_to_video" | "image_to_video" | "audio_to_video"
+        if (hasAudio) task = "audio_to_video"
+        else if (hasStart) task = "image_to_video"
+        else task = "text_to_video"
+
+        // Walk incoming edges to derive the LTX camera_motion enum. Mirrors
+        // the upstream-hint shape `ltxCameraMotionFromUpstream` expects.
+        const incomingNodes = (buildCtx?.edges ?? [])
+          .filter((e) => e.target === node.id)
+          .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))
+          .filter((n): n is SimpleNode => !!n)
+        const hints = incomingNodes.map((n) => ({
+          nodeType: n.type,
+          data: { cameraMotion: (n.data as Record<string, unknown>).cameraMotion as string | undefined },
+        }))
+        const cameraMotion = ltxCameraMotionFromUpstream(hints) ?? "none"
+
+        return {
+          jobName: task === "audio_to_video" ? "text-to-video" : (task === "image_to_video" ? "image-to-video" : "text-to-video"),
+          queueName: "video-generation",
+          modelIdentifier: provider,
+          payload: {
+            jobId,
+            provider,
+            task,
+            prompt: (resolvedInputs.prompt as string | undefined) ?? (data.prompt as string | undefined) ?? "",
+            ...(task === "image_to_video" && {
+              image: resolvedInputs.startFrameUrl,
+              ...(hasEnd && { last_frame_image: resolvedInputs.endFrameUrl }),
+            }),
+            ...(task === "audio_to_video" && { audio: resolvedInputs.audioUrl }),
+            resolution: data.resolution as string | undefined,
+            duration: data.duration as number | undefined,
+            aspect_ratio: data.aspectRatio as string | undefined,
+            fps: data.fps as number | undefined,
+            generate_audio: (data.generateAudio as boolean | undefined) ?? true,
+            camera_motion: cameraMotion,
+            usageLogId,
+          },
+        }
+      }
+
       // EndFrame-only swap: if user wired endFrame but no startFrame, use
       // endFrame as the start so providers (veo3, minimax, kling-turbo, etc.)
       // get at least one image in their primary slot. We then clear
@@ -2353,6 +2413,45 @@ export function buildPayload(
           generationType,
           loopTrim: data.loopTrim,
           enableTranslation: data.enableTranslation,
+          usageLogId,
+        },
+      }
+    }
+
+    // Replicate MMAudio — generates synchronized SFX/foley/ambient audio for a
+    // video clip and merges it into the original. Three typed input handles:
+    // `video` (required, the clip to score), `prompt` (text describing the
+    // sound — text-prompt source or literal data field), `negative` (sounds
+    // to suppress; defaults to "music" so MMAudio doesn't synthesize a
+    // soundtrack instead of foley).
+    //
+    // `versions` (1-4) is the multi-take batch knob. The standalone route
+    // (`POST /v1/video-sfx`) fans this out into N jobs rows up front; here in
+    // the orchestrator we keep it in the payload so the worker layer can
+    // honor it the same way the standalone route does once orchestrator-side
+    // batching lands. node-executor creates ONE job per node — the worker
+    // re-reads `input_data` from the row, so writing `versions` into the
+    // payload propagates it via the input_data backfill in node-executor.
+    case "video-sfx": {
+      return {
+        jobName: "video-sfx",
+        queueName: "video-generation",
+        modelIdentifier: "replicate-mmaudio",
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined),
+          prompt: resolvedInputs.prompt ?? (data.prompt as string | undefined),
+          // `negative` handle takes precedence over the config field; default
+          // to "music" so MMAudio synthesizes SFX/foley rather than a score
+          // (mirrors the route's Zod default at `routes/video-sfx.ts:18`).
+          negativePrompt:
+            resolvedInputs.negativePrompt
+            ?? (data.negativePrompt as string | undefined)
+            ?? "music",
+          cfgStrength: (data.cfgStrength as number | undefined) ?? 4.5,
+          numSteps: (data.numSteps as number | undefined) ?? 25,
+          seed: data.seed as number | undefined,
+          versions: (data.versions as number | undefined) ?? 1,
           usageLogId,
         },
       }
@@ -2569,6 +2668,29 @@ export function buildPayload(
 
     case "extend-video": {
       const evProvider = (data.provider as string) ?? "veo-extend"
+
+      // ─── LTX 2.3 Pro extend ──────────────────────────────────────────────
+      // LTX extend operates on the source video URL (no KIE taskId — Replicate
+      // accepts any HTTPS-reachable video). Webhook-driven completion via the
+      // standard Replicate prediction reconcile path. `duration` is the number
+      // of seconds to ADD (1–20); `extendMode` is "start" or "end" (defaults
+      // to "end" — append).
+      if (evProvider === "ltx-2.3-pro") {
+        return {
+          jobName: "extend-video",
+          queueName: "video-generation",
+          modelIdentifier: evProvider,
+          payload: {
+            jobId,
+            provider: evProvider,
+            video: resolvedInputs.videoUrl || data.videoUrl,
+            duration: data.duration,
+            extend_mode: (data.extendMode as string | undefined) ?? "end",
+            usageLogId,
+          },
+        }
+      }
+
       const evModel = evProvider === "veo-extend"
         ? (evProvider + (data.model === "quality" ? ":quality" : ""))
         : evProvider
@@ -2596,6 +2718,56 @@ export function buildPayload(
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,
           quality: evProvider === "runway-extend" ? (data.quality ?? "720p") : undefined,
           seeds: evProvider === "veo-extend" ? data.seeds : undefined,
+          usageLogId,
+        },
+      }
+    }
+
+    // ─── LTX 2.3 Pro Retake ───────────────────────────────────────────────
+    // Replace a portion of a video — audio only / video only / both —
+    // using LTX 2.3 Pro's `retake` task on Replicate. Webhook-driven
+    // completion via the standard Replicate reconcile path. Credit math is
+    // `ltx-2.3-pro-retake:per-second × retakeDuration` (the route hook
+    // applies the multiplication on the single-node path; the orchestrator
+    // path also bills `:per-second` here so reconciliation sums match).
+    case "video-retake": {
+      // Walk incoming edges to derive the LTX camera_motion enum. Mirror of
+      // the LTX generate-video case — `ltxCameraMotionFromUpstream` consumes
+      // the same `{ nodeType, data: { cameraMotion } }[]` shape.
+      const incomingNodes = (buildCtx?.edges ?? [])
+        .filter((e) => e.target === node.id)
+        .map((e) => (buildCtx?.nodes ?? []).find((n) => n.id === e.source))
+        .filter((n): n is SimpleNode => !!n)
+      const hints = incomingNodes.map((n) => ({
+        nodeType: n.type,
+        data: { cameraMotion: (n.data as Record<string, unknown>).cameraMotion as string | undefined },
+      }))
+      const cameraMotion = ltxCameraMotionFromUpstream(hints) ?? "none"
+
+      return {
+        jobName: "video-retake",
+        queueName: "video-generation",
+        // Orchestrator path uses the static `video-retake` fallback (100cr,
+        // ~2s worth). Single-node route uses `computeCredits` with the actual
+        // `ltx-2.3-pro-retake:per-second × retakeDuration` math — mirrors the
+        // extend-video LTX pattern where orchestrator reserves the base rate
+        // and reconciliation refunds the diff once Replicate reports actual.
+        modelIdentifier: "video-retake",
+        payload: {
+          jobId,
+          provider: "ltx-2.3-pro",
+          video: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+          prompt: resolvedInputs.prompt
+            ?? resolveRefs(data.prompt as string | undefined, refMap)
+            ?? "",
+          retake_start_time: data.retakeStartTime as number | undefined,
+          retake_duration: data.retakeDuration as number | undefined,
+          retake_mode: data.retakeMode as string | undefined,
+          resolution: "1080p",
+          aspect_ratio: (data.aspectRatio as string | undefined) ?? "16:9",
+          fps: (data.fps as number | undefined) ?? 25,
+          generate_audio: (data.generateAudio as boolean | undefined) ?? true,
+          camera_motion: cameraMotion,
           usageLogId,
         },
       }

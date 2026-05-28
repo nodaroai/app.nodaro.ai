@@ -867,6 +867,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  "video-retake",
   "suno-music-video",
   "combine-videos",
   "merge-video-audio",
@@ -880,6 +881,7 @@ const VIDEO_OUTPUT_NODE_TYPES = new Set([
   "fade-video",
   "transcode-video",
   "manual-edit",
+  "video-sfx",
 ])
 
 const AUDIO_OUTPUT_NODE_TYPES = new Set([
@@ -1047,6 +1049,17 @@ function routeOutput(
   }
   if (edge.targetHandle === "image") {
     inputs.imageUrl = output
+    return
+  }
+  // Video-sfx (and any future single-video-input node) exposes a typed
+  // `video` handle for its input clip. Generic video-source routing
+  // (VIDEO_OUTPUT_NODE_TYPES → routeVideoOutput → inputs.videoUrl) already
+  // works for upload-video / generate-video / video-to-video upstreams, but
+  // an explicit handle case bullet-proofs against sources whose default
+  // routing doesn't land in `videoUrl` (e.g. a future media-producing
+  // source-type that defaults elsewhere). Mirrors the `image` handle above.
+  if (edge.targetHandle === "video") {
+    inputs.videoUrl = output
     return
   }
   if (edge.targetHandle === "reference") {
