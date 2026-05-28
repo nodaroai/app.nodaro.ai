@@ -6,6 +6,9 @@ import {
   PIPELINE_FORMATS,
   PIPELINE_MODES,
   PIPELINE_OUTPUT_RESOLUTIONS,
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  PIPELINE_PINNABLE_SCRIPT_LLMS,
+  PIPELINE_PINNABLE_VIDEO_MODELS,
   VIDEO_CRITIC_FRAME_MODES,
   validateDurationForFormat,
   type PipelineFormat,
@@ -54,39 +57,74 @@ const VIDEO_CRITIC_FRAME_DESCRIPTIONS: Record<VideoCriticFrameMode, string> = {
     "5 frames per shot at 0%/25%/50%/75%/100%. Best motion-glitch coverage. ~4 credits per shot.",
 }
 
-// Empty string = "Auto" sentinel. The backend resolver treats absent /
-// empty-string keys as "not set" and falls back to its own default (Scene
-// Director picks per-shot, or hardcoded sonnet-4-6 for scripts). Keep this in
-// sync with what's in `STATIC_CREDIT_COSTS` + `model_pricing` — pinning a
-// model that isn't priced will fail the hard-fail guard at generate-time.
-const IMAGE_MODEL_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "", label: "Auto (Director picks per shot)" },
-  { value: "nano-banana", label: "Nano Banana — fast" },
-  { value: "nano-banana-pro", label: "Nano Banana Pro — higher fidelity" },
-  { value: "nano-banana-2", label: "Nano Banana 2 — latest" },
-  { value: "flux", label: "Flux Pro" },
-  { value: "gpt-image", label: "GPT Image" },
-  { value: "gpt-image-2", label: "GPT Image 2" },
-]
+// Labels for each pinnable model. The model id list lives in
+// `@nodaro/shared::PIPELINE_PINNABLE_*` so the Zod schema and these dropdowns
+// can't drift. Labels intentionally match the credit-table identifier — e.g.
+// `veo3` is VEO 3.1 Quality (~125cr/shot), `veo3.1` is VEO 3.1 Fast
+// (~30-40cr/shot) per backend/CLAUDE.md.
+const IMAGE_MODEL_LABELS: Record<string, string> = {
+  "nano-banana": "Nano Banana — fast",
+  "nano-banana-pro": "Nano Banana Pro — higher fidelity",
+  "nano-banana-2": "Nano Banana 2 — latest",
+  flux: "Flux Pro",
+  "gpt-image": "GPT Image",
+  "gpt-image-2": "GPT Image 2",
+}
 
-const VIDEO_MODEL_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "", label: "Auto (Director picks per shot)" },
-  { value: "kling-turbo", label: "Kling Turbo — cheapest" },
-  { value: "kling", label: "Kling" },
-  { value: "seedance-2-fast", label: "Seedance 2 Fast" },
-  { value: "seedance-2", label: "Seedance 2" },
-  { value: "veo3.1", label: "VEO 3.1 Fast" },
-  { value: "veo3", label: "VEO 3.1 Quality" },
-  { value: "minimax", label: "MiniMax" },
-]
+const VIDEO_MODEL_LABELS: Record<string, string> = {
+  "kling-turbo": "Kling Turbo — cheapest",
+  kling: "Kling",
+  "kling-3.0": "Kling 3.0",
+  seedance: "Seedance",
+  "seedance-2": "Seedance 2",
+  "seedance-2-fast": "Seedance 2 Fast",
+  veo3: "VEO 3.1 Quality (~125cr/shot)",
+  "veo3.1": "VEO 3.1 Fast (~30-40cr/shot)",
+  veo3_lite: "VEO 3.1 Lite (~30cr/shot)",
+  minimax: "MiniMax",
+  "hailuo-standard": "Hailuo Standard",
+  "wan-turbo": "Wan Turbo",
+  "bytedance-lite": "Bytedance Lite",
+  "bytedance-pro": "Bytedance Pro",
+}
 
-const SCRIPT_LLM_OPTIONS: readonly { value: string; label: string }[] = [
-  { value: "", label: "Auto (Claude Sonnet 4.6)" },
-  { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 — fastest" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — default" },
-  { value: "claude-opus-4-6", label: "Claude Opus 4.6 — deepest" },
-  { value: "gpt-5.2", label: "GPT-5.2" },
-]
+const SCRIPT_LLM_LABELS: Record<string, string> = {
+  "claude-haiku-4-5": "Claude Haiku 4.5 — fastest",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6 — default",
+  "claude-opus-4-6": "Claude Opus 4.6 — deepest",
+}
+
+// Build dropdown options from the shared allowlist + an "Auto" sentinel.
+// `"" ` is mapped to `"auto"` in the Radix Select (empty string is reserved
+// by Radix for "no selection"). The onValueChange normalizes back to
+// undefined so the API receives an absent key, NOT an empty string (which the
+// Zod enum would reject).
+function buildOptions(
+  ids: readonly string[],
+  labels: Record<string, string>,
+  autoLabel: string,
+): readonly { value: string; label: string }[] {
+  return [
+    { value: "auto", label: autoLabel },
+    ...ids.map((id) => ({ value: id, label: labels[id] ?? id })),
+  ]
+}
+
+const IMAGE_MODEL_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  IMAGE_MODEL_LABELS,
+  "Auto (Director picks per shot)",
+)
+const VIDEO_MODEL_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_VIDEO_MODELS,
+  VIDEO_MODEL_LABELS,
+  "Auto (Director picks per shot)",
+)
+const SCRIPT_LLM_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_SCRIPT_LLMS,
+  SCRIPT_LLM_LABELS,
+  "Auto (Claude Sonnet 4.6)",
+)
 
 export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<GenerativePipelineNodeData>) {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
@@ -274,7 +312,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
               </SelectTrigger>
               <SelectContent>
                 {IMAGE_MODEL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value || "auto"} value={o.value || "auto"}>
+                  <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
                 ))}
@@ -297,7 +335,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
               </SelectTrigger>
               <SelectContent>
                 {VIDEO_MODEL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value || "auto"} value={o.value || "auto"}>
+                  <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
                 ))}
@@ -320,7 +358,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
               </SelectTrigger>
               <SelectContent>
                 {SCRIPT_LLM_OPTIONS.map((o) => (
-                  <SelectItem key={o.value || "auto"} value={o.value || "auto"}>
+                  <SelectItem key={o.value} value={o.value}>
                     {o.label}
                   </SelectItem>
                 ))}

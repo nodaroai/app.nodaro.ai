@@ -12,7 +12,14 @@ import type {
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
-import type { PipelineFormat, PipelineMode, VideoCriticFrameMode } from "@nodaro/shared"
+import type {
+  PipelineFormat,
+  PipelineMode,
+  PipelinePinnableImageModel,
+  PipelinePinnableScriptLlm,
+  PipelinePinnableVideoModel,
+  VideoCriticFrameMode,
+} from "@nodaro/shared"
 import type { SceneNodeData as SharedSceneNodeData } from "@nodaro/shared"
 import type { PipelineState } from "@nodaro/shared"
 import { MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS } from "@nodaro/shared"
@@ -4053,19 +4060,20 @@ export interface GenerativePipelineNodeData {
   // backend resolver — `resolvePipelineModel` in @nodaro/shared — picks them
   // up). All optional — leaving any of these blank reverts to "auto" (LLM
   // picks per shot for image/video, hardcoded sonnet-4-6 for script).
-  image_model?: string
-  video_model?: string
-  script_llm?: string
-  /** Optional per-stage overrides (`characters_image`, `locations_image`, `objects_image`, `scene_keyframes_image`, `shots_video`, `script_llm`). */
-  stage_models?: Partial<Record<
-    | "characters_image"
-    | "locations_image"
-    | "objects_image"
-    | "scene_keyframes_image"
-    | "shots_video"
-    | "script_llm",
-    string
-  >>
+  // Types come from the shared allowlists so a workflow JSON with an
+  // unknown id fails to typecheck instead of reaching the API.
+  image_model?: PipelinePinnableImageModel
+  video_model?: PipelinePinnableVideoModel
+  script_llm?: PipelinePinnableScriptLlm
+  /** Optional per-stage overrides — each key constrained to its kind's allowlist. */
+  stage_models?: {
+    characters_image?: PipelinePinnableImageModel
+    locations_image?: PipelinePinnableImageModel
+    objects_image?: PipelinePinnableImageModel
+    scene_keyframes_image?: PipelinePinnableImageModel
+    shots_video?: PipelinePinnableVideoModel
+    script_llm?: PipelinePinnableScriptLlm
+  }
   // Server-side runtime fields (read-only on the canvas):
   pipeline_id?: string
   status?: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import {
+  PIPELINE_PINNABLE_IMAGE_MODELS,
   SceneNodeDataSchema,
   type SceneNodeData,
   modelsForInputMode,
@@ -8,6 +9,7 @@ import {
   type ShowrunnerPlan,
 } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { pipelineEvents } from "../events.js"
 
 const _REDACTED_PROMPT_3 = `[REDACTED — moved to private plugin, S9 extraction]`
 
@@ -84,31 +86,55 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
     maxDurationSeconds: VIDEO_MODEL_CAPS[m]!.maxDurationSeconds,
   }))
 
-  // User overrides: narrow what we tell the LLM about. An incompatible
-  // videoModelOverride is silently dropped (rather than crashing the stage) so
-  // a single misconfigured pipeline doesn't fail every scene — the LLM falls
-  // back to picking from the full eligible list. We do log it so it's
-  // diagnosable from prod logs.
+  // User overrides: narrow what we tell the LLM about.
+  //
+  // For VIDEO: an incompatible pick (one that's not in the per-input-mode
+  // eligible set) is dropped — rather than crashing the stage — so a single
+  // misconfigured pipeline doesn't fail every scene. We surface it as a
+  // pipeline:warning event so the UI shows the user that their pin didn't
+  // apply and they got the Director's pick instead. Billing-affecting code
+  // path; silent drops are not OK.
+  //
+  // For IMAGE: we additionally re-validate against the pinnable allowlist
+  // (defense-in-depth — the Zod schema in `PipelineConfigSchema` should have
+  // caught any non-allowlist string at the route, but if a future codepath
+  // bypasses Zod we mustn't propagate an arbitrary user string into the LLM
+  // prompt — prompt-injection vector).
   const userVideoPick =
     args.videoModelOverride &&
     eligibleVideoModels.includes(args.videoModelOverride as (typeof eligibleVideoModels)[number])
       ? args.videoModelOverride
       : undefined
   if (args.videoModelOverride && !userVideoPick) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[scene-director] user pinned video_model='${args.videoModelOverride}' but it isn't eligible for shot_input_mode='${args.shotInputMode}' — falling back to LLM pick from ${eligibleVideoModels.join(", ")}`,
-    )
+    pipelineEvents.publish({
+      type: "pipeline:warning",
+      pipelineId: args.pipelineId,
+      code: "video_model_override_dropped",
+      message: `Pinned video_model='${args.videoModelOverride}' isn't compatible with shot_input_mode='${args.shotInputMode}'. Using the Director's per-shot pick instead.`,
+    })
   }
   const videoModelsForPrompt = userVideoPick
     ? eligibleVideoModelsWithStyle.filter((m) => m.model === userVideoPick)
     : eligibleVideoModelsWithStyle
 
-  const imageRegistrySection = args.imageModelOverride
+  const userImagePick =
+    args.imageModelOverride &&
+    (PIPELINE_PINNABLE_IMAGE_MODELS as readonly string[]).includes(args.imageModelOverride)
+      ? args.imageModelOverride
+      : undefined
+  if (args.imageModelOverride && !userImagePick) {
+    pipelineEvents.publish({
+      type: "pipeline:warning",
+      pipelineId: args.pipelineId,
+      code: "image_model_override_dropped",
+      message: `Pinned image_model='${args.imageModelOverride}' isn't on the pinnable allowlist. Letting the Director pick.`,
+    })
+  }
+  const imageRegistrySection = userImagePick
     ? `CAPABILITY REGISTRY (image model — user-pinned for this pipeline):
-- ${args.imageModelOverride}
+- ${userImagePick}
 
-You MUST set image_model="${args.imageModelOverride}" for every shot. Do not pick anything else.`
+You MUST set image_model="${userImagePick}" for every shot. Do not pick anything else.`
     : `CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
 - nano-banana-2
 - flux
@@ -173,6 +199,14 @@ Return a SceneNodeData via the emit tool.`
     throw new Error(
       `Scene Director picked video_model='${result.output.video_model}' which is not eligible for shot_input_mode='${args.shotInputMode}'. Eligible: ${eligibleVideoModels.join(", ")}`,
     )
+  }
+  // Post-validate: when the user pinned an image model, force the LLM's pick
+  // to honor it. The prompt told the LLM to use only `userImagePick`, but
+  // historically non-Sonnet models have ignored prompt constraints. Symmetric
+  // to the video gate above, but we coerce rather than throw because the
+  // user's billing was already estimated assuming their pinned model.
+  if (userImagePick && result.output.image_model !== userImagePick) {
+    return { ...result.output, image_model: userImagePick }
   }
 
   return result.output

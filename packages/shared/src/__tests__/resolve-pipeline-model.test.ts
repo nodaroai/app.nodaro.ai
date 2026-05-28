@@ -62,15 +62,15 @@ describe("resolvePipelineModel", () => {
     expect(resolvePipelineModel(config, "characters_image")).toBe("flux")
   })
 
-  it("an explicit empty string in stage_models is treated as 'not set' so the global wins", () => {
-    // Common pattern when a frontend clears a select to "Auto" — sending "" is
-    // equivalent to omitting the key. The resolver MUST NOT propagate "" as a
-    // model identifier (it would later be rejected as an unknown model with a
-    // confusing error).
-    const config: Partial<PipelineConfig> = {
+  it("an explicit empty string in stage_models is treated as 'not set' so the global wins (defense-in-depth)", () => {
+    // The Zod schema now rejects empty strings (the enum doesn't include ""),
+    // but the resolver still defensively treats falsy stage values as
+    // unset — in case a record bypasses Zod (DB hand-edit, legacy row, etc.).
+    // The cast below acknowledges we're testing a state Zod won't produce.
+    const config = {
       image_model: "flux",
       stage_models: { characters_image: "" },
-    }
+    } as unknown as Partial<PipelineConfig>
     expect(resolvePipelineModel(config, "characters_image")).toBe("flux")
   })
 })

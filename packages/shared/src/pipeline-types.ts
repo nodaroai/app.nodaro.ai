@@ -34,6 +34,76 @@ export const PIPELINE_MODEL_STAGES = [
 export type PipelineModelStage = (typeof PIPELINE_MODEL_STAGES)[number]
 const PipelineModelStageEnum = z.enum(PIPELINE_MODEL_STAGES)
 
+// User-pinnable model identifiers. Curated allowlists — both the Zod schema
+// AND the frontend dropdowns derive from these. Three reasons the allowlist
+// matters even with the `model_pricing` hard-fail guard downstream:
+//   1. Closes the unknown-ID oracle (an unknown id returns a 503 from the
+//      route, an known-but-internal id would silently 500 mid-pipeline).
+//   2. Keeps internal-only synthetic ids (e.g. `flux-lora-character`) out of
+//      the user-pinnable surface — those should ONLY be set by the
+//      orchestrator at runtime.
+//   3. Prevents prompt injection via raw interpolation of the override string
+//      into the Scene Director's LLM prompt — if it isn't in the enum it
+//      can't reach the prompt.
+// Tier-restriction enforcement (free tier blocked from veo3 etc.) lives at
+// the route level via `canAffordCredits` — see `routes/pipelines.ts`.
+export const PIPELINE_PINNABLE_IMAGE_MODELS = [
+  "nano-banana",
+  "nano-banana-pro",
+  "nano-banana-2",
+  "flux",
+  "gpt-image",
+  "gpt-image-2",
+] as const
+export type PipelinePinnableImageModel = (typeof PIPELINE_PINNABLE_IMAGE_MODELS)[number]
+
+export const PIPELINE_PINNABLE_VIDEO_MODELS = [
+  "kling-turbo",
+  "kling",
+  "kling-3.0",
+  "seedance",
+  "seedance-2",
+  "seedance-2-fast",
+  "veo3",
+  "veo3.1",
+  "veo3_lite",
+  "minimax",
+  "hailuo-standard",
+  "wan-turbo",
+  "bytedance-lite",
+  "bytedance-pro",
+] as const
+export type PipelinePinnableVideoModel = (typeof PIPELINE_PINNABLE_VIDEO_MODELS)[number]
+
+// Script LLM — Anthropic-only. The pipeline's `callLLM` is hardwired to the
+// Anthropic SDK; picking a non-Anthropic model would 400 mid-stage and burn
+// the upfront credit reservation. Adding GPT/Gemini support requires routing
+// through `lib/llm-client.ts` first; until then, keep this list tight.
+export const PIPELINE_PINNABLE_SCRIPT_LLMS = [
+  "claude-haiku-4-5",
+  "claude-sonnet-4-6",
+  "claude-opus-4-6",
+] as const
+export type PipelinePinnableScriptLlm = (typeof PIPELINE_PINNABLE_SCRIPT_LLMS)[number]
+
+const ImageModelEnum = z.enum(PIPELINE_PINNABLE_IMAGE_MODELS)
+const VideoModelEnum = z.enum(PIPELINE_PINNABLE_VIDEO_MODELS)
+const ScriptLlmEnum = z.enum(PIPELINE_PINNABLE_SCRIPT_LLMS)
+
+// Per-stage override map. Each stage key maps to a model id valid for its
+// kind. Defined as a discriminated shape (instead of `Record<stage, string>`)
+// so the type system rejects `stage_models.shots_video = "nano-banana"`.
+const StageModelsSchema = z
+  .object({
+    characters_image: ImageModelEnum.optional(),
+    locations_image: ImageModelEnum.optional(),
+    objects_image: ImageModelEnum.optional(),
+    scene_keyframes_image: ImageModelEnum.optional(),
+    shots_video: VideoModelEnum.optional(),
+    script_llm: ScriptLlmEnum.optional(),
+  })
+  .optional()
+
 export const PipelineConfigSchema = z.object({
   music_enabled: z.boolean().default(true),
   narration_enabled: z.boolean().default(true),
@@ -47,13 +117,16 @@ export const PipelineConfigSchema = z.object({
   shot_generation_mode: z.enum(["parallel", "sequential"]).default("parallel"),
   silent_cut_review: z.boolean().default(true),
   // Global model overrides — apply to every stage of the matching kind unless
-  // a more-specific entry in `stage_models` overrides it.
-  image_model: z.string().optional(),
-  video_model: z.string().optional(),
+  // a more-specific entry in `stage_models` overrides it. Constrained to the
+  // pinnable allowlists above; the route handler still re-validates against
+  // tier restrictions before pipeline creation.
+  image_model: ImageModelEnum.optional(),
+  video_model: VideoModelEnum.optional(),
   music_model: z.string().optional(),
-  script_llm: z.string().optional(),
-  // Per-stage overrides. Empty/missing key = fall back to the global field.
-  stage_models: z.record(PipelineModelStageEnum, z.string()).optional(),
+  script_llm: ScriptLlmEnum.optional(),
+  // Per-stage overrides. Each key is constrained to its kind's allowlist.
+  // Empty/missing key = fall back to the global field.
+  stage_models: StageModelsSchema,
 })
 export type PipelineConfig = z.infer<typeof PipelineConfigSchema>
 
