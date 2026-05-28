@@ -1319,9 +1319,13 @@ function mapHistoryToOptions(
 }
 
 const COMMON_NODE_TYPES: ReadonlyArray<SceneNodeType> = [
+  // Headerless lead block — first COMMON_LEAD_COUNT entries render without
+  // a group sub-header in the COMMON tab. Reorder with care.
   "text-prompt",
+  "llm-chat",
   "upload-image",
   "upload-video",
+  // Group sub-headers resume below.
   "generate-image",
   "modify-image",
   "upscale-image",
@@ -1335,6 +1339,7 @@ const COMMON_NODE_TYPES: ReadonlyArray<SceneNodeType> = [
   "add-captions",
   "save-to-storage",
 ];
+const COMMON_LEAD_COUNT = 4;
 
 export const CATEGORIES = [
   {
@@ -1431,7 +1436,7 @@ export const CATEGORIES = [
 const CATEGORY_COLORS: Record<string, string> = {
   Recent: "text-[#06B6D4]",
   "Most Used": "text-[#F59E0B]",
-  Common: "text-[#10B981]",
+  Common: "text-[#ff0073] dark:text-[#ff0073]",
   Input: "text-[#007AFF]",
   Triggers: "text-[#F97316]",
   Data: "text-[#14B8A6]",
@@ -1947,7 +1952,11 @@ export function AddNodePopup({
           categoryNodes.map((node, index) => {
             const prevGroup =
               index > 0 ? categoryNodes[index - 1].group : undefined;
-            const showGroupHeader = node.group && node.group !== prevGroup;
+            const inCommonLead =
+              selectedCategory === VIRTUAL_CATEGORY_IDS.common &&
+              index < COMMON_LEAD_COUNT;
+            const showGroupHeader =
+              !inCommonLead && node.group && node.group !== prevGroup;
             return (
               <div key={node.type}>
                 {showGroupHeader && (

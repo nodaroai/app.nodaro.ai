@@ -321,11 +321,19 @@ export function isValidWorkflowConnection(
   // in `loop-node.tsx`'s per-pip `accepts` predicate (which drives the
   // drag-glow visual and popover candidate filtering).
   if (targetType === "list" && connection.targetHandle) {
-    return isValidListNodeConnection(
-      connection.targetHandle,
-      typeOf(connection.source) ?? "",
-      isVisualPickerType,
-    )
+    // "list" SceneNodeType renders via LoopNode (nodes/index.ts:166), which
+    // uses per-column target handles (`col_xxx_in`) — not the bare `"in"`
+    // that isValidListNodeConnection's switch checks. Without the coarse
+    // gate, every column-handle drop falls through to `return false` and
+    // any text-prompt → list connection gets rejected at drag time.
+    if (connection.targetHandle === "in") {
+      return isValidListNodeConnection(
+        connection.targetHandle,
+        typeOf(connection.source) ?? "",
+        isVisualPickerType,
+      )
+    }
+    return isValidLoopCoarse(typeOf(connection.source) ?? "", isVisualPickerType)
   }
   if (targetType === "web-scrape" && connection.targetHandle) {
     return isValidWebScrapeConnection(
