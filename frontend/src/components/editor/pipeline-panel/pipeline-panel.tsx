@@ -775,6 +775,36 @@ export function PipelinePanel({ pipelineId, onClose, onNavigateToPipeline }: Pro
               onApprove={() => handleApproveStage(entityStageName)}
             />
           )}
+        {/* Stage-level approve bar for Stages 6/7/8 (scene_images,
+            animate_audio_edit, post_merge) when they reach awaiting_approval in
+            manual/guided mode. Without these the panel rendered nothing once
+            the pipeline advanced past shot_list and the only way to approve
+            was a direct API call. Auto mode advances itself so the bar stays
+            hidden there. */}
+        {pipeline?.current_stage === "scene_images" &&
+          sceneImagesStageQuery.data?.status === "awaiting_approval" &&
+          pipeline?.mode !== "auto" && (
+            <StageApproveBar
+              stageLabel={STAGE_LABELS.scene_images}
+              onApprove={() => handleApproveStage("scene_images")}
+            />
+          )}
+        {pipeline?.current_stage === "animate_audio_edit" &&
+          animateStageQuery.data?.status === "awaiting_approval" &&
+          pipeline?.mode !== "auto" && (
+            <StageApproveBar
+              stageLabel={STAGE_LABELS.animate_audio_edit}
+              onApprove={() => handleApproveStage("animate_audio_edit")}
+            />
+          )}
+        {pipeline?.current_stage === "post_merge" &&
+          postMergeStageQuery.data?.status === "awaiting_approval" &&
+          pipeline?.mode !== "auto" && (
+            <StageApproveBar
+              stageLabel={STAGE_LABELS.post_merge}
+              onApprove={() => handleApproveStage("post_merge")}
+            />
+          )}
       </div>
 
       {/* Phase 1D.2a §4.5 — Auto-mode critic-failure surface. Triggered when
