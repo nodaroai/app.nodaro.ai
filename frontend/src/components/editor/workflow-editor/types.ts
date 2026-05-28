@@ -393,7 +393,31 @@ export interface ExecutionContext {
   setInsufficientCreditsData: (
     data: { required: number; available: number; tier: string } | null,
   ) => void;
+  /**
+   * Idempotency key for this user-click intent. Set by the click handler
+   * (handleRunSingleNode, handleRun, etc.) — one UUID per click. Run*
+   * wrappers in node-executors.ts read this and pass it to api.ts so the
+   * backend can dedupe React StrictMode / network retries of THIS click
+   * WITHOUT collapsing intentional re-runs (the next click generates a
+   * fresh UUID → fresh ctx → fresh keys → new jobs).
+   *
+   * For fan-out (list iteration), each iteration must produce a distinct
+   * job, so the run* wrappers append `:iter:N` per iteration via
+   * `iterationIdempotencyKey()` — same intent, distinct rows.
+   *
+   * Undefined when the execution is not user-triggered (auto-execute
+   * cascades, programmatic re-runs); in that case, no dedup is applied
+   * and every call creates a fresh row.
+   */
+  idempotencyKey?: string;
 }
+
+// `iterationIdempotencyKey` lives in `frontend/src/lib/idempotency-key.ts`
+// (not here in types.ts) — many tests in this directory mock `../types`
+// and re-exporting the helper through types would force every such mock
+// to also stub it. Keeping it in the lib file means execute-node.ts can
+// import it directly from `@/lib/idempotency-key` and tests don't need
+// per-file updates.
 
 /** Check if an error is a StorageExceededError and show the modal. Returns true if handled. */
 export function checkStorageError(

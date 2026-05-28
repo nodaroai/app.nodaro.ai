@@ -21,6 +21,8 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { requireScope } from "../lib/scopes.js"
+import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -180,7 +182,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Check for already-running execution
+    // Check for already-running execution (best-effort fast path; the DB
+    // UNIQUE constraint on (user_id, idempotency_key) is the race-proof
+    // backstop below).
     const { data: activeExec } = await supabase
       .from("workflow_executions")
       .select("id")
@@ -198,23 +202,64 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Create execution record
+    // Race-proof execution-row INSERT, gated by the client-supplied
+    // Idempotency-Key. We deliberately do NOT derive a fallback key from
+    // (workflow_id, user_id, nodeIds) — a user may intentionally re-run
+    // the same workflow back-to-back to get different outputs (AI nodes
+    // are stochastic). The 409 "already_running" guard above already
+    // prevents truly concurrent runs of the same workflow; this layer
+    // only catches the React-StrictMode / network-retry case where the
+    // same logical click fires the same POST twice with the same UUID.
+    //
+    // No header → undefined key → plain INSERT → no dedup. That's the
+    // correct behavior: two distinct user clicks must produce two rows.
     const mcpClient = extractMcpClient(req.body)
-    const { data: execution, error: execError } = await supabase
-      .from("workflow_executions")
-      .insert({
-        workflow_id: workflowId,
-        user_id: req.userId,
-        status: "pending",
-        trigger_type: mcpClient ? "mcp" : "manual",
-        ...(mcpClient ? { mcp_client: mcpClient } : {}),
-      })
-      .select("id")
-      .single()
+    const headerKeyRaw = req.headers["idempotency-key"]
+    const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : ""
+    const idempotencyKey =
+      headerKey.length >= MIN_IDEMPOTENCY_KEY_LENGTH ? headerKey : undefined
 
-    if (execError || !execution) {
+    let execution: { id: string }
+    let dedupHit = false
+    try {
+      const result = await insertWithIdempotencyKey<{ id: string }>(
+        "workflow_executions",
+        {
+          workflow_id: workflowId,
+          user_id: req.userId,
+          status: "pending",
+          trigger_type: mcpClient ? "mcp" : "manual",
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
+        },
+        idempotencyKey,
+      )
+      execution = result.row
+      dedupHit = !result.created
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       return reply.status(500).send({
-        error: { code: "internal_error", message: execError?.message ?? "Failed to create execution" },
+        error: { code: "internal_error", message },
+      })
+    }
+
+    if (dedupHit) {
+      // React StrictMode / network retry of the SAME click (same UUID)
+      // resolved to the winner's execution row. Return it so the client
+      // can poll on the canonical id.
+      //
+      // Status code 200 (not 202) to match the dedup-hit contract of every
+      // other migrated route (generate-image/video, text-to-video):
+      // `200 { id-field, deduped: true }` means "this was already accepted
+      // earlier — here's the canonical id". 202 would semantically claim
+      // "accepted, processing started by THIS request", which is wrong on
+      // a dedup hit (processing started on the FIRST request). SDK retry
+      // logic that branches on `status === 200 && body.deduped` works
+      // uniformly across all four routes after this change.
+      reply.header("X-Dedup-Hit", "1")
+      return reply.status(200).send({
+        executionId: execution.id,
+        status: "pending",
+        deduped: true,
       })
     }
 

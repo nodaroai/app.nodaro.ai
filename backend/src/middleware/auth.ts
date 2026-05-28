@@ -21,6 +21,13 @@ declare module "fastify" {
      *  creditGuard for anti-double-click dedup. Route handlers should write
      *  it to the `input_fingerprint` column on the jobs INSERT. */
     inputFingerprint?: string
+    /** Race-proof idempotency key resolved by creditGuard. When the client
+     *  sends an `Idempotency-Key` header, this holds that value; otherwise
+     *  it falls back to the SHA-256 fingerprint. Route handlers pass this
+     *  to `insertWithIdempotencyKey` so the DB UNIQUE constraint on
+     *  `(user_id, idempotency_key)` (migration 163) closes the duplicate-
+     *  execution race that any read-then-write dedup leaves open. */
+    idempotencyKey?: string
     /** Set by route-level pre-handlers that ffprobe an input video URL before
      *  credit reservation, so creditGuard.computeCredits can pick a duration
      *  bucket without re-probing. Currently used by video-sfx. */

@@ -5,6 +5,7 @@ import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import type { ReduceMeta, ImageCriticMode, WorkflowExport } from "@nodaro/shared"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
+import { withIdempotencyHeader } from "@/lib/idempotency-key"
 
 export const API_BASE_URL = ''
 
@@ -136,7 +137,55 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: string
       (errObj.updatedAt as string) ?? "",
     )
   }
+  if (errObj?.code === "dedup_race_winner_unresolvable") {
+    // Structured signal from the backend: the client should retry the
+    // same request (same Idempotency-Key) after a short delay; the
+    // canonical job will be found on the next attempt. Surfaced as a
+    // typed Error so the call-site auto-retry wrapper can detect it.
+    throw new DedupRaceRetryableError(
+      (errObj.message as string) ?? fallback,
+      (errObj.retryAfterSeconds as number) ?? 2,
+    )
+  }
   throw new Error((errObj?.message as string) ?? fallback)
+}
+
+/**
+ * Thrown when the backend signals a dedup-race winner-unresolvable
+ * condition (HTTP 503 + body code `dedup_race_winner_unresolvable`).
+ * The recommended response is to retry the same request with the same
+ * Idempotency-Key after `retryAfterSeconds` ± 25% jitter. The
+ * `withDedupRaceRetry` wrapper in this module handles this automatically.
+ */
+export class DedupRaceRetryableError extends Error {
+  constructor(
+    message: string,
+    public readonly retryAfterSeconds: number,
+  ) {
+    super(message)
+    this.name = "DedupRaceRetryableError"
+  }
+}
+
+/**
+ * Wrap an API call so a single `DedupRaceRetryableError` is automatically
+ * retried after the backend-advised delay ± 25% jitter. If the retry also
+ * throws, the error propagates to the caller. Most generate/run wrappers
+ * in api.ts should be wrapped in this helper at their call site (see
+ * run-handlers.ts for the workflow Run path).
+ */
+export async function withDedupRaceRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (err) {
+    if (!(err instanceof DedupRaceRetryableError)) throw err
+    // ±25% jitter on the backend-advised value so concurrent retries
+    // from a 503 cluster don't all hit the DB on the same tick.
+    const jitterMs = (Math.random() - 0.5) * 0.5 * err.retryAfterSeconds * 1000
+    const waitMs = Math.max(0, err.retryAfterSeconds * 1000 + jitterMs)
+    await new Promise((r) => setTimeout(r, waitMs))
+    return await fn()  // single retry — if this throws, caller handles it
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,6 +269,16 @@ export async function generateImage(
    * version + trigger word server-side scoped by `req.userId`.
    */
   internalLora?: { readonly characterId: string },
+  /**
+   * Optional Idempotency-Key. When supplied, the backend deduplicates POSTs
+   * sharing this key — the safe way to protect against React StrictMode
+   * double-fires, network retries, and double-clicks WITHOUT collapsing
+   * intentional re-runs (the user clicking Generate twice to get two
+   * variations gets two different keys → two jobs). Callers should
+   * generate ONE UUID per click via `generateIdempotencyKey()` and pass
+   * the same value to all retries of that click.
+   */
+  idempotencyKey?: string,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { prompt }
   if (referenceImageUrls && referenceImageUrls.length > 0) {
@@ -270,7 +329,10 @@ export async function generateImage(
   }
   const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    headers: withIdempotencyHeader(
+      { "Content-Type": "application/json", ...await getAuthHeaders() },
+      idempotencyKey,
+    ),
     body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
@@ -1910,6 +1972,9 @@ export interface GenerateVideoOptions {
   injectCharacterContext?: boolean
   attachToCharacterId?: string
   userId?: string
+  /** Per-click idempotency key. Same UUID across retries of one click;
+   *  fresh UUID for the next click. See generateIdempotencyKey(). */
+  idempotencyKey?: string
 }
 
 export async function generateVideo(options: GenerateVideoOptions): Promise<{ jobId: string }>
@@ -1975,9 +2040,14 @@ export async function generateVideo(
     }
   }
 
+  const idempotencyKey =
+    typeof imageUrlOrOptions === "string" ? undefined : imageUrlOrOptions.idempotencyKey
   const res = await fetch(`${API_BASE_URL}/v1/generate-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    headers: withIdempotencyHeader(
+      { "Content-Type": "application/json", ...await getAuthHeaders() },
+      idempotencyKey,
+    ),
     body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
@@ -2036,14 +2106,20 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   nsfwChecker?: boolean
   // VEO 3.x: opt out of KIE's auto-translate-to-English (default true).
   enableTranslation?: boolean
+  /** Per-click idempotency key. See generateIdempotencyKey(). */
+  idempotencyKey?: string
 }): Promise<{ jobId: string }> {
-  const body: Record<string, unknown> = { prompt, provider, ...options }
+  const { idempotencyKey, ...bodyOptions } = options ?? {}
+  const body: Record<string, unknown> = { prompt, provider, ...bodyOptions }
   if (userId) {
     body.userId = userId
   }
   const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    headers: withIdempotencyHeader(
+      { "Content-Type": "application/json", ...await getAuthHeaders() },
+      idempotencyKey,
+    ),
     body: JSON.stringify(withWorkflowId(body)),
   })
   if (!res.ok) {
@@ -4854,13 +4930,22 @@ export class WorkflowAlreadyRunningError extends Error {
 }
 
 /** Run a workflow (creates execution, enqueues orchestrator). Optionally pass nodeIds for partial execution. */
-export async function runWorkflow(workflowId: string, nodeIds?: string[]): Promise<{ executionId: string }> {
-  const headers: Record<string, string> = { ...(await getAuthHeaders()) }
+export async function runWorkflow(
+  workflowId: string,
+  nodeIds?: string[],
+  /** Per-click idempotency key. One UUID per click of the Run button —
+   *  the same key on React StrictMode re-fires / network retries collapses
+   *  into one execution. A new key on the next click creates a new
+   *  execution (intentional re-run). */
+  idempotencyKey?: string,
+): Promise<{ executionId: string }> {
+  let headers: Record<string, string> = { ...(await getAuthHeaders()) }
   let body: string | undefined
   if (nodeIds) {
     headers["Content-Type"] = "application/json"
     body = JSON.stringify({ nodeIds })
   }
+  headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
     method: "POST",
     headers,

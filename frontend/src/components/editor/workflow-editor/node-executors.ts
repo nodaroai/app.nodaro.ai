@@ -67,6 +67,10 @@ export function runImageGeneration(
    * another user's LoRA version).
    */
   internalLora?: { readonly characterId: string },
+  /** Per-call idempotency key. The click handler sets ctx.idempotencyKey;
+   *  executeNode derives a per-iteration suffix for fan-out and passes
+   *  the final key here. The backend dedupes POSTs sharing this key. */
+  idempotencyKey?: string,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -87,6 +91,7 @@ export function runImageGeneration(
         expandPrompt,
         identity,
         internalLora,
+        idempotencyKey,
       ),
     "generatedImageUrl",
     "Image generation",
@@ -274,6 +279,8 @@ export function runVideoGeneration(
     injectCharacterContext?: boolean;
     attachToCharacterId?: string;
   },
+  /** Per-call idempotency key — see runImageGeneration for rationale. */
+  idempotencyKey?: string,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
@@ -311,6 +318,7 @@ export function runVideoGeneration(
         injectCharacterContext: extras?.injectCharacterContext,
         attachToCharacterId: extras?.attachToCharacterId,
         userId: ctx.userId,
+        idempotencyKey,
       }),
     "generatedVideoUrl",
     "Video generation",
@@ -384,10 +392,12 @@ export function runTextToVideoGeneration(
     /** VEO 3.x: opt out of KIE's auto-translate-to-English. */
     enableTranslation?: boolean;
   },
+  /** Per-call idempotency key — see runImageGeneration for rationale. */
+  idempotencyKey?: string,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
     nodeId,
-    () => textToVideo(prompt, provider, ctx.userId, kling3Options),
+    () => textToVideo(prompt, provider, ctx.userId, { ...kling3Options, idempotencyKey }),
     "generatedVideoUrl",
     "Text-to-video generation",
     ctx,

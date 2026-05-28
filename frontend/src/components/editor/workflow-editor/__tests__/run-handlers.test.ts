@@ -51,6 +51,12 @@ vi.mock("@/lib/api", () => ({
   getUserCredits: vi.fn(),
   runWorkflow: (...args: unknown[]) => mockRunWorkflow(...args),
   getWorkflowExecution: (...args: unknown[]) => mockGetWorkflowExecution(...args),
+  // The handler wraps runWorkflow in withDedupRaceRetry — for tests we
+  // pass through immediately, since the dedup-race retry behavior is
+  // unit-tested elsewhere (against the api.ts wrapper directly). This
+  // keeps the run-handlers tests focused on the BFS / pending-state /
+  // error-shape behavior they were written to cover.
+  withDedupRaceRetry: <T,>(fn: () => Promise<T>) => fn(),
   WorkflowAlreadyRunningError: class WorkflowAlreadyRunningError extends Error {
     executionId: string
     constructor(executionId: string) {
@@ -295,7 +301,8 @@ describe("handleRun", () => {
 
     await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
-    expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1")
+    // Third arg is the per-click idempotency key (UUID generated in handler).
+    expect(mockRunWorkflow).toHaveBeenCalledWith("wf-1", undefined, expect.any(String))
     expect(setIsRunning).toHaveBeenCalledWith(true)
   })
 
@@ -488,6 +495,7 @@ describe("handleRunFromHere", () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith(
       "wf-mock-1",
       expect.arrayContaining(["a", "b", "c"]),
+      expect.any(String),
     )
   })
 
@@ -510,6 +518,7 @@ describe("handleRunFromHere", () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith(
       "wf-mock-1",
       expect.arrayContaining(["a", "b"]),
+      expect.any(String),
     )
   })
 
@@ -599,6 +608,7 @@ describe("handleRunSelected", () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith(
       "wf-mock-1",
       expect.arrayContaining(["a", "c"]),
+      expect.any(String),
     )
     const calledIds = mockRunWorkflow.mock.calls[0][1]
     expect(calledIds).toHaveLength(2)
@@ -623,6 +633,7 @@ describe("handleRunSelected", () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith(
       "wf-mock-1",
       expect.arrayContaining(["a", "b"]),
+      expect.any(String),
     )
   })
 

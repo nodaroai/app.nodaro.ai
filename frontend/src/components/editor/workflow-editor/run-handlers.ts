@@ -1,7 +1,8 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError } from "@/lib/api";
+import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
+import { generateIdempotencyKey } from "@/lib/idempotency-key";
 import { createClient } from "@/lib/supabase";
 import { hasCredits } from "@/lib/edition";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
@@ -260,7 +261,12 @@ export async function handleRun(
   });
 
   try {
-    const result = await runWorkflow(workflowId);
+    // One key per click of the Run button. Reused across any retries of
+    // THIS click; a fresh key is generated next time the user clicks. The
+    // backend's DB UNIQUE constraint on (user_id, idempotency_key) ensures
+    // React StrictMode / network retry can't create a duplicate execution.
+    const idempotencyKey = generateIdempotencyKey();
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, undefined, idempotencyKey));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
@@ -313,6 +319,13 @@ export async function handleRunSingleNode(
     useWorkflowStore.getState();
   const listItems = getListInputForNode(node, currentNodes, currentEdges);
   const expanded = expandItemsWithRepeat(listItems, node.type ?? "", node.data as Record<string, unknown>);
+
+  // One key per click of Run-on-this-node. Reused by all retries inside
+  // this execution (network-level retry, browser fetch retry); fan-out
+  // iterations add a per-index suffix in iterationIdempotencyKey() so
+  // each iteration is its own row. Mutates `ctx` deliberately — every
+  // run* wrapper down the tree reads ctx.idempotencyKey.
+  ctx.idempotencyKey = generateIdempotencyKey();
 
   const execution = expanded
     ? executeNodeForList(node, expanded, ctx)
@@ -411,7 +424,8 @@ export async function handleRunFromHere(
   });
 
   try {
-    const result = await runWorkflow(workflowId, [...downstream]);
+    const idempotencyKey = generateIdempotencyKey();
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, [...downstream], idempotencyKey));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
@@ -491,7 +505,8 @@ export async function handleRunSelected(
   });
 
   try {
-    const result = await runWorkflow(workflowId, selectedIds);
+    const idempotencyKey = generateIdempotencyKey();
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, selectedIds, idempotencyKey));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {

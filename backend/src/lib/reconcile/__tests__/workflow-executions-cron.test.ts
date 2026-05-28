@@ -29,17 +29,27 @@ vi.mock("../../supabase.js", () => {
         select: () => ({
           in: () => ({
             lt: () => ({
-              limit: () =>
-                Promise.resolve({ data: mocks.executions, error: null }),
+              // Production chain added .order(...).limit() — the order
+              // call must be supported even though the mock doesn't use
+              // its arguments (it just returns the predetermined dataset).
+              order: () => ({
+                limit: () =>
+                  Promise.resolve({ data: mocks.executions, error: null }),
+              }),
             }),
           }),
         }),
         update: (updates: Record<string, unknown>) => ({
           eq: (_col: string, id: string) => ({
-            neq: () => {
-              mocks.updates.push({ id, updates })
-              return Promise.resolve({ data: null, error: null })
-            },
+            // Production now chains .select("id") after .neq for the
+            // retry-aware writer; the mock continues to short-circuit
+            // here regardless of which terminal pattern fires.
+            neq: () => ({
+              select: () => {
+                mocks.updates.push({ id, updates })
+                return Promise.resolve({ data: [{ id }], error: null })
+              },
+            }),
           }),
         }),
       }

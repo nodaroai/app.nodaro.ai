@@ -177,6 +177,7 @@ import {
   updateProgressIfChanged,
   type ExecutionContext,
 } from "./types";
+import { iterationIdempotencyKey } from "@/lib/idempotency-key";
 import { PLATFORM_SPECS } from "@/lib/social-media-specs";
 import { extractNodeOutput, collectMediaAssets, buildAutoComposition, collectAncestorRefs, IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES_FOR_RENDER, AUDIO_SOURCE_TYPES } from "./execution-graph";
 import { resolveNodeInputs, extractNodeOutputAsList, resolveSourceThroughConnectedList, resolveSeedPromptHint, type FrontendResolvedInputs } from "./node-input-resolver";
@@ -1159,6 +1160,16 @@ export function executeNode(
   const { nodes, edges } = useWorkflowStore.getState();
   const inputs = resolveNodeInputs(node, nodes, edges, listIterationIndex);
 
+  // Per-call idempotency key. ctx.idempotencyKey is set by the click handler
+  // (handleRunSingleNode / handleRun*) to one UUID per click intent. For
+  // fan-out, each iteration gets a `:iter:N` suffix so the backend treats
+  // it as a distinct row (otherwise N iterations would collapse to 1 job
+  // via the UNIQUE constraint). Run* wrappers in node-executors.ts accept
+  // this as their final parameter and pass it to the api.ts call so the
+  // backend can dedupe React StrictMode / network retries of THIS specific
+  // call WITHOUT collapsing intentional re-runs or fan-out iterations.
+  const idempotencyKey = iterationIdempotencyKey(ctx.idempotencyKey, listIterationIndex);
+
   // Set forcePrivate flag if this node uses uploaded/private content as input.
   // The flag is module-global; it survives the sync path from here to the API
   // wrapper's synchronous body-build + withWorkflowId consumption. Any branch
@@ -1589,6 +1600,7 @@ export function executeNode(
         ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
         : undefined,
       internalLora,
+      idempotencyKey,
     );
   }
 
@@ -2254,6 +2266,7 @@ export function executeNode(
           ? { injectCharacterContext: true, attachToCharacterId: inputs.attachToCharacterId }
           : {}),
       },
+      idempotencyKey,
     );
   }
 
@@ -2501,6 +2514,7 @@ export function executeNode(
       ctx,
       t2vProvider,
       t2vOptions,
+      idempotencyKey,
     );
   }
 

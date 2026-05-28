@@ -464,6 +464,17 @@ function ExecutionRow({
   const completed = exec.completedNodes ?? 0
   const failed = exec.failedNodes ?? 0
   const total = exec.totalNodes ?? 0
+  const isTerminal =
+    exec.status === "completed" || exec.status === "failed" || exec.status === "cancelled"
+  // Avoid showing "100%" while the row is still in a non-terminal status —
+  // that's the "stuck at 100%" UX bug. The cached `completed_nodes` can
+  // hit total before the orchestrator flips status to "completed" (fan-out
+  // mispredict, transient final-write retry, in-flight finalization). Clamp
+  // the displayed percentage to 99% until status is genuinely terminal, so
+  // the user sees "Finalizing…" instead of a misleading "100% RUNNING".
+  const rawPct = total > 0 ? Math.round((completed / total) * 100) : 0
+  const displayPct = isTerminal ? rawPct : Math.min(rawPct, 99)
+  const showFinalizingHint = !isTerminal && rawPct >= 100
 
   return (
     <>
@@ -515,11 +526,16 @@ function ExecutionRow({
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${Math.round((completed / total) * 100)}%`,
+                    width: `${displayPct}%`,
                     backgroundColor: failed > 0 ? "#ef4444" : "#ff0073",
                   }}
                 />
               </div>
+            )}
+            {showFinalizingHint && (
+              <span className="text-[10px] text-gray-500 dark:text-[#94A3B8] italic">
+                finalizing…
+              </span>
             )}
           </div>
         </td>

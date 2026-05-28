@@ -6,6 +6,17 @@ import { supabase } from "./supabase.js"
  *  re-clicking the same Generate button a minute later starts a fresh job. */
 export const DEDUP_TTL_MS = 10_000
 
+/** Minimum length of a client-supplied Idempotency-Key. Below this we reject
+ *  the header and fall back to fingerprint — short keys (empty string, "x")
+ *  would collide across unrelated requests from buggy clients. 8 chars is
+ *  enough to accommodate truncated UUID prefixes while excluding obvious
+ *  garbage.
+ *
+ *  Lives here (not in middleware/credit-guard.ts) so routes that parse the
+ *  header directly — workflow-execution.ts, future routes — can import it
+ *  without inverting the natural middleware→routes dependency direction. */
+export const MIN_IDEMPOTENCY_KEY_LENGTH = 8
+
 /**
  * SHA-256 over the route key + stable-stringified body. The stable
  * stringifier sorts object keys recursively so two POSTs that JSON-encode
@@ -23,9 +34,17 @@ export function computeFingerprint(routeKey: string, body: unknown): string {
 }
 
 /**
- * SELECT the most-recent matching jobs row for this user + fingerprint
- * within the dedup window. Returns null if no recent match. Uses the
- * `jobs_dedup_idx` partial index (migration 144).
+ * SELECT the most-recent matching jobs row for this user + key within the
+ * dedup window. Returns null if no recent match. The `key` parameter is
+ * either a client-supplied Idempotency-Key (preferred) or the SHA-256
+ * fingerprint (backstop). `creditGuard` writes both `idempotency_key` and
+ * `input_fingerprint` columns on every job INSERT — for fingerprint-only
+ * requests the values are identical; with a header they diverge. We query
+ * the new authoritative column (`idempotency_key`, migration 163) so the
+ * header path works. Race-proof correctness lives in
+ * `insertWithIdempotencyKey`, which uses the same column's UNIQUE
+ * constraint — this SELECT is just a best-effort fast path that avoids
+ * the INSERT roundtrip for obvious double-clicks.
  *
  * Best-effort: any error (DB blip, missing column on pre-migration deploys,
  * etc.) returns null so the request proceeds normally — never breaks a
@@ -33,7 +52,7 @@ export function computeFingerprint(routeKey: string, body: unknown): string {
  */
 export async function findRecentMatchingJob(
   userId: string,
-  fingerprint: string,
+  key: string,
 ): Promise<{ id: string } | null> {
   try {
     const since = new Date(Date.now() - DEDUP_TTL_MS).toISOString()
@@ -41,7 +60,7 @@ export async function findRecentMatchingJob(
       .from("jobs")
       .select("id")
       .eq("user_id", userId)
-      .eq("input_fingerprint", fingerprint)
+      .eq("idempotency_key", key)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1)

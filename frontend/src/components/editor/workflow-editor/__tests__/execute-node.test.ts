@@ -534,7 +534,10 @@ describe("generate-image", () => {
       // identity — undefined when no upstream Character has
       // injectIdentityInPrompts enabled.
       undefined,
-      // internalLora (trailing arg) — undefined when no wired trained character.
+      // internalLora — undefined when no wired trained character.
+      undefined,
+      // idempotencyKey (trailing arg) — undefined here because makeCtx()
+      // doesn't set ctx.idempotencyKey; only set by click handlers.
       undefined,
     )
   })
@@ -564,7 +567,9 @@ describe("generate-image", () => {
       undefined,
       // identity.
       undefined,
-      // internalLora (trailing arg).
+      // internalLora.
+      undefined,
+      // idempotencyKey (trailing arg).
       undefined,
     )
   })
@@ -1049,6 +1054,8 @@ describe("image-to-video", () => {
         webSearch: undefined,
         nsfwChecker: undefined,
       },
+      // idempotencyKey (trailing arg).
+      undefined,
     )
   })
 
@@ -1383,6 +1390,9 @@ describe("text-to-video", () => {
         resolution: "480p",
         generateAudio: true,
       }),
+      // idempotencyKey (trailing arg) — undefined here because makeCtx()
+      // doesn't set ctx.idempotencyKey.
+      undefined,
     )
   })
 
