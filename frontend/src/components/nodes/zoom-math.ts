@@ -42,10 +42,12 @@ export function computeZoomFromDrag(
   start: Point,
   now: Point,
   position: "bottom-left" | "bottom-right" = "bottom-left",
+  min: number = ZOOM_MIN,
+  max: number = ZOOM_MAX,
 ): number {
   const xDelta = position === "bottom-left" ? (start.x - now.x) : (now.x - start.x)
   const yDelta = now.y - start.y
-  return clamp(zoom0 + (xDelta + yDelta) * ZOOM_PER_PIXEL, ZOOM_MIN, ZOOM_MAX)
+  return clamp(zoom0 + (xDelta + yDelta) * ZOOM_PER_PIXEL, min, max)
 }
 
 /** Visual = round(logical × zoom), with VISUAL_FLOOR_PX hard floor. */

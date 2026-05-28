@@ -10,6 +10,7 @@ import {
   isValidSortListConnection,
   isValidSelectorConnection,
   isValidLoopCoarse,
+  isDataProducer,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
 import {
@@ -350,6 +351,15 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   // handles target-direction visual filtering.
   "list": [
     { handleId: "in", label: "Items", accepts: (s) => isValidListNodeConnection("in", s, isVisualPickerType) },
+  ],
+  // text-prompt's `in` handle was migrated from the legacy invisible
+  // <Handle> to HandleWithPopover (typed pip + popover). Register here so
+  // source-direction popovers from upstream producers list it as a
+  // candidate consumer. Accepts any data producer — same gate as the
+  // node's own `accepts` predicate, so popover candidates match drop
+  // validation exactly.
+  "text-prompt": [
+    { handleId: "in", label: "Text", accepts: (s) => isDataProducer(s, isVisualPickerType) },
   ],
   "web-scrape": [
     { handleId: "in", label: "URL / Query", accepts: (s) => isValidWebScrapeConnection("in", s) },

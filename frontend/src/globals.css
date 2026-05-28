@@ -1091,10 +1091,11 @@ html, body {
    do NOT override padding, font-size, or line-height on either layer independently */
 .text-prompt-tag-textarea {
   height: 100%;
+  min-height: 0;
 }
-.text-prompt-tag-textarea .tag-textarea-container {
-  height: 100%;
-}
+/* No height: 100% on inner divs — the textarea autosizes via the shadcn
+   `field-sizing-content` default, and the wrapping Radix ScrollArea owns
+   scrolling. Forcing 100% would clip the autosize and break the scroll. */
 .text-prompt-tag-textarea .tag-textarea-backdrop {
   color: rgba(30, 41, 59, 0.8);
 }
@@ -1102,9 +1103,24 @@ html, body {
   color: rgba(255, 255, 255, 0.8);
 }
 .text-prompt-tag-textarea .tag-textarea-input {
-  height: 100% !important;
   min-height: 0 !important;
   caret-color: rgba(30, 41, 59, 0.8) !important;
+}
+/* Fullscreen prompt modal overrides the textarea + backdrop font-size /
+   line-height via CSS variables set as inline style on
+   `.text-prompt-card-fullscreen`. Both layers must match exactly or the
+   backdrop highlight pills drift away from the textarea text underneath. */
+.text-prompt-card-fullscreen .tag-textarea-input,
+.text-prompt-card-fullscreen .tag-textarea-backdrop {
+  font-size: var(--prompt-fs, 1rem) !important;
+  line-height: var(--prompt-lh, 1.5rem) !important;
+}
+/* Hide the I-beam "text edit" cursor until the textarea actually has
+   focus — hovering the node body should read as "draggable", not "type
+   here". The cursor returns to the browser default (text) on focus. */
+.text-prompt-card .tag-textarea-input:not(:focus),
+.text-prompt-card .tag-textarea-backdrop {
+  cursor: default !important;
 }
 .dark .text-prompt-tag-textarea .tag-textarea-input {
   caret-color: rgba(255, 255, 255, 0.8) !important;
@@ -1114,6 +1130,46 @@ html, body {
 }
 .dark .text-prompt-tag-textarea .tag-textarea-input::placeholder {
   color: rgba(255, 255, 255, 0.25) !important;
+}
+/* Native textarea scrollbar is fully hidden — the wrapping Radix ScrollArea
+   in text-prompt-node.tsx renders the visible scrollbar. */
+.text-prompt-card .tag-textarea-input::-webkit-scrollbar {
+  display: none;
+}
+.text-prompt-card .tag-textarea-input {
+  scrollbar-width: none;
+}
+/* The TagTextarea sets `.tag-textarea-input { z-index: 1 }` so its grid-
+   item layer floats above the backdrop overlay. That same z-index also
+   lifts the textarea above the Radix ScrollArea scrollbar (data-orientation),
+   which is `position: absolute` with z-auto inside the ScrollArea Root.
+   Result: pointer events on the scrollbar were being captured by the
+   textarea sitting on top, so the thumb never registered :hover and was
+   undraggable. Bumping the scrollbar's z-index above the textarea's puts
+   the thumb back on the click-layer. */
+.text-prompt-card [data-orientation="vertical"],
+.text-prompt-card [data-orientation="horizontal"] {
+  z-index: 10;
+  /* Counter-scale the scrollbar so its 12px track + 8px thumb stays
+     pixel-constant under the node's `transform: scale(zoom)` wrapper.
+     `--inv-zoom` (=1/zoom) is set on the styled card; anchoring the
+     transform-origin to the appropriate corner keeps the scrollbar
+     flush with the viewport edge. */
+  transform: scale(var(--inv-zoom, 1));
+}
+.text-prompt-card [data-orientation="vertical"] {
+  transform-origin: top right;
+}
+.text-prompt-card [data-orientation="horizontal"] {
+  transform-origin: bottom left;
+}
+/* Direct-hover on the Radix scrollbar thumb bumps from foreground/30 →
+   foreground/60 like the loop/list node. CSS color-mix tracks
+   `--foreground` so dark mode reads light and light mode reads dark
+   without a separate `.dark` selector. */
+.text-prompt-card [data-orientation="vertical"] > *:hover,
+.text-prompt-card [data-orientation="horizontal"] > *:hover {
+  background-color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
 }
 /* NodeResizer: ensure resize handles stay interactive above card content */
 .react-flow__resize-control {

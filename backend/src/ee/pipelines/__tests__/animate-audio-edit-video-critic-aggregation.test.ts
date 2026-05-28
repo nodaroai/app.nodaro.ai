@@ -34,6 +34,9 @@ vi.mock("../music-timeline.js", () => ({
 vi.mock("../llms/editor.js", () => ({
   runEditor: vi.fn(),
 }))
+vi.mock("../queue.js", () => ({
+  enqueuePipelineRun: vi.fn(),
+}))
 // E1: the auto-mode aggregator delegates to `failPipelineWithCriticReason` in
 // stage-utils.js. Mock the helper here (NOT failStage) so we can assert the
 // auto-mode path hits the typed-reason fail flow and NOT the generic failStage.

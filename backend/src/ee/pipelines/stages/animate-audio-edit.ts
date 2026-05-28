@@ -368,6 +368,15 @@ export async function runAnimateAudioEditStage(
     stageName: "animate_audio_edit",
     status: "approved",
   })
+  // Drive the next stage (post_merge). Without this re-enqueue the natural-end
+  // path marks approved but never advances, stalling at
+  // `animate_audio_edit approved / current_stage=animate_audio_edit` with no
+  // BullMQ job (the reconcile cron resumes 3× then abandons + refunds). Same
+  // bug class as c7b4f705 fixed for objects / characters / locations /
+  // shot_list — animate_audio_edit was missed because it has no entity-grid
+  // approval path, only sub_gate pauses inside the handler.
+  const { enqueuePipelineRun } = await import("../queue.js")
+  await enqueuePipelineRun({ pipelineId, userId, reason: "stage_advance" })
 }
 
 /* --- Helpers ----------------------------------------------------------- */
