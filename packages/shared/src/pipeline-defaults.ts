@@ -108,6 +108,23 @@ export const DEFAULT_CHARACTER_ANGLE_COUNT = 3 // main + 2 variants for non-prot
 export const DEFAULT_CHARACTER_EXPRESSION_COUNT = 2 // baseline expression variants
 
 /**
+ * Short-film lean reference set. A few-shot film can't meaningfully consume
+ * 5-8 reference variants per character: each shot is animated from exactly ONE
+ * reference image (the video providers accept a single reference and drop the
+ * rest — see `allocateReferenceSlots`), so the extra angle/expression variants
+ * are pure wall-clock + KIE load with ~no quality return. For films at or under
+ * the threshold we generate only main + 1 angle + 1 expression; longer films
+ * keep the full plan-driven variant set unchanged.
+ *
+ * Measured impact: the characters stage was the joint-largest time sink (≈27
+ * min for a 40 s film — 23 character images at ~58 s each on KIE). Capping a
+ * ≤2 min film to 2 variants/character cuts that to ~12 images.
+ */
+export const SHORT_FILM_VARIANT_THRESHOLD_SEC = 120
+export const SHORT_FILM_ANGLE_COUNT = 2 // main + 1 angle variant
+export const SHORT_FILM_EXPRESSION_COUNT = 1 // neutral only
+
+/**
  * Max location variants generated even if Showrunner suggests more — cost guard.
  */
 export const MAX_LOCATION_VARIANTS = 4

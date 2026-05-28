@@ -302,7 +302,9 @@ describe("runCharactersStage", () => {
       supabase, pipelineId: "p1", userId: "u1", userTier: "pro",
     })
 
-    // Variants should have been generated (1 angle + 2 expressions for the seeded plan).
+    // Variants should have been generated. fakePlan is 60 s (short film), so
+    // the lean cap applies → 1 angle + 1 expression (see the dedicated
+    // short-vs-long variant-count tests below for the exact assertion).
     const variants = (supabase as never as { _variants: Array<Record<string, unknown>> })._variants
     expect(variants.length).toBeGreaterThan(0)
 
@@ -1320,5 +1322,56 @@ describe("runCharactersStage", () => {
     expect((awaitingUpdate?.output as Record<string, unknown>)?.phase).toBe(
       "variant_batch_approval",
     )
+  })
+
+  // ─── Length-aware variant cap (perf) ─────────────────────────────────────
+  describe("short-film lean variant set", () => {
+    function seedApprovedHero() {
+      return {
+        id: "e-hero",
+        entity_key: "hero",
+        status: "approved",
+        main_asset_id: "main-asset-hero",
+        metadata: {
+          entity_type: "character",
+          name: "Hero",
+          visual_description: "tall, weathered",
+        },
+      }
+    }
+
+    function variantKeys(supabase: unknown): string[] {
+      return (supabase as { _variants: Array<{ variant_key: string }> })._variants
+        .map((v) => v.variant_key)
+        .sort()
+    }
+
+    it("short film (60 s): caps to 1 angle + 1 expression regardless of plan hints", async () => {
+      ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+        jobId: "jv", assetId: "av", assetUrl: "https://r2/variant.png", creditsSpent: 2,
+      })
+      // fakePlan is 60 s with angle_count_hint:2 + expression_set_hint:["neutral","determined"].
+      // Pre-cap that would be 1 angle + 2 expressions = 3 variants; the lean cap → 2.
+      const supabase = makeSupabase({ seedEntities: [seedApprovedHero()] })
+      await runCharactersStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
+
+      expect(variantKeys(supabase)).toEqual(["angle_profile", "expression_neutral"])
+    })
+
+    it("longer film (300 s): respects the full plan hints (unchanged behavior)", async () => {
+      ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+        jobId: "jv", assetId: "av", assetUrl: "https://r2/variant.png", creditsSpent: 2,
+      })
+      const longPlan = { ...(fakePlan as Record<string, unknown>), target_duration_seconds: 300 }
+      const supabase = makeSupabase({ seedEntities: [seedApprovedHero()], plan: longPlan })
+      await runCharactersStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
+
+      // angle_count_hint:2 → 1 angle label; expression_set_hint:["neutral","determined"] → 2.
+      expect(variantKeys(supabase)).toEqual([
+        "angle_profile",
+        "expression_determined",
+        "expression_neutral",
+      ])
+    })
   })
 })

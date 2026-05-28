@@ -3,6 +3,9 @@ import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
 import {
   DEFAULT_CHARACTER_ANGLE_COUNT,
   DEFAULT_CHARACTER_EXPRESSION_COUNT,
+  SHORT_FILM_VARIANT_THRESHOLD_SEC,
+  SHORT_FILM_ANGLE_COUNT,
+  SHORT_FILM_EXPRESSION_COUNT,
   resolvePipelineModel,
 } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
@@ -643,12 +646,26 @@ async function ensureCharacterVariants(
         .map((v) => v.variant_key),
     )
 
-    // Decide what to generate.
-    const angleCount = cast.angle_count_hint ?? DEFAULT_CHARACTER_ANGLE_COUNT
-    const expressions: readonly string[] =
+    // Decide what to generate. Short films get a lean reference set — each
+    // shot animates from a single reference image (providers drop extras), so
+    // a few-shot film can't use 5-8 variants/character. Longer films keep the
+    // full plan-driven set: the `Infinity` cap below is a no-op for them, so
+    // their behavior is byte-for-byte unchanged.
+    const shortFilm =
+      (plan.target_duration_seconds ?? Number.POSITIVE_INFINITY) <=
+      SHORT_FILM_VARIANT_THRESHOLD_SEC
+    const angleCount = Math.min(
+      cast.angle_count_hint ?? DEFAULT_CHARACTER_ANGLE_COUNT,
+      shortFilm ? SHORT_FILM_ANGLE_COUNT : Number.POSITIVE_INFINITY,
+    )
+    const maxExpressions = shortFilm
+      ? SHORT_FILM_EXPRESSION_COUNT
+      : Number.POSITIVE_INFINITY
+    const expressionSource: readonly string[] =
       cast.expression_set_hint.length > 0
-        ? [...cast.expression_set_hint]
+        ? cast.expression_set_hint
         : (["neutral", "smiling"].slice(0, DEFAULT_CHARACTER_EXPRESSION_COUNT) as readonly string[])
+    const expressions: readonly string[] = [...expressionSource].slice(0, maxExpressions)
 
     // Angle variants (profile, three_quarter, full_body, etc — generic labels).
     const angleLabels = ["profile", "three_quarter", "full_body"].slice(0, Math.max(0, angleCount - 1))
