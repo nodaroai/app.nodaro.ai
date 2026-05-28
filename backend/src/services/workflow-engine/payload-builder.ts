@@ -10,7 +10,7 @@ import { collectAncestorRefs as sharedCollectAncestorRefs } from "@nodaro/shared
 import { buildImagePrompt, buildScenePrompt, applyReferenceOrderToVideo } from "@nodaro/shared"
 import { collectIdentityLockClause as sharedCollectIdentityLockClause } from "@nodaro/shared"
 import { resolveTemplate, applyTemplate } from "@nodaro/shared"
-import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier } from "@nodaro/shared"
+import { buildCreditModelIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt } from "@nodaro/shared"
 import { resolveNodeRefs } from "@nodaro/shared"
 import { composeCameraMotionHintFromConnections } from "@nodaro/shared"
 import {
@@ -2713,7 +2713,13 @@ export function buildPayload(
             }
             const identityClause = collectIdentityLockClause(node.id, buildCtx)
             if (identityClause) p = p ? `${p} ${identityClause}` : identityClause
-            return p
+            // Inject `Avoid: <negativePrompt>` for non-native providers —
+            // none of the extend providers accept native negative_prompt, so
+            // this always applies when negativePrompt is set. Mirrors the
+            // /v1/extend-video route's behavior.
+            const neg = (resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined))
+            const { prompt: pWithNeg } = applyVideoNegativePrompt(p, neg, evProvider)
+            return pWithNeg
           })(),
           provider: evProvider,
           model: evProvider === "veo-extend" ? (data.model ?? "fast") : undefined,

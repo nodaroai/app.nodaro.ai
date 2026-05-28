@@ -3784,6 +3784,7 @@ export async function extendVideo(params: {
   // KIE-based providers (veo-extend, runway-extend) require kieTaskId + prompt
   kieTaskId?: string
   prompt?: string
+  negativePrompt?: string
   // LTX 2.3 Pro requires videoUrl; extendMode + duration are LTX-only
   videoUrl?: string
   extendMode?: "start" | "end"

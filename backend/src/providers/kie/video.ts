@@ -17,7 +17,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds } from "@nodaro/shared"
+import { SEEDANCE_2_REF_LIMITS, isSeedance2Provider, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt } from "@nodaro/shared"
 import {
   createSanitizedError,
   runKieTask,
@@ -426,6 +426,12 @@ export class KieVideoProvider
       )
     }
 
+    // Per-provider negative-prompt routing — for providers that don't
+    // accept `negative_prompt` natively, append "Avoid: <text>" to the
+    // user prompt so the negative intent still reaches the model.
+    const { prompt: effectivePrompt, nativeNegativePrompt } =
+      applyVideoNegativePrompt(prompt, options?.negativePrompt, provider)
+
     console.log(
       `[KIE.ai] ========== VIDEO GENERATION REQUEST ==========`
     )
@@ -485,7 +491,7 @@ export class KieVideoProvider
         : [effectiveImageUrl!]
       return runKling3(
         modelConfig,
-        prompt ?? "smooth cinematic motion",
+        effectivePrompt ?? "smooth cinematic motion",
         duration,
         options?.aspectRatio ?? "16:9",
         options,
@@ -509,7 +515,7 @@ export class KieVideoProvider
         : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
-        prompt ?? "smooth cinematic motion",
+        effectivePrompt ?? "smooth cinematic motion",
         imageUrls,
         {
           aspectRatio: options?.aspectRatio,
@@ -551,7 +557,7 @@ export class KieVideoProvider
         : 5
       const runwayInput: Record<string, unknown> = {
         ...(modelConfig.extraParams ?? {}),
-        prompt: prompt ?? "smooth cinematic motion",
+        prompt: effectivePrompt ?? "smooth cinematic motion",
         duration: snapped,
         imageUrl,
       }
@@ -572,7 +578,7 @@ export class KieVideoProvider
     // Standard createTask endpoint for other providers
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
-      prompt: prompt ?? "smooth cinematic motion",
+      prompt: effectivePrompt ?? "smooth cinematic motion",
     }
 
     // Handle image parameter - different models use different param names
@@ -628,9 +634,12 @@ export class KieVideoProvider
     if (options?.sound !== undefined) {
       input.sound = options.sound
     }
-    // Kling Turbo / Kling Master supports negative_prompt and cfg_scale
-    if (options?.negativePrompt) {
-      input.negative_prompt = options.negativePrompt
+    // Native negative_prompt for providers in NATIVE_NEGATIVE_VIDEO_PROVIDERS
+    // (Kling family / Wan family). For everyone else the negative was already
+    // injected into `effectivePrompt` above as "Avoid: …", so we don't send
+    // a native field they'd ignore.
+    if (nativeNegativePrompt) {
+      input.negative_prompt = nativeNegativePrompt
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
@@ -755,6 +764,11 @@ export class KieVideoProvider
       )
     }
 
+    // Per-provider negative-prompt routing — see imageToVideo above.
+    const { prompt: effectivePromptOrUndefined, nativeNegativePrompt } =
+      applyVideoNegativePrompt(prompt, options?.negativePrompt, provider)
+    const effectivePrompt = effectivePromptOrUndefined ?? prompt
+
     console.log(
       `[KIE.ai] Generating text-to-video with provider: ${provider}, model: ${modelConfig.model}`
     )
@@ -767,7 +781,7 @@ export class KieVideoProvider
     if (provider === "kling-3.0") {
       return runKling3(
         modelConfig,
-        prompt,
+        effectivePrompt,
         duration,
         aspectRatio ?? options?.aspectRatio ?? "16:9",
         options,
@@ -783,7 +797,7 @@ export class KieVideoProvider
         : undefined
       const veoResult = await runVeoTask(
         modelConfig.model,
-        prompt,
+        effectivePrompt,
         undefined,
         {
           aspectRatio: aspectRatio ?? options?.aspectRatio,
@@ -824,7 +838,7 @@ export class KieVideoProvider
         : 5
       const runwayInput: Record<string, unknown> = {
         ...(modelConfig.extraParams ?? {}),
-        prompt,
+        prompt: effectivePrompt,
         duration: snapped,
         ...(aspectRatio && { aspectRatio }),
       }
@@ -845,7 +859,7 @@ export class KieVideoProvider
     // Standard createTask endpoint for other providers
     const input: Record<string, unknown> = {
       ...(modelConfig.extraParams ?? {}),
-      prompt,
+      prompt: effectivePrompt,
     }
 
     // Override duration if provided
@@ -867,9 +881,10 @@ export class KieVideoProvider
     if (options?.sound !== undefined) {
       input.sound = options.sound
     }
-    // Kling Turbo supports negative_prompt and cfg_scale
-    if (options?.negativePrompt) {
-      input.negative_prompt = options.negativePrompt
+    // Native negative_prompt for providers in NATIVE_NEGATIVE_VIDEO_PROVIDERS.
+    // Non-native providers got "Avoid: …" injected into `effectivePrompt` above.
+    if (nativeNegativePrompt) {
+      input.negative_prompt = nativeNegativePrompt
     }
     if (options?.cfgScale !== undefined) {
       input.cfg_scale = options.cfgScale
@@ -941,8 +956,11 @@ export class KieVideoProvider
       `[KIE.ai] ==============================================`
     )
 
+    // Per-provider negative-prompt routing — see imageToVideo above.
+    const { prompt: promptWithMaybeNegative, nativeNegativePrompt } =
+      applyVideoNegativePrompt(prompt, options?.negativePrompt, provider)
     const finalPrompt =
-      prompt ?? "continue this video with smooth cinematic motion"
+      promptWithMaybeNegative ?? "continue this video with smooth cinematic motion"
 
     // Runway Aleph uses a special API endpoint
     if (provider === "runway-aleph") {
@@ -1029,7 +1047,7 @@ export class KieVideoProvider
         video_url: videoUrl,
         resolution: options?.resolution ?? "1080p",
       }
-      if (options?.negativePrompt) input.negative_prompt = options.negativePrompt
+      if (nativeNegativePrompt) input.negative_prompt = nativeNegativePrompt
       if (options?.aspectRatio) input.aspect_ratio = options.aspectRatio
       // duration: 0 = auto-detect, 2-10 = target seconds
       const durStr = options?.videoEditDuration ?? "0"
@@ -1135,6 +1153,12 @@ export class KieVideoProvider
       )
     }
 
+    // Per-provider negative-prompt routing — Kling 2.6 / 3.0 accept
+    // `negative_prompt` natively; Wan Animate Move/Replace doesn't, so the
+    // negative gets injected into the prompt as "Avoid: …" instead.
+    const { prompt: effectivePrompt, nativeNegativePrompt } =
+      applyVideoNegativePrompt(prompt, options?.negativePrompt, provider)
+
     const characterOrientation =
       options?.characterOrientation ?? "image"
     const resolution = options?.resolution ?? "720p"
@@ -1191,11 +1215,11 @@ export class KieVideoProvider
       // Always send background_source explicitly — KIE defaults to input_image if omitted
       input.background_source = options?.backgroundSource ?? "input_video"
 
-      if (prompt) {
-        input.prompt = prompt
+      if (effectivePrompt) {
+        input.prompt = effectivePrompt
       }
-      if (options?.negativePrompt) {
-        input.negative_prompt = options.negativePrompt
+      if (nativeNegativePrompt) {
+        input.negative_prompt = nativeNegativePrompt
       }
 
       console.log(
@@ -1228,13 +1252,22 @@ export class KieVideoProvider
     }
 
     // Wan 2.2 Animate (Move/Replace) — standard createTask
-    // Input: image_url (string) + video_url (string) + resolution
+    // Input: image_url (string) + video_url (string) + resolution + optional prompt
     if (provider === "wan-animate-move" || provider === "wan-animate-replace") {
       const wanResolution = options?.resolution ?? "480p"
       const input: Record<string, unknown> = {
         image_url: effectiveImageUrl,
         video_url: videoUrl,
         resolution: wanResolution,
+      }
+
+      // Wan Animate doesn't accept `negative_prompt` natively — the helper
+      // already injected "Avoid: …" into `effectivePrompt`. Send whatever
+      // prompt we have (positive + injected negative) so the model can act
+      // on it. KIE silently ignores unknown fields, so providers that don't
+      // act on `prompt` won't error out.
+      if (effectivePrompt) {
+        input.prompt = effectivePrompt
       }
 
       console.log(
@@ -1279,11 +1312,11 @@ export class KieVideoProvider
     }
 
     // Add optional prompt if provided
-    if (prompt) {
-      input.prompt = prompt
+    if (effectivePrompt) {
+      input.prompt = effectivePrompt
     }
-    if (options?.negativePrompt) {
-      input.negative_prompt = options.negativePrompt
+    if (nativeNegativePrompt) {
+      input.negative_prompt = nativeNegativePrompt
     }
 
     console.log(

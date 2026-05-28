@@ -15,6 +15,66 @@ export const NATIVE_NEGATIVE_PROMPT_MODELS = new Set([
   "qwen", "qwen-edit",
 ])
 
+/**
+ * Video providers that accept `negative_prompt` natively in their KIE.ai
+ * request payload. Everywhere else, the helper below appends `Avoid: <text>`
+ * to the prompt instead so the negative intent still reaches the model.
+ *
+ * Sourced from inline comments in `backend/src/providers/kie/video.ts`
+ * (Kling family + Wan family) plus the wan-s2v speech-to-video flow.
+ *
+ * NOT included (KIE will silently drop the param):
+ *   minimax / hailuo-* family, veo3.* family, sora2 / sora2-pro,
+ *   bytedance-* family, grok / grok-i2v, seedance-* family,
+ *   happyhorse-*, ltx-* family, runway-kie, wan-animate-move/replace
+ *   (Wan Animate is a separate model from regular Wan and doesn't take
+ *    negative_prompt — verified against KIE docs 2026-05-28).
+ */
+export const NATIVE_NEGATIVE_VIDEO_PROVIDERS = new Set<string>([
+  // Kling family
+  "kling", "kling-turbo", "kling-master", "kling-3.0", "kling-3-omni",
+  // Wan family (regular Wan, NOT wan-animate)
+  "wan", "wan-flash", "wan-videoedit",
+  "wan-i2v", "wan-turbo",
+  "wan-2.7-i2v", "wan-2.7-t2v",
+  // Wan speech-to-video
+  "wan-s2v",
+])
+
+/**
+ * Apply the negative prompt to a video-provider request.
+ *
+ * If the provider natively accepts `negative_prompt` (Kling / Wan families),
+ * the helper returns the original prompt and the trimmed negative as
+ * `nativeNegativePrompt` — the caller should forward it as the API's
+ * dedicated field.
+ *
+ * Otherwise, the helper appends `Avoid: <negativePrompt>` to the prompt
+ * (consistent with `buildImagePrompt` in `prompt-builder.ts`) so the model
+ * still sees the negative intent, and returns `nativeNegativePrompt = undefined`.
+ *
+ * Empty / missing negative is a no-op.
+ *
+ * Naming mirrors the established image-side pattern. Keep the wording
+ * identical to `prompt-builder.ts` ("Avoid: ...") so users moving between
+ * image and video nodes see consistent behavior.
+ */
+export function applyVideoNegativePrompt(
+  prompt: string | undefined,
+  negativePrompt: string | undefined,
+  provider: string,
+): { prompt: string | undefined; nativeNegativePrompt: string | undefined } {
+  const neg = negativePrompt?.trim()
+  if (!neg) return { prompt, nativeNegativePrompt: undefined }
+  if (NATIVE_NEGATIVE_VIDEO_PROVIDERS.has(provider)) {
+    return { prompt, nativeNegativePrompt: neg }
+  }
+  const injected = prompt && prompt.trim().length > 0
+    ? `${prompt}\nAvoid: ${neg}`
+    : `Avoid: ${neg}`
+  return { prompt: injected, nativeNegativePrompt: undefined }
+}
+
 // Image providers that natively use reference images in their API.
 // Used by `buildImagePrompt` to filter referenceImageUrls before sending,
 // and by the frontend to warn when the user has `{image:N:label}` tokens

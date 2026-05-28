@@ -154,14 +154,17 @@ function BaseNodeComponent({
   //
   //   1. `imageAspectRatio` known → fit box to content aspect. With explicit
   //      width: preserve it, derive height (letterbox via object-cover when
-  //      mismatched). Without explicit width: promote to 320px, derive
-  //      height. In either branch, floor-clamp height up to
-  //      `effectiveMinHeight` so handle stacks stay visible. The width side
-  //      of the floor-clamp ALWAYS runs (even when an explicit width is
-  //      persisted), because any width below `effectiveMinHeight × aspect`
-  //      would force the height clamp into a letterboxed dead-space layout
-  //      — never a useful state. Width is bumped to the proportional
-  //      minimum, respecting `minWidth` so portrait images don't write a
+  //      mismatched). Without explicit width: start at `minWidth` and let
+  //      `proportionalMinWidth` bump it up only as far as the aspect
+  //      requires — gives the snuggest fit for the first generation
+  //      instead of inflating portrait/square nodes to a fixed 320px box.
+  //      In either branch, floor-clamp height up to `effectiveMinHeight`
+  //      so handle stacks stay visible. The width side of the floor-clamp
+  //      ALWAYS runs (even when an explicit width is persisted), because
+  //      any width below `effectiveMinHeight × aspect` would force the
+  //      height clamp into a letterboxed dead-space layout — never a
+  //      useful state. Width is bumped to the proportional minimum,
+  //      respecting `minWidth` so portrait images don't write a
   //      sub-minimum box.
   //
   //   2. No aspect ratio yet → just ensure stored height ≥ effectiveMinHeight
@@ -186,7 +189,7 @@ function BaseNodeComponent({
       // would either clip handles (height < minHeight) or letterbox the
       // result (height stays at minHeight, width too small for aspect).
       const proportionalMinWidth = Math.max(minWidth, effectiveMinHeight * imageAspectRatio)
-      const baseW = hasExplicitWidth ? node.width! : 320
+      const baseW = hasExplicitWidth ? node.width! : minWidth
       // Always floor-clamp width to the proportional minimum. Existing nodes
       // that were persisted at the OLD minWidth (e.g., legacy 240px) get
       // bumped here even though they have a stored width — without this, a
