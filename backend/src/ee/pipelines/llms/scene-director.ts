@@ -25,6 +25,20 @@ export interface RunSceneDirectorArgs {
   castByKey?: Map<string, ShowrunnerPlan["cast"][number]>
   locationsByKey?: Map<string, ShowrunnerPlan["locations"][number]>
   objectsByKey?: Map<string, ShowrunnerPlan["objects"][number]>
+  /**
+   * User picks (from `pipelines.config.image_model` /
+   * `stage_models.scene_keyframes_image`). When set, the LLM is constrained
+   * to ONLY this identifier. When unset, the full capability registry is
+   * offered and the LLM picks per-shot (today's behavior).
+   */
+  imageModelOverride?: string
+  /**
+   * Same idea for video. The override MUST still be in the per-input-mode
+   * eligible set; an incompatible pick is silently dropped so the LLM keeps
+   * picking from the full eligible list (it would otherwise be rejected by
+   * the post-LLM validation gate at the bottom of this function).
+   */
+  videoModelOverride?: string
 }
 
 export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<SceneNodeData> {
@@ -70,6 +84,36 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
     maxDurationSeconds: VIDEO_MODEL_CAPS[m]!.maxDurationSeconds,
   }))
 
+  // User overrides: narrow what we tell the LLM about. An incompatible
+  // videoModelOverride is silently dropped (rather than crashing the stage) so
+  // a single misconfigured pipeline doesn't fail every scene — the LLM falls
+  // back to picking from the full eligible list. We do log it so it's
+  // diagnosable from prod logs.
+  const userVideoPick =
+    args.videoModelOverride &&
+    eligibleVideoModels.includes(args.videoModelOverride as (typeof eligibleVideoModels)[number])
+      ? args.videoModelOverride
+      : undefined
+  if (args.videoModelOverride && !userVideoPick) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[scene-director] user pinned video_model='${args.videoModelOverride}' but it isn't eligible for shot_input_mode='${args.shotInputMode}' — falling back to LLM pick from ${eligibleVideoModels.join(", ")}`,
+    )
+  }
+  const videoModelsForPrompt = userVideoPick
+    ? eligibleVideoModelsWithStyle.filter((m) => m.model === userVideoPick)
+    : eligibleVideoModelsWithStyle
+
+  const imageRegistrySection = args.imageModelOverride
+    ? `CAPABILITY REGISTRY (image model — user-pinned for this pipeline):
+- ${args.imageModelOverride}
+
+You MUST set image_model="${args.imageModelOverride}" for every shot. Do not pick anything else.`
+    : `CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
+- nano-banana-2
+- flux
+- gpt-image`
+
   const criticPreamble = args.criticFeedback
     ? `\n\nPRIOR ATTEMPT WAS REJECTED BY THE SHOT LIST CRITIC:\n${JSON.stringify(args.criticFeedback, null, 2)}\n\nAddress every blocking issue.\n\n`
     : ""
@@ -99,15 +143,12 @@ RESOLVED REFS:
 USER PREFERENCES:
 - shot_input_mode: ${args.shotInputMode}
 
-CAPABILITY REGISTRY (video models eligible for this scene's input mode):
+CAPABILITY REGISTRY (video models eligible for this scene's input mode${userVideoPick ? " — user-pinned" : ""}):
 \`\`\`json
-${JSON.stringify(eligibleVideoModelsWithStyle, null, 2)}
+${JSON.stringify(videoModelsForPrompt, null, 2)}
 \`\`\`
-
-CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
-- nano-banana-2
-- flux-pro
-- gpt-image
+${userVideoPick ? `\nYou MUST set video_model="${userVideoPick}" for every shot.\n` : ""}
+${imageRegistrySection}
 
 Return a SceneNodeData via the emit tool.`
 

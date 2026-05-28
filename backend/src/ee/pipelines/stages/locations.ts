@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ShowrunnerPlan } from "@nodaro/shared"
-import { MAX_LOCATION_VARIANTS } from "@nodaro/shared"
+import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
+import { MAX_LOCATION_VARIANTS, resolvePipelineModel } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import {
@@ -47,6 +47,8 @@ export interface RunLocationsStageArgs {
    * two-phase pause behavior.
    */
   mode?: "manual" | "auto" | "guided"
+  /** Pipeline `config`; resolved via `resolvePipelineModel(config, "locations_image")`. */
+  config?: Partial<PipelineConfig> | null
 }
 
 /**
@@ -64,6 +66,7 @@ export interface RunLocationsStageArgs {
  */
 export async function runLocationsStage(args: RunLocationsStageArgs): Promise<void> {
   const { supabase, pipelineId, userId } = args
+  const imageOverride = resolvePipelineModel(args.config, "locations_image")
 
   const stageId = await ensureStageRow(supabase, pipelineId, "locations", 4)
 
@@ -140,7 +143,7 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
   const tasks = (entities ?? []).map((entity) => async () => {
     try {
       if (entity.status === "approved") {
-        await ensureLocationVariants(supabase, pipelineId, userId, entity, plan)
+        await ensureLocationVariants(supabase, pipelineId, userId, entity, plan, imageOverride)
         return
       }
       if (entity.status === "awaiting_approval") {
@@ -152,7 +155,7 @@ export async function runLocationsStage(args: RunLocationsStageArgs): Promise<vo
         entity.status === "generating" ||
         entity.status === "rejected"
       ) {
-        await generateLocationMain(supabase, pipelineId, stageId, userId, entity, plan)
+        await generateLocationMain(supabase, pipelineId, stageId, userId, entity, plan, imageOverride)
         anyAwaiting = true
       }
     } catch (err) {
@@ -334,6 +337,7 @@ async function generateLocationMain(
   userId: string,
   entity: { id: string; entity_key: string; metadata: Record<string, unknown> | null },
   plan: ShowrunnerPlan,
+  imageOverride?: string,
 ): Promise<void> {
   const loc = plan.locations.find((l) => l.key === entity.entity_key)
   if (!loc) return
@@ -360,6 +364,7 @@ async function generateLocationMain(
       pipelineEntityId: entity.id,
       userId,
       prompt,
+      userOverride: imageOverride,
     })
 
     // ─────────────────────────────────────────────────────────────────────
@@ -387,6 +392,7 @@ async function generateLocationMain(
           pipelineEntityId: entity.id,
           userId,
           prompt: feedbackPrompt,
+          userOverride: imageOverride,
         }),
       runCritic: async (imageUrl) => {
         const result = await runLocationImageCritic({
@@ -480,6 +486,7 @@ async function ensureLocationVariants(
     main_asset_id: string | null
   },
   plan: ShowrunnerPlan,
+  imageOverride?: string,
 ): Promise<void> {
   const loc = plan.locations.find((l) => l.key === entity.entity_key)
   if (!loc || !entity.main_asset_id) return
@@ -536,6 +543,7 @@ async function ensureLocationVariants(
         userId,
         prompt,
         referenceImageUrls: [mainUrl],
+        userOverride: imageOverride,
       })
       await supabase
         .from("pipeline_entity_variants")

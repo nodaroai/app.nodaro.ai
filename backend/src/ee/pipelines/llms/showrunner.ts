@@ -40,6 +40,12 @@ export interface RunShowrunnerArgs {
     locationsVerdict?: LocationsCoverageCriticVerdict
     objectsVerdict?: ObjectsValidationResult
   }
+  /**
+   * Optional LLM override. When set (via `pipelines.config.script_llm` or a
+   * per-stage `stage_models.script_llm`), this model is used instead of the
+   * default. Caller resolves precedence via `resolvePipelineModel`.
+   */
+  scriptLlmOverride?: string
 }
 
 export async function runShowrunner(args: RunShowrunnerArgs): Promise<ShowrunnerPlan> {
@@ -91,7 +97,7 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userId: args.userId,
     role: "showrunner",
     task: "script",
-    modelId: "claude-sonnet-4-6",
+    modelId: args.scriptLlmOverride ?? "claude-sonnet-4-6",
     temperature: 0.4,
     systemPrompt: '[REDACTED]',
     userPrompt,

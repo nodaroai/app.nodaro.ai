@@ -11,8 +11,18 @@ export interface PipelineGenerateImageArgs {
   userId: string
   /** Free-text prompt. Engine builds this from entity metadata. */
   prompt: string
-  /** Image generation model. Defaults to nano-banana. */
+  /** Image generation model. Explicit override that wins over everything
+   * else, including `userOverride`. Defaults to nano-banana when both this
+   * and `userOverride` are absent. */
   modelIdentifier?: string
+  /**
+   * Pipeline-config-derived user override. When set and `modelIdentifier`
+   * is absent, this becomes the effective model. Read by callers via
+   * `resolvePipelineModel(config, stage)` — passed in pre-resolved so each
+   * caller picks the right stage key (`characters_image`, `locations_image`,
+   * `objects_image`, …) without this helper needing to know the stage.
+   */
+  userOverride?: string
   /** Reference image URLs (e.g., main character image when generating variants). */
   referenceImageUrls?: string[]
   /** Optional aspect ratio (default 1:1). */
@@ -55,10 +65,12 @@ export async function pipelineGenerateImage(
     pipelineEntityId,
     userId,
     prompt,
-    modelIdentifier = "nano-banana",
     referenceImageUrls,
     aspectRatio = "1:1",
   } = args
+  // Precedence: explicit modelIdentifier > userOverride > nano-banana default.
+  const modelIdentifier =
+    args.modelIdentifier ?? args.userOverride ?? "nano-banana"
 
   return runPipelineWorkerJob({
     supabase,

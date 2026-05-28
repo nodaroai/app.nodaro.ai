@@ -19,6 +19,21 @@ export const StyleDirectivesSchema = z.object({
 })
 export type StyleDirectives = z.infer<typeof StyleDirectivesSchema>
 
+// User-configurable per-stage model overrides. Keys follow `<stage>_<kind>` so
+// the resolver can fall back to the global `<kind>_model` field below when a
+// stage key is absent. When neither stage nor global is set, downstream code
+// keeps its current "LLM picks" or "hardcoded default" behavior.
+export const PIPELINE_MODEL_STAGES = [
+  "characters_image",
+  "locations_image",
+  "objects_image",
+  "scene_keyframes_image",
+  "shots_video",
+  "script_llm",
+] as const
+export type PipelineModelStage = (typeof PIPELINE_MODEL_STAGES)[number]
+const PipelineModelStageEnum = z.enum(PIPELINE_MODEL_STAGES)
+
 export const PipelineConfigSchema = z.object({
   music_enabled: z.boolean().default(true),
   narration_enabled: z.boolean().default(true),
@@ -31,11 +46,37 @@ export const PipelineConfigSchema = z.object({
   freecut_export_format: z.enum(["json", "fcpxml"]).default("json"),
   shot_generation_mode: z.enum(["parallel", "sequential"]).default("parallel"),
   silent_cut_review: z.boolean().default(true),
+  // Global model overrides — apply to every stage of the matching kind unless
+  // a more-specific entry in `stage_models` overrides it.
   image_model: z.string().optional(),
   video_model: z.string().optional(),
   music_model: z.string().optional(),
+  script_llm: z.string().optional(),
+  // Per-stage overrides. Empty/missing key = fall back to the global field.
+  stage_models: z.record(PipelineModelStageEnum, z.string()).optional(),
 })
 export type PipelineConfig = z.infer<typeof PipelineConfigSchema>
+
+/**
+ * Resolve which model a given stage should use, following the precedence:
+ *   1. `config.stage_models[stage]` — user's per-stage override
+ *   2. `config.<kind>_model` (or `config.script_llm`) — user's global pick
+ *   3. `undefined` — caller falls back to its own default (LLM picks, or hardcode)
+ *
+ * Returns `undefined` (not `null`) so callers can use `??` chains cleanly.
+ */
+export function resolvePipelineModel(
+  config: PipelineConfig | Partial<PipelineConfig> | null | undefined,
+  stage: PipelineModelStage,
+): string | undefined {
+  if (!config) return undefined
+  const override = config.stage_models?.[stage]
+  if (override) return override
+  if (stage === "script_llm") return config.script_llm
+  if (stage.endsWith("_video")) return config.video_model
+  if (stage.endsWith("_image")) return config.image_model
+  return undefined
+}
 
 export const PipelineInputSchema = z.object({
   pipeline_type: z.enum(PIPELINE_TYPES).default("story_to_video"),

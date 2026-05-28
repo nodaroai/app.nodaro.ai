@@ -9,9 +9,10 @@ import type {
   PipelineActivationMode,
   PipelineFormat,
   PipelineOutputResolution,
+  PipelineConfig,
   StyleDirectives,
 } from "@nodaro/shared"
-import { validateObjects } from "@nodaro/shared"
+import { resolvePipelineModel, validateObjects } from "@nodaro/shared"
 import { runDetection } from "../llms/detection.js"
 import { runShowrunner } from "../llms/showrunner.js"
 import { runScriptCritic } from "../llms/script-critic.js"
@@ -92,6 +93,12 @@ export interface RunScriptStageArgs {
   activationMode: PipelineActivationMode
   userTier: string
   styleDirectives?: StyleDirectives
+  /**
+   * Pipeline-level config from `pipelines.config`. Carries user model
+   * overrides (`script_llm`, `stage_models.script_llm`). Passed through so
+   * `runShowrunner` can swap its default Claude Sonnet for the user's pick.
+   */
+  config?: Partial<PipelineConfig> | null
 }
 
 export type ScriptStageOutcome =
@@ -150,6 +157,8 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
     })
 
     // 2. Showrunner (retry once on Critic fail).
+    const scriptLlmOverride = resolvePipelineModel(args.config, "script_llm")
+
     let plan = await runShowrunner({
       supabase: args.supabase,
       pipelineId: args.pipelineId,
@@ -166,6 +175,7 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       activationMode: args.activationMode,
       mode: args.mode,
       styleDirectives: args.styleDirectives,
+      scriptLlmOverride,
     })
 
     emitScriptProgress(
@@ -216,6 +226,7 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
         mode: args.mode,
         styleDirectives: args.styleDirectives,
         criticFeedback: { scriptVerdict, castVerdict, locationsVerdict, objectsVerdict },
+        scriptLlmOverride,
       })
       emitScriptProgress(
         args.supabase,

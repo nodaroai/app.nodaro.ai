@@ -4049,6 +4049,23 @@ export interface GenerativePipelineNodeData {
    * motion-glitch detection. Defaults to "first_last" (2 frames per shot).
    */
   video_critic_frame_count?: VideoCriticFrameMode
+  // User-pinned models (forwarded to `pipelines.config` at create time so the
+  // backend resolver — `resolvePipelineModel` in @nodaro/shared — picks them
+  // up). All optional — leaving any of these blank reverts to "auto" (LLM
+  // picks per shot for image/video, hardcoded sonnet-4-6 for script).
+  image_model?: string
+  video_model?: string
+  script_llm?: string
+  /** Optional per-stage overrides (`characters_image`, `locations_image`, `objects_image`, `scene_keyframes_image`, `shots_video`, `script_llm`). */
+  stage_models?: Partial<Record<
+    | "characters_image"
+    | "locations_image"
+    | "objects_image"
+    | "scene_keyframes_image"
+    | "shots_video"
+    | "script_llm",
+    string
+  >>
   // Server-side runtime fields (read-only on the canvas):
   pipeline_id?: string
   status?: "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"
