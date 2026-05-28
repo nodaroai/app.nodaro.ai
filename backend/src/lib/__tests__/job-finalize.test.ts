@@ -181,6 +181,40 @@ describe("finalizeJobWithMedia", () => {
   })
 
   // -------------------------------------------------------------------------
+  // 1b. Regression: result.kieTaskId writes to `provider_task_id` (the actual
+  // schema column from migration 135), NOT the legacy `kie_task_id` name.
+  // -------------------------------------------------------------------------
+  it("kieTaskId persists as provider_task_id (not kie_task_id) in markJobCompleted payload", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: {
+        url: "https://kie.example/x.png",
+        cost: 0.02,
+        providerUsed: "nano-banana",
+        kieTaskId: "kie-task-abc123",
+      },
+    })
+
+    expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
+    const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+    expect(payload).toMatchObject({ provider_task_id: "kie-task-abc123" })
+    expect(payload).not.toHaveProperty("kie_task_id")
+  })
+
+  it("omits provider_task_id from payload when result.kieTaskId is absent", async () => {
+    await finalizeJobWithMedia({
+      jobId: "j1",
+      jobType: "generate-image",
+      result: { url: "https://kie.example/x.png", cost: 0.02, providerUsed: "nano-banana" },
+    })
+
+    const payload = sharedMocks.markJobCompleted.mock.calls[0]![1]
+    expect(payload).not.toHaveProperty("provider_task_id")
+    expect(payload).not.toHaveProperty("kie_task_id")
+  })
+
+  // -------------------------------------------------------------------------
   // 2. CAS race: markJobCompleted returns false → no commit, no asset
   // -------------------------------------------------------------------------
   it("CAS race: markJobCompleted returns false → returns { ok: false } and does NOT commit credits or create asset", async () => {

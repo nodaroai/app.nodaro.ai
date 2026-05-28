@@ -2506,7 +2506,7 @@ export function buildPayload(
           aspectRatio: data.aspectRatio as string | undefined,
           seed: data.seed as number | undefined,
           referenceImageUrl: v2vReferenceImageUrl,
-          negativePrompt: data.negativePrompt as string | undefined,
+          negativePrompt: resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined),
           videoEditDuration: data.videoEditDuration as string | undefined,
           audioSetting: data.audioSetting as string | undefined,
           promptExtend: data.promptExtend as boolean | undefined,
