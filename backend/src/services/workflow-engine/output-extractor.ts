@@ -500,6 +500,22 @@ export function getPrimaryOutput(
     return output.plan ? "plan-ready" : undefined
   }
 
+  // Selector: route by sourceHandle. "rest" → restResults[0], default + explicit
+  // "picked" handle → pickedResults[0] with output.text as fallback. Mirrors the
+  // frontend execution-graph.ts selector branch. Empty arrays return "" (not
+  // undefined) so resolveNodeInputs' `if (!output) continue` doesn't silently
+  // drop the edge — picked already does this via `output.text` ("" set by
+  // executeSelector when picked is empty); rest mirrors that to keep behavior
+  // symmetric (e.g. selector picked everything → restResults = [] → "" emitted
+  // so downstream sees an empty string, not a dropped edge).
+  if (sourceType === "selector") {
+    if (sourceHandle === "rest") {
+      return output.restResults?.[0] ?? ""
+    }
+    // Default + explicit "picked" handle
+    return output.pickedResults?.[0] ?? output.text
+  }
+
   // Suno-separate: support stem routing via sourceHandle. The Batch 2 rename
   // normalized `vocal-out` → `vocals` and `instrumental-out` → `instrumental`;
   // the load-time edge migration rewrites legacy ids on workflow load. Both
@@ -940,6 +956,17 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   if (type === "split-text") {
     const results = (data.splitResults as string[] | undefined) ?? []
     return results.length > 0 ? { text: results[0], splitResults: results } : undefined
+  }
+
+  if (type === "selector") {
+    const pickedResults = (data.pickedResults as string[] | undefined) ?? []
+    const restResults = (data.restResults as string[] | undefined) ?? []
+    if (pickedResults.length === 0 && restResults.length === 0) return undefined
+    return {
+      text: pickedResults[0] ?? "",
+      pickedResults,
+      restResults,
+    }
   }
 
   if (type === "filter-list" || type === "deduplicate" || type === "merge-lists" || type === "sort-list") {

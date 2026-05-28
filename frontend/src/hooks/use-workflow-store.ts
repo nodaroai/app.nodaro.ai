@@ -81,6 +81,17 @@ export const EXECUTION_DATA_KEYS = new Set([
   "__listTotal",
   "__listCompleted",
   "__listResults",
+  // Selector node dual-channel outputs (picked + rest). Without these the
+  // executeSelector store write diffs the config snapshot → useAutoExecute
+  // re-runs 300ms later, and in random mode (Math.random) every re-run
+  // produces a fresh pick → infinite loop. Same exemption rationale as
+  // __listResults: server-side execution output, not user-edited config.
+  "pickedResults",
+  "restResults",
+  "__pickedResults",
+  "__restResults",
+  "__pickedTotal",
+  "__restTotal",
   "generatedJson",
   "subWorkflowProgress",
   "outputResults",

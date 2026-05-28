@@ -20,6 +20,7 @@ import type {
   GeneratedScript,
   GeneratedScriptResult,
   LoopNodeData,
+  SelectorNodeData,
   WebScrapeNodeData,
 } from "@/types/nodes";
 
@@ -618,6 +619,17 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       return typeof result[0] === "string" ? result[0] : JSON.stringify(result[0]);
     }
     return typeof result === "string" ? result : JSON.stringify(result);
+  }
+  if (type === "selector") {
+    // Dual-output: pick channel by edge sourceHandle. "rest" emits the unselected
+    // remainder; any other handle (typically "picked", or omitted) emits the
+    // selected items. Falls back to in-store `pickedResults`/`restResults`
+    // snapshots if the runtime mirrors (`__*`) aren't populated yet.
+    const selectorData = data as SelectorNodeData;
+    const results = sourceHandle === "rest"
+      ? (selectorData.__restResults ?? selectorData.restResults)
+      : (selectorData.__pickedResults ?? selectorData.pickedResults);
+    return results && results.length > 0 ? results[0] : undefined;
   }
   if (type === "filter-list" || type === "deduplicate" || type === "merge-lists" || type === "sort-list") {
     const listResults =

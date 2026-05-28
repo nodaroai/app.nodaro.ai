@@ -134,6 +134,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // combine-text / split-text; `video` is split-media; `media` already
   // covered by ffmpeg's adjust-volume entry.
   "text", "video",
+  // filter-list / selector `variables` handle — accepts any data producer
+  // for ref resolution via buildConditionVariables. Selector's addition in
+  // T19+ extended the registry; this set must mirror TARGET_HANDLE_ACCEPTS.
+  "variables",
   // Image-producer handles (Phase 20). `image` covers edit/modify/i2i/
   // generate-mask/upscale/remove-background/image-to-text targets;
   // `mask` is edit/modify/i2i; `cinematography` is edit/modify/i2i;

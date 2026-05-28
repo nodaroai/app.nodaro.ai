@@ -9,6 +9,7 @@ import type {
   LipSyncProvider, ScriptProvider, QaCheckProvider,
   SunoModel, VoiceDesignModel, CaptionStyle, ImageCriticMode,
   ReduceStrategyId, ReduceMeta,
+  SelectorConfig,
 } from "@nodaro/shared"
 import type { ScraperActorId, CharacterAspectRatio } from "@nodaro/shared"
 import type { LocationReferencePhotoKind as SharedLocationReferencePhotoKind } from "@nodaro/shared"
@@ -3726,6 +3727,24 @@ export type SortListNodeData = {
   errorMessage?: string
 }
 
+// --- Selector Node Data ---
+
+export type SelectorNodeData = {
+  [key: string]: unknown
+  label: string
+  config: SelectorConfig
+  // outputs
+  pickedResults?: string[]
+  __pickedResults?: string[]
+  __pickedTotal?: number
+  restResults?: string[]
+  __restResults?: string[]
+  __restTotal?: number
+  // status
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+}
+
 // --- Sticky Note Node Data ---
 
 export type StickyNoteData = {
@@ -4257,6 +4276,7 @@ export type SceneNodeData =
   | DeduplicateNodeData
   | MergeListsNodeData
   | SortListNodeData
+  | SelectorNodeData
   | PreviewNodeData
   | StickyNoteData
   | GroupNodeData
@@ -4418,6 +4438,7 @@ export type SceneNodeType =
   | "deduplicate"
   | "merge-lists"
   | "sort-list"
+  | "selector"
   | "preview"
   | "sticky-note"
   | "group"
@@ -6456,6 +6477,19 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       sortType: "auto",
       direction: "asc",
     } as SortListNodeData,
+  },
+  {
+    type: "selector",
+    label: "Selector",
+    category: "utility",
+    creditCost: 0,
+    inputs: ["in"],
+    outputs: ["picked", "rest"],
+    autoExecute: true,
+    defaultData: {
+      label: "Selector",
+      config: { mode: "item", itemIndex: "1" },
+    } as SelectorNodeData,
   },
   {
     type: "preview",

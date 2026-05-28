@@ -43,6 +43,7 @@ import {
   isValidDeduplicateConnection,
   isValidMergeListsConnection,
   isValidSortListConnection,
+  isValidSelectorConnection,
   isValidLoopCoarse,
 } from "./data-handles"
 import {
@@ -361,6 +362,13 @@ export function isValidWorkflowConnection(
     return isValidSortListConnection(
       connection.targetHandle,
       typeOf(connection.source) ?? "",
+    )
+  }
+  if (targetType === "selector" && connection.targetHandle) {
+    return isValidSelectorConnection(
+      connection.targetHandle,
+      typeOf(connection.source) ?? "",
+      isVisualPickerType,
     )
   }
   if (targetType === "loop" && connection.targetHandle) {

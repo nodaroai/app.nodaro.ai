@@ -6,6 +6,9 @@
  * to support edge-level range, step, and item selection.
  */
 
+import { evaluateCondition, substituteTriggerTokens, tryParseJson } from "./filter-condition.js"
+import { resolveNodeRefs } from "./node-refs.js"
+
 /** Selector tab on an edge — "range" (from/to/step) or "list" (expression). */
 export type SelectorMode = "range" | "list"
 
@@ -20,6 +23,55 @@ export type SelectorFields = {
   rangeTo?: string
   rangeStep?: number
 }
+
+/** Full selector mode set — extends the edge-selector modes with new operators. */
+export type FullSelectorMode =
+  | "item"
+  | "range"
+  | "list"
+  | "random"
+  | "modulo"
+  | "predicate"
+  | "named-key"
+
+/** Operator set for predicate mode — reused from filter-list. */
+export type SelectorPredicateOp =
+  | ">" | "<" | ">=" | "<="
+  | "=" | "!="
+  | "contains" | "not_contains"
+  | "starts_with" | "ends_with"
+  | "regex"
+  | "exists" | "not_exists"
+
+/** Config consumed by `runSelector` and `resolveSelectorRefs`. */
+export type SelectorConfig = {
+  mode: FullSelectorMode
+  // item
+  itemIndex?: string
+  // range
+  rangeFrom?: string
+  rangeTo?: string
+  rangeStep?: number
+  // list
+  listExpression?: string
+  // random
+  seed?: string
+  randomCount?: number
+  // modulo
+  moduloDivisor?: string
+  // predicate
+  predicateField?: string
+  predicateOp?: SelectorPredicateOp
+  predicateValue?: string
+  predicateMatch?: "first" | "all"
+  predicateCaseSensitive?: boolean
+  // named-key
+  namedKeyField?: string
+  namedKeyValue?: string
+}
+
+/** Result of a selector run. `picked ∪ rest = items`, `picked ∩ rest = ∅`. */
+export type SelectorResult = { picked: string[]; rest: string[] }
 
 /**
  * Resolves a 1-based index expression to a 0-based array index.
@@ -576,4 +628,237 @@ function buildListSelectionPhrase(expr: string): SelectionPhrase {
     joined = `${head}, and ${rendered[rendered.length - 1]}`
   }
   return { kind: "items", text: `items ${joined}` }
+}
+
+/**
+ * Run the selector against `items`. Returns the picked subset plus the
+ * complement (`rest`). For modes that pick by index, `rest` is computed by
+ * index exclusion (not value) so duplicate items are handled correctly.
+ */
+export function runSelector(items: string[], config: SelectorConfig): SelectorResult {
+  if (items.length === 0) return { picked: [], rest: [] }
+
+  switch (config.mode) {
+    case "item": {
+      const idx = resolveIndex(config.itemIndex ?? "1", items.length, "1")
+      return splitByIndices(items, [idx])
+    }
+    case "range": {
+      const indices = applyRangeIndices(items.length, config.rangeFrom, config.rangeTo, config.rangeStep)
+      return splitByIndices(items, indices)
+    }
+    case "list": {
+      const indices = resolveListExpression(config.listExpression ?? "", items.length)
+      return splitByIndices(items, indices)
+    }
+    case "random":
+      return selectRandom(items, config.randomCount ?? 1, config.seed)
+    case "modulo":
+      return selectByModulo(items, config.moduloDivisor)
+    case "predicate":
+      return selectByPredicate(items, config)
+    case "named-key":
+      return selectByNamedKey(items, config.namedKeyField, config.namedKeyValue)
+    default:
+      return { picked: [], rest: items.slice() }
+  }
+}
+
+/**
+ * Partition `items` into picked (indices ∈ pickedIndices, in their original
+ * order in the source list) and rest (everything else). Deduplicates
+ * `pickedIndices` so passing the same index twice doesn't double-count.
+ */
+function splitByIndices(items: string[], pickedIndices: number[]): SelectorResult {
+  const pickedSet = new Set(pickedIndices.filter((i) => i >= 0 && i < items.length))
+  const picked: string[] = []
+  const rest: string[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (pickedSet.has(i)) picked.push(items[i])
+    else rest.push(items[i])
+  }
+  return { picked, rest }
+}
+
+/**
+ * Returns the indices that `applyRange` would pick. Extracted so `runSelector`
+ * range mode can compute the exact picked-index set (`items.indexOf(value)`
+ * would return the wrong duplicate when the list contains repeated values).
+ */
+export function applyRangeIndices(
+  length: number,
+  from?: string,
+  to?: string,
+  step?: number,
+): number[] {
+  if (length === 0) return []
+  const fromIdx = resolveIndex(from ?? "1", length, "1")
+  const toIdx = resolveIndex(to ?? "last", length, "last")
+  const effectiveStep = step === 0 || step === undefined ? 1 : step
+  if (effectiveStep > 0 && fromIdx > toIdx) return []
+  if (effectiveStep < 0 && fromIdx < toIdx) return []
+  const result: number[] = []
+  if (effectiveStep > 0) {
+    for (let i = fromIdx; i <= toIdx; i += effectiveStep) result.push(i)
+  } else {
+    for (let i = fromIdx; i >= toIdx; i += effectiveStep) result.push(i)
+  }
+  return result
+}
+
+/** mulberry32 PRNG — deterministic given a seed (any 32-bit signed integer). */
+function mulberry32(seed: number): () => number {
+  let a = seed | 0
+  return () => {
+    a = (a + 0x6D2B79F5) | 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Hash a seed string to a 32-bit integer (FNV-1a variant). */
+function hashSeed(s: string): number {
+  let h = 2166136261 | 0
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h
+}
+
+/**
+ * Pick `count` items uniformly at random without replacement.
+ * If `seed` is non-empty, the PRNG is seeded deterministically.
+ * Otherwise `Math.random` is used (fresh randomness per call).
+ */
+export function selectRandom(items: string[], count: number, seed?: string): SelectorResult {
+  if (items.length === 0) return { picked: [], rest: [] }
+  const k = Math.max(0, Math.min(count, items.length))
+  const rand = seed && seed.length > 0 ? mulberry32(hashSeed(seed)) : Math.random
+  // Partial Fisher-Yates: shuffle the first k positions, pick those indices.
+  const indices = items.map((_, i) => i)
+  for (let i = 0; i < k; i++) {
+    const j = i + Math.floor(rand() * (indices.length - i))
+    ;[indices[i], indices[j]] = [indices[j], indices[i]]
+  }
+  return splitByIndices(items, indices.slice(0, k))
+}
+
+/**
+ * Pick a single item at `divisor % items.length`. Non-numeric `divisor`
+ * falls back to index 0. Caller is responsible for resolving any
+ * `{NodeLabel}` template refs in `divisor` BEFORE calling this — see
+ * `resolveSelectorRefs`.
+ */
+export function selectByModulo(items: string[], divisor: string | undefined): SelectorResult {
+  if (items.length === 0) return { picked: [], rest: [] }
+  const n = divisor ? Number.parseInt(divisor.trim(), 10) : NaN
+  const safeN = Number.isFinite(n) ? n : 0
+  const idx = ((safeN % items.length) + items.length) % items.length
+  return splitByIndices(items, [idx])
+}
+
+/**
+ * Pick items whose parsed JSON satisfies the predicate. `match: "first"`
+ * (default) stops at the first hit; `"all"` collects every hit.
+ *
+ * Reuses the filter-list condition evaluator so operator semantics
+ * (numeric coercion on `=`/`!=`, locale-aware ordering, case-sensitive
+ * text ops) stay identical to the Filter List node.
+ */
+export function selectByPredicate(
+  items: string[],
+  config: SelectorConfig,
+): SelectorResult {
+  if (items.length === 0) return { picked: [], rest: [] }
+  // Default operator to "=" so the UI's visual default (selector-config.tsx
+  // shows `op={config.predicateOp ?? "="}`) matches runtime; first-time
+  // predicate use without explicitly setting an operator used to silently
+  // return picked=[].
+  // predicateField is intentionally allowed to be empty/undefined —
+  // evaluateCondition treats an empty path as "compare against the whole
+  // item" (filter-condition.ts:161), matching the UI placeholder hint
+  // "blank = whole item" on the field input.
+  const op = config.predicateOp ?? "="
+  // Pass caseSensitive explicitly. evaluateCondition defaults undefined to
+  // `true` (case-sensitive) to preserve legacy callers, but the selector
+  // UI checkbox shows unchecked by default — so undefined config must map
+  // to case-INsensitive at runtime to match what the user sees.
+  const opts = { caseSensitive: config.predicateCaseSensitive ?? false }
+  const matchAll = config.predicateMatch === "all"
+  const cond = {
+    id: "selector-predicate",
+    field: config.predicateField ?? "",
+    operator: op,
+    value: config.predicateValue ?? "",
+    valueType: "static" as const,
+  }
+  const matchedIndices: number[] = []
+  for (let i = 0; i < items.length; i++) {
+    const parsed = tryParseJson(items[i])
+    const hit = evaluateCondition(parsed, items[i], cond, undefined, opts)
+    if (hit) {
+      matchedIndices.push(i)
+      if (!matchAll) break
+    }
+  }
+  return splitByIndices(items, matchedIndices)
+}
+
+/**
+ * Shortcut for `predicate(op="=", match="first")` — pick the first item
+ * whose `field` strictly equals `value`. Implemented as a thin wrapper
+ * so the UI can offer a 2-field form ("look up by name") instead of the
+ * full 4-field predicate form.
+ */
+export function selectByNamedKey(
+  items: string[],
+  field: string | undefined,
+  value: string | undefined,
+): SelectorResult {
+  return selectByPredicate(items, {
+    mode: "predicate",
+    predicateField: field,
+    predicateOp: "=",
+    predicateValue: value,
+    predicateMatch: "first",
+  })
+}
+
+/**
+ * Returns a new SelectorConfig with `{NodeLabel}` refs and `{{trigger.*}}` /
+ * `{{now}}` / `{{last_N_*:N}}` template tokens resolved in the four
+ * template-aware fields: moduloDivisor, predicateValue, namedKeyValue, seed.
+ * All other fields are passed through unchanged. Callers must build
+ * `variables` via `buildConditionVariables` (or equivalent) BEFORE calling.
+ *
+ * Other selector fields (itemIndex, range/list expressions, randomCount, etc.)
+ * are treated as literals — they have their own selector-lib syntax and are
+ * not resolved against the variable space.
+ *
+ * Token resolution matches `resolveConditionValue` exactly (both reuse
+ * `substituteTriggerTokens`) so the selector's `{{trigger.foo}}` semantics
+ * stay in lockstep with filter-list / router conditions.
+ *
+ * Pure: returns a new object; the input config is not mutated.
+ */
+export function resolveSelectorRefs(
+  config: SelectorConfig,
+  triggerData: Record<string, unknown> | undefined,
+  variables: ReadonlyMap<string, string>,
+): SelectorConfig {
+  const resolve = (v: string | undefined): string | undefined => {
+    if (v == null) return v
+    const refsResolved = resolveNodeRefs(v, variables)
+    return substituteTriggerTokens(refsResolved, triggerData)
+  }
+  return {
+    ...config,
+    moduloDivisor: resolve(config.moduloDivisor),
+    predicateValue: resolve(config.predicateValue),
+    namedKeyValue: resolve(config.namedKeyValue),
+    seed: resolve(config.seed),
+  }
 }

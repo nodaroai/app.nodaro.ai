@@ -82,19 +82,22 @@ export function resolveRelativeWindowToken(key: string): string | undefined {
   return new Date(Date.now() - n * unitMs).toISOString()
 }
 
-export function resolveConditionValue(
+/**
+ * Substitute `{{...}}` template tokens — `{{now}}`, `{{trigger.<path>}}`,
+ * and relative-window tokens (`{{last_N_hours:N}}` / days / weeks). Reused
+ * by `resolveConditionValue` (filter-list / router) and `resolveSelectorRefs`
+ * (selector node) so token semantics stay identical across the workflow-engine
+ * ref-resolution surface.
+ *
+ * Pure: returns a new string. Strings with no `{{...}}` tokens pass through
+ * unchanged.
+ */
+export function substituteTriggerTokens(
   raw: string,
-  valueType: string | undefined,
   triggerData?: Record<string, unknown>,
-  variables?: ReadonlyMap<string, string>,
 ): string {
-  let value = raw
-  if (variables && variables.size > 0) {
-    value = resolveNodeRefs(value, variables)
-  }
-  const hasTemplate = /\{\{/.test(value)
-  if (valueType !== "variable" && !hasTemplate) return value
-  return value.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
+  if (!/\{\{/.test(raw)) return raw
+  return raw.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, expr) => {
     const key = String(expr).trim()
     if (key === "now") return new Date().toISOString()
     if (key === "trigger.last_triggered_at") {
@@ -110,6 +113,21 @@ export function resolveConditionValue(
     if (relative !== undefined) return relative
     return ""
   })
+}
+
+export function resolveConditionValue(
+  raw: string,
+  valueType: string | undefined,
+  triggerData?: Record<string, unknown>,
+  variables?: ReadonlyMap<string, string>,
+): string {
+  let value = raw
+  if (variables && variables.size > 0) {
+    value = resolveNodeRefs(value, variables)
+  }
+  const hasTemplate = /\{\{/.test(value)
+  if (valueType !== "variable" && !hasTemplate) return value
+  return substituteTriggerTokens(value, triggerData)
 }
 
 function asComparableNumber(v: unknown): number {

@@ -91,6 +91,17 @@ const LIST_STATE_FIELDS: ReadonlyArray<string> = [
   "__listCompleted",
   "__listInputs",
   "listResults",
+  // Selector dual-channel outputs — clear pre-run so stale picked/rest from a
+  // previous run don't survive upstream-input changes or run-from-here. The
+  // selector node component reads these to render its "N picked · M rest"
+  // badges; without the reset, a re-run with no upstream still shows the
+  // prior counts until executeSelector overwrites them.
+  "pickedResults",
+  "restResults",
+  "__pickedResults",
+  "__restResults",
+  "__pickedTotal",
+  "__restTotal",
 ]
 
 const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
@@ -861,6 +872,10 @@ interface NodeExecutionState {
     splitResults?: string[];
     combinedText?: string;
     listResults?: string[];
+    /** Selector node `picked` output channel (selected items). */
+    pickedResults?: string[];
+    /** Selector node `rest` output channel (items NOT picked). */
+    restResults?: string[];
     plan?: Record<string, unknown>;
     sunoTrackId?: string;
     sunoTaskId?: string;
@@ -1004,6 +1019,23 @@ function syncNodeStatesToStore(
           updates.__listResults = state.output.listResults;
           updates.__listTotal = state.output.listResults.length;
           updates.__listCompleted = state.output.listResults.length;
+        }
+        // Selector dual-channel mirror — orchestrator state carries
+        // pickedResults/restResults but the SelectorNode UI reads from
+        // node.data (`__pickedResults`/`__restResults` + the snapshot
+        // mirrors). Without this copy, server-driven runs (webhook /
+        // schedule triggers) leave the selector node showing the empty
+        // "0 picked · 0 rest" placeholder forever. Mirrors the
+        // listResults branch above.
+        if (state.output.pickedResults || state.output.restResults) {
+          const picked = state.output.pickedResults ?? [];
+          const rest = state.output.restResults ?? [];
+          updates.pickedResults = picked;
+          updates.__pickedResults = picked;
+          updates.__pickedTotal = picked.length;
+          updates.restResults = rest;
+          updates.__restResults = rest;
+          updates.__restTotal = rest.length;
         }
 
         // Add generated results — for fan-out nodes, include ALL list results

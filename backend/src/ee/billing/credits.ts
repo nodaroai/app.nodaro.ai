@@ -553,6 +553,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "deduplicate": 0,
   "merge-lists": 0,
   "sort-list": 0,
+  "selector": 0,
   "webhook-output": 0,
   "preview": 0,
   "teleport-send": 0,

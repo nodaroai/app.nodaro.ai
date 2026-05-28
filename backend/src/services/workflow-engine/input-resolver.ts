@@ -69,9 +69,21 @@ export function resolveNodeInputs(
     let sourceNode = allNodes.find((n) => n.id === edge.source)
     if (!sourceNode) continue
 
+    // The effective sourceHandle for downstream resolution. Starts as the
+    // consumer-side edge's sourceHandle. If we walk through teleport
+    // send/receive pairs, the consumer's edge.sourceHandle refers to the
+    // teleport node's "out" port (or similar) — NOT the underlying source's
+    // handle. For handle-discriminated sources like selector (picked/rest),
+    // llm-chat (items vs text), and loop/list (per-column handles), we MUST
+    // surface the original upstream-of-teleport edge's sourceHandle instead,
+    // or downstream channel routing collapses to the default channel
+    // regardless of which channel was actually wired through the teleport pair.
+    let effectiveSourceHandle: string | null | undefined = edge.sourceHandle
+
     // Teleport transparency: resolve through the chain to the original source
     if (sourceNode.type === "teleport-send" || sourceNode.type === "teleport-receive") {
       let current = sourceNode
+      let lastInEdge: SimpleEdge | undefined
       const visited = new Set<string>()
       while ((current.type === "teleport-send" || current.type === "teleport-receive") && !visited.has(current.id)) {
         visited.add(current.id)
@@ -79,9 +91,14 @@ export function resolveNodeInputs(
         if (!inEdge) break
         const upstream = allNodes.find((n) => n.id === inEdge.source)
         if (!upstream) break
+        // Remember the LAST edge whose source is the final non-teleport
+        // upstream — its sourceHandle is the handle on the real source
+        // (e.g. selector's "picked"/"rest", llm-chat's "items").
+        lastInEdge = inEdge
         current = upstream
       }
       sourceNode = current
+      if (lastInEdge) effectiveSourceHandle = lastInEdge.sourceHandle
     }
 
     // Get output from node state or source node data
@@ -100,11 +117,29 @@ export function resolveNodeInputs(
     // current text). Gate both blocks off for this exact edge so it falls
     // through to the handle-aware llm-chat block. Other handles/types untouched.
     const isLlmChatItemsEdge =
-      sourceNode.type === "llm-chat" && edge.sourceHandle === "items"
+      sourceNode.type === "llm-chat" && effectiveSourceHandle === "items"
+
+    // Selector emits two channels (pickedResults + restResults) keyed by
+    // edge.sourceHandle. The "rest" handle returns the unselected remainder;
+    // any other handle (typically "picked", or omitted) returns the picked
+    // items. Mirrors the frontend node-input-resolver.ts srcListResults
+    // ternary — without this, selector outputs are invisible to the generic
+    // listResults fan-out path (selector never populates state.output.listResults)
+    // and the resolver falls through to extractAllGeneratedResults which reads
+    // data.generatedResults (not pickedResults/restResults).
+    const selectorListResults: string[] | undefined =
+      sourceNode.type === "selector"
+        ? (effectiveSourceHandle === "rest"
+            ? (state?.output?.restResults
+                ?? (sourceNode.data.restResults as string[] | undefined))
+            : (state?.output?.pickedResults
+                ?? (sourceNode.data.pickedResults as string[] | undefined)))
+        : undefined
 
     const effectiveListResults = isLlmChatItemsEdge
       ? undefined
-      : state?.output?.listResults
+      : selectorListResults
+        ?? state?.output?.listResults
         ?? extractAllGeneratedResults(sourceNode.data as Record<string, unknown>)
         ?? extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
 
@@ -119,7 +154,7 @@ export function resolveNodeInputs(
       // zeroed above), so a reduce over `items` folds the same blocks the
       // frontend would. Falls through to the single-result wrap if no items.
       const fanInList: string[] | undefined = isLlmChatItemsEdge
-        ? resolveLlmChatItems(sourceNode, edge.sourceHandle, nodeStates)
+        ? resolveLlmChatItems(sourceNode, effectiveSourceHandle, nodeStates)
         : effectiveListResults
       const filtered: string[] = fanInList && fanInList.length > 0
         ? selectListItems(fanInList, edgeData as SelectorFields | undefined)
@@ -133,7 +168,7 @@ export function resolveNodeInputs(
         continue
       }
       // Single-result fallback — upstream wasn't fanned out.
-      const single = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData)
+      const single = getNodeOutput(sourceNode, effectiveSourceHandle, nodeStates, triggerData)
       if (single) {
         inputs.inputs = [...(inputs.inputs ?? []), single]
       }
@@ -213,8 +248,8 @@ export function resolveNodeInputs(
     // frontend node-input-resolver). Only the explicit `items` handle splits —
     // the default/`text` handle stays scalar and falls through to getNodeOutput
     // below (full generatedText with delimiters intact).
-    if (!output && sourceNode.type === "llm-chat" && edge.sourceHandle === "items") {
-      const raw = resolveLlmChatItems(sourceNode, edge.sourceHandle, nodeStates)
+    if (!output && sourceNode.type === "llm-chat" && effectiveSourceHandle === "items") {
+      const raw = resolveLlmChatItems(sourceNode, effectiveSourceHandle, nodeStates)
       if (raw && raw.length > 0) {
         const ranged = selectListItems(raw, edgeData as SelectorFields | undefined)
         if (ranged.length > 0) {
@@ -248,7 +283,7 @@ export function resolveNodeInputs(
       if (sourceNode.type === "loop" || sourceNode.type === "list") {
         const items = resolveListLoopColumnItems(
           sourceNode,
-          edge.sourceHandle,
+          effectiveSourceHandle,
           edges,
           allNodes,
           nodeStates,
@@ -267,7 +302,7 @@ export function resolveNodeInputs(
       }
 
       if (!output) {
-        output = getNodeOutput(sourceNode, edge.sourceHandle, nodeStates, triggerData, ctx)
+        output = getNodeOutput(sourceNode, effectiveSourceHandle, nodeStates, triggerData, ctx)
       }
     }
 
@@ -364,7 +399,7 @@ function getSavedNodeOutput(node: SimpleNode): string | undefined {
 // ---------------------------------------------------------------------------
 
 /** Node types whose edges default to "each" output mode (fan-out). */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text"])
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "selector"])
 
 /**
  * Resolve the Generate Text (llm-chat) `items` handle into its fan-out list —
@@ -461,6 +496,19 @@ function resolveListLoopColumnItems(
           triggerData,
           visited,
         )
+      } else if (upstreamNode.type === "selector") {
+        // Selector emits picked/rest channels keyed by sourceHandle. Mirrors
+        // the listResults branch below but routes by colInEdge.sourceHandle —
+        // selector never populates listResults, so the generic branch would
+        // miss it. Prefer state.output, fall back to data.* snapshots.
+        const state = nodeStates[upstreamNode.id]
+        const data = upstreamNode.data as Record<string, unknown>
+        const channel = colInEdge.sourceHandle === "rest"
+          ? (state?.output?.restResults ?? (data.restResults as string[] | undefined))
+          : (state?.output?.pickedResults ?? (data.pickedResults as string[] | undefined))
+        if (channel && channel.length > 0) {
+          upstreamVals = channel.filter((v): v is string => typeof v === "string" && v.length > 0)
+        }
       } else {
         // Non-list upstream: prefer completed state's listResults (fan-out
         // output), fall back to the node's accumulated generatedResults.
@@ -660,14 +708,31 @@ export function getListInputForNode(
       continue
     }
 
-    // 4. Any node with listResults from a prior fan-out execution
+    // 4. Selector — picked vs rest channel selected by edge.sourceHandle.
+    //    Mirrors the filter-list family but routes by handle. Selector never
+    //    populates listResults, so the generic block below would miss its
+    //    output entirely. Prefer state.output, fall back to data.* snapshots
+    //    for nodes that ran in a previous session.
     const state = nodeStates[sourceNode.id]
+    if (sourceNode.type === "selector") {
+      const data = sourceNode.data as Record<string, unknown>
+      const channel = edge.sourceHandle === "rest"
+        ? (state?.output?.restResults ?? (data.restResults as string[] | undefined))
+        : (state?.output?.pickedResults ?? (data.pickedResults as string[] | undefined))
+      if (channel && channel.length > 1) {
+        const filtered = selectListItems(channel, selectorArg)
+        if (filtered.length > 1) return filtered
+      }
+      continue
+    }
+
+    // 5. Any node with listResults from a prior fan-out execution
     if (state?.output?.listResults && state.output.listResults.length > 1) {
       const filtered = selectListItems(state.output.listResults, selectorArg)
       if (filtered.length > 1) return filtered
     }
 
-    // 5. Fallback: accumulated generatedResults from multiple manual runs
+    // 6. Fallback: accumulated generatedResults from multiple manual runs
     const savedResults = extractAllGeneratedResults(
       sourceNode.data as Record<string, unknown>,
     )
@@ -676,7 +741,7 @@ export function getListInputForNode(
       if (filtered.length > 1) return filtered
     }
 
-    // 6. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
+    // 7. JSON array output (e.g. web-scrape generatedJson) — each element is one list item
     const jsonItems = extractGeneratedJsonAsList(sourceNode.data as Record<string, unknown>)
     if (jsonItems) {
       const filtered = selectListItems(jsonItems, selectorArg)

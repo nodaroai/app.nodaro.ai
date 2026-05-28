@@ -44,6 +44,10 @@ export interface NodeOutput {
   paramOutputs?: Record<string, string>
   /** Accumulated results from fan-out (list/loop/split-text) execution */
   listResults?: string[]
+  /** Selector node `picked` output channel (selected items). */
+  pickedResults?: string[]
+  /** Selector node `rest` output channel (items NOT picked). */
+  restResults?: string[]
   /** Sub-workflow output port values for handle-based routing in getPrimaryOutput */
   _outputResults?: Record<string, string>
   /** Sub-workflow visible output port ID (from routeSnapshot.visibleOutputPortId) */

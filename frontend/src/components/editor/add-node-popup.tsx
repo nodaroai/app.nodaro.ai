@@ -86,6 +86,7 @@ import {
   Filter,
   Funnel,
   ListFilter,
+  ListTree,
   CopyMinus,
   GitMerge,
   ArrowUpDown,
@@ -245,6 +246,12 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     type: "sort-list",
     label: "Sort List",
     icon: <ArrowUpDown className="h-4 w-4" />,
+    category: "Data",
+  },
+  {
+    type: "selector",
+    label: "Selector",
+    icon: <ListTree className="h-4 w-4" />,
     category: "Data",
   },
   // Parameter

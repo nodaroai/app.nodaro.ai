@@ -268,8 +268,23 @@ export {
   selectListItems,
   describeEdgeBehavior,
   isDefaultSelectorConfig,
-} from "./edge-range.js"
-export type { SelectorMode, OutputMode, SelectorFields } from "./edge-range.js"
+  runSelector,
+  applyRangeIndices,
+  selectRandom,
+  selectByModulo,
+  selectByPredicate,
+  selectByNamedKey,
+  resolveSelectorRefs,
+} from "./selector.js"
+export type {
+  SelectorMode,
+  OutputMode,
+  SelectorFields,
+  FullSelectorMode,
+  SelectorConfig,
+  SelectorPredicateOp,
+  SelectorResult,
+} from "./selector.js"
 
 export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX, encodeProviderItem, decodeProviderItem, getEffectiveRepeatCount, expandItemsWithRepeat } from "./repeat-types.js"
 

@@ -1,0 +1,872 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SelectorConfig — per-mode snapshots > renders the item mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label
+      for="selector-item-index"
+    >
+      Index
+    </label>
+    <input
+      id="selector-item-index"
+      placeholder="3, last, last-1"
+      value=""
+    />
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      1-based. Supports 
+      <code>
+        last
+      </code>
+       and 
+      <code>
+        last-N
+      </code>
+       relative expressions.
+    </p>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the list mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label
+      for="selector-list-expression"
+    >
+      Expression
+    </label>
+    <input
+      id="selector-list-expression"
+      placeholder="1, 2, last"
+      value=""
+    />
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Examples: 
+      <code>
+        1, 2, last
+      </code>
+       · 
+      <code>
+        1..5
+      </code>
+       · 
+      <code>
+        1..10:2
+      </code>
+       · 
+      <code>
+        1..last-1
+      </code>
+    </p>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the modulo mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label
+      for="selector-modulo-divisor"
+    >
+      Divisor
+    </label>
+    <input
+      id="selector-modulo-divisor"
+      placeholder="5 or {LoopIteration}"
+      value=""
+    />
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Literal integer or 
+      <code>
+        {NodeLabel}
+      </code>
+       reference. Picks index = divisor % length.
+    </p>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the named-key mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-3"
+  >
+    <div
+      class="flex flex-col gap-1.5"
+    >
+      <label
+        for="selector-key-field"
+      >
+        Field
+      </label>
+      <input
+        id="selector-key-field"
+        placeholder="name (blank = whole item)"
+        value=""
+      />
+    </div>
+    <div
+      class="flex flex-col gap-1.5"
+    >
+      <label
+        for="selector-key-value"
+      >
+        Value
+      </label>
+      <input
+        id="selector-key-value"
+        placeholder="hero or {HeroName}"
+        value=""
+      />
+      <p
+        class="text-[10px] text-muted-foreground"
+      >
+        Shortcut for predicate 
+        <code>
+          (op="=", match="first")
+        </code>
+        . Supports 
+        <code>
+          {NodeLabel}
+        </code>
+         refs.
+      </p>
+    </div>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the predicate mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-3"
+  >
+    <div
+      class="grid grid-cols-[1fr_140px] gap-2"
+    >
+      <div
+        class="flex flex-col gap-1"
+      >
+        <label
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          for="selector-pred-field"
+        >
+          Field
+        </label>
+        <input
+          id="selector-pred-field"
+          placeholder="score (blank = whole item)"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-col gap-1"
+      >
+        <label
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+          for="selector-pred-op"
+        >
+          Operator
+        </label>
+        <select
+          aria-label="Operator"
+          id="selector-pred-op"
+        >
+          <option
+            value="="
+          >
+            equals
+          </option>
+          <option
+            value="!="
+          >
+            not equals
+          </option>
+          <option
+            value=">"
+          >
+            greater than
+          </option>
+          <option
+            value="<"
+          >
+            less than
+          </option>
+          <option
+            value=">="
+          >
+            greater or equal
+          </option>
+          <option
+            value="<="
+          >
+            less or equal
+          </option>
+          <option
+            value="contains"
+          >
+            contains
+          </option>
+          <option
+            value="not_contains"
+          >
+            does not contain
+          </option>
+          <option
+            value="starts_with"
+          >
+            starts with
+          </option>
+          <option
+            value="ends_with"
+          >
+            ends with
+          </option>
+          <option
+            value="regex"
+          >
+            matches regex
+          </option>
+          <option
+            value="exists"
+          >
+            exists
+          </option>
+          <option
+            value="not_exists"
+          >
+            does not exist
+          </option>
+        </select>
+      </div>
+    </div>
+    <div
+      class="flex flex-col gap-1.5"
+    >
+      <label
+        for="selector-pred-value"
+      >
+        Value
+      </label>
+      <input
+        id="selector-pred-value"
+        placeholder="threshold or {NodeLabel}"
+        value=""
+      />
+      <p
+        class="text-[10px] text-muted-foreground"
+      >
+        Supports 
+        <code>
+          {NodeLabel}
+        </code>
+         refs. Reuses filter-list evaluator semantics.
+      </p>
+    </div>
+    <div
+      class="flex items-center gap-4"
+    >
+      <div
+        class="flex flex-col gap-1"
+      >
+        <label
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+        >
+          Match
+        </label>
+        <div
+          aria-label="Match"
+          class="flex gap-3"
+          data-value="first"
+          role="radiogroup"
+        >
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <input
+              checked=""
+              id="selector-pred-match-first"
+              type="radio"
+              value="first"
+            />
+            <label
+              class="text-xs font-normal"
+              for="selector-pred-match-first"
+            >
+              First
+            </label>
+          </div>
+          <div
+            class="flex items-center gap-1.5"
+          >
+            <input
+              id="selector-pred-match-all"
+              type="radio"
+              value="all"
+            />
+            <label
+              class="text-xs font-normal"
+              for="selector-pred-match-all"
+            >
+              All
+            </label>
+          </div>
+        </div>
+      </div>
+      <div
+        class="flex items-center gap-1.5 self-end pb-1"
+      >
+        <input
+          id="selector-pred-case-sensitive"
+          type="checkbox"
+        />
+        <label
+          class="text-xs font-normal"
+          for="selector-pred-case-sensitive"
+        >
+          Case-sensitive
+        </label>
+      </div>
+    </div>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the random mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-3"
+  >
+    <div
+      class="flex flex-col gap-1.5"
+    >
+      <label
+        for="selector-random-seed"
+      >
+        Seed (optional)
+      </label>
+      <input
+        id="selector-random-seed"
+        placeholder="leave empty for fresh randomness each run"
+        value=""
+      />
+      <p
+        class="text-[10px] text-muted-foreground"
+      >
+        Supports 
+        <code>
+          {NodeLabel}
+        </code>
+         refs. Same seed + same input list → same pick.
+      </p>
+    </div>
+    <div
+      class="flex flex-col gap-1.5"
+    >
+      <label
+        for="selector-random-count"
+      >
+        Count
+      </label>
+      <input
+        id="selector-random-count"
+        inputmode="numeric"
+        placeholder="1"
+        value=""
+      />
+      <p
+        class="text-[10px] text-muted-foreground"
+      >
+        Number of items to sample without replacement. Defaults to 1.
+      </p>
+    </div>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;
+
+exports[`SelectorConfig — per-mode snapshots > renders the range mode panel 1`] = `
+<div
+  class="flex flex-col gap-3"
+>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Mode
+    </label>
+    <select
+      aria-label="Mode"
+    >
+      <option
+        value="item"
+      >
+        Item (single index)
+      </option>
+      <option
+        value="range"
+      >
+        Range (from/to/step)
+      </option>
+      <option
+        value="list"
+      >
+        List (comma expression)
+      </option>
+      <option
+        value="random"
+      >
+        Random (seeded)
+      </option>
+      <option
+        value="modulo"
+      >
+        Modulo (cycle by index)
+      </option>
+      <option
+        value="predicate"
+      >
+        Predicate (filter)
+      </option>
+      <option
+        value="named-key"
+      >
+        Named key (look up)
+      </option>
+    </select>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Pick items by index, range, list, random sample, modulo cycle, predicate, or named key. Per-mode fields appear here once configured.
+    </p>
+  </div>
+  <div
+    class="flex flex-col gap-1.5"
+  >
+    <label>
+      Range
+    </label>
+    <div
+      class="grid grid-cols-3 gap-2"
+    >
+      <div
+        class="flex flex-col gap-1"
+      >
+        <span
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+        >
+          From
+        </span>
+        <input
+          placeholder="1"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-col gap-1"
+      >
+        <span
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+        >
+          To
+        </span>
+        <input
+          placeholder="last"
+          value=""
+        />
+      </div>
+      <div
+        class="flex flex-col gap-1"
+      >
+        <span
+          class="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+        >
+          Step
+        </span>
+        <input
+          inputmode="numeric"
+          placeholder="1"
+          value=""
+        />
+      </div>
+    </div>
+    <p
+      class="text-[10px] text-muted-foreground"
+    >
+      Both bounds are inclusive and 1-based. Step 
+      <code>
+        &lt;
+         0
+      </code>
+       iterates backwards (set From 
+      &gt;
+       To).
+    </p>
+  </div>
+  <p
+    class="text-[10px] text-muted-foreground bg-muted/30 rounded-md px-3 py-2 border border-dashed border-border"
+  >
+    Run the node to see picked / rest counts here.
+  </p>
+</div>
+`;

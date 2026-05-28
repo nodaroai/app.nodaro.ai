@@ -168,6 +168,7 @@ import type {
   DeduplicateNodeData,
   MergeListsNodeData,
   SortListNodeData,
+  SelectorNodeData,
   ReduceNodeData,
 } from "@/types/nodes";
 import {
@@ -225,6 +226,7 @@ import {
   resolveConditionValue,
 } from "@nodaro/shared";
 import { sortListItems } from "@nodaro/shared";
+import { runSelector, resolveSelectorRefs } from "@nodaro/shared";
 import { buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared";
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 import { collectAudioStyleHints, truncateForField, appendField } from "@/lib/audio-style-hints";
@@ -388,7 +390,10 @@ function collectItemsForEdgeFrontend(
   // extractNodeOutputAsList handles split-text, list, generatedJson arrays
   // (web-scrape), generatedResults, and __listResults — same coverage as the
   // backend collector. Mirrors inline-executor.ts:collectItemsForEdge.
-  const listItems = extractNodeOutputAsList(src);
+  // sourceHandle is forwarded so selector's dual-channel outputs (picked/rest)
+  // route correctly — without it the function defaults to the picked channel
+  // even when the edge originates from the selector's "rest" handle.
+  const listItems = extractNodeOutputAsList(src, resolvedEdge.sourceHandle ?? undefined);
   if (listItems && listItems.length > 0) {
     return listItems.filter((item): item is string => item != null);
   }
@@ -6001,9 +6006,11 @@ export function executeNode(
     // evaluates per-item. Without this, Extract Field would silently read only
     // listResults[0] via extractNodeOutput and produce inconsistent counts
     // whenever upstream order shifted between runs. Mirrors backend
-    // executeExtractField's `output.listResults` branch.
+    // executeExtractField's `output.listResults` branch. sourceHandle is
+    // forwarded so selector picked/rest route correctly through to the
+    // field-evaluation list.
     if (value === undefined) {
-      const listItems = extractNodeOutputAsList(src);
+      const listItems = extractNodeOutputAsList(src, inEdge.sourceHandle ?? undefined);
       if (listItems && listItems.length > 0) {
         const spread = spreadJsonArrayIfSingleton(listItems);
         value = spread.map((item) => tryParseJson(item));
@@ -6217,6 +6224,33 @@ export function executeNode(
       errorMessage: undefined,
     });
     return Promise.resolve(sorted[0] ?? "");
+  }
+
+  if (node.type === "selector") {
+    const { nodes: currentNodes, edges: currentEdges, updateNodeData } = useWorkflowStore.getState();
+    const selectorData = node.data as SelectorNodeData;
+    // Default to item-mode when config is missing — mirrors backend
+    // inline-executor.ts:executeSelector. Without this, imported / migrated
+    // workflow JSON that pre-dates the config field would spread undefined
+    // into an empty object, runSelector's switch falls to default, and the
+    // node silently returns { picked: [], rest: items.slice() } — a hard
+    // mismatch with backend semantics.
+    const config = selectorData.config ?? { mode: "item" as const };
+    const items = collectUpstreamListItemsFrontend(node.id, currentEdges, currentNodes);
+    const variables = buildConditionVariables(node.id, currentEdges, currentNodes, (n) => extractNodeOutput(n));
+    const resolvedConfig = resolveSelectorRefs(config, undefined, variables);
+    const { picked, rest } = runSelector(items, resolvedConfig);
+    updateNodeData(node.id, {
+      pickedResults: picked,
+      __pickedResults: picked,
+      __pickedTotal: picked.length,
+      restResults: rest,
+      __restResults: rest,
+      __restTotal: rest.length,
+      executionStatus: "completed",
+      errorMessage: undefined,
+    });
+    return Promise.resolve(picked[0] ?? "");
   }
 
   // Reduce (fan-in) — aggregate N upstream branch results into a single value

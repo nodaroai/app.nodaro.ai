@@ -16,6 +16,7 @@ import {
   type RouterConditionGroup,
 } from "@nodaro/shared"
 import { sortListItems, type SortType, type SortDirection } from "@nodaro/shared"
+import { runSelector, resolveSelectorRefs, type SelectorConfig } from "@nodaro/shared"
 import { spreadJsonArrayIfSingleton } from "@nodaro/shared"
 import { zipMergeLists } from "@nodaro/shared"
 import { resolveSourceThroughConnectedList } from "@nodaro/shared"
@@ -300,6 +301,27 @@ function collectItemsForEdge(
   if (!output) return []
 
   const items: string[] = []
+
+  // Selector emits dual channels (pickedResults / restResults) keyed by
+  // edge.sourceHandle — it never populates listResults. Without this branch
+  // chains like `selector → filter-list / sort-list / deduplicate / merge-lists
+  // / selector` would fall through to getPrimaryOutput below, which returns
+  // ONLY the first item of the routed channel, and the downstream list
+  // operator would run on a 1-element list. Mirrors the selector handling in
+  // input-resolver.ts (`selectorListResults`) so list-consumer and
+  // generic-resolver paths agree on cardinality.
+  if (srcNode.type === "selector") {
+    const handle = resolvedEdge.sourceHandle
+    const channelResults =
+      handle === "rest"
+        ? (output.restResults ?? [])
+        : (output.pickedResults ?? [])
+    for (const item of channelResults) {
+      if (item != null) items.push(item)
+    }
+    return items
+  }
+
   const listResults = output.listResults
   if (listResults && listResults.length > 0) {
     for (const item of listResults) {
@@ -507,6 +529,34 @@ export function executeSortList(
     direction: (data.direction as SortDirection) ?? "asc",
   })
   return { text: sorted[0] ?? "", listResults: sorted }
+}
+
+/**
+ * Execute selector node: pick item(s) from an upstream list using the
+ * configured mode. Emits two output channels: pickedResults + restResults.
+ * Mirrors frontend execute-node.ts — both call the shared runSelector /
+ * resolveSelectorRefs so semantics are identical.
+ */
+export function executeSelector(
+  node: SimpleNode,
+  edges: SimpleEdge[],
+  allNodes: SimpleNode[],
+  nodeStates: Record<string, NodeExecutionState>,
+  triggerData?: Record<string, unknown>,
+): NodeOutput {
+  const data = node.data as Record<string, unknown>
+  const config = (data.config ?? { mode: "item" }) as SelectorConfig
+  const items = collectUpstreamListItems(node.id, edges, allNodes, nodeStates)
+  const variables = buildConditionVariables(node.id, edges, allNodes, (n) =>
+    getNodeOutput(n, undefined, nodeStates),
+  )
+  const resolvedConfig = resolveSelectorRefs(config, triggerData, variables)
+  const { picked, rest } = runSelector(items, resolvedConfig)
+  return {
+    text: picked[0] ?? "",
+    pickedResults: picked,
+    restResults: rest,
+  }
 }
 
 /**

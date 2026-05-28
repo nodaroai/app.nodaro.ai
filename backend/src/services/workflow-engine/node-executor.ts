@@ -19,7 +19,7 @@ import { buildPayload, type WorkflowSettings } from "./payload-builder.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 
-import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList } from "./inline-executor.js"
+import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
@@ -257,6 +257,7 @@ const INLINE_NODES = new Set([
   "deduplicate",
   "merge-lists",
   "sort-list",
+  "selector",
 ])
 
 // ---------------------------------------------------------------------------
@@ -397,6 +398,9 @@ async function executeInlineNode(
       break
     case "sort-list":
       output = executeSortList(node, edges, allNodes, nodeStates)
+      break
+    case "selector":
+      output = executeSelector(node, edges, allNodes, nodeStates, ctx.triggerData)
       break
     case "composite":
       output = executeComposite(node, edges, allNodes, nodeStates)

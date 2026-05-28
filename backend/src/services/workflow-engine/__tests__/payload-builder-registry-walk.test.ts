@@ -72,6 +72,7 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "deduplicate",
   "merge-lists",
   "sort-list",
+  "selector",
   // Note: "preview" is in INLINE_NODES at runtime but is NOT in EXECUTABLE_TYPES
   // — the frontend treats it as a passive display node that updates reactively
   // when upstream completes. So we don't need to exempt it (the iteration
