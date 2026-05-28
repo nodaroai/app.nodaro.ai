@@ -455,6 +455,7 @@ describe("motion-transfer", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
     )
   })
 })
@@ -1393,6 +1394,7 @@ describe("motion-transfer with kling-3.0 provider", () => {
       "u1",
       "kling-3.0",
       "greenscreen",
+      undefined,
       undefined,
     )
   })
