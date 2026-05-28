@@ -46,7 +46,8 @@ const ACCEPTS_CINEMATOGRAPHY = (
 ): boolean => isVisualPicker(sourceType)
 
 // ─── video-to-video ────────────────────────────────────────────────────
-// Inputs: video, cinematography. Source: video (already correct).
+// Inputs: video, cinematography, prompt, negative (text-only).
+// Source: video (already correct).
 export function isValidVideoToVideoConnection(
   targetHandleId: string,
   sourceType: string,
@@ -57,6 +58,10 @@ export function isValidVideoToVideoConnection(
       return ACCEPTS_VIDEO_OR_DYN(sourceType)
     case "cinematography":
       return ACCEPTS_CINEMATOGRAPHY(sourceType, isVisualPicker)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    case "negative":
+      return ACCEPTS_TEXT_OR_DYN(sourceType)
     default:
       return false
   }
@@ -77,7 +82,8 @@ export function isValidVideoUpscaleConnection(
 }
 
 // ─── extend-video ──────────────────────────────────────────────────────
-// Inputs: video, cinematography. Source: video (already correct).
+// Inputs: video, cinematography, prompt. Source: video (already correct).
+// (extend-video worker doesn't read negativePrompt — no `negative` handle.)
 export function isValidExtendVideoConnection(
   targetHandleId: string,
   sourceType: string,
@@ -88,6 +94,8 @@ export function isValidExtendVideoConnection(
       return ACCEPTS_VIDEO_OR_DYN(sourceType)
     case "cinematography":
       return ACCEPTS_CINEMATOGRAPHY(sourceType, isVisualPicker)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
     default:
       return false
   }
@@ -138,15 +146,21 @@ export function isValidSpeechToVideoConnection(
 }
 
 // ─── motion-transfer ───────────────────────────────────────────────────
-// Single video input (source video — character/object motion gets
-// transferred onto it). Source: video (renamed from `out`).
+// Inputs: image (character reference — REQUIRED per backend route),
+// video (motion source — REQUIRED), prompt (optional text).
+// Source: video (renamed from `out`).
 export function isValidMotionTransferConnection(
   targetHandleId: string,
   sourceType: string,
+  isVisualPicker?: (t: string) => boolean,
 ): boolean {
   switch (targetHandleId) {
+    case "image":
+      return ACCEPTS_IMAGE_OR_DYN(sourceType)
     case "video":
       return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker ?? (() => false))
     default:
       return false
   }
@@ -155,10 +169,10 @@ export function isValidMotionTransferConnection(
 // ─── Friendly labels for source-direction popover candidate rows ──────
 
 export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>> = {
-  "video-to-video":   { video: "Video", cinematography: "Cinematography" },
+  "video-to-video":   { video: "Video", cinematography: "Cinematography", prompt: "Prompt", negative: "Negative" },
   "video-upscale":    { video: "Video" },
-  "extend-video":     { video: "Video", cinematography: "Cinematography" },
+  "extend-video":     { video: "Video", cinematography: "Cinematography", prompt: "Prompt" },
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
-  "motion-transfer":  { video: "Video" },
+  "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt" },
 }

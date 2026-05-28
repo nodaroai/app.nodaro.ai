@@ -2011,6 +2011,23 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const SUNO_IN_CLASSIFIER_TARGETS: ReadonlySet<string> = new Set([
         "suno-cover", "suno-extend", "suno-replace-section", "suno-upload-extend",
       ])
+      // motion-transfer's legacy `in` accepted multi-type connections
+      // (image character, video source, optional text prompt). The Phase-21
+      // blanket rewrite to `video` loses image+prompt edges, so re-classify
+      // by source type here.
+      const IMAGE_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
+        "generate-image", "upload-image", "edit-image", "image-to-image",
+        "modify-image", "upscale-image", "remove-background", "generate-mask",
+        "face-swap", "character", "face", "object", "location", "scene",
+      ])
+      const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
+        "image-to-video", "text-to-video", "generate-video", "video-to-video",
+        "upload-video", "lip-sync", "speech-to-video", "motion-transfer",
+        "video-upscale", "extend-video", "video-retake", "suno-music-video",
+        "combine-videos", "merge-video-audio", "add-captions", "resize-video",
+        "social-media-format", "trim-video", "render-video", "speed-ramp",
+        "loop-video", "fade-video", "transcode-video", "manual-edit", "video-sfx",
+      ])
       // Suno nodes that have a typed `voice` target — used to route legacy
       // suno-voice → suno-* edges to the right slot. Matches the set of
       // resolvers that wire personaId in input-resolver.ts (excludes
@@ -2063,6 +2080,24 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
           // `prompt`. Doesn't fire for suno-voice (handled above).
           const newTh = AUDIO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType) ? "audio" : "prompt"
           next = { ...next, targetHandle: newTh }
+        } else if (targetType === "motion-transfer" && next.targetHandle === "video") {
+          // Phase 21's blanket `in` → `video` rewrite for motion-transfer
+          // dropped its multi-type input shape. Re-classify by source so
+          // image and prompt edges land on their correct typed handles.
+          if (IMAGE_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
+            next = { ...next, targetHandle: "image" }
+          } else if (!VIDEO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
+            next = { ...next, targetHandle: "prompt" }
+          }
+        } else if (
+          (targetType === "video-to-video" || targetType === "extend-video") &&
+          next.targetHandle === "video" &&
+          !VIDEO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)
+        ) {
+          // Phase 21's `in` → `video` rewrite for video-to-video / extend-video
+          // dropped legacy text-source edges (the pre-migration `in` handle
+          // accepted prompt input). Re-route non-video sources to `prompt`.
+          next = { ...next, targetHandle: "prompt" }
         }
         return next
       })
