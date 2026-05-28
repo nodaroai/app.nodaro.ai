@@ -82,7 +82,17 @@ export const TIER_MAX_PIPELINE_COST_CREDITS: Record<string, number> = {
 
 // Per-stage soft timeout (matches workflow-orchestration)
 export const PIPELINE_STAGE_TIMEOUT_MS = 30 * 60 * 1000
-export const PIPELINE_HARD_TIMEOUT_MS = 90 * 60 * 1000
+// Hard ceiling for a SINGLE orchestrator drive (pipeline-worker aborts the
+// in-flight drive when this fires). One drive runs a whole stage's work; the
+// heaviest is animate_audio_edit, which fans out every scene × every shot
+// (KIE video gen + per-shot critic + audio + merge). For a multi-scene film
+// that legitimately exceeds 90 min — the old value aborted such drives
+// mid-fan-out, and before the scene-level resume short-circuit landed each
+// retry restarted from scratch and tripped the resume cap (prod pipeline
+// 64b76ed9). 4 h gives a heavy drive room to finish in one pass while staying
+// well under the reconcile cron's 6 h abandon threshold. Worker concurrency is
+// 5, so even a pathological long drive leaves 4 slots free.
+export const PIPELINE_HARD_TIMEOUT_MS = 4 * 60 * 60 * 1000
 
 /**
  * Per-stage hard retry caps applied to image-gen for that stage.

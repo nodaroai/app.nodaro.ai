@@ -179,6 +179,16 @@ export interface ApplyShotMutationArgs {
    * this callback ever runs).
    */
   onAfterUpdate?: () => Promise<void>
+  /**
+   * When true, drop the scene-level `composite_video_url` +
+   * `composite_video_asset_id` from the rebuilt `scene_node_data`. The Retry
+   * (regenerate) route sets this so the re-enqueued drive re-animates the
+   * scene: `runSceneInternalPipeline` short-circuits when a scene still has a
+   * `composite_video_url`, so leaving the stale URL in place would make the
+   * regenerate a silent no-op. Skip (accept-bad-shot) leaves it false — the
+   * user accepted the existing composite and does NOT want re-animation.
+   */
+  clearSceneComposite?: boolean
 }
 
 export async function applyShotMutationAndEmit(
@@ -195,6 +205,7 @@ export async function applyShotMutationAndEmit(
     sceneId,
     shotMutator,
     onAfterUpdate,
+    clearSceneComposite,
   } = args
 
   // a. Build the next-state metadata immutably so a partial commit can't
@@ -208,9 +219,25 @@ export async function applyShotMutationAndEmit(
       ? (shotMutator(s) as FailedShotSceneData["shots"][number])
       : s,
   )
+  // `composite_video_url` / `composite_video_asset_id` live on scene_node_data
+  // at runtime (not declared on the typed subset). Omit them — immutably, no
+  // delete — when the caller asks to invalidate the composite so the scene
+  // re-animates on the next drive.
+  const sceneDataWithShots = ((): FailedShotSceneData => {
+    if (!clearSceneComposite) return { ...sceneData, shots: updatedShots }
+    const {
+      composite_video_url: _droppedUrl,
+      composite_video_asset_id: _droppedAssetId,
+      ...rest
+    } = sceneData as FailedShotSceneData & {
+      composite_video_url?: string
+      composite_video_asset_id?: string
+    }
+    return { ...rest, shots: updatedShots }
+  })()
   const updatedMetadata = {
     ...(sceneEntity.metadata ?? {}),
-    scene_node_data: { ...sceneData, shots: updatedShots },
+    scene_node_data: sceneDataWithShots,
   }
 
   // b. Persist. db_error → 500 + the helper already replied (caller returns).

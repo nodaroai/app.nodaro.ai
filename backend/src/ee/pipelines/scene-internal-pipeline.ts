@@ -174,6 +174,37 @@ export async function runSceneInternalPipeline(
     return { ok: false, reason: "shots_missing" }
   }
 
+  // ─── Step 0: scene-level idempotency short-circuit ────────────────────────
+  // animate-audio-edit.ts runs this per-scene loop unconditionally on every
+  // drive (and the orchestrator re-drives after each ~90-min hard-timeout
+  // abort or worker restart). Without this guard, a drive that gets killed
+  // mid-fan-out re-animates EVERY already-finished scene from scratch on the
+  // next drive — re-paying KIE for video gen and blowing past the resume cap
+  // before the pipeline ever completes (observed on prod pipeline 64b76ed9:
+  // a 5-scene film aborted at the 90-min mark 3× → resume_limit_exceeded).
+  //
+  // A finished scene persists `composite_video_url` onto its scene_node_data
+  // (see the success return below + the caller's entity UPDATE). If it's
+  // already there, the scene's clips + composite are on R2 already — return
+  // the cached result verbatim so the loop advances to unfinished scenes.
+  // This is the short-circuit the handler's header comment already documents
+  // as the contract; it was never actually implemented until now.
+  //
+  // Regeneration safety: the Regenerate (retry-video-generation) route clears
+  // `composite_video_url` (clearSceneComposite in shot-recovery.ts), so a
+  // scene the user asked to re-render does NOT carry the URL and correctly
+  // re-animates. Skip (accept-bad-shot) intentionally keeps the URL — the
+  // user accepted the existing composite, so skipping re-animation is correct.
+  const existingComposite = sceneData.composite_video_url
+  if (existingComposite) {
+    return {
+      ok: true,
+      composite_video_url: existingComposite,
+      composite_video_asset_id: sceneData.composite_video_asset_id,
+      updated_metadata: sceneEntity.metadata ?? {},
+    }
+  }
+
   // ─── Step 3: animate ──────────────────────────────────────────────────────
   const shotResultsResult =
     options.mode === "sequential"
