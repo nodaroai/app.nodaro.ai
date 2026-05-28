@@ -85,10 +85,10 @@ describe("findRecentMatchingJob", () => {
     expect(result).toEqual({ id: "job-1" })
   })
 
-  it("filters by user_id and fingerprint", async () => {
-    await findRecentMatchingJob("user-42", "fp-xyz")
+  it("filters by user_id and idempotency_key", async () => {
+    await findRecentMatchingJob("user-42", "key-xyz")
     expect(mocks.eq1Mock).toHaveBeenCalledWith("user_id", "user-42")
-    expect(mocks.eq2Mock).toHaveBeenCalledWith("input_fingerprint", "fp-xyz")
+    expect(mocks.eq2Mock).toHaveBeenCalledWith("idempotency_key", "key-xyz")
   })
 
   it("filters by created_at within DEDUP_TTL_MS window", async () => {

@@ -9,6 +9,7 @@ import { getModelCreditBaseCost } from "../ee/billing/credits.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { VIDEO_GEN_PROVIDERS, SEEDANCE_2_REF_LIMITS, isSeedance2Provider, estimateLoopTrimAddonCredits } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -216,24 +217,37 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // reconcile defaults to "generate-image" and tries to upload an LTX
     // video as an image. Always "image-to-video" here — this route only
     // serves i2v; the t2v route is `/v1/text-to-video`.
-    const { data: job, error } = await supabase
-      .from("jobs")
-      .insert({
-        workflow_id: extractWorkflowId(req.body),
-        force_private: extractForcePrivate(req.body) || undefined,
-        user_id: userId,
-        job_type: "image-to-video",
-        status: "pending",
-        input_data: buildJobInputData(parsed.data, "image-to-video"),
-        ...(mcpClient ? { mcp_client: mcpClient } : {}),
-      })
-      .select("id")
-      .single()
-
-    if (error) {
+    //
+    // Race-proof INSERT: see generate-image.ts for the rationale. If a
+    // concurrent caller already inserted with the same (user_id,
+    // idempotency_key), the DB UNIQUE constraint catches it and we get
+    // back the winner's row with `created: false`.
+    let insertResult: { row: { id: string }; created: boolean }
+    try {
+      insertResult = await insertWithIdempotencyKey<{ id: string }>(
+        "jobs",
+        {
+          workflow_id: extractWorkflowId(req.body),
+          force_private: extractForcePrivate(req.body) || undefined,
+          user_id: userId,
+          job_type: "image-to-video",
+          status: "pending",
+          input_data: buildJobInputData(parsed.data, "image-to-video"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
+        },
+        req.idempotencyKey,
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "internal_error", message },
       })
+    }
+    const job = insertResult.row
+
+    if (!insertResult.created) {
+      reply.header("X-Dedup-Hit", "1")
+      return reply.code(200).send({ jobId: job.id, deduped: true })
     }
 
     // Reserve credits

@@ -30,6 +30,7 @@ const motionTransferBody = z.object({
   imageUrl: safeUrlSchema,
   videoUrl: safeUrlSchema,
   prompt: z.string().max(2500).optional(),
+  negativePrompt: z.string().max(2500).optional(),
   userPrompt: z.string().max(8000).optional(),
   characterOrientation: z.enum(["image", "video"]).default("image"),
   resolution: z.enum(["480p", "580p", "720p", "1080p"]).default("720p"),
@@ -55,7 +56,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       })
     }
 
-    const { imageUrl, videoUrl, prompt, characterOrientation, resolution, provider, backgroundSource, videoDuration } = parsed.data
+    const { imageUrl, videoUrl, prompt, negativePrompt, characterOrientation, resolution, provider, backgroundSource, videoDuration } = parsed.data
     const userId = req.userId
 
     if (!userId) {
@@ -93,6 +94,7 @@ export async function motionTransferRoutes(app: FastifyInstance) {
       imageUrl,
       videoUrl,
       prompt,
+      negativePrompt,
       characterOrientation,
       resolution,
       provider,

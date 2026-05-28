@@ -271,7 +271,11 @@ describe("POST /v1/workflows/:id/run", () => {
           }),
         } as never
       }
-      // Create execution
+      // Create execution — via insertWithIdempotencyKey. With no
+      // Idempotency-Key header in the test request, the helper takes
+      // the plain-INSERT branch (no key = no dedup). Mock both chains
+      // for robustness — `upsert` path is exercised when the test sends
+      // a header.
       return {
         insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
@@ -279,6 +283,12 @@ describe("POST /v1/workflows/:id/run", () => {
               data: { id: TEST_EXEC_ID },
               error: null,
             }),
+          }),
+        }),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({
+            data: [{ id: TEST_EXEC_ID }],
+            error: null,
           }),
         }),
       } as never
@@ -341,6 +351,12 @@ describe("POST /v1/workflows/:id/run", () => {
               data: null,
               error: { message: "insert failed" },
             }),
+          }),
+        }),
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockResolvedValue({
+            data: null,
+            error: { message: "insert failed" },
           }),
         }),
       } as never

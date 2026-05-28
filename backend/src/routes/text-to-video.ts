@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { TEXT_TO_VIDEO_PROVIDERS, SEEDANCE_2_REF_LIMITS } from "@nodaro/shared"
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -86,24 +87,35 @@ export async function textToVideoRoutes(app: FastifyInstance) {
     // job_type powers the reconcile cron's correct finalization path —
     // see lib/reconcile/replicate.ts (defaults to "generate-image" when
     // null, which mis-uploads videos as images).
-    const { data: job, error } = await supabase
-      .from("jobs")
-      .insert({
-        workflow_id: extractWorkflowId(req.body),
-        force_private: extractForcePrivate(req.body) || undefined,
-        user_id: userId,
-        job_type: "text-to-video",
-        status: "pending",
-        input_data: buildJobInputData(parsed.data, "text-to-video"),
-        ...(mcpClient ? { mcp_client: mcpClient } : {}),
-      })
-      .select("id")
-      .single()
-
-    if (error) {
+    //
+    // Race-proof INSERT via DB UNIQUE constraint on (user_id,
+    // idempotency_key). See generate-image.ts for full rationale.
+    let insertResult: { row: { id: string }; created: boolean }
+    try {
+      insertResult = await insertWithIdempotencyKey<{ id: string }>(
+        "jobs",
+        {
+          workflow_id: extractWorkflowId(req.body),
+          force_private: extractForcePrivate(req.body) || undefined,
+          user_id: userId,
+          job_type: "text-to-video",
+          status: "pending",
+          input_data: buildJobInputData(parsed.data, "text-to-video"),
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
+        },
+        req.idempotencyKey,
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "internal_error", message },
       })
+    }
+    const job = insertResult.row
+
+    if (!insertResult.created) {
+      reply.header("X-Dedup-Hit", "1")
+      return reply.code(200).send({ jobId: job.id, deduped: true })
     }
 
     // Reserve credits

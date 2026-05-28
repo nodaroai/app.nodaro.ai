@@ -1,8 +1,8 @@
 "use client"
 
-import { memo, useState, useEffect, useRef, useCallback } from "react"
-import { Position, type NodeProps } from "@xyflow/react"
-import { Waypoints, Film, Image as ImageIcon, Type, Loader2, AlertCircle, X, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { Waypoints, Film, Image as ImageIcon, Type, Minus, Users, Loader2, AlertCircle, X, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { HandleWithPopover } from "./handle-with-popover"
 import { isValidMotionTransferConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
@@ -21,9 +21,24 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { MotionTransferData } from "@/types/nodes"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
-const ACCEPTS_IMAGE  = (t: string) => isValidMotionTransferConnection("image",  t)
-const ACCEPTS_VIDEO  = (t: string) => isValidMotionTransferConnection("video",  t)
-const ACCEPTS_PROMPT = (t: string) => isValidMotionTransferConnection("prompt", t, isPickerType)
+const ACCEPTS_PROMPT   = (t: string) => isValidMotionTransferConnection("prompt",   t, isPickerType)
+const ACCEPTS_NEGATIVE = (t: string) => isValidMotionTransferConnection("negative", t)
+const ACCEPTS_IMAGE    = (t: string) => isValidMotionTransferConnection("image",    t)
+const ACCEPTS_VIDEO    = (t: string) => isValidMotionTransferConnection("video",    t)
+const ACCEPTS_ASSETS   = (t: string) => isValidMotionTransferConnection("assets",   t)
+
+// Bottom-up clusters: 28px within cluster, 40px between clusters.
+// Mirrors generate-video's HANDLE_TOP pattern.
+//   Text:    prompt(24) → negative(52)
+//   Image:   image(92)  → video(120)        (gap 40 → 92)
+//   Pickers: assets(160)                    (gap 40 → 160)
+const HANDLE_TOP = {
+  prompt:   "calc(100% - 24px)",
+  negative: "calc(100% - 52px)",
+  image:    "calc(100% - 92px)",
+  video:    "calc(100% - 120px)",
+  assets:   "calc(100% - 160px)",
+} as const
 
 function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as MotionTransferData
@@ -76,6 +91,30 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
 
   const maxDuration = nodeData.characterOrientation === "image" ? 10 : 30
 
+  // BaseNode handles array — declared once, deps-free useMemo so RF's
+  // `useUpdateNodeInternals` only re-registers handle bounds when the node id
+  // changes (i.e., never after mount), not on every render.
+  const handles = useMemo(
+    () => [
+      { id: "prompt",   type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.prompt,   left: "-29px" }, external: true },
+      { id: "negative", type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.negative, left: "-29px" }, external: true },
+      { id: "image",    type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.image,    left: "-29px" }, external: true },
+      { id: "video",    type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.video,    left: "-29px" }, external: true },
+      { id: "assets",   type: "target" as const, position: Position.Left,  customStyle: { top: HANDLE_TOP.assets,   left: "-29px" }, external: true },
+      { id: "video",    type: "source" as const, position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
+    ],
+    [],
+  )
+
+  // Re-register handles with React Flow on mount. Without this, edges drawn
+  // toward newly-added typed handles (e.g., after a workflow load) can snap
+  // visually to stale positions — the symptom that surfaced as "drag line
+  // points at the output even though it lands on the right target."
+  const updateNodeInternals = useUpdateNodeInternals()
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [id, handles, updateNodeInternals])
+
   return (
     <div className="relative" style={{ width: "100%", height: "100%" }}>
     <EditableNodeLabel
@@ -92,7 +131,9 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       selected={selected}
       isRunning={status === "running"}
       minWidth={200}
-      minHeight={mediaAspectRatio ? Math.round(200 / mediaAspectRatio) : 150}
+      // 5 input pips spanning 24..160px from bottom + 28px headroom → floor 188.
+      // Once a result lands, mediaAspectRatio drives the size but never below 188.
+      minHeight={mediaAspectRatio ? Math.max(188, Math.round(200 / mediaAspectRatio)) : 188}
       imageAspectRatio={mediaAspectRatio}
       hideHeader
       bottomToolbarContent={
@@ -137,12 +178,7 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       topToolbarContent={
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
-      handles={[
-        { id: "video",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
-        { id: "image",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
-        { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
-        { id: "video",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
-      ]}
+      handles={handles}
     >
       <div className="relative w-full h-full group/video">
         {/* Video / thumbnail */}
@@ -283,10 +319,15 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"  type="target" position={Position.Left}  label="Source video" color="#A78BFA" icon={<Film />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="image"  type="target" position={Position.Left}  label="Character"    color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_IMAGE} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="prompt" type="target" position={Position.Left}  label="Prompt"       color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"  type="source" position={Position.Right} label="Video"        color="#A78BFA" icon={<Film />}      side="right" top="24px" />
+    {/* 5 typed input pips + 1 output pip — bottom-up clusters:
+        text → image → pickers. Colors mirror generate-video so wires read
+        as the source node's brand. */}
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="prompt"   type="target" position={Position.Left}  label="Prompt"    color="#ff0073" icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}   accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="negative" type="target" position={Position.Left}  label="Negative"  color="#ef4444" icon={<Minus />}     side="left"  top={HANDLE_TOP.negative} accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="image"    type="target" position={Position.Left}  label="Character" color="#22D3EE" icon={<ImageIcon />} side="left"  top={HANDLE_TOP.image}    accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="target" position={Position.Left}  label="Motion"    color="#A78BFA" icon={<Film />}      side="left"  top={HANDLE_TOP.video}    accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="assets"   type="target" position={Position.Left}  label="Assets"    color="#F472B6" icon={<Users />}     side="left"  top={HANDLE_TOP.assets}   accepts={ACCEPTS_ASSETS} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="source" position={Position.Right} label="Video"     color="#A78BFA" icon={<Film />}      side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

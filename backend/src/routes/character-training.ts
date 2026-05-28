@@ -154,8 +154,21 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
           TRAINING_CREDIT_ID,
         )
         if (reply.sent) {
-          // creditGuard already responded (402/503). Throw to enter the catch
-          // so CAS + zip cleanup fire.
+          // creditGuard already responded. Two distinct reply.sent causes:
+          //  (a) 402 insufficient_credits — user needs more credits; we
+          //      should run the full cleanup (CAS rollback + zip delete)
+          //      because the training row was created but no credits hold
+          //      and Replicate was not dispatched.
+          //  (b) 503 dedup_race_winner_unresolvable — the dedup-race
+          //      detector intercepted the request. The training row was
+          //      INSERTed but reserveCreditsForJob has ALREADY deleted it
+          //      best-effort (deleteJobBestEffort); no credits reserved,
+          //      no Replicate dispatch, and the CAS lora_training_status
+          //      claim still belongs to whoever is processing the
+          //      winning request. Running the cleanup here would clobber
+          //      that legitimate in-flight training.
+          // The 503 path returns cleanly; only 402 enters the catch.
+          if (reply.statusCode === 503) return
           throw new Error("reservation_failed_reply_sent")
         }
         if (!reservation) throw new Error("reservation_failed")

@@ -1435,6 +1435,20 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
       {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
+        <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+          <TagTextarea
+            value={data.negativePrompt ?? ""}
+            onChange={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })}
+            placeholder="Optional: Describe what to avoid…"
+            rows={2}
+            nodeRefs={nodeRefs}
+            displayMode={variableDisplayMode}
+            refMap={refMap}
+          />
+          <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/2500</span>
+        </MappableField>
+      )}
+      {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
         <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
             value={data.characterOrientation || "video"}

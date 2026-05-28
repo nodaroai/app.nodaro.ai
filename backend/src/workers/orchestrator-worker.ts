@@ -12,6 +12,7 @@ import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
+import { updateExecutionWithRetry } from "../lib/execution-writes.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
@@ -75,18 +76,78 @@ export function getParallelismLimit(tier: string | undefined): number {
  */
 const STALE_EXECUTION_THRESHOLD_MS = 4 * 60 * 60 * 1000 // 4 hours
 
+/** Cap per-restart sweep so a large backlog (e.g., several hundred stuck
+ *  rows after a prolonged outage) doesn't hold up worker startup. Each row
+ *  costs a reconcile-node-states query + a retry-aware UPDATE; at 3-retry
+ *  exhaustion this can take ~500ms per row sequentially. The
+ *  workflow-executions reconcile cron (90s interval) picks up the
+ *  remainder on subsequent ticks. */
+const STARTUP_RECONCILE_BATCH_LIMIT = 100
+
 async function cleanupStaleExecutions(): Promise<void> {
   const { data: rows, error } = await supabase
     .from("workflow_executions")
     .select("id, started_at, node_states")
     .in("status", ["running", "stopping"])
+    // ORDER BY started_at ASC so oldest stuck rows are processed first.
+    // Without an explicit order, PostgREST returns heap-order rows —
+    // a deployment with a persistent backlog and write failures could
+    // re-process the same front-of-the-list rows on every restart and
+    // never advance past them. Oldest-first ordering also prioritizes
+    // the executions most likely to be genuinely abandoned. Nulls last
+    // so a row with NULL started_at doesn't monopolize the head.
+    .order("started_at", { ascending: true, nullsFirst: false })
+    .limit(STARTUP_RECONCILE_BATCH_LIMIT)
 
   if (error || !rows || rows.length === 0) return
 
+  // Counter outcomes:
+  //   reconciledCompleted — write succeeded with status='completed'
+  //   reconciledFailed    — write succeeded with status='failed'
+  //   abandoned           — write succeeded with status='failed' (>4h stale or null started_at)
+  //   cancelledRaces      — write returned cancelledRace=true (user cancelled mid-flight)
+  //   writeFailures       — write threw after 3-retry exhaustion
+  //   skipped             — row didn't meet any terminal-write condition (genuinely-active execution)
+  // Invariant: every row increments exactly one counter; rows.length == sum.
   let reconciledCompleted = 0
   let reconciledFailed = 0
   let abandoned = 0
+  let cancelledRaces = 0
+  let writeFailures = 0
+  let skipped = 0
   const now = Date.now()
+
+  /**
+   * Run a terminal updateExecutionWithRetry call and update the right
+   * counter based on the outcome. Single source of truth for the 3
+   * branches below — keeps error message format consistent and ensures
+   * cancelledRace is always counted separately from a successful write.
+   */
+  async function tryTerminalWrite(
+    rowId: string,
+    updates: Record<string, unknown>,
+    action: string,
+    onSuccess: () => void,
+  ): Promise<void> {
+    try {
+      const result = await updateExecutionWithRetry(rowId, updates)
+      if (result.cancelledRace) {
+        // The user cancelled between SELECT and UPDATE; the row was NOT
+        // written. Track separately from successful reconciliation so
+        // ops can distinguish "user cancellations during recovery" from
+        // genuine reconciliation throughput.
+        cancelledRaces++
+        return
+      }
+      onSuccess()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error(
+        `[orchestrator] cleanupStaleExecutions: failed to ${action} ${rowId}: ${detail}`,
+      )
+      writeFailures++
+    }
+  }
 
   for (const row of rows) {
     const rawStates = (row.node_states ?? {}) as Record<string, NodeExecutionState>
@@ -103,20 +164,12 @@ async function cleanupStaleExecutions(): Promise<void> {
     const anyActive = nodeStatuses.some((s) => s === "pending" || s === "running")
 
     if (allCompleted) {
-      // .neq("status", "cancelled") to avoid the same overwrite race during
-      // stale-execution reconciliation: row was selected with status="running"
-      // but the user could cancel between SELECT and this UPDATE.
       const updates: Record<string, unknown> = {
         status: "completed",
         completed_at: new Date().toISOString(),
       }
       if (changed) updates.node_states = states
-      await supabase
-        .from("workflow_executions")
-        .update(updates)
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      reconciledCompleted++
+      await tryTerminalWrite(row.id, updates, "flip to completed", () => { reconciledCompleted++ })
       continue
     }
 
@@ -131,38 +184,53 @@ async function cleanupStaleExecutions(): Promise<void> {
         completed_at: new Date().toISOString(),
       }
       if (changed) updates.node_states = states
-      await supabase
-        .from("workflow_executions")
-        .update(updates)
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      reconciledFailed++
+      await tryTerminalWrite(row.id, updates, "flip to failed", () => { reconciledFailed++ })
       continue
     }
 
-    // Only mark as failed if this row is *really* stale — otherwise let
-    // BullMQ's stalled-job retry pick it back up.
-    // .neq("status", "cancelled") to avoid overwriting a user cancellation.
+    // A null started_at means the row was INSERTed but the orchestrator
+    // died before its first `UPDATE … SET status='running', started_at=now()`.
+    // The worker never claimed it; treat as immediately abandoned so the
+    // user can re-run instead of waiting 4h for the threshold.
+    // For non-null started_at, only abandon when past the >4h threshold —
+    // otherwise let BullMQ's stalled-job retry pick it back up.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
-    if (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
-      await supabase
-        .from("workflow_executions")
-        .update({
+    const isAbandonable =
+      startedAt === 0 ||
+      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS)
+
+    if (isAbandonable) {
+      await tryTerminalWrite(
+        row.id,
+        {
           status: "failed",
-          error_message: "Execution abandoned — no active orchestrator worker",
+          error_message:
+            startedAt === 0
+              ? "Execution failed — orchestrator never claimed this row (never started)"
+              : "Execution abandoned — no active orchestrator worker",
           completed_at: new Date().toISOString(),
-        })
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      abandoned++
+        },
+        "mark abandoned",
+        () => { abandoned++ },
+      )
+      continue
     }
+
+    // Row is genuinely active — left for BullMQ stalled-retry.
+    skipped++
   }
 
   const reconciled = reconciledCompleted + reconciledFailed
-  if (reconciled > 0 || abandoned > 0) {
-    const leftForRetry = rows.length - reconciled - abandoned
+  if (reconciled > 0 || abandoned > 0 || cancelledRaces > 0 || writeFailures > 0 || skipped > 0) {
+    // leftForRetry = rows that NEITHER reconciled-terminal-state NOR were
+    // attempted-but-failed. writeFailures rows will be re-tried by the
+    // 90s reconcile cron, so they're not "left for BullMQ retry" — but
+    // they're not resolved either. Surface them as a separate field
+    // rather than burying them in leftForRetry, and don't double-count
+    // them in the formula.
+    const leftForRetry = rows.length - reconciled - abandoned - cancelledRaces - writeFailures - skipped
     console.log(
-      `[orchestrator] Startup reconcile: ${reconciledCompleted} completed, ${reconciledFailed} failed, ${abandoned} abandoned, ${leftForRetry} left for retry`,
+      `[orchestrator] Startup reconcile: ${reconciledCompleted} completed, ${reconciledFailed} failed, ${abandoned} abandoned, ${cancelledRaces} cancelled-races, ${writeFailures} write-failures, ${skipped} skipped, ${leftForRetry} left for retry`,
     )
   }
 }
@@ -1141,14 +1209,22 @@ async function failExecution(
   if (failedNodes !== undefined) updates.failed_nodes = failedNodes
   if (totalCredits !== undefined) updates.total_credits_used = totalCredits
 
-  // .neq("status", "cancelled") so a fail-write doesn't overwrite a user
-  // cancellation that landed in the same window. Same rationale as
-  // updateExecution() — terminal states must not clobber "cancelled".
-  await supabase
-    .from("workflow_executions")
-    .update(updates)
-    .eq("id", executionId)
-    .neq("status", "cancelled")
+  // Use the retry-aware helper so a transient DB error doesn't strand the
+  // row in "running" with no terminal status — the prior fire-and-forget
+  // UPDATE silently swallowed errors. cancelledRace is fine to ignore
+  // here (the cancellation stands; we don't want to fail-overwrite it).
+  try {
+    await updateExecutionWithRetry(executionId, updates)
+  } catch (err) {
+    // Final terminal write failed even after retries. Log loudly so the
+    // workflow_executions reconciler (added in this PR) can sweep it up
+    // on the next 5-min tick. Do NOT re-throw — failExecution is itself
+    // the failure-handling path and we don't want to recursively fail.
+    const detail = err instanceof Error ? err.message : String(err)
+    console.error(
+      `[orchestrator] failExecution: persistent write failure for ${executionId} (${detail}). Row will be reconciled by cron.`,
+    )
+  }
 
   emitExecutionEvent({
     type: "execution:failed",
@@ -1165,22 +1241,34 @@ async function updateExecution(
   executionId: string,
   updates: Record<string, unknown>,
 ): Promise<void> {
-  const builder = supabase
-    .from("workflow_executions")
-    .update(updates)
-    .eq("id", executionId)
-
-  // Terminal-state transitions must NEVER overwrite a row the user already
-  // cancelled. Otherwise, between checkExecutionControl and this UPDATE the
-  // user can hit /v1/workflow-executions/:id/cancel — and the orchestrator
-  // would silently flip status from "cancelled" back to "completed"/"failed",
-  // claiming work the user actually cancelled (and which has already had its
-  // child-job credits refunded by the cancel route).
-  if (updates.status === "completed" || updates.status === "failed") {
-    builder.neq("status", "cancelled")
+  // Delegate to the retry-aware helper. Terminal writes (status=completed/
+  // failed) retry 3× with exponential backoff and THROW on persistent
+  // failure — that's the load-bearing fix for the "stuck at 100%" bug,
+  // where the prior fire-and-forget UPDATE silently swallowed transient
+  // DB errors and left the row in "running" forever.
+  //
+  // Per-level (non-terminal) writes don't retry: the next level's write
+  // will catch up, so wasting cycles on transient retries here is
+  // pointless. We log the error so it's visible in Railway logs.
+  //
+  // The .neq("status", "cancelled") guard for terminal writes is inside
+  // updateExecutionWithRetry — it returns { ok: false, cancelledRace: true }
+  // when the row was concurrently cancelled, which we just respect (no
+  // throw) since the cancellation is the correct outcome.
+  try {
+    const result = await updateExecutionWithRetry(executionId, updates)
+    if (!result.ok && !result.cancelledRace) {
+      console.error(
+        `[orchestrator] non-terminal updateExecution failed for ${executionId} after ${result.attempts} attempts`,
+      )
+    }
+  } catch (err) {
+    // Terminal write exhausted all retries. Re-throw so the orchestrator's
+    // outer try/catch flags the execution as failed AND BullMQ records the
+    // job as failed. The stalled-job handler + cleanupStaleExecutions on
+    // next restart will pick it back up.
+    throw err
   }
-
-  await builder
 }
 
 function emitExecutionEvent(event: ExecutionEvent): void {

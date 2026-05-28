@@ -205,8 +205,13 @@ export async function imageCriticRoutes(app: FastifyInstance) {
         })
       }
 
-      await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+      const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
       if (reply.sent) return
+      // Capture for downstream commit/refund paths even if not currently
+      // referenced — every other route in the codebase preserves this
+      // value, and dropping it here makes future credit-flow changes
+      // silently fail on the sync path.
+      void reservation
 
       await markProviderCallStart(job.id, "anthropic-sync")
 

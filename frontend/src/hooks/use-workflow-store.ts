@@ -2018,7 +2018,12 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       const IMAGE_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
         "generate-image", "upload-image", "edit-image", "image-to-image",
         "modify-image", "upscale-image", "remove-background", "generate-mask",
-        "face-swap", "character", "face", "object", "location", "scene",
+        "face-swap", "scene",
+      ])
+      // Identity entities route to the `assets` typed handle (mirrors
+      // generate-video's assets handle for character/face/object/location).
+      const IDENTITY_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
+        "character", "face", "object", "location",
       ])
       const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
         "image-to-video", "text-to-video", "generate-video", "video-to-video",
@@ -2083,8 +2088,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         } else if (targetType === "motion-transfer" && next.targetHandle === "video") {
           // Phase 21's blanket `in` → `video` rewrite for motion-transfer
           // dropped its multi-type input shape. Re-classify by source so
-          // image and prompt edges land on their correct typed handles.
-          if (IMAGE_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
+          // image / assets / prompt edges land on their correct typed handles.
+          if (IDENTITY_TYPES_FOR_CLASSIFIER.has(sourceType)) {
+            next = { ...next, targetHandle: "assets" }
+          } else if (IMAGE_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
             next = { ...next, targetHandle: "image" }
           } else if (!VIDEO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
             next = { ...next, targetHandle: "prompt" }

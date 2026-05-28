@@ -15,6 +15,7 @@
 import { supabase } from "../supabase.js"
 import { orchestrationQueue } from "../orchestration-queue.js"
 import { reconcileNodeStatesFromJobs } from "./node-states.js"
+import { updateExecutionWithRetry } from "../execution-writes.js"
 import type { NodeExecutionState } from "../../services/workflow-engine/types.js"
 
 /**
@@ -78,6 +79,10 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     .select("id, started_at, node_states")
     .in("status", ["running", "stopping"])
     .lt("started_at", backoffCutoff)
+    // Oldest-first ordering for the same reason as cleanupStaleExecutions:
+    // a backlog with persistent write failures shouldn't re-process the
+    // same heap-order rows on every tick.
+    .order("started_at", { ascending: true, nullsFirst: false })
     .limit(BATCH_LIMIT)
 
   if (error) {
@@ -91,6 +96,37 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
   let reconciledFailed = 0
   let abandoned = 0
   let skipped = 0
+  let cancelledRaces = 0
+  let writeFailures = 0
+
+  /**
+   * Run a terminal updateExecutionWithRetry call and update the right
+   * counter based on the outcome. Mirrors the helper in
+   * orchestrator-worker.ts::cleanupStaleExecutions — single source of
+   * truth for counter semantics (cancelledRace and writeFailures are
+   * distinct from "successful reconciliation").
+   */
+  async function tryTerminalWrite(
+    rowId: string,
+    updates: Record<string, unknown>,
+    action: string,
+    onSuccess: () => void,
+  ): Promise<void> {
+    try {
+      const result = await updateExecutionWithRetry(rowId, updates)
+      if (result.cancelledRace) {
+        cancelledRaces++
+        return
+      }
+      onSuccess()
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error(
+        `[reconcile/workflow-executions] failed to ${action} ${rowId}: ${detail}`,
+      )
+      writeFailures++
+    }
+  }
 
   for (const row of rows) {
     scanned++
@@ -108,12 +144,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
         completed_at: new Date().toISOString(),
       }
       if (changed) updates.node_states = states
-      await supabase
-        .from("workflow_executions")
-        .update(updates)
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      reconciledCompleted++
+      await tryTerminalWrite(row.id, updates, "flip to completed", () => { reconciledCompleted++ })
       continue
     }
 
@@ -124,27 +155,32 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
         completed_at: new Date().toISOString(),
       }
       if (changed) updates.node_states = states
-      await supabase
-        .from("workflow_executions")
-        .update(updates)
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      reconciledFailed++
+      await tryTerminalWrite(row.id, updates, "flip to failed", () => { reconciledFailed++ })
       continue
     }
 
+    // Null started_at: orchestrator never claimed the row. Treat as
+    // immediately abandonable so the user can re-run. Non-null started_at
+    // requires the >4h threshold to avoid racing a healthy orchestrator.
     const startedAt = row.started_at ? new Date(row.started_at).getTime() : 0
-    if (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS) {
-      await supabase
-        .from("workflow_executions")
-        .update({
+    const isAbandonable =
+      startedAt === 0 ||
+      (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS)
+
+    if (isAbandonable) {
+      await tryTerminalWrite(
+        row.id,
+        {
           status: "failed",
-          error_message: "Execution abandoned — no orchestrator activity for >4h",
+          error_message:
+            startedAt === 0
+              ? "Execution failed — orchestrator never claimed this row (never started)"
+              : "Execution abandoned — no orchestrator activity for >4h",
           completed_at: new Date().toISOString(),
-        })
-        .eq("id", row.id)
-        .neq("status", "cancelled")
-      abandoned++
+        },
+        "mark abandoned",
+        () => { abandoned++ },
+      )
       continue
     }
 
@@ -174,21 +210,21 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
       }
     }
 
-    await supabase
-      .from("workflow_executions")
-      .update({
+    await tryTerminalWrite(
+      row.id,
+      {
         status: "failed",
         error_message: "Execution orphaned — no orchestrator job in queue (reconciled by cron)",
         completed_at: new Date().toISOString(),
-      })
-      .eq("id", row.id)
-      .neq("status", "cancelled")
-    abandoned++
+      },
+      "mark orphaned",
+      () => { abandoned++ },
+    )
   }
 
-  if (reconciledCompleted > 0 || reconciledFailed > 0 || abandoned > 0) {
+  if (reconciledCompleted > 0 || reconciledFailed > 0 || abandoned > 0 || cancelledRaces > 0 || writeFailures > 0) {
     console.log(
-      `[reconcile/workflow-executions] tick: scanned=${scanned} completed=${reconciledCompleted} failed=${reconciledFailed} abandoned=${abandoned} skipped=${skipped} (${Date.now() - start}ms)`,
+      `[reconcile/workflow-executions] tick: scanned=${scanned} completed=${reconciledCompleted} failed=${reconciledFailed} abandoned=${abandoned} skipped=${skipped} cancelled-races=${cancelledRaces} write-failures=${writeFailures} (${Date.now() - start}ms)`,
     )
   }
 }

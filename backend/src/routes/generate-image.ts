@@ -8,6 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
+import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import { buildCreditModelIdentifier } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -254,23 +255,38 @@ export async function generateImageRoutes(app: FastifyInstance) {
         )
 
     const mcpClient = extractMcpClient(req.body)
-    const { data: job, error } = await supabase
-      .from("jobs")
-      .insert({
-        workflow_id: extractWorkflowId(req.body),
-        force_private: extractForcePrivate(req.body) || undefined,
-        user_id: userId,
-        status: "pending",
-        input_data: { ...buildJobInputData(parsed.data, "generate-image"), prompt },
-        ...(mcpClient ? { mcp_client: mcpClient } : {}),
-      })
-      .select("id")
-      .single()
 
-    if (error) {
+    // Race-proof INSERT: if a concurrent caller already inserted a row with
+    // the same (user_id, idempotency_key), the DB UNIQUE constraint catches
+    // it and we get back the winner's row with `created: false`. Skip credit
+    // reservation in that case — the original caller already reserved.
+    let insertResult: { row: { id: string }; created: boolean }
+    try {
+      insertResult = await insertWithIdempotencyKey<{ id: string }>(
+        "jobs",
+        {
+          workflow_id: extractWorkflowId(req.body),
+          force_private: extractForcePrivate(req.body) || undefined,
+          user_id: userId,
+          status: "pending",
+          input_data: { ...buildJobInputData(parsed.data, "generate-image"), prompt },
+          ...(mcpClient ? { mcp_client: mcpClient } : {}),
+        },
+        req.idempotencyKey,
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
       return reply.status(500).send({
-        error: { code: "internal_error", message: error.message },
+        error: { code: "internal_error", message },
       })
+    }
+    const job = insertResult.row
+
+    if (!insertResult.created) {
+      // Dedup hit at the DB layer (race winner already exists). Mirror the
+      // preHandler dedup-hit response so callers see a consistent contract.
+      reply.header("X-Dedup-Hit", "1")
+      return reply.code(200).send({ jobId: job.id, deduped: true })
     }
 
     // Reserve credits

@@ -242,6 +242,7 @@ export async function motionTransfer(
     resolution?: "480p" | "580p" | "720p" | "1080p"
     provider?: string
     backgroundSource?: "input_video" | "input_image"
+    negativePrompt?: string
   },
   reconcileOpts?: ReconcileOpts,
 ): Promise<RouteResult> {

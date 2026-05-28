@@ -1334,7 +1334,7 @@ export function resolveNodeInputs(
       src.type === "face" ||
       src.type === "object"
     ) {
-      if (node.type === "lip-sync" || node.type === "speech-to-video") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer") {
         inputs.imageUrl = output;
       } else {
         inputs.referenceImageUrls = [
@@ -1365,7 +1365,7 @@ export function resolveNodeInputs(
       // consumer can field-map a specific variant via a `"bucket[idx]"`
       // string in its `fieldMappings`; otherwise the helper falls back to
       // the anchor image. See `injectLocationContext` above for details.
-      if (node.type === "lip-sync" || node.type === "speech-to-video") {
+      if (node.type === "lip-sync" || node.type === "speech-to-video" || node.type === "motion-transfer") {
         inputs.imageUrl = output;
       } else {
         const consumerFieldMappings = (node.data as Record<string, unknown> | undefined)?.fieldMappings as Readonly<Record<string, unknown>> | undefined;

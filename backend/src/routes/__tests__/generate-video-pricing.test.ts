@@ -25,8 +25,14 @@ const fakeProfile = {
   storage_used_bytes: 0, storage_limit_bytes: 1e10,
 }
 
+// Route uses insertWithIdempotencyKey — plain INSERT when no header is
+// supplied (the no-dedup path), upsert when a header IS sent. Mock both
+// chains so the test works under either client behavior.
 const fakeJobInsert = vi.fn(() => ({
   select: () => ({ single: () => Promise.resolve({ data: { id: "job-1" }, error: null }) }),
+}))
+const fakeJobUpsert = vi.fn(() => ({
+  select: () => Promise.resolve({ data: [{ id: "job-1" }], error: null }),
 }))
 const fakeJobUpdate = vi.fn(() => ({ eq: () => Promise.resolve({ data: null, error: null }) }))
 
@@ -36,7 +42,7 @@ vi.mock("../../lib/supabase.js", () => ({
       if (table === "profiles") {
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: fakeProfile, error: null }) }) }) }
       }
-      if (table === "jobs") return { insert: fakeJobInsert, update: fakeJobUpdate }
+      if (table === "jobs") return { insert: fakeJobInsert, upsert: fakeJobUpsert, update: fakeJobUpdate }
       if (table === "model_pricing") {
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { credit_cost: 19, is_enabled: true, tier_restriction: null }, error: null }) }) }) }
       }

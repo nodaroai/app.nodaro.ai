@@ -1122,6 +1122,7 @@ export class KieVideoProvider
       resolution?: "480p" | "580p" | "720p" | "1080p"
       provider?: string
       backgroundSource?: "input_video" | "input_image"
+      negativePrompt?: string
     },
     reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
@@ -1192,6 +1193,9 @@ export class KieVideoProvider
 
       if (prompt) {
         input.prompt = prompt
+      }
+      if (options?.negativePrompt) {
+        input.negative_prompt = options.negativePrompt
       }
 
       console.log(
@@ -1277,6 +1281,9 @@ export class KieVideoProvider
     // Add optional prompt if provided
     if (prompt) {
       input.prompt = prompt
+    }
+    if (options?.negativePrompt) {
+      input.negative_prompt = options.negativePrompt
     }
 
     console.log(
