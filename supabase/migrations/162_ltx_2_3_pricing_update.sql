@@ -6,7 +6,7 @@
 ***REDACTED-OSS-SCRUB***
 -- Extend + retake are Pro-only at 1080p → 5 credits/sec.
 --
--- Replaces (not seeded twice): migration 159_ltx_2_3_models.sql inserted placeholders
+-- Replaces (not seeded twice): migration 161_ltx_2_3_models.sql inserted placeholders
 -- 6–10× higher. This UPDATE corrects every existing row in-place.
 
 UPDATE model_pricing SET credit_cost = 30  WHERE model_identifier = 'ltx-2.3-pro';
