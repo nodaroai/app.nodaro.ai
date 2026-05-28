@@ -106,7 +106,7 @@ ${JSON.stringify(eligibleVideoModelsWithStyle, null, 2)}
 
 CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
 - nano-banana-2
-- flux-pro
+- flux
 - gpt-image
 
 Return a SceneNodeData via the emit tool.`

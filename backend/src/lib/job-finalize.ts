@@ -269,7 +269,7 @@ export async function finalizeJobWithMedia(
     provider: result.providerUsed,
     provider_cost: result.cost,
     display_cost: result.displayCost,
-    ...(result.kieTaskId && { kie_task_id: result.kieTaskId }),
+    ...(result.kieTaskId && { provider_task_id: result.kieTaskId }),
   })
   if (!ok) return { ok: false }
 
