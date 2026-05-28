@@ -1,0 +1,36 @@
+-- 165 (placeholder — superseded by migration 166)
+--
+-- Why this file exists
+-- --------------------
+-- The original migration 165 was a race-condition casualty. Two PRs
+-- (#2873 and #2875) landed concurrently with files both prefixed
+-- `165_`, but Supabase tracks migrations by a PRIMARY KEY on
+-- `schema_migrations.version` — only ONE row at version 165 can exist.
+-- Whichever ran first won; the other always crashed with
+-- `duplicate key value violates unique constraint "schema_migrations_pkey"`
+-- and every subsequent deploy retried it.
+--
+-- PR #2877 deleted BOTH 165 files and added `166_idempotency_constraint_convergence.sql`
+-- to converge every environment onto the same canonical UNIQUE
+-- constraint regardless of which 165 file had won the race. End state
+-- is correct on every database.
+--
+-- But: the Supabase CLI's `db push` / migration check compares
+-- `schema_migrations` against the local files and rejects any deploy
+-- where a remote version is missing locally. Production already has
+-- (version=165, name="idempotency_index_non_partial") and staging has
+-- (version=165, name="idempotency_unique_constraint") — both reference
+-- a file with prefix `165_` that we deleted. The check fails with
+-- "Remote migration versions not found in local migrations directory."
+--
+-- This placeholder file's only job is to make `165_*` exist locally
+-- so the CLI sees the version. The body is a no-op. The actual
+-- migration work is in `166_idempotency_constraint_convergence.sql`.
+--
+-- Future devs reading this: if you're tempted to delete this file,
+-- don't. It's load-bearing for the CLI's local↔remote sync check
+-- until every environment's schema_migrations row at version=165 is
+-- cleared (which requires manual DB intervention we've chosen not to
+-- do — the placeholder is cheaper and harmless).
+
+SELECT 1 WHERE false;
