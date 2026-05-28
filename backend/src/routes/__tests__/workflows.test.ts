@@ -418,9 +418,12 @@ describe("PATCH /v1/workflows/:id", () => {
   it("returns 404 when not found", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,
-      error: { code: "PGRST116", message: "not found" },
+      error: null,
     })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    // After optimistic-locking landed, the PATCH handler uses `.maybeSingle()`
+    // so a 0-row result is no longer expressed as a PGRST116 error — it's
+    // `data === null` with no error. Mock matches the new chain.
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -439,7 +442,7 @@ describe("PATCH /v1/workflows/:id", () => {
   it("returns 200 on name-only update", async () => {
     const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -461,7 +464,7 @@ describe("PATCH /v1/workflows/:id", () => {
     const newEdges = [{ source: "n1", target: "n2" }]
     const updated = { ...DB_WORKFLOW_FULL, nodes: newNodes, edges: newEdges }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -486,7 +489,7 @@ describe("PATCH /v1/workflows/:id", () => {
   it("returns 200 on folderId set to null", async () => {
     const updated = { ...DB_WORKFLOW_FULL, folder_id: null }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -508,7 +511,7 @@ describe("PATCH /v1/workflows/:id", () => {
   it("returns 200 on sourcePrompt update", async () => {
     const updated = { ...DB_WORKFLOW_FULL, source_prompt: "New prompt" }
     const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -530,7 +533,7 @@ describe("PATCH /v1/workflows/:id", () => {
       data: null,
       error: { code: "OTHER", message: "DB error" },
     })
-    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
@@ -544,6 +547,77 @@ describe("PATCH /v1/workflows/:id", () => {
     })
 
     expect(res.statusCode).toBe(500)
+  })
+
+  it("returns 409 when expectedUpdatedAt mismatches the row's current updated_at", async () => {
+    // First call: UPDATE chain — `.eq(id).eq(user_id).eq(updated_at).select().maybeSingle()`
+    // returns 0 rows because optimistic lock failed. Second call: SELECT
+    // fallback to fetch the current `updated_at` so the handler can echo
+    // it in the 409 body.
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
+    const updateEq3 = vi.fn().mockReturnValue({ select: updateSelect })
+    const updateEq2 = vi.fn().mockReturnValue({ eq: updateEq3 })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
+
+    const currentMaybeSingle = vi.fn().mockResolvedValue({
+      data: { updated_at: "2026-01-02T00:00:00Z" },
+      error: null,
+    })
+    const currentEq2 = vi.fn().mockReturnValue({ maybeSingle: currentMaybeSingle })
+    const currentEq1 = vi.fn().mockReturnValue({ eq: currentEq2 })
+    const mockSelectTop = vi.fn().mockReturnValue({ eq: currentEq1 })
+
+    // The handler hits `supabase.from("workflows")` twice — first for the
+    // UPDATE, then for the fallback SELECT. The mock returns both shapes
+    // on the same `from()` since chained method calls only pull what each
+    // path needs.
+    vi.mocked(supabase.from).mockReturnValue({
+      update: mockUpdate,
+      select: mockSelectTop,
+    } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        name: "stale",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+      },
+    })
+
+    expect(res.statusCode).toBe(409)
+    const body = res.json()
+    expect(body.error.code).toBe("workflow_conflict")
+    expect(body.error.currentUpdatedAt).toBe("2026-01-02T00:00:00Z")
+    // Verify the optimistic lock filter was chained.
+    expect(updateEq3).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
+  })
+
+  it("returns 200 when expectedUpdatedAt matches (happy path)", async () => {
+    const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
+    const updateEq3 = vi.fn().mockReturnValue({ select: updateSelect })
+    const updateEq2 = vi.fn().mockReturnValue({ eq: updateEq3 })
+    const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        name: "Updated",
+        expectedUpdatedAt: "2026-01-01T00:00:00Z",
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(updateEq3).toHaveBeenCalledWith("updated_at", "2026-01-01T00:00:00Z")
   })
 })
 
@@ -637,9 +711,9 @@ describe("cross-tenant denial", () => {
   it("PATCH /v1/workflows/:id — foreign-owner row is 404 and update is user-scoped", async () => {
     const mockSingle = vi.fn().mockResolvedValue({
       data: null,
-      error: { code: "PGRST116", message: "no rows" },
+      error: null,
     })
-    const mockSelectAfterEq = vi.fn().mockReturnValue({ single: mockSingle })
+    const mockSelectAfterEq = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
     const mockEq2 = vi.fn().mockReturnValue({ select: mockSelectAfterEq })
     const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
     const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })

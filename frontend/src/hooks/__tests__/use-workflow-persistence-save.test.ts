@@ -11,6 +11,9 @@ const mockLoadWorkflow = vi.fn()
 const mockSetWorkflowId = vi.fn()
 const mockMarkClean = vi.fn()
 const mockSetSaveStatus = vi.fn()
+const mockSetLoadedUpdatedAt = vi.fn()
+const mockSetRemoteUpdatedAt = vi.fn()
+const mockApplySaveSuccess = vi.fn()
 
 // Store state that can be mutated per test
 let storeState: Record<string, unknown> = {}
@@ -25,6 +28,8 @@ function resetStoreState(overrides: Record<string, unknown> = {}) {
     flowPromptTemplates: {},
     presentationSettings: { runTarget: "workflow" },
     saveStatus: "idle",
+    loadedUpdatedAt: null,
+    remoteUpdatedAt: null,
     ...overrides,
   }
 }
@@ -64,6 +69,9 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setWorkflowId: mockSetWorkflowId,
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
+          setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          applySaveSuccess: mockApplySaveSuccess,
         }),
       {
         getState: () => ({
@@ -72,6 +80,9 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setWorkflowId: mockSetWorkflowId,
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
+          setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          applySaveSuccess: mockApplySaveSuccess,
         }),
         setState: vi.fn(),
         subscribe: vi.fn(),
@@ -104,18 +115,35 @@ function makeEdge(id: string, source: string, target: string) {
   return { id, source, target, type: "default" }
 }
 
-/** Set up supabase.from("workflows").update(...).eq(...) chain for update (existing workflow). */
-function setupSupabaseUpdate(error: { message: string } | null = null) {
+/**
+ * Set up `supabase.from("workflows").update(...).eq("id", ...).select(...)
+ * .maybeSingle()` chain for the optimistic-locking save path. When
+ * `loadedUpdatedAt` is set on the store, the handler chains a second
+ * `.eq("updated_at", ...)` before `.select()` — the mock supports both
+ * variants by returning the same `select` from either branch.
+ */
+function setupSupabaseUpdate(
+  error: { message: string } | null = null,
+  updatedAt = "2026-01-02T00:00:00Z",
+) {
+  const maybeSingle = vi.fn().mockResolvedValue({
+    data: error ? null : { updated_at: updatedAt },
+    error,
+  })
+  const select = vi.fn().mockReturnValue({ maybeSingle })
+  const eqUpdatedAt = vi.fn().mockReturnValue({ select })
+  const eqId = vi.fn().mockReturnValue({ select, eq: eqUpdatedAt })
   mockSupabaseFrom.mockReturnValue({
-    update: vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error }),
-    }),
+    update: vi.fn().mockReturnValue({ eq: eqId }),
   })
 }
 
-/** Set up supabase.from("workflows").insert(...).select("id").single() chain for insert (new workflow). */
+/** Set up supabase.from("workflows").insert(...).select("id, updated_at").single() chain for insert (new workflow). */
 function setupSupabaseInsert(
-  data: { id: string } | null = { id: "new-workflow-id" },
+  data: { id: string; updated_at?: string } | null = {
+    id: "new-workflow-id",
+    updated_at: "2026-01-02T00:00:00Z",
+  },
   error: { message: string } | null = null,
 ) {
   mockSupabaseFrom.mockReturnValue({
@@ -190,8 +218,11 @@ describe("useWorkflowPersistence — save", () => {
 
     // The payload should use the arg-project, verify via the from call
     expect(mockSupabaseFrom).toHaveBeenCalledWith("workflows")
-    // The update was called which means it resolved correctly
-    expect(mockMarkClean).toHaveBeenCalled()
+    // The update was called which means it resolved correctly — post-save
+    // bookkeeping (clean + cursor advance + status flip) is now done
+    // atomically by applySaveSuccess so we assert against that instead of
+    // the legacy individual markClean call.
+    expect(mockApplySaveSuccess).toHaveBeenCalled()
   })
 
   // -----------------------------------------------------------------------
@@ -203,9 +234,10 @@ describe("useWorkflowPersistence — save", () => {
     const edges = [makeEdge("e1", "n1", "n2")]
     resetStoreState({ workflowId: "existing-wf-id", workflowName: "My Flow", nodes, edges })
 
-    const mockUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    })
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
+    const select = vi.fn().mockReturnValue({ maybeSingle })
+    const eqId = vi.fn().mockReturnValue({ select })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
     const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
@@ -305,7 +337,7 @@ describe("useWorkflowPersistence — save", () => {
   // Status transitions
   // -----------------------------------------------------------------------
 
-  it("transitions through saving -> saved -> idle statuses on success", async () => {
+  it("transitions through saving -> applySaveSuccess -> idle on success", async () => {
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
     setupSupabaseUpdate()
 
@@ -315,13 +347,15 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
 
-    // Should have been called with "saving" first, then "saved"
+    // "saving" is still set via setSaveStatus before the HTTP roundtrip;
+    // the post-save "saved" flip now lives inside applySaveSuccess so it
+    // batches with the cursor advance — assert against both paths.
     const statusCalls = mockSetSaveStatus.mock.calls.map((c: unknown[]) => c[0])
     expect(statusCalls).toContain("saving")
-    expect(statusCalls).toContain("saved")
+    expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
 
-    // After 2000ms, it should reset to "idle"
-    // We need the store to report "saved" when getState() is called
+    // After 2000ms, the fade timer flips status back to "idle".
+    // We need the store to report "saved" when getState() is called.
     storeState.saveStatus = "saved"
 
     await act(async () => {
@@ -364,12 +398,92 @@ describe("useWorkflowPersistence — save", () => {
   })
 
   // -----------------------------------------------------------------------
-  // markClean
+  // Optimistic-lock conflict (0-row UPDATE with `loadedUpdatedAt` filter)
   // -----------------------------------------------------------------------
 
-  it("calls markClean after successful save", async () => {
+  it("sets remoteUpdatedAt to the DB's current updated_at when the fallback fetch succeeds", async () => {
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1")],
+      loadedUpdatedAt: "2026-01-01T00:00:00Z",
+    })
+
+    // Optimistic-lock chain: UPDATE returns 0 rows (data=null, error=null).
+    // Then save() issues a fallback SELECT that returns the current value.
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
+    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect })
+    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
+
+    const fallbackMaybeSingle = vi.fn().mockResolvedValue({
+      data: { updated_at: "2026-01-02T00:00:00Z" },
+      error: null,
+    })
+    const fallbackEq = vi.fn().mockReturnValue({ maybeSingle: fallbackMaybeSingle })
+    const fallbackSelect = vi.fn().mockReturnValue({ eq: fallbackEq })
+
+    mockSupabaseFrom.mockReturnValue({
+      update: mockUpdate,
+      select: fallbackSelect,
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    let saveResult: { success: boolean; error?: string } | undefined
+    await act(async () => {
+      saveResult = await result.current.save()
+    })
+
+    expect(saveResult!.success).toBe(false)
+    expect(saveResult!.error).toBe("remote_conflict")
+    expect(mockSetRemoteUpdatedAt).toHaveBeenCalledWith("2026-01-02T00:00:00Z")
+    // The success-path batch action must NOT be called.
+    expect(mockApplySaveSuccess).not.toHaveBeenCalled()
+  })
+
+  it("falls back to a sentinel `conflict:<iso>` when the fallback fetch returns no updated_at", async () => {
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1")],
+      loadedUpdatedAt: "2026-01-01T00:00:00Z",
+    })
+
+    // UPDATE returns 0 rows AND the fallback SELECT also returns no row
+    // (concurrent delete or transient read failure). Without the sentinel
+    // the autosave gate would stay null and hot-retry every 3 seconds.
+    const updateMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateMaybeSingle })
+    const eqUpdatedAt = vi.fn().mockReturnValue({ select: updateSelect })
+    const eqId = vi.fn().mockReturnValue({ eq: eqUpdatedAt, select: updateSelect })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
+
+    const fallbackMaybeSingle = vi.fn().mockResolvedValue({ data: null, error: null })
+    const fallbackEq = vi.fn().mockReturnValue({ maybeSingle: fallbackMaybeSingle })
+    const fallbackSelect = vi.fn().mockReturnValue({ eq: fallbackEq })
+
+    mockSupabaseFrom.mockReturnValue({
+      update: mockUpdate,
+      select: fallbackSelect,
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    // The sentinel is any non-null string that differs from loadedUpdatedAt.
+    // We only assert the prefix to keep the test deterministic across clocks.
+    const lastCall = mockSetRemoteUpdatedAt.mock.calls.at(-1) as [string | null] | undefined
+    expect(lastCall?.[0]).toMatch(/^conflict:/)
+  })
+
+  // -----------------------------------------------------------------------
+  // applySaveSuccess (batched post-save bookkeeping)
+  // -----------------------------------------------------------------------
+
+  it("calls applySaveSuccess once with the returned updated_at after a successful save", async () => {
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
-    setupSupabaseUpdate()
+    setupSupabaseUpdate(null, "2026-03-04T12:00:00Z")
 
     const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
 
@@ -377,10 +491,13 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
 
-    expect(mockMarkClean).toHaveBeenCalledTimes(1)
+    // Batched: markClean + setLoadedUpdatedAt + setRemoteUpdatedAt + status
+    // flip happen in one Zustand set() to close the realtime echo race.
+    expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
+    expect(mockApplySaveSuccess).toHaveBeenCalledWith("2026-03-04T12:00:00Z")
   })
 
-  it("does NOT call markClean on save failure", async () => {
+  it("does NOT call applySaveSuccess on save failure", async () => {
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
     setupSupabaseUpdate({ message: "DB error" })
 
@@ -390,7 +507,7 @@ describe("useWorkflowPersistence — save", () => {
       await result.current.save()
     })
 
-    expect(mockMarkClean).not.toHaveBeenCalled()
+    expect(mockApplySaveSuccess).not.toHaveBeenCalled()
   })
 
   // -----------------------------------------------------------------------
@@ -402,9 +519,10 @@ describe("useWorkflowPersistence — save", () => {
     const originalEdge = makeEdge("e1", "n1", "n2")
     resetStoreState({ workflowId: "w1", nodes: [originalNode], edges: [originalEdge] })
 
-    const mockUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    })
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
+    const select = vi.fn().mockReturnValue({ maybeSingle })
+    const eqId = vi.fn().mockReturnValue({ select })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
     const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
@@ -433,9 +551,10 @@ describe("useWorkflowPersistence — save", () => {
       flowPromptTemplates: templates,
     })
 
-    const mockUpdate = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    })
+    const maybeSingle = vi.fn().mockResolvedValue({ data: { updated_at: "T1" }, error: null })
+    const select = vi.fn().mockReturnValue({ maybeSingle })
+    const eqId = vi.fn().mockReturnValue({ select })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: eqId })
     mockSupabaseFrom.mockReturnValue({ update: mockUpdate })
 
     const { result } = renderHook(() => useWorkflowPersistence("proj-1"))

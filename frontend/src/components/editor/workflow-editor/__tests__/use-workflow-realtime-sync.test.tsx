@@ -18,14 +18,8 @@ interface SubscribeRecord {
   handler: (payload: { new: unknown }) => void
 }
 
-// One record per subscribe(). The active subscription is always the last
-// one — tests can introspect the array to confirm exactly one channel was
-// opened (or that an old one was removed when workflowId changed).
 const subscribeLog: SubscribeRecord[] = []
 const removeChannelMock = vi.fn()
-
-// Stable channel object returned by .channel(name) so tests can compare
-// identity to the argument passed to removeChannel.
 let nextChannelId = 0
 
 function makeChannel(channelName: string) {
@@ -72,15 +66,24 @@ vi.mock("@/lib/supabase", () => ({
 // ---------------------------------------------------------------------------
 // Test harness — drives the hook with controllable params + exposes the
 // captured event handler so each test can fire a synthetic UPDATE payload
-// and inspect the resulting onAppend* invocations.
+// and inspect the resulting callback invocations.
 // ---------------------------------------------------------------------------
 
 interface HarnessParams {
   workflowId: string | null | undefined
   currentNodes: readonly Node[]
   currentEdges: readonly Edge[]
+  isDirty: boolean
+  loadedUpdatedAt: string | null
+  onReconcile: (args: {
+    nodes: Node[]
+    edges: Edge[]
+    updatedAt: string
+    settings: Record<string, unknown> | null
+  }) => void
   onAppendNodes: (newNodes: Node[]) => void
   onAppendEdges: (newEdges: Edge[]) => void
+  onRemoteUpdatedAt: (updatedAt: string) => void
 }
 
 function Harness(props: HarnessParams) {
@@ -88,8 +91,12 @@ function Harness(props: HarnessParams) {
     workflowId: props.workflowId,
     getCurrentNodes: () => props.currentNodes,
     getCurrentEdges: () => props.currentEdges,
+    getIsDirty: () => props.isDirty,
+    getLoadedUpdatedAt: () => props.loadedUpdatedAt,
+    onReconcile: props.onReconcile,
     onAppendNodes: props.onAppendNodes,
     onAppendEdges: props.onAppendEdges,
+    onRemoteUpdatedAt: props.onRemoteUpdatedAt,
   })
   return null
 }
@@ -114,6 +121,21 @@ function lastSubscription(): SubscribeRecord {
   return subscribeLog[subscribeLog.length - 1]
 }
 
+function defaultProps(overrides: Partial<HarnessParams> = {}): HarnessParams {
+  return {
+    workflowId: "wf-1",
+    currentNodes: [],
+    currentEdges: [],
+    isDirty: false,
+    loadedUpdatedAt: null,
+    onReconcile: vi.fn(),
+    onAppendNodes: vi.fn(),
+    onAppendEdges: vi.fn(),
+    onRemoteUpdatedAt: vi.fn(),
+    ...overrides,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -127,17 +149,7 @@ describe("useWorkflowRealtimeSync", () => {
   })
 
   it("subscribes on mount with the workflow:<id> channel name and id-filtered postgres_changes config", () => {
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
-    render(
-      <Harness
-        workflowId="abc-123"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
+    render(<Harness {...defaultProps({ workflowId: "abc-123" })} />)
 
     expect(channelFactory).toHaveBeenCalledTimes(1)
     expect(channelFactory).toHaveBeenCalledWith("workflow:abc-123")
@@ -150,288 +162,386 @@ describe("useWorkflowRealtimeSync", () => {
   })
 
   it("does NOT subscribe when workflowId is null/undefined (hook is a no-op)", () => {
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
-    const { rerender } = render(
-      <Harness
-        workflowId={null}
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
+    const { rerender } = render(<Harness {...defaultProps({ workflowId: null })} />)
     expect(channelFactory).not.toHaveBeenCalled()
 
-    rerender(
-      <Harness
-        workflowId={undefined}
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
+    rerender(<Harness {...defaultProps({ workflowId: undefined })} />)
     expect(channelFactory).not.toHaveBeenCalled()
   })
 
   it("unsubscribes on unmount", () => {
-    const { unmount } = render(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={vi.fn()}
-        onAppendEdges={vi.fn()}
-      />,
-    )
+    const { unmount } = render(<Harness {...defaultProps()} />)
     expect(removeChannelMock).not.toHaveBeenCalled()
     unmount()
     expect(removeChannelMock).toHaveBeenCalledTimes(1)
   })
 
   it("tears down old subscription and opens a fresh one when workflowId changes", () => {
-    const { rerender } = render(
-      <Harness
-        workflowId="wf-A"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={vi.fn()}
-        onAppendEdges={vi.fn()}
-      />,
-    )
+    const { rerender } = render(<Harness {...defaultProps({ workflowId: "wf-A" })} />)
     expect(channelFactory).toHaveBeenCalledTimes(1)
     expect(channelFactory).toHaveBeenLastCalledWith("workflow:wf-A")
-    expect(removeChannelMock).not.toHaveBeenCalled()
 
-    rerender(
-      <Harness
-        workflowId="wf-B"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={vi.fn()}
-        onAppendEdges={vi.fn()}
-      />,
-    )
+    rerender(<Harness {...defaultProps({ workflowId: "wf-B" })} />)
     expect(removeChannelMock).toHaveBeenCalledTimes(1)
     expect(channelFactory).toHaveBeenCalledTimes(2)
     expect(channelFactory).toHaveBeenLastCalledWith("workflow:wf-B")
   })
 
-  it("calls onAppendNodes with ONLY new nodes (filtered by id) on UPDATE", () => {
-    const existing = makeNode("n1")
+  // -------------------------------------------------------------------------
+  // Reconcile path (local clean)
+  // -------------------------------------------------------------------------
+
+  it("full reconciles when local state is clean (replaces nodes/edges with broadcast)", () => {
+    const onReconcile = vi.fn()
     const onAppendNodes = vi.fn()
     const onAppendEdges = vi.fn()
+    const local = [makeNode("n1"), makeNode("removed-node")]
     render(
       <Harness
-        workflowId="wf-1"
-        currentNodes={[existing]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
+        {...defaultProps({
+          currentNodes: local,
+          isDirty: false,
+          loadedUpdatedAt: "2026-01-01T00:00:00Z",
+          onReconcile,
+          onAppendNodes,
+          onAppendEdges,
+        })}
       />,
     )
 
-    const incoming = [existing, makeNode("n2"), makeNode("n3")]
-    lastSubscription().handler({ new: { id: "wf-1", nodes: incoming, edges: [] } })
-
-    expect(onAppendNodes).toHaveBeenCalledTimes(1)
-    const appended = onAppendNodes.mock.calls[0][0] as Node[]
-    expect(appended.map((n) => n.id)).toEqual(["n2", "n3"])
-    expect(onAppendEdges).not.toHaveBeenCalled()
-  })
-
-  it("calls onAppendEdges with ONLY new edges (filtered by id) on UPDATE", () => {
-    const existing = makeEdge("e1", "n1", "n2")
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
-    render(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={[]}
-        currentEdges={[existing]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
-
-    const incoming = [existing, makeEdge("e2", "n2", "n3"), makeEdge("e3", "n3", "n4")]
-    lastSubscription().handler({ new: { id: "wf-1", nodes: [], edges: incoming } })
-
-    expect(onAppendEdges).toHaveBeenCalledTimes(1)
-    const appended = onAppendEdges.mock.calls[0][0] as Edge[]
-    expect(appended.map((e) => e.id)).toEqual(["e2", "e3"])
-    expect(onAppendNodes).not.toHaveBeenCalled()
-  })
-
-  it("does NOT call onAppendNodes when all incoming nodes already exist locally", () => {
-    const a = makeNode("n1")
-    const b = makeNode("n2")
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
-    render(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={[a, b]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
-
+    const incomingNodes = [makeNode("n1"), makeNode("n2")] // "removed-node" gone
+    const incomingEdges = [makeEdge("e1", "n1", "n2")]
     lastSubscription().handler({
-      new: { id: "wf-1", nodes: [a, b], edges: [] },
+      new: {
+        id: "wf-1",
+        nodes: incomingNodes,
+        edges: incomingEdges,
+        updated_at: "2026-01-02T00:00:00Z",
+        settings: { characterDefinitions: [], flowPromptTemplates: {} },
+      },
     })
 
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+    const arg = onReconcile.mock.calls[0][0] as {
+      nodes: Node[]
+      edges: Edge[]
+      updatedAt: string
+      settings: Record<string, unknown> | null
+    }
+    expect(arg.nodes.map((n) => n.id)).toEqual(["n1", "n2"])
+    expect(arg.edges.map((e) => e.id)).toEqual(["e1"])
+    expect(arg.updatedAt).toBe("2026-01-02T00:00:00Z")
+    expect(arg.settings).toEqual({ characterDefinitions: [], flowPromptTemplates: {} })
     expect(onAppendNodes).not.toHaveBeenCalled()
     expect(onAppendEdges).not.toHaveBeenCalled()
   })
 
-  it("does NOT call onAppendEdges when all incoming edges already exist locally", () => {
-    const e1 = makeEdge("e1", "a", "b")
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
+  it("forwards null settings to the reconcile callback when the payload omits the column", () => {
+    const onReconcile = vi.fn()
     render(
       <Harness
-        workflowId="wf-1"
-        currentNodes={[]}
-        currentEdges={[e1]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
-
-    lastSubscription().handler({
-      new: { id: "wf-1", nodes: [], edges: [e1] },
-    })
-
-    expect(onAppendEdges).not.toHaveBeenCalled()
-    expect(onAppendNodes).not.toHaveBeenCalled()
-  })
-
-  it("handles UPDATE events that change both nodes and edges in a single payload", () => {
-    const onAppendNodes = vi.fn()
-    const onAppendEdges = vi.fn()
-    render(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt: "T0",
+          onReconcile,
+        })}
       />,
     )
 
     lastSubscription().handler({
       new: {
         id: "wf-1",
-        nodes: [makeNode("n1"), makeNode("n2")],
-        edges: [makeEdge("e1", "n1", "n2")],
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "T1",
+        // settings intentionally omitted (legacy/sparse row)
       },
     })
 
-    expect(onAppendNodes).toHaveBeenCalledTimes(1)
-    expect((onAppendNodes.mock.calls[0][0] as Node[]).map((n) => n.id)).toEqual(["n1", "n2"])
-    expect(onAppendEdges).toHaveBeenCalledTimes(1)
-    expect((onAppendEdges.mock.calls[0][0] as Edge[]).map((e) => e.id)).toEqual(["e1"])
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+    expect(
+      (onReconcile.mock.calls[0][0] as { settings: unknown }).settings,
+    ).toBeNull()
   })
 
-  it("is idempotent: replaying the SAME payload twice does not double-append", () => {
-    const onAppendNodes = vi.fn<(newNodes: Node[]) => void>()
-    const onAppendEdges = vi.fn()
+  // -------------------------------------------------------------------------
+  // Append-only path (local dirty)
+  // -------------------------------------------------------------------------
 
-    // Simulate the caller wiring through actual append into a local
-    // reference so the second event sees the appended nodes as already
-    // existing.
-    const localNodes: Node[] = []
-    function handleAppend(newNodes: Node[]) {
-      onAppendNodes(newNodes)
-      localNodes.push(...newNodes)
-    }
-
-    const { rerender } = render(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={localNodes}
-        currentEdges={[]}
-        onAppendNodes={handleAppend}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
-
-    const payload = { new: { id: "wf-1", nodes: [makeNode("n1")], edges: [] } }
-    lastSubscription().handler(payload)
-    expect(onAppendNodes).toHaveBeenCalledTimes(1)
-    expect((onAppendNodes.mock.calls[0][0] as Node[]).map((n) => n.id)).toEqual(["n1"])
-
-    // Re-render so the harness reads the now-populated localNodes; the
-    // hook's getCurrentNodes callback will see "n1" as existing.
-    rerender(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={localNodes}
-        currentEdges={[]}
-        onAppendNodes={handleAppend}
-        onAppendEdges={onAppendEdges}
-      />,
-    )
-
-    lastSubscription().handler(payload)
-    // Still 1 — second event sees n1 as existing in current state.
-    expect(onAppendNodes).toHaveBeenCalledTimes(1)
-  })
-
-  it("uses the LATEST getCurrent* callbacks on each event (no stale closure)", () => {
+  it("falls back to append-only when local state is dirty (preserves local edits)", () => {
+    const onReconcile = vi.fn()
     const onAppendNodes = vi.fn()
-    let currentNodes: readonly Node[] = []
-
-    const { rerender } = render(
+    const onAppendEdges = vi.fn()
+    const local = [makeNode("n1"), makeNode("locally-added")]
+    render(
       <Harness
-        workflowId="wf-1"
-        currentNodes={currentNodes}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={vi.fn()}
+        {...defaultProps({
+          currentNodes: local,
+          isDirty: true,
+          loadedUpdatedAt: "2026-01-01T00:00:00Z",
+          onReconcile,
+          onAppendNodes,
+          onAppendEdges,
+        })}
       />,
     )
 
-    // Capture the handler from the only subscription — workflowId is
-    // stable across re-renders so the same handler is reused.
-    const handler = lastSubscription().handler
+    // Broadcast missing "locally-added" (because it isn't saved yet)
+    // and bringing a new node "n2". Append-only contract must NOT
+    // remove "locally-added" — only appends "n2".
+    const incomingNodes = [makeNode("n1"), makeNode("n2")]
+    lastSubscription().handler({
+      new: {
+        id: "wf-1",
+        nodes: incomingNodes,
+        edges: [],
+        updated_at: "2026-01-02T00:00:00Z",
+      },
+    })
 
-    // User adds n1 locally (drags from sidebar). Re-render with the new
-    // state — the hook's refs now point at currentNodes = [n1].
-    currentNodes = [makeNode("n1")]
-    rerender(
-      <Harness
-        workflowId="wf-1"
-        currentNodes={currentNodes}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={vi.fn()}
-      />,
-    )
-
-    // Realtime event arrives: payload says nodes are [n1, n2]. Without
-    // ref-based callbacks we'd diff against the empty array captured at
-    // subscribe time and incorrectly append n1 a second time. With the
-    // ref pattern, only n2 is new.
-    handler({ new: { id: "wf-1", nodes: [makeNode("n1"), makeNode("n2")], edges: [] } })
-
+    expect(onReconcile).not.toHaveBeenCalled()
     expect(onAppendNodes).toHaveBeenCalledTimes(1)
     expect((onAppendNodes.mock.calls[0][0] as Node[]).map((n) => n.id)).toEqual(["n2"])
   })
 
-  it("tolerates payloads where new is null or nodes/edges are missing/non-array", () => {
-    const onAppendNodes = vi.fn()
+  it("dirty + edges arrive: appends only new edge ids", () => {
     const onAppendEdges = vi.fn()
+    const local = [makeEdge("e1", "a", "b")]
     render(
       <Harness
-        workflowId="wf-1"
-        currentNodes={[]}
-        currentEdges={[]}
-        onAppendNodes={onAppendNodes}
-        onAppendEdges={onAppendEdges}
+        {...defaultProps({
+          currentEdges: local,
+          isDirty: true,
+          loadedUpdatedAt: "T0",
+          onAppendEdges,
+        })}
+      />,
+    )
+
+    lastSubscription().handler({
+      new: {
+        id: "wf-1",
+        nodes: [],
+        edges: [makeEdge("e1", "a", "b"), makeEdge("e2", "b", "c")],
+        updated_at: "T1",
+      },
+    })
+
+    expect(onAppendEdges).toHaveBeenCalledTimes(1)
+    expect((onAppendEdges.mock.calls[0][0] as Edge[]).map((e) => e.id)).toEqual(["e2"])
+  })
+
+  // -------------------------------------------------------------------------
+  // Own-broadcast suppression
+  // -------------------------------------------------------------------------
+
+  it("skips broadcasts whose updated_at matches loadedUpdatedAt (own-save echo)", () => {
+    const onReconcile = vi.fn()
+    const onAppendNodes = vi.fn()
+    const onRemoteUpdatedAt = vi.fn()
+    render(
+      <Harness
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt: "2026-01-02T00:00:00Z",
+          onReconcile,
+          onAppendNodes,
+          onRemoteUpdatedAt,
+        })}
+      />,
+    )
+
+    lastSubscription().handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "2026-01-02T00:00:00Z", // matches local
+      },
+    })
+
+    expect(onReconcile).not.toHaveBeenCalled()
+    expect(onAppendNodes).not.toHaveBeenCalled()
+    expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // Remote-divergence tracking
+  // -------------------------------------------------------------------------
+
+  it("reports remote updated_at on the dirty path (drives the divergence banner)", () => {
+    const onRemoteUpdatedAt = vi.fn()
+    render(
+      <Harness
+        {...defaultProps({
+          isDirty: true,
+          loadedUpdatedAt: "2026-01-01T00:00:00Z",
+          onRemoteUpdatedAt,
+        })}
+      />,
+    )
+
+    lastSubscription().handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "2026-01-02T00:00:00Z",
+      },
+    })
+
+    expect(onRemoteUpdatedAt).toHaveBeenCalledTimes(1)
+    expect(onRemoteUpdatedAt).toHaveBeenCalledWith("2026-01-02T00:00:00Z")
+  })
+
+  it("does NOT call onRemoteUpdatedAt on the clean reconcile path (reconcileFromRemote clears it itself — avoid the wasted set→clear pair)", () => {
+    const onReconcile = vi.fn()
+    const onRemoteUpdatedAt = vi.fn()
+    render(
+      <Harness
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt: "T0",
+          onReconcile,
+          onRemoteUpdatedAt,
+        })}
+      />,
+    )
+
+    lastSubscription().handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "T1",
+      },
+    })
+
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+    expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // Idempotency / fresh-callback contracts
+  // -------------------------------------------------------------------------
+
+  it("is idempotent in the clean path: replaying the SAME payload doesn't double-reconcile when loadedUpdatedAt has advanced", () => {
+    // First event reconciles → caller advances loadedUpdatedAt to T1.
+    // Second event with same updated_at=T1 must short-circuit.
+    const onReconcile = vi.fn<(args: {
+      nodes: Node[]
+      edges: Edge[]
+      updatedAt: string
+    }) => void>()
+    let loadedUpdatedAt: string | null = "T0"
+
+    const { rerender } = render(
+      <Harness
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt,
+          onReconcile,
+        })}
+      />,
+    )
+
+    const handler = lastSubscription().handler
+    handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "T1",
+      },
+    })
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+
+    // Caller (store) advances loadedUpdatedAt to T1.
+    loadedUpdatedAt = "T1"
+    rerender(
+      <Harness
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt,
+          onReconcile,
+        })}
+      />,
+    )
+
+    handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("n1")],
+        edges: [],
+        updated_at: "T1",
+      },
+    })
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses the LATEST callbacks/state on each event (no stale closure)", () => {
+    const onReconcile = vi.fn()
+    let currentNodes: readonly Node[] = []
+    let isDirty = true
+
+    const { rerender } = render(
+      <Harness
+        {...defaultProps({
+          currentNodes,
+          isDirty,
+          loadedUpdatedAt: "T0",
+          onReconcile,
+        })}
+      />,
+    )
+
+    const handler = lastSubscription().handler
+
+    // Local becomes clean (user saved). Re-render with the new state.
+    isDirty = false
+    currentNodes = [makeNode("locally-saved")]
+    rerender(
+      <Harness
+        {...defaultProps({
+          currentNodes,
+          isDirty,
+          loadedUpdatedAt: "T0",
+          onReconcile,
+        })}
+      />,
+    )
+
+    handler({
+      new: {
+        id: "wf-1",
+        nodes: [makeNode("from-remote")],
+        edges: [],
+        updated_at: "T2",
+      },
+    })
+
+    // Should hit the reconcile path now because isDirty flipped to false.
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+    expect(
+      (onReconcile.mock.calls[0][0] as { nodes: Node[] }).nodes.map((n) => n.id),
+    ).toEqual(["from-remote"])
+  })
+
+  it("tolerates payloads where new is null or required fields are missing/non-array", () => {
+    const onReconcile = vi.fn()
+    const onAppendNodes = vi.fn()
+    const onAppendEdges = vi.fn()
+    const onRemoteUpdatedAt = vi.fn()
+    render(
+      <Harness
+        {...defaultProps({
+          isDirty: false,
+          loadedUpdatedAt: "T0",
+          onReconcile,
+          onAppendNodes,
+          onAppendEdges,
+          onRemoteUpdatedAt,
+        })}
       />,
     )
 
@@ -439,14 +549,29 @@ describe("useWorkflowRealtimeSync", () => {
 
     // null new
     expect(() => handler({ new: null })).not.toThrow()
-    // missing nodes / edges fields
-    expect(() => handler({ new: { id: "wf-1" } as unknown as { id: string } })).not.toThrow()
-    // non-array values (e.g. DB legacy column edge cases)
+    // missing updated_at — must skip silently (no reconcile, no banner)
     expect(() =>
-      handler({ new: { id: "wf-1", nodes: null, edges: "not-an-array" } }),
+      handler({ new: { id: "wf-1", nodes: [], edges: [] } as { id: string; nodes: unknown[]; edges: unknown[] } }),
     ).not.toThrow()
+    // non-array nodes / edges with valid updated_at — reconcile to empty
+    handler({
+      new: {
+        id: "wf-1",
+        nodes: null,
+        edges: "not-an-array",
+        updated_at: "T1",
+      } as unknown as { id: string; nodes: unknown; edges: unknown; updated_at: string },
+    })
 
     expect(onAppendNodes).not.toHaveBeenCalled()
     expect(onAppendEdges).not.toHaveBeenCalled()
+    expect(onReconcile).toHaveBeenCalledTimes(1)
+    const arg = onReconcile.mock.calls[0][0] as { nodes: Node[]; edges: Edge[] }
+    expect(arg.nodes).toEqual([])
+    expect(arg.edges).toEqual([])
+    // Clean reconcile path doesn't call onRemoteUpdatedAt — the store's
+    // reconcileFromRemote clears remoteUpdatedAt itself. Only the dirty
+    // path tracks the divergence to drive the banner.
+    expect(onRemoteUpdatedAt).not.toHaveBeenCalled()
   })
 })

@@ -314,7 +314,8 @@ describe("PATCH /v1/workflows/:id (projectId move)", () => {
       data: { ...DB_WORKFLOW_FULL, project_id: OTHER_PROJECT_ID, folder_id: null },
       error: null,
     })
-    const updateSelect = vi.fn().mockReturnValue({ single: updateSingle })
+    // Optimistic-locking landed: PATCH now uses `.maybeSingle()`.
+    const updateSelect = vi.fn().mockReturnValue({ maybeSingle: updateSingle })
     const updateEq2 = vi.fn().mockReturnValue({ select: updateSelect })
     const updateEq1 = vi.fn().mockReturnValue({ eq: updateEq2 })
     const workflowsUpdate = vi.fn().mockReturnValue({ eq: updateEq1 })

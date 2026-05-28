@@ -636,19 +636,35 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   })
 
   // Realtime live-canvas sync: external writers (MCP / Film Director skill
-  // via update_workflow_json) mutate the workflows row directly in the DB.
-  // Subscribe to Postgres UPDATE events for the open workflow id and
-  // append-only diff new nodes/edges into React Flow. The id-keyed mount
-  // animations (D1 node fade-in, D2 edge stretch) and D3 camera auto-pan
-  // naturally fire for the appended items because they're seeing those
-  // ids for the first time. See use-workflow-realtime-sync.ts.
+  // via update_workflow_json) mutate the workflows row directly in the DB,
+  // and the same workflow may be open in another tab / browser / phone.
+  // Subscribe to Postgres UPDATE events for the open workflow id; the
+  // hook applies a full reconcile when local state is clean (snaps to
+  // remote so a passive tab can't resurrect deleted nodes on its next
+  // save) and falls back to append-only when local is dirty (preserves
+  // in-progress edits + the Film Director live-canvas UX). The id-keyed
+  // mount animations (D1 node fade-in, D2 edge stretch) and D3 camera
+  // auto-pan naturally fire for any appended items because they're
+  // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
+  const reconcileFromRemote = useWorkflowStore((s) => s.reconcileFromRemote)
+  const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
   useWorkflowRealtimeSync({
     workflowId: realtimeWorkflowId,
     getCurrentNodes: () => getNodes(),
     getCurrentEdges: () => getEdges(),
+    getIsDirty: () => useWorkflowStore.getState().isDirty,
+    getLoadedUpdatedAt: () => useWorkflowStore.getState().loadedUpdatedAt,
+    onReconcile: ({ nodes: remoteNodes, edges: remoteEdges, updatedAt, settings }) =>
+      reconcileFromRemote({
+        nodes: remoteNodes as unknown as WorkflowNode[],
+        edges: remoteEdges as unknown as WorkflowEdge[],
+        updatedAt,
+        settings,
+      }),
     onAppendNodes: (newNodes) => setNodes((nds) => [...nds, ...newNodes]),
     onAppendEdges: (newEdges) => setEdges((eds) => [...eds, ...newEdges]),
+    onRemoteUpdatedAt: (updatedAt) => setRemoteUpdatedAt(updatedAt),
   })
 
   // ── Playwright dev-only test helper (D4b) ───────────────────────────────

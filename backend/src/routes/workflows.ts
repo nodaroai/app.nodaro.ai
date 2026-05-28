@@ -99,6 +99,12 @@ const updateWorkflowBody = z.object({
   settings: z.record(z.unknown()).optional(),
   sourcePrompt: z.string().max(10000).optional(),
   thumbnailUrl: z.string().url().nullable().optional(),
+  // Optimistic concurrency token — when supplied, the row is updated
+  // ONLY if its current `updated_at` matches. Mismatches return 409
+  // with the actual current `updated_at` so the caller can refetch and
+  // merge. Mirrors the MCP `update_workflow_json` contract; safe to
+  // omit on legacy callers (last-write-wins fallback).
+  expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
 })
 
 const listWorkflowsQuery = z.object({
@@ -451,17 +457,47 @@ export async function workflowRoutes(app: FastifyInstance) {
       if (body.folderId === undefined) updates.folder_id = null
     }
 
-    const { data, error } = await supabase
+    let updateQuery = supabase
       .from("workflows")
       .update(updates)
       .eq("id", params.id)
       .eq("user_id", userId)
-      .select(WORKFLOW_FULL_COLS)
-      .single()
+    if (body.expectedUpdatedAt) {
+      updateQuery = updateQuery.eq("updated_at", body.expectedUpdatedAt)
+    }
 
-    if (error) {
-      if (error.code === PGRST_NOT_FOUND) return notFound(reply, "Workflow not found")
-      return internalError(reply, error.message)
+    const { data, error } = await updateQuery
+      .select(WORKFLOW_FULL_COLS)
+      .maybeSingle()
+
+    // `.maybeSingle()` returns `{ data: null, error: null }` on 0 rows
+    // (no PGRST116 to special-case). Any non-null error here is a real
+    // DB failure — surface as 500.
+    if (error) return internalError(reply, error.message)
+    if (!data) {
+      // 0 rows matched. If the caller opted into optimistic concurrency,
+      // the row exists but `updated_at` shifted (another tab/device wrote
+      // first) — return 409 with the current `updated_at` so the caller
+      // can refetch + merge. If the caller did NOT supply
+      // expectedUpdatedAt, the row truly doesn't exist (or isn't owned).
+      if (body.expectedUpdatedAt) {
+        const { data: current } = await supabase
+          .from("workflows")
+          .select("updated_at")
+          .eq("id", params.id)
+          .eq("user_id", userId)
+          .maybeSingle()
+        if (current?.updated_at) {
+          return reply.status(409).send({
+            error: {
+              code: "workflow_conflict",
+              message: "Workflow was updated by another writer",
+              currentUpdatedAt: current.updated_at,
+            },
+          })
+        }
+      }
+      return notFound(reply, "Workflow not found")
     }
     return { data: toWorkflowFull(data) }
   })

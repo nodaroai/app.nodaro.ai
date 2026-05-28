@@ -402,6 +402,22 @@ interface WorkflowState {
   readonly loadGeneration: number
   readonly saveStatus: SaveStatus
   readonly saveError: string | null
+  /**
+   * `workflows.updated_at` of the row this tab's local state was last
+   * synced from. Used for optimistic locking on save (sent as
+   * `expected_updated_at`) and to skip own-broadcast echoes in the
+   * realtime sync. Set on load, after a successful save, and after a
+   * full reconcile from a remote broadcast. Null when no workflow is
+   * loaded.
+   */
+  readonly loadedUpdatedAt: string | null
+  /**
+   * Most recent `updated_at` observed on a realtime broadcast that did
+   * NOT come from this tab. When this diverges from `loadedUpdatedAt`,
+   * another device wrote a newer version while this tab had unsaved
+   * edits — drives the "workflow updated elsewhere" banner.
+   */
+  readonly remoteUpdatedAt: string | null
   readonly videoAutoplay: boolean
   readonly freecutEdit: { nodeId: string; videoUrl: string; freecutProjectUrl?: string } | null
   readonly openFreeCut: (nodeId: string, videoUrl: string, freecutProjectUrl?: string) => void
@@ -480,6 +496,36 @@ interface WorkflowState {
   readonly clearWorkflow: () => void
   readonly markClean: () => void
   readonly setSaveStatus: (status: SaveStatus, error?: string | null) => void
+  readonly setLoadedUpdatedAt: (updatedAt: string | null) => void
+  readonly setRemoteUpdatedAt: (updatedAt: string | null) => void
+  /**
+   * Atomically apply post-save state changes in a single Zustand `set()`.
+   * Replaces the previous sequence of `setLoadedUpdatedAt → setRemoteUpdatedAt
+   * → markClean → setSaveStatus`, which the realtime subscription could
+   * observe mid-sequence — e.g., seeing `isDirty=false` plus a still-stale
+   * `loadedUpdatedAt` and triggering a redundant full reconcile on our own
+   * save echo. Batching closes that window.
+   */
+  readonly applySaveSuccess: (updatedAt: string) => void
+  /**
+   * Multi-tab/multi-device sync: snap local state to a remote broadcast.
+   * Replaces nodes/edges (and persisted settings fields:
+   * characterDefinitions, flowPromptTemplates, presentationSettings)
+   * with the payload, marks the workflow clean, and advances
+   * `loadedUpdatedAt` to the broadcast version. Used by the realtime
+   * sync when local state had no unsaved edits.
+   *
+   * Tab-local UI state (configPanelFullscreen, savedViewport, etc.)
+   * is preserved — those aren't workflow content. `selectedNodeId` is
+   * cleared if the selected node was removed in the remote snapshot,
+   * to avoid leaving a phantom selection pointing at a deleted id.
+   */
+  readonly reconcileFromRemote: (args: {
+    nodes: WorkflowNode[]
+    edges: WorkflowEdge[]
+    updatedAt: string
+    settings?: Record<string, unknown> | null
+  }) => void
   readonly setVideoAutoplay: (autoplay: boolean) => void
   readonly clearNewNode: (id: string) => void
   readonly runSingleNode: ((nodeId: string) => void) | null
@@ -750,6 +796,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   loadGeneration: 0,
   saveStatus: "idle" as SaveStatus,
   saveError: null,
+  loadedUpdatedAt: null,
+  remoteUpdatedAt: null,
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
     ? localStorage.getItem("videoAutoplay") === "true"
     : true,
@@ -2261,6 +2309,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
+      loadedUpdatedAt: null,
+      remoteUpdatedAt: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
       presentationSettings: presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
@@ -2280,6 +2330,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
       loadGeneration: state.loadGeneration + 1,
       saveStatus: "idle" as SaveStatus,
       saveError: null,
+      loadedUpdatedAt: null,
+      remoteUpdatedAt: null,
       characterDefinitions: [],
       flowPromptTemplates: {},
       presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
@@ -2289,6 +2341,66 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
 
   setSaveStatus: (status, error = null) => set({ saveStatus: status, saveError: error }),
+
+  setLoadedUpdatedAt: (updatedAt) => set({ loadedUpdatedAt: updatedAt }),
+
+  setRemoteUpdatedAt: (updatedAt) => set({ remoteUpdatedAt: updatedAt }),
+
+  applySaveSuccess: (updatedAt) =>
+    set({
+      loadedUpdatedAt: updatedAt,
+      remoteUpdatedAt: null,
+      isDirty: false,
+      saveStatus: "saved" as SaveStatus,
+      saveError: null,
+    }),
+
+  reconcileFromRemote: ({ nodes, edges, updatedAt, settings }) => {
+    const orderedNodes = orderNodesParentFirst(nodes)
+    set((state) => {
+      // `WorkflowState`'s fields are `readonly` for consumers, but
+      // Zustand's `set` accepts a partial-state object — collect the
+      // patch in a plain record and cast on return.
+      const next: Record<string, unknown> = {
+        nodes: orderedNodes,
+        edges,
+        isDirty: false,
+        loadedUpdatedAt: updatedAt,
+        remoteUpdatedAt: null,
+        loadGeneration: state.loadGeneration + 1,
+      }
+
+      // Clear the selection if the selected node id no longer exists
+      // in the remote snapshot — otherwise the config panel renders
+      // for a node that was deleted on another device.
+      if (state.selectedNodeId) {
+        const stillExists = orderedNodes.some((n) => n.id === state.selectedNodeId)
+        if (!stillExists) next.selectedNodeId = null
+      }
+
+      // Apply persisted settings fields. Tab-local fields (viewport)
+      // are intentionally NOT reconciled — each tab keeps its own
+      // pan/zoom. Missing fields are left unchanged on this tab.
+      // `typeof === "object"` matches arrays too, so each non-array
+      // field also rejects arrays explicitly — without that, a payload
+      // shaped `{ flowPromptTemplates: [] }` would be cast to
+      // `Record<string, string>` and silently overwrite the store.
+      if (settings && typeof settings === "object" && !Array.isArray(settings)) {
+        const cd = (settings as Record<string, unknown>).characterDefinitions
+        if (Array.isArray(cd)) next.characterDefinitions = cd as CharacterDefinition[]
+        const ft = (settings as Record<string, unknown>).flowPromptTemplates
+        if (ft && typeof ft === "object" && !Array.isArray(ft)) {
+          next.flowPromptTemplates = ft as Record<string, string>
+        }
+        const ps = (settings as Record<string, unknown>).presentationSettings
+        if (ps && typeof ps === "object" && !Array.isArray(ps)) {
+          next.presentationSettings = ps as PresentationSettings
+        }
+      }
+
+      return next as Partial<WorkflowState>
+    })
+  },
 
   setVideoAutoplay: (autoplay) => {
     if (typeof window !== "undefined") localStorage.setItem("videoAutoplay", String(autoplay))

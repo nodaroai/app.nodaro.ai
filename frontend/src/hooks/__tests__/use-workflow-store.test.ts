@@ -330,6 +330,131 @@ describe("useWorkflowStore", () => {
       expect(useWorkflowStore.getState().isDirty).toBe(false)
     })
   })
+
+  describe("reconcileFromRemote", () => {
+    it("replaces nodes/edges, marks clean, advances loadedUpdatedAt, and clears remoteUpdatedAt", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow(
+        "wf-1",
+        "Test",
+        [{ id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } }] as never,
+        [],
+      )
+      store.setLoadedUpdatedAt("T0")
+      store.setRemoteUpdatedAt("T1")
+      store.setWorkflowName("Dirty Name") // marks isDirty=true
+
+      store.reconcileFromRemote({
+        nodes: [
+          { id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } },
+          { id: "n2", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "b" } },
+        ] as never,
+        edges: [],
+        updatedAt: "T2",
+      })
+
+      const next = useWorkflowStore.getState()
+      expect(next.nodes.map((n) => n.id)).toEqual(["n1", "n2"])
+      expect(next.isDirty).toBe(false)
+      expect(next.loadedUpdatedAt).toBe("T2")
+      expect(next.remoteUpdatedAt).toBeNull()
+    })
+
+    it("clears selectedNodeId when the selected node is no longer in the remote snapshot", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow(
+        "wf-1",
+        "Test",
+        [
+          { id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } },
+          { id: "n2", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "b" } },
+        ] as never,
+        [],
+      )
+      store.selectNode("n2")
+      expect(useWorkflowStore.getState().selectedNodeId).toBe("n2")
+
+      // Remote snapshot drops "n2" — the config panel would otherwise stay
+      // open against a phantom id.
+      store.reconcileFromRemote({
+        nodes: [
+          { id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } },
+        ] as never,
+        edges: [],
+        updatedAt: "T2",
+      })
+
+      expect(useWorkflowStore.getState().selectedNodeId).toBeNull()
+    })
+
+    it("preserves selectedNodeId when the selected node still exists in the remote snapshot", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow(
+        "wf-1",
+        "Test",
+        [
+          { id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } },
+          { id: "n2", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "b" } },
+        ] as never,
+        [],
+      )
+      store.selectNode("n2")
+
+      store.reconcileFromRemote({
+        nodes: [
+          { id: "n1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "a" } },
+          { id: "n2", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "b" } },
+        ] as never,
+        edges: [],
+        updatedAt: "T2",
+      })
+
+      expect(useWorkflowStore.getState().selectedNodeId).toBe("n2")
+    })
+
+    it("applies characterDefinitions / flowPromptTemplates / presentationSettings from the settings payload", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow("wf-1", "Test", [], [])
+
+      store.reconcileFromRemote({
+        nodes: [],
+        edges: [],
+        updatedAt: "T2",
+        settings: {
+          characterDefinitions: [{ id: "c1", name: "Alice" }],
+          flowPromptTemplates: { "node-1": "remote template" },
+          presentationSettings: { runTarget: "node" },
+        },
+      })
+
+      const next = useWorkflowStore.getState()
+      expect(next.characterDefinitions).toEqual([{ id: "c1", name: "Alice" }])
+      expect(next.flowPromptTemplates).toEqual({ "node-1": "remote template" })
+      expect(next.presentationSettings).toEqual({ runTarget: "node" })
+    })
+
+    it("rejects array-shaped settings subfields (typeof array === 'object' slip)", () => {
+      const store = useWorkflowStore.getState()
+      store.loadWorkflow("wf-1", "Test", [], [])
+      store.setFlowPromptTemplates({ "node-1": "before" })
+
+      // Malformed payload: flowPromptTemplates as array. Without the
+      // `!Array.isArray` guard this would silently cast `[]` to
+      // `Record<string, string>` and wipe local state.
+      store.reconcileFromRemote({
+        nodes: [],
+        edges: [],
+        updatedAt: "T2",
+        settings: {
+          flowPromptTemplates: [] as unknown as Record<string, string>,
+          presentationSettings: [] as never,
+        },
+      })
+
+      const next = useWorkflowStore.getState()
+      expect(next.flowPromptTemplates).toEqual({ "node-1": "before" })
+    })
+  })
 })
 
 describe("EXECUTION_DATA_KEYS", () => {

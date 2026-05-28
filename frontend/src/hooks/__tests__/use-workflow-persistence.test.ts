@@ -11,6 +11,8 @@ const mockLoadWorkflow = vi.fn()
 const mockSetWorkflowId = vi.fn()
 const mockMarkClean = vi.fn()
 const mockSetSaveStatus = vi.fn()
+const mockSetLoadedUpdatedAt = vi.fn()
+const mockSetRemoteUpdatedAt = vi.fn()
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -46,6 +48,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
     characterDefinitions: [],
     flowPromptTemplates: {},
     saveStatus: "idle",
+    loadedUpdatedAt: null as string | null,
+    remoteUpdatedAt: null as string | null,
   }
   return {
     useWorkflowStore: Object.assign(
@@ -56,6 +60,9 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setWorkflowId: mockSetWorkflowId,
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
+          setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          applySaveSuccess: vi.fn(),
         }),
       {
         getState: () => ({
@@ -64,6 +71,9 @@ vi.mock("@/hooks/use-workflow-store", () => {
           setWorkflowId: mockSetWorkflowId,
           markClean: mockMarkClean,
           setSaveStatus: mockSetSaveStatus,
+          setLoadedUpdatedAt: mockSetLoadedUpdatedAt,
+          setRemoteUpdatedAt: mockSetRemoteUpdatedAt,
+          applySaveSuccess: vi.fn(),
         }),
         setState: vi.fn(),
         subscribe: vi.fn(),
@@ -97,14 +107,32 @@ function makeNode(overrides: Record<string, unknown> = {}) {
 }
 
 function setupSupabaseLoad(workflowData: Record<string, unknown>) {
+  // Default updated_at when callers don't supply one — keeps the new
+  // optimistic-locking code path happy without forcing every existing
+  // fixture to opt in.
+  const withUpdatedAt = { updated_at: "2026-01-01T00:00:00Z", ...workflowData }
   mockSupabaseFrom.mockReturnValue({
     select: () => ({
       eq: () => ({
-        single: async () => ({ data: workflowData, error: null }),
+        single: async () => ({ data: withUpdatedAt, error: null }),
       }),
     }),
     update: () => ({
-      eq: () => ({ error: null }),
+      eq: () => ({
+        // Direct await path (legacy `await .update(...).eq(...)`).
+        error: null,
+        // New chain: `.eq(...).select("updated_at").maybeSingle()` for the
+        // side-save after node-result sync, and (after one more `.eq` for
+        // optimistic locking) for the save() path.
+        select: () => ({
+          maybeSingle: async () => ({ data: { updated_at: "2026-01-02T00:00:00Z" }, error: null }),
+        }),
+        eq: () => ({
+          select: () => ({
+            maybeSingle: async () => ({ data: { updated_at: "2026-01-02T00:00:00Z" }, error: null }),
+          }),
+        }),
+      }),
     }),
   })
 }
