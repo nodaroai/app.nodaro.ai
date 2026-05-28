@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-05-27T21:51:49.846Z
-generated_from: fc154a3f
+generated_at: 2026-05-28T14:07:28.053Z
+generated_from: 54359c42
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -160,6 +160,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `scene` — Scene
 - `scene-count` — Scene Count
 - `schedule-trigger` — Schedule Trigger
+- `selector` — Selector
 - `setting` — Setting
 - `social-media-format` — Social Media Format
 - `sort-list` — Sort List
