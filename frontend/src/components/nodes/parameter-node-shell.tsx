@@ -79,13 +79,13 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
   const setDisplayMode = (mode: DisplayMode) => {
-    // Clear width + height to auto-fit the new mode's content. Width matters
-    // for fluidWidth pickers: in "prompt" mode the wrapper applies a 220px
-    // cap (long prompt text mustn't drive growth), in "picks"/"both" modes
-    // it removes the cap (the picks grid drives width). Without clearing
-    // width here, a node generated wide in picks mode keeps that width when
-    // toggled to prompt (empty space on the right), and vice-versa.
-    updateNode(id, { width: undefined, height: undefined })
+    // Clear height to auto-fit the new mode's content. Width is preserved:
+    // the picks layout is ALWAYS in the DOM (visually hidden in prompt-only
+    // mode) and the prompt preview uses `width: 0; min-width: 100%` so it
+    // doesn't drive intrinsic width — meaning every mode renders at the
+    // same picks-natural width. Toggling modes only changes vertical
+    // content; horizontal stays put unless the user manually resizes.
+    updateNode(id, { height: undefined })
     updateNodeData(id, { displayMode: mode })
     // Remember the user's preference so the NEXT new parameter node spawns
     // in this mode. Existing nodes are unaffected — they keep their own
@@ -174,7 +174,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   }, [node, nodes, edges])
 
   return (
-    <div ref={wrapperRef} className={cn("group", fluidWidth && displayMode !== "prompt" ? "relative w-full h-full" : "relative max-w-[220px]")}>
+    <div ref={wrapperRef} className={cn("group", fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]")}>
       <div ref={labelRef}>
         <EditableNodeLabel
           label={label}
@@ -231,11 +231,32 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
           </div>
           {/* Wrapper around the actual content children. ResizeObserver
               watches this (no h-full) so when picks add/remove changes
-              the natural content size, we re-fit the node height. */}
+              the natural content size, we re-fit the node height.
+              The picks layout is ALWAYS rendered so its intrinsic width
+              drives the node — when in prompt-only mode it's visually
+              hidden via max-h-0/overflow-hidden/invisible but still
+              participates in width calculation, so toggling modes never
+              changes the node's horizontal size. */}
           <div ref={naturalContentRef}>
-            {(displayMode === "picks" || displayMode === "both") && children}
+            <div
+              className={cn(
+                displayMode === "prompt" &&
+                  "max-h-0 overflow-hidden invisible pointer-events-none",
+              )}
+              aria-hidden={displayMode === "prompt" || undefined}
+            >
+              {children}
+            </div>
             {(displayMode === "prompt" || displayMode === "both") && (
-              <div className={displayMode === "both" ? "mt-3" : ""}>
+              // `width: 0; min-width: 100%` makes the prompt take the
+              // parent's full width WITHOUT contributing to intrinsic
+              // sizing — long single-line prompt text can no longer push
+              // the node wider. The picks layout above is what defines
+              // the natural width; the prompt wraps within it.
+              <div
+                className={displayMode === "both" ? "mt-3" : ""}
+                style={{ width: 0, minWidth: "100%" }}
+              >
                 <PromptPreview text={promptText} />
               </div>
             )}
