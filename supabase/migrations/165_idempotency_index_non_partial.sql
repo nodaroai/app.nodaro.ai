@@ -1,0 +1,24 @@
+-- 165 (neutralized — DO NOT MODIFY)
+--
+-- This migration was committed concurrently with the slightly better
+-- 165_idempotency_unique_constraint.sql (PR #2873), which fixes the
+-- same bug (PostgREST upsert can't match a partial unique index) by
+-- replacing the partial index with a non-partial UNIQUE constraint
+-- on the same column pair. Both files merged in close succession to
+-- dev; in alphabetical order this one runs first (DROP partial INDEX,
+-- CREATE non-partial INDEX) and the other runs immediately after
+-- (DROP my INDEX, ADD CONSTRAINT). End state is correct — the UNIQUE
+-- constraint exists and `ON CONFLICT (user_id, idempotency_key)`
+-- matches it.
+--
+-- The body was neutralized post-merge to (a) stop the migration linter
+-- failing on `CREATE UNIQUE INDEX` without `IF NOT EXISTS` and (b)
+-- prevent any rerun of redundant DROP/CREATE work in environments
+-- where the original body had already been applied. The file is kept
+-- (instead of deleted) so the entry in `supabase_migrations.schema_migrations`
+-- on already-deployed environments still has a backing file.
+--
+-- If you're reading this looking for the real fix, see
+-- `165_idempotency_unique_constraint.sql` in the same directory.
+
+SELECT 1 WHERE false;
