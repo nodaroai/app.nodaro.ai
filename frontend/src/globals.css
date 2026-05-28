@@ -1150,18 +1150,6 @@ html, body {
 .text-prompt-card [data-orientation="vertical"],
 .text-prompt-card [data-orientation="horizontal"] {
   z-index: 10;
-  /* Counter-scale the scrollbar so its 12px track + 8px thumb stays
-     pixel-constant under the node's `transform: scale(zoom)` wrapper.
-     `--inv-zoom` (=1/zoom) is set on the styled card; anchoring the
-     transform-origin to the appropriate corner keeps the scrollbar
-     flush with the viewport edge. */
-  transform: scale(var(--inv-zoom, 1));
-}
-.text-prompt-card [data-orientation="vertical"] {
-  transform-origin: top right;
-}
-.text-prompt-card [data-orientation="horizontal"] {
-  transform-origin: bottom left;
 }
 /* Direct-hover on the Radix scrollbar thumb bumps from foreground/30 →
    foreground/60 like the loop/list node. CSS color-mix tracks
