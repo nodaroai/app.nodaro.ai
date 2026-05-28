@@ -79,10 +79,13 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   // preference only seeds NEW nodes (handled in store `addNode`).
   const displayMode: DisplayMode = (data.displayMode as DisplayMode) || "picks"
   const setDisplayMode = (mode: DisplayMode) => {
-    // Clear height to auto-fit the new mode's content. The
-    // useAutoMeasureForZoom hook below handles the visual = logical
-    // × zoom write-back when zoom != 1.
-    updateNode(id, { height: undefined })
+    // Clear width + height to auto-fit the new mode's content. Width matters
+    // for fluidWidth pickers: in "prompt" mode the wrapper applies a 220px
+    // cap (long prompt text mustn't drive growth), in "picks"/"both" modes
+    // it removes the cap (the picks grid drives width). Without clearing
+    // width here, a node generated wide in picks mode keeps that width when
+    // toggled to prompt (empty space on the right), and vice-versa.
+    updateNode(id, { width: undefined, height: undefined })
     updateNodeData(id, { displayMode: mode })
     // Remember the user's preference so the NEXT new parameter node spawns
     // in this mode. Existing nodes are unaffected — they keep their own
@@ -171,7 +174,7 @@ export function ParameterNodeShell({ id, label, icon, handleId, selected, childr
   }, [node, nodes, edges])
 
   return (
-    <div ref={wrapperRef} className={cn("group", fluidWidth ? "relative w-full h-full" : "relative max-w-[220px]")}>
+    <div ref={wrapperRef} className={cn("group", fluidWidth && displayMode !== "prompt" ? "relative w-full h-full" : "relative max-w-[220px]")}>
       <div ref={labelRef}>
         <EditableNodeLabel
           label={label}

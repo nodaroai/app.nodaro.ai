@@ -1,6 +1,6 @@
 "use client"
 
-import { type ReactNode, useMemo, useState } from "react"
+import { createContext, type ReactNode, useContext, useMemo, useState } from "react"
 import { Search } from "lucide-react"
 import type { I18nCatalogId } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,15 @@ import { MultiPickBadge, useMultiPick, type MultiPickValue } from "./multi-pick-
 
 /** Multi-pick value: undefined / single id / array of ids (1..maxSelected). */
 export type DimensionPickValue = MultiPickValue
+
+/**
+ * Opt-in commit channel for tile grids. When a provider supplies a `commit`
+ * handler, double-clicking a tile selects the entry AND fires `commit()` —
+ * used by the fullscreen config panel to close itself on a double-click pick,
+ * a "make my choice and get out of my way" shortcut. Plain side-panel pickers
+ * don't wrap, so double-click is a no-op there.
+ */
+export const TileCommitContext = createContext<{ readonly commit: () => void } | null>(null)
 
 /**
  * Search-first tile grid for picking one entry from a list of dimension
@@ -59,6 +68,8 @@ export function DimensionTileGrid({
 
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =
     useMultiPick(value, onChange, maxSelected)
+
+  const commitCtx = useContext(TileCommitContext)
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
@@ -112,6 +123,20 @@ export function DimensionTileGrid({
                   aria-checked={isSelected}
                   title={description}
                   onClick={() => handlePick(entry.id)}
+                  onDoubleClick={(e) => {
+                    // First click already fired handlePick via onClick; the
+                    // second click fires it again (idempotent for single-pick,
+                    // re-cycles for multi-pick — acceptable). Then commit so
+                    // the host (fullscreen config panel) can close.
+                    handlePick(entry.id)
+                    commitCtx?.commit()
+                    // Stop the dblclick from bubbling to the panel-level
+                    // delegation (which also closes fullscreen). When this
+                    // tile grid lives inside a modal browser opened ON TOP
+                    // of a fullscreen panel, the override commit closes the
+                    // modal — we must NOT also close the panel beneath.
+                    e.stopPropagation()
+                  }}
                   className={cn(
                     "w-full group flex flex-col items-center gap-1 rounded-xl border p-2 transition-colors cursor-pointer",
                     isSelected
