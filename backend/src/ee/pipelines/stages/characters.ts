@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
 import {
   DEFAULT_CHARACTER_ANGLE_COUNT,
   DEFAULT_CHARACTER_EXPRESSION_COUNT,
+  resolvePipelineModel,
 } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { runVoiceMatcher } from "../llms/voice-matcher.js"
@@ -50,6 +51,8 @@ export interface RunCharactersStageArgs {
    * behavior: pause at `awaiting_approval` for user approval.
    */
   mode?: "manual" | "auto" | "guided"
+  /** Pipeline `config`; resolved via `resolvePipelineModel(config, "characters_image")`. */
+  config?: Partial<PipelineConfig> | null
 }
 
 /**
@@ -67,6 +70,7 @@ export interface RunCharactersStageArgs {
  */
 export async function runCharactersStage(args: RunCharactersStageArgs): Promise<void> {
   const { supabase, pipelineId, userId } = args
+  const imageOverride = resolvePipelineModel(args.config, "characters_image")
 
   // 1. Ensure stage row exists.
   const stageId = await ensureStageRow(supabase, pipelineId, "characters", 2)
@@ -165,7 +169,7 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
       }
       if (entity.status === "approved") {
         // Ensure variants are generated.
-        await ensureCharacterVariants(supabase, pipelineId, userId, entity, plan)
+        await ensureCharacterVariants(supabase, pipelineId, userId, entity, plan, imageOverride)
         return
       }
       if (entity.status === "awaiting_approval") {
@@ -174,12 +178,12 @@ export async function runCharactersStage(args: RunCharactersStageArgs): Promise<
       }
       if (entity.status === "rejected") {
         // Rejected with feedback — regenerate main.
-        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
+        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan, imageOverride)
         anyAwaiting = true
         return
       }
       if (entity.status === "pending" || entity.status === "generating") {
-        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan)
+        await generateCharacterMain(supabase, pipelineId, stageId, userId, entity, plan, imageOverride)
         anyAwaiting = true
       }
     } catch (err) {
@@ -415,6 +419,7 @@ async function generateCharacterMain(
   userId: string,
   entity: { id: string; entity_key: string; metadata: Record<string, unknown> | null },
   plan: ShowrunnerPlan,
+  imageOverride?: string,
 ): Promise<void> {
   const cast = plan.cast.find((c) => c.key === entity.entity_key)
   if (!cast) {
@@ -447,6 +452,7 @@ async function generateCharacterMain(
       pipelineEntityId: entity.id,
       userId,
       prompt,
+      userOverride: imageOverride,
     })
 
     // ─────────────────────────────────────────────────────────────────────
@@ -477,6 +483,7 @@ async function generateCharacterMain(
           pipelineEntityId: entity.id,
           userId,
           prompt: feedbackPrompt,
+          userOverride: imageOverride,
         }),
       runCritic: async (imageUrl) => {
         const result = await runCharacterImageCritic({
@@ -614,6 +621,7 @@ async function ensureCharacterVariants(
     main_asset_id: string | null
   },
   plan: ShowrunnerPlan,
+  imageOverride?: string,
 ): Promise<void> {
   const cast = plan.cast.find((c) => c.key === entity.entity_key)
   if (!cast || !entity.main_asset_id) return
@@ -712,6 +720,7 @@ async function ensureCharacterVariants(
           userId,
           prompt: v.prompt,
           referenceImageUrls: mainUrl ? [mainUrl] : undefined,
+          userOverride: imageOverride,
         })
         await supabase
           .from("pipeline_entity_variants")
