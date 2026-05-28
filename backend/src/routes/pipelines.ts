@@ -196,10 +196,23 @@ export async function pipelinesRoutes(app: FastifyInstance) {
 
     const { data: profileRow } = await supabase
       .from("profiles")
-      .select("tier")
+      .select(
+        "tier, subscription_tier, subscription_credits, topup_credits, " +
+          "daily_spent_credits, last_daily_reset, app_credits_allowance",
+      )
       .eq("id", userId)
       .single()
-      .then((r) => ({ data: r.data as { tier?: string } | null }))
+      .then((r) => ({
+        data: r.data as {
+          tier?: string | null
+          subscription_tier?: string | null
+          subscription_credits?: number | null
+          topup_credits?: number | null
+          daily_spent_credits?: number | null
+          last_daily_reset?: string | null
+          app_credits_allowance?: number | null
+        } | null,
+      }))
     const userTier = profileRow?.tier ?? "free"
 
     const config = input.config ?? {}
@@ -226,8 +239,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       // user's tier — exactly the surface that `reserveCredits` skips. Daily
       // cap + balance check ride along; that's fine since a user pinning a
       // model they can't afford should also fail-fast here rather than mid-
-      // pipeline. Build a minimal profile from the tier we already loaded.
-      const profile = { id: userId, tier: userTier } as Parameters<
+      // pipeline. Pass the full profile row so balance + daily-cap checks
+      // see real numbers (not undefined → 0, which 403'd every pin).
+      const profile = (profileRow ?? { tier: userTier }) as Parameters<
         typeof CreditsService.checkCreditsWithProfile
       >[1]
       for (const modelId of pinnedModels) {
