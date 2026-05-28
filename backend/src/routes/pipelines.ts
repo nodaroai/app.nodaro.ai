@@ -2364,6 +2364,11 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         shotId: req.params.shot_id,
         sceneId: req.params.scene_id,
         shotMutator: (s) => clearVideoCriticMetadata(s),
+        // Invalidate the scene's composite so the re-enqueued drive actually
+        // re-animates it. `runSceneInternalPipeline` now short-circuits when a
+        // scene still carries `composite_video_url`; without clearing it the
+        // Regenerate would re-enqueue but the scene would skip → silent no-op.
+        clearSceneComposite: true,
         onAfterUpdate: async () => {
           const { enqueuePipelineRun } = await import(
             "../ee/pipelines/queue.js"

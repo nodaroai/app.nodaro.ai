@@ -893,4 +893,59 @@ describe("runSceneInternalPipeline", () => {
     // voice should be omitted entirely (not "undefined" string, not null).
     expect(args?.voice).toBeUndefined()
   })
+
+  // ─── Scene-level resume idempotency (skip-if-done) ───────────────────────
+  describe("skip-if-done short-circuit", () => {
+    it("returns the cached composite WITHOUT animating when composite_video_url is already present", async () => {
+      // A finished scene persists composite_video_url onto its scene_node_data.
+      // On a re-drive (after a hard-timeout abort / worker restart) the per-scene
+      // loop runs again — this scene must short-circuit so we don't re-pay KIE
+      // for video gen that already landed on R2.
+      const sceneData = makeSceneNodeData(3, {
+        composite_video_url: "https://r2/cached-composite.mp4",
+        composite_video_asset_id: "cached-composite-asset",
+      } as Partial<SceneNodeData>)
+
+      const result = await runSceneInternalPipeline(
+        makeCtx(),
+        makeSceneEntity({ scene_node_data: sceneData }),
+        { mode: "parallel", lipSyncEnabled: true, runImageCritic: false },
+      )
+
+      expect(result.ok).toBe(true)
+      expect(result.composite_video_url).toBe("https://r2/cached-composite.mp4")
+      expect(result.composite_video_asset_id).toBe("cached-composite-asset")
+      expect(result.updated_metadata).toEqual({ scene_node_data: sceneData })
+      // The whole point: zero re-animation, zero re-combine, zero speech.
+      expect(pipelineAnimateShot).not.toHaveBeenCalled()
+      expect(pipelineCombineVideos).not.toHaveBeenCalled()
+      expect(pipelineGenerateSpeech).not.toHaveBeenCalled()
+      expect(pipelineLipSync).not.toHaveBeenCalled()
+    })
+
+    it("animates normally when composite_video_url is absent (boundary: regen / first run)", async () => {
+      // The Regenerate route clears composite_video_url to force re-animation;
+      // a first run never had it. Either way, absence → full animate path.
+      ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+        async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+      )
+      ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+        jobId: "combine-1",
+        assetId: "composite-asset",
+        assetUrl: "https://r2/composite.mp4",
+        creditsSpent: 0,
+      })
+
+      const sceneData = makeSceneNodeData(2) // no composite_video_url
+      const result = await runSceneInternalPipeline(
+        makeCtx(),
+        makeSceneEntity({ scene_node_data: sceneData }),
+        { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+      )
+
+      expect(result.ok).toBe(true)
+      expect(pipelineAnimateShot).toHaveBeenCalledTimes(2)
+      expect(pipelineCombineVideos).toHaveBeenCalledTimes(1)
+    })
+  })
 })
