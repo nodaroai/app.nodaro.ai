@@ -77,8 +77,10 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const nodeRefs = useMemo(() => nodeRefsRaw, [nodeRefsKey])
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const color = nodeData.color ?? "#0f172a"
-  const effectiveColor = getEffectiveColor(color, isDark)
+  // `null`/undefined = "no color" — re-pressing the active swatch clears
+  // it, and the card renders transparent so the canvas shows through.
+  const color = nodeData.color
+  const effectiveColor = color ? getEffectiveColor(color, isDark) : undefined
   // Read visual width/height from the React Flow node-level properties so
   // `updateNodeWithData(... { width, height } ...)` from the zoom drag
   // resizes the outer wrapper live (BaseNode line 252-261 pattern). Fall
@@ -96,8 +98,16 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const width = visualW ?? (nodeData as { width?: number }).width ?? 220
   const height = visualH ?? (nodeData as { height?: number }).height ?? 160
   const zoom = zoomFromStore
-  const logicalW = zoom !== 1 ? Math.round(width / zoom) : width
-  const logicalH = zoom !== 1 ? Math.round(height / zoom) : height
+  // Outer wrapper uses box-sizing: border-box and has a 2px border, so
+  // its inner content area is (width - 4) × (height - 4). The scale
+  // wrapper must size to the CONTENT area (not the full visual W/H), or
+  // the scaled inner card would overshoot by the border total and
+  // cover the right + bottom borders.
+  const OUTER_BORDER = 2 // px per side; mirrored in the JSX className "border-2"
+  const contentW = width - OUTER_BORDER * 2
+  const contentH = height - OUTER_BORDER * 2
+  const logicalW = zoom !== 1 ? contentW / zoom : contentW
+  const logicalH = zoom !== 1 ? contentH / zoom : contentH
   const updateNodeWithData = useWorkflowStore((s) => s.updateNodeWithData)
   // Drag-state ref for the zoom handle — snapshots zoom + logical size at
   // pointer-down so move math is anchored to a stable starting point.
@@ -171,12 +181,15 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   // outer chrome. Snapshots zoom + logical size on pointerdown, recomputes
   // both on each move, writes one undo snapshot on release.
   const handleZoomDragStart = useCallback((e: ReactPointerEvent) => {
+    // logical = content area / zoom; mirrors the render math so a zoom
+    // change keeps the on-screen content stable (the outer border adds
+    // 4px that aren't part of the scaled content).
     zoomDragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
       zoom0: zoom,
-      logicalW: Math.round(width / zoom),
-      logicalH: Math.round(height / zoom),
+      logicalW: (width - OUTER_BORDER * 2) / zoom,
+      logicalH: (height - OUTER_BORDER * 2) / zoom,
     }
   }, [zoom, width, height])
   const handleZoomDragMove = useCallback((e: ReactPointerEvent) => {
@@ -186,8 +199,16 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     // the prompt can be enlarged to a writing-surface size on the canvas.
     const zRaw = computeZoomFromDrag(ds.zoom0, { x: ds.startX, y: ds.startY }, { x: e.clientX, y: e.clientY }, "bottom-left", 0.5, 8)
     const z = applyMagnet(zRaw, ds.zoom0)
+    // `computeVisualSize` returns content-area visual; add the border
+    // back to get the outer wrapper's React-Flow-level width/height.
     const visual = computeVisualSize({ w: ds.logicalW, h: ds.logicalH }, z)
-    updateNodeWithData(id, { width: visual.w, height: visual.h }, { zoom: z })
+    visual.w += OUTER_BORDER * 2
+    visual.h += OUTER_BORDER * 2
+    // Mirror width/height into `data` as well as React Flow's node-level
+    // properties. The workflow persistence only restores `node.data`
+    // after a refresh — without this, the zoomed visual size would
+    // revert to whatever was last written by the bottom-right resize.
+    updateNodeWithData(id, { width: visual.w, height: visual.h }, { width: visual.w, height: visual.h, zoom: z })
   }, [id, updateNodeWithData])
   const handleZoomDragEnd = useCallback(() => {
     const ds = zoomDragRef.current
@@ -269,8 +290,18 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <div
-      className="relative"
-      style={{ width, height, overflow: 'visible' }}
+      className={cn(
+        // The visual border lives on this OUTER wrapper (not the inner
+        // scaled card) so its width stays a true 2px regardless of node
+        // zoom — Chrome snaps fractional `border-width` on the inner
+        // card and made the previous approach jitter across zooms.
+        "relative rounded-xl border-2",
+        "hover:border-black/40 dark:hover:border-white/40 transition-colors duration-200",
+        "!border-[#E2E8F0] dark:!border-[#333333]",
+        selected && !isEditing && "border-blue-400",
+        isEditing && "border-[#ff0073]",
+      )}
+      style={{ width, height, overflow: 'visible', boxSizing: 'border-box' }}
       onMouseEnter={() => {
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
         setIsHovered(true)
@@ -297,7 +328,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           {NODE_COLORS.map((c) => (
             <div
               key={c}
-              onClick={(e) => { e.stopPropagation(); updateNodeData(id, { color: c }) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                // Toggle: re-pressing the active swatch clears the color
+                // and the node falls back to a canvas-matching transparent
+                // background.
+                updateNodeData(id, { color: color === c ? null : c })
+              }}
               className={`w-4 h-4 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${color === c ? "border-foreground dark:border-white" : "border-foreground/15 dark:border-white/20"}`}
               style={{ backgroundColor: getEffectiveColor(c, isDark) }}
             />
@@ -410,42 +447,27 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       {/* Container — with selection/editing glow matching BaseNode */}
       <div
         className={cn(
-          "text-prompt-card w-full h-full rounded-xl overflow-hidden flex flex-col border-2 py-1 pr-1 transition-colors duration-200",
-          "hover:border-black/40 dark:hover:border-white/40",
-          // Always-on base border. `!` (important) on both halves so the
-          // grey wins over the selected/editing color overrides below in
-          // BOTH themes — without `!` on the light value, light mode
-          // would fall through to `border-blue-400` / `border-[#ff0073]`
-          // by source-order. Dark wins over light via specificity even
-          // when both are important.
-          "!border-[#E2E8F0] dark:!border-[#333333]",
-          // Focused (selected, config panel closed): blue glow
-          selected && !isEditing && "border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.6)]",
-          // Editing (selected + config panel open) — matches BaseNode's
-          // `ai` category (the family generate-image uses): pink border +
-          // pink shadow in light, grey border (dark:border-[#333333]
-          // wins over border-[#ff0073] by specificity) + pink 25px glow
-          // in dark.
-          isEditing && "border-[#ff0073] shadow-[0_0_20px_rgba(255,0,115,0.5)] dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
+          "text-prompt-card w-full h-full rounded-xl overflow-hidden flex flex-col py-1 pr-1 transition-colors duration-200",
+          // Focused (selected, config panel closed): blue glow only.
+          // Border is rendered on the unscaled outer wrapper so it
+          // stays a flat 2px at any node zoom (Chrome's fractional
+          // border-width snapping made the inner approach inconsistent).
+          selected && !isEditing && "shadow-[0_0_20px_rgba(96,165,250,0.6)]",
+          // Editing (selected + config panel open) — pink glow only;
+          // border lives on the outer wrapper, see above.
+          isEditing && "shadow-[0_0_20px_rgba(255,0,115,0.5)] dark:shadow-[0_0_25px_rgba(255,0,115,0.5)]",
         )}
         style={{
-          backgroundColor: effectiveColor,
-          boxShadow: (!selected && !isEditing) ? `0 0 16px ${effectiveColor}15` : undefined,
-          // Counter-scale the border so it stays 2px on screen at any
-          // zoom. `border-2` would render as `2 × zoom` after the parent
-          // scale transform — visually thick at high zoom, almost
-          // invisible at low zoom. Dividing the source width by zoom
-          // restores a constant 2px on-screen stroke.
-          borderWidth: 2 / zoom,
-          // `rounded-xl` resolves to `--radius-xl = 14px` (globals.css
-          // line 98). Counter-scale so the corner stays 14px on screen
-          // at any zoom — without this, a zoom-2 node has visually
-          // 28px corners that don't match the rest of the canvas.
+          // "No color" mode uses `var(--background)` so the card paints
+          // an opaque fill that matches the canvas exactly — no grid
+          // dots show through, but the node still blends seamlessly
+          // until the border / selection glow defines its shape.
+          backgroundColor: effectiveColor ?? "var(--background)",
+          boxShadow: (!selected && !isEditing && effectiveColor) ? `0 0 16px ${effectiveColor}15` : undefined,
+          // Border-radius still counter-scales (no Chrome snapping
+          // for fractional radius); border-width is now on the outer
+          // wrapper so we don't override it here.
           borderRadius: 14 / zoom,
-          // `--inv-zoom` is consumed by the CSS rule that counter-scales
-          // the Radix scrollbar (globals.css) so the thumb keeps a
-          // constant 12px-wide track regardless of node zoom.
-          ["--inv-zoom" as string]: 1 / zoom,
         }}
       >
         <div
@@ -638,7 +660,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
           <div
             className="text-prompt-card text-prompt-card-fullscreen w-full h-full rounded-xl overflow-hidden flex flex-col border-2 border-transparent py-1 pr-1"
             style={{
-              backgroundColor: effectiveColor,
+              backgroundColor: effectiveColor ?? "var(--background)",
               ["--prompt-fs" as string]: `${fontSize}px`,
               ["--prompt-lh" as string]: `${lineHeight}px`,
             }}
