@@ -37,6 +37,9 @@ vi.mock("../music-timeline.js", () => ({
 vi.mock("../llms/editor.js", () => ({
   runEditor: vi.fn(),
 }))
+vi.mock("../queue.js", () => ({
+  enqueuePipelineRun: vi.fn(),
+}))
 
 import { runSceneInternalPipeline } from "../scene-internal-pipeline.js"
 import { failStage } from "../stage-utils.js"
