@@ -198,6 +198,7 @@ import {
   SelectorConfig,
   ResultsGallery,
 } from "./config-panels"
+import { TileCommitContext } from "./config-panels/dimension-tile-grid"
 
 const LIBRARY_VIDEO_TYPES = new Set(["image-to-video", "video-to-video", "text-to-video", "generate-video", "video-upscale", "extend-video", "motion-transfer", "lip-sync", "speech-to-video", "face-swap", "video-sfx"])
 const LIBRARY_AUDIO_TYPES = new Set(["text-to-speech", "generate-music", "text-to-audio", "audio-isolation", "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design", "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup", "suno-replace-section", "suno-add-instrumental", "suno-add-vocals", "suno-convert-wav", "suno-upload-extend"])
@@ -777,6 +778,20 @@ export function ConfigPanel() {
     }
   }, [setConfigPanelFullscreen])
 
+  // Scroll-to-top on fullscreen entry. Without this, opening a fresh picker
+  // inherits whatever scroll position the side-panel scroller had — pickers
+  // that auto-open in fullscreen (addNodeAndOpenPicker) would land halfway
+  // down the tile grid, and the Maximize2 toggle would keep the prior offset
+  // instead of giving the wider modal a clean top-aligned view. Re-fires when
+  // the selected node changes too so opening a different node in fullscreen
+  // doesn't carry over the previous node's offset.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (isExpanded && scrollRef.current) {
+      scrollRef.current.scrollTop = 0
+    }
+  }, [isExpanded, selectedNodeId])
+
   const update = useCallback((data: Record<string, unknown>) => {
     if (!selectedNodeId) return
     updateNodeData(selectedNodeId, data)
@@ -878,9 +893,18 @@ export function ConfigPanel() {
             {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
         )}
-        <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
-          <X className="h-4 w-4" />
-        </Button>
+        {isExpanded ? (
+          // Fullscreen: a prominent text "Close" button reads as the
+          // primary exit affordance — the small X icon was easy to miss
+          // against the wider modal chrome.
+          <Button variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }}>
+            Close
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" className="text-gray-400 dark:text-[#64748B] hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-[#2D2D2D]" onClick={() => { setConfigPanelFullscreen(false); useWorkflowStore.setState({ selectedNodeId: null }) }} aria-label="Close panel">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -903,6 +927,21 @@ export function ConfigPanel() {
           : "flex flex-col h-full min-h-0"
       }
         ref={isMobile ? sheetRef : undefined}
+        // Delegate dblclick on the fullscreen modal: when the target is a
+        // role="radio"/role="checkbox" tile button anywhere inside (custom
+        // pickers like Lens, Framing, Animal, Camera Motion, Person,
+        // Styling, etc. don't go through DimensionTileGrid but they all
+        // share this role convention on their tiles), close the modal.
+        // DimensionTileGrid handles its own dblclick + stopPropagation so
+        // its events don't reach here — that's deliberate: it owns the
+        // override path used inside a sub-Dialog (modal browser) to close
+        // the dialog instead of the panel underneath.
+        onDoubleClick={isExpanded && isTileGridPickerType(nodeType) ? (e) => {
+          const t = e.target as HTMLElement | null
+          if (!t) return
+          const tile = t.closest('button[role="radio"], button[role="checkbox"]')
+          if (tile) setConfigPanelFullscreen(false)
+        } : undefined}
       >
         {/* Mobile drag handle + peek header */}
         {isMobile && (
@@ -933,7 +972,7 @@ export function ConfigPanel() {
         {!isMobile && panelHeader}
 
       {(!isMobile || sheetState === "expanded") && (
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#F8FAFC] dark:bg-[#121212]">
         <div className="flex flex-col gap-5 p-4">
           <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
             <Label htmlFor="node-label" className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Label</Label>
@@ -955,16 +994,34 @@ export function ConfigPanel() {
 
           <Separator />
 
-          {/* Node-type-specific config */}
-          <NodeTypeConfig
-            nodeType={nodeType}
-            nodeData={nodeData}
-            configProps={configProps}
-            updateNodeData={updateNodeData}
-            onExpandDirector={() => setExpandDirectorOpen(true)}
-            update={update}
-            selectedNodeId={selectedNodeId ?? undefined}
-          />
+          {/* Node-type-specific config. In fullscreen, expose a "commit"
+              channel via context so DimensionTileGrid (used by Pose, Mood,
+              Person, Styling, etc.) closes the modal on a double-click pick.
+              Side-panel mode leaves the context null — double-click is a
+              no-op there, which matches the surrounding-non-tile picker UX. */}
+          {isExpanded ? (
+            <TileCommitContext.Provider value={{ commit: () => setConfigPanelFullscreen(false) }}>
+              <NodeTypeConfig
+                nodeType={nodeType}
+                nodeData={nodeData}
+                configProps={configProps}
+                updateNodeData={updateNodeData}
+                onExpandDirector={() => setExpandDirectorOpen(true)}
+                update={update}
+                selectedNodeId={selectedNodeId ?? undefined}
+              />
+            </TileCommitContext.Provider>
+          ) : (
+            <NodeTypeConfig
+              nodeType={nodeType}
+              nodeData={nodeData}
+              configProps={configProps}
+              updateNodeData={updateNodeData}
+              onExpandDirector={() => setExpandDirectorOpen(true)}
+              update={update}
+              selectedNodeId={selectedNodeId ?? undefined}
+            />
+          )}
 
           <Separator />
 

@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils"
 import { FitText } from "@/components/ui/fit-text"
 import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
-import { DimensionTileGrid } from "./dimension-tile-grid"
+import { DimensionTileGrid, TileCommitContext } from "./dimension-tile-grid"
 
 export interface DimensionEntry {
   readonly id: string
@@ -122,16 +122,22 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto -mx-1 px-1">
-          <DimensionTileGrid
-            entries={entries}
-            value={value}
-            onChange={handlePick}
-            renderIcon={renderIcon}
-            searchPlaceholder={title}
-            autoFocusSearch
-            showClear
-            catalog={catalog}
-          />
+          {/* React Context flows through Radix's portal, so the fullscreen
+              config panel's "close on double-click" commit would otherwise
+              fire here too — closing the panel under us instead of just the
+              modal. Override the channel to close THIS dialog instead. */}
+          <TileCommitContext.Provider value={{ commit: () => setOpen(false) }}>
+            <DimensionTileGrid
+              entries={entries}
+              value={value}
+              onChange={handlePick}
+              renderIcon={renderIcon}
+              searchPlaceholder={title}
+              autoFocusSearch
+              showClear
+              catalog={catalog}
+            />
+          </TileCommitContext.Provider>
         </div>
       </DialogContent>
     </Dialog>
