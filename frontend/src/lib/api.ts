@@ -3730,9 +3730,11 @@ export async function motionTransferApi(
   provider?: "kling" | "kling-3.0" | "wan-animate-move" | "wan-animate-replace",
   backgroundSource?: "input_video" | "input_image",
   videoDuration?: number,
+  negativePrompt?: string,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { imageUrl, videoUrl }
   if (prompt) body.prompt = prompt
+  if (negativePrompt) body.negativePrompt = negativePrompt
   if (characterOrientation) body.characterOrientation = characterOrientation
   if (resolution) body.resolution = resolution
   if (userId) body.userId = userId

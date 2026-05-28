@@ -1899,6 +1899,7 @@ export type MotionTransferData = {
   [key: string]: unknown
   label: string
   prompt: string // Optional, max 2500 chars
+  negativePrompt?: string // Optional — sent natively to Kling 2.6/3.0 motion-control; Wan Animate ignores it
   characterOrientation: "image" | "video" // image = max 10s, video = max 30s
   resolution: "720p" | "1080p" | "480p" | "580p"
   provider?: "kling" | "kling-3.0" | "wan-animate-move" | "wan-animate-replace"

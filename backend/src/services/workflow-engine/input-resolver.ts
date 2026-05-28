@@ -1286,9 +1286,9 @@ function routeOutput(
     return
   }
 
-  // --- Entity nodes → reference images (or imageUrl for lip-sync) ---
+  // --- Entity nodes → reference images (or imageUrl for lip-sync / motion-transfer) ---
   if (ENTITY_NODE_TYPES.has(srcType)) {
-    if (targetType === "lip-sync" || targetType === "speech-to-video") {
+    if (targetType === "lip-sync" || targetType === "speech-to-video" || targetType === "motion-transfer") {
       inputs.imageUrl = output
     } else {
       inputs.referenceImageUrls = [...(inputs.referenceImageUrls ?? []), output]

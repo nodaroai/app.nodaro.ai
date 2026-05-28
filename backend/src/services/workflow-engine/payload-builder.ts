@@ -2636,6 +2636,7 @@ export function buildPayload(
           videoUrl: resolvedInputs.videoUrl || data.videoUrl,
           imageUrl: resolvedInputs.imageUrl || data.imageUrl,
           prompt: resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap),
+          negativePrompt: resolvedInputs.negativePrompt || (data.negativePrompt as string | undefined),
           provider: mtProvider,
           backgroundSource: data.backgroundSource,
           characterOrientation: data.characterOrientation,

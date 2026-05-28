@@ -715,11 +715,12 @@ const handleSpeechToVideo: HandlerFn = async function handleSpeechToVideo(job, c
 }
 
 const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job, ctx) {
-  const { imageUrl, videoUrl, prompt, characterOrientation, resolution, provider, backgroundSource } = job.data as {
+  const { imageUrl, videoUrl, prompt, negativePrompt, characterOrientation, resolution, provider, backgroundSource } = job.data as {
     jobId: string
     imageUrl: string
     videoUrl: string
     prompt?: string
+    negativePrompt?: string
     characterOrientation?: "image" | "video"
     resolution?: "480p" | "580p" | "720p" | "1080p"
     provider?: string
@@ -749,6 +750,7 @@ const handleMotionTransfer: HandlerFn = async function handleMotionTransfer(job,
         resolution: resolution ?? "720p",
         provider: mtProvider,
         backgroundSource,
+        negativePrompt,
       },
       { onTaskCreated: mtOnTaskCreated },
     ),

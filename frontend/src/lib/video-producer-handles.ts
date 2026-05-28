@@ -16,7 +16,7 @@
  * resolver would happily route at runtime (drift fix from #2823 / #2827).
  */
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
-import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES } from "./generate-image-handles"
+import { TEXT_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, IDENTITY_TYPES } from "./generate-image-handles"
 
 const ACCEPTS_IMAGE_OR_DYN = (s: string): boolean =>
   IMAGE_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s)
@@ -146,9 +146,14 @@ export function isValidSpeechToVideoConnection(
 }
 
 // ─── motion-transfer ───────────────────────────────────────────────────
-// Inputs: image (character reference — REQUIRED per backend route),
-// video (motion source — REQUIRED), prompt (optional text).
+// Inputs (bottom-up clusters mirroring generate-video):
+//   Text:    prompt → negative
+//   Image:   image → video    (character ref + motion source — both REQUIRED)
+//   Pickers: assets            (character / face / object / location → imageUrl)
 // Source: video (renamed from `out`).
+//
+// `negative` is text-only — pickers like `mood: cheerful` would invert the
+// picker's intent if wired into negation. Matches generate-video.
 export function isValidMotionTransferConnection(
   targetHandleId: string,
   sourceType: string,
@@ -161,6 +166,10 @@ export function isValidMotionTransferConnection(
       return ACCEPTS_VIDEO_OR_DYN(sourceType)
     case "prompt":
       return ACCEPTS_PROMPT(sourceType, isVisualPicker ?? (() => false))
+    case "negative":
+      return ACCEPTS_TEXT_OR_DYN(sourceType)
+    case "assets":
+      return IDENTITY_TYPES.has(sourceType)
     default:
       return false
   }
@@ -174,5 +183,5 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "extend-video":     { video: "Video", cinematography: "Cinematography", prompt: "Prompt" },
   "lip-sync":         { image: "Portrait", video: "Source video", audio: "Audio" },
   "speech-to-video":  { image: "Portrait", audio: "Audio", prompt: "Prompt", cinematography: "Cinematography" },
-  "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt" },
+  "motion-transfer":  { image: "Character", video: "Source video", prompt: "Prompt", negative: "Negative", assets: "Assets" },
 }
