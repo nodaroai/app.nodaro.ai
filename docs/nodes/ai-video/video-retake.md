@@ -43,27 +43,23 @@ The node body shows a visual scrubber over the upstream video preview; the quick
 
 ## Credit pricing
 
-Video Retake is metered per second of the retake window:
+Video Retake is metered per second of the retake window. LTX 2.3 Pro on Replicate bills $0.08/sec at 1080p (retake is locked to 1080p); after our standard configured pricing factor at $0.02/credit, that's **5 credits/second**:
 
 ```
-credits = 50 × retakeDuration × repeatCount
+credits = 5 × retakeDuration × repeatCount
 ```
 
 **Worked examples:**
 
 | Retake duration | Repeat count | Credits |
 |---|---|---|
-| 2s | 1 | 100 |
-| 4s | 1 | 200 |
-| 6s | 1 | 300 |
-| 10s | 1 | 500 |
-| 4s | 3 | 600 |
+| 2s | 1 | 10 |
+| 4s | 1 | 20 |
+| 6s | 1 | 30 |
+| 10s | 1 | 50 |
+| 4s | 3 | 60 |
 
-The per-second rate (`50 credits/second`) is a **placeholder** during the initial LTX 2.3 rollout — see footnote below. The same per-second pricing approach applies to LTX 2.3 Pro **Extend Video** runs, where `credits = 50 × extendDuration`.
-
-The placeholder will be replaced with the production rate once Replicate billing is finalized. The runtime table at `/admin/models` (Business / Cloud editions) always reflects the live rate; this page is updated whenever the rate changes.
-
-> **Placeholder pricing notice.** The `50 credits/second` rate for LTX 2.3 retake (and extend) is provisional. The final rate, derived from Replicate's per-second cost plus our standard markup, will replace this placeholder before LTX 2.3 leaves the staged rollout. Pre-existing in-flight workflows are billed at the rate in effect at credit-reservation time.
+The same per-second rate applies to **Extend Video** runs on LTX 2.3 Pro (`credits = 5 × extendDuration`). The runtime table at `/admin/models` (Business / Cloud editions) is the authoritative source — this page is updated whenever the rate changes.
 
 ## Notes
 
@@ -80,6 +76,6 @@ The placeholder will be replaced with the production rate once Replicate billing
 ## See also
 
 - [Generate Video](./generate-video.md) — the unified video producer node (LTX 2.3 Pro / Fast both available there for full-clip generation).
-- [Extend Video](./extend-video.md) — append (or prepend) new footage to an existing clip. LTX 2.3 Pro extends are billed at the same `50 credits/second` placeholder rate as retake.
+- [Extend Video](./extend-video.md) — append (or prepend) new footage to an existing clip. LTX 2.3 Pro extends are billed at the same `5 credits/second` rate as retake.
 - [Video to Video](./video-to-video.md) — transform an entire clip (not a time window) with a text prompt.
 - [Trim Video](../processing-video/trim-video.md) — for cutting a window out of a clip without regeneration.

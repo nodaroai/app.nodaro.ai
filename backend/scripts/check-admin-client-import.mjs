@@ -196,6 +196,13 @@ const ALLOWED_PATHS = [
   // req.userId at insert time.
   /^src\/routes\/video-retake\.ts$/,
 
+  // Video SFX (Replicate mmaudio): creates a jobs row tagged with
+  // `user_id: req.userId` (line 196). Service-role required for the same
+  // reasons as video-retake — reserveCreditsForJob runs under the same
+  // client, worker reads by `job.id` out-of-band, and orphan cleanup deletes
+  // by job id. Audited 2026-05-28 (#2834 landed without allowlist update).
+  /^src\/routes\/video-sfx\.ts$/,
+
   // Collect: inline-HTTP route — needs service-role to insert the jobs row +
   // reserve credits before strategy dispatch, then commit/refund on completion.
   // Ownership is enforced via `.eq("user_id", userId)` on every `.update()`
