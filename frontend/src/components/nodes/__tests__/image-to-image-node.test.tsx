@@ -10,13 +10,15 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   return {
     ...actual,
     Handle: ({ type, position, id }: any) => (
-      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+      <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
     ),
     NodeResizer: () => null,
     NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
     useStore: vi.fn(() => 1),
     useNodeId: vi.fn(() => "test-node"),
     useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
+    useUpdateNodeInternals: vi.fn(() => vi.fn()),
+    useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
   }
 })
 
@@ -30,10 +32,10 @@ vi.mock("../base-node", () => ({
       data-id={id}
       data-is-running={isRunning}
     >
-      {handles?.map((h: any) => (
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
         <div
-          key={h.id}
-          data-testid={`handle-${h.id}`}
+          key={`${h.type}-${h.id}`}
+          data-testid={`handle-${h.type}-${h.id}`}
           data-type={h.type}
           data-position={h.position}
         />
@@ -41,6 +43,17 @@ vi.mock("../base-node", () => ({
       {children}
     </div>
   ),
+}))
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
 }))
 
 vi.mock("../run-node-button", () => ({
@@ -187,14 +200,14 @@ describe("ImageToImageNode", () => {
     expect(screen.getByTestId("base-node")).toHaveAttribute("data-id", "i2i-77")
   })
 
-  it("has correct handles (image target + out source)", () => {
+  it("has correct handles (image target + image source)", () => {
     renderNode()
-    const imageHandle = screen.getByTestId("handle-image")
-    expect(imageHandle).toHaveAttribute("data-type", "target")
-    expect(imageHandle).toHaveAttribute("data-position", "left")
+    const imageTarget = screen.getByTestId("handle-target-image")
+    expect(imageTarget).toHaveAttribute("data-type", "target")
+    expect(imageTarget).toHaveAttribute("data-position", "left")
 
-    const outHandle = screen.getByTestId("handle-out")
-    expect(outHandle).toHaveAttribute("data-type", "source")
-    expect(outHandle).toHaveAttribute("data-position", "right")
+    const imageSource = screen.getByTestId("handle-source-image")
+    expect(imageSource).toHaveAttribute("data-type", "source")
+    expect(imageSource).toHaveAttribute("data-position", "right")
   })
 })

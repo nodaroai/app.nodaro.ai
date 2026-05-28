@@ -697,6 +697,10 @@ const VIDEO_RESULT_TYPES = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  // face-swap writes generatedVideoUrl + per-result `url` like the other video
+  // producers. Without this entry, the "Run from here" path can't hydrate a
+  // downstream consumer from a previously-executed face-swap without re-running.
+  "face-swap",
   "video-retake",
   "suno-music-video",
   "render-video",

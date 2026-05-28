@@ -2,12 +2,13 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { ArrowUpFromLine, Clapperboard, Film, Loader2, AlertCircle, X } from "lucide-react"
+import { ArrowUpFromLine, Film, Loader2, AlertCircle, X } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidVideoUpscaleConnection } from "@/lib/video-producer-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -15,6 +16,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { VideoUpscaleData } from "@/types/nodes"
+
+const ACCEPTS_VIDEO = (t: string) => isValidVideoUpscaleConnection("video", t)
 
 function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoUpscaleData
@@ -81,8 +84,8 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         {hasResult ? null : (
@@ -184,8 +187,8 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
           onDimensionsChange={setVideoDimensions}
         />
       )}
-      <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Film />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="target" position={Position.Left}  label="Video" color="#A78BFA" icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

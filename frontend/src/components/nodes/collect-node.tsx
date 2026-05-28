@@ -11,7 +11,8 @@ import {
 } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
-import { AggregateHandleVisual, HandleIcon } from "@/components/nodes/handle-icon"
+import { AggregateHandleVisual } from "@/components/nodes/handle-icon"
+import { HandleWithPopover } from "@/components/nodes/handle-with-popover"
 import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
 import { BaseNode, type HandleConfig } from "@/components/nodes/base-node"
 import { computeCollectBuckets } from "@/components/editor/workflow-editor/execution-graph"
@@ -47,8 +48,8 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
         id: COLLECT_IN_HANDLE,
         type: "target",
         position: Position.Left,
-        hideHandle: true,
         customStyle: { top: "24px", left: "-29px" },
+        external: true,
       },
       ...types.map((t, idx) => ({
         id: groupHandleId(t),
@@ -86,8 +87,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
             : `${incoming.length} connection${incoming.length === 1 ? "" : "s"}`}
         </div>
       </BaseNode>
-      {/* Visual handle circles — the functional <Handle>s live in BaseNode. */}
-      <HandleIcon icon={<Combine />} color="steel" side="left" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="collect" handleId={COLLECT_IN_HANDLE} type="target" position={Position.Left} label="Inputs" color="#475569" icon={<Combine />} side="left" top="24px" />
       {types.map((t, idx) => (
         <AggregateHandleVisual
           key={groupHandleId(t)}

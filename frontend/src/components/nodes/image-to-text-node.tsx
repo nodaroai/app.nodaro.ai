@@ -4,17 +4,20 @@ import { memo, useState, useRef, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, Type, Loader2, AlertCircle, X, ImageIcon, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidImageToTextConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { EditableNodeLabel } from "./editable-node-label"
 import type { ImageToTextData } from "@/types/nodes"
+
+const ACCEPTS_IMAGE = (t: string) => isValidImageToTextConnection("image", t)
 
 function TextPreviewModal({
   isOpen,
@@ -80,7 +83,6 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToTextData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const inConnectionCount = useConnectionCount(id, "image")
   const credits = useModelCredits(buildLlmCreditIdentifier("image-to-text", nodeData.llmModel || LLM_FEATURE_DEFAULTS["image-to-text"]), 1)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -116,8 +118,8 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "text", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "text",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1 h-full">
@@ -240,26 +242,8 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    {/* Input handle icon (TYPE 1) */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Type className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="text"  type="source" position={Position.Right} label="Text"  color="#22D3EE" icon={<Type />}      side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

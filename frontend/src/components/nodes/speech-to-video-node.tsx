@@ -2,8 +2,10 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
-import { HandleIcon } from "./handle-icon"
+import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidSpeechToVideoConnection } from "@/lib/video-producer-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -16,6 +18,12 @@ import { NodeJobProgress } from "./node-job-progress"
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { SpeechToVideoData, GeneratedResult } from "@/types/nodes"
+
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_IMAGE          = (t: string) => isValidSpeechToVideoConnection("image",          t, isPickerType)
+const ACCEPTS_AUDIO          = (t: string) => isValidSpeechToVideoConnection("audio",          t, isPickerType)
+const ACCEPTS_PROMPT         = (t: string) => isValidSpeechToVideoConnection("prompt",         t, isPickerType)
+const ACCEPTS_CINEMATOGRAPHY = (t: string) => isValidSpeechToVideoConnection("cinematography", t, isPickerType)
 
 const IMAGE_OUTPUT_TYPES = [
   "generate-image",
@@ -225,11 +233,11 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 110px)', left: '-29px' }, hideHandle: true },
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "prompt", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "prompt",         type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
+        { id: "audio",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
+        { id: "image",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
+        { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+        { id: "video",          type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
       ]}
     >
       {/* When result exists, show video fullscreen in node */}
@@ -345,40 +353,11 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    {/* cinematography input handle icon */}
-    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 110px)" label="Cinematography" />
-
-    {/* image input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 80px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-    </div>
-
-    {/* audio input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-
-    {/* prompt input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Type className="w-3.5 h-3.5 text-white" />
-    </div>
-
-    {/* video output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="audio"          type="target" position={Position.Left}  label="Audio"          color="#FCD34D" icon={<Volume2 />}   side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="image"          type="target" position={Position.Left}  label="Portrait"       color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />}  side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}      side="right" top="24px" />
 
     {activeUrl && (
       <MediaPreviewModal

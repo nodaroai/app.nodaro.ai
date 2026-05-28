@@ -14,11 +14,12 @@ import {
   Settings,
   LayoutGrid,
 } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidGenerateMaskConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -26,6 +27,8 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { copyToClipboard } from "@/lib/utils"
 import type { GenerateMaskData } from "@/types/nodes"
+
+const ACCEPTS_IMAGE = (t: string) => isValidGenerateMaskConnection("image", t)
 
 type PreviewMode = "overlay" | "mask" | "source"
 
@@ -37,7 +40,6 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const inConnectionCount = useConnectionCount(id, "image")
 
   const status = nodeData.executionStatus ?? "idle"
   const results: ReadonlyArray<MaskResult> = nodeData.generatedResults ?? []
@@ -141,27 +143,9 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          {
-            id: "image",
-            type: "target",
-            position: Position.Left,
-            customStyle: { top: "calc(100% - 20px)", left: "-29px" },
-            hideHandle: true,
-          },
-          {
-            id: "image",
-            type: "source",
-            position: Position.Right,
-            customStyle: { top: "20px", right: "-29px" },
-            hideHandle: true,
-          },
-          {
-            id: "mask",
-            type: "source",
-            position: Position.Right,
-            customStyle: { top: "50px", right: "-29px" },
-            hideHandle: true,
-          },
+          { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "image", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+          { id: "mask",  type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="relative w-full h-full group/mask flex flex-col">
@@ -346,36 +330,9 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-
-      {/* Input handle icon: image (pink, bottom-left) */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-        style={{ top: "calc(100% - 20px)", left: "-29px", transform: "translateY(-50%)" }}
-      >
-        <ImageIcon className="w-3.5 h-3.5 text-white" />
-        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-        {inConnectionCount >= 2 && (
-          <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-            {inConnectionCount}
-          </div>
-        )}
-      </div>
-
-      {/* Output handle icon: image passthrough (pink, top-right) */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: "20px", right: "-29px", transform: "translateY(-50%)" }}
-      >
-        <ImageIcon className="w-3.5 h-3.5 text-white" />
-      </div>
-
-      {/* Output handle icon: mask (purple, below image output) */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#a855f7] shadow-lg shadow-purple-500/30"
-        style={{ top: "50px", right: "-29px", transform: "translateY(-50%)" }}
-      >
-        <Layers className="w-3.5 h-3.5 text-white" />
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="mask"  type="source" position={Position.Right} label="Mask"  color="#a855f7" icon={<Layers />}    side="right" top="56px" />
 
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}

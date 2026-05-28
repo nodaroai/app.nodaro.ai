@@ -7,7 +7,7 @@ import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
@@ -150,43 +150,11 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
           />
         }
         handles={[
-          {
-            id: "image",
-            type: "target",
-            position: Position.Left,
-            hideHandle: true,
-            customStyle: { top: "30%", left: "-29px" },
-          },
-          {
-            id: "reference",
-            type: "target",
-            position: Position.Left,
-            hideHandle: true,
-            customStyle: { top: "50%", left: "-29px" },
-          },
-          {
-            id: "prompt",
-            type: "target",
-            position: Position.Left,
-            hideHandle: true,
-            customStyle: { top: "70%", left: "-29px" },
-          },
-          {
-            id: "approved",
-            type: "source",
-            position: Position.Right,
-            label: "Approved",
-            hideHandle: true,
-            customStyle: { top: "35%", right: "-29px" },
-          },
-          {
-            id: "rejected",
-            type: "source",
-            position: Position.Right,
-            label: "Rejected",
-            hideHandle: true,
-            customStyle: { top: "65%", right: "-29px" },
-          },
+          { id: "image",     type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "reference", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+          { id: "prompt",    type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+          { id: "approved",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+          { id: "rejected",  type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1.5">
@@ -225,13 +193,11 @@ function ImageCriticNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      {/* Input handle icons (left side) */}
-      <HandleIcon icon={<ImageIcon />} color="pink" side="left" top="30%" label="Image" />
-      <HandleIcon icon={<ImageIcon />} color="pink" side="left" top="50%" label="Reference" />
-      <HandleIcon icon={<FileText />} color="pink" side="left" top="70%" label="Prompt" />
-      {/* Output handle icons (right side) */}
-      <HandleIcon icon={<Check />} color="green" top="35%" />
-      <HandleIcon icon={<X />} color="red" top="65%" />
+      <HandleWithPopover nodeId={id} nodeType="image-critic" handleId="image"     type="target" position={Position.Left}  label="Image"     color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="image-critic" handleId="reference" type="target" position={Position.Left}  label="Reference" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" />
+      <HandleWithPopover nodeId={id} nodeType="image-critic" handleId="prompt"    type="target" position={Position.Left}  label="Prompt"    color="#ff0073" icon={<FileText />}  side="left"  top="calc(100% - 88px)" />
+      <HandleWithPopover nodeId={id} nodeType="image-critic" handleId="approved"  type="source" position={Position.Right} label="Approved"  color="#22c55e" icon={<Check />}     side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="image-critic" handleId="rejected"  type="source" position={Position.Right} label="Rejected"  color="#ef4444" icon={<X />}         side="right" top="56px" />
       <ImageCriticDetailsModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}

@@ -37,6 +37,12 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "motion-transfer",
   "video-upscale",
   "extend-video",
+  // face-swap output is video (writes generatedVideoUrl, per-result `url`).
+  // Frontend execution-graph already includes it in VIDEO_SOURCE_TYPES; this
+  // entry brings the shared set in line so canvas typed-handle validation
+  // doesn't reject face-swap → video-consumer edges that the orchestrator
+  // would happily route at runtime.
+  "face-swap",
   "video-retake",
   "suno-music-video",
   "merge-video-audio",

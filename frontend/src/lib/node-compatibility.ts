@@ -134,6 +134,14 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // combine-text / split-text; `video` is split-media; `media` already
   // covered by ffmpeg's adjust-volume entry.
   "text", "video",
+  // Image-producer handles (Phase 20). `image` covers edit/modify/i2i/
+  // generate-mask/upscale/remove-background/image-to-text targets;
+  // `mask` is edit/modify/i2i; `cinematography` is edit/modify/i2i;
+  // `face` is face-swap. The `video` id above also covers face-swap.
+  "image", "mask", "cinematography", "face",
+  // Identity-node handles (Phase 23). `in` already covered above; `type`
+  // is object-node-specific (accepts identity-type pickers).
+  "type",
 ])
 /** Subset that requires consumer-type dispatch — the dev-time warning in
  *  getCompatibleNodes triggers when one of these is passed without a
@@ -162,6 +170,12 @@ const CONSUMER_TYPE_DEPENDENT_HANDLES: ReadonlySet<string> = new Set(["startStat
  *  after-effects, transcribe, etc.) — false-positive UX. */
 export const PARAMETER_ACCEPTING_HANDLE_IDS: ReadonlySet<string> = new Set([
   "startState", "endState", "target",
+  // Image-producer legacy `cinematography` handle accepts visual pickers
+  // (camera, look, elements). The existing getCompatibleNodes branch
+  // (handleId === "cinematography" || "style") routes to picker candidates;
+  // include here so the add-node popup swaps `visibleNodes` for the
+  // unfiltered `typedHandlePool` (which surfaces Parameter-category nodes).
+  "cinematography",
 ])
 
 export function getCompatibleNodes(

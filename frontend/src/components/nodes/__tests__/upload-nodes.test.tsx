@@ -4,11 +4,24 @@ import { render, screen } from "@testing-library/react"
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
   ),
   NodeResizer: () => null,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
+  useUpdateNodeInternals: vi.fn(() => () => {}),
+  useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
+}))
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
 }))
 
 vi.mock("../base-node", () => ({
@@ -20,10 +33,10 @@ vi.mock("../base-node", () => ({
       data-credits={credits}
       data-id={id}
     >
-      {handles?.map((h: any) => (
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
         <div
-          key={h.id}
-          data-testid={`handle-${h.id}`}
+          key={`${h.type}-${h.id}`}
+          data-testid={`handle-${h.type}-${h.id}`}
           data-type={h.type}
           data-position={h.position}
         />
@@ -46,8 +59,10 @@ vi.mock("lucide-react", () => ({
   AlertCircle: MockIcon,
   X: MockIcon,
   Video: MockIcon,
+  Film: MockIcon,
   Play: MockIcon,
   Music: MockIcon,
+  Volume2: MockIcon,
   Download: MockIcon,
   Expand: MockIcon,
   Scissors: MockIcon,
@@ -203,7 +218,7 @@ describe("UploadImageNode", () => {
 
   it("has correct source handle", () => {
     renderImageNode()
-    const handle = screen.getByTestId("handle-image")
+    const handle = screen.getByTestId("handle-source-image")
     expect(handle).toHaveAttribute("data-type", "source")
     expect(handle).toHaveAttribute("data-position", "right")
   })
@@ -264,7 +279,7 @@ describe("UploadVideoNode", () => {
 
   it("has correct source handle", () => {
     renderVideoNode()
-    const handle = screen.getByTestId("handle-video")
+    const handle = screen.getByTestId("handle-source-video")
     expect(handle).toHaveAttribute("data-type", "source")
     expect(handle).toHaveAttribute("data-position", "right")
   })
@@ -325,7 +340,7 @@ describe("UploadAudioNode", () => {
 
   it("has correct source handle", () => {
     renderAudioNode()
-    const handle = screen.getByTestId("handle-audio")
+    const handle = screen.getByTestId("handle-source-audio")
     expect(handle).toHaveAttribute("data-type", "source")
     expect(handle).toHaveAttribute("data-position", "right")
   })

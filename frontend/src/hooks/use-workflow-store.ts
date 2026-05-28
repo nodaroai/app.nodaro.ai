@@ -1906,6 +1906,39 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         // split-media produces dual-typed outputs; map each leg of the
         // legacy `*-out` pair to the new single-word form.
         "split-media":           { "audio-out": "audio", "video-out": "video" },
+        // Phase 20 — Image-producer output id normalization. Pre-migration
+        // these nodes shipped a single generic `out` source handle; after
+        // the typed-handle migration their source pip is the canonical
+        // type name (matching IMAGE_PRODUCER_TYPES / VIDEO_PRODUCER_TYPES
+        // identity). generate-mask already used `image` + `mask`; image-to-
+        // text already used `text` — no entries needed for those.
+        "edit-image":        { "out": "image" },
+        "modify-image":      { "out": "image" },
+        "image-to-image":    { "out": "image" },
+        "upscale-image":     { "out": "image" },
+        "remove-background": { "out": "image" },
+        "face-swap":         { "out": "video" },
+        // Phase 21 — Video-producer output id normalization. Only
+        // motion-transfer used legacy `out`; the others (video-to-video,
+        // video-upscale, extend-video, lip-sync, speech-to-video) already
+        // shipped with `video` as the source handle id.
+        "motion-transfer":   { "out": "video" },
+        // Phase 22 — Upload/source-node output id normalization.
+        // upload-image/upload-video/upload-audio already shipped with the
+        // canonical type ids (image/video/audio); only reference-audio
+        // needs the `audio-out` → `audio` rewrite. youtube-video already
+        // uses `video`.
+        "reference-audio":   { "audio-out": "audio" },
+        // Phase 24c — Compositing-stragglers output id normalization. The
+        // 4 ffmpeg-overlapping nodes (speed-ramp, fade-video, transcode-
+        // video, manual-edit) shipped with `video-out` source ids; rewrite
+        // to `video`. social-media-format had `media-out` + `text-out` —
+        // map each to the canonical single-word ids.
+        "speed-ramp":          { "video-out": "video" },
+        "fade-video":          { "video-out": "video" },
+        "transcode-video":     { "video-out": "video" },
+        "manual-edit":         { "video-out": "video" },
+        "social-media-format": { "media-out": "media", "text-out": "text" },
       }
       const TARGET_REWRITES: Record<string, Record<string, string>> = {
         // Batch 1
@@ -1935,6 +1968,43 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         "split-text":       { "in": "text" },
         // split-media: rename legacy `video-in`/`audio-in` → `video`/`audio`.
         "split-media":      { "video-in": "video", "audio-in": "audio" },
+        // Phase 20 — Image-producer target id normalization. Only face-swap
+        // had a legacy `in` target id needing migration (its video input
+        // pip). The others (edit-image, modify-image, image-to-image,
+        // generate-mask, upscale-image, remove-background, image-to-text)
+        // already used `image` / `mask` / `cinematography` / `face` from
+        // pre-migration.
+        "face-swap":        { "in": "video" },
+        // Phase 21 — Video-producer target id normalization. video-to-
+        // video / video-upscale / extend-video / motion-transfer all shipped
+        // with a single generic `in` target id. lip-sync used `videoIn`
+        // for its video-input slot (image + audio were already the canonical
+        // names). speech-to-video shipped with all four typed ids already
+        // (cinematography / image / audio / prompt) so no entry needed.
+        "video-to-video":   { "in": "video" },
+        "video-upscale":    { "in": "video" },
+        "extend-video":     { "in": "video" },
+        "motion-transfer":  { "in": "video" },
+        "lip-sync":         { "videoIn": "video" },
+        // Phase 24c — Compositing-stragglers target id normalization.
+        // after-effects / motion-graphics / lottie-overlay / video-composer
+        // all shipped with a generic `in` target; rewrite to `video` (these
+        // nodes apply effects/overlays onto a video source). render-video's
+        // `in` target receives the composition plan from the four CompositePlan
+        // emitters, so its rename is `in` → `composition`. speed-ramp / fade-
+        // video / transcode-video / manual-edit also use `in` → `video`.
+        // social-media-format used `media-in` + `text-in`; rename to canonical
+        // single-word ids (`media` / `text`).
+        "after-effects":       { "in": "video" },
+        "motion-graphics":     { "in": "video" },
+        "lottie-overlay":      { "in": "video" },
+        "video-composer":      { "in": "video" },
+        "render-video":        { "in": "composition" },
+        "speed-ramp":          { "in": "video" },
+        "fade-video":          { "in": "video" },
+        "transcode-video":     { "in": "video" },
+        // (manual-edit keeps `in` as a multi-asset target — see node file.)
+        "social-media-format": { "media-in": "media", "text-in": "text" },
       }
       // Source-type-driven classifier for legacy `in` handles on Suno nodes
       // whose new typed shape splits `in` into `audio` + `prompt`.

@@ -1,11 +1,11 @@
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Clapperboard, Loader2, AlertCircle, X } from "lucide-react"
+import { Film, Loader2, AlertCircle, X } from "lucide-react"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -69,8 +69,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
           ) : undefined
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-          { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+          { id: "composition", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "video",       type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         {hasResult ? null : (
@@ -191,8 +191,8 @@ function RenderVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleIcon icon={<Clapperboard />} color="steel" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Film />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="composition" type="target" position={Position.Left}  label="Composition" color="#ff0073" icon={<Film />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="render-video" handleId="video"       type="source" position={Position.Right} label="Video"       color="#A78BFA" icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

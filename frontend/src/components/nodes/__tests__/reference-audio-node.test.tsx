@@ -5,12 +5,24 @@ import { ReferenceAudioNode } from "../reference-audio-node"
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
   ),
   NodeResizer: () => null,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
   useUpdateNodeInternals: vi.fn(() => () => {}),
+  useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
+}))
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
 }))
 
 vi.mock("../base-node", () => ({
@@ -23,7 +35,7 @@ vi.mock("../base-node", () => ({
 
 vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
-  return { Music: I, Loader2: I, AlertCircle: I, CheckCircle2: I }
+  return { Music: I, Volume2: I, Loader2: I, AlertCircle: I, CheckCircle2: I }
 })
 
 vi.mock("@/components/ui/cached-image", () => ({

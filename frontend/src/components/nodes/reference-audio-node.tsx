@@ -2,18 +2,18 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Music, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Music, Volume2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ReferenceAudioData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "audio-out", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "audio", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
@@ -65,8 +65,8 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Music />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Music />} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Music />}   side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="audio" type="source" position={Position.Right} label="Audio" color="#FCD34D" icon={<Volume2 />} side="right" top="24px" />
     </div>
   )
 }

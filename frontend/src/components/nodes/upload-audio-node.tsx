@@ -2,10 +2,10 @@
 
 import { memo, useRef, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Music, Upload, Link, Loader2, AlertCircle, X } from "lucide-react"
+import { Music, Volume2, Upload, Link, Loader2, AlertCircle, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useUpstreamUrl } from "@/hooks/use-upstream-url"
 import { useFileUpload } from "@/hooks/use-file-upload"
@@ -16,8 +16,8 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { UploadAudioData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "audio", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "audio", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 function formatBytes(bytes: number): string {
@@ -277,8 +277,8 @@ function UploadAudioNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Music />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Music />} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="upload-audio" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Music />}   side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="upload-audio" handleId="audio" type="source" position={Position.Right} label="Audio" color="#FCD34D" icon={<Volume2 />} side="right" top="24px" />
     </div>
 
     <StorageExceededModal

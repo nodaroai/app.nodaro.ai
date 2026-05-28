@@ -3,12 +3,13 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ZoomIn, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, ImageIcon, Link, Pencil } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidUpscaleImageConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -19,13 +20,14 @@ import { buildCreditModelIdentifier } from "@/components/editor/config-panels/he
 import { EditableNodeLabel } from "./editable-node-label"
 import type { UpscaleImageData } from "@/types/nodes"
 
+const ACCEPTS_IMAGE = (t: string) => isValidUpscaleImageConnection("image", t)
+
 function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as UpscaleImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
-  const inConnectionCount = useConnectionCount(id, "image")
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -95,8 +97,8 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "image", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="relative w-full h-full group">
@@ -193,26 +195,8 @@ function UpscaleImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    {/* Input handle icon (TYPE 1) */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </div>
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ZoomIn className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="upscale-image" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="upscale-image" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

@@ -2,9 +2,9 @@
 
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Type, Clapperboard } from "lucide-react"
+import { Film, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
@@ -38,8 +38,8 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
         minHeight={120}
         hideHeader
         handles={[
-          { id: "story_prompt", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
-          { id: "final_video", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+          { id: "story_prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "final_video",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex h-full flex-col gap-2 p-3">
@@ -66,10 +66,8 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      {/* Story prompt input handle icon (bottom-left) */}
-      <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" label="prompt" />
-      {/* Final video output handle icon (top-right) */}
-      <HandleIcon icon={<Clapperboard />} color="pink" side="right" top="20px" label="video" />
+      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="story_prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="final_video"  type="source" position={Position.Right} label="Video"  color="#A78BFA" icon={<Film />} side="right" top="24px" />
     </div>
   )
 }

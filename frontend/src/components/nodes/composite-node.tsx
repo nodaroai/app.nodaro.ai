@@ -4,7 +4,7 @@ import { Layers, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NodeJobProgress } from "./node-job-progress"
 import type { CompositeData } from "@/types/nodes"
@@ -44,11 +44,11 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "video1", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 110px)', left: '-29px' }, hideHandle: true },
-        { id: "video2", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-        { id: "video3", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "video4", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "video1",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 120px)', left: '-29px' }, external: true },
+        { id: "video2",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)',  left: '-29px' }, external: true },
+        { id: "video3",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)',  left: '-29px' }, external: true },
+        { id: "video4",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)',  left: '-29px' }, external: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '24px',               right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -97,11 +97,11 @@ function CompositeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 110px)" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 80px)" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 50px)" />
-    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<Film />} color="steel" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video1"      type="target" position={Position.Left}  label="Video 1"     color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 120px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video2"      type="target" position={Position.Left}  label="Video 2"     color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 88px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video3"      type="target" position={Position.Left}  label="Video 3"     color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 56px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="video4"      type="target" position={Position.Left}  label="Video 4"     color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="composite" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Layers />} side="right" top="24px" />
     </div>
   )
 }

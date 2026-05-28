@@ -5,17 +5,17 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Webhook, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookTriggerData, WebhookParam } from "@/types/nodes"
 
-const TARGET_HANDLE = { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true }
+const TARGET_HANDLE = { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true }
 
 function buildHandles(params: ReadonlyArray<WebhookParam>) {
   if (params.length === 0) {
     return [
       TARGET_HANDLE,
-      { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+      { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
     ]
   }
 
@@ -32,7 +32,7 @@ function buildHandles(params: ReadonlyArray<WebhookParam>) {
       label: p.name,
       top: `${pct}%`,
       customStyle: { top: `${pct}%`, right: '-29px' },
-      hideHandle: true,
+      external: true,
     }
   })
   return [TARGET_HANDLE, ...sourceHandles]
@@ -79,9 +79,9 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Webhook />} color="cyan" side="left" top="calc(100% - 20px)" />
+      <HandleWithPopover nodeId={id} nodeType="webhook-trigger" handleId="in" type="target" position={Position.Left} label="URL" color="#38BDF8" icon={<Webhook />} side="left" top="calc(100% - 24px)" />
       {handles.filter(h => h.type === "source").map((h) => (
-        <HandleIcon key={h.id} icon={<Type />} top={h.customStyle?.top as string ?? '50%'} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="webhook-trigger" handleId={h.id} type="source" position={Position.Right} label={(h as { label?: string }).label ?? h.id} color="#38BDF8" icon={<Type />} side="right" top={h.customStyle?.top as string ?? '50%'} />
       ))}
     </div>
   )

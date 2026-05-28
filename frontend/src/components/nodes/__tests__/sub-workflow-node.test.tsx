@@ -10,7 +10,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   return {
     ...actual,
     Handle: ({ type, position, id }: any) => (
-      <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+      <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
     ),
     NodeResizer: () => null,
     NodeToolbar: ({ children }: any) => <div data-testid="node-toolbar">{children}</div>,
@@ -18,8 +18,20 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     useNodeId: vi.fn(() => "test-node"),
     useReactFlow: vi.fn(() => ({ getNodes: vi.fn(() => []), getEdges: vi.fn(() => []), setNodes: vi.fn(), setEdges: vi.fn() })),
     useUpdateNodeInternals: vi.fn(() => vi.fn()),
+    useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
   }
 })
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
+}))
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles, toolbarActions, topToolbarContent }: any) => (
@@ -31,10 +43,10 @@ vi.mock("../base-node", () => ({
       data-id={id}
       data-is-running={isRunning}
     >
-      {handles?.map((h: any) => (
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
         <div
-          key={h.id}
-          data-testid={`handle-${h.id}`}
+          key={`${h.type}-${h.id}`}
+          data-testid={`handle-${h.type}-${h.id}`}
           data-type={h.type}
           data-position={h.position}
           data-label={h.label}
@@ -172,14 +184,14 @@ describe("SubWorkflowInputNode", () => {
         ports: [{ id: "p1", name: "Image", mediaType: "image" }],
       },
     })
-    const handle = screen.getByTestId("handle-p1")
+    const handle = screen.getAllByTestId(/handle-(source|target)-p1/)[0]
     expect(handle).toHaveAttribute("data-type", "source")
     expect(handle).toHaveAttribute("data-position", "right")
   })
 
   it("shows fallback handle when no ports", () => {
     renderInputNode({ data: { label: "Input", ports: [] } })
-    const handle = screen.getByTestId("handle-out")
+    const handle = screen.getAllByTestId("handle-source-out")[0]
     expect(handle).toHaveAttribute("data-type", "source")
   })
 })
@@ -248,7 +260,7 @@ describe("SubWorkflowOutputNode", () => {
         ports: [{ id: "p1", name: "In", mediaType: "text" }],
       },
     })
-    const handle = screen.getByTestId("handle-p1")
+    const handle = screen.getAllByTestId(/handle-(source|target)-p1/)[0]
     expect(handle).toHaveAttribute("data-type", "target")
     expect(handle).toHaveAttribute("data-position", "left")
   })
@@ -367,8 +379,8 @@ describe("SubWorkflowNode", () => {
 
   it("shows fallback handles when no routeSnapshot", () => {
     renderSubWorkflowNode({ data: { label: "Sub-Workflow" } })
-    expect(screen.getByTestId("handle-in")).toHaveAttribute("data-type", "target")
-    expect(screen.getByTestId("handle-out")).toHaveAttribute("data-type", "source")
+    expect(screen.getAllByTestId("handle-target-in")[0]).toHaveAttribute("data-type", "target")
+    expect(screen.getAllByTestId("handle-source-out")[0]).toHaveAttribute("data-type", "source")
   })
 
   it("renders RunNodeButton with credits=0", () => {
@@ -393,11 +405,11 @@ describe("SubWorkflowNode", () => {
         },
       },
     })
-    const inputHandle = screen.getByTestId("handle-in_ip1")
+    const inputHandle = screen.getAllByTestId("handle-target-in_ip1")[0]
     expect(inputHandle).toHaveAttribute("data-type", "target")
     expect(inputHandle).toHaveAttribute("data-position", "left")
 
-    const outputHandle = screen.getByTestId("handle-out_op1")
+    const outputHandle = screen.getAllByTestId("handle-source-out_op1")[0]
     expect(outputHandle).toHaveAttribute("data-type", "source")
     expect(outputHandle).toHaveAttribute("data-position", "right")
   })

@@ -6,7 +6,7 @@ import { GitBranch, ChevronRight, Variable } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { VARIABLES_HANDLE_ID } from "@nodaro/shared"
@@ -57,17 +57,17 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
 
   // Build dynamic handles — only recompute when route IDs or spacing change
   const handles = useMemo(() => {
-    const h: Array<{ id: string; type: "target" | "source"; position: typeof Position.Left | typeof Position.Right; hideHandle: boolean; customStyle: Record<string, string> }> = [
-      { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: "calc(100% - 20px)", left: "-29px" } },
-      { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, hideHandle: true, customStyle: { top: "20px", left: "-29px" } },
+    const h: Array<{ id: string; type: "target" | "source"; position: typeof Position.Left | typeof Position.Right; external: boolean; customStyle: Record<string, string> }> = [
+      { id: "in", type: "target", position: Position.Left, external: true, customStyle: { top: 'calc(100% - 24px)', left: '-29px' } },
+      { id: VARIABLES_HANDLE_ID, type: "target", position: Position.Left, external: true, customStyle: { top: '24px', left: '-29px' } },
     ]
     routes.forEach((route, i) => {
       h.push({
         id: route.id,
         type: "source",
         position: Position.Right,
-        hideHandle: true,
-        customStyle: { top: `${20 + i * spacing}px`, right: "-29px" },
+        external: true,
+        customStyle: { top: `${20 + i * spacing}px`, right: '-29px' },
       })
     })
     return h
@@ -145,16 +145,10 @@ function RouterNodeComponent({ id, data, selected }: NodeProps) {
           })}
         </div>
       </BaseNode>
-      <HandleIcon icon={<ChevronRight />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Variable />} color="orange" side="left" top="20px" label="Variables" />
+      <HandleWithPopover nodeId={id} nodeType="router" handleId="in"                  type="target" position={Position.Left}  label="In"        color="#38BDF8" icon={<ChevronRight />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="router" handleId={VARIABLES_HANDLE_ID} type="target" position={Position.Left}  label="Variables" color="#f97316" icon={<Variable />}     side="left"  top="24px" />
       {routes.map((route, i) => (
-        <HandleIcon
-          key={route.id}
-          icon={<span className="text-[8px] font-bold">{LETTERS[i] ?? "?"}</span>}
-          color={isRouteActive(route) ? "green" : "steel"}
-          top={`${20 + i * spacing}px`}
-          label={route.name}
-        />
+        <HandleWithPopover key={route.id} nodeId={id} nodeType="router" handleId={route.id} type="source" position={Position.Right} label={route.name} color={isRouteActive(route) ? "#22c55e" : "#475569"} icon={<span className="text-[8px] font-bold">{LETTERS[i] ?? "?"}</span>} side="right" top={`${20 + i * spacing}px`} />
       ))}
     </div>
   )

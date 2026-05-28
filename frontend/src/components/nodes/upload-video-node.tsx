@@ -5,7 +5,8 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Upload, Link, Loader2, AlertCircle, X, Play, Expand, Download, Scissors, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { Film } from "lucide-react"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -19,8 +20,8 @@ import { CachedImage } from "@/components/ui/cached-image"
 import type { UploadVideoData, GeneratedResult } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 
@@ -392,8 +393,8 @@ function UploadVideoNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
       </BaseNode>
-      <HandleIcon icon={<Video />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Video />} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="upload-video" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Video />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="upload-video" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />}  side="right" top="24px" />
     </div>
     {videoUrl && (
       <MediaPreviewModal

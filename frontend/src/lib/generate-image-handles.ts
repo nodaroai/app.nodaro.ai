@@ -105,6 +105,11 @@ export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // candidates and downstream image consumers couldn't enumerate it as a
   // valid producer.
   "extract-frame",
+  // generate-mask emits the source image AND a mask PNG. Its `image` source
+  // pip is the passthrough (same image as the input) — included here so
+  // downstream image consumers (Generate Image References, etc.) enumerate it
+  // as a valid candidate.
+  "generate-mask",
 ])
 
 /** Identity-locking source node types that feed Subjects. */
