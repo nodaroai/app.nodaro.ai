@@ -6,6 +6,9 @@ import {
   PIPELINE_FORMATS,
   PIPELINE_MODES,
   PIPELINE_OUTPUT_RESOLUTIONS,
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  PIPELINE_PINNABLE_SCRIPT_LLMS,
+  PIPELINE_PINNABLE_VIDEO_MODELS,
   VIDEO_CRITIC_FRAME_MODES,
   validateDurationForFormat,
   type PipelineFormat,
@@ -54,6 +57,75 @@ const VIDEO_CRITIC_FRAME_DESCRIPTIONS: Record<VideoCriticFrameMode, string> = {
     "5 frames per shot at 0%/25%/50%/75%/100%. Best motion-glitch coverage. ~4 credits per shot.",
 }
 
+// Labels for each pinnable model. The model id list lives in
+// `@nodaro/shared::PIPELINE_PINNABLE_*` so the Zod schema and these dropdowns
+// can't drift. Labels intentionally match the credit-table identifier — e.g.
+// `veo3` is VEO 3.1 Quality (~125cr/shot), `veo3.1` is VEO 3.1 Fast
+// (~30-40cr/shot) per backend/CLAUDE.md.
+const IMAGE_MODEL_LABELS: Record<string, string> = {
+  "nano-banana": "Nano Banana — fast",
+  "nano-banana-pro": "Nano Banana Pro — higher fidelity",
+  "nano-banana-2": "Nano Banana 2 — latest",
+  flux: "Flux Pro",
+  "gpt-image": "GPT Image",
+  "gpt-image-2": "GPT Image 2",
+}
+
+const VIDEO_MODEL_LABELS: Record<string, string> = {
+  "kling-turbo": "Kling Turbo — cheapest",
+  kling: "Kling",
+  "kling-3.0": "Kling 3.0",
+  seedance: "Seedance",
+  "seedance-2": "Seedance 2",
+  "seedance-2-fast": "Seedance 2 Fast",
+  veo3: "VEO 3.1 Quality (~125cr/shot)",
+  "veo3.1": "VEO 3.1 Fast (~30-40cr/shot)",
+  veo3_lite: "VEO 3.1 Lite (~30cr/shot)",
+  minimax: "MiniMax",
+  "hailuo-standard": "Hailuo Standard",
+  "wan-turbo": "Wan Turbo",
+  "bytedance-lite": "Bytedance Lite",
+  "bytedance-pro": "Bytedance Pro",
+}
+
+const SCRIPT_LLM_LABELS: Record<string, string> = {
+  "claude-haiku-4-5": "Claude Haiku 4.5 — fastest",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6 — default",
+  "claude-opus-4-6": "Claude Opus 4.6 — deepest",
+}
+
+// Build dropdown options from the shared allowlist + an "Auto" sentinel.
+// `"" ` is mapped to `"auto"` in the Radix Select (empty string is reserved
+// by Radix for "no selection"). The onValueChange normalizes back to
+// undefined so the API receives an absent key, NOT an empty string (which the
+// Zod enum would reject).
+function buildOptions(
+  ids: readonly string[],
+  labels: Record<string, string>,
+  autoLabel: string,
+): readonly { value: string; label: string }[] {
+  return [
+    { value: "auto", label: autoLabel },
+    ...ids.map((id) => ({ value: id, label: labels[id] ?? id })),
+  ]
+}
+
+const IMAGE_MODEL_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_IMAGE_MODELS,
+  IMAGE_MODEL_LABELS,
+  "Auto (Director picks per shot)",
+)
+const VIDEO_MODEL_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_VIDEO_MODELS,
+  VIDEO_MODEL_LABELS,
+  "Auto (Director picks per shot)",
+)
+const SCRIPT_LLM_OPTIONS = buildOptions(
+  PIPELINE_PINNABLE_SCRIPT_LLMS,
+  SCRIPT_LLM_LABELS,
+  "Auto (Claude Sonnet 4.6)",
+)
+
 export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<GenerativePipelineNodeData>) {
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const [running, setRunning] = useState(false)
@@ -79,6 +151,20 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
     setRunning(true)
     setErr(null)
     try {
+      // Build the `config` payload only with model fields the user actually
+      // set — empty-string sentinels (the "Auto" option) become absent keys so
+      // the backend resolver falls through to its own defaults. Empty
+      // `stage_models` is also omitted to keep the row clean.
+      const modelConfig: Record<string, unknown> = {}
+      if (data.image_model) modelConfig.image_model = data.image_model
+      if (data.video_model) modelConfig.video_model = data.video_model
+      if (data.script_llm) modelConfig.script_llm = data.script_llm
+      if (data.stage_models && Object.values(data.stage_models).some(Boolean)) {
+        modelConfig.stage_models = Object.fromEntries(
+          Object.entries(data.stage_models).filter(([, v]) => Boolean(v)),
+        )
+      }
+
       const { id } = await pipelinesApi.create({
         pipeline_type: "story_to_video",
         root_node_id: selectedNodeId,
@@ -89,6 +175,7 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
         language: "en",
         mode: data.mode ?? "manual",
         video_critic_frame_count: data.video_critic_frame_count ?? "first_last",
+        ...(Object.keys(modelConfig).length > 0 ? { config: modelConfig } : {}),
       })
       onUpdate({ pipeline_id: id, status: "queued" })
     } catch (e) {
@@ -205,6 +292,82 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
           {VIDEO_CRITIC_FRAME_DESCRIPTIONS[
             data.video_critic_frame_count ?? "first_last"
           ]}
+        </div>
+      </div>
+      <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        <div className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Models (optional)
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="image_model">Image model</Label>
+            <Select
+              value={data.image_model || "auto"}
+              onValueChange={(v) =>
+                onUpdate({ image_model: v === "auto" ? undefined : v })
+              }
+            >
+              <SelectTrigger id="image_model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {IMAGE_MODEL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Applies to character/location/object portraits + scene keyframes.
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="video_model">Video model</Label>
+            <Select
+              value={data.video_model || "auto"}
+              onValueChange={(v) =>
+                onUpdate({ video_model: v === "auto" ? undefined : v })
+              }
+            >
+              <SelectTrigger id="video_model">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VIDEO_MODEL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Used for every shot. Must be compatible with your shot input mode — incompatible picks silently fall back to Auto.
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="script_llm">Script LLM</Label>
+            <Select
+              value={data.script_llm || "auto"}
+              onValueChange={(v) =>
+                onUpdate({ script_llm: v === "auto" ? undefined : v })
+              }
+            >
+              <SelectTrigger id="script_llm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SCRIPT_LLM_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Drives the Showrunner (script + scene plan). Critics still use the default.
+            </div>
+          </div>
         </div>
       </div>
       <Button onClick={handleRun} disabled={running || !validation.ok}>

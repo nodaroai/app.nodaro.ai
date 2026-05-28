@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { SceneInputMode, SceneNodeData, ShowrunnerPlan } from "@nodaro/shared"
+import type {
+  PipelineConfig,
+  SceneInputMode,
+  SceneNodeData,
+  ShowrunnerPlan,
+} from "@nodaro/shared"
+import { resolvePipelineModel } from "@nodaro/shared"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"
@@ -28,6 +34,13 @@ export interface RunShotListStageArgs {
    * pause-for-user behavior.
    */
   mode?: "manual" | "auto" | "guided"
+  /**
+   * Pipeline-level config from `pipelines.config`. Forwarded to runOneScene
+   * → runSceneDirector so user image/video model overrides constrain the LLM's
+   * per-shot picks. Absent → Scene Director picks freely from the full
+   * capability registry (today's behavior).
+   */
+  config?: Partial<PipelineConfig> | null
 }
 
 const MAX_CRITIC_RETRIES_PER_SCENE = 2
@@ -104,6 +117,11 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
     const locationsByKey = new Map(plan.locations.map((l) => [l.key, l]))
     const objectsByKey = new Map(plan.objects.map((o) => [o.key, o]))
 
+    // Resolve user model overrides once for the whole stage (config is the
+    // same for every scene). `undefined` = let the Scene Director pick.
+    const imageModelOverride = resolvePipelineModel(args.config, "scene_keyframes_image")
+    const videoModelOverride = resolvePipelineModel(args.config, "shots_video")
+
     // Bounded concurrency — each runOneScene issues 2-6 Sonnet calls. Without a
     // cap, >6 scenes blows past Anthropic tier-1 rate limits. runOneScene catches
     // its own errors and never throws, so failFast=false is safe here.
@@ -121,6 +139,8 @@ export async function runShotListStage(args: RunShotListStageArgs): Promise<void
             castByKey,
             locationsByKey,
             objectsByKey,
+            imageModelOverride,
+            videoModelOverride,
           }),
       ),
       SCENE_CONCURRENCY_LIMIT,
@@ -213,6 +233,8 @@ interface RunOneSceneArgs {
   castByKey?: Map<string, ShowrunnerPlan["cast"][number]>
   locationsByKey?: Map<string, ShowrunnerPlan["locations"][number]>
   objectsByKey?: Map<string, ShowrunnerPlan["objects"][number]>
+  imageModelOverride?: string
+  videoModelOverride?: string
 }
 
 async function runOneScene(args: RunOneSceneArgs): Promise<void> {
@@ -227,6 +249,8 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
     castByKey,
     locationsByKey,
     objectsByKey,
+    imageModelOverride,
+    videoModelOverride,
   } = args
 
   await supabase
@@ -260,6 +284,8 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
         castByKey,
         locationsByKey,
         objectsByKey,
+        imageModelOverride,
+        videoModelOverride,
       })
     } catch (err) {
       await supabase

@@ -194,14 +194,58 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       await import("../ee/pipelines/credits.js")
     const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
 
-    const userTier = await supabase
+    const { data: profileRow } = await supabase
       .from("profiles")
       .select("tier")
       .eq("id", userId)
       .single()
-      .then((r) => r.data?.tier ?? "free")
+      .then((r) => ({ data: r.data as { tier?: string } | null }))
+    const userTier = profileRow?.tier ?? "free"
 
     const config = input.config ?? {}
+
+    // Tier-restriction guard for user-pinned model picks. The Zod schema
+    // already constrains values to the pinnable allowlists, but tier-gated
+    // models (e.g. veo3 blocked for free) still need a runtime check. Reject
+    // BEFORE creating the pipeline row so the user gets a fast 403 instead of
+    // a stuck `failed` row + refund cycle. CreditsService internally short-
+    // circuits when `creditsDisabled()` so this is safe for self-hosted.
+    const pinnedRaw: ReadonlyArray<string | undefined> = [
+      config.image_model,
+      config.video_model,
+      config.script_llm,
+      ...(config.stage_models ? Object.values(config.stage_models) : []),
+    ]
+    const pinnedModels = Array.from(
+      new Set(pinnedRaw.filter((m): m is string => typeof m === "string" && m.length > 0)),
+    )
+    if (pinnedModels.length > 0) {
+      const { CreditsService } = await import("../ee/billing/credits.js")
+      // `checkCreditsWithProfile` enforces `pricing.isEnabled`, the model's
+      // `tierRestriction`, and `FREE_TIER_RESTRICTIONS.blockedModels` for the
+      // user's tier — exactly the surface that `reserveCredits` skips. Daily
+      // cap + balance check ride along; that's fine since a user pinning a
+      // model they can't afford should also fail-fast here rather than mid-
+      // pipeline. Build a minimal profile from the tier we already loaded.
+      const profile = { id: userId, tier: userTier } as Parameters<
+        typeof CreditsService.checkCreditsWithProfile
+      >[1]
+      for (const modelId of pinnedModels) {
+        const check = await CreditsService.checkCreditsWithProfile(userId, profile, modelId)
+        if (!check.allowed) {
+          return reply.status(403).send({
+            error: {
+              code: "model_pin_forbidden",
+              model: modelId,
+              message:
+                check.error ??
+                `You can't pin '${modelId}' on this plan. Upgrade your subscription or pick a different model.`,
+            },
+          })
+        }
+      }
+    }
+
     const upfront = estimateUpfrontCredits({
       targetDurationSeconds: input.target_duration_seconds,
       format: input.format,

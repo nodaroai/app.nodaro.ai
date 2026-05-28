@@ -164,6 +164,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       userId: pipeline.user_id,
       userTier,
       mode: pipelineMode,
+      config: pipeline.config ?? undefined,
     })
     return
   }
@@ -175,6 +176,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       userId: pipeline.user_id,
       userTier,
       mode: pipelineMode,
+      config: pipeline.config ?? undefined,
     })
     return
   }
@@ -186,6 +188,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       userId: pipeline.user_id,
       userTier,
       mode: pipelineMode,
+      config: pipeline.config ?? undefined,
     })
     return
   }
@@ -197,6 +200,7 @@ export async function drivePipeline(args: DriveArgs): Promise<void> {
       userId: pipeline.user_id,
       userTier,
       mode: pipelineMode,
+      config: pipeline.config ?? undefined,
     })
     return
   }
@@ -251,6 +255,7 @@ async function runScriptAndPersist(
     activationMode: pipeline.activation_mode,
     userTier,
     styleDirectives: pipeline.style_directives ?? undefined,
+    config: pipeline.config ?? undefined,
   })
 
   if (outcome.status === "failed") {

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { ShowrunnerPlan } from "@nodaro/shared"
+import type { PipelineConfig, ShowrunnerPlan } from "@nodaro/shared"
+import { resolvePipelineModel } from "@nodaro/shared"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
@@ -23,6 +24,8 @@ export interface RunObjectsStageArgs {
    * behavior: stop after generation so the user approves each object.
    */
   mode?: "manual" | "auto" | "guided"
+  /** Pipeline `config` row; resolved via `resolvePipelineModel(config, "objects_image")` to pick the entity image model. */
+  config?: Partial<PipelineConfig> | null
 }
 
 /**
@@ -31,6 +34,7 @@ export interface RunObjectsStageArgs {
  */
 export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> {
   const { supabase, pipelineId, userId } = args
+  const userOverride = resolvePipelineModel(args.config, "objects_image")
 
   const stageId = await ensureStageRow(supabase, pipelineId, "objects", 3)
 
@@ -95,6 +99,7 @@ export async function runObjectsStage(args: RunObjectsStageArgs): Promise<void> 
         pipelineEntityId: entity.id,
         userId,
         prompt,
+        userOverride,
       })
       await supabase
         .from("pipeline_entities")
