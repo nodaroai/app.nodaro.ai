@@ -12,6 +12,33 @@ import {
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
 import {
+  IMAGE_PRODUCER_HANDLE_LABELS,
+  isValidEditImageConnection,
+  isValidModifyImageConnection,
+  isValidImageToImageConnection,
+  isValidGenerateMaskConnection,
+  isValidUpscaleImageConnection,
+  isValidRemoveBackgroundConnection,
+  isValidFaceSwapConnection,
+  isValidImageToTextConnection,
+} from "./image-producer-handles"
+import {
+  VIDEO_PRODUCER_HANDLE_LABELS,
+  isValidVideoToVideoConnection,
+  isValidVideoUpscaleConnection,
+  isValidExtendVideoConnection,
+  isValidLipSyncConnection,
+  isValidSpeechToVideoConnection,
+  isValidMotionTransferConnection,
+} from "./video-producer-handles"
+import {
+  IDENTITY_HANDLE_LABELS,
+  isValidCharacterConnection,
+  isValidFaceConnection,
+  isValidObjectConnection,
+  isValidLocationConnection,
+} from "./identity-handles"
+import {
   AUDIO_TEXT_HANDLE_LABELS,
   isValidTextToSpeechConnection,
   isValidTextToAudioConnection,
@@ -342,6 +369,84 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "sort-list": [
     { handleId: "in", label: "List", accepts: (s) => isValidSortListConnection("in", s) },
   ],
+  // ─── Image-producer nodes (Phase 20 of typed-handles migration) ──────
+  "edit-image": [
+    { handleId: "image",          label: IMAGE_PRODUCER_HANDLE_LABELS["edit-image"].image,          accepts: (s) => isValidEditImageConnection("image",          s, isVisualPickerType) },
+    { handleId: "mask",           label: IMAGE_PRODUCER_HANDLE_LABELS["edit-image"].mask,           accepts: (s) => isValidEditImageConnection("mask",           s, isVisualPickerType) },
+    { handleId: "cinematography", label: IMAGE_PRODUCER_HANDLE_LABELS["edit-image"].cinematography, accepts: (s) => isValidEditImageConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "modify-image": [
+    { handleId: "image",          label: IMAGE_PRODUCER_HANDLE_LABELS["modify-image"].image,          accepts: (s) => isValidModifyImageConnection("image",          s, isVisualPickerType) },
+    { handleId: "mask",           label: IMAGE_PRODUCER_HANDLE_LABELS["modify-image"].mask,           accepts: (s) => isValidModifyImageConnection("mask",           s, isVisualPickerType) },
+    { handleId: "cinematography", label: IMAGE_PRODUCER_HANDLE_LABELS["modify-image"].cinematography, accepts: (s) => isValidModifyImageConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "image-to-image": [
+    { handleId: "image",          label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-image"].image,          accepts: (s) => isValidImageToImageConnection("image",          s, isVisualPickerType) },
+    { handleId: "mask",           label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-image"].mask,           accepts: (s) => isValidImageToImageConnection("mask",           s, isVisualPickerType) },
+    { handleId: "cinematography", label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-image"].cinematography, accepts: (s) => isValidImageToImageConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "generate-mask": [
+    { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["generate-mask"].image, accepts: (s) => isValidGenerateMaskConnection("image", s) },
+  ],
+  "upscale-image": [
+    { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["upscale-image"].image, accepts: (s) => isValidUpscaleImageConnection("image", s) },
+  ],
+  "remove-background": [
+    { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["remove-background"].image, accepts: (s) => isValidRemoveBackgroundConnection("image", s) },
+  ],
+  "face-swap": [
+    { handleId: "face",  label: IMAGE_PRODUCER_HANDLE_LABELS["face-swap"].face,  accepts: (s) => isValidFaceSwapConnection("face",  s) },
+    { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["face-swap"].video, accepts: (s) => isValidFaceSwapConnection("video", s) },
+  ],
+  "image-to-text": [
+    { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-text"].image, accepts: (s) => isValidImageToTextConnection("image", s) },
+    { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-text"].video, accepts: (s) => isValidImageToTextConnection("video", s) },
+    { handleId: "text",  label: IMAGE_PRODUCER_HANDLE_LABELS["image-to-text"].text,  accepts: (s) => isValidImageToTextConnection("text",  s) },
+  ],
+
+  // ─── Video-producer nodes (Phase 21 of typed-handles migration) ──────
+  "video-to-video": [
+    { handleId: "video",          label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].video,          accepts: (s) => isValidVideoToVideoConnection("video",          s, isVisualPickerType) },
+    { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["video-to-video"].cinematography, accepts: (s) => isValidVideoToVideoConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "video-upscale": [
+    { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["video-upscale"].video, accepts: (s) => isValidVideoUpscaleConnection("video", s) },
+  ],
+  "extend-video": [
+    { handleId: "video",          label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].video,          accepts: (s) => isValidExtendVideoConnection("video",          s, isVisualPickerType) },
+    { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["extend-video"].cinematography, accepts: (s) => isValidExtendVideoConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "lip-sync": [
+    { handleId: "image", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].image, accepts: (s) => isValidLipSyncConnection("image", s) },
+    { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].video, accepts: (s) => isValidLipSyncConnection("video", s) },
+    { handleId: "audio", label: VIDEO_PRODUCER_HANDLE_LABELS["lip-sync"].audio, accepts: (s) => isValidLipSyncConnection("audio", s) },
+  ],
+  "speech-to-video": [
+    { handleId: "image",          label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].image,          accepts: (s) => isValidSpeechToVideoConnection("image",          s, isVisualPickerType) },
+    { handleId: "audio",          label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].audio,          accepts: (s) => isValidSpeechToVideoConnection("audio",          s, isVisualPickerType) },
+    { handleId: "prompt",         label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].prompt,         accepts: (s) => isValidSpeechToVideoConnection("prompt",         s, isVisualPickerType) },
+    { handleId: "cinematography", label: VIDEO_PRODUCER_HANDLE_LABELS["speech-to-video"].cinematography, accepts: (s) => isValidSpeechToVideoConnection("cinematography", s, isVisualPickerType) },
+  ],
+  "motion-transfer": [
+    { handleId: "video", label: VIDEO_PRODUCER_HANDLE_LABELS["motion-transfer"].video, accepts: (s) => isValidMotionTransferConnection("video", s) },
+  ],
+
+  // ─── Identity nodes (Phase 23 of typed-handles migration) ────────────
+  "character": [
+    { handleId: "in", label: IDENTITY_HANDLE_LABELS["character"].in, accepts: (s) => isValidCharacterConnection("in", s, isVisualPickerType) },
+  ],
+  "face": [
+    { handleId: "in", label: IDENTITY_HANDLE_LABELS["face"].in, accepts: (s) => isValidFaceConnection("in", s, isVisualPickerType) },
+  ],
+  "object": [
+    { handleId: "in",   label: IDENTITY_HANDLE_LABELS["object"].in,   accepts: (s) => isValidObjectConnection("in",   s, isVisualPickerType) },
+    { handleId: "type", label: IDENTITY_HANDLE_LABELS["object"].type, accepts: (s) => isValidObjectConnection("type", s, isVisualPickerType) },
+  ],
+  "location": [
+    { handleId: "in",             label: IDENTITY_HANDLE_LABELS["location"].in,             accepts: (s) => isValidLocationConnection("in",             s, isVisualPickerType) },
+    { handleId: "cinematography", label: IDENTITY_HANDLE_LABELS["location"].cinematography, accepts: (s) => isValidLocationConnection("cinematography", s, isVisualPickerType) },
+  ],
+
   // Loop's per-column input handles have dynamic ids (`col_<uuid>_in`) so
   // they can't be enumerated statically. Expose the col_add quick-add
   // handle instead — source-direction popovers will offer loop as a

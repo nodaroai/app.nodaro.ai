@@ -6,9 +6,10 @@ import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Downloa
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidFaceConnection } from "@/lib/identity-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -18,6 +19,9 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { FaceNodeData } from "@/types/nodes"
+
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT = (t: string) => isValidFaceConnection("in", t, isPickerType)
 
 const STYLE_LABELS: Record<string, string> = {
   realistic: "Realistic",
@@ -33,7 +37,6 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
-  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -66,8 +69,8 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "faceRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "in",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "faceRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -241,17 +244,8 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icon */}
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)">
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </HandleIcon>
-    {/* Output handle icon */}
-    <HandleIcon icon={<SmilePlus />} color="pink" side="right" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="face" handleId="in"      type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="face" handleId="faceRef" type="source" position={Position.Right} label="Face"   color="#FB923C" icon={<SmilePlus />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

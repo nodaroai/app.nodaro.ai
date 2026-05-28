@@ -3,6 +3,8 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidFaceSwapConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -15,6 +17,9 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { FaceSwapData } from "@/types/nodes"
+
+const ACCEPTS_FACE  = (t: string) => isValidFaceSwapConnection("face",  t)
+const ACCEPTS_VIDEO = (t: string) => isValidFaceSwapConnection("video", t)
 
 function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as FaceSwapData
@@ -124,9 +129,9 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
         <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "face", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "face",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="relative w-full h-full group/video">
@@ -247,32 +252,9 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-
-    {/* Face image input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#FB923C]"
-      style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#FB923C] text-[#FB923C] text-[8px] font-black flex items-center justify-center">+</div>
-    </div>
-
-    {/* Video input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-    </div>
-
-    {/* Video output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="target" position={Position.Left}  label="Video" color="#ff0073" icon={<Clapperboard />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="face"  type="target" position={Position.Left}  label="Face"  color="#FB923C" icon={<ImageIcon />}    side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_FACE} />
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="source" position={Position.Right} label="Video" color="#ff0073" icon={<Clapperboard />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

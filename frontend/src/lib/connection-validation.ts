@@ -45,6 +45,30 @@ import {
   isValidSortListConnection,
   isValidLoopCoarse,
 } from "./data-handles"
+import {
+  isValidEditImageConnection,
+  isValidModifyImageConnection,
+  isValidImageToImageConnection,
+  isValidGenerateMaskConnection,
+  isValidUpscaleImageConnection,
+  isValidRemoveBackgroundConnection,
+  isValidFaceSwapConnection,
+  isValidImageToTextConnection,
+} from "./image-producer-handles"
+import {
+  isValidVideoToVideoConnection,
+  isValidVideoUpscaleConnection,
+  isValidExtendVideoConnection,
+  isValidLipSyncConnection,
+  isValidSpeechToVideoConnection,
+  isValidMotionTransferConnection,
+} from "./video-producer-handles"
+import {
+  isValidCharacterConnection,
+  isValidFaceConnection,
+  isValidObjectConnection,
+  isValidLocationConnection,
+} from "./identity-handles"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { ACCEPTS_CHARACTER_REF, ACCEPTS_PARAMETER_PICKER } from "./target-handle-registry"
 
@@ -231,6 +255,48 @@ export function isValidWorkflowConnection(
     )
   }
 
+  // Image-producer nodes (edit-image, modify-image, image-to-image,
+  // generate-mask, upscale-image, remove-background, face-swap,
+  // image-to-text) — each owns its target-handle predicate, dispatched
+  // here so connection-validation and HandlePopover share one rule set.
+  if (connection.targetHandle) {
+    const validator = IMAGE_PRODUCER_VALIDATORS[targetType ?? ""]
+    if (validator) {
+      return validator(
+        connection.targetHandle,
+        typeOf(connection.source) ?? "",
+        isVisualPickerType,
+      )
+    }
+  }
+
+  // Video-producer nodes (video-to-video, video-upscale, extend-video,
+  // lip-sync, speech-to-video, motion-transfer) — Phase 21.
+  if (connection.targetHandle) {
+    const validator = VIDEO_PRODUCER_VALIDATORS[targetType ?? ""]
+    if (validator) {
+      return validator(
+        connection.targetHandle,
+        typeOf(connection.source) ?? "",
+        isVisualPickerType,
+      )
+    }
+  }
+
+  // Identity nodes (character, face, object, location) — Phase 23.
+  // Each has a `in` text-prompt input; object adds a `type` picker target
+  // and location adds a `cinematography` picker target.
+  if (connection.targetHandle) {
+    const validator = IDENTITY_VALIDATORS[targetType ?? ""]
+    if (validator) {
+      return validator(
+        connection.targetHandle,
+        typeOf(connection.source) ?? "",
+        isVisualPickerType,
+      )
+    }
+  }
+
   // FFmpeg / pure-processing nodes (trim-video, combine-videos,
   // merge-video-audio, extract-frame, loop-video, resize-video,
   // add-captions, trim-audio, adjust-volume, combine-audio, mix-audio).
@@ -333,6 +399,33 @@ type AudioTextValidator = (
   sourceType: string,
   isVisualPicker: (t: string) => boolean,
 ) => boolean
+
+const IMAGE_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
+  "edit-image":        isValidEditImageConnection,
+  "modify-image":      isValidModifyImageConnection,
+  "image-to-image":    isValidImageToImageConnection,
+  "generate-mask":     (h, s) => isValidGenerateMaskConnection(h, s),
+  "upscale-image":     (h, s) => isValidUpscaleImageConnection(h, s),
+  "remove-background": (h, s) => isValidRemoveBackgroundConnection(h, s),
+  "face-swap":         (h, s) => isValidFaceSwapConnection(h, s),
+  "image-to-text":     (h, s) => isValidImageToTextConnection(h, s),
+}
+
+const VIDEO_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
+  "video-to-video":   isValidVideoToVideoConnection,
+  "video-upscale":    (h, s) => isValidVideoUpscaleConnection(h, s),
+  "extend-video":     isValidExtendVideoConnection,
+  "lip-sync":         (h, s) => isValidLipSyncConnection(h, s),
+  "speech-to-video":  isValidSpeechToVideoConnection,
+  "motion-transfer":  (h, s) => isValidMotionTransferConnection(h, s),
+}
+
+const IDENTITY_VALIDATORS: Record<string, AudioTextValidator> = {
+  "character": isValidCharacterConnection,
+  "face":      isValidFaceConnection,
+  "object":    isValidObjectConnection,
+  "location":  isValidLocationConnection,
+}
 
 const AUDIO_TEXT_VALIDATORS: Record<string, AudioTextValidator> = {
   // Batch 1: AI > Audio & Speech

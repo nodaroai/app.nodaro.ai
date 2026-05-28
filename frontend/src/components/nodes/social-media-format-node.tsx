@@ -6,7 +6,7 @@ import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Do
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { PlatformPreview } from "./platform-preview"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -67,10 +67,10 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "media-in", type: "target", position: Position.Left, top: "calc(100% - 50px)", customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "text-in", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "media-out", type: "source", position: Position.Right, top: "20px", customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
-        { id: "text-out", type: "source", position: Position.Right, top: "50px", customStyle: { top: '50px', right: '-29px' }, hideHandle: true },
+        { id: "media", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "text",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "media", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "text",  type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="relative w-full group">
@@ -182,13 +182,10 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icons */}
-    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="left" top="calc(100% - 50px)" />
-    <HandleIcon icon={<Type />} color="steel" side="left" top="calc(100% - 20px)" />
-
-    {/* Output handle icons */}
-    <HandleIcon icon={specIsVideo ? <FileVideo /> : <FileImage />} color="steel" side="right" top="20px" />
-    <HandleIcon icon={<Type />} color="steel" side="right" top="50px" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="target" position={Position.Left}  label="Media" color={specIsVideo ? "#A78BFA" : "#22D3EE"} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="left"  top="calc(100% - 56px)" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="target" position={Position.Left}  label="Caption" color="#22D3EE" icon={<Type />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="source" position={Position.Right} label="Media"   color={specIsVideo ? "#A78BFA" : "#22D3EE"} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="source" position={Position.Right} label="Caption" color="#22D3EE" icon={<Type />} side="right" top="56px" />
 
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={urlIsVideo ? "video" : "image"} url={activeUrl} results={results} initialIndex={activeIndex} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />

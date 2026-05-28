@@ -6,7 +6,9 @@ import { Package, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download,
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidObjectConnection } from "@/lib/identity-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useConnectionCount } from "@/hooks/use-connection-count"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -19,6 +21,10 @@ import { NodeJobProgress } from "./node-job-progress"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ObjectNodeData } from "@/types/nodes"
+
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT = (t: string) => isValidObjectConnection("in",   t, isPickerType)
+const ACCEPTS_TYPE   = (t: string) => isValidObjectConnection("type", t, isPickerType)
 
 const STYLE_LABELS: Record<string, string> = {
   realistic: "Realistic",
@@ -48,7 +54,6 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
   const setObjectStudioNodeId = useWorkflowStore((s) => s.setObjectStudioNodeId)
-  const inConnectionCount = useConnectionCount(id)
   // Count of edges wired to the `type` input handle. When this transitions
   // from 0 → ≥1, an upstream picker has just been wired and we auto-clear the
   // legacyPickerSelection breadcrumb per spec Pass 6 F-74 + Pass 12 F-98.
@@ -113,9 +118,9 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "type", type: "target", position: Position.Left, customStyle: { top: '20px', left: '-29px' }, hideHandle: true },
-        { id: "objectRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "in",        type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "type",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "objectRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1.5">
@@ -316,21 +321,9 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icon — bottom "in" handle for generic upstream wires */}
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)">
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </HandleIcon>
-    {/* Type input handle icon — accepts upstream picker nodes (animal /
-        vehicle / furniture / weapon / material) as the object's identity
-        provider. Wiring one auto-clears the legacy picker breadcrumb. */}
-    <HandleIcon icon={<Package />} color="emerald" side="left" top="20px" label="Type" />
-    {/* Output handle icon */}
-    <HandleIcon icon={<Package />} color="emerald" side="right" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="in"        type="target" position={Position.Left}  label="Prompt"      color="#ff0073" icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="type"      type="target" position={Position.Left}  label="Object type" color="#34D399" icon={<Package />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object"      color="#34D399" icon={<Package />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

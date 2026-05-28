@@ -2,13 +2,14 @@
 
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Clapperboard, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
-import { HandleIcon } from "./handle-icon"
+import { Clapperboard, Film, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidVideoToVideoConnection } from "@/lib/video-producer-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -17,6 +18,10 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { EditableNodeLabel } from "./editable-node-label"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { VideoToVideoData } from "@/types/nodes"
+
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_VIDEO          = (t: string) => isValidVideoToVideoConnection("video",          t, isPickerType)
+const ACCEPTS_CINEMATOGRAPHY = (t: string) => isValidVideoToVideoConnection("cinematography", t, isPickerType)
 
 function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as VideoToVideoData
@@ -29,7 +34,6 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const playState = nodeData.videoPlayState ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"
   const openFreeCut = useWorkflowStore((s) => s.openFreeCut)
-  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -138,9 +142,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "video",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "video",          type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="relative w-full h-full group/video">
@@ -276,31 +280,9 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-
-    {/* Input handle icon (TYPE 1) */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </div>
-
-    {/* Cinematography input handle icon */}
-    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 50px)" label="Cinematography" />
-
-    {/* Video output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color="#A78BFA" icon={<Film />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}     side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

@@ -5,7 +5,11 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { LogOut } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+
+const PORT_COLOR: Record<string, string> = {
+  text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
+}
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowOutputData, SubWorkflowPort } from "@/types/nodes"
 
@@ -17,11 +21,11 @@ const MEDIA_TYPE_COLORS: Record<string, string> = {
   any: "bg-gray-400",
 }
 
-const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true }
+const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true, mediaType: "any" as const }
 
 function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
   if (ports.length === 0) {
-    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "calc(100% - 20px)", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } }, SOURCE_HANDLE]
+    return [{ id: "in", type: "target" as const, position: Position.Left, label: "In", top: "calc(100% - 24px)", customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true, mediaType: "any" as const }, SOURCE_HANDLE]
   }
 
   const startPct = 42
@@ -36,8 +40,9 @@ function buildHandles(ports: ReadonlyArray<SubWorkflowPort>) {
       position: Position.Left,
       label: port.name,
       top: `${pct}%`,
-      hideHandle: true,
+      mediaType: port.mediaType,
       customStyle: { top: `${pct}%`, left: '-29px' },
+      external: true,
     }
   })
   return [...targetHandles, SOURCE_HANDLE]
@@ -102,9 +107,9 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleIcon key={h.id} icon={<LogOut />} color="steel" side="left" top={h.top ?? "calc(100% - 20px)"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color={PORT_COLOR[(h as { mediaType?: string }).mediaType ?? "any"] ?? "#475569"} icon={<LogOut />} side="left" top={(h as { top?: string }).top ?? "calc(100% - 24px)"} />
       ))}
-      <HandleIcon icon={<LogOut />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="sub-workflow-output" handleId="out" type="source" position={Position.Right} label="Parent" color="#475569" icon={<LogOut />} side="right" top="24px" />
     </div>
   )
 }

@@ -6,7 +6,7 @@ import { Funnel, FileText, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { REDUCE_STRATEGIES } from "@nodaro/shared"
@@ -57,8 +57,8 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runFromHere?.(nid)} runFromHere />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, customStyle: { top: "calc(100% - 20px)", left: "-29px" }, hideHandle: true },
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "20px", right: "-29px" }, hideHandle: true },
+          { id: "in",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="flex flex-col gap-1">
@@ -91,8 +91,8 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Braces />} color="indigo" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<FileText />} color="steel" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="in"  type="target" position={Position.Left}  label="Branches" color="#818CF8" icon={<Braces />}   side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="out" type="source" position={Position.Right} label="Reduced"  color="#475569" icon={<FileText />} side="right" top="24px" />
     </div>
   )
 }

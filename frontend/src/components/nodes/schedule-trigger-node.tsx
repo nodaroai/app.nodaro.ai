@@ -5,13 +5,13 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Clock, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ScheduleTriggerData } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",      type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "payload", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
@@ -44,8 +44,8 @@ function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleIcon icon={<Clock />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Type />} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="in"      type="target" position={Position.Left}  label="URL"     color="#38BDF8" icon={<Clock />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="payload" type="source" position={Position.Right} label="Payload" color="#38BDF8" icon={<Type />}  side="right" top="24px" />
     </div>
   )
 }

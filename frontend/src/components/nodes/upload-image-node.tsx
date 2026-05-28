@@ -6,7 +6,7 @@ import { ImageIcon, Expand, Upload, Link, Download, Loader2, AlertCircle, X, Pen
 import { normalizePinterestUrl } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -22,8 +22,8 @@ import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { UploadImageData, GeneratedResult } from "@/types/nodes"
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "image", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 interface PickerProps {
@@ -413,8 +413,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         </BaseNode>
-        <HandleIcon icon={<ImageIcon />} color="cyan" side="left" top="calc(100% - 20px)" />
-        <HandleIcon icon={<ImageIcon />} top="20px" />
+        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
+        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
       </div>
 
       {imageUrl && (

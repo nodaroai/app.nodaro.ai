@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Send } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { TelegramTriggerData } from "@/types/nodes"
 
@@ -32,19 +32,8 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
         minWidth={220}
         hideHeader
         handles={[
-          {
-            id: "in",
-            type: "target",
-            position: Position.Left,
-            customStyle: { top: "calc(100% - 20px)", left: "-29px" },
-            hideHandle: true,
-          },
-          {
-            id: "out",
-            type: "source",
-            position: Position.Right,
-            top: "20px",
-          },
+          { id: "in",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <div className="p-3">
@@ -58,8 +47,8 @@ function TelegramTriggerNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleIcon icon={<Send />} color="cyan" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Send />} top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="telegram-trigger" handleId="in"  type="target" position={Position.Left}  label="URL"     color="#38BDF8" icon={<Send />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="telegram-trigger" handleId="out" type="source" position={Position.Right} label="Message" color="#38BDF8" icon={<Send />} side="right" top="24px" />
     </div>
   )
 }

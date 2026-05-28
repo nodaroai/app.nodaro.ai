@@ -1,10 +1,10 @@
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Shapes, Loader2, AlertCircle } from "lucide-react"
+import { Shapes, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -47,8 +47,8 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "video",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -97,8 +97,8 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Shapes />} color="pink" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<Shapes />} color="pink" side="right" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="video"       type="target" position={Position.Left}  label="Video"       color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Shapes />} side="right" top="24px" />
     </div>
   )
 }

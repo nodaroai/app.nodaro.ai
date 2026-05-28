@@ -6,7 +6,7 @@ import { ShieldCheck, Type, Check, X } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
@@ -40,18 +40,18 @@ function QACheckNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
-          { id: "approved", type: "source", position: Position.Right, label: "Approved", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
-          { id: "rejected", type: "source", position: Position.Right, label: "Rejected", hideHandle: true, customStyle: { top: '50px', right: '-29px' } },
+          { id: "in",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "approved", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+          { id: "rejected", type: "source", position: Position.Right, customStyle: { top: '56px',              right: '-29px' }, external: true },
         ]}
       >
         <p className="text-muted-foreground truncate max-w-[180px]">
           {nodeData.checkType} ({nodeData.provider})
         </p>
       </BaseNode>
-      <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<Check />} color="green" top="20px" />
-      <HandleIcon icon={<X />} color="red" top="50px" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="in"       type="target" position={Position.Left}  label="Input"    color="#ff0073" icon={<Type />}  side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="approved" type="source" position={Position.Right} label="Approved" color="#22c55e" icon={<Check />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="qa-check" handleId="rejected" type="source" position={Position.Right} label="Rejected" color="#ef4444" icon={<X />}     side="right" top="56px" />
     </div>
   )
 }

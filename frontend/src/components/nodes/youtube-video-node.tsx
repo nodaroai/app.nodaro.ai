@@ -2,11 +2,11 @@
 
 import { memo, useState, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Link, X, Play, Video, Music2, Camera, Hash, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { Link, X, Play, Video, Film, Music2, Camera, Hash, Download, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, downloadYouTubeAudio } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
@@ -155,8 +155,8 @@ function VideoPlayerModal({
 }
 
 const HANDLES = [
-  { id: "in", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-  { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+  { id: "in",    type: "target" as const, position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+  { id: "video", type: "source" as const, position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
 ] as const
 
 function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
@@ -535,8 +535,8 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         </BaseNode>
-        <HandleIcon icon={<Video />} color="cyan" side="left" top="calc(100% - 20px)" />
-        <HandleIcon icon={<Video />} top="20px" />
+        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Video />} side="left"  top="calc(100% - 24px)" />
+        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />}  side="right" top="24px" />
       </div>
       <VideoPlayerModal
         isOpen={playerOpen}

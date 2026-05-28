@@ -2,7 +2,9 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, Film, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidLipSyncConnection } from "@/lib/video-producer-handles"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -25,6 +27,10 @@ import type { LipSyncData, GeneratedResult } from "@/types/nodes"
 import { VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, buildLipSyncCreditId, isPerSecondLipSyncProvider } from "@nodaro/shared"
 import { probeAudioDuration } from "@/lib/audio-duration"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
+
+const ACCEPTS_IMAGE = (t: string) => isValidLipSyncConnection("image", t)
+const ACCEPTS_VIDEO = (t: string) => isValidLipSyncConnection("video", t)
+const ACCEPTS_AUDIO = (t: string) => isValidLipSyncConnection("audio", t)
 
 // Node types that output images (for portrait/face)
 const IMAGE_OUTPUT_TYPES = [
@@ -370,10 +376,10 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-        { id: "videoIn", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "audio", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "video", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "audio", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "video", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "image", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 88px)', left: '-29px' }, external: true },
+        { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       {/* When result exists, show video fullscreen in node */}
@@ -617,41 +623,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    {/* image input handle icon — only for image-input/flexible providers */}
-    {(needsImageInput || needsBothInputs) && (
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-        style={{ top: 'calc(100% - 80px)', left: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <ImageIcon className="w-3.5 h-3.5 text-white" />
-      </div>
-    )}
-
-    {/* video input handle icon — only for video-input/flexible providers */}
+    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="audio" type="target" position={Position.Left}  label="Audio"        color="#FCD34D" icon={<Volume2 />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
     {(needsVideoInput || needsBothInputs) && (
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-        style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Clapperboard className="w-3.5 h-3.5 text-white" />
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="target" position={Position.Left}  label="Source video" color="#A78BFA" icon={<Film />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_VIDEO} />
     )}
-
-    {/* audio input handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Volume2 className="w-3.5 h-3.5 text-white" />
-    </div>
-
-    {/* video output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <Clapperboard className="w-3.5 h-3.5 text-white" />
-    </div>
+    {(needsImageInput || needsBothInputs) && (
+      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="image" type="target" position={Position.Left}  label="Portrait"     color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_IMAGE} />
+    )}
+    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="source" position={Position.Right} label="Video"        color="#A78BFA" icon={<Film />}      side="right" top="24px" />
 
     {/* Preview Modal */}
     {activeUrl && (

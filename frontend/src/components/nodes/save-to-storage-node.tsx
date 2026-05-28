@@ -6,7 +6,7 @@ import { HardDrive } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SaveToStorageData } from "@/types/nodes"
 
@@ -37,16 +37,16 @@ function SaveToStorageNodeComponent({ id, data, selected }: NodeProps) {
           <RunNodeButton nodeId={id} credits={0} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Left, hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
-          { id: "out", type: "source", position: Position.Right, hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
+          { id: "in",  type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "out", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         <p className="text-muted-foreground truncate max-w-[180px]">
           {nodeData.format} ({nodeData.quality})
         </p>
       </BaseNode>
-      <HandleIcon icon={<HardDrive />} color="green" side="left" top="calc(100% - 20px)" />
-      <HandleIcon icon={<HardDrive />} color="green" top="20px" />
+      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="in"  type="target" position={Position.Left}  label="Input"  color="#22c55e" icon={<HardDrive />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="save-to-storage" handleId="out" type="source" position={Position.Right} label="Output" color="#22c55e" icon={<HardDrive />} side="right" top="24px" />
     </div>
   )
 }

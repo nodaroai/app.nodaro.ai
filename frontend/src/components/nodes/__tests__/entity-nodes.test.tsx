@@ -4,18 +4,31 @@ import { render, screen, fireEvent } from "@testing-library/react"
 vi.mock("@xyflow/react", () => ({
   Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
   Handle: ({ type, position, id }: any) => (
-    <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
+    <div data-testid={`handle-${type}-${id}`} data-type={type} data-position={position} />
   ),
   NodeResizer: () => null,
   useStore: vi.fn(() => 1),
   useNodeId: vi.fn(() => "test-node"),
+  useUpdateNodeInternals: vi.fn(() => () => {}),
+  useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
+}))
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
 }))
 
 vi.mock("../base-node", () => ({
   BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
     <div data-testid="base-node" data-label={label} data-category={category} data-credits={credits} data-id={id} data-is-running={String(isRunning)}>
-      {handles?.map((h: any) => (
-        <div key={h.id} data-testid={`handle-${h.id}`} data-type={h.type} data-position={h.position} />
+      {handles?.filter((h: any) => !h.external).map((h: any) => (
+        <div key={`${h.type}-${h.id}`} data-testid={`handle-${h.type}-${h.id}`} data-type={h.type} data-position={h.position} />
       ))}
       {children}
     </div>
@@ -190,11 +203,11 @@ describe("CharacterNode", () => {
 
   it("has correct handles (in + characterRef)", () => {
     renderCharacterNode()
-    const inHandle = screen.getByTestId("handle-in")
+    const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
 
-    const refHandle = screen.getByTestId("handle-characterRef")
+    const refHandle = screen.getByTestId("handle-source-characterRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
     expect(refHandle).toHaveAttribute("data-position", "right")
   })
@@ -276,11 +289,11 @@ describe("FaceNode", () => {
 
   it("has correct handles (in + faceRef)", () => {
     renderFaceNode()
-    const inHandle = screen.getByTestId("handle-in")
+    const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
 
-    const refHandle = screen.getByTestId("handle-faceRef")
+    const refHandle = screen.getByTestId("handle-source-faceRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
     expect(refHandle).toHaveAttribute("data-position", "right")
   })
@@ -340,15 +353,15 @@ describe("ObjectNode", () => {
 
   it("has correct handles (in + type + objectRef)", () => {
     renderObjectNode()
-    const inHandle = screen.getByTestId("handle-in")
+    const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
 
-    const typeHandle = screen.getByTestId("handle-type")
+    const typeHandle = screen.getByTestId("handle-target-type")
     expect(typeHandle).toHaveAttribute("data-type", "target")
     expect(typeHandle).toHaveAttribute("data-position", "left")
 
-    const refHandle = screen.getByTestId("handle-objectRef")
+    const refHandle = screen.getByTestId("handle-source-objectRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
     expect(refHandle).toHaveAttribute("data-position", "right")
   })
@@ -540,11 +553,11 @@ describe("LocationNode", () => {
 
   it("has correct handles (in + locationRef)", () => {
     renderLocationNode()
-    const inHandle = screen.getByTestId("handle-in")
+    const inHandle = screen.getByTestId("handle-target-in")
     expect(inHandle).toHaveAttribute("data-type", "target")
     expect(inHandle).toHaveAttribute("data-position", "left")
 
-    const refHandle = screen.getByTestId("handle-locationRef")
+    const refHandle = screen.getByTestId("handle-source-locationRef")
     expect(refHandle).toHaveAttribute("data-type", "source")
     expect(refHandle).toHaveAttribute("data-position", "right")
   })

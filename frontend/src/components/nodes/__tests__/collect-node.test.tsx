@@ -11,7 +11,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
     Position: { Top: "top", Bottom: "bottom", Left: "left", Right: "right" },
     Handle: ({ type, position, id, style }: any) => (
       <div
-        data-testid={`handle-${id}`}
+        data-testid={`handle-${type}-${id}`}
         data-type={type}
         data-position={position}
         data-background={style?.background}
@@ -19,8 +19,21 @@ vi.mock("@xyflow/react", async (importOriginal) => {
       />
     ),
     useUpdateNodeInternals: () => updateNodeInternalsMock,
+    useConnection: vi.fn(() => ({ inProgress: false, fromHandle: null, fromNode: null })),
+    useStore: vi.fn(() => 1),
   }
 })
+
+vi.mock("@/components/ui/popover", () => ({
+  Popover: ({ children }: any) => <>{children}</>,
+  PopoverAnchor: ({ children }: any) => <>{children}</>,
+  PopoverContent: () => null,
+  PopoverTrigger: ({ children }: any) => <>{children}</>,
+}))
+
+vi.mock("@/hooks/use-handle-connections", () => ({
+  useHandleConnections: () => [],
+}))
 
 // `EditableNodeLabel` subscribes to React Flow's zustand store for a
 // zoom-aware font-size floor. The test isn't wrapped in a
@@ -41,13 +54,13 @@ vi.mock("@/components/nodes/base-node", () => ({
     handles,
   }: {
     children?: import("react").ReactNode
-    handles?: ReadonlyArray<{ id: string; type: string; position: string }>
+    handles?: ReadonlyArray<{ id: string; type: string; position: string; external?: boolean }>
   }) => (
     <div data-testid="base-node">
-      {handles?.map((h) => (
+      {handles?.filter((h) => !h.external).map((h) => (
         <div
-          key={h.id}
-          data-testid={`handle-${h.id}`}
+          key={`${h.type}-${h.id}`}
+          data-testid={`handle-${h.type}-${h.id}`}
           data-type={h.type}
           data-position={h.position}
         />
@@ -98,7 +111,7 @@ describe("CollectNode", () => {
   it("renders the 'in' target handle on the left", () => {
     resetMocks([{ id: "collect-1", type: "collect", position: { x: 0, y: 0 }, data: { label: "Collect", order: [] } }])
     renderNode()
-    const handle = screen.getByTestId("handle-in")
+    const handle = screen.getByTestId("handle-target-in")
     expect(handle).toBeInTheDocument()
     expect(handle).toHaveAttribute("data-type", "target")
     expect(handle).toHaveAttribute("data-position", "left")
@@ -155,10 +168,10 @@ describe("CollectNode", () => {
       ],
     )
     renderNode()
-    expect(screen.getByTestId("handle-out-text")).toBeInTheDocument()
-    expect(screen.getByTestId("handle-out-image")).toBeInTheDocument()
-    expect(screen.queryByTestId("handle-out-video")).not.toBeInTheDocument()
-    expect(screen.queryByTestId("handle-out-audio")).not.toBeInTheDocument()
+    expect(screen.getByTestId("handle-source-out-text")).toBeInTheDocument()
+    expect(screen.getByTestId("handle-source-out-image")).toBeInTheDocument()
+    expect(screen.queryByTestId("handle-source-out-video")).not.toBeInTheDocument()
+    expect(screen.queryByTestId("handle-source-out-audio")).not.toBeInTheDocument()
   })
 
   it("places output handles on the right side as source handles", () => {
@@ -170,7 +183,7 @@ describe("CollectNode", () => {
       [{ id: "e1", source: "tp-1", target: "collect-1", targetHandle: "in" }],
     )
     renderNode()
-    const handle = screen.getByTestId("handle-out-text")
+    const handle = screen.getByTestId("handle-source-out-text")
     expect(handle).toHaveAttribute("data-type", "source")
     expect(handle).toHaveAttribute("data-position", "right")
   })

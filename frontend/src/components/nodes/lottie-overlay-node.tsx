@@ -4,7 +4,7 @@ import { Layers, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -48,9 +48,9 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         ) : undefined
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true },
-        { id: "lottie", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "video",       type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+        { id: "lottie",      type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "composition", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-1">
@@ -99,9 +99,9 @@ function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleIcon icon={<Film />} color="steel" side="left" top="calc(100% - 50px)" />
-    <HandleIcon icon={<Layers />} color="steel" side="left" top="calc(100% - 20px)" />
-    <HandleIcon icon={<Film />} color="steel" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="lottie-overlay" handleId="video"       type="target" position={Position.Left}  label="Video"       color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 56px)" />
+    <HandleWithPopover nodeId={id} nodeType="lottie-overlay" handleId="lottie"      type="target" position={Position.Left}  label="Lottie"      color="#475569" icon={<Layers />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="lottie-overlay" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Layers />} side="right" top="24px" />
     </div>
   )
 }

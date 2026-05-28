@@ -6,7 +6,11 @@ import { Workflow, Expand } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+
+const PORT_COLOR: Record<string, string> = {
+  text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
+}
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useNavigateWithGuard } from "@/hooks/use-navigate-with-guard"
 import { openSubWorkflow } from "@/lib/sub-workflow-navigation"
@@ -33,8 +37,9 @@ function buildHandles(
       position: Position.Left,
       label: port.name,
       top: `${pct}%`,
-      hideHandle: true,
+      mediaType: port.mediaType,
       customStyle: { top: `${pct}%`, left: '-29px' },
+      external: true,
     }
   })
 
@@ -48,16 +53,17 @@ function buildHandles(
       position: Position.Right,
       label: port.name,
       top: `${pct}%`,
-      hideHandle: true,
+      mediaType: port.mediaType,
       customStyle: { top: `${pct}%`, right: '-29px' },
+      external: true,
     }
   })
 
   // Fallback handles if no snapshot
   if (targets.length === 0 && sources.length === 0) {
     return [
-      { id: "in", type: "target" as const, position: Position.Left, label: "In", top: "calc(100% - 20px)", hideHandle: true, customStyle: { top: 'calc(100% - 20px)', left: '-29px' } },
-      { id: "out", type: "source" as const, position: Position.Right, label: "Out", top: "20px", hideHandle: true, customStyle: { top: '20px', right: '-29px' } },
+      { id: "in",  type: "target" as const, position: Position.Left,  label: "In",  top: "calc(100% - 24px)", mediaType: "any", customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+      { id: "out", type: "source" as const, position: Position.Right, label: "Out", top: "24px",              mediaType: "any", customStyle: { top: '24px',              right: '-29px' }, external: true },
     ]
   }
 
@@ -134,10 +140,10 @@ function SubWorkflowNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleIcon key={h.id} icon={<Workflow />} color="steel" side="left" top={h.top ?? "calc(100% - 20px)"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="target" position={Position.Left}  label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? "#475569"} icon={<Workflow />} side="left"  top={h.top ?? "calc(100% - 24px)"} />
       ))}
       {handles.filter(h => h.type === "source").map(h => (
-        <HandleIcon key={h.id} icon={<Workflow />} color="steel" top={h.top ?? "20px"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow" handleId={h.id} type="source" position={Position.Right} label={h.label ?? h.id} color={PORT_COLOR[h.mediaType ?? "any"] ?? "#475569"} icon={<Workflow />} side="right" top={h.top ?? "24px"} />
       ))}
       {nodeData.referencedWorkflowId && status !== "running" && (
         <button

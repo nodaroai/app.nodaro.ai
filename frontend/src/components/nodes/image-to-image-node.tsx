@@ -3,13 +3,14 @@
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, X, Settings, LayoutGrid, Expand, Download, Link, Layers, Pencil, Aperture } from "lucide-react"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidImageToImageConnection } from "@/lib/image-producer-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -21,6 +22,11 @@ import { EditableNodeLabel } from "./editable-node-label"
 import { I2I_MASK_SUPPORT } from "@nodaro/shared"
 import type { ImageToImageData } from "@/types/nodes"
 
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_IMAGE          = (t: string) => isValidImageToImageConnection("image",          t, isPickerType)
+const ACCEPTS_MASK           = (t: string) => isValidImageToImageConnection("mask",           t, isPickerType)
+const ACCEPTS_CINEMATOGRAPHY = (t: string) => isValidImageToImageConnection("cinematography", t, isPickerType)
+
 function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ImageToImageData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
@@ -28,7 +34,6 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
   const openImageEdit = useWorkflowStore((s) => s.openImageEdit)
-  const inConnectionCount = useConnectionCount(id, "image")
   const supportsMask = !!nodeData.provider && I2I_MASK_SUPPORT.has(nodeData.provider)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -97,10 +102,10 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
                   <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "image", type: "target", position: Position.Left, top: "calc(100% - 20px)", customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 50px)', left: '-29px' }, hideHandle: true }] : []),
-        { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 80px)', left: '-29px' }, hideHandle: true },
-        { id: "out", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "image",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        ...(supportsMask ? [{ id: "mask", type: "target" as const, position: Position.Left, customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true }] : []),
+        { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: `calc(100% - ${supportsMask ? 88 : 56}px)`, left: '-29px' }, external: true },
+        { id: "image",          type: "source", position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true },
       ]}
       imageAspectRatio={imgAspectRatio}
     >
@@ -198,38 +203,12 @@ function ImageToImageNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    {/* Input handle icon (TYPE 1) */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073]"
-      style={{ top: 'calc(100% - 20px)', left: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </div>
-    {/* Mask handle icon */}
+    <HandleWithPopover nodeId={id} nodeType="image-to-image" handleId="image"          type="target" position={Position.Left}  label="Image"          color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
     {supportsMask && (
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#a855f7]"
-        style={{ top: 'calc(100% - 50px)', left: '-29px', transform: 'translateY(-50%)' }}
-      >
-        <Layers className="w-3.5 h-3.5 text-white" />
-        <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#a855f7] text-[#a855f7] text-[8px] font-black flex items-center justify-center">+</div>
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="image-to-image" handleId="mask"         type="target" position={Position.Left}  label="Mask"           color="#a855f7" icon={<Layers />}    side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_MASK} />
     )}
-    {/* Cinematography input handle icon */}
-    <HandleIcon icon={<Aperture />} color="indigo" side="left" top="calc(100% - 80px)" label="Cinematography" />
-    {/* Output handle icon */}
-    <div
-      className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-      style={{ top: '20px', right: '-29px', transform: 'translateY(-50%)' }}
-    >
-      <ImageIcon className="w-3.5 h-3.5 text-white" />
-    </div>
+    <HandleWithPopover nodeId={id} nodeType="image-to-image" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />}  side="left"  top={`calc(100% - ${supportsMask ? 88 : 56}px)`} accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="image-to-image" handleId="image"          type="source" position={Position.Right} label="Image"          color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

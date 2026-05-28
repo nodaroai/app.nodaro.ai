@@ -2,8 +2,10 @@
 
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Film, Loader2, AlertCircle, X, Clapperboard, Aperture } from "lucide-react"
-import { HandleIcon } from "./handle-icon"
+import { Film, Loader2, AlertCircle, X, Aperture } from "lucide-react"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidExtendVideoConnection } from "@/lib/video-producer-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -16,6 +18,10 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { ExtendVideoData } from "@/types/nodes"
+
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_VIDEO          = (t: string) => isValidExtendVideoConnection("video",          t, isPickerType)
+const ACCEPTS_CINEMATOGRAPHY = (t: string) => isValidExtendVideoConnection("cinematography", t, isPickerType)
 
 function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ExtendVideoData
@@ -69,9 +75,9 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
                       <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
         }
         handles={[
-          { id: "in", type: "target", position: Position.Top, customStyle: { top: '-29px', left: '50%' }, hideHandle: true },
-          { id: "cinematography", type: "target", position: Position.Left, customStyle: { top: 'calc(50% - 14px)', left: '-29px' }, hideHandle: true },
-          { id: "video", type: "source", position: Position.Bottom, customStyle: { bottom: '-29px', left: '50%' }, hideHandle: true },
+          { id: "video",          type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+          { id: "cinematography", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 56px)', left: '-29px' }, external: true },
+          { id: "video",          type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
         ]}
       >
         {hasResult ? null : (
@@ -194,22 +200,9 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {/* Input handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ top: '-29px', left: 'calc(50% - 14px)' }}
-      >
-        <Clapperboard className="w-3.5 h-3.5 text-white" />
-      </div>
-      {/* Cinematography input handle icon */}
-      <HandleIcon icon={<Aperture />} color="indigo" side="left" top="50%" label="Cinematography" />
-      {/* Video output handle icon */}
-      <div
-        className="absolute pointer-events-none z-20 flex items-center justify-center w-7 h-7 rounded-full bg-[#ff0073] shadow-lg shadow-pink-500/30"
-        style={{ bottom: '-29px', left: 'calc(50% - 14px)' }}
-      >
-        <Film className="w-3.5 h-3.5 text-white" />
-      </div>
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color="#A78BFA" icon={<Film />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}     side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

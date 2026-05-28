@@ -6,9 +6,10 @@ import { UserCircle, Loader2, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleIcon } from "./handle-icon"
+import { HandleWithPopover } from "./handle-with-popover"
+import { isValidCharacterConnection } from "@/lib/identity-handles"
+import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useConnectionCount } from "@/hooks/use-connection-count"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -26,6 +27,9 @@ import {
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import type { CharacterNodeData } from "@/types/nodes"
 
+const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
+const ACCEPTS_PROMPT = (t: string) => isValidCharacterConnection("in", t, isPickerType)
+
 function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CharacterNodeData
   const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
@@ -33,7 +37,6 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const inConnectionCount = useConnectionCount(id)
   const status = nodeData.executionStatus ?? "idle"
 
   const expressionCount = (nodeData.expressions ?? []).length
@@ -142,8 +145,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
         <RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />
       }
       handles={[
-        { id: "in", type: "target", position: Position.Left, customStyle: { top: 'calc(100% - 20px)', left: '-29px' }, hideHandle: true },
-        { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '20px', right: '-29px' }, hideHandle: true },
+        { id: "in",           type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
+        { id: "characterRef", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
       ]}
     >
       {/* Header */}
@@ -343,17 +346,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    {/* Input handle icon */}
-    <HandleIcon icon={<Type />} color="pink" side="left" top="calc(100% - 20px)">
-      <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-[12px] h-[12px] rounded-full bg-[#111827] border border-[#ff0073] text-[#ff0073] text-[8px] font-black flex items-center justify-center">+</div>
-      {inConnectionCount >= 2 && (
-        <div className="absolute top-1/2 -translate-y-1/2 -right-[9px] w-[13px] h-[13px] rounded-full bg-white text-[#ff0073] text-[8px] font-black flex items-center justify-center">
-          {inConnectionCount}
-        </div>
-      )}
-    </HandleIcon>
-    {/* Output handle icon */}
-    <HandleIcon icon={<UserCircle />} color="pink" side="right" top="20px" />
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="in"           type="target" position={Position.Left}  label="Prompt"    color="#ff0073" icon={<Type />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="characterRef" type="source" position={Position.Right} label="Character" color="#F472B6" icon={<UserCircle />} side="right" top="24px" />
     </div>
   )
 }
