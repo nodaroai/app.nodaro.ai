@@ -4219,6 +4219,7 @@ export function executeNode(
         extendVideo({
           kieTaskId,
           prompt: prompt || "",
+          negativePrompt: inputs.negativePrompt || evData.negativePrompt || undefined,
           provider: evData.provider || "veo-extend",
           model: evData.provider === "veo-extend" ? evData.model : undefined,
           quality: evData.provider === "runway-extend" ? evData.quality : undefined,

@@ -498,6 +498,18 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
+      {/* Negative Prompt — always visible. Kling family providers send it
+          natively as `negative_prompt`; non-native providers get it
+          appended to the prompt as "Avoid: …" by the backend helper. */}
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={2}
+          value={(data as Record<string, unknown>).negativePrompt as string || ""}
+          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+          placeholder="Things to avoid..."
+        />
+      </MappableField>
+
       {/* Unified injected-references list — shows wired upstreams, character
           canonicals, @-mention variants AND canonical fallbacks in the final
           API order. Drag to reorder; × removes the edge, mention token, or
@@ -748,17 +760,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         </div>
       )}
 
-      {data.provider === "kling-turbo" && (
-        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
-        </MappableField>
-      )}
-
       {(data.provider === "kling-turbo" || data.provider === "kling-master") && (
         <div>
           <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
@@ -772,17 +773,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
         </div>
-      )}
-
-      {data.provider === "kling-master" && (
-        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
-        </MappableField>
       )}
 
       {data.provider === "kling-3-omni" && (
@@ -821,14 +811,6 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             />
             <label htmlFor="kling3OmniAudio" className="text-xs">Generate Audio</label>
           </div>
-          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Textarea
-              rows={2}
-              value={(data as Record<string, unknown>).negativePrompt as string || ""}
-              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-              placeholder="Things to avoid..."
-            />
-          </MappableField>
         </>
       )}
 
@@ -1172,6 +1154,22 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
         />
       </MappableField>
 
+      {/* Negative Prompt — always visible. Wan family providers send it
+          natively as `negative_prompt`; non-native providers get it
+          appended to the prompt as "Avoid: …" by the backend helper. */}
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea
+          value={data.negativePrompt || ""}
+          onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
+          placeholder="What to avoid..."
+          rows={2}
+          nodeRefs={nodeRefs}
+          referenceImages={refImagesForAutocomplete}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
+        />
+      </MappableField>
+
       <ExtraRefsSection
         extraRefs={data.extraRefs}
         onChange={(next) => onUpdate({ extraRefs: next })}
@@ -1332,18 +1330,6 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
             />
             <label htmlFor="v2vPromptExtend" className="text-xs">Expand prompt with AI</label>
           </div>
-          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <TagTextarea
-              value={data.negativePrompt || ""}
-              onChange={(v) => onUpdate({ negativePrompt: v || undefined })}
-              placeholder="What to avoid..."
-              rows={2}
-              nodeRefs={nodeRefs}
-              referenceImages={refImagesForAutocomplete}
-              displayMode={variableDisplayMode}
-              refMap={refMap}
-            />
-          </MappableField>
           <MappableField field="seed" label="Seed" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <Input
               type="number"
@@ -1434,20 +1420,21 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
         />
         <span className="text-xs text-muted-foreground">{data.prompt?.length || 0}/2500</span>
       </MappableField>
-      {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
-        <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <TagTextarea
-            value={data.negativePrompt ?? ""}
-            onChange={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })}
-            placeholder="Optional: Describe what to avoid…"
-            rows={2}
-            nodeRefs={nodeRefs}
-            displayMode={variableDisplayMode}
-            refMap={refMap}
-          />
-          <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/2500</span>
-        </MappableField>
-      )}
+      {/* Negative Prompt — always visible. Kling 2.6/3.0 send it natively as
+          `negative_prompt`; Wan Animate gets it appended to the prompt as
+          "Avoid: …" by the backend helper. */}
+      <MappableField field="negativePrompt" label="Negative Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <TagTextarea
+          value={data.negativePrompt ?? ""}
+          onChange={(v) => onUpdate({ negativePrompt: v.slice(0, 2500) })}
+          placeholder="Optional: Describe what to avoid…"
+          rows={2}
+          nodeRefs={nodeRefs}
+          displayMode={variableDisplayMode}
+          refMap={refMap}
+        />
+        <span className="text-xs text-muted-foreground">{data.negativePrompt?.length || 0}/2500</span>
+      </MappableField>
       {provider !== "wan-animate-move" && provider !== "wan-animate-replace" && (
         <MappableField field="characterOrientation" label="Character Orientation" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
           <Select
@@ -2233,6 +2220,18 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
         />
       </MappableField>
 
+      {/* Negative Prompt — always visible. Kling family providers send it
+          natively as `negative_prompt`; non-native providers get it
+          appended to the prompt as "Avoid: …" by the backend helper. */}
+      <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+        <Textarea
+          rows={2}
+          value={(data as Record<string, unknown>).negativePrompt as string || ""}
+          onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
+          placeholder="Things to avoid..."
+        />
+      </MappableField>
+
       {/* Unified injected-references list */}
       <InjectedReferenceList
         connectedReferences={toConnectedReferences(buildVideoRefAutocomplete(sources))}
@@ -2476,17 +2475,6 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
         </div>
       )}
 
-      {currentProvider === "kling-turbo" && (
-        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
-        </MappableField>
-      )}
-
       {(currentProvider === "kling-turbo" || currentProvider === "kling-master") && (
         <div>
           <Label className="text-xs">CFG Scale ({String((data as Record<string, unknown>).cfgScale ?? 0.5)})</Label>
@@ -2500,17 +2488,6 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
           />
           <p className="text-[10px] text-muted-foreground mt-1">0 = creative, 1 = strict prompt adherence</p>
         </div>
-      )}
-
-      {currentProvider === "kling-master" && (
-        <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-          <Textarea
-            rows={2}
-            value={(data as Record<string, unknown>).negativePrompt as string || ""}
-            onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-            placeholder="Things to avoid..."
-          />
-        </MappableField>
       )}
 
       {currentProvider === "kling-3-omni" && (
@@ -2549,14 +2526,6 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
             />
             <label htmlFor="gv-kling3OmniAudio" className="text-xs">Generate Audio</label>
           </div>
-          <MappableField field="negativePrompt" label="Negative Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-            <Textarea
-              rows={2}
-              value={(data as Record<string, unknown>).negativePrompt as string || ""}
-              onChange={(e) => onUpdate({ negativePrompt: e.target.value })}
-              placeholder="Things to avoid..."
-            />
-          </MappableField>
         </>
       )}
 
