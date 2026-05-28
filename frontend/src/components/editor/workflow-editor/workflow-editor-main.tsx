@@ -575,7 +575,21 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
         },
       };
 
-      fetch(`${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}`, {
+      // Optimistic locking on the unload-flush: PostgREST treats each
+      // query-string `<col>=eq.<v>` filter as an AND'd predicate, so
+      // adding `&updated_at=eq.<loadedUpdatedAt>` mirrors the in-app
+      // `.eq("updated_at", ...)` chain. If another device wrote first
+      // the row no longer matches, the PATCH is a silent 0-row no-op
+      // (better than overwriting remote with stale fields the user
+      // never got a chance to merge). When loadedUpdatedAt is null we
+      // fall back to last-write-wins — a brand-new workflow that has
+      // never been saved has no version to lock against.
+      const lockedAt = state.loadedUpdatedAt;
+      const url = lockedAt
+        ? `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}&updated_at=eq.${encodeURIComponent(lockedAt)}`
+        : `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}`;
+
+      fetch(url, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -627,6 +641,18 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let maxTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // Multi-tab safety: when a realtime broadcast tells us another
+    // device wrote a newer version while local state was dirty, the
+    // optimistic-lock cursor (`loadedUpdatedAt`) is now stale. Letting
+    // the autosave keep firing here would just hit the .eq("updated_at")
+    // mismatch every 3 seconds and spam toasts — pause the loop until
+    // the user reloads (clears `remoteUpdatedAt`) or saves over (which
+    // advances `loadedUpdatedAt` past the divergence).
+    function remoteIsAhead() {
+      const s = useWorkflowStore.getState();
+      return s.remoteUpdatedAt != null && s.remoteUpdatedAt !== s.loadedUpdatedAt;
+    }
+
     function doSave() {
       if (timer) {
         clearTimeout(timer);
@@ -640,21 +666,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       if (
         current.isDirty &&
         current.saveStatus !== "saving" &&
-        current.nodes.length > 0
+        current.nodes.length > 0 &&
+        !remoteIsAhead()
       ) {
         save(projectId);
       }
     }
 
     const unsub = useWorkflowStore.subscribe((state) => {
-      if (state.isDirty && state.saveStatus !== "saving") {
+      const remoteAhead =
+        state.remoteUpdatedAt != null &&
+        state.remoteUpdatedAt !== state.loadedUpdatedAt;
+      if (state.isDirty && state.saveStatus !== "saving" && !remoteAhead) {
         if (timer) clearTimeout(timer);
         timer = setTimeout(doSave, 3000);
 
         if (!maxTimer) {
           maxTimer = setTimeout(doSave, 10_000);
         }
-      } else if (!state.isDirty) {
+      } else if (!state.isDirty || remoteAhead) {
         if (timer) {
           clearTimeout(timer);
           timer = null;

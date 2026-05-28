@@ -471,8 +471,15 @@ export function useWorkflowPersistence(projectId?: string) {
 
   const loadWorkflow = useWorkflowStore((s) => s.loadWorkflow)
   const setWorkflowId = useWorkflowStore((s) => s.setWorkflowId)
-  const markClean = useWorkflowStore((s) => s.markClean)
   const setSaveStatus = useWorkflowStore((s) => s.setSaveStatus)
+  const setLoadedUpdatedAt = useWorkflowStore((s) => s.setLoadedUpdatedAt)
+  const setRemoteUpdatedAt = useWorkflowStore((s) => s.setRemoteUpdatedAt)
+  const applySaveSuccess = useWorkflowStore((s) => s.applySaveSuccess)
+
+  // Hold a reference to the latest `load` callback so the save-on-conflict
+  // toast's "Reload" button can call it without forcing a circular
+  // `useCallback` dependency. Updated below right after `load` is defined.
+  const loadRef = useRef<((id: string) => Promise<SaveResult>) | null>(null)
 
   const save = useCallback(
     async (pid?: string): Promise<SaveResult> => {
@@ -512,15 +519,79 @@ export function useWorkflowPersistence(projectId?: string) {
         }
 
         if (workflowId) {
-          const { error } = await supabase
+          // Optimistic locking: chain `.eq("updated_at", loadedUpdatedAt)`
+          // so a concurrent write (same workflow open on phone / other
+          // tab / other browser) is detected as a 0-row UPDATE. Falls
+          // back to last-write-wins only when `loadedUpdatedAt` is null
+          // (no load happened — defensive; shouldn't occur in practice
+          // since save() is reached via the editor which always loads
+          // first).
+          const loadedUpdatedAt = useWorkflowStore.getState().loadedUpdatedAt
+
+          let query = supabase
             .from("workflows")
             .update(payload)
             .eq("id", workflowId)
+          if (loadedUpdatedAt) query = query.eq("updated_at", loadedUpdatedAt)
+
+          const { data, error } = await query.select("updated_at").maybeSingle()
 
           if (error) {
             setSaveStatus("error", error.message)
             return { success: false, error: error.message }
           }
+
+          if (!data) {
+            // 0 rows matched: either the row was deleted, or its
+            // `updated_at` changed between load and save (another tab /
+            // device wrote first). Surface the conflict with a one-tap
+            // Reload action; dedupe on a stable toast id so a retry
+            // loop in the autosave gate can't spam the screen.
+            setSaveStatus("error", "Workflow was updated on another device")
+            // Fetch the current updated_at so the realtime banner's
+            // divergence check (`remoteUpdatedAt !== loadedUpdatedAt`)
+            // shows even if the matching Realtime UPDATE event hasn't
+            // arrived yet (or was missed because Realtime was offline).
+            // If the fallback fetch fails or returns no `updated_at`,
+            // still mark `remoteUpdatedAt` non-null with a sentinel so
+            // the autosave gate (`remoteUpdatedAt !== loadedUpdatedAt`)
+            // pauses retries — otherwise the loop hot-retries every
+            // 3 s and spams the conflict toast on the same id.
+            let captured = false
+            try {
+              const { data: cur } = await supabase
+                .from("workflows")
+                .select("updated_at")
+                .eq("id", workflowId)
+                .maybeSingle()
+              if (cur?.updated_at) {
+                setRemoteUpdatedAt(cur.updated_at as string)
+                captured = true
+              }
+            } catch {
+              // best-effort; fall through to the sentinel below
+            }
+            if (!captured) {
+              // Sentinel: any string different from `loadedUpdatedAt`.
+              // The next real Realtime broadcast or reload corrects it.
+              setRemoteUpdatedAt(`conflict:${new Date().toISOString()}`)
+            }
+            const reload = loadRef.current
+            toast.error("Workflow was updated on another device", {
+              id: "workflow-remote-conflict",
+              description: "Your unsaved edits are still here. Reload to see the latest version.",
+              action: reload && workflowId
+                ? { label: "Reload", onClick: () => { void reload(workflowId) } }
+                : undefined,
+              duration: 10_000,
+            })
+            return { success: false, error: "remote_conflict" }
+          }
+
+          // Advance the optimistic-lock cursor to the new version + mark
+          // clean + flip status atomically — see `applySaveSuccess` doc
+          // for why these four updates must land in one Zustand set().
+          applySaveSuccess(data.updated_at as string)
         } else {
           const { data: { user } } = await supabase.auth.getUser()
           if (!user) {
@@ -531,18 +602,21 @@ export function useWorkflowPersistence(projectId?: string) {
           const { data, error } = await supabase
             .from("workflows")
             .insert({ ...payload, user_id: user.id })
-            .select("id")
+            .select("id, updated_at")
             .single()
 
           if (error) {
             setSaveStatus("error", error.message)
             return { success: false, error: error.message }
           }
+          // `setWorkflowId` is a separate set() — ordering matters only
+          // relative to the realtime subscription, which won't fire for
+          // this workflow until the channel id matches (re-subscribe is
+          // triggered by `workflowId` change in `workflow-canvas.tsx`).
+          // The window between insert and re-subscribe is broadcast-safe.
           setWorkflowId(data.id)
+          applySaveSuccess(data.updated_at as string)
         }
-
-        markClean()
-        setSaveStatus("saved")
 
         // Clear any existing fade timer
         if (savedFadeTimerRef.current) {
@@ -565,7 +639,7 @@ export function useWorkflowPersistence(projectId?: string) {
         setSaving(false)
       }
     },
-    [projectId, setWorkflowId, markClean, setSaveStatus],
+    [projectId, setWorkflowId, setSaveStatus, setLoadedUpdatedAt, setRemoteUpdatedAt, applySaveSuccess],
   )
 
   const load = useCallback(
@@ -577,6 +651,8 @@ export function useWorkflowPersistence(projectId?: string) {
       // The empty nodes array also prevents save() from persisting stale data
       // (save bails out when nodes.length === 0).
       loadWorkflow(id, "", [], [], [])
+      setLoadedUpdatedAt(null)
+      setRemoteUpdatedAt(null)
 
       try {
         const supabase = createClient()
@@ -674,6 +750,7 @@ export function useWorkflowPersistence(projectId?: string) {
           presSettings,
           savedViewport,
         )
+        setLoadedUpdatedAt(data.updated_at as string)
 
         // Reconcile per-node `generatedResults` against the backend's
         // `jobs.output_data`. When a single-node run gets stuck → backend
@@ -700,14 +777,23 @@ export function useWorkflowPersistence(projectId?: string) {
         // Order parent-first: loadWorkflow heals the store's copy, but this
         // local `nodes` array was never reordered, so without this the re-save
         // would re-persist a child-before-parent order to the DB.
+        //
+        // Capture the side-save's returned `updated_at` and advance the
+        // optimistic-lock cursor — otherwise the next user-driven autosave
+        // would send the pre-side-save version and 0-row-conflict against
+        // the row we just bumped here ourselves.
         if (nodesChanged && projectId) {
-          const { error: saveError } = await supabase
+          const { data: sideSaved, error: saveError } = await supabase
             .from("workflows")
             .update({ nodes: JSON.parse(JSON.stringify(orderNodesParentFirst(nodes))) })
             .eq("id", id)
+            .select("updated_at")
+            .maybeSingle()
 
           if (saveError) {
             toast.error("Failed to save synced nodes")
+          } else if (sideSaved?.updated_at) {
+            setLoadedUpdatedAt(sideSaved.updated_at as string)
           }
         }
 
@@ -725,8 +811,14 @@ export function useWorkflowPersistence(projectId?: string) {
         setLoading(false)
       }
     },
-    [loadWorkflow, projectId],
+    [loadWorkflow, projectId, setLoadedUpdatedAt, setRemoteUpdatedAt],
   )
+
+  // Refresh the ref pointer on every render — read by the save-on-
+  // conflict toast's "Reload" action. Same pattern as the realtime
+  // sync hook's callback refs (avoids a circular `useCallback` dep
+  // between `save` and `load`).
+  loadRef.current = load
 
   // Cleanup fade timer on unmount
   useEffect(() => {
