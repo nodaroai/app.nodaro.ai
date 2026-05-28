@@ -318,6 +318,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "loop", label: "Loop", category: "control", description: "Multi-column loop / table.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
   { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
+  { type: "selector", label: "Selector", category: "utility", description: "Pick item(s) from a list — supports item/range/list/random/modulo/predicate/named-key modes. Two outputs: picked + rest.", outputType: "text", creditCost: 0 },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
   { type: "split-text", label: "Split Text", category: "control", description: "Split text by delimiter.", outputType: "text" },
   { type: "sub-workflow", label: "Sub-Workflow", category: "control", description: "Embed another workflow as a node. Selects a route (matched input+output pair) on the referenced workflow; ports become handles on the parent canvas. Expand opens the child for editing with a breadcrumb back to the parent.", outputType: "data", creditCost: 0 },

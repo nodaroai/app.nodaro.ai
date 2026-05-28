@@ -8,6 +8,7 @@ import {
   isValidDeduplicateConnection,
   isValidMergeListsConnection,
   isValidSortListConnection,
+  isValidSelectorConnection,
   isValidLoopCoarse,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
@@ -368,6 +369,10 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   ],
   "sort-list": [
     { handleId: "in", label: "List", accepts: (s) => isValidSortListConnection("in", s) },
+  ],
+  "selector": [
+    { handleId: "in",        label: "List",      accepts: (s) => isValidSelectorConnection("in",        s, isVisualPickerType) },
+    { handleId: "variables", label: "Variables", accepts: (s) => isValidSelectorConnection("variables", s, isVisualPickerType) },
   ],
   // ─── Image-producer nodes (Phase 20 of typed-handles migration) ──────
   "edit-image": [

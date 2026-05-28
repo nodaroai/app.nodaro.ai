@@ -33,3 +33,4 @@ export {
 export { GenerativePipelineConfig } from "./generative-configs"
 export { SceneConfig } from "./scene-configs"
 export { ReduceConfig } from "./reduce-configs"
+export { SelectorConfig } from "./selector-config"

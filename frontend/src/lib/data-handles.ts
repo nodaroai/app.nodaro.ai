@@ -1,7 +1,7 @@
 /**
  * Typed handle accepts predicates for Data root-category nodes:
  * `list`, `loop`, `web-scrape`, `extract-field`, `filter-list`,
- * `deduplicate`, `merge-lists`, `sort-list`.
+ * `deduplicate`, `merge-lists`, `sort-list`, `selector`.
  *
  * Mirrors the pattern in `generate-image-handles.ts` / `generate-video-handles.ts`.
  * Each per-node `isValid<Node>Connection` returns true when the source node
@@ -33,6 +33,7 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "list", "loop",
   "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
+  "selector",
   "ai-writer", "generate-script",
 ])
 
@@ -42,6 +43,7 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "web-scrape", "extract-field",
   "list", "loop", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
+  "selector",
   "ai-writer", "generate-script",
 ])
 
@@ -157,6 +159,24 @@ export function isValidSortListConnection(
   switch (targetHandleId) {
     case "in":
       return isListConsumer(sourceType)
+    default:
+      return false
+  }
+}
+
+/** selector: `in` accepts lists; `variables` accepts any data producer
+ *  (resolved by name in modulo / predicate / named-key / seed expressions
+ *  via buildConditionVariables in @nodaro/shared). Mirrors filter-list. */
+export function isValidSelectorConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isPicker: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "in":
+      return isListConsumer(sourceType)
+    case "variables":
+      return isDataProducer(sourceType, isPicker)
     default:
       return false
   }

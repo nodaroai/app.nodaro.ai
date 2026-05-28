@@ -157,6 +157,7 @@ import { TelegramTriggerNode } from "./telegram-trigger-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
 import { CollectNode } from "./collect-node";
+import { SelectorNode } from "./selector-node";
 import type { SceneNodeType } from "@/types/nodes";
 
 export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
@@ -319,6 +320,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "deduplicate": DeduplicateNode,
   "merge-lists": MergeListsNode,
   "sort-list": SortListNode,
+  "selector": SelectorNode,
   "preview": PreviewNode,
   "sticky-note": StickyNoteNode,
   "router": RouterNode,

@@ -88,9 +88,28 @@ export function resolveSeedPromptHint(
   return hints.join(", ");
 }
 
-/** Follow teleport chain to find the original non-teleport source node. */
-function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges: WorkflowEdge[]): WorkflowNode {
+/**
+ * Follow the teleport chain to find the original non-teleport source node AND
+ * the sourceHandle on the FIRST non-teleport edge feeding that node. The
+ * caller-supplied edge to the teleport-send/receive uses generic "in"/"out"
+ * handles, so consumers that need to discriminate between source-side
+ * channels (e.g. selector's `picked` vs `rest`) must read the handle from
+ * the source-side edge, not from the teleport edge.
+ *
+ * Returns `{ node, sourceHandle }` — `node` is the resolved origin (input
+ * node if the chain terminates cleanly), and `sourceHandle` is the
+ * sourceHandle of the last edge walked when its source is NOT a teleport
+ * (i.e. the edge that connects the underlying producer to a teleport-send).
+ * Returns `sourceHandle: undefined` when the chain is degenerate (no
+ * upstream edges, or the origin node itself is a teleport with no input).
+ */
+function resolveTeleportOrigin(
+  node: WorkflowNode,
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): { node: WorkflowNode; sourceHandle: string | undefined } {
   let current = node
+  let sourceSideHandle: string | undefined
   const visited = new Set<string>()
   while ((current.type === "teleport-send" || current.type === "teleport-receive") && !visited.has(current.id)) {
     visited.add(current.id)
@@ -98,9 +117,14 @@ function resolveTeleportOrigin(node: WorkflowNode, nodes: WorkflowNode[], edges:
     if (!inEdge) break
     const upstream = nodes.find((n) => n.id === inEdge.source)
     if (!upstream) break
+    // Remember the sourceHandle of THIS edge — when the next iteration finds
+    // `upstream` is non-teleport, this is the edge whose sourceHandle is the
+    // real channel id (picked/rest/items/etc.), not the teleport-side
+    // "in"/"out".
+    sourceSideHandle = inEdge.sourceHandle ?? undefined
     current = upstream
   }
-  return current
+  return { node: current, sourceHandle: sourceSideHandle }
 }
 
 type EdgeLike = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown };
@@ -354,7 +378,7 @@ export function resolveLoopColumnValues(
 }
 
 /** Node types whose edges default to "each" output mode (fan-out) */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list"]);
+const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
@@ -624,6 +648,17 @@ export function extractNodeOutputAsList(
     const splitResults = data.splitResults as string[] | undefined;
     if (splitResults && splitResults.length > 0) return splitResults;
   }
+  // Selector emits dual-output lists keyed by edge sourceHandle. The "rest"
+  // handle returns the unselected remainder; any other handle (typically
+  // "picked", or omitted) returns the picked items. Falls back to the in-store
+  // mirrors when the runtime `__*` arrays are absent (matches extractNodeOutput).
+  if (node.type === "selector") {
+    const results = sourceHandle === "rest"
+      ? ((data.__restResults as string[] | undefined) ?? (data.restResults as string[] | undefined))
+      : ((data.__pickedResults as string[] | undefined) ?? (data.pickedResults as string[] | undefined));
+    if (results && results.length > 0) return results;
+    return undefined;
+  }
   if (node.type === "list") {
     // New format: columns + rows (same as loop)
     const cols = data.columns as Array<{ handleId: string }> | undefined;
@@ -736,7 +771,8 @@ export function getListInputForNode(
     if (outputMode !== "each") continue;
 
     const edgeData = edge.data as Record<string, unknown> | undefined;
-    const rawList = extractNodeOutputAsList(sourceNode);
+    // Pass sourceHandle so selector's picked vs rest channel is honored.
+    const rawList = extractNodeOutputAsList(sourceNode, edge.sourceHandle ?? undefined);
     if (!rawList || rawList.length < 1) continue;
     const listOutput = selectListItems(rawList, edgeData as SelectorFields | undefined);
     if (listOutput.length > 1) {
@@ -856,9 +892,17 @@ export function resolveNodeInputs(
     let src = nodes.find((n) => n.id === srcEdge.source);
     if (!src) continue;
 
-    // Teleport transparency: resolve through the chain to the original source
+    // Teleport transparency: resolve through the chain to the original source.
+    // The original `srcEdge.sourceHandle` is the teleport-side "in"/"out"
+    // handle — useless for source-side channel discrimination (selector
+    // picked/rest, llm-chat items, etc.). Replace it with the sourceHandle
+    // of the source-side edge that actually connects the producer to the
+    // first teleport-send. For non-teleport edges this stays the original.
+    let resolvedSourceHandle: string | null | undefined = srcEdge.sourceHandle
     if (src.type === "teleport-send" || src.type === "teleport-receive") {
-      src = resolveTeleportOrigin(src, nodes, edges)
+      const origin = resolveTeleportOrigin(src, nodes, edges)
+      src = origin.node
+      if (origin.sourceHandle !== undefined) resolvedSourceHandle = origin.sourceHandle
     }
 
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
@@ -866,11 +910,18 @@ export function resolveNodeInputs(
     const srcData = src.data as Record<string, unknown>;
     // split-media uses outputChunkIndex routing, skip __listResults.
     // Group + Collect: route through extractNodeOutputAsList (no __listResults on data).
+    // Selector: dual-output list — picked vs rest channel selected by edge.sourceHandle.
+    //   Falls back to the in-store mirrors (pickedResults/restResults) if the
+    //   runtime `__*` arrays aren't populated yet.
     const srcListResults = src.type === "group" || src.type === "collect"
-      ? extractNodeOutputAsList(src, srcEdge.sourceHandle ?? undefined)
+      ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
         ? undefined
-        : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
+        : src.type === "selector"
+          ? (resolvedSourceHandle === "rest"
+              ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
+              : ((srcData.__pickedResults as string[] | undefined) ?? (srcData.pickedResults as string[] | undefined)))
+          : ((srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData));
 
     // Fan-in targets (reduce): consume the entire upstream list as a single
     // `inputs.inputs` array regardless of edgeOutputMode — reduce strategies
@@ -892,7 +943,7 @@ export function resolveNodeInputs(
         continue;
       }
       // Single-result fallback — upstream wasn't fanned out.
-      const single = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
+      const single = extractNodeOutput(src, resolvedSourceHandle ?? undefined);
       if (single) {
         inputs.inputs = [...(inputs.inputs ?? []), single];
       }
@@ -971,7 +1022,7 @@ export function resolveNodeInputs(
       }
     }
     if (!output && (src.type === "loop" || src.type === "list")) {
-      const raw = resolveLoopColumnValues(src, srcEdge.sourceHandle ?? undefined, edges, nodes);
+      const raw = resolveLoopColumnValues(src, resolvedSourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const ranged = selectListItems(raw, edgeData as SelectorFields | undefined);
       if (ranged.length > 0) {
@@ -999,7 +1050,7 @@ export function resolveNodeInputs(
     // item:N mode + range/list selector. Mirrors the loop/list block above.
     // Only the explicit `items` handle splits — the default/text handle stays
     // scalar and falls through to extractNodeOutput below (full generatedText).
-    if (!output && src.type === "llm-chat" && srcEdge.sourceHandle === "items") {
+    if (!output && src.type === "llm-chat" && resolvedSourceHandle === "items") {
       const raw = splitGeneratedItems(srcData.generatedText as string | undefined);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const ranged = selectListItems(raw, edgeData as SelectorFields | undefined);
@@ -1038,7 +1089,7 @@ export function resolveNodeInputs(
     }
 
     if (!output) {
-      output = extractNodeOutput(src, srcEdge.sourceHandle ?? undefined);
+      output = extractNodeOutput(src, resolvedSourceHandle ?? undefined);
     }
     if (!output) continue;
 
@@ -1166,7 +1217,7 @@ export function resolveNodeInputs(
       // Component output routing — determine media type from the output handle metadata.
       const compMeta = (src.data as Record<string, unknown>).componentMetadata as
         { outputs?: Array<{ id: string; type: string }> } | undefined
-      const handleId = srcEdge.sourceHandle?.replace(/^out_/, "")
+      const handleId = resolvedSourceHandle?.replace(/^out_/, "")
       const handleType = compMeta?.outputs?.find((o) => o.id === handleId)?.type
 
       if (handleType === "image") {
@@ -1263,7 +1314,7 @@ export function resolveNodeInputs(
     } else if (src.type === "loop" || src.type === "list") {
       // output already resolved per-iteration by loop handler above — route by column type
       const loopCols = ((src.data as LoopNodeData).columns ?? []);
-      let loopCol = loopCols.find((c) => c.handleId === (srcEdge.sourceHandle ?? ""));
+      let loopCol = loopCols.find((c) => c.handleId === (resolvedSourceHandle ?? ""));
       // List nodes use a fixed "list" output handle (not per-column handles like
       // loop nodes), so the handleId lookup above won't match any column.  Fall
       // back to the first column so the user's column-type setting is honoured.
@@ -1564,7 +1615,7 @@ export function resolveNodeInputs(
       //   `audio_track` → scene_audio_track.url
       // `output` was already routed through extractNodeOutput(src, sourceHandle)
       // above, so we route it here by source-handle kind.
-      const sceneSourceHandle = srcEdge.sourceHandle as string | undefined;
+      const sceneSourceHandle = resolvedSourceHandle as string | undefined;
       if (sceneSourceHandle === "last_frame") {
         // Treat as an image source — mirror upload-image routing below.
         if (
@@ -1684,10 +1735,10 @@ export function resolveNodeInputs(
       }
     } else if (
       src.type === "suno-separate" &&
-      (srcEdge.sourceHandle === "instrumental" ||
-        srcEdge.sourceHandle === "instrumental-out" ||
-        srcEdge.sourceHandle === "vocals" ||
-        srcEdge.sourceHandle === "vocal-out")
+      (resolvedSourceHandle === "instrumental" ||
+        resolvedSourceHandle === "instrumental-out" ||
+        resolvedSourceHandle === "vocals" ||
+        resolvedSourceHandle === "vocal-out")
     ) {
       // Suno-separate emits two stems; route the right one based on the
       // edge's sourceHandle. Batch 2 rename normalized `vocal-out` →
@@ -1695,7 +1746,7 @@ export function resolveNodeInputs(
       // accepted here as a safety net for edges that bypass loadWorkflow's
       // migration (MCP-built / scripted workflows).
       const srcData = src.data as Record<string, unknown>;
-      const isInstrumental = srcEdge.sourceHandle === "instrumental" || srcEdge.sourceHandle === "instrumental-out"
+      const isInstrumental = resolvedSourceHandle === "instrumental" || resolvedSourceHandle === "instrumental-out"
       if (isInstrumental) {
         const instrumentalUrl = srcData.instrumentalUrl as string | undefined;
         if (instrumentalUrl) {
@@ -1784,10 +1835,15 @@ export function resolveNodeInputs(
       inputs.prompt = output;
     } else if (src.type === "extract-field") {
       inputs.prompt = output;
+    } else if (src.type === "selector") {
+      // Picked/rest channel was already resolved into `output` upstream via the
+      // srcListResults ternary (sourceHandle-aware). Mirror filter-list family:
+      // route the scalar result into `inputs.prompt` for text-shaped consumers.
+      inputs.prompt = output;
     } else if (src.type === "filter-list" || src.type === "deduplicate" || src.type === "merge-lists" || src.type === "sort-list") {
       inputs.prompt = output;
     } else if (src.type === "generate-script") {
-      const handle = srcEdge.sourceHandle;
+      const handle = resolvedSourceHandle;
       const scriptNodeData = src.data as Record<string, unknown>;
       const script = getActiveScriptFromData(scriptNodeData);
       const scenes = (script?.scenes as Array<Record<string, unknown>>) ?? [];
@@ -1850,8 +1906,8 @@ export function resolveNodeInputs(
       // Route by param type using sourceHandle (matches backend)
       const srcData = src.data as Record<string, unknown>;
       const params = srcData.params as Array<{ id: string; name: string; type: string }> | undefined;
-      if (params && params.length > 0 && srcEdge.sourceHandle) {
-        const param = params.find((p) => p.id === srcEdge.sourceHandle);
+      if (params && params.length > 0 && resolvedSourceHandle) {
+        const param = params.find((p) => p.id === resolvedSourceHandle);
         if (param) {
           if (param.type === "imageUrl") {
             inputs.imageUrl = output;

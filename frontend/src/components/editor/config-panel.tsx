@@ -195,6 +195,7 @@ import {
   SceneConfig,
   CollectConfig,
   ReduceConfig,
+  SelectorConfig,
   ResultsGallery,
 } from "./config-panels"
 
@@ -324,6 +325,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "deduplicate": "Remove Duplicates",
   "merge-lists": "Merge Lists",
   "sort-list": "Sort List",
+  "selector": "Selector",
   "preview": "Preview",
   "loop": "Table",
   "save-to-storage": "Save to Storage",
@@ -590,6 +592,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "deduplicate": return <DeduplicateConfig {...configProps} />
     case "merge-lists": return <MergeListsConfig {...configProps} />
     case "sort-list": return <SortListConfig {...configProps} />
+    case "selector": return <SelectorConfig {...configProps} />
     case "preview": return <PreviewConfig {...configProps} />
     case "teleport-send": case "teleport-receive": return <TeleporterConfig {...configProps} nodeType={nodeType} />
     case "router": return <RouterConfig {...configProps} />
