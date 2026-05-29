@@ -1,4 +1,8 @@
--- 167: Lock down append_location_asset / append_object_asset to service_role only.
+-- 170: Lock down append_location_asset / append_object_asset to service_role only.
+-- (Renumbered 167 → 169 → 170 to avoid version collisions with a concurrent
+--  gemini-omni pricing migration (#2904/#2907) and the billing-accounting
+--  migration (169) — Supabase tracks migrations by a version PRIMARY KEY, so two
+--  files sharing a numeric prefix break deploys.)
 --
 -- Security bug (cross-tenant IDOR)
 -- -------------------------------
