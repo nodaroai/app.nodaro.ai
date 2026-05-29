@@ -83,10 +83,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         resolution: z
           .string()
           .optional()
-          .describe("Output resolution. Provider-dependent — common values: 480p, 720p, 1080p."),
+          .describe("Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k."),
         sound: z.boolean().optional(),
         negative_prompt: z.string().max(8000).optional(),
-        seed: z.number().int().min(10000).max(99999).optional(),
+        seed: z.number().int().min(0).max(2147483647).optional(),
         structured: StructuredFields.optional(),
       },
               outputSchema: {
@@ -261,7 +261,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .string()
           .optional()
           .describe(
-            "Output resolution. Provider-dependent — common values: 480p, 720p, 1080p. " +
+            "Output resolution. Provider-dependent — common values: 480p, 720p, 1080p, 4k. " +
             "Unknown values fall back to the model's default.",
           ),
         sound: z.boolean().optional(),

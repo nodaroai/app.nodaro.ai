@@ -278,6 +278,8 @@ export function runVideoGeneration(
      *  canonical_description to the prompt. */
     injectCharacterContext?: boolean;
     attachToCharacterId?: string;
+    videoTrimStart?: number;
+    videoTrimEnd?: number;
   },
   /** Per-call idempotency key — see runImageGeneration for rationale. */
   idempotencyKey?: string,
@@ -315,6 +317,8 @@ export function runVideoGeneration(
         seedance2InputMode: extras?.seedance2InputMode,
         enableTranslation: extras?.enableTranslation,
         loopTrim: extras?.loopTrim,
+        videoTrimStart: extras?.videoTrimStart,
+        videoTrimEnd: extras?.videoTrimEnd,
         injectCharacterContext: extras?.injectCharacterContext,
         attachToCharacterId: extras?.attachToCharacterId,
         userId: ctx.userId,

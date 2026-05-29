@@ -52,6 +52,7 @@ Generate Video covers the union of the legacy image-to-video and text-to-video c
 | Family | Models | Modes | Notes |
 |---|---|---|---|
 | VEO 3.x | `veo3` (Quality), `veo3.1` (Fast), `veo3_lite` (Lite) | T2V, I2V, first+last, reference | 4 / 6 / 8s; 720p / 1080p; generate-audio default on; auto-translate |
+| Gemini Omni | `gemini-omni-video` | T2V, I2V, video-edit (V2V) | 4 / 6 / 8 / 10s; 720p / 1080p / 4K (4K not on free tier); native audio output; up to 7 reference images; V2V uses trim window ≤ 10 s |
 | Kling | `kling`, `kling-turbo`, `kling-3.0`, `kling-master` | T2V, I2V | 5 / 10s (Kling 3.0: continuous 3–15s) |
 | Seedance / Seedance 2 | `seedance`, `seedance-2`, `seedance-2-fast` | T2V, I2V, reference (S2) | S2: 4–15s; 480p / 720p / 1080p; up to 9 image + 3 video + 3 audio refs |
 | Hailuo | `hailuo-2.3-pro`, `hailuo-2.3`, `hailuo-standard` | T2V (`hailuo-standard`), I2V | 6 / 10s |
@@ -86,6 +87,42 @@ LTX 2.3 exposes five task modes on Replicate; Generate Video picks one automatic
 | `audio` connected (no `startFrame`) | `audio_to_video` | Pro only |
 
 LTX 2.3 Fast has its audio handle visually muted because Fast does not accept audio. Wiring an `endFrame` enables LTX's `last_frame_image` parameter for end-frame interpolation.
+
+### Gemini Omni — modes and capabilities
+
+`gemini-omni-video` supports three generation modes, all selected automatically from wired inputs:
+
+| Mode | Dispatch condition | Notes |
+|---|---|---|
+| Text-to-video | No image / video input wired | Prompt-only generation |
+| Image-to-video | `startFrame` wired (up to 7 reference images) | Up to 7 image references accepted |
+| Video-edit (V2V) | `video` input wired | Source clip trimmed to ≤ 10 s; see trim fields below |
+
+**Key characteristics:**
+- **Native audio** — the output clip includes generated sound by default (`Generate Audio` checkbox, default on).
+- **Resolutions** — 720p, 1080p, and 4K. **4K is not available on the free tier.**
+- **Durations** — 4 / 6 / 8 / 10 seconds for 720p / 1080p; 4 / 6 / 8 / 10 seconds for 4K.
+- **Reference images** — up to 7 images can be wired into the `imageReferences` handle.
+- **V2V trim window** — when a source video is connected, the fields `videoTrimStart` and `videoTrimEnd` (integer seconds) define the trim window, which must span ≤ 10 seconds. The duration is derived automatically from the wired clip; override manually in the config panel if needed.
+
+#### Gemini Omni credit pricing
+
+Composite credit identifier: `gemini-omni-video:<resolution_prefix>:<duration>` (e.g. `gemini-omni-video:4k:8`). Video-edit uses a flat per-call price regardless of output duration.
+
+| Setting | Credits |
+|---|---|
+| 720p / 1080p · 4 s | 29 |
+| 720p / 1080p · 6 s | 38 |
+| 720p / 1080p · 8 s | 47 |
+| 720p / 1080p · 10 s | 57 |
+| 4K · 4 s | 66 |
+| 4K · 6 s | 75 |
+| 4K · 8 s | 85 |
+| 4K · 10 s | 94 |
+| Video-edit · 720p / 1080p (flat) | 75 |
+| Video-edit · 4K (flat) | 113 |
+
+> **Note:** 4K is blocked on the free tier. Free-tier requests at 4K resolution are rejected with a `tier_restriction` error — upgrade to Basic or higher to use 4K output.
 
 ## Credit pricing
 

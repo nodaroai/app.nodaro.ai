@@ -364,6 +364,7 @@ export const IMAGE_TO_VIDEO_PROVIDERS = [
   "happyhorse-ref2v",
   "runway-kie",
   "kling-3-omni",
+  "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // Replicate disabled
@@ -394,6 +395,7 @@ export const TEXT_TO_VIDEO_PROVIDERS = [
   "wan-2.7-t2v",
   "happyhorse",
   "runway-kie",
+  "gemini-omni-video",
   "ltx-2.3-pro",
   "ltx-2.3-fast",
   // Replicate disabled
@@ -701,6 +703,7 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "hailuo-2.3": { images: 1 },
   "bytedance-pro": { images: 1 },
   "bytedance-pro-fast": { images: 1 },
+  "gemini-omni-video": { images: 7, videos: 1 },
 }
 
 /**

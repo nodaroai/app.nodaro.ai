@@ -184,7 +184,7 @@ async function dispatchLtxIfRequested(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation, videoTrimStart, videoTrimEnd } = job.data as {
     jobId: string
     imageUrl?: string
     endFrameUrl?: string
@@ -219,6 +219,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
       quality?: "lossless" | "precise"
     }
     enableTranslation?: boolean
+    videoTrimStart?: number
+    videoTrimEnd?: number
   }
 
   // LTX 2.3 short-circuits the i2v router — it has its own Replicate
@@ -261,7 +263,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   )
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
   } finally {
     ramp.stop()
   }

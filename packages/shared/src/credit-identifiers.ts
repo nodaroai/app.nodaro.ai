@@ -84,6 +84,11 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  * @param resolution - Output resolution (used by Seedance 2 for 480p/720p pricing)
  * @param hasVideoRef - Whether a reference video is connected (Seedance 2 uses a lower per-second rate when true)
  */
+/** Gemini Omni Video duration tiers (seconds). Mirrors `MODEL_CATALOG["gemini-omni-video"].durations`
+ *  and `KIE_VIDEO_MODELS["gemini-omni-video"].allowedDurations`. Hoisted to module scope so the
+ *  nearest-tier snap below doesn't reallocate on every (hot-path) call. */
+const GEMINI_OMNI_DURATIONS = [4, 6, 8, 10]
+
 export function buildVideoCreditModelIdentifier(
   provider: string,
   duration?: number | string,
@@ -112,6 +117,19 @@ export function buildVideoCreditModelIdentifier(
   // duration-tier path below does not apply.
   if (VEO_RESOLUTION_TIERED_PROVIDERS.has(effectiveProvider)) {
     return resolution === "1080p" ? `${effectiveProvider}:1080p` : effectiveProvider
+  }
+
+  // Gemini Omni Video: priced by (resolution-band × duration), with a flat
+  // per-generation rate when a source video is supplied (V2V). Lowercase "4k".
+  if (effectiveProvider === "gemini-omni-video") {
+    if (hasVideoRef) {
+      return resolution === "4k" ? "gemini-omni-video:4k:vref" : "gemini-omni-video:vref"
+    }
+    // Snap to nearest allowed tier (NOT a min/max clamp) so off-tier durations
+    // map to a SEEDED composite; default 8 when unset.
+    const raw = parseInt(String(duration ?? 8), 10)
+    const d = Number.isNaN(raw) ? 8 : GEMINI_OMNI_DURATIONS.reduce((b, a) => (Math.abs(a - raw) < Math.abs(b - raw) ? a : b))
+    return resolution === "4k" ? `gemini-omni-video:4k:${d}` : `gemini-omni-video:${d}`
   }
 
   if (!DURATION_PRICED_PROVIDERS.has(effectiveProvider)) {

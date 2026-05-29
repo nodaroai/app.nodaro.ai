@@ -193,6 +193,7 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // `field: "resolution"` is mandatory — see Provider Enum Sync pitfall 4.
   "ltx-2.3-pro":         { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
   "ltx-2.3-fast":        { field: "resolution", values: { low: "1080p", mid: "2k", high: "4k" } },
+  "gemini-omni-video":   { field: "resolution", values: { low: "720p", mid: "1080p", high: "4k" } },
 }
 
 const ASPECT_PASSTHROUGH_PROVIDERS = new Set([

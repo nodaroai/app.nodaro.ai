@@ -47,7 +47,7 @@ const VIDEO_NODE_TYPES: Array<"image-to-video" | "text-to-video" | undefined> = 
   "text-to-video",
 ]
 const VIDEO_MODES: Array<string | undefined> = [undefined, "high", "pro"]
-const VIDEO_RESOLUTIONS: Array<string | undefined> = [undefined, "480p", "720p", "1080p"]
+const VIDEO_RESOLUTIONS: Array<string | undefined> = [undefined, "480p", "720p", "1080p", "4k"]
 const VIDEO_HAS_REFS: Array<boolean | undefined> = [undefined, true, false]
 
 const MOTION_PROVIDERS = ["kling", "kling-3.0", "wan-animate-move", "wan-animate-replace"]

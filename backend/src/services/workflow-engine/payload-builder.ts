@@ -2305,6 +2305,11 @@ export function buildPayload(
       // without modification.
       const mode: "image-to-video" | "text-to-video" = hasStart ? "image-to-video" : "text-to-video"
 
+      // Gemini Omni: a connected source video is a video-edit (V2V) job, routed
+      // through the image-to-video worker path (one handler serves all modes).
+      const effectiveMode: "image-to-video" | "text-to-video" =
+        (provider === "gemini-omni-video" && hasVideoRef) ? "image-to-video" : mode
+
       // Prompt composition: prefer upstream → data.prompt → data.motionPrompt
       // (legacy field still emitted by the inline picker). composeVideoPrompt
       // appends cinematography hints + optional motion-hint + identity-lock.
@@ -2366,13 +2371,13 @@ export function buildPayload(
       else if (hasImageRef || hasVideoRef) generationType = "REFERENCE_2_VIDEO"
 
       return {
-        jobName: mode,
+        jobName: effectiveMode,
         queueName: "video-generation",
         modelIdentifier: buildVideoCreditModelIdentifier(
           provider,
           data.duration as number | string | undefined,
           (data.sound ?? data.kling3Sound) as boolean | undefined,
-          mode,
+          effectiveMode,
           (data.videoSize as string | undefined) ?? (data.mode ?? data.kling3Mode) as string | undefined,
           data.resolution as string | undefined,
           hasVideoRef,
@@ -2388,6 +2393,8 @@ export function buildPayload(
           endFrameUrl,         // gated on having a startFrame to pair with
           referenceImageUrls,
           referenceVideoUrls: resolvedInputs.referenceVideoUrls,
+          videoTrimStart: data.videoTrimStart,
+          videoTrimEnd: data.videoTrimEnd,
           referenceAudioUrls: resolvedInputs.referenceAudioUrls,
           audioUrl: resolvedInputs.audioUrl,
           duration: data.duration,

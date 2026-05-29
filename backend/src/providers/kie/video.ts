@@ -403,6 +403,81 @@ async function runKling3(
   return { url: result.videoUrl, cost: modelConfig.cost }
 }
 
+/** KIE Gemini Omni Video accepted resolution values (lowercase, per the API). */
+const GEMINI_OMNI_RESOLUTIONS = ["720p", "1080p", "4k"]
+
+/** Shared helper for Gemini Omni Video calls from both imageToVideo and textToVideo.
+ *  Standard market endpoint; multimodal input + native audio. Callers compute the
+ *  per-method `prompt` / `imageUrls` / `aspectRatioValue`; everything else is identical.
+ *  Defensively validates duration / resolution / trim-window / video-count here because
+ *  this is the single choke point both the single-node route AND the orchestrator reach. */
+async function runGeminiOmni(
+  modelConfig: { model: string; cost: number; allowedDurations?: number[] },
+  prompt: string,
+  duration: number | undefined,
+  aspectRatioValue: string | undefined,
+  imageUrls: string[],
+  options: ProviderOptions | undefined,
+  reconcileOpts: ReconcileOpts | undefined,
+  logLabel: string,
+): Promise<ProviderResult> {
+  const videoUrls = options?.referenceVideoUrls ?? []
+  // Gemini Omni V2V accepts exactly ONE source video — reject extras rather than
+  // silently using only the first (the route Zod allows up to 3 for other models).
+  if (videoUrls.length > 1) {
+    throw createSanitizedError(
+      "Gemini Omni: only one source video is supported",
+      "Video generation",
+    )
+  }
+  const videoConnected = videoUrls.length > 0
+  // KIE quota: images + videos*2 (+ character_ids, none in Phase 1) ≤ 7.
+  // Check the RAW count and reject overflow (do NOT silently truncate).
+  if (imageUrls.length + (videoConnected ? 2 : 0) > 7) {
+    throw createSanitizedError(
+      "Gemini Omni: too many inputs (images + 2×videos must be ≤ 7)",
+      "Video generation",
+    )
+  }
+  // Validate resolution against KIE's allowed set; default off-list values (e.g. a
+  // non-UI caller sending "2k"/"480p"/"4K") to 720p rather than failing at the API.
+  const reqResolution = options?.resolution
+  const resolution = reqResolution && GEMINI_OMNI_RESOLUTIONS.includes(reqResolution) ? reqResolution : "720p"
+  let videoList: Array<Record<string, unknown>> | undefined
+  if (videoConnected) {
+    // Clamp the trim window to KIE's contract (integer seconds, 0 ≤ start < ends,
+    // ends − start ≤ 10). The route superRefine only guards single-node; orchestrator
+    // / imported-workflow callers reach here unchecked.
+    const start = Math.max(0, Math.floor(options?.videoTrimStart ?? 0))
+    const rawEnd = options?.videoTrimEnd != null ? Math.floor(options.videoTrimEnd) : start + 10
+    const ends = Math.min(Math.max(rawEnd, start + 1), start + 10)
+    videoList = [{ url: videoUrls[0], start, ends }]
+  }
+  const geminiInput: Record<string, unknown> = {
+    prompt,
+    resolution,
+    ...(aspectRatioValue ? { aspect_ratio: aspectRatioValue } : {}),
+    // V2V auto-determines duration from the clip; for t2v/i2v snap to an allowed tier
+    // so the value sent to KIE matches the tier the credit identifier billed.
+    ...(videoList
+      ? { video_list: videoList }
+      : { duration: String(snapToAllowedDuration(duration ?? 8, modelConfig.allowedDurations ?? [4, 6, 8, 10])) }),
+    ...(imageUrls.length ? { image_urls: imageUrls } : {}),
+    // Omit the -1 "random" sentinel (and any negative); only forward real seeds.
+    ...(options?.seed != null && options.seed >= 0 ? { seed: options.seed } : {}),
+  }
+  console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(geminiInput, null, 2))
+  const { resultJson, taskId: gTaskId, providerMs } = await runKieTask(
+    modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress, reconcileOpts,
+  )
+  const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
+  if (!videoUrl) {
+    throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
+  }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
+  return { url: videoUrl, cost: modelConfig.cost, ...(gTaskId && { kieTaskId: gTaskId }), ...(providerMs !== undefined && { providerMs }) }
+}
+
 export class KieVideoProvider
   implements
     ImageToVideoProvider,
@@ -577,6 +652,24 @@ export class KieVideoProvider
         `[KIE.ai] Runway Video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
+    }
+
+    // Gemini Omni Video — multimodal input + native audio. imageToVideo has no
+    // top-level aspectRatio param (unlike textToVideo); read from options only.
+    if (provider === "gemini-omni-video") {
+      const imageUrls = [effectiveImageUrl, ...(options?.referenceImageUrls ?? [])].filter(
+        (u): u is string => !!u,
+      )
+      return runGeminiOmni(
+        modelConfig,
+        effectivePrompt ?? "smooth cinematic motion",
+        duration,
+        options?.aspectRatio,
+        imageUrls,
+        options,
+        reconcileOpts,
+        "Gemini Omni",
+      )
     }
 
     // Standard createTask endpoint for other providers
@@ -858,6 +951,21 @@ export class KieVideoProvider
         `[KIE.ai] Runway Text-to-video completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`
       )
       return { url: videoUrl, cost: modelConfig.cost, kieTaskId: runwayTaskId }
+    }
+
+    // Gemini Omni Video — text-to-video (defensive V2V/I2V if refs present).
+    if (provider === "gemini-omni-video") {
+      const imageUrls = (options?.referenceImageUrls ?? []).filter((u): u is string => !!u)
+      return runGeminiOmni(
+        modelConfig,
+        effectivePrompt,
+        duration,
+        aspectRatio ?? options?.aspectRatio,
+        imageUrls,
+        options,
+        reconcileOpts,
+        "Gemini Omni (t2v)",
+      )
     }
 
     // Standard createTask endpoint for other providers

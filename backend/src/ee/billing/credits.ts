@@ -284,6 +284,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "seedance-2-fast:8s:1080p-ref": 60,  // 240 KIE cr, $1.20
   "seedance-2-fast:12s:1080p-ref": 90, // 360 KIE cr, $1.80
   "seedance-2-fast:15s:1080p-ref": 113, // 450 KIE cr, $2.25
+  ***REDACTED-OSS-SCRUB***
+  "gemini-omni-video": 29,         // base = 720p/1080p 4s
+  "gemini-omni-video:4": 29,       // 90 KIE cr, $0.45
+  "gemini-omni-video:6": 38,       // 120 KIE cr, $0.60
+  "gemini-omni-video:8": 47,       // 150 KIE cr, $0.75
+  "gemini-omni-video:10": 57,      // 180 KIE cr, $0.90
+  "gemini-omni-video:4k:4": 66,    // 210 KIE cr, $1.05
+  "gemini-omni-video:4k:6": 75,    // 240 KIE cr, $1.20
+  "gemini-omni-video:4k:8": 85,    // 270 KIE cr, $1.35
+  "gemini-omni-video:4k:10": 94,   // 300 KIE cr, $1.50
+  "gemini-omni-video:vref": 75,    // 240 KIE cr, $1.20 (video-edit, flat)
+  "gemini-omni-video:4k:vref": 113,// 360 KIE cr, $1.80 (video-edit 4K, flat)
   "wan-i2v": 22,                 // 70 KIE cr, $0.35 (5s 720p fallback)
   // Wan I2V duration-tiered pricing (720p default)
   ***REDACTED-OSS-SCRUB***

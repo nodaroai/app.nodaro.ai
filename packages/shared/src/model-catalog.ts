@@ -886,6 +886,32 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     ],
     featured: false,
   },
+  "gemini-omni-video": {
+    id: "gemini-omni-video",
+    kind: "video",
+    modes: ["i2v", "t2v"] as const,   // V2V is served via the i2v handle, not a catalog mode
+    family: "Google",
+    label: "Gemini Omni",
+    description: "Google multimodal video with native audio; text/image-to-video + video-edit.",
+    useCases: ["cinematic", "narrative"],
+    features: ["audio", "reference-image"],
+    aspectRatios: VIDEO_RATIOS_HV,
+    resolutions: ["720p", "1080p", "4k"],
+    durations: [4, 6, 8, 10],
+    pricing: [
+      { identifier: "gemini-omni-video", credits: 29, note: "default — 720p/1080p 4s" },
+      { identifier: "gemini-omni-video:4", credits: 29, note: "720p/1080p 4s" },
+      { identifier: "gemini-omni-video:6", credits: 38, note: "720p/1080p 6s" },
+      { identifier: "gemini-omni-video:8", credits: 47, note: "720p/1080p 8s" },
+      { identifier: "gemini-omni-video:10", credits: 57, note: "720p/1080p 10s" },
+      { identifier: "gemini-omni-video:4k:4", credits: 66, note: "4K 4s" },
+      { identifier: "gemini-omni-video:4k:6", credits: 75, note: "4K 6s" },
+      { identifier: "gemini-omni-video:4k:8", credits: 85, note: "4K 8s" },
+      { identifier: "gemini-omni-video:4k:10", credits: 94, note: "4K 10s" },
+      { identifier: "gemini-omni-video:vref", credits: 75, note: "video-edit 720p/1080p" },
+      { identifier: "gemini-omni-video:4k:vref", credits: 113, note: "video-edit 4K" },
+    ],
+  },
 
   // ── Kling ──
   "kling": {
@@ -1829,6 +1855,7 @@ const MODEL_VALUE_LABELS: Record<string, string> = {
   "1K": "1K (Standard)",
   "2K": "2K (High)",
   "4K": "4K (Ultra)",
+  "4k": "4K",
   "8K": "8K (Ultra)",
   // qualities
   "medium": "Medium (Balanced)",

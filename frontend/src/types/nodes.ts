@@ -1550,6 +1550,8 @@ export type ImageToVideoData = {
   // Seedance 2.0 fields (reference arrays resolved from edges at runtime, not stored on data)
   webSearch?: boolean
   nsfwChecker?: boolean
+  videoTrimStart?: number
+  videoTrimEnd?: number
   // Smart-loop-cut post-process. When `enabled: true`, the worker runs a
   // PSNR-based loop-point search after generation and trims the clip there.
   // Replaces the legacy autoLoopTrim (VEO 3.1 only, fixed 8 frames).

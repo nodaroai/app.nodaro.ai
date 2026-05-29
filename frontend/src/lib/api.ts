@@ -1967,6 +1967,10 @@ export interface GenerateVideoOptions {
     framesToTest?: number
     quality?: "lossless" | "precise"
   }
+  /** Gemini V2V: trim start/end seconds applied to the reference video before
+   *  it is sent to the model. Forwarded to backend POST /v1/generate-video. */
+  videoTrimStart?: number
+  videoTrimEnd?: number
   /** When true, the backend appends the character's canonical_description +
    *  identity-preserve suffix to the prompt. Requires attachToCharacterId. */
   injectCharacterContext?: boolean
@@ -2022,6 +2026,8 @@ export async function generateVideo(
       seedance2InputMode: opts.seedance2InputMode,
       enableTranslation: opts.enableTranslation,
       loopTrim: opts.loopTrim,
+      videoTrimStart: opts.videoTrimStart,
+      videoTrimEnd: opts.videoTrimEnd,
     }
     if (opts.injectCharacterContext) {
       body.injectCharacterContext = true
