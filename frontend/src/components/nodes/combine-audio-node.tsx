@@ -18,8 +18,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { CombineAudioData } from "@/types/nodes"
 
 function CombineAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CombineAudioData | undefined
-  const nodeData = currentNodeData ?? (data as CombineAudioData)
+  const nodeData = data as CombineAudioData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

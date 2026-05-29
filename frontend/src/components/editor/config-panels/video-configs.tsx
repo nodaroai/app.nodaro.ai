@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState, useCallback, useEffect, lazy, Suspense } from "react"
+import { useMemo, useState, useCallback, useEffect, Suspense, memo } from "react"
+import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ImageIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -42,7 +43,10 @@ import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
 import type { RefImageItem } from "./tag-textarea"
 import { PromptEditor } from "./prompt-editor"
-import { Kling3StudioConfig } from "./kling3-studio-config"
+// Lazy-loaded so the heavy Kling3 studio panel ships in its OWN chunk instead
+// of being statically bundled into the video-configs chunk. config-panel.tsx
+// lazy-imports the same module path, so both share a single on-demand chunk.
+const Kling3StudioConfig = lazyWithRetry(() => import("./kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { AspectRatioSelector } from "./aspect-ratio-selector"
 import { CameraMotionPicker } from "./camera-motion-picker"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -300,7 +304,7 @@ function toRefImageItems(entries: ReadonlyArray<VideoRefAutocompleteEntry>): Ref
   }))
 }
 
-export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
+function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ImageToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_I2V_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
 
@@ -391,7 +395,7 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   const seedance2Conflict = isSeedance2Provider(data.provider || "seedance-2-fast") && hasEndFrame && connectedRefImages.length > 0
 
   if (data.provider === "kling-3.0") {
-    return <Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
+    return <Suspense fallback={null}><Kling3StudioConfig data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} /></Suspense>
   }
 
   return (
@@ -1078,9 +1082,14 @@ export function ImageToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
+// Memoized so an unrelated ConfigPanel re-render (stable configProps) skips
+// reconciling this large subtree. See the topology-signature memos in
+// config-panel.tsx that keep configProps' source/ref props stable.
+export const ImageToVideoConfig = memo(ImageToVideoConfigImpl)
+
 const V2V_IMAGE_TYPES = ["generate-image", "upload-image", "character", "object", "location", "edit-image", "image-to-image", "scene"]
 
-export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
+function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoToVideoData> & { nodeId?: string }) {
   const provider = data.provider || "wan"
   const isWan = provider === "wan" || provider === "wan-flash"
   const isWanFlash = provider === "wan-flash"
@@ -1347,9 +1356,11 @@ export function VideoToVideoConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
+export const VideoToVideoConfig = memo(VideoToVideoConfigImpl)
+
 const MOTION_VIDEO_NODE_TYPES = new Set(["image-to-video", "text-to-video", "video-to-video", "upload-video", "motion-transfer", "extend-video", "speech-to-video"])
 
-export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<MotionTransferData> & { nodeId?: string }) {
+function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<MotionTransferData> & { nodeId?: string }) {
   const provider = data.provider || "kling"
 
   // Detect video duration from connected upstream video node's metadata or URL
@@ -1524,6 +1535,8 @@ export function MotionTransferConfig({ data, onUpdate, sources, fieldMappings, o
   )
 }
 
+export const MotionTransferConfig = memo(MotionTransferConfigImpl)
+
 export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodeRefs }: ConfigProps<VideoUpscaleData>) {
   // Topaz uses the "topaz-video" credit row (NOT the "topaz" processing
   // row, which is 1 CR for image processing). Backend route maps the
@@ -1572,7 +1585,7 @@ export function VideoUpscaleConfig({ data, onUpdate, sources, fieldMappings, onM
   )
 }
 
-export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
+function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToVideoData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_T2V_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "seedance-2-fast"
   const allowedDurations = KIE_T2V_DURATIONS[currentProvider] || null
@@ -1636,7 +1649,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 
   if (data.provider === "kling-3.0") {
-    return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} />
+    return <Suspense fallback={null}><Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} /></Suspense>
   }
 
   return (
@@ -1916,6 +1929,8 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
   )
 }
 
+export const TextToVideoConfig = memo(TextToVideoConfigImpl)
+
 // ---------------------------------------------------------------------------
 // GenerateVideoConfig — unified i2v + t2v configuration panel for the
 // `generate-video` node (Task 7.2). Renders the structural superset of the
@@ -1935,7 +1950,7 @@ export function TextToVideoConfig({ data, onUpdate, sources, fieldMappings, onMa
 //     `connectedRefImageOrder`).
 //   - Kling 3.0 dispatches to Kling3StudioConfig (same as i2v/t2v).
 // ---------------------------------------------------------------------------
-export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
+function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources, fieldMappings, onMapField, nodes, edges, onUpdateNode, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateVideoNodeData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(VIDEO_GEN_MODELS.map((m) => m.value)) }, [])
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   // GenerateVideoNodeData is structurally `ImageToVideoData & TextToVideoData`
@@ -2103,7 +2118,7 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
   const seedance2Conflict = isSeedance2 && hasEndFrame && connectedRefImages.length > 0
 
   if (currentProvider === "kling-3.0") {
-    return <Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate as (u: Partial<ImageToVideoData>) => void} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} />
+    return <Suspense fallback={null}><Kling3StudioConfig data={data as unknown as ImageToVideoData} onUpdate={onUpdate as (u: Partial<ImageToVideoData>) => void} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} nodes={nodes} edges={edges} onUpdateNode={onUpdateNode} nodeId={nodeId} /></Suspense>
   }
 
   return (
@@ -2879,6 +2894,8 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
   )
 }
 
+export const GenerateVideoConfig = memo(GenerateVideoConfigImpl)
+
 export function ExtendVideoConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ExtendVideoData> & { nodeId?: string }) {
   return (
     <div className="flex flex-col gap-3">
@@ -3217,7 +3234,7 @@ export function FaceSwapConfig({ data, onUpdate, sources, edges, nodeId }: Confi
 // duration, aspect ratio, fps, and generate-audio toggle. Resolution is
 // locked at 1080p for retake (LTX 2.3 Pro contract).
 // ---------------------------------------------------------------------------
-export function VideoRetakeConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoRetakeData> & { nodeId?: string }) {
+function VideoRetakeConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VideoRetakeData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(["ltx-2.3-pro"]) }, [])
   return (
     <div className="flex flex-col gap-3">
@@ -3346,3 +3363,5 @@ export function VideoRetakeConfig({ data, onUpdate, sources, fieldMappings, onMa
     </div>
   )
 }
+
+export const VideoRetakeConfig = memo(VideoRetakeConfigImpl)

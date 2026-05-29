@@ -12,8 +12,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LottieOverlayData } from "@/types/nodes"
 
 function LottieOverlayNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as LottieOverlayData | undefined
-  const nodeData = currentNodeData ?? (data as LottieOverlayData)
+  const nodeData = data as LottieOverlayData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const credits = useModelCredits(buildLlmCreditIdentifier("lottie-overlay", nodeData.llmModel || LLM_FEATURE_DEFAULTS["lottie-overlay"]), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

@@ -239,22 +239,24 @@ function BaseNodeComponent({
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
-  const isSkipped = useWorkflowStore((s) => {
-    const node = s.nodes.find((n) => n.id === id)
-    return !!(node?.data as Record<string, unknown> | undefined)?.skipped
-  })
-  // Inner zoom wrapper bookkeeping. Combine into one selector with shallow
-  // compare so we do ONE `nodes.find(...)` per store update (not three).
-  // Resize fires the store at ~60Hz; with 100+ nodes on canvas, three
-  // separate selectors meant 300 extra O(N) array iterations per frame.
-  const { zoom, visualW, visualH } = useWorkflowStore(
+  // Inner zoom wrapper bookkeeping + per-node flags. Combine into ONE selector
+  // with shallow compare so we do a single `nodes.find(...)` per store update
+  // (not one per flag). Resize fires the store at ~60Hz; with 100+ nodes on
+  // canvas, separate selectors meant hundreds of extra O(N) array iterations
+  // per frame. `isPending` drives the active "node-running" border the instant
+  // Run is clicked (the optimistic flip writes data.executionStatus:"pending"
+  // before the backend execution even starts).
+  const { zoom, visualW, visualH, isSkipped, isPending } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
-      const z = (node?.data as Record<string, unknown> | undefined)?.zoom
+      const data = node?.data as Record<string, unknown> | undefined
+      const z = data?.zoom
       return {
         zoom: typeof z === "number" ? z : 1.0,
         visualW: node?.width,
         visualH: node?.height,
+        isSkipped: !!data?.skipped,
+        isPending: data?.executionStatus === "pending",
       }
     }),
   )
@@ -450,8 +452,8 @@ function BaseNodeComponent({
           isEditing && category === "object" && "dark:shadow-[0_0_20px_rgba(52,211,153,0.4)]",
           isEditing && category === "output" && "dark:shadow-[0_0_20px_rgba(34,197,94,0.4)]",
           isEditing && category === "component" && "dark:shadow-[0_0_20px_rgba(168,85,247,0.4)]",
-          isRunning && "node-running",
-          isNew && !isRunning && "node-new-pulse",
+          (isRunning || isPending) && "node-running",
+          isNew && !isRunning && !isPending && "node-new-pulse",
           isSkipped && "opacity-40 border-dashed",
           className,
         )}

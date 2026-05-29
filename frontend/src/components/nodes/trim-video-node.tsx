@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { TrimVideoData } from "@/types/nodes"
 
 function TrimVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TrimVideoData | undefined
-  const nodeData = currentNodeData ?? (data as TrimVideoData)
+  const nodeData = data as TrimVideoData
   const credits = useEstimatedCredits({ id, type: "trim-video", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

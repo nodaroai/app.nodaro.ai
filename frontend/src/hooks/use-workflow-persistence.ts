@@ -500,6 +500,17 @@ export function useWorkflowPersistence(projectId?: string) {
       // Don't save empty workflows
       if (nodes.length === 0) return { success: false, error: "Empty workflow" }
 
+      // isDirty guard: when the row is already persisted and the store has no
+      // unsaved edits, skip the Supabase UPDATE entirely. The pre-Run save
+      // (run-handlers) calls save() on every Run; for a clean editor this is a
+      // pure round-trip with no payload change, so returning the success shape
+      // without a network write makes Run feel instant. A brand-new workflow
+      // (no workflowId yet) must still INSERT, so only short-circuit when an
+      // id exists.
+      if (workflowId && !useWorkflowStore.getState().isDirty) {
+        return { success: true }
+      }
+
       setSaving(true)
       setSaveStatus("saving")
       try {

@@ -17,8 +17,7 @@ const ACCEPTS_VIDEO = (t: string) => isValidSplitMediaConnection("video", t)
 const ACCEPTS_AUDIO = (t: string) => isValidSplitMediaConnection("audio", t)
 
 function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as SplitMediaData | undefined
-  const nodeData = currentNodeData ?? (data as SplitMediaData)
+  const nodeData = data as SplitMediaData
   const credits = useModelCredits("ffmpeg", 2)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

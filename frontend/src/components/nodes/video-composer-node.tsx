@@ -12,8 +12,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { VideoComposerData } from "@/types/nodes"
 
 function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as VideoComposerData | undefined
-  const nodeData = currentNodeData ?? (data as VideoComposerData)
+  const nodeData = data as VideoComposerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const credits = useModelCredits(buildLlmCreditIdentifier("scene-graph-ai", nodeData.llmModel || LLM_FEATURE_DEFAULTS["scene-graph-ai"]), 10)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

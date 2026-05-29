@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
+import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,7 +43,12 @@ import { PlatformPreview } from "@/components/nodes/platform-preview"
 import { Textarea } from "@/components/ui/textarea"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
-import { CaptionsStylePreview } from "../captions-style-preview"
+
+// Lazy — pulls @remotion/player + remotion (~63KB gz) out of the editor chunk;
+// only fetched when an Add Captions node's config panel is opened.
+const CaptionsStylePreview = lazyWithRetry(() =>
+  import("../captions-style-preview").then((m) => ({ default: m.CaptionsStylePreview })),
+)
 
 const KINETIC_STYLE_FONT_DEFAULT = 64
 const STATIC_STYLE_FONT_DEFAULT = 32
@@ -190,13 +196,15 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
         </Select>
       </div>
 
-      <CaptionsStylePreview
-        style={data.style}
-        position={data.position}
-        fontSize={data.fontSize}
-        color={data.color}
-        backgroundColor={data.backgroundColor as string | undefined}
-      />
+      <Suspense fallback={<div className="text-xs text-muted-foreground py-2">Loading preview...</div>}>
+        <CaptionsStylePreview
+          style={data.style}
+          position={data.position}
+          fontSize={data.fontSize}
+          color={data.color}
+          backgroundColor={data.backgroundColor as string | undefined}
+        />
+      </Suspense>
 
       <div>
         <Label>Position</Label>

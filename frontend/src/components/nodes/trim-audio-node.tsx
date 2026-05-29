@@ -18,8 +18,7 @@ import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TrimAudioData } from "@/types/nodes"
 
 function TrimAudioNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TrimAudioData | undefined
-  const nodeData = currentNodeData ?? (data as TrimAudioData)
+  const nodeData = data as TrimAudioData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

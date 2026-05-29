@@ -2,6 +2,7 @@
 
 import { memo, useState, useMemo, useEffect, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Volume2, Loader2, AlertCircle, X, Film, Mic, Music, AudioWaveform, LayoutGrid } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
@@ -36,8 +37,14 @@ function getSourceIcon(nodeType: string) {
 function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MergeVideoAudioData | undefined
   const nodeData = currentNodeData ?? (data as MergeVideoAudioData)
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+  // Narrow subscription: a primitive fingerprint of the incoming connections
+  // (source id + type + label) instead of whole-array `s.nodes` / `s.edges`.
+  // `connectedSources` is the only consumer, so re-render only when an
+  // incoming connection (or upstream label) changes — not on every unrelated
+  // mutation that mints a fresh nodes array.
+  const connectedFingerprint = useWorkflowStore((s) =>
+    incomingSourcesFingerprint(s.nodes, s.edges, id, "label"),
+  )
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
@@ -81,8 +88,12 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
   )
   const activeJobId = activeResult?.jobId
 
-  // Collect connected source info for display
+  // Collect connected source info for display. Reads live arrays from
+  // getState() at compute time; memoized on the incoming-connection
+  // fingerprint so it only recomputes when that changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedSources = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const incoming = edges.filter((e) => e.target === id)
     return incoming
       .map((e) => nodes.find((n) => n.id === e.source))
@@ -93,7 +104,7 @@ function MergeVideoAudioNodeComponent({ id, data, selected }: NodeProps) {
         label: (n.data as Record<string, unknown>).label as string ?? n.type,
         isVideo: VIDEO_TYPES.has(n.type),
       }))
-  }, [edges, nodes, id])
+  }, [id, connectedFingerprint])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))

@@ -156,27 +156,33 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
     face: assets.filter((a) => a.type === "face").length,
   }), [assets])
 
-  // Find if asset has a node on canvas
-  const findNodeForAsset = useCallback(
-    (asset: UnifiedAsset): string | null => {
-      for (const node of nodes) {
-        if (asset.type === "character" && node.type === "character") {
-          const d = node.data as CharacterNodeData
-          if (d.characterDbId === asset.dbId) return node.id
-        } else if (asset.type === "object" && node.type === "object") {
-          const d = node.data as ObjectNodeData
-          if (d.objectDbId === asset.dbId) return node.id
-        } else if (asset.type === "location" && node.type === "location") {
-          const d = node.data as LocationNodeData
-          if (d.locationDbId === asset.dbId) return node.id
-        } else if (asset.type === "face" && node.type === "face") {
-          const d = node.data as FaceNodeData
-          if (d.faceDbId === asset.dbId) return node.id
-        }
+  // Map of `${type}:${dbId}` -> nodeId, built in ONE pass over canvas nodes so
+  // the per-asset "on canvas" lookup below is O(1) instead of O(assets×nodes).
+  const assetNodeMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.type === "character") {
+        const d = node.data as CharacterNodeData
+        if (d.characterDbId) map.set(`character:${d.characterDbId}`, node.id)
+      } else if (node.type === "object") {
+        const d = node.data as ObjectNodeData
+        if (d.objectDbId) map.set(`object:${d.objectDbId}`, node.id)
+      } else if (node.type === "location") {
+        const d = node.data as LocationNodeData
+        if (d.locationDbId) map.set(`location:${d.locationDbId}`, node.id)
+      } else if (node.type === "face") {
+        const d = node.data as FaceNodeData
+        if (d.faceDbId) map.set(`face:${d.faceDbId}`, node.id)
       }
-      return null
-    },
-    [nodes],
+    }
+    return map
+  }, [nodes])
+
+  // Find if asset has a node on canvas (O(1) via assetNodeMap)
+  const findNodeForAsset = useCallback(
+    (asset: UnifiedAsset): string | null =>
+      assetNodeMap.get(`${asset.type}:${asset.dbId}`) ?? null,
+    [assetNodeMap],
   )
 
   // Handle clicking asset thumbnail
@@ -670,27 +676,33 @@ export function UnifiedAssetLibraryButton() {
     face: assets.filter((a) => a.type === "face").length,
   }), [assets])
 
-  // Find if asset already has a node on canvas
-  const findNodeForAsset = useCallback(
-    (asset: UnifiedAsset): string | null => {
-      for (const node of nodes) {
-        if (asset.type === "character" && node.type === "character") {
-          const d = node.data as CharacterNodeData
-          if (d.characterDbId === asset.dbId) return node.id
-        } else if (asset.type === "object" && node.type === "object") {
-          const d = node.data as ObjectNodeData
-          if (d.objectDbId === asset.dbId) return node.id
-        } else if (asset.type === "location" && node.type === "location") {
-          const d = node.data as LocationNodeData
-          if (d.locationDbId === asset.dbId) return node.id
-        } else if (asset.type === "face" && node.type === "face") {
-          const d = node.data as FaceNodeData
-          if (d.faceDbId === asset.dbId) return node.id
-        }
+  // Map of `${type}:${dbId}` -> nodeId, built in ONE pass over canvas nodes so
+  // the per-asset "on canvas" lookup below is O(1) instead of O(assets×nodes).
+  const assetNodeMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.type === "character") {
+        const d = node.data as CharacterNodeData
+        if (d.characterDbId) map.set(`character:${d.characterDbId}`, node.id)
+      } else if (node.type === "object") {
+        const d = node.data as ObjectNodeData
+        if (d.objectDbId) map.set(`object:${d.objectDbId}`, node.id)
+      } else if (node.type === "location") {
+        const d = node.data as LocationNodeData
+        if (d.locationDbId) map.set(`location:${d.locationDbId}`, node.id)
+      } else if (node.type === "face") {
+        const d = node.data as FaceNodeData
+        if (d.faceDbId) map.set(`face:${d.faceDbId}`, node.id)
       }
-      return null
-    },
-    [nodes],
+    }
+    return map
+  }, [nodes])
+
+  // Find if asset already has a node on canvas (O(1) via assetNodeMap)
+  const findNodeForAsset = useCallback(
+    (asset: UnifiedAsset): string | null =>
+      assetNodeMap.get(`${asset.type}:${asset.dbId}`) ?? null,
+    [assetNodeMap],
   )
 
   // Handle clicking asset thumbnail - opens respective Page modal
@@ -1075,10 +1087,12 @@ export function UnifiedAssetLibraryButton() {
                         >
                           {asset.thumbnailUrl ? (
                             <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-[#121212]">
-                              <img
+                              <CachedImage
                                 src={asset.thumbnailUrl}
                                 alt={asset.name}
                                 className="w-full h-full object-cover"
+                                thumbnail
+                                thumbnailWidth={160}
                               />
                             </div>
                           ) : (

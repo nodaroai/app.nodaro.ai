@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react"
+import { memo, useRef, useState, useCallback } from "react"
 import { Download, Copy, Play, Pause, Volume2, VolumeX, VideoIcon } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
 import { ActionMenu } from "./action-menu"
@@ -16,7 +16,7 @@ interface VideoOutputCardProps {
   actions?: OutputCardActions
 }
 
-export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, elementSize, actions }: VideoOutputCardProps) {
+function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions }: VideoOutputCardProps) {
   const maxHClass = ELEMENT_SIZES.videoOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "video", url)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -123,3 +123,5 @@ export function VideoOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
     </GlassCard>
   )
 }
+
+export const VideoOutputCard = memo(VideoOutputCardImpl)

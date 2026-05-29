@@ -30,6 +30,10 @@ function resetStoreState(overrides: Record<string, unknown> = {}) {
     saveStatus: "idle",
     loadedUpdatedAt: null,
     remoteUpdatedAt: null,
+    // Default dirty so the existing save-path tests exercise the network
+    // update; the isDirty short-circuit (clean editor → no UPDATE) is covered
+    // by its own test below.
+    isDirty: true,
     ...overrides,
   }
 }
@@ -202,6 +206,20 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(false)
     expect(saveResult!.error).toBe("Empty workflow")
+    expect(mockSupabaseFrom).not.toHaveBeenCalled()
+  })
+
+  it("skips the network update when an existing workflow is already clean (not dirty)", async () => {
+    resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], isDirty: false })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    let saveResult: { success: boolean; error?: string } | undefined
+
+    await act(async () => {
+      saveResult = await result.current.save()
+    })
+
+    expect(saveResult!.success).toBe(true)
     expect(mockSupabaseFrom).not.toHaveBeenCalled()
   })
 

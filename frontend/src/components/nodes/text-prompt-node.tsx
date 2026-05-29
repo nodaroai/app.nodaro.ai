@@ -66,15 +66,53 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
 
-  // Only subscribe to full nodes/edges for nodeRefs + downstream credits,
-  // but memoize the nodeRefs result by serializing to avoid unnecessary TagTextarea re-renders
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodeRefsRaw = useMemo(() => getUpstreamNodes(id, nodes, edges), [id, nodes, edges])
-  const nodeRefsKey = useMemo(() => nodeRefsRaw.map(r => r.id).join(","), [nodeRefsRaw])
-  // Stable reference: only changes when the actual upstream node IDs change
+  // Both the nodeRefs autocomplete and the downstream-credits walk traverse
+  // the whole graph. Previously this component held whole-array `s.nodes` /
+  // `s.edges` subscriptions, so every node drag (~60fps, new array refs) and
+  // every keystroke anywhere re-rendered this node AND its TagTextarea tree.
+  // Instead, derive PRIMITIVE keys in a useShallow selector: the component
+  // only re-renders when the upstream node set (id\x01label\x01type) or the
+  // downstream credit topology actually changes. The heavy walks are memoized
+  // on those keys and read live arrays from getState() at compute time.
+  const { upstreamKey, downstreamKey } = useWorkflowStore(
+    useShallow((s) => {
+      // Upstream key — id + label + type so a rename invalidates (not id alone,
+      // which would leave stale {Node Label} tokens in the textarea).
+      const ups = getUpstreamNodes(id, s.nodes, s.edges)
+      let uKey = ""
+      for (const r of ups) uKey += `${r.id}\x01${r.label}\x01${r.type}\x02`
+
+      // Downstream key — forward BFS topology + each executable downstream
+      // node's type and the data fields estimateNodeCredits reads.
+      let dKey = ""
+      const outEdges0 = s.edges.filter((e) => e.source === id)
+      if (outEdges0.length > 0) {
+        const visited = new Set<string>([id])
+        const queue = outEdges0.map((e) => e.target)
+        while (queue.length > 0) {
+          const current = queue.shift()!
+          if (visited.has(current)) continue
+          visited.add(current)
+          const dn = s.nodes.find((n) => n.id === current)
+          if (dn) {
+            const dd = (dn.data ?? {}) as Record<string, unknown>
+            dKey += `${current}\x01${dn.type ?? ""}\x01${String(dd.estimatedCredits ?? "")}\x01${String(dd.provider ?? "")}\x01${String(dd.resolution ?? "")}\x01${String(dd.videoDuration ?? "")}\x01${String(dd.actor ?? "")}\x01${String(dd.mode ?? "")}\x02`
+          }
+          for (const edge of s.edges) {
+            if (edge.source === current && !visited.has(edge.target)) queue.push(edge.target)
+          }
+        }
+      }
+      return { upstreamKey: uKey, downstreamKey: dKey }
+    }),
+  )
+
+  // Recompute the actual upstream refs only when the upstream key changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nodeRefs = useMemo(() => nodeRefsRaw, [nodeRefsKey])
+  const nodeRefs = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
+    return getUpstreamNodes(id, nodes, edges)
+  }, [id, upstreamKey])
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // `null`/undefined = "no color" — re-pressing the active swatch clears
@@ -224,8 +262,13 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id])
 
-  // BFS forward to find downstream executable nodes and sum their credit cost
+  // BFS forward to find downstream executable nodes and sum their credit cost.
+  // Memoized on `downstreamKey` (a primitive fingerprint of the downstream
+  // topology + credit-relevant data) so it only recomputes when that actually
+  // changes; reads live arrays from getState() at compute time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const { hasDownstream, downstreamCredits } = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const outEdges = edges.filter((e) => e.source === id)
     if (outEdges.length === 0) return { hasDownstream: false, downstreamCredits: 0 }
 
@@ -253,7 +296,7 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     }
 
     return { hasDownstream: true, downstreamCredits: totalCredits }
-  }, [id, nodes, edges])
+  }, [id, downstreamKey])
 
   const outputTarget: "text" | "voice" | "lyrics" =
     nodeData.outputTarget === "voice" || nodeData.outputTarget === "lyrics" ? nodeData.outputTarget : "text"

@@ -332,28 +332,56 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
   const containerRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const cleanupRef = useRef<(() => void) | null>(null)
+  // Cache the bounding rect at drag-start to avoid layout reads on every move.
+  const dragRectRef = useRef<DOMRect | null>(null)
+  const rafIdRef = useRef<number | null>(null)
 
-  // Clean up drag listeners on unmount
+  // Clean up drag listeners and pending RAF on unmount
   useEffect(() => {
-    return () => { cleanupRef.current?.() }
+    return () => {
+      cleanupRef.current?.()
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
+    }
   }, [])
 
+  // pendingClientXRef holds the latest clientX so the RAF always applies the
+  // most recent pointer position (not the one that first triggered the frame).
+  const pendingClientXRef = useRef<number | null>(null)
+
   const updatePosition = useCallback((clientX: number) => {
-    if (!containerRef.current) return
-    const rect = containerRef.current.getBoundingClientRect()
-    const pct = ((clientX - rect.left) / rect.width) * 100
-    setPosition(Math.max(2, Math.min(98, pct)))
+    if (!dragRectRef.current) return
+    pendingClientXRef.current = clientX
+    if (rafIdRef.current !== null) return
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null
+      const latestX = pendingClientXRef.current
+      const rect = dragRectRef.current
+      if (latestX === null || !rect) return
+      pendingClientXRef.current = null
+      const pct = ((latestX - rect.left) / rect.width) * 100
+      setPosition(Math.max(2, Math.min(98, pct)))
+    })
   }, [])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
+    // Capture rect once at drag-start — container won't move during drag.
+    dragRectRef.current = containerRef.current?.getBoundingClientRect() ?? null
 
     const handleMove = (ev: MouseEvent) => {
       if (isDragging.current) updatePosition(ev.clientX)
     }
     const handleUp = () => {
       isDragging.current = false
+      dragRectRef.current = null
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
       document.removeEventListener("mousemove", handleMove)
       document.removeEventListener("mouseup", handleUp)
       cleanupRef.current = null
@@ -363,6 +391,11 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
     document.addEventListener("mouseup", handleUp)
     cleanupRef.current = handleUp
   }, [updatePosition])
+
+  const handleTouchStart = useCallback(() => {
+    // Capture rect once at touch-start so handleTouchMove doesn't re-read layout.
+    dragRectRef.current = containerRef.current?.getBoundingClientRect() ?? null
+  }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     updatePosition(e.touches[0].clientX)
@@ -412,6 +445,7 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
         className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 w-8 h-8 rounded-full bg-white border-2 border-[#ff0073] cursor-ew-resize flex items-center justify-center shadow-lg"
         style={{ left: `${position}%` }}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
       >
         <div className="flex gap-0.5">

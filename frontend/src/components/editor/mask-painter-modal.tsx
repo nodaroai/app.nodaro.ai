@@ -30,6 +30,9 @@ export function MaskPainterModal({
   const activeStrokeRef = useRef<MaskStroke | null>(null)
   const rafIdRef = useRef<number | null>(null)
   const redrawRef = useRef<() => void>(() => {})
+  // Cache canvas bounding rect for the duration of a stroke (pointerdown → pointerup)
+  // to avoid a layout read on every pointermove event.
+  const canvasRectRef = useRef<DOMRect | null>(null)
   const scaleRef = useRef({ scaleX: 1, scaleY: 1 })
   const maskBaseCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
@@ -230,9 +233,9 @@ export function MaskPainterModal({
   }, [strokes, imageLoaded, viewMode, lassoPoints, baseImageData, scheduleRedraw])
 
   function getCanvasPoint(e: React.MouseEvent) {
-    const canvas = canvasRef.current
-    if (!canvas) return null
-    const rect = canvas.getBoundingClientRect()
+    if (!canvasRef.current) return null
+    // Use cached rect during an active stroke to avoid layout reads on every move.
+    const rect = canvasRectRef.current ?? canvasRef.current.getBoundingClientRect()
     const { scaleX, scaleY } = getScale()
     return {
       x: (e.clientX - rect.left) * scaleX,
@@ -263,6 +266,8 @@ export function MaskPainterModal({
 
   function handlePointerDown(e: React.MouseEvent) {
     e.preventDefault()
+    // Cache the canvas rect for this stroke — canvas won't move while drawing.
+    canvasRectRef.current = canvasRef.current?.getBoundingClientRect() ?? null
     const pt = getCanvasPoint(e)
     if (!pt) return
 
@@ -294,6 +299,7 @@ export function MaskPainterModal({
 
   function handlePointerUp() {
     const stroke = activeStrokeRef.current
+    canvasRectRef.current = null
     if (!stroke) return
     activeStrokeRef.current = null
     setStrokes((prev) => [...prev, stroke])

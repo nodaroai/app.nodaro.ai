@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 // ---------------------------------------------------------------------------
 
 const mockUpdateNodeData = vi.fn()
+const mockMarkNodesStatus = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
 const mockToastInfo = vi.fn()
@@ -41,6 +42,10 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       nodes: mockNodes,
       edges: mockEdges,
       updateNodeData: mockUpdateNodeData,
+      markNodesStatus: mockMarkNodesStatus,
+      // Default dirty so the run handlers exercise the pre-Run save() path;
+      // the isDirty save-skip is unit-tested separately.
+      isDirty: true,
       workflowId: "wf-mock-1",
     }),
   },
@@ -73,6 +78,10 @@ vi.mock("@/lib/supabase", () => ({
       getUser: vi.fn().mockResolvedValue({ data: { user: null } }),
     },
   }),
+}))
+
+vi.mock("@/hooks/use-auth", () => ({
+  getCachedUserId: () => "u1",
 }))
 
 vi.mock("@/lib/edition", () => ({
@@ -320,9 +329,7 @@ describe("handleRun", () => {
 
     await handleRun(ctx, "p1", "wf-1", save, setIsRunning)
 
-    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
-      executionStatus: "pending",
-    })
+    expect(mockMarkNodesStatus).toHaveBeenCalledWith(["n1"], "pending")
   })
 
   it("clears pending states and shows error on backend failure", async () => {
@@ -344,9 +351,7 @@ describe("handleRun", () => {
       expect.objectContaining({ description: "Server error" }),
     )
     // Should clear pending states
-    expect(mockUpdateNodeData).toHaveBeenCalledWith("n1", {
-      executionStatus: undefined,
-    })
+    expect(mockMarkNodesStatus).toHaveBeenCalledWith(["n1"], undefined)
     expect(setIsRunning).toHaveBeenCalledWith(false)
   })
 })

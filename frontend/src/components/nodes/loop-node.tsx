@@ -18,6 +18,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import { upstreamSubgraphFingerprint } from "@/lib/node-fingerprint"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleIcon } from "./handle-icon"
@@ -235,9 +236,28 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
   const nodeData = data as LoopNodeData
   const isList = type === "list"
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+
+  // `connectedRows` resolves values through this node's column `in` edges,
+  // which can recurse up a loop/list chain (resolveLoopColumnValues), and
+  // `hasUpstreamInput` checks incoming target-handle edges. Subscribing to
+  // whole `s.nodes` / `s.edges` re-rendered this (heavy) node on every
+  // unrelated mutation. Instead derive a PRIMITIVE fingerprint over the
+  // transitive upstream subgraph (ancestor nodes' data + edges among them) so
+  // any change feeding the resolution invalidates the memos without missing a
+  // deep-chain field; the heavy resolution reads live arrays from getState().
+  const upstreamFingerprint = useWorkflowStore((s) => {
+    let seedPrefix = ""
+    const seedSources: string[] = []
+    // Seed: every edge landing on this node (any handle, incl. legacy "in").
+    for (const e of s.edges) {
+      if (e.target !== id) continue
+      seedPrefix += `in:${e.id}\x01${e.source}\x01${e.sourceHandle ?? ""}\x01${e.targetHandle ?? ""}\x01${JSON.stringify(e.data ?? {})}\x04`
+      seedSources.push(e.source)
+    }
+    if (seedSources.length === 0) return ""
+    return upstreamSubgraphFingerprint(s.nodes, s.edges, id, seedSources, seedPrefix)
+  })
   const updateNodeInternals = useUpdateNodeInternals()
   const status = (nodeData as Record<string, unknown>).executionStatus as string | undefined ?? "idle"
 
@@ -283,14 +303,17 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
     [handles],
   )
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const hasUpstreamInput = useMemo(
-    () => edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
-    [edges, id, targetHandleIds],
+    () => useWorkflowStore.getState().edges.some((e) => e.target === id && e.targetHandle && targetHandleIds.has(e.targetHandle)),
+    [id, targetHandleIds, upstreamFingerprint],
   )
 
   /** Resolve rows from connected upstream nodes — respects edge outputMode and selector. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedRows = useMemo<string[][] | null>(() => {
     if (columns.length === 0) return null
+    const { nodes, edges } = useWorkflowStore.getState()
 
     const colValues: (string[] | null)[] = columns.map((col) => {
       const colInEdges = edges.filter(
@@ -333,7 +356,7 @@ function LoopNodeComponent({ id, data, selected, type }: NodeProps) {
       )
     }
     return result
-  }, [id, columns, edges, nodes])
+  }, [id, columns, upstreamFingerprint])
 
   useEffect(() => {
     updateNodeInternals(id)

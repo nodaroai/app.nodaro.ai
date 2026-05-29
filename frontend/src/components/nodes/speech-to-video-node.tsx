@@ -2,6 +2,7 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
 import { HandleWithPopover } from "./handle-with-popover"
 import { isValidSpeechToVideoConnection } from "@/lib/video-producer-handles"
@@ -77,8 +78,18 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
+
+  // Narrow subscription: a primitive fingerprint of the incoming connections
+  // and their source nodes (type + full data) instead of whole-array
+  // `s.nodes` / `s.edges`. `connectedNodes` is the only consumer; it reads
+  // upstream type/label/result fields that change during polling, so we
+  // serialize the connected sources' data wholesale (typically 1-3 nodes —
+  // cheap) to guarantee no missed field, and re-render only when an incoming
+  // connection or upstream source data changes — not on every unrelated
+  // mutation across the graph.
+  const connectedFingerprint = useWorkflowStore((s) =>
+    incomingSourcesFingerprint(s.nodes, s.edges, id),
+  )
 
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -115,7 +126,12 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
   const defaultCost = resolution === "720p" ? 8 : resolution === "580p" ? 6 : 4
   const credits = useModelCredits(creditModelId, defaultCost)
 
+  // Reads live arrays from getState(); memoized on the connected-source
+  // fingerprint so it only recomputes when an incoming connection or upstream
+  // source data changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedNodes = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const connectedEdges = edges.filter((e) => e.target === id)
     const nodeMap = new Map<string, ConnectedNodeInfo>()
 
@@ -155,7 +171,7 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
     }
 
     return Array.from(nodeMap.values())
-  }, [edges, nodes, id])
+  }, [id, connectedFingerprint])
 
   const imageNodes = useMemo(() => connectedNodes.filter((n) => n.outputType === "image"), [connectedNodes])
   const audioNodes = useMemo(() => connectedNodes.filter((n) => n.outputType === "audio"), [connectedNodes])

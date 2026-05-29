@@ -684,9 +684,16 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const userId = req.userId
     if (!userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
 
+    // Explicit column list (mirrors /browse) — excludes the heavy JSONB
+    // snapshot columns (snapshot_nodes, snapshot_edges, snapshot_settings)
+    // which the card mapper below never reads. Every field the mapper does
+    // read is listed here; keep this in sync with the mapper at ~698.
+    const mineCols =
+      "id, workflow_id, creator_id, version, slug, name, description, icon_url, is_active, is_listed, is_embeddable, allowed_origins, estimated_credits, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, thumbnail_node_id, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_display_name, total_run_count, favorite_count, created_at, publish_type, component_metadata, deleted_at"
+
     const { data: apps, error } = await supabase
       .from("published_apps")
-      .select("*, app_runs(count), workflows!workflow_id(project_id)")
+      .select(`${mineCols}, app_runs(count), workflows!workflow_id(project_id)`)
       .eq("creator_id", userId)
       .order("created_at", { ascending: false })
 

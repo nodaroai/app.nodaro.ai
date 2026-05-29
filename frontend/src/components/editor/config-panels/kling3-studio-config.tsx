@@ -687,7 +687,7 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
                           onClick={() => node.thumbUrl && handleAddFromWorkflow(i, node.thumbUrl)}
                         >
                           {node.thumbUrl ? (
-                            <img src={optimizedImageUrl(node.thumbUrl)} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
+                            <img src={optimizedImageUrl(node.thumbUrl, { width: 64 })} alt={node.label} className="w-7 h-7 rounded-lg object-cover border border-border shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
                               <ImageIcon className="w-3 h-3 text-muted-foreground/40" />

@@ -18,8 +18,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { FadeVideoData } from "@/types/nodes"
 
 function FadeVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as FadeVideoData | undefined
-  const nodeData = currentNodeData ?? (data as FadeVideoData)
+  const nodeData = data as FadeVideoData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

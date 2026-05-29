@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Download, Music } from "lucide-react"
 import { StatusBadge, GlassCard, GlassButton, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
 import { ActionMenu } from "./action-menu"
@@ -23,7 +24,7 @@ interface AudioOutputCardProps {
   actions?: OutputCardActions
 }
 
-export function AudioOutputCard({ label, status, url, nodeId, elementSize, actions }: AudioOutputCardProps) {
+function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions }: AudioOutputCardProps) {
   const heightClass = ELEMENT_SIZES.audioOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "audio", url)
   return (
@@ -85,3 +86,5 @@ export function AudioOutputCard({ label, status, url, nodeId, elementSize, actio
     </GlassCard>
   )
 }
+
+export const AudioOutputCard = memo(AudioOutputCardImpl)

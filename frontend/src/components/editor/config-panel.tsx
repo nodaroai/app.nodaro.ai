@@ -11,14 +11,12 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 const Kling3DirectorModal = lazy(() => import("@/components/editor/kling3-director-modal").then(m => ({ default: m.Kling3DirectorModal })))
-const Kling3StudioConfig = lazy(() => import("./config-panels/kling3-studio-config").then(m => ({ default: m.Kling3StudioConfig })))
 import { GenerateButton } from "@/ee/components/credits/GenerateButton"
 import { useProvidersCreditsSum } from "@/ee/hooks/use-providers-credits-sum"
 import { createClient } from "@/lib/supabase"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import {
   NODE_DEFINITIONS,
-  type ImageToVideoData,
   type TextToVideoData,
   type GenerateVideoNodeData,
   type FieldMappings,
@@ -494,9 +492,10 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "upscale-image": return <UpscaleImageConfig {...configProps} />
     case "remove-background": return <RemoveBackgroundConfig {...configProps} />
     case "generate-mask": return <GenerateMaskConfig {...configProps} />
-    case "image-to-video": return (nodeData as ImageToVideoData).provider === "kling-3.0"
-      ? <Suspense fallback={null}><Kling3StudioConfig {...configProps} /></Suspense>
-      : <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
+    // ImageToVideoConfig dispatches the kling-3.0 provider to the
+    // (lazy-loaded) Kling3StudioConfig internally — no separate branch needed
+    // here, which keeps the studio panel in a single on-demand chunk.
+    case "image-to-video": return <ImageToVideoConfig {...configProps} onUpdateNode={updateNodeData} nodeId={selectedNodeId} />
     case "video-to-video": return <VideoToVideoConfig {...configProps} nodeId={selectedNodeId} />
     case "text-to-video": return (
       <>
@@ -650,20 +649,55 @@ export function ConfigPanel() {
 
   const foundNode = nodes.find((n) => n.id === selectedNodeId)
 
+  // Topology signature that EXCLUDES the selected node's own data. Editing the
+  // selected node creates a fresh `nodes` array (and a new data object for that
+  // node) on every keystroke; keying the heavy whole-graph BFS memos directly
+  // on [nodes, edges] would re-run them all on each keystroke even though only
+  // the selected node changed. We bump `topoVersion` only when `edges` change
+  // or when ANY non-selected node's identity/type/data reference changes — so
+  // the BFS memos still recompute when an UPSTREAM node's data changes
+  // (liveRefMap reads upstream output via extractNodeOutput) but stay put while
+  // the user types into the selected node. Zustand does immutable updates, so a
+  // changed node always carries a new `data` reference (reference compare is
+  // sufficient and cheap).
+  const topoVersionRef = useRef(0)
+  const prevTopoRef = useRef<{ edges: typeof edges; sig: ReadonlyArray<unknown> } | null>(null)
+  const topoVersion = useMemo(() => {
+    const sig: unknown[] = []
+    for (const n of nodes) {
+      if (n.id === selectedNodeId) continue
+      sig.push(n.id, n.type, n.data)
+    }
+    const prev = prevTopoRef.current
+    const changed =
+      !prev ||
+      prev.edges !== edges ||
+      prev.sig.length !== sig.length ||
+      sig.some((v, i) => v !== prev.sig[i])
+    if (changed) {
+      topoVersionRef.current += 1
+      prevTopoRef.current = { edges, sig }
+    }
+    return topoVersionRef.current
+  }, [nodes, edges, selectedNodeId])
+
   const liveSources = useMemo(() => {
     if (!selectedNodeId) return [] as SourceNodeInfo[]
     return getConnectedSources(selectedNodeId, edges, nodes)
-  }, [edges, nodes, selectedNodeId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveNodeRefs = useMemo(() => {
     if (!selectedNodeId) return []
     return getUpstreamNodes(selectedNodeId, nodes, edges)
-  }, [selectedNodeId, nodes, edges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveRefMap = useMemo(() => {
     if (!selectedNodeId) return new Map<string, string>()
     return buildNodeRefMap(selectedNodeId, nodes, edges)
-  }, [selectedNodeId, nodes, edges])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoVersion, selectedNodeId])
 
   const liveHasDownstream = useMemo(() => {
     if (!selectedNodeId) return false

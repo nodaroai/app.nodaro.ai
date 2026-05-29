@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { AddCaptionsData } from "@/types/nodes"
 
 function AddCaptionsNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as AddCaptionsData | undefined
-  const nodeData = currentNodeData ?? (data as AddCaptionsData)
+  const nodeData = data as AddCaptionsData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

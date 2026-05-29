@@ -19,8 +19,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { ExtractFrameData } from "@/types/nodes"
 
 function ExtractFrameNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as ExtractFrameData | undefined
-  const nodeData = currentNodeData ?? (data as ExtractFrameData)
+  const nodeData = data as ExtractFrameData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
