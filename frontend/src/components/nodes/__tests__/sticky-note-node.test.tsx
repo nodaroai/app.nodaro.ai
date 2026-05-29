@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { StickyNoteNode } from "../sticky-note-node"
 
 vi.mock("@xyflow/react", async (importOriginal) => {
@@ -95,5 +95,21 @@ describe("StickyNoteNode", () => {
     renderNode({ data: { label: "Note", text: "", color: "#2d2d44", bold: true } })
     const textarea = screen.getByRole("textbox")
     expect(textarea).toHaveStyle({ fontWeight: 700 })
+  })
+
+  it("renders the 3-dots More options button when selected", () => {
+    renderNode({ selected: true })
+    expect(screen.getByLabelText("More options")).toBeInTheDocument()
+  })
+
+  it("dispatches open-node-context-menu when the 3-dots button is clicked", () => {
+    const handler = vi.fn()
+    window.addEventListener("open-node-context-menu", handler)
+    renderNode({ selected: true })
+    fireEvent.click(screen.getByLabelText("More options"))
+    window.removeEventListener("open-node-context-menu", handler)
+    expect(handler).toHaveBeenCalledTimes(1)
+    const evt = handler.mock.calls[0][0] as CustomEvent
+    expect(evt.detail.nodeId).toBe("node-1")
   })
 })

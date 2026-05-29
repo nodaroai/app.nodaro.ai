@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Position, type NodeProps, NodeResizer, NodeToolbar } from "@xyflow/react"
-import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown } from "lucide-react"
+import { StickyNote, Bold, Italic, AlignLeft, AlignCenter, AlignRight, List, ChevronDown, MoreHorizontal } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { EditableNodeLabel } from "./editable-node-label"
@@ -189,6 +189,27 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
             }}
           >
             <List className="w-3.5 h-3.5" />
+          </button>
+
+          <div className="w-px h-4 bg-border dark:bg-white/10 mx-1" />
+
+          {/* 3-dots "More options" — sticky-note uses custom chrome instead
+              of BaseNode, so it must reproduce BaseNode's overflow button
+              itself: dispatch the same `open-node-context-menu` event the
+              canvas listens for, giving the note the identical context menu
+              (duplicate / skip / delete / …) every other node exposes. */}
+          <button
+            type="button"
+            className="w-6 h-6 flex items-center justify-center rounded text-foreground/50 hover:text-foreground/80 hover:bg-black/5 dark:text-white/50 dark:hover:text-white/80 dark:hover:bg-white/10 transition-colors"
+            aria-label="More options"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.dispatchEvent(new CustomEvent("open-node-context-menu", {
+                detail: { nodeId: id, x: e.clientX, y: e.clientY },
+              }))
+            }}
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
         </div>
       </NodeToolbar>

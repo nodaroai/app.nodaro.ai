@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, fireEvent } from "@testing-library/react"
 import { TextPromptNode } from "../text-prompt-node"
 
 vi.mock("@xyflow/react", async (importOriginal) => {
@@ -10,6 +10,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
       <div data-testid={`handle-${id}`} data-type={type} data-position={position} />
     ),
     NodeResizer: () => null,
+    NodeResizeControl: () => null,
     NodeToolbar: ({ children, isVisible }: any) => isVisible ? <div data-testid="node-toolbar">{children}</div> : null,
     useStore: vi.fn(() => 1),
     useNodeId: vi.fn(() => "test-node"),
@@ -88,5 +89,21 @@ describe("TextPromptNode", () => {
     renderNode({ data: { label: "Prompt", text: "A very long prompt text", variables: {} } })
     const textarea = screen.getByRole("textbox") as HTMLTextAreaElement
     expect(textarea.value).toBe("A very long prompt text")
+  })
+
+  it("renders the 3-dots More options button when selected", () => {
+    renderNode({ selected: true })
+    expect(screen.getByLabelText("More options")).toBeInTheDocument()
+  })
+
+  it("dispatches open-node-context-menu when the 3-dots button is clicked", () => {
+    const handler = vi.fn()
+    window.addEventListener("open-node-context-menu", handler)
+    renderNode({ selected: true })
+    fireEvent.click(screen.getByLabelText("More options"))
+    window.removeEventListener("open-node-context-menu", handler)
+    expect(handler).toHaveBeenCalledTimes(1)
+    const evt = handler.mock.calls[0][0] as CustomEvent
+    expect(evt.detail.nodeId).toBe("node-1")
   })
 })
