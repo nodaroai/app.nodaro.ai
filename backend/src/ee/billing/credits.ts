@@ -1283,19 +1283,24 @@ export class CreditsService {
     const pricing = creditOverride !== undefined
       ? { ...dbPricing, creditCost: creditOverride }
       : dbPricing
-    let watermark: boolean
-    if (watermarkOverride !== undefined) {
-      watermark = watermarkOverride
-    } else {
-      const { data: tierProfile } = await supabase
-        .from("profiles")
-        .select("tier, subscription_tier")
-        .eq("id", userId)
-        .single()
+    // Fetch tier once — needed for the atomic daily cap below, and (unless
+    // overridden) for the watermark decision.
+    const { data: tierProfile } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier")
+      .eq("id", userId)
+      .single()
+    const userTier = tierProfile ? resolveTier(tierProfile as Record<string, unknown>) : "free"
+    const watermark = watermarkOverride !== undefined
+      ? watermarkOverride
+      : (userTier === "free" && FREE_TIER_RESTRICTIONS.watermark)
 
-      const userTier = tierProfile ? resolveTier(tierProfile as Record<string, unknown>) : "free"
-      watermark = userTier === "free" && FREE_TIER_RESTRICTIONS.watermark
-    }
+    // Daily credit cap, enforced atomically inside reserve_credits (closes the
+    // TOCTOU the read-only creditGuard preHandler left open). Free tier uses the
+    // fixed cap; paid tiers use their configured daily_credit_limit (null = no cap).
+    const dailyLimit: number | null = userTier === "free"
+      ? FREE_TIER_RESTRICTIONS.dailyCreditCap
+      : (await getTierConfig(userTier)).daily_credit_limit
 
     // Skip deduction for zero-cost models
     if (pricing.creditCost === 0) {
@@ -1329,6 +1334,7 @@ export class CreditsService {
       p_provider_cost_usd: providerCostUsd,
       p_display_cost_usd: displayCostUsd,
       p_is_app_run: isAppRun ?? false,
+      p_daily_limit: dailyLimit,
     })
 
     if (reserveError) {
