@@ -8,6 +8,7 @@ import { uploadBufferToR2 } from "../lib/storage.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { extractWorkflowId, extractForcePrivate } from "../lib/request-helpers.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeFetch } from "../lib/safe-fetch.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 
@@ -240,10 +241,23 @@ export async function voiceCloneRoutes(app: FastifyInstance) {
     }
     const { audioUrl, name } = parsed.data
 
-    const fetched = await fetch(audioUrl)
+    // safeFetch: audioUrl is user-supplied and its body is re-uploaded to a
+    // PUBLIC R2 URL we return — a raw fetch here is a full SSRF read-oracle
+    // for internal HTTP services. safeFetch gates DNS/IP at connect time
+    // (safeUrlSchema is only a syntactic check and can't see resolved IPs).
+    const fetched = await safeFetch(audioUrl, { timeoutMs: 30_000 })
     if (!fetched.ok) {
       return reply.status(400).send({
         error: { code: "fetch_failed", message: `Could not fetch audioUrl (${fetched.status})` },
+      })
+    }
+    // Early-reject oversized bodies via Content-Length before buffering them
+    // into memory (defense-in-depth alongside the post-read byteLength cap,
+    // since Content-Length can be absent or understated).
+    const declaredLength = Number(fetched.headers.get("content-length") ?? 0)
+    if (declaredLength > MAX_AUDIO_SIZE) {
+      return reply.status(413).send({
+        error: { code: "too_large", message: `Audio sample exceeds ${MAX_AUDIO_SIZE / 1024 / 1024}MB cap` },
       })
     }
     const arrayBuf = await fetched.arrayBuffer()

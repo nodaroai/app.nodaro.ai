@@ -42,6 +42,7 @@ import {
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
 import { uploadBufferToR2 } from "../../lib/storage.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
 import sharp from "sharp"
@@ -251,8 +252,11 @@ async function ensureImageForProvider(
 
   const context = constraints?.context ?? "Video generation"
 
-  // Download and inspect the image
-  const res = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) })
+  // Download and inspect the image. safeFetch (DNS+IP gate at connect time)
+  // because imageUrl is user-supplied and the bytes are decoded/processed
+  // server-side — raw fetch here is an SSRF read-oracle (safeUrlSchema is
+  // only a syntactic gate and cannot see what a hostname resolves to).
+  const res = await safeFetch(imageUrl, { timeoutMs: 30_000 })
   if (!res.ok) {
     throw createSanitizedError(
       `Failed to download image: HTTP ${res.status}`,
