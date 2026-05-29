@@ -245,6 +245,14 @@ export async function commitJobCredits(
   usageLogId: string | null | undefined,
   jobId: string,
   providerCostUsd?: number | null,
+  /**
+   * Credits for work we performed that is NOT reflected in the provider's USD
+   * cost — e.g. the loop-trim (smart-loop-cut) FFmpeg/PSNR add-on. Without
+   * this, the provider-cost reconciliation below computes actual ≈ base and
+   * commit_credits refunds the difference (the add-on), so the user gets the
+   * post-process for free. Added on top of the provider-derived credits.
+   */
+  extraNonProviderCredits = 0,
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
@@ -253,7 +261,7 @@ export async function commitJobCredits(
 
   try {
     if (providerCostUsd && providerCostUsd > 0) {
-      const [actualCredits, { data: usageLog }] = await Promise.all([
+      const [providerCredits, { data: usageLog }] = await Promise.all([
         computeActualCredits(providerCostUsd),
         supabase
           .from("usage_logs")
@@ -261,6 +269,10 @@ export async function commitJobCredits(
           .eq("id", usageLogId)
           .single(),
       ])
+      // Retained non-provider add-ons (e.g. loop-trim) are charged on top of
+      // the provider-derived credits. This also makes the anomaly check
+      // accurate (reserved included the add-on, so actual should too).
+      const actualCredits = providerCredits + Math.max(0, extraNonProviderCredits)
 
       // checkAndLogAnomaly has internal try/catch so it never rejects
       const tasks: PromiseLike<unknown>[] = [

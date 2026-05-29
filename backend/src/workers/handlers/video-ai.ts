@@ -275,6 +275,12 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // Generic smart-loop-cut post-process. Runs for any provider when
   // loopTrim.enabled. Failures are non-fatal: keep the un-trimmed output
   // and refund only the addon credits (the i2v base credits stay charged).
+  //
+  // On SUCCESS the addon must be CHARGED (we spent the compute). The success
+  // commit goes through finalizeJobWithMedia -> commitJobCredits with the
+  // provider USD cost, which reconciles actual ≈ base and would otherwise
+  // refund the addon — so we forward it as extraNonProviderCredits below.
+  let loopTrimAddonToCharge = 0
   if (loopTrim?.enabled) {
     const addonCredits = estimateLoopTrimAddonCredits(loopTrim, duration ?? 8)
     try {
@@ -287,11 +293,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
         quality: loopTrim.quality ?? "precise",
         outputSilent: sound === false ? true : undefined,
       })
+      loopTrimAddonToCharge = addonCredits
     } catch (err) {
       console.warn(
         `[worker] smart-loop-cut failed for job ${ctx.jobId}; keeping un-trimmed output:`,
         err,
       )
+      // Failure path already commits at (reserved - addon); leave addon at 0.
       await refundLoopTrimAddon(ctx.jobId, ctx.usageLogId, addonCredits)
     }
   }
@@ -344,6 +352,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     jobType: "image-to-video",
     result,
     mediaUrl: finalVideoUrl,
+    // Charge the loop-trim addon on top of provider cost when smart-loop-cut
+    // succeeded (0 otherwise — failure already refunded it).
+    extraNonProviderCredits: loopTrimAddonToCharge,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
