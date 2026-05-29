@@ -6,7 +6,7 @@ import { isDataProducer } from "@/lib/data-handles"
 import { isVisualPickerType } from "@/lib/parameter-picker-types"
 import { CustomHandle } from "./custom-handle"
 import { computeZoomFromDrag, computeVisualSize, applyMagnet } from "./zoom-math"
-import { Type, FastForward, Maximize2, AArrowUp, AArrowDown } from "lucide-react"
+import { Type, FastForward, Maximize2, AArrowUp, AArrowDown, MoreHorizontal } from "lucide-react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -374,6 +374,39 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
         icon={<Type className="w-3.5 h-3.5" />}
         onSave={(newLabel) => updateNodeData(id, { label: newLabel })}
       />
+
+      {/* 3-dots "More options" — top-right. This node uses custom chrome
+          instead of BaseNode, so it must reproduce BaseNode's overflow
+          button itself: dispatch the same `open-node-context-menu` event
+          the canvas listens for, so text-prompt gets the identical context
+          menu (duplicate / skip / delete / …) every other node exposes on
+          hover. Without this the menu was only reachable via right-click. */}
+      <NodeToolbar align="end" isVisible={selected || isHovered} position={Position.Top} offset={4}>
+        <div
+          className="flex items-center"
+          onMouseEnter={() => {
+            if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+            setIsHovered(true)
+          }}
+          onMouseLeave={() => {
+            hoverTimeoutRef.current = setTimeout(() => setIsHovered(false), 300)
+          }}
+        >
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.dispatchEvent(new CustomEvent("open-node-context-menu", {
+                detail: { nodeId: id, x: e.clientX, y: e.clientY },
+              }))
+            }}
+            aria-label="More options"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </div>
+      </NodeToolbar>
 
       {/* Two corner controls, matching the person/parameter family in
           BaseNode: bottom-right resizes the box only; bottom-left zooms
