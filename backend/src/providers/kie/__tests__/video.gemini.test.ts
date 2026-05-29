@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   )
   const mockKling3Generate = vi.fn()
   const mockUploadBufferToR2 = vi.fn()
+  const mockSafeFetch = vi.fn()
   const sharpMeta: { format: string; width: number; height: number } = {
     format: "jpeg",
     width: 1024,
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => {
     mockCreateSanitizedError,
     mockKling3Generate,
     mockUploadBufferToR2,
+    mockSafeFetch,
     sharpMeta,
   }
 })
@@ -45,6 +47,14 @@ vi.mock("../models.js", async () => {
 
 vi.mock("../../../lib/storage.js", () => ({
   uploadBufferToR2: mocks.mockUploadBufferToR2,
+}))
+
+// video.ts downloads the image via safeFetch (SSRF gate, PR #2897) — NOT global
+// fetch. Without mocking it the provider does a real DNS lookup of the test's
+// fake hostname and fails with EAI_AGAIN. Mock it to the same shape the global
+// fetch stub uses.
+vi.mock("../../../lib/safe-fetch.js", () => ({
+  safeFetch: mocks.mockSafeFetch,
 }))
 
 vi.mock("sharp", () => {
@@ -83,6 +93,11 @@ beforeEach(() => {
     ok: true,
     arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
   }))
+  mocks.mockSafeFetch.mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
+  })
   mocks.mockRunKieTask.mockResolvedValue({
     resultJson: { resultUrls: ["https://x/out.mp4"] },
     taskId: "t1",

@@ -292,6 +292,8 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 - \`elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>\`
 - \`webSearch?: boolean\`
 - \`nsfwChecker?: boolean\`
+- \`videoTrimStart?: number\`
+- \`videoTrimEnd?: number\`
 - \`loopTrim?: {
     enabled: boolean
     framesToTest?: number
