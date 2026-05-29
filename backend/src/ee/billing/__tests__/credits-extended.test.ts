@@ -181,7 +181,7 @@ describe("CreditsService — extended", () => {
         p_display_cost_usd: 0.0625,
         p_is_app_run: false,
         // p_daily_limit added in migration 169 — free-tier cap when no profile tier resolves.
-        p_daily_limit: 30,
+        p_daily_limit: 50,
       }))
 
       expect(result.usageLogId).toBe("usage-log-abc")
