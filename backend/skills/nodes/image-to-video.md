@@ -1,7 +1,7 @@
 ---
 node_type: image-to-video
-generated_at: 2026-05-18T20:51:28.596Z
-generated_from: af4193bd
+generated_at: 2026-05-29T10:18:56.937Z
+generated_from: 691ceafd
 ---
 
 # image-to-video
@@ -42,6 +42,8 @@ generated_from: af4193bd
 - `elements?: Array<{ name: string; description: string; type: "image" | "video"; urls: string[] }>`
 - `webSearch?: boolean`
 - `nsfwChecker?: boolean`
+- `videoTrimStart?: number`
+- `videoTrimEnd?: number`
 - `loopTrim?: {
     enabled: boolean
     framesToTest?: number

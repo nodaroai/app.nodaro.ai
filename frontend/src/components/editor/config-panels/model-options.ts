@@ -104,6 +104,7 @@ export const VIDEO_I2V_MODELS = [
   { value: "kling-3-omni", label: "Kling 3 Omni", desc: "Replicate, 3–15s, 720p/1080p, end frame + up to 7 reference images" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
+  { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 
 export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: string; desc: string }[] = [
@@ -128,6 +129,7 @@ export const VIDEO_T2V_MODELS: readonly { value: TextToVideoProvider; label: str
   { value: "happyhorse",   label: "HappyHorse", desc: "3–15s, 720p/1080p" },
   { value: "ltx-2.3-pro", label: "LTX 2.3 Pro", desc: "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K" },
   { value: "ltx-2.3-fast", label: "LTX 2.3 Fast", desc: "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s" },
+  { value: "gemini-omni-video", label: "Gemini Omni", desc: "Google, 4–10s, 720p/1080p/4K, native audio, refs + video-edit" },
 ]
 
 /** Unified generate-video model list — VIDEO_I2V_MODELS ∪ VIDEO_T2V_MODELS,
@@ -449,6 +451,7 @@ export const VIDEO_PROVIDER_FALLBACKS: Record<string, number> = {
   "wan-2.7-i2v": 24, "wan-2.7-t2v": 24,
   "happyhorse": 16, "happyhorse-i2v": 16, "happyhorse-ref2v": 19, "happyhorse-edit": 25,
   "kling-3-omni": 32,
+  "gemini-omni-video": 47,
 }
 
 /** Aspect ratio options supported by Seedance 2.0 (includes 4:3, 3:4, 21:9, adaptive). */

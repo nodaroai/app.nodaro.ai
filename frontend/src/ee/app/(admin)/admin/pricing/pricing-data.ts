@@ -232,6 +232,7 @@ export const MODEL_REFERENCE: Readonly<Record<string, ModelReferenceData>> = {
   // Replicate $/sec rate before merge (Phase 5).
   "ltx-2.3-pro":  { provider: "Replicate", providerCostUsd: 4.800, markupPct: 25 },  // 300 cr placeholder (1080p:6s)
   "ltx-2.3-fast": { provider: "Replicate", providerCostUsd: 2.400, markupPct: 25 },  // 150 cr placeholder (1080p:6s)
+  "gemini-omni-video": { provider: "gemini-omni-video", providerCostUsd: 0.45, markupPct: 25 },
   "luma-modify":       { provider: "KIE.ai",    providerCostUsd: 0.500, markupPct: 25 },  // ~100 KIE cr (estimated)
   "topaz-video":       { provider: "KIE.ai",    providerCostUsd: 0.060, markupPct: 25 },  // 12 KIE cr (upscale 1x/2x/4x)
   "motion-transfer":   { provider: "KIE.ai",    providerCostUsd: 0.300, markupPct: 25 },  // 6 cr/sec × 10s (kling 2.6 720p)

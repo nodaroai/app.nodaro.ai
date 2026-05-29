@@ -77,6 +77,8 @@ export interface ProviderOptions {
   referenceImageUrls?: string[] // Reference images for generation (e.g., VEO 3 reference-to-video, Seedance 2 max 9)
   referenceVideoUrls?: string[] // Reference videos for generation (Seedance 2, max 3)
   referenceAudioUrls?: string[] // Reference audio tracks for generation (Seedance 2, max 3)
+  videoTrimStart?: number  // Gemini Omni V2V: source-clip trim start (seconds)
+  videoTrimEnd?: number    // Gemini Omni V2V: source-clip trim end (seconds, ends-start ≤ 10)
   webSearch?: boolean      // Enable online search capability (Seedance 2, required field)
   nsfwChecker?: boolean    // Toggle NSFW content filter (Seedance 2)
   generationType?: string // Generation type (e.g., "TEXT_2_VIDEO", "FIRST_AND_LAST_FRAMES_2_VIDEO", "REFERENCE_2_VIDEO")

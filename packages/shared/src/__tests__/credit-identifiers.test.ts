@@ -679,3 +679,36 @@ describe("buildMotionCreditModelIdentifier", () => {
     })
   })
 })
+
+// ---------------------------------------------------------------------------
+// gemini-omni-video credit identifier
+// ---------------------------------------------------------------------------
+describe("gemini-omni-video", () => {
+  const id = (opts: { duration?: number | string; resolution?: string; hasVideoRef?: boolean; nodeType?: "image-to-video" | "text-to-video" }) =>
+    buildVideoCreditModelIdentifier("gemini-omni-video", opts.duration, undefined, opts.nodeType ?? "image-to-video", undefined, opts.resolution, opts.hasVideoRef)
+
+  it("prices 720p/1080p by duration tier", () => {
+    expect(id({ duration: 4, resolution: "720p" })).toBe("gemini-omni-video:4")
+    expect(id({ duration: 6, resolution: "1080p" })).toBe("gemini-omni-video:6")
+    expect(id({ duration: 8, resolution: "720p" })).toBe("gemini-omni-video:8")
+    expect(id({ duration: 10, resolution: "1080p" })).toBe("gemini-omni-video:10")
+  })
+  it("prices 4k by duration tier", () => {
+    expect(id({ duration: 4, resolution: "4k" })).toBe("gemini-omni-video:4k:4")
+    expect(id({ duration: 10, resolution: "4k" })).toBe("gemini-omni-video:4k:10")
+  })
+  it("prices V2V flat, ignoring duration", () => {
+    expect(id({ duration: 8, resolution: "1080p", hasVideoRef: true })).toBe("gemini-omni-video:vref")
+    expect(id({ duration: 8, resolution: "4k", hasVideoRef: true })).toBe("gemini-omni-video:4k:vref")
+  })
+  it("snaps off-tier durations to nearest allowed tier (never :5)", () => {
+    expect(id({ duration: 5, resolution: "720p" })).toBe("gemini-omni-video:4")
+    expect(id({ duration: 12, resolution: "720p" })).toBe("gemini-omni-video:10")
+  })
+  it("defaults to tier 8 when duration is undefined", () => {
+    expect(id({ resolution: "720p" })).toBe("gemini-omni-video:8")
+  })
+  it("works on the text-to-video path too", () => {
+    expect(id({ duration: 6, resolution: "720p", nodeType: "text-to-video" })).toBe("gemini-omni-video:6")
+  })
+})

@@ -884,6 +884,16 @@ async function executeWorkerNode(
 
   if (hasCredits() && modelIdentifier !== "ffmpeg") {
     try {
+      // Free-tier / blocked-models gate. reserveCredits does NOT check
+      // blockedModels, so without this a free-tier workflow/app run could
+      // generate a blocked model (e.g. 4K gemini-omni-video). checkCredits
+      // self-fetches the profile and reports blocked/over-limit; the
+      // surrounding catch deletes the orphaned pending jobs row on throw.
+      const preflight = await CreditsService.checkCredits(ctx.userId, modelIdentifier, ctx.isAppRun)
+      if (!preflight.allowed) {
+        throw new Error(preflight.error ?? "Model not available on your plan or insufficient credits")
+      }
+
       const reservation = await CreditsService.reserveCredits(
         ctx.userId,
         jobId,

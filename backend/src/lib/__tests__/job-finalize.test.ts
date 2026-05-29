@@ -176,7 +176,8 @@ describe("finalizeJobWithMedia", () => {
       false,
     )
     expect(sharedMocks.markJobCompleted).toHaveBeenCalledTimes(1)
-    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", 0.02)
+    // 4th arg = extraNonProviderCredits (undefined here — no loop-trim addon).
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith("u-log-1", "j1", 0.02, undefined)
     expect(sharedMocks.createAssetFromJob).toHaveBeenCalledWith("j1", "u1")
   })
 
@@ -274,7 +275,7 @@ describe("finalizeJobWithMedia", () => {
     })
 
     expect(result.ok).toBe(true)
-    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith(null, "j1", 0.02)
+    expect(sharedMocks.commitJobCredits).toHaveBeenCalledWith(null, "j1", 0.02, undefined)
   })
 
   // -------------------------------------------------------------------------

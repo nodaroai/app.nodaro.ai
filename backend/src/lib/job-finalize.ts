@@ -172,6 +172,10 @@ export interface FinalizeInput {
    *  provider-meta extras). Useful for video handlers that need to record
    *  a thumbnail alongside the main URL. */
   extraOutputData?: Record<string, unknown>
+  /** Credits for work NOT reflected in the provider's USD cost (e.g. a
+   *  successful loop-trim add-on). Passed through to commitJobCredits so the
+   *  provider-cost reconciliation doesn't refund it. Defaults to none. */
+  extraNonProviderCredits?: number
 }
 
 /**
@@ -275,7 +279,7 @@ export async function finalizeJobWithMedia(
 
   // 5. Commit credits (idempotent: CAS on usage_logs.status='reserved' inside
   //    commitJobCredits; null usageLogId is a graceful no-op).
-  await commitJobCredits(usageLogId, jobId, result.cost)
+  await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits)
 
   // 6. Create asset record so the output appears in /library.
   await createAssetFromJob(jobId, job.user_id ?? undefined)

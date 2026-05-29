@@ -17,6 +17,7 @@ import { runFluxKontextTask } from "./kontext-client.js"
 import { KIE_IMAGE_MODELS } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { uploadBufferToR2 } from "../../lib/storage.js"
+import { safeFetch } from "../../lib/safe-fetch.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
 // Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
@@ -53,7 +54,10 @@ const RATIO_TO_NAMED_SIZE: Record<string, string> = {
  * Download an image and return its buffer + dimensions.
  */
 async function downloadAndMeasure(url: string): Promise<{ buffer: Buffer; width: number; height: number }> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+  // safeFetch: url is user-supplied (image/mask URL for ideogram-edit etc.)
+  // and the bytes are decoded server-side — guard against SSRF (DNS rebinding
+  // to internal IPs) at connect time, not just the syntactic safeUrlSchema.
+  const res = await safeFetch(url, { timeoutMs: 30_000 })
   if (!res.ok) throw new Error(`Failed to download image: ${res.status}`)
   const buffer = Buffer.from(await res.arrayBuffer())
   const meta = await sharp(buffer).metadata()

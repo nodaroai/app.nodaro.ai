@@ -26,7 +26,7 @@ export const textToVideoBody = z.object({
   multiShot: z.boolean().optional(),
   shots: shotsSchema.optional(),
   elements: elementsSchema.optional(),
-  seed: z.number().int().min(10000).max(99999).optional(),
+  seed: z.number().int().min(0).max(2147483647).optional(),
   resolution: z.string().optional(),
   generateAudio: z.boolean().optional(),
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_REF_LIMITS.images).optional(),

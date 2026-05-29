@@ -2036,7 +2036,13 @@ export function executeNode(
     const hasImage = Boolean(
       inputs.startFrameUrl || inputs.endFrameUrl || inputs.imageUrl || overrideMediaUrl,
     );
-    const syntheticType = (hasImage ? "image-to-video" : "text-to-video") as SceneNodeType;
+    // A connected source video routes to image-to-video ONLY for gemini-omni-video
+    // (its V2V mode), matching the backend payload-builder's gemini-scoped override.
+    // Other providers (e.g. seedance-2) keep the start-frame-only i2v/t2v split.
+    const hasGeminiVideoRef =
+      (node.data as { provider?: string } | undefined)?.provider === "gemini-omni-video" &&
+      Boolean((inputs.referenceVideoUrls as string[] | undefined)?.length);
+    const syntheticType = ((hasImage || hasGeminiVideoRef) ? "image-to-video" : "text-to-video") as SceneNodeType;
     const syntheticNode = { ...node, type: syntheticType } as WorkflowNode;
     return executeNode(syntheticNode, ctx, overridePrompt, overrideMediaUrl, listIterationIndex, runId);
   }
@@ -2265,6 +2271,8 @@ export function executeNode(
         seedance2InputMode: i2vData.seedance2InputMode,
         enableTranslation: i2vData.enableTranslation,
         loopTrim: i2vData.loopTrim,
+        videoTrimStart: i2vData.videoTrimStart,
+        videoTrimEnd: i2vData.videoTrimEnd,
         // Identity injection — populated by node-input-resolver when an upstream
         // Character has injectIdentityInPrompts + characterDbId.
         ...(inputs.injectCharacterContext && inputs.attachToCharacterId

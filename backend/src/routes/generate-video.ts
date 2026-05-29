@@ -71,6 +71,21 @@ export const generateVideoBody = z.object({
   injectCharacterContext: z.boolean().optional().default(false),
   attachToCharacterId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
+  videoTrimStart: z.number().int().min(0).optional(),
+  videoTrimEnd: z.number().int().min(0).optional(),
+}).superRefine((b, ctx) => {
+  // Validate the EFFECTIVE trim window when EITHER bound is supplied — a one-sided
+  // value still resolves a window at the provider (start ?? 0, ends ?? start+10),
+  // so e.g. videoTrimEnd:30 alone (→ 0..30) must be rejected here, not at KIE.
+  if (b.videoTrimStart != null || b.videoTrimEnd != null) {
+    const start = b.videoTrimStart ?? 0
+    const ends = b.videoTrimEnd ?? start + 10
+    if (ends <= start) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "videoTrimEnd must be greater than videoTrimStart", path: ["videoTrimEnd"] })
+    } else if (ends - start > 10) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "trim window must be ≤ 10 seconds", path: ["videoTrimEnd"] })
+    }
+  }
 })
 
 const IDENTITY_PRESERVE_SUFFIX =
@@ -126,7 +141,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       })
     }
 
-    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode } = parsed.data
+    const { audioUrl, prompt: rawPrompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, webSearch, nsfwChecker, generationType, autoLoopTrim, loopTrim: rawLoopTrim, enableTranslation, seedance2InputMode, videoTrimStart, videoTrimEnd } = parsed.data
     let prompt = rawPrompt
 
     // Seedance 2: strip inputs that belong to the inactive mode — hidden handles leave
@@ -186,7 +201,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       }
     }
 
-    const hasMultimodalRef = isS2 && (
+    const hasMultimodalRef = (isS2 || provider === "gemini-omni-video") && (
       (referenceVideoUrls?.length ?? 0) > 0 ||
       (referenceAudioUrls?.length ?? 0) > 0 ||
       (referenceImageUrls?.length ?? 0) > 0
@@ -286,6 +301,8 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       generationType,
       loopTrim,
       enableTranslation,
+      videoTrimStart,
+      videoTrimEnd,
       usageLogId,
     })
 

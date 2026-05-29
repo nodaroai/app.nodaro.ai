@@ -49,7 +49,12 @@ vi.mock("../../ee/services/credits.js", () => ({
   },
 }))
 
-import { refundJobCredits, refundLoopTrimAddon } from "../shared.js"
+import { refundJobCredits, refundLoopTrimAddon, isFinalJobAttempt } from "../shared.js"
+
+// Minimal BullMQ Job shape for isFinalJobAttempt.
+function fakeJob(attemptsMade: number, attempts?: number) {
+  return { attemptsMade, opts: { attempts } } as unknown as Parameters<typeof isFinalJobAttempt>[0]
+}
 
 beforeEach(() => {
   hasCreditsState.enabled = true
@@ -216,5 +221,35 @@ describe("refundLoopTrimAddon", () => {
     mockUsageLog(25)
     commitCreditsSpy.mockRejectedValueOnce(new Error("commit failed"))
     await expect(refundLoopTrimAddon("job-1", "usage-1", 5)).resolves.not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isFinalJobAttempt — gate that prevents refunding (and thus free generations)
+// on a non-final BullMQ attempt. Must be the exact inverse of BullMQ's
+// shouldRetryJob: retry iff attemptsMade + 1 < opts.attempts.
+// ---------------------------------------------------------------------------
+
+describe("isFinalJobAttempt", () => {
+  it("video queue (attempts:3): only the 3rd processing (attemptsMade=2) is final", () => {
+    // attemptsMade is 0 during the first processing in BullMQ v5.
+    expect(isFinalJobAttempt(fakeJob(0, 3))).toBe(false) // 1st run → will retry
+    expect(isFinalJobAttempt(fakeJob(1, 3))).toBe(false) // 2nd run → will retry
+    expect(isFinalJobAttempt(fakeJob(2, 3))).toBe(true)  // 3rd run → terminal
+  })
+
+  it("render queue (attempts:4): only the 4th processing (attemptsMade=3) is final", () => {
+    expect(isFinalJobAttempt(fakeJob(0, 4))).toBe(false)
+    expect(isFinalJobAttempt(fakeJob(1, 4))).toBe(false)
+    expect(isFinalJobAttempt(fakeJob(2, 4))).toBe(false)
+    expect(isFinalJobAttempt(fakeJob(3, 4))).toBe(true)
+  })
+
+  it("treats missing opts.attempts as 1 (single attempt → always final)", () => {
+    expect(isFinalJobAttempt(fakeJob(0, undefined))).toBe(true)
+  })
+
+  it("attempts:1 → the only attempt is final", () => {
+    expect(isFinalJobAttempt(fakeJob(0, 1))).toBe(true)
   })
 })

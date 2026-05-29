@@ -682,6 +682,15 @@ export const KIE_VIDEO_MODELS: Record<string, KieModelConfig> = {
     allowedDurations: [5, 10],
     supportsEndFrame: false,
   },
+
+  // Gemini Omni Video — multimodal I2V/V2V/T2V via standard market endpoint.
+  // See: docs.kie.ai (gemini-omni-video)
+  "gemini-omni-video": {
+    model: "gemini-omni-video",
+    credits: 90,               // KIE credits for the cheapest tier (audit display)
+    cost: 0.45,                // USD display fallback only — real cost via STATIC composites
+    allowedDurations: [4, 6, 8, 10],
+  },
 }
 
 // =============================================================================
@@ -855,6 +864,14 @@ export const KIE_TEXT_TO_VIDEO_MODELS: Record<string, KieModelConfig> = {
     ***REDACTED-OSS-SCRUB***
     extraParams: { duration: 5, quality: "720p", aspectRatio: "16:9" },
     allowedDurations: [5, 10],
+  },
+
+  // Gemini Omni Video T2V — multimodal text-to-video via standard market endpoint.
+  "gemini-omni-video": {
+    model: "gemini-omni-video",
+    credits: 90,               // KIE credits for the cheapest tier (audit display)
+    cost: 0.45,                // USD display fallback only — real cost via STATIC composites
+    allowedDurations: [4, 6, 8, 10],
   },
 
   // Wan 2.7 T2V — 2–15s, 720p/1080p

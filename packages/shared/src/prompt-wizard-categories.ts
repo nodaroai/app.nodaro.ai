@@ -229,6 +229,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "happyhorse":   "HappyHorse T2V — 3–15s, 720p/1080p",
     "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — text/image/audio→video, 6–10s, up to 4K",
     "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — text/image→video, 6–20s, up to 4K",
+    "gemini-omni-video": "Google Gemini Omni — multimodal video with native audio, 4–10s, up to 4K.",
   },
   "image-to-video": {
     "minimax": "Versatile animation from still images",
@@ -257,6 +258,7 @@ export const PROVIDER_CAPABILITIES: Record<string, Record<string, string>> = {
     "happyhorse-ref2v": "HappyHorse Ref2V — multi-ref image to video, 3–15s",
     "ltx-2.3-pro":  "Lightricks LTX 2.3 Pro — start/end frame i2v + audio→video, 6–10s, up to 4K",
     "ltx-2.3-fast": "Lightricks LTX 2.3 Fast — start/end frame i2v, 6–20s, up to 4K",
+    "gemini-omni-video": "Google Gemini Omni — multimodal video with native audio, 4–10s, up to 4K.",
   },
   "video-to-video": {
     "wan": "Style transfer and video transformation",

@@ -33,7 +33,7 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
 import { ModelSelectOption } from "./model-select-option"
@@ -1982,6 +1982,23 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
     } else if (currentFps !== undefined) {
       updates.fps = undefined
     }
+    // Gemini Omni only supports 16:9 / 9:16 — snap a stale wide ratio (1:1, 21:9,
+    // 4:3, adaptive, Auto) carried over from another provider so the unsupported
+    // value isn't persisted and sent to KIE. Scoped to gemini to avoid disturbing
+    // providers whose valid aspect set differs (e.g. VEO's "Auto").
+    if (currentProvider === "gemini-omni-video") {
+      const geminiRatios = getAspectRatiosForVideoModel("gemini-omni-video").map((o) => o.value)
+      if (data.aspectRatio && !geminiRatios.includes(data.aspectRatio as string)) {
+        updates.aspectRatio = geminiRatios[0] as ImageToVideoData["aspectRatio"]
+      }
+      // Persist the 8s default when duration is unset so the dropdown, the credit
+      // identifier, and the KIE payload all agree (the credit id + provider both
+      // default to 8 when undefined, while the dropdown would otherwise show the
+      // first option, 4s). The generic snap above handles non-tier values (e.g. 5→4).
+      if (data.duration == null) {
+        updates.duration = 8
+      }
+    }
     if (Object.keys(updates).length > 0) {
       onUpdate(updates as Partial<ImageToVideoData>)
     }
@@ -2073,7 +2090,14 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
     [sources],
   )
 
-  const maxRefImages = currentProvider === "grok-i2v" ? 6 : currentProvider === "kling-3-omni" ? 7 : 3
+  // Gemini Omni shares a 7-unit input budget: images (1 each) + startFrame (1) +
+  // videos (2 each) ≤ 7. Surface the remaining image budget in the label and an
+  // over-quota warning below, so the user isn't surprised by the runtime rejection.
+  const geminiVideoCount = connectedRefVideos.length
+  const geminiHasStartFrame = connectedImages.some((i) => i.targetHandle === "startFrame")
+  const geminiQuotaUsed = (geminiHasStartFrame ? 1 : 0) + connectedRefImages.length + geminiVideoCount * 2
+  const geminiQuotaExceeded = currentProvider === "gemini-omni-video" && geminiQuotaUsed > 7
+  const maxRefImages = currentProvider === "grok-i2v" ? 6 : currentProvider === "kling-3-omni" ? 7 : currentProvider === "gemini-omni-video" ? Math.max(0, 7 - geminiVideoCount * 2 - (geminiHasStartFrame ? 1 : 0)) : 3
 
   const hasEndFrame = connectedImages.some((img) => img.targetHandle === "endFrame")
   const seedance2Conflict = isSeedance2 && hasEndFrame && connectedRefImages.length > 0
@@ -2345,6 +2369,7 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
           <Select
             value={String(allowedDurations.includes(data.duration as number) ? data.duration : allowedDurations[0])}
             onValueChange={(v) => onUpdate({ duration: parseInt(v, 10) })}
+            disabled={currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0}
           >
             <SelectTrigger aria-label="Duration (seconds)"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -2363,6 +2388,9 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
           />
         )}
       </MappableField>
+      {currentProvider === "gemini-omni-video" && connectedRefVideos.length > 0 && (
+        <p className="text-[11px] text-muted-foreground">Duration is set automatically from the source clip.</p>
+      )}
       {allowedDurations && allowedDurations.length === 1 && (
         <p className="text-xs text-muted-foreground px-1">
           {`${currentProvider || "This provider"} produces ~${allowedDurations[0]} second videos.`}
@@ -2778,6 +2806,64 @@ export function GenerateVideoConfig({ data: rawData, onUpdate: rawOnUpdate, sour
             </SelectContent>
           </Select>
         </div>
+      )}
+
+      {currentProvider === "gemini-omni-video" && (
+        <>
+          {geminiQuotaExceeded && (
+            <div className="rounded border border-red-500/40 bg-red-500/10 p-2 text-[11px] leading-snug text-red-300">
+              Too many inputs for Gemini Omni: images + 2×videos must be ≤ 7 (currently {geminiQuotaUsed}). The start frame and each reference image count as 1; each source video counts as 2. Remove some inputs before generating.
+            </div>
+          )}
+          <MappableField field="resolution" label="Resolution" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <Select value={(data.resolution as string) || "720p"} onValueChange={(v) => onUpdate({ resolution: v })}>
+              <SelectTrigger aria-label="Resolution"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(getVideoResolutionOptions("gemini-omni-video") ?? []).map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </MappableField>
+          <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
+            <AspectRatioSelector
+              options={getAspectRatiosForVideoModel("gemini-omni-video")}
+              value={(data.aspectRatio as string) || "16:9"}
+              onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
+            />
+          </MappableField>
+          {connectedRefVideos.length > 0 && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Source clip trim (seconds, ≤10s window)</label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  value={(data.videoTrimStart as number) ?? 0}
+                  onChange={(e) => {
+                    const start = Math.max(0, Math.floor(Number(e.target.value) || 0))
+                    // Re-clamp end so raising start past it can't create an inverted /
+                    // >10s window that the backend would reject only at submit.
+                    const end = (data.videoTrimEnd as number) ?? start + 10
+                    onUpdate({ videoTrimStart: start, videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
+                  }}
+                  placeholder="start"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  value={(data.videoTrimEnd as number) ?? 10}
+                  onChange={(e) => {
+                    const start = (data.videoTrimStart as number) ?? 0
+                    const end = Math.floor(Number(e.target.value) || 0)
+                    onUpdate({ videoTrimEnd: Math.min(Math.max(end, start + 1), start + 10) })
+                  }}
+                  placeholder="end"
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {lightboxImage && (

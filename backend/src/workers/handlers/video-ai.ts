@@ -184,7 +184,7 @@ async function dispatchLtxIfRequested(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, enableTranslation, videoTrimStart, videoTrimEnd } = job.data as {
     jobId: string
     imageUrl?: string
     endFrameUrl?: string
@@ -219,6 +219,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
       quality?: "lossless" | "precise"
     }
     enableTranslation?: boolean
+    videoTrimStart?: number
+    videoTrimEnd?: number
   }
 
   // LTX 2.3 short-circuits the i2v router — it has its own Replicate
@@ -261,7 +263,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   )
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -275,6 +277,12 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   // Generic smart-loop-cut post-process. Runs for any provider when
   // loopTrim.enabled. Failures are non-fatal: keep the un-trimmed output
   // and refund only the addon credits (the i2v base credits stay charged).
+  //
+  // On SUCCESS the addon must be CHARGED (we spent the compute). The success
+  // commit goes through finalizeJobWithMedia -> commitJobCredits with the
+  // provider USD cost, which reconciles actual ≈ base and would otherwise
+  // refund the addon — so we forward it as extraNonProviderCredits below.
+  let loopTrimAddonToCharge = 0
   if (loopTrim?.enabled) {
     const addonCredits = estimateLoopTrimAddonCredits(loopTrim, duration ?? 8)
     try {
@@ -287,11 +295,13 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
         quality: loopTrim.quality ?? "precise",
         outputSilent: sound === false ? true : undefined,
       })
+      loopTrimAddonToCharge = addonCredits
     } catch (err) {
       console.warn(
         `[worker] smart-loop-cut failed for job ${ctx.jobId}; keeping un-trimmed output:`,
         err,
       )
+      // Failure path already commits at (reserved - addon); leave addon at 0.
       await refundLoopTrimAddon(ctx.jobId, ctx.usageLogId, addonCredits)
     }
   }
@@ -344,6 +354,9 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     jobType: "image-to-video",
     result,
     mediaUrl: finalVideoUrl,
+    // Charge the loop-trim addon on top of provider cost when smart-loop-cut
+    // succeeded (0 otherwise — failure already refunded it).
+    extraNonProviderCredits: loopTrimAddonToCharge,
     extraOutputData: {
       thumbnailUrl: thumbUrl,
       ...buildProviderMeta(result),
