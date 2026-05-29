@@ -164,5 +164,56 @@ export async function reconcileInflightJobs(): Promise<ReconcileResult> {
     }
   }
 
+  await sweepNeverStartedJobs(result)
+
   return result
+}
+
+/** Jobs created but never picked up by a worker sit at `status='pending'` with
+ *  `provider_call_started_at IS NULL` — past this age they're orphaned. Long
+ *  enough that a legitimately-queued job (even behind a busy worker) has had
+ *  ample time to start; workers normally claim within seconds. */
+const NEVER_STARTED_STALE_MS = 30 * 60 * 1000
+
+/**
+ * Sweep jobs that were created but never started a provider call. The main scan
+ * above requires `provider_call_started_at IS NOT NULL` (it reconciles against
+ * an upstream task), so a job whose creating drive died before the worker
+ * claimed it is invisible there and accumulates forever — thousands piled up
+ * from pipeline drives killed by deploys / hard-timeouts. Mark each failed +
+ * refund its reserved credits via the same `sweepStaleSyncJob` path.
+ */
+async function sweepNeverStartedJobs(result: ReconcileResult): Promise<void> {
+  const cutoff = new Date(Date.now() - NEVER_STARTED_STALE_MS).toISOString()
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, provider_kind, reconcile_attempts")
+    .eq("status", "pending")
+    .is("provider_call_started_at", null)
+    .lt("created_at", cutoff)
+    .limit(BATCH_LIMIT)
+
+  if (error) {
+    console.error(`[reconcile/cron] never-started query failed:`, error.message)
+    result.errors++
+    return
+  }
+
+  for (const row of data ?? []) {
+    result.scanned++
+    try {
+      await sweepStaleSyncJob({
+        id: row.id as string,
+        provider_kind: (row.provider_kind as string | null) ?? null,
+        reconcile_attempts: (row.reconcile_attempts as number | null) ?? 0,
+      })
+      result.swept++
+    } catch (err) {
+      console.error(
+        `[reconcile/cron] never-started sweep failed for job ${row.id}:`,
+        err,
+      )
+      result.errors++
+    }
+  }
 }

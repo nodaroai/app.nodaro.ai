@@ -3,20 +3,39 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   rows: [] as any[],
   selectChain: { data: null as any[] | null, error: null as { message: string } | null },
+  // Rows returned by the never-started sweep query (the one using `.is(...)`).
+  // Defaults empty so pre-existing tests (which only seed `rows`) are unaffected.
+  neverStartedRows: [] as any[],
+  neverStartedChain: { data: null as any[] | null, error: null as { message: string } | null },
 }))
 
 vi.mock("../../supabase.js", () => ({
   supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn().mockReturnThis(),
-      in: vi.fn().mockReturnThis(),
-      not: vi.fn().mockReturnThis(),
-      lt: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockImplementation(() => Promise.resolve({
-        data: mocks.selectChain.data ?? mocks.rows,
-        error: mocks.selectChain.error,
-      })),
-    })),
+    from: vi.fn(() => {
+      // The main candidate query uses `.not(...)`; the never-started sweep uses
+      // `.is("provider_call_started_at", null)`. Track which one this builder is
+      // so `.limit()` returns the right fixture set.
+      let isNeverStarted = false
+      const chain: any = {
+        select: vi.fn(() => chain),
+        in: vi.fn(() => chain),
+        not: vi.fn(() => chain),
+        eq: vi.fn(() => chain),
+        is: vi.fn(() => {
+          isNeverStarted = true
+          return chain
+        }),
+        lt: vi.fn(() => chain),
+        limit: vi.fn(() =>
+          Promise.resolve(
+            isNeverStarted
+              ? { data: mocks.neverStartedChain.data ?? mocks.neverStartedRows, error: mocks.neverStartedChain.error }
+              : { data: mocks.selectChain.data ?? mocks.rows, error: mocks.selectChain.error },
+          ),
+        ),
+      }
+      return chain
+    }),
   },
 }))
 
@@ -47,6 +66,9 @@ describe("reconcileInflightJobs", () => {
     mocks.rows.length = 0
     mocks.selectChain.data = null
     mocks.selectChain.error = null
+    mocks.neverStartedRows.length = 0
+    mocks.neverStartedChain.data = null
+    mocks.neverStartedChain.error = null
     ;(sweepStaleSyncJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileKieJob as ReturnType<typeof vi.fn>).mockClear()
     ;(reconcileReplicateJob as ReturnType<typeof vi.fn>).mockClear()
@@ -213,5 +235,32 @@ describe("reconcileInflightJobs", () => {
     const result = await reconcileInflightJobs()
     expect(result.scanned).toBe(0)
     expect(result.errors).toBe(0)  // pre-loop select error is recorded but not counted here
+  })
+
+  it("sweeps never-started pending jobs (provider_call_started_at IS NULL) the main scan can't see", async () => {
+    // These jobs were created but never claimed by a worker, so they have no
+    // provider_call_started_at and are excluded from the main candidate query.
+    // The never-started sweep must mark them failed + refund via sweepStaleSyncJob.
+    mocks.neverStartedRows.push(
+      { id: "j-orphan-1", provider_kind: null, reconcile_attempts: 0 },
+      { id: "j-orphan-2", provider_kind: null, reconcile_attempts: 2 },
+    )
+    const result = await reconcileInflightJobs()
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-1" }))
+    expect(sweepStaleSyncJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-orphan-2" }))
+    expect(result.swept).toBe(2)
+  })
+
+  it("never-started sweep does not run for the main candidate set (no double-processing)", async () => {
+    // A started+stale job goes through the main path only; the never-started
+    // query returns empty, so it isn't swept twice.
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    mocks.rows.push({
+      id: "j-started", status: "processing", provider_kind: "anthropic-sync",
+      provider_task_id: null, provider_call_started_at: stale, reconcile_attempts: 0,
+    })
+    const result = await reconcileInflightJobs()
+    expect(result.swept).toBe(1)
+    expect(sweepStaleSyncJob).toHaveBeenCalledTimes(1)
   })
 })
