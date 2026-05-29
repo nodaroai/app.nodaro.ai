@@ -115,8 +115,8 @@ describe("stripe-config", () => {
   })
 
   describe("FREE_TIER_RESTRICTIONS", () => {
-    it("dailyCreditCap is 30", () => {
-      expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(30)
+    it("dailyCreditCap is 50", () => {
+      expect(FREE_TIER_RESTRICTIONS.dailyCreditCap).toBe(50)
     })
 
     it("blockedModels includes veo3", () => {
