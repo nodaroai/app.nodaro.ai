@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
   )
   const mockKling3Generate = vi.fn()
   const mockUploadBufferToR2 = vi.fn()
+  const mockSafeFetch = vi.fn()
   // Mutable so a test can simulate a PNG / oversized image driving conversion.
   const sharpMeta: { format: string; width: number; height: number } = {
     format: "jpeg",
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => {
     mockCreateSanitizedError,
     mockKling3Generate,
     mockUploadBufferToR2,
+    mockSafeFetch,
     sharpMeta,
   }
 })
@@ -46,6 +48,12 @@ vi.mock("../models.js", async () => {
 
 vi.mock("../../../lib/storage.js", () => ({
   uploadBufferToR2: mocks.mockUploadBufferToR2,
+}))
+
+// ensureImageForProvider now downloads via safeFetch (SSRF guard) instead of
+// global fetch — mock it to return a tiny fake buffer.
+vi.mock("../../../lib/safe-fetch.js", () => ({
+  safeFetch: mocks.mockSafeFetch,
 }))
 
 // Mock sharp so ensureImageForProvider doesn't need real image data. The chain
@@ -84,11 +92,12 @@ beforeEach(() => {
   mocks.mockUploadBufferToR2.mockResolvedValue(
     "https://cdn.nodaro.ai/images/provider-converted-test.jpg",
   )
-  // Mock global fetch for ensureImageForProvider (returns a tiny fake buffer)
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+  // Mock safeFetch for ensureImageForProvider (returns a tiny fake buffer)
+  mocks.mockSafeFetch.mockResolvedValue({
     ok: true,
+    status: 200,
     arrayBuffer: () => Promise.resolve(new ArrayBuffer(100)),
-  }))
+  })
   mocks.mockRunKieTask.mockResolvedValue({
     resultJson: { resultUrls: ["https://cdn.kie.ai/video.mp4"] },
   })
