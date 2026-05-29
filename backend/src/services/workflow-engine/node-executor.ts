@@ -511,10 +511,15 @@ async function executeSyncHttpNode(
 
   const output = buildNodeOutputFromJobData(result, node.type)
 
+  // Sync result with no job row: surface any credits the route reported so the
+  // execution total isn't under-counted (most sync-HTTP nodes return a jobId and
+  // take the path above; this covers the rare no-job responders).
+  const reportedCredits = result.creditsUsed ?? result.creditsReserved
   return {
     output,
     jobId: result.jobId as string | undefined,
     usageLogId: result.usageLogId as string | undefined,
+    creditsUsed: typeof reportedCredits === "number" ? reportedCredits : undefined,
   }
 }
 
@@ -986,10 +991,12 @@ async function pollJobToCompletion(
       }
     }
 
-    // Poll job status
+    // Poll job status. credits_actual lets sync-HTTP nodes (which reserve +
+    // commit inside their own route, so the orchestrator never received a
+    // creditsUsed) report what they spent into the execution total.
     const { data: jobRecord } = await supabase
       .from("jobs")
-      .select("status, output_data, error_message, progress")
+      .select("status, output_data, error_message, progress, credits_actual")
       .eq("id", jobId)
       .single()
 
@@ -1021,7 +1028,12 @@ async function pollJobToCompletion(
         throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
       }
 
-      return { output, jobId, usageLogId, creditsUsed }
+      // Prefer the explicit creditsUsed passed by the worker-queued path;
+      // otherwise fall back to the job's committed credits_actual (sync-HTTP
+      // jobs reserve+commit in their own route and pass no creditsUsed).
+      const effectiveCreditsUsed = creditsUsed
+        ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
+      return { output, jobId, usageLogId, creditsUsed: effectiveCreditsUsed }
     }
 
     if (status === "failed" || status === "cancelled") {

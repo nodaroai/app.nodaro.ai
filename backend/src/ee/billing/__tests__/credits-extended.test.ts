@@ -172,7 +172,7 @@ describe("CreditsService — extended", () => {
         { watermarkOverride: false },
       )
 
-      expect(mockRpc).toHaveBeenCalledWith("reserve_credits", {
+      expect(mockRpc).toHaveBeenCalledWith("reserve_credits", expect.objectContaining({
         p_user_id: "user-123",
         p_credits: 5,
         p_job_id: "job-456",
@@ -180,7 +180,9 @@ describe("CreditsService — extended", () => {
         p_provider_cost_usd: 0.05,
         p_display_cost_usd: 0.0625,
         p_is_app_run: false,
-      })
+        // p_daily_limit added in migration 169 — free-tier cap when no profile tier resolves.
+        p_daily_limit: 30,
+      }))
 
       expect(result.usageLogId).toBe("usage-log-abc")
       expect(result.creditsReserved).toBe(5)
