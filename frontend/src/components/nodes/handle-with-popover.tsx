@@ -330,7 +330,7 @@ export function HandleWithPopover({
               // overlapping the pip (offset -10 from the pip's outer edge).
               // Hidden by default; revealed on node hover or when the node
               // is selected via the `.handle-typed-pip-badge` CSS rules.
-              className="handle-typed-pip-badge absolute text-[9px] font-bold rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
+              className="handle-typed-pip-badge absolute text-[9px] font-bold leading-none tabular-nums rounded-full flex items-center justify-center pointer-events-none bg-white text-neutral-900 border border-background shadow-sm"
               style={{
                 width: 14,
                 height: 14,
