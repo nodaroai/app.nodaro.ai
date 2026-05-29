@@ -37,7 +37,7 @@ import { AlignmentGuideLines } from "./alignment-guide-lines"
 import { useAlignmentGuides, type GuideLine, type DraggedNodeRect } from "@/hooks/use-alignment-guides"
 import { useCameraAutoPan } from "./workflow-editor/use-camera-auto-pan"
 import { useWorkflowRealtimeSync } from "./workflow-editor/use-workflow-realtime-sync"
-import { useElkLayout, elk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
+import { useElkLayout, getElk, ELK_LAYOUT_OPTIONS } from "@/hooks/use-elk-layout"
 import { useAutoPanWhenIdle } from "@/hooks/use-auto-pan-when-idle"
 import { __resetSeenNodesForTests } from "./workflow-editor/use-node-insert-animation"
 import { __resetSeenEdgesForTests } from "./workflow-editor/use-edge-insert-animation"
@@ -801,6 +801,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [getNode, adjacencyIndex],
   )
 
+  // Per-edge identity cache for `animatedEdges`. AnimatedFlowEdge is memoized
+  // on its `data`/`style` props; without this cache the useMemo below rebuilt a
+  // fresh `data: {...}` literal for EVERY edge on EVERY `nodes` change (e.g. a
+  // node drag or a streaming-token update), defeating that memo and forcing
+  // React Flow to reconcile every edge. We diff the actually-computed field
+  // values per edge and reuse the previous returned edge object (and its `data`
+  // reference) when nothing observable changed.
+  const animatedEdgeCacheRef = useRef<
+    Map<string, { fields: string; rawEdge: WorkflowEdge; result: WorkflowEdge }>
+  >(new Map())
+
   // Transform edges to be animated when source or target node is running, or highlighted when dragging
   const animatedEdges = useMemo(() => {
     // Build a set of node IDs that are currently running
@@ -816,7 +827,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // Build a map of nodeId → node for quick lookup
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))
 
-    return edges.map((edge): WorkflowEdge => {
+    const cache = animatedEdgeCacheRef.current
+    const nextCache = new Map<string, { fields: string; rawEdge: WorkflowEdge; result: WorkflowEdge }>()
+
+    const result = edges.map((edge): WorkflowEdge => {
       const isRunning = runningNodeIds.has(edge.source)       // Output: source is running (pink)
       const isInputRunning = runningNodeIds.has(edge.target)  // Input: target is running (blue)
       const hasAnimation = isRunning || isInputRunning
@@ -859,18 +873,55 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         : null
       const disabledByProvider = targetHandleLimit?.limit === 0
 
-      return {
+      const outputMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
+
+      // Stable signature of every value that feeds the returned edge's
+      // `data`/`style`/`animated`/`type`. Reuse the previously-returned object
+      // (and its `data` reference, which is what AnimatedFlowEdge's memo keys
+      // on) when both the signature AND the upstream `edge` reference are
+      // unchanged. On the hot path (node drag / streaming-token updates the
+      // store mutates only `nodes`, leaving every `edge` object reference
+      // stable) this skips rebuilding the `data` literal for unaffected edges.
+      const fields = JSON.stringify([
+        hasAnimation,
+        isRunning,
+        isInputRunning,
+        edgeLabel,
+        edgeLabelColor,
+        edgeModeLabel,
+        edgeRangeLabel,
+        outputMode,
+        sourceNode?.type,
+        targetNode?.type,
+        disabledByProvider,
+        shouldHighlight,
+        edgeColor,
+      ])
+
+      const cached = cache.get(edge.id)
+      if (cached && cached.fields === fields && cached.rawEdge === edge) {
+        nextCache.set(edge.id, cached)
+        return cached.result
+      }
+
+      const computed: WorkflowEdge = {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
-        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode: resolveEffectiveOutputMode(edge, sourceNode, targetNode), sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider },
+        data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider },
         style: shouldHighlight ? {
           ...edge.style,
           stroke: edgeColor,
           strokeWidth: 2,
         } : edge.style,
       }
+      nextCache.set(edge.id, { fields, rawEdge: edge, result: computed })
+      return computed
     })
+
+    // Prune entries for edges that no longer exist (cache rebuilt from current edges).
+    animatedEdgeCacheRef.current = nextCache
+    return result
   }, [nodes, edges, draggingNodeId])
 
   // Filter out teleporter edges from rendering — store keeps all edges for DAG execution
@@ -1220,6 +1271,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     }
 
     try {
+      const elk = await getElk()
       const layout = await elk.layout(elkGraph)
 
       // For selection mode, offset to preserve original bounding box position

@@ -7,6 +7,7 @@ import {
 } from "@xyflow/react"
 import { Boxes } from "lucide-react"
 import { groupHandleId, presentTypes } from "@nodaro/shared"
+import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
 import { AggregateHandleIcon } from "@/components/nodes/handle-icon"
@@ -15,19 +16,35 @@ import type { GroupNodeData, WorkflowNode } from "@/types/nodes"
 
 function GroupNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as GroupNodeData
-  const allNodes = useWorkflowStore((s) => s.nodes) as WorkflowNode[]
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const [editing, setEditing] = useState(false)
   const [labelDraft, setLabelDraft] = useState(nodeData.label)
 
-  const node = useMemo(() => allNodes.find((n) => n.id === id), [allNodes, id])
-  const buckets = useMemo(
-    () =>
-      node
-        ? computeGroupBuckets(node, allNodes)
-        : { text: [], image: [], video: [], audio: [] },
-    [node, allNodes],
+  // computeGroupBuckets traverses this group's children (their parentId,
+  // type, position.y and output values). Subscribing to the whole `s.nodes`
+  // array re-rendered the group on every unrelated mutation. Instead derive a
+  // PRIMITIVE fingerprint that changes only when a child's membership /
+  // ordering / output actually changes; the heavy bucket computation reads
+  // live nodes from getState() keyed on that fingerprint.
+  const childFingerprint = useWorkflowStore(
+    useShallow((s) => {
+      let fp = ""
+      for (const n of s.nodes) {
+        if (n.parentId !== id) continue
+        fp += `${n.id}\x01${n.type ?? ""}\x01${n.position?.y ?? 0}\x01${JSON.stringify(n.data ?? {})}\x02`
+      }
+      return fp
+    }),
   )
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const buckets = useMemo(() => {
+    const { nodes } = useWorkflowStore.getState()
+    const node = (nodes as WorkflowNode[]).find((n) => n.id === id)
+    return node
+      ? computeGroupBuckets(node, nodes as WorkflowNode[])
+      : { text: [], image: [], video: [], audio: [] }
+  }, [id, childFingerprint])
   const types = useMemo(() => presentTypes(buckets), [buckets])
 
   useStaleHandleCleanup(id, types)

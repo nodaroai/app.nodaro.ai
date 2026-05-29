@@ -984,7 +984,7 @@ export function Kling3DirectorModal({ isOpen, onClose, nodeId }: Kling3DirectorM
                                   onClick={() => wfNode.thumbUrl && handleAddFromWorkflow(i, wfNode.thumbUrl)}
                                 >
                                   {wfNode.thumbUrl ? (
-                                    <img src={optimizedImageUrl(wfNode.thumbUrl)} alt={wfNode.label} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
+                                    <img src={optimizedImageUrl(wfNode.thumbUrl, { width: 64 })} alt={wfNode.label} className="w-8 h-8 rounded-lg object-cover border border-border shrink-0" />
                                   ) : (
                                     <div className="w-8 h-8 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/20 flex items-center justify-center shrink-0">
                                       <ImageIcon className="w-3.5 h-3.5 text-muted-foreground/40" />

@@ -69,6 +69,12 @@ export default defineConfig({
           if (id.includes("node_modules/@supabase/")) return "supabase";
           if (id.includes("node_modules/@tanstack/")) return "query-vendor";
           if (id.includes("node_modules/@dnd-kit/")) return "dnd-kit";
+          if (id.includes("node_modules/elkjs/")) return "elkjs";
+          if (
+            id.includes("node_modules/@tiptap/") ||
+            id.includes("node_modules/prosemirror-")
+          )
+            return "tiptap";
 
           // Markdown + unified ecosystem
           if (

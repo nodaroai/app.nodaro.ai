@@ -1,14 +1,24 @@
 "use client"
 
 import { useEffect } from "react"
-import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js"
+import type { ELK as ElkInstance, ElkNode } from "elkjs/lib/elk.bundled.js"
 import { useReactFlow } from "@xyflow/react"
 
-// Single ELK instance for the lifetime of the module — `ELK` is purely
-// stateless across `layout()` calls and reusing the instance avoids the
-// (small but real) Worker bootstrap cost on every layout invocation.
-// Exported so the canvas's Tidy Up handler reuses the same instance.
-export const elk = new ELK()
+// Lazily-instantiated single ELK instance, shared for the lifetime of the
+// module — `ELK` is purely stateless across `layout()` calls and reusing the
+// instance avoids the (small but real) Worker bootstrap cost on every layout
+// invocation. elkjs (~458KB gz) is dynamically imported on first use so it
+// stays out of the editor's initial bundle; "Tidy Up" / auto-layout are the
+// only consumers and both await `getElk()`.
+let _elk: ElkInstance | undefined
+
+export async function getElk(): Promise<ElkInstance> {
+  if (!_elk) {
+    const { default: ELK } = await import("elkjs/lib/elk.bundled.js")
+    _elk = new ELK()
+  }
+  return _elk
+}
 
 /**
  * Canonical ELK layered-layout options shared by both the auto-layout hook
@@ -95,6 +105,7 @@ export function useElkLayout(opts: UseElkLayoutOpts) {
         }
         let result: ElkNode
         try {
+          const elk = await getElk()
           result = await elk.layout(elkGraph)
         } catch (err) {
           // ELK throws on cycles / disconnected graphs in some configurations.

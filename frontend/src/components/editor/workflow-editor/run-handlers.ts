@@ -3,8 +3,8 @@ import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
-import { createClient } from "@/lib/supabase";
 import { hasCredits } from "@/lib/edition";
+import { getCachedUserId } from "@/hooks/use-auth";
 import { setSkipUndoCapture } from "@/hooks/undo-flags";
 import { queryClient } from "@/lib/query-client";
 import { queryKeys } from "@/lib/query-keys";
@@ -209,27 +209,39 @@ export async function handleRun(
     return;
   }
 
+  // Capture dirtiness BEFORE any per-run state writes (the accumulation reset
+  // and the optimistic pending flip both set isDirty). A clean editor can then
+  // skip the pre-Run save round-trip entirely (see FIX 4 in
+  // use-workflow-persistence).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   // Reset accumulated output so downstream list/preview nodes reflect only
   // this run — mirrors the per-run clear the backend orchestrator applies
   // via list-execution.ts:42.
   resetNodeAccumulation(executableNodes);
 
-  if (projectId) {
+  // Optimistic UI FIRST: flip every executable node to "pending" and show the
+  // running state before the save round-trip / credit precheck. This is what
+  // makes Run feel instant — the active border appears the instant the user
+  // clicks, centralized via the batched markNodesStatus action.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
     await save(projectId);
   }
 
   // Credit check (cloud edition only)
   if (hasCredits()) {
     try {
-      const supabase = createClient();
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      if (authUser) {
+      const userId = getCachedUserId();
+      if (userId) {
         const balance = await queryClient.fetchQuery({
-          queryKey: queryKeys.credits.balance(authUser.id),
+          queryKey: queryKeys.credits.balance(userId),
           queryFn: async () => {
-            const result = await getUserCredits(authUser.id);
+            const result = await getUserCredits(userId);
             return (
               result.data ??
               (result as unknown as { total: number; tier: string })
@@ -246,6 +258,9 @@ export async function handleRun(
           return sum + cost * multiplier;
         }, 0);
         if (balance.total < estimatedCost) {
+          // Roll back the optimistic flip before surfacing the modal.
+          markNodesStatus(executableIds, undefined);
+          setIsRunning(false);
           ctx.setInsufficientCreditsData({
             required: estimatedCost,
             available: balance.total,
@@ -256,17 +271,10 @@ export async function handleRun(
         }
       }
     } catch {
-      // Credit check failed -- proceed anyway
+      // Credit check failed -- proceed anyway (optimistic state stays)
     }
   }
 
-  // Mark all executable nodes as pending immediately for UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
-  }
-
-  setIsRunning(true);
   toast.info("Executing workflow...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -288,9 +296,7 @@ export async function handleRun(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start workflow", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
@@ -318,14 +324,22 @@ export async function handleRunSingleNode(
     return;
   }
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   clearConnectedListRows(nodes);
   resetNodeAccumulation([node], { preserveHistory: true });
 
-  if (projectId) {
+  // Optimistic UI FIRST — flip this node to "pending" + show running before the
+  // save round-trip so the active border appears the instant Run is clicked.
+  useWorkflowStore.getState().markNodesStatus([nodeId], "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
     await save(projectId);
   }
 
-  setIsRunning(true);
   const { nodes: currentNodes, edges: currentEdges } =
     useWorkflowStore.getState();
   const listItems = getListInputForNode(node, currentNodes, currentEdges);
@@ -389,10 +403,6 @@ export async function handleRunFromHere(
     return;
   }
 
-  if (projectId) {
-    await save(projectId);
-  }
-
   // BFS forward to collect all downstream node IDs
   const downstream = new Set<string>([nodeId]);
   const queue = [nodeId];
@@ -416,6 +426,10 @@ export async function handleRunFromHere(
     return;
   }
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   // Only clear the scope that's actually re-running — upstream/out-of-subset
   // nodes keep their saved output so the backend orchestrator can still
   // resolve inputs from them via extractSavedNodeOutput.
@@ -423,13 +437,17 @@ export async function handleRunFromHere(
   // existing list instead of replacing it (matches single-node Run behavior).
   resetNodeAccumulation(executableNodes, { preserveHistory: true });
 
-  // Mark nodes as pending for immediate UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
+  // Optimistic UI FIRST — batched pending flip + running state before the save
+  // round-trip so the active border appears the instant Run is clicked.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
-  setIsRunning(true);
   toast.info("Running from here...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -447,9 +465,7 @@ export async function handleRunFromHere(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start execution", {
       description: err instanceof Error ? err.message : "Unknown error",
     });
@@ -489,10 +505,6 @@ export async function handleRunSelected(
     return;
   }
 
-  if (projectId) {
-    await save(projectId);
-  }
-
   const executableNodes = selectedNodes.filter(isExecutableNode);
   if (executableNodes.length === 0) {
     toast.error("No executable nodes in selection.");
@@ -502,15 +514,23 @@ export async function handleRunSelected(
 
   const selectedIds = selectedNodes.map((n) => n.id);
 
+  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
+  // editor skips the pre-Run save round-trip (see FIX 4).
+  const wasDirty = useWorkflowStore.getState().isDirty;
+
   resetNodeAccumulation(executableNodes);
 
-  // Mark nodes as pending for immediate UI feedback
-  const { updateNodeData } = useWorkflowStore.getState();
-  for (const node of executableNodes) {
-    updateNodeData(node.id, { executionStatus: "pending" });
+  // Optimistic UI FIRST — batched pending flip + running state before the save
+  // round-trip so the active border appears the instant Run is clicked.
+  const { markNodesStatus } = useWorkflowStore.getState();
+  const executableIds = executableNodes.map((n) => n.id);
+  markNodesStatus(executableIds, "pending");
+  setIsRunning(true);
+
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
-  setIsRunning(true);
   toast.info("Running selected nodes...", {
     description: `${executableNodes.length} node(s) to run`,
   });
@@ -528,9 +548,7 @@ export async function handleRunSelected(
       return;
     }
     setIsRunning(false);
-    for (const node of executableNodes) {
-      updateNodeData(node.id, { executionStatus: undefined });
-    }
+    markNodesStatus(executableIds, undefined);
     toast.error("Failed to start execution", {
       description: err instanceof Error ? err.message : "Unknown error",
     });

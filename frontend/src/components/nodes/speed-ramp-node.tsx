@@ -18,8 +18,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { SpeedRampData } from "@/types/nodes"
 
 function SpeedRampNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as SpeedRampData | undefined
-  const nodeData = currentNodeData ?? (data as SpeedRampData)
+  const nodeData = data as SpeedRampData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

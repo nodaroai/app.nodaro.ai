@@ -1,4 +1,5 @@
 import { type ReactNode } from "react"
+import { CachedImage } from "@/components/ui/cached-image"
 import type {
   AddBRollResult,
   AnchorSceneStyleResult,
@@ -437,10 +438,12 @@ function KeyframeThumbnail({
       <CardContent className="space-y-2">
         {url ? (
           <div className="aspect-video bg-zinc-100 rounded overflow-hidden">
-            <img
+            <CachedImage
               src={url}
               alt={typeof title === "string" ? title : "keyframe"}
               className="w-full h-full object-cover"
+              thumbnail
+              thumbnailWidth={192}
             />
           </div>
         ) : (

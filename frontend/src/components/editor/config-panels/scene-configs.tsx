@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type { ConfigProps } from "./types"
 import type { SceneNodeFrontendData } from "@/types/nodes"
+import { CachedImage } from "@/components/ui/cached-image"
 import {
   clearVideoCriticMetadata,
   VIDEO_CRITIC_MIN_ADHERENCE_SCORE,
@@ -583,17 +584,21 @@ export function SceneConfig({ data, onUpdate, stageOutput }: SceneConfigProps) {
                   {/* Side-by-side thumbnails */}
                   <div className="flex gap-2">
                     {shot.keyframe_url && (
-                      <img
+                      <CachedImage
                         src={shot.keyframe_url}
                         alt={`Shot ${shot.shot_id} keyframe`}
                         className="w-24 h-14 object-cover rounded"
+                        thumbnail
+                        thumbnailWidth={192}
                       />
                     )}
                     {nextShot.keyframe_url && (
-                      <img
+                      <CachedImage
                         src={nextShot.keyframe_url}
                         alt={`Shot ${nextShot.shot_id} keyframe`}
                         className="w-24 h-14 object-cover rounded"
+                        thumbnail
+                        thumbnailWidth={192}
                       />
                     )}
                   </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { memo, useCallback, useEffect } from "react"
+import { CachedImage } from "@/components/ui/cached-image"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, FileText, ImageIcon, Film, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
@@ -34,12 +35,13 @@ function PreviewItemRow({ item }: { readonly item: PreviewItem }) {
       <div className="flex-1 min-w-0">
         <span className="text-[10px] text-muted-foreground block truncate">{item.sourceNodeLabel}</span>
         {item.type === "image" && isMediaUrl(item.value) ? (
-          <img
+          <CachedImage
             src={item.value}
-            crossOrigin="anonymous"
             alt=""
             className="w-full h-14 object-cover rounded mt-0.5"
             loading="lazy"
+            thumbnail
+            thumbnailWidth={120}
           />
         ) : item.type === "video" && isMediaUrl(item.value) ? (
           <video

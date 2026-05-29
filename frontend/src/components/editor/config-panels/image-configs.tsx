@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, Suspense, useMemo } from "react"
+import { useState, useRef, useEffect, Suspense, useMemo, memo } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { optimizedImageUrl } from "@/lib/image"
 import { X, FileText, Plus, UserPlus, Loader2, Upload, UserCircle, Package, MapPin, Paintbrush } from "lucide-react"
@@ -136,7 +136,7 @@ function expandLocationSourceForAutocomplete(
 
 // REF_IMAGE_MAX_LIMITS / DEFAULT_REF_IMAGE_MAX live in @nodaro/shared (model-constants).
 
-export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
+function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<GenerateImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(IMAGE_GEN_MODELS.map((m) => m.value)) }, [])
 
   // The selected providers list is the source of truth. Legacy data with only
@@ -975,7 +975,12 @@ export function GenerateImageConfig({ data, onUpdate, sources, fieldMappings, on
   )
 }
 
-export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
+// Memoized so a ConfigPanel re-render whose props (configProps) are unchanged —
+// e.g. an unrelated async load (userId), fullscreen toggle, or mobile-sheet
+// drag — skips reconciling this ~840-line subtree.
+export const GenerateImageConfig = memo(GenerateImageConfigImpl)
+
+function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<ModifyImageData> & { nodeId?: string }) {
   useEffect(() => { prefetchModelCredits(MODIFY_IMAGE_MODELS.map((m) => m.value)) }, [])
   const currentProvider = data.provider || "nano-banana"
   const isNanoBananaEdit = currentProvider === "nano-banana-edit"
@@ -1806,6 +1811,8 @@ export function ModifyImageConfig({ data, onUpdate, sources, fieldMappings, onMa
     </div>
   )
 }
+
+export const ModifyImageConfig = memo(ModifyImageConfigImpl)
 
 export function UpscaleImageConfig({ data, onUpdate, sources, fieldMappings, onMapField }: ConfigProps<UpscaleImageData>) {
   useEffect(() => { prefetchModelCredits(UPSCALE_IMAGE_MODELS.map((m) => m.value)) }, [])

@@ -795,21 +795,44 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [])
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!containerRef.current) return
     e.preventDefault()
     isDraggingDivider.current = true
 
+    // Cache the container rect once at drag-start instead of measuring on every
+    // mousemove, and RAF-coalesce the setState so we commit at most once per frame.
+    const rect = containerRef.current.getBoundingClientRect()
+    let rafId: number | null = null
+    let pendingClamped: number | null = null
+
+    const flush = () => {
+      rafId = null
+      if (pendingClamped !== null) {
+        updatePresentationSettings({ splitRatio: pendingClamped })
+        pendingClamped = null
+      }
+    }
+
     const handleMouseMove = (ev: MouseEvent) => {
-      if (!isDraggingDivider.current || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
+      if (!isDraggingDivider.current) return
       const ratio = Math.round(((ev.clientX - rect.left) / rect.width) * 100)
-      const clamped = Math.max(25, Math.min(75, ratio))
-      updatePresentationSettings({ splitRatio: clamped })
+      pendingClamped = Math.max(25, Math.min(75, ratio))
+      if (rafId === null) rafId = requestAnimationFrame(flush)
     }
 
     const handleMouseUp = () => {
       isDraggingDivider.current = false
       document.removeEventListener("mousemove", handleMouseMove)
       document.removeEventListener("mouseup", handleMouseUp)
+      // Commit the final position immediately and drop any queued frame.
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      if (pendingClamped !== null) {
+        updatePresentationSettings({ splitRatio: pendingClamped })
+        pendingClamped = null
+      }
       dividerCleanupRef.current = null
     }
 
@@ -1019,6 +1042,47 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return map
   }, [outputItems, findFieldDef, nodeMap, isFullscreen, presInputValues])
 
+  // Stable per-node OutputCardActions factory. Memoizing the object identity per
+  // node id (instead of rebuilding it inline on every render) lets React.memo'd
+  // output cards skip reconciliation on poll-driven `nodes` replacements — the
+  // returned object only changes when hide-state or the (stable) handlers change.
+  const getNodeActions = useMemo(() => {
+    const cache = new Map<string, OutputCardActions>()
+    return (nodeId: string): OutputCardActions => {
+      const cached = cache.get(nodeId)
+      if (cached) return cached
+      const isNodeHidden = hiddenNodeIds.has(nodeId)
+      const actions: OutputCardActions = {
+        onEdit: handleEditNode,
+        onHide: isNodeHidden ? undefined : handleHideNode,
+        onUnhide: isNodeHidden ? handleUnhideNode : undefined,
+        isRevealed: isNodeHidden && isRevealingHidden,
+      }
+      cache.set(nodeId, actions)
+      return actions
+    }
+  }, [hiddenNodeIds, isRevealingHidden, handleEditNode, handleHideNode, handleUnhideNode])
+
+  // Stable per-result OutputCardActions factory (individual list-result hiding).
+  // Caches both the object and the per-key callbacks so memo'd cards stay stable
+  // across poll ticks; recreated only when result hide-state or handlers change.
+  const getResultActions = useMemo(() => {
+    const cache = new Map<string, OutputCardActions>()
+    return (key: string): OutputCardActions => {
+      const cached = cache.get(key)
+      if (cached) return cached
+      const isResultHidden = hiddenResultKeys.has(key)
+      const actions: OutputCardActions = {
+        onEdit: handleEditNode,
+        onHide: isResultHidden ? undefined : () => handleHideResult(key),
+        onUnhide: isResultHidden ? () => handleUnhideResult(key) : undefined,
+        isRevealed: isResultHidden && isRevealingHidden,
+      }
+      cache.set(key, actions)
+      return actions
+    }
+  }, [hiddenResultKeys, isRevealingHidden, handleEditNode, handleHideResult, handleUnhideResult])
+
   const renderOutputCard = useCallback((node: WorkflowNode) => {
     // Resolve element size from node-level + card-level overrides
     const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
@@ -1026,14 +1090,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const elementSize = cardDisplay?.elementSize ?? nodeDisplay?.elementSize ?? "lg"
     const fieldBadges = fieldBadgesByNode.get(node.id)
 
-    // Build per-node action callbacks for share/edit/hide
-    const isNodeHidden = hiddenNodeIds.has(node.id)
-    const nodeActions: OutputCardActions = {
-      onEdit: handleEditNode,
-      onHide: isNodeHidden ? undefined : handleHideNode,
-      onUnhide: isNodeHidden ? handleUnhideNode : undefined,
-      isRevealed: isNodeHidden && isRevealingHidden,
-    }
+    // Build per-node action callbacks for share/edit/hide (stable object identity)
+    const nodeActions = getNodeActions(node.id)
 
     // Preview node: show all visible items with their actual values
     if (node.type === "preview") {
@@ -1173,13 +1231,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         <div className="flex flex-col gap-2">
           {visibleResults.map(({ resultUrl, i }) => {
             const key = `${node.id}:${i}`
-            const isResultHidden = hiddenResultKeys.has(key)
-            const resultActions: OutputCardActions = {
-              onEdit: handleEditNode,
-              onHide: isResultHidden ? undefined : () => handleHideResult(key),
-              onUnhide: isResultHidden ? () => handleUnhideResult(key) : undefined,
-              isRevealed: isResultHidden && isRevealingHidden,
-            }
+            const resultActions = getResultActions(key)
             return (
               <OutputCard
                 key={`${node.id}-${i}`}
@@ -1216,7 +1268,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         actions={nodeActions}
       />
     )
-  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenNodeIds, hiddenResultKeys, isRevealingHidden, handleHideNode, handleUnhideNode, handleHideResult, handleUnhideResult, handleEditNode])
+  }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions])
 
   // Render a single PresentationItem — dispatches by type for input side
   const renderInputItem = useCallback(

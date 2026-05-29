@@ -36,6 +36,19 @@ const JobSummary = z
   })
   .openapi("Job")
 
+// Lean status shape for the per-node poll path (every ~3s). Selects only the
+// fields a poller needs (status + progress + output/error) — no input_data,
+// cost, timestamps, or provider columns — to keep the hot-path payload small.
+const JobStatus = z
+  .object({
+    id: z.string().uuid(),
+    status: z.enum(["pending", "queued", "processing", "completed", "failed", "cancelled"]),
+    progress: z.number().min(0).max(100),
+    output_data: z.unknown(),
+    error_message: z.string().nullable(),
+  })
+  .openapi("JobStatus")
+
 openApiRegistry.registerPath({
   method: "get",
   path: "/v1/jobs/{id}",
@@ -50,6 +63,29 @@ openApiRegistry.registerPath({
       content: {
         "application/json": {
           schema: z.object({ data: JobSummary }),
+        },
+      },
+    },
+    401: { description: "Unauthorized" },
+    404: { description: "Job not found" },
+  },
+})
+
+openApiRegistry.registerPath({
+  method: "get",
+  path: "/v1/jobs/{id}/status",
+  description:
+    "Lightweight job status for polling. Returns only status, progress, output, and error — no input_data, cost, or timestamps.",
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      description: "Job status",
+      content: {
+        "application/json": {
+          schema: z.object({ data: JobStatus }),
         },
       },
     },
@@ -219,6 +255,45 @@ export async function jobRoutes(app: FastifyInstance) {
     }
 
     return { data: sanitizeJobForPublic(job as JobRecord, isAdmin) }
+  })
+
+  // Lean status poll for the per-node 3s poll path. Same auth + ownership
+  // semantics as GET /v1/jobs/:id (admins read any job, non-admins only
+  // their own) but selects only the fields a poller needs. No cost/provider
+  // columns are returned, so no sanitization is required.
+  app.get<{ Params: { id: string } }>("/v1/jobs/:id/status", async (req, reply) => {
+    if (!req.userId) {
+      return reply.status(401).send({
+        error: { code: "unauthorized", message: "Authentication required" },
+      })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+
+    const { id } = req.params
+    const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
+
+    let query = supabase
+      .from("jobs")
+      .select("id, status, progress, output_data, error_message")
+      .eq("id", id)
+
+    if (!isAdmin) {
+      query = query.eq("user_id", req.userId)
+    }
+
+    const { data: job, error } = await query.single()
+
+    if (error || !job) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Job not found" },
+      })
+    }
+
+    return { data: job }
   })
 
   app.get<{ Querystring: { userId?: string; limit?: string; cursor?: string } }>("/v1/jobs", async (req, reply) => {

@@ -18,8 +18,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import type { TranscodeVideoData } from "@/types/nodes"
 
 function TranscodeVideoNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as TranscodeVideoData | undefined
-  const nodeData = currentNodeData ?? (data as TranscodeVideoData)
+  const nodeData = data as TranscodeVideoData
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

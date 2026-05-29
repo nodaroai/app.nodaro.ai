@@ -465,6 +465,21 @@ interface WorkflowState {
   readonly updateNode: (nodeId: string, updates: Partial<WorkflowNode>) => void
   readonly updateNodeData: (nodeId: string, data: Record<string, unknown>) => void
   /**
+   * Batched optimistic execution-status flip for many nodes in ONE store
+   * update. Sets `data.executionStatus` on every matched id (to `undefined`,
+   * which reads back as idle, when `status` is undefined) in a single
+   * `nodes.map()` — used by the Run
+   * handlers so the "pending" border appears the instant Run is clicked
+   * without K separate `updateNodeData` calls. `executionStatus` is an
+   * EXECUTION_DATA_KEY so this is wrapped in `setSkipUndoCapture` and never
+   * registers an undo snapshot (same exemption rationale as
+   * `syncNodeStatesToStore`). Unmatched nodes keep object identity.
+   */
+  readonly markNodesStatus: (
+    ids: ReadonlyArray<string>,
+    status: "pending" | "running" | "failed" | "completed" | undefined,
+  ) => void
+  /**
    * Phase 1B.4 — patch `data` on every node whose
    * `data.pipeline_entity_id === entityId`. Used by the pipeline SSE handler
    * to apply `entity:state_change` / `entity:stale` events without needing to
@@ -1261,6 +1276,33 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         node.id === nodeId ? { ...node, ...updates } : node,
       ),
     })),
+
+  // Batched optimistic execution-status flip — see interface JSDoc. One
+  // nodes.map(); only matched ids get a fresh data reference (object identity
+  // preserved for the rest). executionStatus is execution-only, so undo
+  // capture is suppressed (mirrors syncNodeStatesToStore).
+  markNodesStatus: (ids, status) => {
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    // Build the patch as Record<string, unknown> so the literal status
+    // (which includes the runtime-only "pending" value, not present in the
+    // narrower SceneNodeData type) erases to unknown — same erasure
+    // updateNodeData/syncNodeStatesToStore rely on for "pending".
+    const patch: Record<string, unknown> = { executionStatus: status }
+    setSkipUndoCapture(true)
+    try {
+      set((state) => ({
+        nodes: state.nodes.map((node) =>
+          idSet.has(node.id)
+            ? { ...node, data: { ...node.data, ...patch } as SceneNodeData }
+            : node,
+        ),
+        isDirty: true,
+      }))
+    } finally {
+      setSkipUndoCapture(false)
+    }
+  },
 
   // Phase 1B.4 — see interface JSDoc. Skips undo capture (lifecycle is
   // backend-driven, not a user action) and skips label-rename / ref-sync.

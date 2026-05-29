@@ -887,6 +887,30 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 // Response formatters
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip the per-node-state `inputs` blob (resolved upstream inputs, kept only
+ * for debugging) from a `node_states` map. The 2s/3s execution-status poll
+ * (app-runner + editor live state) reads `node_states[].output` to render
+ * live results but never reads `inputs`, so dropping it trims a large
+ * payload from the hottest poll path without changing observable behavior.
+ * `output` and every other field are preserved verbatim. Non-mutating —
+ * returns a fresh map (and fresh per-node objects for any node that carried
+ * an `inputs` field).
+ */
+function stripNodeStateInputs(nodeStates: unknown): unknown {
+  if (!nodeStates || typeof nodeStates !== "object") return nodeStates
+  const out: Record<string, unknown> = {}
+  for (const [nodeId, state] of Object.entries(nodeStates as Record<string, unknown>)) {
+    if (state && typeof state === "object" && "inputs" in (state as Record<string, unknown>)) {
+      const { inputs: _inputs, ...rest } = state as Record<string, unknown>
+      out[nodeId] = rest
+    } else {
+      out[nodeId] = state
+    }
+  }
+  return out
+}
+
 function toExecutionResponse(row: Record<string, unknown>) {
   return {
     id: row.id,
@@ -895,8 +919,11 @@ function toExecutionResponse(row: Record<string, unknown>) {
     status: row.status,
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
-    triggerData: row.trigger_data,
-    nodeStates: row.node_states,
+    // `triggerData` (top-level) is debug-only and not read by any poll
+    // consumer (verified across frontend/backend), so it's omitted here to
+    // trim the hot-path detail/poll response. The per-node `inputs` blobs are
+    // also stripped — pollers read `node_states[].output`, never `inputs`.
+    nodeStates: stripNodeStateInputs(row.node_states),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

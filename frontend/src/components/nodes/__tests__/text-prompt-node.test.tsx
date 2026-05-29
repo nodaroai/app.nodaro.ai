@@ -33,13 +33,19 @@ vi.mock("lucide-react", async (importOriginal) => {
   return { ...actual }
 })
 
-vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: (selector: any) => selector({
+vi.mock("@/hooks/use-workflow-store", () => {
+  const state = {
     updateNodeData: () => {},
     nodes: [],
     edges: [],
-  }),
-}))
+  }
+  return {
+    useWorkflowStore: Object.assign(
+      (selector: any) => selector(state),
+      { getState: () => state },
+    ),
+  }
+})
 
 function renderNode(overrides: Record<string, unknown> = {}) {
   const defaultProps = {

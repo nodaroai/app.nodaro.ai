@@ -9,6 +9,7 @@ import {
   isCollectInEdge,
   presentTypes,
 } from "@nodaro/shared"
+import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
 import { AggregateHandleVisual } from "@/components/nodes/handle-icon"
@@ -20,23 +21,40 @@ import type { CollectNodeData, WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 function CollectNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as CollectNodeData
-  const allNodes = useWorkflowStore((s) => s.nodes) as WorkflowNode[]
-  const allEdges = useWorkflowStore((s) => s.edges) as WorkflowEdge[]
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
 
-  const node = useMemo(() => allNodes.find((n) => n.id === id), [allNodes, id])
-  const buckets = useMemo(
-    () =>
-      node
-        ? computeCollectBuckets(node, allNodes, allEdges)
-        : { text: [], image: [], video: [], audio: [] },
-    [node, allNodes, allEdges],
+  // computeCollectBuckets reads this node's `data.order`, its incoming `in`
+  // edges, and each upstream source's type + output value (which changes
+  // during polling). Subscribing to whole `s.nodes` / `s.edges` re-rendered
+  // the collect node on every unrelated mutation. Instead derive a PRIMITIVE
+  // fingerprint (incoming edges + source type/data + this node's order) plus
+  // the incoming count; the heavy bucket computation reads live arrays from
+  // getState() keyed on the fingerprint.
+  const { collectFingerprint, incomingCount } = useWorkflowStore(
+    useShallow((s) => {
+      const self = s.nodes.find((n) => n.id === id)
+      const order = ((self?.data as { order?: string[] } | undefined)?.order) ?? []
+      let fp = `order:${order.join(",")}\x03`
+      let count = 0
+      for (const e of s.edges) {
+        if (e.target !== id || !isCollectInEdge(e)) continue
+        count++
+        const src = s.nodes.find((n) => n.id === e.source)
+        fp += `${e.id}\x01${e.source}\x01${e.sourceHandle ?? ""}\x01${src?.type ?? ""}\x01${JSON.stringify(src?.data ?? {})}\x02`
+      }
+      return { collectFingerprint: fp, incomingCount: count }
+    }),
   )
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const buckets = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
+    const node = (nodes as WorkflowNode[]).find((n) => n.id === id)
+    return node
+      ? computeCollectBuckets(node, nodes as WorkflowNode[], edges as WorkflowEdge[])
+      : { text: [], image: [], video: [], audio: [] }
+  }, [id, collectFingerprint])
   const types = useMemo(() => presentTypes(buckets), [buckets])
-  const incoming = useMemo(
-    () => allEdges.filter((e) => e.target === id && isCollectInEdge(e)),
-    [allEdges, id],
-  )
 
   useStaleHandleCleanup(id, types)
 
@@ -82,9 +100,9 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
         handles={handles}
       >
         <div className="px-3 py-2 text-xs text-muted-foreground">
-          {incoming.length === 0
+          {incomingCount === 0
             ? "Connect inputs"
-            : `${incoming.length} connection${incoming.length === 1 ? "" : "s"}`}
+            : `${incomingCount} connection${incomingCount === 1 ? "" : "s"}`}
         </div>
       </BaseNode>
       <HandleWithPopover nodeId={id} nodeType="collect" handleId={COLLECT_IN_HANDLE} type="target" position={Position.Left} label="Inputs" color="#475569" icon={<Combine />} side="left" top="24px" />

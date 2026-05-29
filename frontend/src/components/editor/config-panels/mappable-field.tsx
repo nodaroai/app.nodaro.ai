@@ -1,6 +1,6 @@
 "use client"
 
-import { useId } from "react"
+import { useId, memo } from "react"
 import { Link2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import {
@@ -23,7 +23,7 @@ import type { SourceNodeInfo } from "./types"
  * prevents typing into a field whose value comes from a source the user
  * explicitly selected.
  */
-export function MappableField({
+export const MappableField = memo(function MappableField({
   field,
   label,
   sources,
@@ -100,4 +100,4 @@ export function MappableField({
       )}
     </div>
   )
-}
+})

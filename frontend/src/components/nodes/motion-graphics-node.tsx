@@ -12,8 +12,7 @@ import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { MotionGraphicsData } from "@/types/nodes"
 
 function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as MotionGraphicsData | undefined
-  const nodeData = currentNodeData ?? (data as MotionGraphicsData)
+  const nodeData = data as MotionGraphicsData
   const credits = useModelCredits(buildLlmCreditIdentifier("motion-graphics", nodeData.llmModel || LLM_FEATURE_DEFAULTS["motion-graphics"]), 10)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)

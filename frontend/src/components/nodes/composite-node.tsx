@@ -10,8 +10,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import type { CompositeData } from "@/types/nodes"
 
 function CompositeNodeComponent({ id, data, selected }: NodeProps) {
-  const currentNodeData = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.data) as CompositeData | undefined
-  const nodeData = currentNodeData ?? (data as CompositeData)
+  const nodeData = data as CompositeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"

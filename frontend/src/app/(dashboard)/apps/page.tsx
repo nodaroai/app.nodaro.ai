@@ -723,7 +723,7 @@ function MyAppCard({
       {app.previewMediaUrl && (
         <div className="mb-3 rounded-md overflow-hidden aspect-video bg-zinc-100 dark:bg-zinc-800">
           {app.previewMediaType === "video" ? (
-            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted />
+            <video src={app.previewMediaUrl} className="w-full h-full object-cover" muted playsInline preload="none" />
           ) : (
             <img src={optimizedImageUrl(app.previewMediaUrl)} alt="" className="w-full h-full object-cover" />
           )}

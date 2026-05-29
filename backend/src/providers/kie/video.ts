@@ -406,6 +406,21 @@ async function runKling3(
 /** KIE Gemini Omni Video accepted resolution values (lowercase, per the API). */
 const GEMINI_OMNI_RESOLUTIONS = ["720p", "1080p", "4k"]
 
+/** Wholesale USD cost for a Gemini Omni tier (KIE-published; KIE bills $0.005/credit).
+ *  The provider MUST report the ACTUAL tier cost — like every other provider does — so the
+ *  credit-commit charges that tier. Returning a flat cheapest-tier cost (the old behavior)
+ *  under-charged 4K / long / video-edit jobs. 720p and 1080p share a price band.
+ ***REDACTED-OSS-SCRUB***
+ ***REDACTED-OSS-SCRUB***
+function geminiOmniTierCostUsd(resolution: string, durationSec: number, videoConnected: boolean): number {
+  const is4k = resolution === "4k"
+  if (videoConnected) return is4k ? 1.8 : 1.2 // video-edit is a flat per-generation price
+  const byDuration: Record<number, number> = is4k
+    ? { 4: 1.05, 6: 1.2, 8: 1.35, 10: 1.5 }
+    : { 4: 0.45, 6: 0.6, 8: 0.75, 10: 0.9 }
+  return byDuration[durationSec] ?? (is4k ? 1.05 : 0.45)
+}
+
 /** Shared helper for Gemini Omni Video calls from both imageToVideo and textToVideo.
  *  Standard market endpoint; multimodal input + native audio. Callers compute the
  *  per-method `prompt` / `imageUrls` / `aspectRatioValue`; everything else is identical.
@@ -453,15 +468,18 @@ async function runGeminiOmni(
     const ends = Math.min(Math.max(rawEnd, start + 1), start + 10)
     videoList = [{ url: videoUrls[0], start, ends }]
   }
+  // Snap once; the value feeds both the KIE payload and the per-tier cost below.
+  const snappedDuration = snapToAllowedDuration(duration ?? 8, modelConfig.allowedDurations ?? [4, 6, 8, 10])
+  // Report the ACTUAL per-tier wholesale cost (resolution band × duration, or flat for V2V)
+  // so the credit-commit charges the right tier instead of the flat cheapest-tier cost.
+  const tierCostUsd = geminiOmniTierCostUsd(resolution, snappedDuration, videoConnected)
   const geminiInput: Record<string, unknown> = {
     prompt,
     resolution,
     ...(aspectRatioValue ? { aspect_ratio: aspectRatioValue } : {}),
-    // V2V auto-determines duration from the clip; for t2v/i2v snap to an allowed tier
-    // so the value sent to KIE matches the tier the credit identifier billed.
-    ...(videoList
-      ? { video_list: videoList }
-      : { duration: String(snapToAllowedDuration(duration ?? 8, modelConfig.allowedDurations ?? [4, 6, 8, 10])) }),
+    // V2V auto-determines duration from the clip; for t2v/i2v send the snapped tier so the
+    // value sent to KIE matches the tier the credit identifier billed.
+    ...(videoList ? { video_list: videoList } : { duration: String(snappedDuration) }),
     ...(imageUrls.length ? { image_urls: imageUrls } : {}),
     // Omit the -1 "random" sentinel (and any negative); only forward real seeds.
     ...(options?.seed != null && options.seed >= 0 ? { seed: options.seed } : {}),
@@ -474,8 +492,8 @@ async function runGeminiOmni(
   if (!videoUrl) {
     throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
   }
-  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (cost: $${modelConfig.cost.toFixed(4)})`)
-  return { url: videoUrl, cost: modelConfig.cost, ...(gTaskId && { kieTaskId: gTaskId }), ...(providerMs !== undefined && { providerMs }) }
+  console.log(`[KIE.ai] ${logLabel} completed: ${videoUrl} (tier cost: $${tierCostUsd.toFixed(4)})`)
+  return { url: videoUrl, cost: tierCostUsd, ...(gTaskId && { kieTaskId: gTaskId }), ...(providerMs !== undefined && { providerMs }) }
 }
 
 export class KieVideoProvider

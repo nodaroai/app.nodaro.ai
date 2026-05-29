@@ -3,6 +3,7 @@
 import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { List } from "lucide-react"
+import { upstreamSubgraphFingerprint } from "@/lib/node-fingerprint"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
@@ -26,17 +27,36 @@ const HANDLES = [
 function ListNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as ListNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
 
+  // `connectedItems` resolves values through the `in` edge, which can recurse
+  // up a loop/list chain (resolveLoopColumnValues). Subscribing to whole
+  // `s.nodes` / `s.edges` re-rendered this node on every unrelated mutation.
+  // Instead derive a PRIMITIVE fingerprint over the transitive upstream
+  // subgraph (all ancestor nodes' data + the edges among them) so any change
+  // feeding the resolution invalidates the memo without missing a deep-chain
+  // field; the actual resolution reads live arrays from getState().
+  const upstreamFingerprint = useWorkflowStore((s) => {
+    const inEdge = s.edges.find((e) => e.target === id && e.targetHandle === "in")
+    if (!inEdge) return ""
+    return upstreamSubgraphFingerprint(
+      s.nodes,
+      s.edges,
+      id,
+      [inEdge.source],
+      `${inEdge.id}\x01${JSON.stringify(inEdge.data ?? {})}\x03`,
+    )
+  })
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedItems = useMemo<string[] | null>(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const inEdge = edges.find((e) => e.target === id && e.targetHandle === "in")
     if (!inEdge) return null
     const upstream = nodes.find((n) => n.id === inEdge.source)
     if (!upstream) return null
     // Pass the list-node's own columns so splitByLoopDelimiter uses the configured splitDelimiter.
     return resolveEdgeValuesForTableColumn(inEdge, upstream, edges, nodes, nodeData.columns)
-  }, [id, edges, nodes, nodeData.columns])
+  }, [id, nodeData.columns, upstreamFingerprint])
 
   const staticItems = useMemo(
     () => extractNodeOutputAsList({ id, type: "list", data: nodeData } as WorkflowNode) ?? [],

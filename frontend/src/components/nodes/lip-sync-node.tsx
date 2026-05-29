@@ -2,6 +2,7 @@
 
 import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, Film, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
 import { HandleWithPopover } from "./handle-with-popover"
 import { isValidLipSyncConnection } from "@/lib/video-producer-handles"
@@ -112,8 +113,18 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)
-  const edges = useWorkflowStore((s) => s.edges)
-  const nodes = useWorkflowStore((s) => s.nodes)
+
+  // Narrow subscription: a primitive fingerprint of the incoming connections
+  // and their source nodes (type + full data) instead of whole-array
+  // `s.nodes` / `s.edges`. `connectedNodes` + `upstreamAudioUrl` are the only
+  // consumers of those arrays; they read upstream type/label/result fields
+  // that change during polling, so we serialize the connected sources' data
+  // wholesale (typically 1-3 nodes — cheap) to guarantee no missed field, and
+  // re-render only when an incoming connection or upstream source data
+  // changes — not on every unrelated mutation across the graph.
+  const connectedFingerprint = useWorkflowStore((s) =>
+    incomingSourcesFingerprint(s.nodes, s.edges, id),
+  )
 
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
@@ -155,8 +166,11 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   }, [lipSyncProvider, nodeData.resolution, nodeData.audioDurationSec])
   const credits = useModelCredits(creditModelId, lipSyncProvider === "kling-avatar" ? 28 : 42)
 
-  // Get all connected nodes to this node (deduplicated by node ID)
+  // Get all connected nodes to this node (deduplicated by node ID). Reads
+  // live arrays from getState(); memoized on the connected-source fingerprint.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedNodes = useMemo(() => {
+    const { nodes, edges } = useWorkflowStore.getState()
     const connectedEdges = edges.filter((e) => e.target === id)
     const nodeMap = new Map<string, ConnectedNodeInfo>()
 
@@ -206,7 +220,7 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
     }
 
     return Array.from(nodeMap.values())
-  }, [edges, nodes, id])
+  }, [id, connectedFingerprint])
 
   const imageNodes = useMemo(
     () => connectedNodes.filter((n) => n.outputType === "image"),
@@ -279,12 +293,13 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
   // reservation reflect actual length. Cached per URL in audio-duration.ts.
   // selectedAudio is a ConnectedNodeInfo (no data field) — look up the real
   // WorkflowNode so extractNodeOutput can read its data.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const upstreamAudioUrl = useMemo(() => {
     if (!selectedAudio) return undefined
-    const audioNode = nodes.find((n) => n.id === selectedAudio.id)
+    const audioNode = useWorkflowStore.getState().nodes.find((n) => n.id === selectedAudio.id)
     if (!audioNode) return undefined
     return extractNodeOutput(audioNode)
-  }, [selectedAudio, nodes])
+  }, [selectedAudio, connectedFingerprint])
   useEffect(() => {
     if (!upstreamAudioUrl) return
     let cancelled = false

@@ -2,6 +2,7 @@
 
 import { memo, useMemo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
+import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Scissors, Loader2, AlertCircle, X, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -51,8 +52,14 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [videoError, setVideoError] = useState(false)
-  const edges = useWorkflowStore((s) => s.edges)
-  const allNodes = useWorkflowStore((s) => s.nodes)
+  // Narrow subscription: a primitive fingerprint of the incoming connections
+  // (source id + type + label) instead of whole-array `s.nodes` / `s.edges`.
+  // `connectedAssets` is the only consumer of those arrays, so re-render this
+  // node only when an incoming connection (or an upstream label) changes —
+  // not on every unrelated keystroke/drag that mints a new nodes array.
+  const connectedFingerprint = useWorkflowStore((s) =>
+    incomingSourcesFingerprint(s.nodes, s.edges, id, "label"),
+  )
 
   useEffect(() => {
     const v = videoRef.current
@@ -72,7 +79,9 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     updateNodeData(id, { videoPlayState: state.playState, pausedAtTime: state.currentTime })
   }, [id, updateNodeData])
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const connectedAssets = useMemo(() => {
+    const { nodes: allNodes, edges } = useWorkflowStore.getState()
     const inEdges = edges.filter((e) => e.target === id)
     const assets: Array<{ nodeId: string; label: string; type: "video" | "image" | "audio" }> = []
     for (const edge of inEdges) {
@@ -85,7 +94,7 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
       else if (AUDIO_TYPES.has(src.type)) assets.push({ nodeId: src.id, label, type: "audio" })
     }
     return assets
-  }, [edges, allNodes, id])
+  }, [id, connectedFingerprint])
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedVideoUrl"))

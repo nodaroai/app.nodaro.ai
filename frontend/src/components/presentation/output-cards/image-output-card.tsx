@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Download, Copy, ImageIcon } from "lucide-react"
 import { CachedImage } from "@/components/ui/cached-image"
 import { StatusBadge, GlassCard, GlassButton, ShimmerPlaceholder, copyUrl, downloadFile, UnhideBanner, resolveCardActions, type OutputStatus, type OutputCardActions } from "./shared"
@@ -18,7 +19,7 @@ interface ImageOutputCardProps {
 
 const THUMBNAIL_WIDTHS: Record<string, number> = { sm: 480, md: 800, lg: 1200 }
 
-export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, elementSize, actions }: ImageOutputCardProps) {
+function ImageOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions }: ImageOutputCardProps) {
   const size = elementSize ?? "md"
   const maxHClass = ELEMENT_SIZES.imageOutput[size]
   const thumbWidth = THUMBNAIL_WIDTHS[size] ?? 800
@@ -86,3 +87,5 @@ export function ImageOutputCard({ label, status, url, nodeId, onOpenMedia, eleme
     </GlassCard>
   )
 }
+
+export const ImageOutputCard = memo(ImageOutputCardImpl)

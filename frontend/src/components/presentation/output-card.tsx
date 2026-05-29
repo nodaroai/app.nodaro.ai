@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { ImageOutputCard } from "./output-cards/image-output-card"
 import { VideoOutputCard } from "./output-cards/video-output-card"
 import { AudioOutputCard } from "./output-cards/audio-output-card"
@@ -44,7 +45,7 @@ export interface OutputCardProps {
 }
 
 /** Renders the appropriate output card based on output type */
-export function OutputCard({
+function OutputCardImpl({
   nodeId,
   label,
   outputType,
@@ -142,3 +143,8 @@ export function OutputCard({
     </div>
   )
 }
+
+/** Memoized so presentation-view's 2s poll re-render doesn't reconcile every
+ *  output card — props (actions/fieldBadges/onOpenMedia) are stabilized upstream
+ *  so unchanged nodes bail the shallow compare. */
+export const OutputCard = memo(OutputCardImpl)

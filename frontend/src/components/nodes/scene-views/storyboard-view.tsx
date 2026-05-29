@@ -1,5 +1,6 @@
 import type { SceneViewProps } from "./view-mode-registry"
 import { registerSceneView } from "./view-mode-registry"
+import { CachedImage } from "@/components/ui/cached-image"
 
 /**
  * StoryboardView — Phase 1B.2 default view-mode for the pipeline SceneNode.
@@ -38,10 +39,13 @@ function StoryboardView({ data }: SceneViewProps) {
               >
                 <div className="relative aspect-video rounded-sm bg-zinc-100 dark:bg-[#2D2D2D] overflow-hidden">
                   {keyframeUrl ? (
-                    <img
+                    <CachedImage
                       src={keyframeUrl}
                       alt={shot.shot_id}
                       className="absolute inset-0 w-full h-full object-cover"
+                      thumbnail
+                      thumbnailWidth={160}
+                      loading="lazy"
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-[8px] text-zinc-400 dark:text-zinc-500">
