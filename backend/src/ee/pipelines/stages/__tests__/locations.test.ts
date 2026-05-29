@@ -295,6 +295,35 @@ describe("runLocationsStage", () => {
     expect(variants[1]?.variant_kind).toBe("time_of_day") // "night"
   })
 
+  it("retries a variant left 'pending' by a partial run instead of skipping it (regression: stuck-reconciler orphan)", async () => {
+    // Repro of prod pipeline 3b3e9958: a variant's KIE job was force-completed
+    // by the stuck-job reconciler while the pipeline's await was killed, leaving
+    // the variant row 'pending'. The old code counted ANY status as "existing"
+    // and skipped it forever → variant_count never set → stage stuck `running`.
+    // The fix counts only 'approved' as existing, so a 'pending' row is retried.
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "v1", assetId: "av1", assetUrl: "https://r2/v1.png", creditsSpent: 2,
+    })
+    const supabase = makeSupabase({ entityState: "approved" })
+    // Seed an orphaned 'pending' variant for one of the needed keys ("sunrise").
+    ;(supabase as never as { _variants: Array<Record<string, unknown>> })._variants.push({
+      variant_key: "sunrise",
+      status: "pending",
+    })
+
+    await runLocationsStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
+
+    // BOTH "sunrise" (retried, was pending) and "night" must regenerate → 2 calls.
+    // Pre-fix this was 1 (sunrise skipped as "existing").
+    expect(pipelineGenerateImage).toHaveBeenCalledTimes(2)
+    // The entity's variant gate is set so the stage can finalize + advance.
+    const entity = (supabase as never as {
+      _entities: Map<string, Record<string, unknown>>
+    })._entities
+    const locRow = [...entity.values()].find((e) => e.entity_type === "location")
+    expect((locRow?.metadata as Record<string, unknown>)?.variants_awaiting_approval).toBe(true)
+  })
+
   // ──────────────────────────────────────────────────────────────────────────
   // Phase 1D.2a §4.1 (G3): auto-mode bulk-approve
   // ──────────────────────────────────────────────────────────────────────────

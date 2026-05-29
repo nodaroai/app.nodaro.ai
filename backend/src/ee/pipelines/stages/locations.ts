@@ -505,9 +505,18 @@ async function ensureLocationVariants(
 
   const { data: existing } = await supabase
     .from("pipeline_entity_variants")
-    .select("variant_key")
+    .select("variant_key, status")
     .eq("entity_id", entity.id)
-  const existingKeys = new Set((existing ?? []).map((v) => v.variant_key))
+  // Count ONLY 'approved' rows as existing. A row left at 'pending' or 'failed'
+  // by a partial run MUST be retried — otherwise it's skipped forever and the
+  // stage never finalizes. This bit us when the #2850 stuck-job reconciler
+  // force-completed a variant's KIE task out-of-band (the pipeline's await was
+  // killed mid-drive), leaving the variant row 'pending', variant_count=0, and
+  // `variants_awaiting_approval` unset → locations stage stuck `running`.
+  // Mirrors the same guard in characters.ts::ensureCharacterVariants.
+  const existingKeys = new Set(
+    (existing ?? []).filter((v) => v.status === "approved").map((v) => v.variant_key),
+  )
 
   // Resolve the main reference URL once — every variant uses the same image.
   const mainUrl = await assetUrlForId(supabase, entity.main_asset_id)
@@ -528,12 +537,23 @@ async function ensureLocationVariants(
             ? "aftermath"
             : "angle"
 
-    await supabase.from("pipeline_entity_variants").insert({
+    // Insert at 'pending'; tolerate a duplicate (a prior partial run may have
+    // left this key as 'pending'/'failed' — it's not in `existingKeys` because
+    // we only count 'approved' above, so we reach here to retry it). The
+    // UPDATE in the try/catch below overwrites that stale row's status.
+    const { error: insertErr } = await supabase.from("pipeline_entity_variants").insert({
       entity_id: entity.id,
       variant_key: variant,
       variant_kind: kind,
       status: "pending",
     })
+    if (insertErr && !insertErr.message.includes("duplicate")) {
+      console.error(
+        `[locations] Failed to insert variant row ${variant} for ${entity.entity_key}:`,
+        insertErr.message,
+      )
+      continue
+    }
     try {
       const prompt = `${loc.visual_description}, ${variant}, ${plan.global_style.visual_style}, wide shot, no people`
       const { assetId, assetUrl } = await pipelineGenerateImage({
