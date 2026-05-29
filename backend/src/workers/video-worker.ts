@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { initProviders } from "../providers/index.js"
 import { KieError } from "../providers/kie/client.js"
 import { isPromptBlocked } from "../config/content-filter.js"
-import { refundJobCredits, createAssetFromJob, type HandlerFn, type JobContext } from "./shared.js"
+import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
 import { videoAIHandlers } from "./handlers/video-ai.js"
 import { videoSfxHandlers } from "./handlers/video-sfx.js"
@@ -194,17 +194,25 @@ export function createVideoWorker() {
           console.error(`[worker] Job ${jobId} failed:`, message)
         }
 
-        // Save only the sanitized message to DB (internal details already logged above)
-        await supabase
-          .from("jobs")
-          .update({
-            status: "failed",
-            error_message: message,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", jobId)
+        // Only finalize (mark failed) + refund on the FINAL attempt. On a
+        // non-final attempt BullMQ will retry, and marking the row failed +
+        // refunding the reservation now would let a successful retry deliver
+        // the media for free (commit_credits no-ops against an already-refunded
+        // usage_log). On non-final attempts we just rethrow so BullMQ retries
+        // with the reservation intact.
+        if (isFinalJobAttempt(job)) {
+          // Save only the sanitized message to DB (internal details already logged above)
+          await supabase
+            .from("jobs")
+            .update({
+              status: "failed",
+              error_message: message,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
 
-        await refundJobCredits(usageLogId, jobId, message)
+          await refundJobCredits(usageLogId, jobId, message)
+        }
         throw err
       }
     },

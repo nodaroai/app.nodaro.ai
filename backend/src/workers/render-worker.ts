@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js"
 import { uploadFileToR2 } from "../lib/storage.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, runFfmpeg, needsTranscode, transcodeToBrowserSafe, BROWSER_SAFE_VIDEO_ARGS, REMOTION_INPUT_VIDEO_ARGS } from "../providers/video/ffmpeg-utils.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
-import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompleted, generateAndUploadThumbnail, createAssetFromJob } from "./shared.js"
+import { commitJobCredits, refundJobCredits, shouldSaveJobResult, markJobCompleted, generateAndUploadThumbnail, createAssetFromJob, isFinalJobAttempt } from "./shared.js"
 import { createServer } from "node:http"
 import { createReadStream, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
@@ -942,19 +942,28 @@ export function createRenderWorker() {
         const errMsg = error instanceof Error ? error.message : String(error)
         console.error(`[render-worker] Job ${jobId} failed:`, errMsg)
 
-        await supabase
-          .from("jobs")
-          .update({
-            status: "failed",
-            error_message: errMsg,
-            completed_at: new Date().toISOString(),
-          })
-          .eq("id", jobId)
-
-        await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
-
-        // Terminal errors won't resolve on retry — skip BullMQ retries
+        // Terminal errors won't resolve on retry — skip BullMQ retries (return,
+        // not throw). Non-terminal errors are rethrown so BullMQ retries them.
         const isTerminal = /composition.*not found|plan validation|zod|invalid plan|timed out/i.test(errMsg)
+
+        // Finalize (mark failed) + refund only when the job will NOT run again:
+        // a terminal error (we return below), or the final BullMQ attempt.
+        // Refunding on a non-final retryable attempt would let a successful
+        // retry deliver the render for free (commit_credits no-ops against an
+        // already-refunded usage_log).
+        if (isTerminal || isFinalJobAttempt(bullJob)) {
+          await supabase
+            .from("jobs")
+            .update({
+              status: "failed",
+              error_message: errMsg,
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", jobId)
+
+          await refundJobCredits(effectiveUsageLogId, jobId, errMsg)
+        }
+
         if (isTerminal) {
           console.error(`[render-worker] Terminal error for job ${jobId}, skipping retry: ${errMsg}`)
           return

@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => {
   const mockHasCreditsRef = { value: true }
   const mockRefundJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockCreateAssetFromJob = vi.fn().mockResolvedValue(undefined)
+  // Default: treat every attempt as the final one so existing failure tests
+  // exercise the finalize+refund path. Per-test override for the retry case.
+  const mockIsFinalJobAttempt = vi.fn().mockReturnValue(true)
   const mockIsPromptBlocked = vi.fn().mockReturnValue(false)
   const mockInitProviders = vi.fn()
   const mockTryInlineReconcile = vi.fn().mockResolvedValue(undefined)
@@ -32,6 +35,7 @@ const mocks = vi.hoisted(() => {
     mockHasCreditsRef,
     mockRefundJobCredits,
     mockCreateAssetFromJob,
+    mockIsFinalJobAttempt,
     mockIsPromptBlocked,
     mockInitProviders,
     mockTryInlineReconcile,
@@ -87,6 +91,7 @@ vi.mock("@/config/content-filter.js", () => ({
 vi.mock("../shared.js", () => ({
   refundJobCredits: mocks.mockRefundJobCredits,
   createAssetFromJob: mocks.mockCreateAssetFromJob,
+  isFinalJobAttempt: mocks.mockIsFinalJobAttempt,
 }))
 
 vi.mock("../inline-reconcile.js", () => ({
@@ -378,6 +383,23 @@ describe("video worker processor", () => {
     await expect(processor(job)).rejects.toThrow()
 
     expect(mocks.mockRefundJobCredits).toHaveBeenCalledWith("usage-1", "job-1", "crash")
+  })
+
+  it("does NOT refund or mark failed on a non-final attempt — BullMQ will retry", async () => {
+    // Regression: refunding on a retryable attempt destroys the reservation,
+    // so a successful retry commits against an already-refunded usage_log
+    // (no-op) → the media is delivered for free.
+    mocks.mockIsFinalJobAttempt.mockReturnValueOnce(false)
+    mocks.mockHandler.mockRejectedValueOnce(new Error("transient KIE 503"))
+
+    const job = makeBullJob("generate-image")
+    // Still rethrows so BullMQ schedules the retry...
+    await expect(processor(job)).rejects.toThrow("transient KIE 503")
+    // ...but the reservation is left intact and the row is not marked failed.
+    expect(mocks.mockRefundJobCredits).not.toHaveBeenCalled()
+    expect(mocks.mockUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    )
   })
 
   // -------------------------------------------------------------------------
