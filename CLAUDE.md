@@ -87,6 +87,7 @@ Enterprise code lives under `backend/src/ee/` and `frontend/src/ee/` and is gove
 - Backend imports: every relative import in `backend/src/` MUST end in `.js` (Node ESM requirement; `tsconfig.json` `moduleResolution: "bundler"` passes extensionless paths through verbatim and the compiled `dist/` then crashes with `ERR_MODULE_NOT_FOUND` — see `backend/CLAUDE.md`). The `backend-boot-smoke` CI job catches violations.
 - Frontend state: React Query (server) + Zustand (UI) + React Flow (canvas).
 - Never mutate objects/arrays — always copy.
+- **Prefer the most robust, future-proof solution over the quickest one.** When choosing between approaches, favor the one that can't silently regress and that new code stays correct under by default (single source of truth, pass-through over re-derivation, capability/data-driven over hardcoded provider/name lists, an invariant + guard test over "remember to update the list"). Amount of work is not the deciding factor — correctness and resistance to future drift are.
 - File size: 200–400 lines typical, 800 max.
 - No `console.log` in production code.
 - Stack: Vite 6 / React Router 7 / shadcn/ui / Tailwind frontend; Fastify + BullMQ (Redis) backend; Supabase Postgres; Cloudflare R2; Stripe.
