@@ -23,6 +23,31 @@ export interface JobContext {
 
 export type HandlerFn = (job: Job, ctx: JobContext) => Promise<void>
 
+/**
+ * True when a thrown error is terminal for THIS BullMQ job — i.e. no further
+ * automatic retry will run, so the job-failure finalize + credit refund MUST
+ * happen on this attempt.
+ *
+ * Why this matters (credit correctness): refunding on a non-final attempt
+ * CAS-flips the reservation reserved→refunded. BullMQ then retries; a
+ * successful retry calls commitJobCredits, but commit_credits matches
+ * `status='reserved'` and the row is already 'refunded', so the commit
+ * silently no-ops — the media is delivered for FREE while we paid the
+ * provider. So we must only refund when the job won't be retried.
+ *
+ * BullMQ v5 semantics (verified against the installed source,
+ * classes/job.js `shouldRetryJob`): `attemptsMade` is 0 during the first
+ * processing and is incremented only AFTER a failure, and a retry happens iff
+ * `attemptsMade + 1 < opts.attempts`. So "final attempt" is the exact inverse:
+ * `attemptsMade + 1 >= attempts`. This holds because these queues use a plain
+ * exponential backoff (no strategy returning -1) and never throw
+ * UnrecoverableError — the only other ways BullMQ would skip a retry early.
+ */
+export function isFinalJobAttempt(job: Pick<Job, "attemptsMade" | "opts">): boolean {
+  const attempts = job.opts?.attempts ?? 1
+  return job.attemptsMade + 1 >= attempts
+}
+
 const SOCIAL_HOSTNAMES = [
   "youtube.com", "youtu.be",
   "tiktok.com",
