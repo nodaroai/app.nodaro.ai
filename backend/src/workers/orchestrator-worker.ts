@@ -41,6 +41,7 @@ import { migrateEdgeOutputMode } from "@nodaro/shared"
 import { REPEAT_PLACEHOLDER, getEffectiveRepeatCount, REPEATABLE_NODE_TYPES, expandItemsWithRepeat, decodeProviderItem } from "@nodaro/shared"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
+import { assembleFanOutResult } from "./fan-out-result.js"
 import { calculateMonetizationMarkup } from "@nodaro/shared"
 
 /** Env-var ceiling — tier limits are capped by this. */
@@ -1115,42 +1116,24 @@ async function executeNodeForList(
 
   const settled = await settledWithLimit(tasks, maxConcurrency ?? MAX_CONCURRENT_NODES_CEILING, cancelRef)
 
-  // Assemble results in original index order
-  const allResults: string[] = new Array(items.length).fill("")
-  const allJobIds: string[] = []
-  let firstOutput: NodeOutput | undefined
-  let totalCreditsUsed = 0
-  let lastJobId: string | undefined
-  let lastUsageLogId: string | undefined
-
-  for (let i = 0; i < settled.length; i++) {
-    const entry = settled[i]
-    if (entry.status === "fulfilled") {
-      const { index, result, resultValue } = entry.value
-      allResults[index] = resultValue
-      if (index === 0) firstOutput = result.output
-      totalCreditsUsed += result.creditsUsed ?? 0
-      if (result.jobId) {
-        lastJobId = result.jobId
-        allJobIds.push(result.jobId)
-      }
-      if (result.usageLogId) lastUsageLogId = result.usageLogId
-    } else if (!cancelRef.cancelled) {
-      cancelRef.cancelled = true
-    }
-  }
-
-  const combinedOutput: NodeOutput = {
-    ...(firstOutput ?? {}),
-    listResults: allResults,
+  // Assemble per-iteration results + apply failure propagation. Throws the
+  // first genuine failure when NOTHING succeeded (so the orchestrator marks
+  // this node failed and the run fail-fasts) instead of the old behavior of
+  // always returning success with empty/partial output. See assembleFanOutResult.
+  const assembly = assembleFanOutResult(settled, items.length)
+  if (assembly.genuineFailure !== undefined) {
+    console.warn(
+      `[orchestrator] Fan-out node ${node.id} (${node.type}): ` +
+      `${assembly.succeededCount}/${items.length} iterations succeeded; continuing with partial results.`,
+    )
   }
 
   return {
-    output: combinedOutput,
-    jobId: lastJobId,
-    jobIds: allJobIds.length > 1 ? allJobIds : undefined,
-    usageLogId: lastUsageLogId,
-    creditsUsed: totalCreditsUsed,
+    output: assembly.output,
+    jobId: assembly.jobId,
+    jobIds: assembly.jobIds,
+    usageLogId: assembly.usageLogId,
+    creditsUsed: assembly.creditsUsed,
   }
 }
 
