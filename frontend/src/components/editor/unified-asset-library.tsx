@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { createPortal } from "react-dom"
-import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen } from "lucide-react"
+import { Grid3X3, X, Loader2, AlertCircle, Plus, Search, UserCircle, Package, MapPin, SmilePlus, FolderOpen, Images, Film, Music } from "lucide-react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,11 +20,16 @@ const CharacterPageModal = lazy(() => import("./character-page-modal").then(m =>
 const ObjectPageModal = lazy(() => import("./object-page-modal").then(m => ({ default: m.ObjectPageModal })))
 const LocationStudioModal = lazy(() => import("./location-studio/location-studio-modal"))
 import { createClient } from "@/lib/supabase"
-import type { DbCharacter, DbObject, DbLocation, DbFace } from "@/lib/api"
+import type { DbCharacter, DbObject, DbLocation, DbFace, LibraryAsset } from "@/lib/api"
 import { CachedImage } from "@/components/ui/cached-image"
+import { LibraryMediaBrowser } from "./library-media-browser"
+import { assetToUploadNode } from "@/lib/asset-to-node"
 import type { CharacterNodeData, ObjectNodeData, LocationNodeData, FaceNodeData } from "@/types/nodes"
 
-type AssetType = "all" | "character" | "object" | "location" | "face"
+// Definition-asset tabs + media tabs (images/videos/audio pulled from the
+// user's account library).
+type AssetType = "all" | "character" | "object" | "location" | "face" | "image" | "video" | "audio"
+const MEDIA_TYPES: ReadonlySet<AssetType> = new Set<AssetType>(["image", "video", "audio"])
 
 interface UnifiedAsset {
   id: string
@@ -123,6 +128,29 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<AssetType>("all")
   const [filterByProject, setFilterByProject] = useState<string>("all")
+  // "All" + the three media tabs render the user's account media (all assets);
+  // the definition tabs (character/object/location/face) render asset records.
+  const isMediaTab = typeFilter === "all" || MEDIA_TYPES.has(typeFilter)
+
+  // Drop a picked media file onto the canvas as an upload-* node, then close.
+  // Reads nodes/addNode from the store at call time so it stays decoupled from
+  // this component's lexical scope.
+  const handleAddMediaToCanvas = useCallback(
+    (asset: LibraryAsset) => {
+      const node = assetToUploadNode(asset)
+      if (!node) return
+      // Place next to existing nodes (matching this modal's definition-asset add
+      // convention); on an empty canvas this falls back to a fixed spot. Select
+      // the new node so its config panel opens — clear feedback that it landed.
+      const { nodes: storeNodes, addNode: storeAddNode, selectNode: storeSelectNode } = useWorkflowStore.getState()
+      const maxX = storeNodes.length > 0 ? Math.max(...storeNodes.map((n) => n.position.x)) + 300 : 200
+      const avgY = storeNodes.length > 0 ? storeNodes.reduce((sum, n) => sum + n.position.y, 0) / storeNodes.length : 200
+      const newId = storeAddNode(node.type, { x: maxX, y: avgY }, node.data)
+      if (newId) storeSelectNode(newId)
+      onClose()
+    },
+    [onClose],
+  )
 
   // Page modals
   const [characterPageNodeId, setCharacterPageNodeId] = useState<string | null>(null)
@@ -372,7 +400,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           onClick={onClose}
         >
           <div
-            className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[600px] max-w-[95vw] max-h-[80vh] flex flex-col"
+            className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2D2D2D] rounded-xl shadow-2xl w-[1100px] max-w-[95vw] max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
           {/* Header */}
@@ -437,7 +465,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
           </div>
 
           {/* Type Filter Tabs */}
-          <div className="flex gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
+          <div className="flex flex-wrap gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E]">
             <button
               type="button"
               className={`h-8 px-4 text-xs font-medium rounded-full transition-colors ${
@@ -448,7 +476,6 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               onClick={() => setTypeFilter("all")}
             >
               All
-              <span className="ml-1.5 text-[10px] opacity-70">({counts.all})</span>
             </button>
             <button
               type="button"
@@ -502,9 +529,56 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               Faces
               <span className="text-[10px] opacity-70">({counts.face})</span>
             </button>
+            <div className="w-px self-stretch my-1 bg-gray-200 dark:bg-[#2D2D2D]" />
+            <button
+              type="button"
+              className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                typeFilter === "image"
+                  ? "bg-[#ff0073] text-white"
+                  : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+              }`}
+              onClick={() => setTypeFilter("image")}
+            >
+              <Images className="h-3 w-3" />
+              Images
+            </button>
+            <button
+              type="button"
+              className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                typeFilter === "video"
+                  ? "bg-[#ff0073] text-white"
+                  : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+              }`}
+              onClick={() => setTypeFilter("video")}
+            >
+              <Film className="h-3 w-3" />
+              Videos
+            </button>
+            <button
+              type="button"
+              className={`h-8 px-4 text-xs font-medium rounded-full transition-colors flex items-center gap-1 ${
+                typeFilter === "audio"
+                  ? "bg-[#ff0073] text-white"
+                  : "bg-gray-100 dark:bg-[#2D2D2D] text-gray-500 dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-[#3D3D3D]"
+              }`}
+              onClick={() => setTypeFilter("audio")}
+            >
+              <Music className="h-3 w-3" />
+              Audio
+            </button>
           </div>
 
-          {/* Body */}
+          {/* Body — definition assets, or the user's media for the image/video/audio tabs */}
+          {isMediaTab ? (
+            <LibraryMediaBrowser
+              hideChrome
+              owned
+              type={typeFilter as "all" | "image" | "video" | "audio"}
+              search={searchQuery}
+              onAddToCanvas={handleAddMediaToCanvas}
+              className="bg-[#F8FAFC] dark:bg-[#121212]"
+            />
+          ) : (
           <div className="flex-1 overflow-y-auto p-4 bg-[#F8FAFC] dark:bg-[#121212]">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
@@ -522,16 +596,8 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
             ) : filteredAssets.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-[#64748B]">
                 <Grid3X3 className="w-10 h-10 mb-2 opacity-40" />
-                <p className="text-sm">
-                  {searchQuery || typeFilter !== "all" || filterByProject !== "all"
-                    ? "No matching assets"
-                    : "No saved assets"}
-                </p>
-                <p className="text-xs mt-1">
-                  {searchQuery || typeFilter !== "all" || filterByProject !== "all"
-                    ? "Try adjusting your filters"
-                    : "Generate a character, object, or location to save it here"}
-                </p>
+                <p className="text-sm">No matching assets</p>
+                <p className="text-xs mt-1">Try adjusting your filters</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-3">
@@ -592,6 +658,7 @@ export function UnifiedAssetLibraryModal({ open, onClose }: UnifiedAssetLibraryM
               </div>
             )}
           </div>
+          )}
         </div>
         </div>,
         document.body
