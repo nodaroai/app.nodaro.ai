@@ -106,12 +106,23 @@ beforeEach(async () => {
 
   app = Fastify({ logger: false })
 
-  // Bypass auth — set userId from header
+  // Bypass auth — set userId from header. When `x-app-scopes` is present,
+  // also simulate an OAuth developer-app token (sets req.appAuthorization) so
+  // scope enforcement can be exercised. Absent the header, appAuthorization
+  // stays undefined (the Supabase-JWT owner path), matching every other test.
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
     if (header && typeof header === "string") {
       req.userId = header
       req.userRole = undefined
+    }
+    const scopesHeader = req.headers["x-app-scopes"]
+    if (typeof scopesHeader === "string") {
+      req.appAuthorization = {
+        appId: "app-1",
+        authorizationId: "authz-1",
+        scopes: scopesHeader.split(/\s+/).filter(Boolean),
+      }
     }
   })
 
@@ -1022,5 +1033,88 @@ describe("POST /v1/workflows/import", () => {
     expect(byId["n-loc"].data.locationDbId).toBe("new-loc-1")
     expect(byId["n-char"].data.name).toBe("Hero")
     expect(byId["n-img"].data).toEqual({})
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OAuth developer-app scope enforcement (regression for the scope-bypass bug:
+// mutating workflow routes called authorize() with no scope arg, so an app
+// token granted e.g. only jobs:read could read/rewrite/hard-delete every
+// workflow the consenting user owns over plain HTTP).
+// ---------------------------------------------------------------------------
+
+describe("OAuth scope enforcement", () => {
+  // A token whose granted scopes do NOT include the one the route requires.
+  const NARROW = "jobs:read"
+
+  it("PATCH /v1/workflows/:id → 403 when token lacks workflows:write", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": NARROW },
+      payload: { name: "Updated" },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("DELETE /v1/workflows/:id → 403 when token lacks workflows:write", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": NARROW },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("GET /v1/workflows/:id → 403 when token lacks workflows:read", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": NARROW },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("POST /v1/projects/:projectId/workflows → 403 when token lacks workflows:write", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/projects/${TEST_PROJECT_ID}/workflows`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": NARROW },
+      payload: { name: "New" },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("POST /v1/workflows/:parentId/sub-workflows → 403 when token lacks workflows:write", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/sub-workflows`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": NARROW },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("insufficient_scope")
+  })
+
+  it("PATCH /v1/workflows/:id → allowed (200) when token carries workflows:write", async () => {
+    const updated = { ...DB_WORKFLOW_FULL, name: "Updated" }
+    const mockSingle = vi.fn().mockResolvedValue({ data: updated, error: null })
+    const mockSelect = vi.fn().mockReturnValue({ maybeSingle: mockSingle })
+    const mockEq2 = vi.fn().mockReturnValue({ select: mockSelect })
+    const mockEq1 = vi.fn().mockReturnValue({ eq: mockEq2 })
+    const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq1 })
+    vi.mocked(supabase.from).mockReturnValue({ update: mockUpdate } as never)
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}`,
+      headers: { "x-user-id": TEST_USER_ID, "x-app-scopes": "workflows:read workflows:write" },
+      payload: { name: "Updated" },
+    })
+    expect(res.statusCode).toBe(200)
   })
 })

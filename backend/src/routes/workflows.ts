@@ -267,7 +267,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   // Create workflow in a project
   app.post("/v1/projects/:projectId/workflows", async (req, reply) => {
-    const userId = authorize(req, reply)
+    const userId = authorize(req, reply, "workflows:write")
     if (!userId) return
 
     const params = parseWith(reply, projectIdParams, req.params, "Invalid project ID")
@@ -388,7 +388,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   // Get workflow by ID
   app.get("/v1/workflows/:id", async (req, reply) => {
-    const userId = authorize(req, reply)
+    const userId = authorize(req, reply, "workflows:read")
     if (!userId) return
 
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
@@ -410,7 +410,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   // Update workflow
   app.patch("/v1/workflows/:id", async (req, reply) => {
-    const userId = authorize(req, reply)
+    const userId = authorize(req, reply, "workflows:write")
     if (!userId) return
 
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
@@ -504,7 +504,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   // Delete workflow
   app.delete("/v1/workflows/:id", async (req, reply) => {
-    const userId = authorize(req, reply)
+    const userId = authorize(req, reply, "workflows:write")
     if (!userId) return
 
     const params = parseWith(reply, workflowIdParams, req.params, "Invalid workflow ID")
@@ -630,7 +630,7 @@ export async function workflowRoutes(app: FastifyInstance) {
 
   // Create a child sub-workflow under a parent
   app.post("/v1/workflows/:parentId/sub-workflows", async (req, reply) => {
-    const userId = authorize(req, reply)
+    const userId = authorize(req, reply, "workflows:write")
     if (!userId) return
 
     const params = parseWith(

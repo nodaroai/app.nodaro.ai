@@ -1,22 +1,10 @@
 import { join } from "node:path"
 import youtubedl from "youtube-dl-exec"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
-
-const SOCIAL_MEDIA_HOSTS = [
-  "youtube.com", "youtu.be",
-  "tiktok.com",
-  "instagram.com",
-  "twitter.com", "x.com",
-  "facebook.com", "fb.watch", "fb.com",
-]
+import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 
 function isSocialMediaUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return SOCIAL_MEDIA_HOSTS.some((h) => parsed.hostname.includes(h))
-  } catch {
-    return false
-  }
+  return isAllowedSocialVideoUrl(url)
 }
 
 interface TrimAudioOptions {

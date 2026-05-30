@@ -46,6 +46,51 @@ export const safeUrlSchema = z
   )
 
 /**
+ * Canonical allowlist of social-video hosts that the yt-dlp / ffmpeg download
+ * paths accept (youtube-audio, extract-youtube-audio, download-video, the
+ * worker `downloadAudioToR2`, and `trimAudio`). Single source of truth — every
+ * callsite imports this rather than keeping its own copy.
+ */
+export const SOCIAL_VIDEO_HOSTS = [
+  "youtube.com", "youtu.be",
+  "tiktok.com",
+  "instagram.com",
+  "twitter.com", "x.com",
+  "facebook.com", "fb.watch", "fb.com",
+] as const
+
+/** YouTube-only subset (the extract-youtube-audio route accepts only YouTube). */
+export const YOUTUBE_HOSTS = ["youtube.com", "youtu.be"] as const
+
+/**
+ * Exact registrable-domain match against an allowlist.
+ *
+ * **SSRF gate** — replaces the unanchored `hostname.includes(domain)` substring
+ * check that previously guarded every yt-dlp callsite. A substring check let an
+ * attacker-controlled host like `youtube.com.attacker.example` pass and then
+ * resolve to an internal/metadata IP (yt-dlp does its own DNS+HTTP, bypassing
+ * `safeFetch`). Exact-suffix matching admits only the domain itself or a true
+ * subdomain (`www.youtube.com`, `m.youtu.be`), which the attacker cannot
+ * DNS-control because the allowlist is fixed, reputable domains.
+ */
+export function hostnameMatchesAllowlist(hostname: string, domains: readonly string[]): boolean {
+  const h = hostname.toLowerCase().replace(/\.$/, "") // strip FQDN trailing dot
+  return domains.some((d) => {
+    const dom = d.toLowerCase()
+    return h === dom || h.endsWith("." + dom)
+  })
+}
+
+/** True when `url`'s host is on the social-video allowlist (exact-suffix match). */
+export function isAllowedSocialVideoUrl(url: string, domains: readonly string[] = SOCIAL_VIDEO_HOSTS): boolean {
+  try {
+    return hostnameMatchesAllowlist(new URL(url).hostname, domains)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Bare origin URL — `https://example.com` (or `http://localhost`), no path /
  * query / fragment. Used for CORS allowlists and CSP `frame-ancestors` lists,
  * where any extra characters in the stored value would be either silently

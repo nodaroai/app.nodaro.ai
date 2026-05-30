@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
+import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
@@ -48,21 +49,8 @@ export function isFinalJobAttempt(job: Pick<Job, "attemptsMade" | "opts">): bool
   return job.attemptsMade + 1 >= attempts
 }
 
-const SOCIAL_HOSTNAMES = [
-  "youtube.com", "youtu.be",
-  "tiktok.com",
-  "instagram.com",
-  "twitter.com", "x.com",
-  "facebook.com", "fb.watch", "fb.com",
-]
-
 export function isSocialUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return SOCIAL_HOSTNAMES.some((h) => parsed.hostname.includes(h))
-  } catch {
-    return false
-  }
+  return isAllowedSocialVideoUrl(url)
 }
 
 export async function downloadAudioToR2(url: string): Promise<string> {

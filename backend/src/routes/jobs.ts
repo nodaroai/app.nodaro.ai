@@ -308,6 +308,11 @@ export async function jobRoutes(app: FastifyInstance) {
       })
     }
 
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
+    }
+
     // Non-admins always see only their own jobs; admins can optionally filter by userId
     const filterUserId = isAdmin && queryUserId ? queryUserId : currentUserId
 
@@ -349,6 +354,11 @@ export async function jobRoutes(app: FastifyInstance) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
       })
+    }
+
+    if (req.appAuthorization) {
+      const err = requireScope(req.appAuthorization.scopes, "jobs:read")
+      if (err) return reply.status(err.statusCode).send(err.body)
     }
 
     const parsed = batchStatusBody.safeParse(req.body ?? {})
