@@ -461,8 +461,61 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       return
     }
 
-    // 2. Initialize node states
+    // 2. Initialize node states — RESUME-AWARE.
+    //
+    // A BullMQ stalled re-pick (the documented recovery path: worker died
+    // mid-run on a Railway redeploy / OOM / SIGKILL, lock expired) re-invokes
+    // this function for the SAME execution. Rebuilding `nodeStates = {}` here
+    // would re-derive every node as executable and re-run + RE-RESERVE credits
+    // for nodes that already completed-and-committed on the prior attempt
+    // (double-charge + duplicate provider spend + duplicate outputs).
+    //
+    // Load the persisted state and carry forward terminal progress so completed
+    // work is neither re-executed nor re-charged. Reconcile against the jobs
+    // table first to catch nodes whose job finished after the crash but before
+    // node_states could be written. This is a pure no-op on a fresh run (no
+    // prior progress → nodeStates stays empty → identical to the old behavior).
+    const { data: execRow } = await supabase
+      .from("workflow_executions")
+      .select("status, node_states")
+      .eq("id", executionId)
+      .single()
+
+    // A stalled re-pick of an already-finished execution must not re-run it.
+    if (execRow && ["completed", "failed", "cancelled"].includes(execRow.status as string)) {
+      console.log(
+        `[orchestrator] Execution ${executionId} already ${execRow.status} — skipping re-run (stalled re-pick of a closed execution)`,
+      )
+      return
+    }
+
     const nodeStates: Record<string, NodeExecutionState> = {}
+    let resumedNodeCount = 0
+    {
+      const persisted = (execRow?.node_states ?? {}) as Record<string, NodeExecutionState>
+      const hasPriorProgress = Object.values(persisted).some(
+        (s) => s?.status === "completed" || s?.status === "skipped",
+      )
+      if (hasPriorProgress) {
+        // Reconcile "running"/"pending" entries against the jobs table (flips
+        // jobs that completed post-crash to completed), then carry forward only
+        // TERMINAL-DONE states. Nodes still genuinely in-flight (job pending at
+        // re-pick time) are intentionally NOT carried — they re-execute. A
+        // failed node is also not carried, so it re-attempts on resume.
+        const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
+        for (const [id, st] of Object.entries(next)) {
+          if (st?.status === "completed" || st?.status === "skipped") {
+            nodeStates[id] = st
+            resumedNodeCount++
+          }
+        }
+        if (resumedNodeCount > 0) {
+          console.log(
+            `[orchestrator] Resuming execution ${executionId}: ${resumedNodeCount} node(s) already done — skipped (no re-charge)`,
+          )
+        }
+      }
+    }
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
     // and onJobProgress couldn't find earlier iterations.
@@ -648,8 +701,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       failedNodes: 0,
     })
 
-    // 7. Execute level by level
-    let completedCount = 0
+    // 7. Execute level by level. On a resume, the carried-forward done nodes
+    // already count toward progress (they're in totalExecutions) — seed the
+    // counter so the progress bar isn't under-reported after a re-pick.
+    let completedCount = resumedNodeCount
     let failedCount = 0
     let totalCredits = 0
     const startTime = Date.now()
