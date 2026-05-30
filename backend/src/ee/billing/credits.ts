@@ -475,10 +475,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "suno-generate": 4,            // 12 KIE cr (V4 default)
   "suno-cover": 4,               // 12 KIE cr
   "suno-extend": 4,              // 12 KIE cr
-  "suno-lyrics": 2,              // 0.4 KIE cr
-  "suno-separate": 5,            // 10 KIE cr, vocal separation
+  ***REDACTED-OSS-SCRUB*** — matches model_pricing (mig 059); was a stale 2
+  "suno-separate": 4,            // 10 KIE cr ($0.05) vocal separation — matches model_pricing (mig 059); was a stale 5
   "suno-separate-stem": 16,      // 50 KIE cr, full stem separation
-  "suno-music-video": 5,         // 2 KIE cr
+  ***REDACTED-OSS-SCRUB***; was a stale 5 (5× over the DB value runtime uses)
   "suno-mashup": 4,              // 12 KIE cr
   ***REDACTED-OSS-SCRUB***
   ***REDACTED-OSS-SCRUB***
@@ -520,7 +520,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── LLM (standard tier = base entry, economy = 0.5x min 1, premium = 3x) ──
   "prompt-helper": 2,            // standard
   "prompt-helper:economy": 1,
-  "prompt-helper:premium": 5,
+  "prompt-helper:premium": 3,    // matches model_pricing (mig 075); was a stale 5. (LLM tier VALUES themselves are part of the pricing-convention review.)
   "ai-writer": 5,                // standard
   "ai-writer:economy": 3,
   "ai-writer:premium": 15,

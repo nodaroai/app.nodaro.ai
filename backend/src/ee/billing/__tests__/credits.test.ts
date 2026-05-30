@@ -789,7 +789,7 @@ describe("CreditsService", () => {
     it("resolves suno-separate default type", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "suno-separate", data: { type: "separate" } },
-      ])).toBe(5)
+      ])).toBe(4) // matches model_pricing (mig 059); STATIC was a stale 5
     })
 
     it("resolves suno-generate V5", () => {
@@ -813,13 +813,13 @@ describe("CreditsService", () => {
     it("resolves suno-lyrics (exempted from V5 check)", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "suno-lyrics", data: { model: "V5" } },
-      ])).toBe(2)
+      ])).toBe(1) // matches model_pricing (mig 059); STATIC was a stale 2
     })
 
     it("resolves suno-music-video (exempted from V5 check)", () => {
       expect(CreditsService.estimateWorkflowCredits([
         { type: "suno-music-video", data: { model: "V5" } },
-      ])).toBe(5)
+      ])).toBe(1) // matches model_pricing (mig 059); STATIC was a stale 5
     })
 
     it("resolves extend-video veo-extend:quality", () => {
