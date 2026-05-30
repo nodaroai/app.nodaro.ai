@@ -114,7 +114,7 @@ export async function replicateLipSync(
   const videoUrl = extractUrl(
     typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output,
   )
-  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, provider)
 
   console.log(`[Replicate:lipSync] Output: "${videoUrl}"`)
   console.log(`[Replicate:lipSync] Cost: $${cost?.toFixed(6) ?? "N/A"}`)
