@@ -17,7 +17,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { CachedImage } from "@/components/ui/cached-image"
 import { buildScenePrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
 import { TTS_VOICES } from "@/lib/tts-voices"
-import { textToSpeech, getJobStatus } from "@/lib/api"
+import { textToSpeech, getJobStatusLean } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import type { SceneNodeDataType, SceneCharacterEntry, SceneObjectEntry, SceneDialogueEntry, SceneLocationEntry, GenerateScriptData, WorkflowNode, AudioAssignment } from "@/types/nodes"
 import { mapScriptSceneToNodeData, getSceneCharacterNames } from "@/types/nodes"
@@ -239,7 +239,7 @@ export function SceneConfig({ data, onUpdate, step, nodeId }: SceneConfigProps) 
 
       const poll = setInterval(async () => {
         try {
-          const job = await getJobStatus(jobId)
+          const job = await getJobStatusLean(jobId)
           if (job.status === "completed") {
             clearInterval(poll)
             const audioUrl = job.output_data?.audioUrl ?? ""

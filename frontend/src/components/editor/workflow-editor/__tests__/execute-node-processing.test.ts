@@ -82,7 +82,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 vi.mock("@/lib/api", () => ({
   generateImage: vi.fn(),
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
   generateAIWriterStream: (...args: unknown[]) =>
     mockGenerateAIWriterStream(...args),
   generateSceneGraph: (...args: unknown[]) =>

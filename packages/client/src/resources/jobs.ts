@@ -37,12 +37,38 @@ export interface CancelJobResult {
   cancelled: number
 }
 
+/**
+ * Lean job status returned by `GET /v1/jobs/:id/status`. Skips the
+ * `input_data` JSONB, cost/timestamp columns, and the public sanitize pass —
+ * intended for poll loops that only need progress/output/error.
+ */
+export interface JobStatusResult {
+  id: string
+  status: JobStatus
+  progress?: number
+  output_data?: unknown
+  error_message?: string | null
+}
+
 export class JobsResource {
   constructor(private client: NodaroClient) {}
 
   /** Get a single job by ID. */
   get(id: string): Promise<{ data: Job }> {
     return this.client.request("GET", `/v1/jobs/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * Get the lean status of a single job (poll-loop friendly).
+   * Hits `GET /v1/jobs/:id/status` — returns only id/status/progress/
+   * output_data/error_message, with far less wire/CPU cost than `get()`.
+   * Same auth + ownership semantics as {@link get}.
+   */
+  getStatus(id: string): Promise<{ data: JobStatusResult }> {
+    return this.client.request(
+      "GET",
+      `/v1/jobs/${encodeURIComponent(id)}/status`,
+    )
   }
 
   /**

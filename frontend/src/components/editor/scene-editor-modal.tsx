@@ -7,7 +7,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { SceneConfig } from "./scene-config"
 import { buildScenePrompt, buildVideoPrompt, PROMPT_MAX_LENGTH } from "@/lib/prompt-builder"
-import { textToSpeech, generateVideo, getJobStatus } from "@/lib/api"
+import { textToSpeech, generateVideo, getJobStatusLean } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { MediaPreviewModal } from "./media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -141,7 +141,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
         await new Promise<void>((resolve, reject) => {
           const poll = setInterval(async () => {
             try {
-              const job = await getJobStatus(jobId)
+              const job = await getJobStatusLean(jobId)
               if (job.status === "completed") {
                 clearInterval(poll)
                 const currentData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as SceneNodeDataType | undefined
@@ -187,7 +187,7 @@ export function SceneEditorModal({ isOpen, onClose, nodeId }: SceneEditorModalPr
       await new Promise<void>((resolve, reject) => {
         const poll = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId)
+            const job = await getJobStatusLean(jobId)
             if (job.status === "completed") {
               clearInterval(poll)
               const currentData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as SceneNodeDataType | undefined

@@ -58,7 +58,7 @@ import {
   mixAudioApi,
   combineAudioApi,
   generateImage,
-  getJobStatus,
+  getJobStatusLean,
   llmChatStream,
   setForcePrivate,
   setUserPromptTemplate,
@@ -2898,7 +2898,7 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -3129,7 +3129,7 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.progress) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -3575,7 +3575,7 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -4386,7 +4386,7 @@ export function executeNode(
                     return;
                   }
                   try {
-                    const job = await getJobStatus(jobId);
+                    const job = await getJobStatusLean(jobId);
                     pollFailures = 0;
                     if (job.status === "processing" && job.progress != null) {
                       // Surface the first job's progress only — multi-version
@@ -4416,7 +4416,7 @@ export function executeNode(
                       // Final verification: completion may have raced the
                       // network blip — re-fetch once before giving up.
                       try {
-                        const finalJob = await getJobStatus(jobId);
+                        const finalJob = await getJobStatusLean(jobId);
                         if (finalJob.status === "completed") {
                           const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
                           const url = (od.videoUrl as string | undefined)?.trim();
@@ -4551,7 +4551,7 @@ export function executeNode(
                 return;
               }
               try {
-                const job = await getJobStatus(jobId);
+                const job = await getJobStatusLean(jobId);
                 pollFailures = 0;
                 if (job.status === "processing" && job.progress != null) {
                   updateProgressIfChanged(node.id, job.progress, updateNodeData);
@@ -4611,7 +4611,7 @@ export function executeNode(
                   ctx.untrackInterval(poll);
                   // Final verification: the job may have completed while polling was failing
                   try {
-                    const finalJob = await getJobStatus(jobId);
+                    const finalJob = await getJobStatusLean(jobId);
                     if (finalJob.status === "completed") {
                       const od = (finalJob.output_data ?? {}) as Record<string, unknown>;
                       const outImageUrl = od.imageUrl as string | undefined;
@@ -4806,7 +4806,7 @@ export function executeNode(
         updateNodeData(node.id, { currentJobId: jobId });
         const poll = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId);
+            const job = await getJobStatusLean(jobId);
             if (job.progress != null) updateProgressIfChanged(node.id, job.progress, updateNodeData);
             if (job.status === "completed") {
               clearInterval(poll);
@@ -6606,7 +6606,7 @@ export function executeNode(
           details: ImageCriticData["details"];
         };
         if ((result as { deduped?: true }).deduped === true) {
-          const job = await getJobStatus(result.jobId);
+          const job = await getJobStatusLean(result.jobId);
           const od = (job?.output_data ?? {}) as Record<string, unknown>;
           payload = {
             jobId: result.jobId,

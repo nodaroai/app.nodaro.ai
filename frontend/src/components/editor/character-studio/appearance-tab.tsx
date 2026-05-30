@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
-import { approvePortrait, cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
+import { approvePortrait, cancelJob, generateCharacter, getJobStatusLean } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
@@ -96,7 +96,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       const jobId = c.jobId
       const interval = setInterval(async () => {
         try {
-          const job = await getJobStatus(jobId)
+          const job = await getJobStatusLean(jobId)
           setPortraitCandidates((curr) =>
             curr.map((cur) =>
               cur.jobId === jobId
@@ -175,7 +175,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       for (const jobId of jobIds) {
         const interval = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId)
+            const job = await getJobStatusLean(jobId)
             setPortraitCandidates((curr) =>
               curr.map((c) =>
                 c.jobId === jobId

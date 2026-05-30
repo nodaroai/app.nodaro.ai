@@ -36,6 +36,7 @@ import {
   saveToStorageApi,
   getBatchJobStatus,
   getJobStatus,
+  getJobStatusLean,
   subscribeToDownloadProgress,
   generateAIWriterStream,
   saveLocation,
@@ -384,6 +385,33 @@ describe("getJobStatus", () => {
     expect(mock.mock.calls[0][1].method).toBe("GET")
     expect(mock.mock.calls[0][1].headers).toMatchObject({
       Authorization: "Bearer tok-xyz",
+    })
+    expect(result).toEqual(jobData)
+  })
+})
+
+// ---- getJobStatusLean -----------------------------------------------------
+
+describe("getJobStatusLean", () => {
+  it("hits the lean /v1/jobs/:id/status endpoint and returns body.data", async () => {
+    sessionWith("tok-lean")
+    const jobData = {
+      id: "j1",
+      status: "completed",
+      progress: 100,
+      output_data: { imageUrl: "u" },
+      error_message: null,
+    }
+    const mock = mockFetchJson({ data: jobData })
+    vi.stubGlobal("fetch", mock)
+
+    const result = await getJobStatusLean("j1")
+
+    // Delegates to nodaroClient.jobs.getStatus, which sets method explicitly.
+    expect(mock.mock.calls[0][0]).toBe("/v1/jobs/j1/status")
+    expect(mock.mock.calls[0][1].method).toBe("GET")
+    expect(mock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: "Bearer tok-lean",
     })
     expect(result).toEqual(jobData)
   })

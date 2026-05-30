@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
+import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
 import { hasCredits } from "@/lib/edition";
 import { getCachedUserId } from "@/hooks/use-auth";
@@ -592,7 +592,7 @@ export function restorePollingForRunningJobs(
         }
 
         try {
-          const job = await getJobStatus(jobId);
+          const job = await getJobStatusLean(jobId);
           pollFailures = 0;
 
           if (job.progress != null && job.progress > 0) {
@@ -626,7 +626,7 @@ export function restorePollingForRunningJobs(
             ctx.untrackInterval(poll);
             // Final verification before marking as failed
             try {
-              const finalJob = await getJobStatus(jobId);
+              const finalJob = await getJobStatusLean(jobId);
               if (finalJob.status === "completed") {
                 applyRestoredJobCompletion(nodeId, nodeType, finalJob, jobId);
                 return;

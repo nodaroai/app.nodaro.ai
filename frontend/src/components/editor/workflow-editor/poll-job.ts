@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { getJobStatus, getExecutionEstimate } from "@/lib/api";
+import { getJobStatusLean, getExecutionEstimate } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared";
 import type { GeneratedResult } from "@/types/nodes";
 import { buildVariantResults } from "./variant-results";
@@ -57,7 +57,7 @@ export function pollJobToCompletion(
           return;
         }
         try {
-          const job = await getJobStatus(jobId);
+          const job = await getJobStatusLean(jobId);
           pollFailures = 0;
           if (job.status === "completed") {
             ctx.untrackInterval(poll);
@@ -72,7 +72,7 @@ export function pollJobToCompletion(
             ctx.untrackInterval(poll);
             // Final verification: the job may have completed while polling was failing
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               if (job.status === "completed") {
                 resolve(job.output_data?.imageUrl ?? "");
                 return;
@@ -96,7 +96,7 @@ export function pollJobToCompletion(
  * Returns true if the completion was handled, false if no URL was found.
  */
 function handleJobCompleted(
-  job: Awaited<ReturnType<typeof getJobStatus>>,
+  job: Awaited<ReturnType<typeof getJobStatusLean>>,
   nodeId: string,
   jobId: string,
   outputKey: OutputKey,
@@ -213,7 +213,7 @@ export function pollJobWithNodeUpdate(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
 
               if (job.status === "processing") {
@@ -259,7 +259,7 @@ export function pollJobWithNodeUpdate(
                 ctx.untrackInterval(poll);
                 // Final verification: the job may have completed while polling was failing
                 try {
-                  const job = await getJobStatus(jobId);
+                  const job = await getJobStatusLean(jobId);
                   if (job.status === "completed") {
                     if (handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
                       return;

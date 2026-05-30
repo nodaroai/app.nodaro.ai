@@ -31,7 +31,7 @@
  * because the length check shortcircuits.
  */
 
-import { getJobStatus } from "./api"
+import { getJobStatusLean } from "./api"
 import { buildVariantResults } from "@/components/editor/workflow-editor/variant-results"
 import type { WorkflowNode } from "@/types/nodes"
 import type { GeneratedResult } from "@/types/nodes"
@@ -121,9 +121,9 @@ export async function computeReconciledNodeResults(
 
     const baseJobId = stripVariantSuffix(firstJobId)
 
-    let job: Awaited<ReturnType<typeof getJobStatus>>
+    let job: Awaited<ReturnType<typeof getJobStatusLean>>
     try {
-      job = await getJobStatus(baseJobId)
+      job = await getJobStatusLean(baseJobId)
     } catch {
       continue
     }

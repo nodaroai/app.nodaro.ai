@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { cancelJob, getJobStatus } from "@/lib/api"
+import { cancelJob, getJobStatusLean } from "@/lib/api"
 
 export type StudioAssetType =
   | "expressions"
@@ -134,7 +134,7 @@ export function useCharacterStudioJobs(
       const snapshot = pendingRef.current
       for (const jobId of Array.from(snapshot.keys())) {
         try {
-          const job = await getJobStatus(jobId)
+          const job = await getJobStatusLean(jobId)
           const meta = pendingRef.current.get(jobId)
           if (!meta) continue
           if (job.status === "completed") {
@@ -161,11 +161,15 @@ export function useCharacterStudioJobs(
           } else if (typeof job.progress === "number" && job.progress !== meta.progress) {
             // Only re-render when progress actually moved — avoids a fresh
             // Map every 2s when the worker isn't reporting new numbers.
+            // Capture the narrowed number locally; the `typeof` guard above
+            // doesn't propagate into the setPending closure (progress is now
+            // optional on the lean status type).
+            const nextProgress = job.progress
             setPending((prev) => {
               const cur = prev.get(jobId)
-              if (!cur || cur.progress === job.progress) return prev
+              if (!cur || cur.progress === nextProgress) return prev
               const n = new Map(prev)
-              n.set(jobId, { ...cur, progress: job.progress })
+              n.set(jobId, { ...cur, progress: nextProgress })
               return n
             })
           }

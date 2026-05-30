@@ -3639,6 +3639,31 @@ export interface Job {
   job_type?: string | null        // Job type (e.g. "generate-image")
 }
 
+/**
+ * Lean status shape returned by `GET /v1/jobs/:id/status`. Only the fields a
+ * poll loop needs — skips `input_data` JSONB + cost/timestamp columns + the
+ * public sanitize pass on the backend.
+ */
+export type JobStatusLean = {
+  id: string
+  status: Job["status"]
+  progress?: number
+  // Same shape as the full `Job.output_data` so existing poll-loop call sites
+  // (`job.output_data?.imageUrl`, etc.) keep their precise field types.
+  output_data?: Job["output_data"]
+  error_message?: string
+}
+
+/**
+ * Poll-loop friendly status fetch. Use this (not `getJobStatus`) for in-flight
+ * node polling — it hits the lean endpoint and returns far less wire/CPU cost.
+ * Delegates to `nodaroClient.jobs.getStatus`.
+ */
+export async function getJobStatusLean(jobId: string): Promise<JobStatusLean> {
+  const { data } = await nodaroClient.jobs.getStatus(jobId)
+  return data as unknown as JobStatusLean
+}
+
 /** Delegates to `nodaroClient.jobs.get` (Phase 3 SDK dogfooding). */
 export async function getJobStatus(jobId: string): Promise<Job> {
   const { data } = await nodaroClient.jobs.get(jobId)
