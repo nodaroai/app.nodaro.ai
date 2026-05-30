@@ -215,23 +215,15 @@ export async function handleRun(
   // use-workflow-persistence).
   const wasDirty = useWorkflowStore.getState().isDirty;
 
-  // Reset accumulated output so downstream list/preview nodes reflect only
-  // this run — mirrors the per-run clear the backend orchestrator applies
-  // via list-execution.ts:42.
-  resetNodeAccumulation(executableNodes);
-
   // Optimistic UI FIRST: flip every executable node to "pending" and show the
-  // running state before the save round-trip / credit precheck. This is what
-  // makes Run feel instant — the active border appears the instant the user
-  // clicks, centralized via the batched markNodesStatus action.
+  // running state before the credit precheck. This is what makes Run feel
+  // instant — the active border appears the instant the user clicks. It is
+  // fully reversible (rolled back below if the precheck fails), unlike the
+  // accumulation reset + save, which are deferred until AFTER the gate passes.
   const { markNodesStatus } = useWorkflowStore.getState();
   const executableIds = executableNodes.map((n) => n.id);
   markNodesStatus(executableIds, "pending");
   setIsRunning(true);
-
-  if (wasDirty && projectId) {
-    await save(projectId);
-  }
 
   // Credit check (cloud edition only)
   if (hasCredits()) {
@@ -273,6 +265,16 @@ export async function handleRun(
     } catch {
       // Credit check failed -- proceed anyway (optimistic state stays)
     }
+  }
+
+  // Credit gate passed — only NOW clear accumulated output and persist. Doing
+  // this before the gate wiped generatedResults (persisted node data) and saved
+  // the cleared state even when the run was about to abort for insufficient
+  // credits, destroying the prior run's on-canvas results. Mirrors the per-run
+  // clear the backend orchestrator applies via list-execution.ts:42.
+  resetNodeAccumulation(executableNodes);
+  if (wasDirty && projectId) {
+    await save(projectId);
   }
 
   toast.info("Executing workflow...", {
@@ -362,7 +364,17 @@ export async function handleRunSingleNode(
       cascadeAutoExecute(nodeId);
     })
     .catch(() => {
-      // Error already handled via toast in executeNode
+      // Error already surfaced via toast in executeNode. If the node never left
+      // the optimistic "pending" flip — e.g. executeNode rejected on synchronous
+      // input validation before writing any status — roll it back to "failed"
+      // so it doesn't keep the animated running border forever. Leave any
+      // terminal status executeNode already set untouched.
+      const cur = useWorkflowStore
+        .getState()
+        .nodes.find((n) => n.id === nodeId);
+      if ((cur?.data as { executionStatus?: string } | undefined)?.executionStatus === "pending") {
+        useWorkflowStore.getState().markNodesStatus([nodeId], "failed");
+      }
     })
     .finally(() => {
       if (pollIntervalsRef.current.size === 0) {

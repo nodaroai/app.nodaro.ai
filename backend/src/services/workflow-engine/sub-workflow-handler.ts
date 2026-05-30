@@ -7,6 +7,7 @@
  * - Cycle detection via workflowId:routeId tracking
  */
 
+import { PARAMETER_NODE_TYPES, getParameterPromptHint } from "@nodaro/shared"
 import { config } from "../../lib/config.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
 import { supabase } from "../../lib/supabase.js"
@@ -158,6 +159,18 @@ export async function executeSubWorkflow(
           completedAt: new Date().toISOString(),
         }
       }
+    } else if (subNode.type && PARAMETER_NODE_TYPES.has(subNode.type)) {
+      // Parameter pickers (mood, action-fx, lens, person, etc.) emit a prompt
+      // fragment via FieldMappings — they have no executable handler. Mirror the
+      // main orchestrator: pre-complete them so they never reach executeNode
+      // (which would create a stale jobs row → buildPayload throw "Unknown node
+      // type" → fail the whole sub-workflow), while still exposing their hint.
+      const hint = getParameterPromptHint(subNode)
+      nodeStates[subNode.id] = {
+        status: "completed",
+        output: hint ? { text: hint } : {},
+        completedAt: new Date().toISOString(),
+      }
     }
   }
 
@@ -177,6 +190,8 @@ export async function executeSubWorkflow(
       if (isSourceNode(n.type)) return false
       if (skippedIds.has(n.id)) return false
       if (isSkipNode(n.type)) return false
+      // Parameter pickers are pre-completed above and have no job handler.
+      if (n.type && PARAMETER_NODE_TYPES.has(n.type)) return false
       if (nodeStates[n.id]?.status === "completed") return false
       // Recursive sub-workflow nodes are handled specially
       if (n.type === "sub-workflow") return true
