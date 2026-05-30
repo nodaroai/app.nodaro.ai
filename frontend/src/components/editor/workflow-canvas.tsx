@@ -45,9 +45,15 @@ import { computeOverlap, worldToLocal, localToWorld, GROUP_ATTACH_THRESHOLD, ord
 const UnifiedAssetLibraryModal = lazy(() => import("./unified-asset-library").then(m => ({ default: m.UnifiedAssetLibraryModal })))
 const MediaLibraryModal = lazy(() => import("./media-library-modal").then(m => ({ default: m.MediaLibraryModal })))
 const ComponentMarketplaceModal = lazy(() => import("./component-marketplace-modal").then(m => ({ default: m.ComponentMarketplaceModal })))
+// Full dashboard surfaces embedded as in-editor dialogs by the empty-state pills
+// (Templates / Tutorials) so the user never navigates away from their Flow.
+const TemplatesPageModal = lazy(() => import("@/app/(dashboard)/templates/page"))
+const TutorialsTabModal = lazy(() => import("@/components/dashboard/tutorials-tab").then(m => ({ default: m.TutorialsTab })))
 import type { ComponentSelection } from "./component-marketplace-modal"
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
+import { EmptyCanvasState } from "./empty-canvas-state"
+import { assetToUploadNode } from "@/lib/asset-to-node"
 import { useWorkflowStore, migrateImageNodes, buildDuplicatedNodeData } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
 import { useUndoRedoActions } from "@/hooks/use-undo-redo"
@@ -444,6 +450,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [showMiniMap, setShowMiniMap] = useState(true)
   const [addNodePopupOpen, setAddNodePopupOpen] = useState(false)
   const [addNodePopupPosition, setAddNodePopupPosition] = useState<{ x: number; y: number } | undefined>(undefined)
+  // Pre-selected category for the add-node popup (empty-state upload bar opens it drilled to "Input")
+  const [addNodePopupCategory, setAddNodePopupCategory] = useState<string | null>(null)
+  // Empty-state pill dialogs (full Templates / Tutorials surfaces, in-editor)
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false)
+  const [tutorialsModalOpen, setTutorialsModalOpen] = useState(false)
   const [connectionContext, setConnectionContext] = useState<ConnectionContext | null>(null)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [nodeSearchModalOpen, setNodeSearchModalOpen] = useState(false)
@@ -1020,6 +1031,17 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     [addNodeAndOpenPicker, screenToFlowPosition, addNodePopupPosition, getViewportCenter, addNodeAtCenter]
   )
 
+  // Empty-canvas hero cards drop the real node at viewport center and focus it
+  // (opens its config panel) — no picker popup, so the user lands directly on
+  // the node they chose.
+  const handleEmptyStateCreate = useCallback(
+    (type: SceneNodeType) => {
+      const id = addNode(type, screenToFlowPosition(getViewportCenter()))
+      if (id) selectNode(id)
+    },
+    [addNode, selectNode, screenToFlowPosition, getViewportCenter]
+  )
+
   const handleOpenAddNodePopup = useCallback((position?: { x: number; y: number }, placeAtCenter = false) => {
     setAddNodePopupPosition(position ?? getViewportCenter())
     setAddNodeAtCenter(placeAtCenter)
@@ -1028,6 +1050,13 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     setCanvasContextMenu(null)
     setNodeContextMenu(null)
   }, [getViewportCenter])
+
+  // Empty-state upload bar → open the add-node popup pre-drilled to the "Input"
+  // category (Text Prompt, Upload Image/Video/Audio, Video URL, Reference Audio).
+  const handleOpenInputPanel = useCallback(() => {
+    setAddNodePopupCategory("Input")
+    handleOpenAddNodePopup(getViewportCenter(), true)
+  }, [handleOpenAddNodePopup, getViewportCenter])
 
   /** Opens the add-node popup with a connectionContext bound to a specific
    *  handle. Called by HandleWithPopover's "Add new" affordance via the
@@ -1105,6 +1134,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const handleCloseAddNodePopup = useCallback(() => {
     setAddNodePopupOpen(false)
     setAddNodePopupPosition(undefined)
+    setAddNodePopupCategory(null)
     setConnectionContext(null)
     pendingEdgeDataRef.current = null
   }, [])
@@ -1806,27 +1836,9 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
   const handleAddAssetToCanvas = useCallback(
     (asset: LibraryAsset) => {
-      const position = screenToFlowPosition(getViewportCenter())
-
-      const nodeTypeMap: Record<string, SceneNodeType> = {
-        image: "upload-image",
-        video: "upload-video",
-        audio: "upload-audio",
-      }
-      const nodeType = nodeTypeMap[asset.type]
-      if (!nodeType) return
-
-      addNode(nodeType, position, {
-        r2Url: asset.url,
-        url: asset.url,
-        thumbnailUrl: asset.thumbnailUrl ?? undefined,
-        filename: asset.filename,
-        fileSize: asset.sizeBytes,
-        mimeType: asset.mimeType,
-        metadata: asset.metadata,
-        assetId: asset.id,
-      })
-
+      const node = assetToUploadNode(asset)
+      if (!node) return
+      addNode(node.type, screenToFlowPosition(getViewportCenter()), node.data)
       setMediaLibraryOpen(false)
     },
     [screenToFlowPosition, addNode, getViewportCenter],
@@ -1928,6 +1940,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         onClose={handleCloseAddNodePopup}
         onAddNode={handleAddNode}
         position={addNodePopupPosition}
+        initialCategory={addNodePopupCategory}
         connectionContext={connectionContext}
         // Pass plain `addNode` (not `addNodeAndOpenPicker`) so the popup
         // can sequence: create node → wire edge → THEN open the picker.
@@ -1985,6 +1998,34 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
             onAddToCanvas={handleAddAssetToCanvas}
           />
         </Suspense>
+      )}
+
+      {/* Templates — full dashboard surface as an in-editor dialog (no navigation) */}
+      {templatesModalOpen && (
+        <Dialog open={templatesModalOpen} onOpenChange={(o) => !o && setTemplatesModalOpen(false)}>
+          <DialogContent className="w-[92vw] sm:max-w-5xl h-[88vh] overflow-y-auto p-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Templates</DialogTitle>
+            </DialogHeader>
+            <Suspense fallback={null}>
+              <TemplatesPageModal />
+            </Suspense>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Tutorials — full dashboard surface as an in-editor dialog (no navigation) */}
+      {tutorialsModalOpen && (
+        <Dialog open={tutorialsModalOpen} onOpenChange={(o) => !o && setTutorialsModalOpen(false)}>
+          <DialogContent className="w-[92vw] sm:max-w-5xl h-[88vh] overflow-y-auto p-6">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Tutorials</DialogTitle>
+            </DialogHeader>
+            <Suspense fallback={null}>
+              <TutorialsTabModal />
+            </Suspense>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Component Marketplace Modal */}
@@ -2092,6 +2133,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
             <ViewModeToggle />
           </div>
+        )}
+        {/* First-run empty-canvas surface. Gated on a loaded workflow with zero
+            nodes (workflowId is null until the fetch resolves, so this never
+            flashes while an existing flow loads). Unmounts on the first node. */}
+        {realtimeWorkflowId != null && nodes.length === 0 && (
+          <EmptyCanvasState
+            onCreate={handleEmptyStateCreate}
+            onOpenInputPanel={handleOpenInputPanel}
+            onOpenMyLibrary={handleOpenAssetLibrary}
+            onOpenMediaLibrary={handleOpenMediaLibrary}
+            onOpenTemplates={() => setTemplatesModalOpen(true)}
+            onOpenTutorials={() => setTutorialsModalOpen(true)}
+          />
         )}
       </div>
       </CanvasZoomContext.Provider>

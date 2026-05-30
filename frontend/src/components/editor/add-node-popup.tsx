@@ -1459,6 +1459,9 @@ interface AddNodePopupProps {
   readonly connectionContext?: ConnectionContext | null;
   readonly storeAddNode?: (type: SceneNodeType, position: { x: number; y: number }, initialData?: Record<string, unknown>) => string | undefined;
   readonly storeOnConnect?: (connection: Connection) => void;
+  /** Pre-select a category drill-down on open (e.g. "Input") instead of the
+   *  top-level category list. Used by the editor empty-state's upload bar. */
+  readonly initialCategory?: string | null;
 }
 
 export function AddNodePopup({
@@ -1469,6 +1472,7 @@ export function AddNodePopup({
   connectionContext,
   storeAddNode,
   storeOnConnect,
+  initialCategory,
 }: AddNodePopupProps) {
   const { isAdmin, user } = useAuth();
   const { data: userSettings } = useUserSettings(user?.id);
@@ -1654,11 +1658,11 @@ export function AddNodePopup({
   useEffect(() => {
     if (open) {
       setSearchQuery("");
-      setSelectedCategory(null);
+      setSelectedCategory(initialCategory ?? null);
       setHighlightedIndex(0);
       setTimeout(() => searchInputRef.current?.focus(), 50);
     }
-  }, [open]);
+  }, [open, initialCategory]);
 
   // Handle click outside
   useEffect(() => {
