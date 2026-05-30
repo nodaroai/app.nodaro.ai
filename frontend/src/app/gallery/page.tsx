@@ -402,7 +402,7 @@ export default function GalleryPage() {
   )
   const { data: favoriteIds } = useGalleryFavorites(user?.id)
   const favoritesSet = useMemo(() => new Set(favoriteIds ?? []), [favoriteIds])
-  const favoriteMutation = useToggleFavoriteMutation()
+  const favoriteMutation = useToggleFavoriteMutation(user?.id)
   const reportMutation = useReportGalleryItemMutation()
   const deleteMutation = useDeleteGalleryItemMutation()
 

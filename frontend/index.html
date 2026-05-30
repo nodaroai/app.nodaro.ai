@@ -12,16 +12,42 @@
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preconnect" href="https://kvitmiiswsbtxvjgvbkw.supabase.co" crossorigin />
     <title>Nodaro.ai</title>
+    <!-- Analytics (Microsoft Clarity + Google gtag) — first-party dashboard ONLY.
+         Skipped inside iframes and on public app/present/embed/share/profile
+         surfaces so that customer-embedded widgets don't load Clarity session
+         recording + GA. Keep the public-surface prefix list in sync with the
+         routes in src/router.tsx. -->
     <script>
-      (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","vfqplx14da");
-    </script>
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y1JWM4CT9Z"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-Y1JWM4CT9Z');
+      (function () {
+        // Bail out when rendered inside an iframe (embeds): a cross-origin
+        // access on window.top throws, which also means we're framed.
+        try {
+          if (window.self !== window.top) return;
+        } catch (e) {
+          return;
+        }
+        // Bail out on public/embed/app-runner/present/share/profile surfaces.
+        if (
+          /^\/(app|present|embed|g|static-share|u)(\/|$)/.test(
+            window.location.pathname,
+          )
+        ) {
+          return;
+        }
+
+        // Microsoft Clarity
+        (function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","vfqplx14da");
+
+        // Google tag (gtag.js)
+        var ga = document.createElement("script");
+        ga.async = true;
+        ga.src = "https://www.googletagmanager.com/gtag/js?id=G-Y1JWM4CT9Z";
+        document.head.appendChild(ga);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-Y1JWM4CT9Z');
+      })();
     </script>
   </head>
   <body class="antialiased" style="overscroll-behavior-y:contain">

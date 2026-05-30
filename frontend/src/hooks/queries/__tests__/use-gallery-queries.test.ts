@@ -34,6 +34,7 @@ vi.mock("@/lib/query-keys", () => ({
     gallery: {
       all: ["gallery"],
       list: (filter: string) => ["gallery", "list", filter],
+      favorites: (userId: string) => ["gallery", "favorites", userId],
       reportCount: () => ["gallery", "report-count"],
     },
   },
@@ -44,6 +45,7 @@ import {
   useGalleryReportCount,
   useReportGalleryItemMutation,
   useDeleteGalleryItemMutation,
+  useToggleFavoriteMutation,
 } from "../use-gallery-queries"
 
 describe("useGalleryInfinite", () => {
@@ -246,7 +248,7 @@ describe("useDeleteGalleryItemMutation", () => {
     ).rejects.toThrow("Failed to remove item")
   })
 
-  it("onSuccess invalidates gallery.all queries", () => {
+  it("onSettled invalidates gallery.all queries", () => {
     let captured: any
     mockUseMutation.mockImplementation((opts: any) => {
       captured = opts
@@ -254,9 +256,119 @@ describe("useDeleteGalleryItemMutation", () => {
     })
     useDeleteGalleryItemMutation()
 
-    captured.onSuccess()
+    captured.onSettled()
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["gallery"],
     })
+  })
+
+  it("onMutate snapshots gallery lists and writes the optimistic removal", async () => {
+    const setMock = vi.fn()
+    const getMock = vi.fn().mockReturnValue([])
+    const cancelMock = vi.fn().mockResolvedValue(undefined)
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      cancelQueries: cancelMock,
+      getQueriesData: getMock,
+      setQueriesData: setMock,
+      setQueryData: vi.fn(),
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useDeleteGalleryItemMutation()
+
+    await captured.onMutate({ itemId: "item-1", userId: "u1" })
+    expect(cancelMock).toHaveBeenCalled()
+    expect(getMock).toHaveBeenCalled()
+    expect(setMock).toHaveBeenCalledTimes(1)
+    // The updater removes the matching item from each page's `.data` array.
+    const updater = setMock.mock.calls[0][1] as (
+      d: { pages: { data: { id: string }[] }[]; pageParams: unknown[] } | undefined,
+    ) => unknown
+    const result = updater({
+      pages: [{ data: [{ id: "item-1" }, { id: "keep" }] }],
+      pageParams: [undefined],
+    }) as { pages: { data: { id: string }[] }[] }
+    expect(result.pages[0].data.map((x) => x.id)).toEqual(["keep"])
+  })
+})
+
+describe("useToggleFavoriteMutation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  it("onMutate optimistically adds the id to the favorites set", async () => {
+    const setData = vi.fn()
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      cancelQueries: vi.fn().mockResolvedValue(undefined),
+      getQueryData: vi.fn().mockReturnValue(["existing"]),
+      setQueryData: setData,
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useToggleFavoriteMutation("u1")
+
+    const ctx = await captured.onMutate({ jobId: "job-1" })
+    expect(setData).toHaveBeenCalledWith(
+      ["gallery", "favorites", "u1"],
+      expect.any(Function),
+    )
+    // The updater toggles the id in/out of the set.
+    const updater = setData.mock.calls[0][1]
+    expect(updater(["existing"])).toEqual(["existing", "job-1"])
+    expect(updater(["existing", "job-1"])).toEqual(["existing"])
+    // Snapshot captured for rollback.
+    expect(ctx.previous).toEqual(["existing"])
+    expect(ctx.key).toEqual(["gallery", "favorites", "u1"])
+  })
+
+  it("onMutate is a no-op without a userId (cannot key the favorites set)", async () => {
+    const setData = vi.fn()
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      cancelQueries: vi.fn().mockResolvedValue(undefined),
+      getQueryData: vi.fn(),
+      setQueryData: setData,
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useToggleFavoriteMutation(undefined)
+
+    const ctx = await captured.onMutate({ jobId: "job-1" })
+    expect(setData).not.toHaveBeenCalled()
+    expect(ctx.previous).toBeUndefined()
+  })
+
+  it("onError restores the captured favorites snapshot", () => {
+    const setData = vi.fn()
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      setQueryData: setData,
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useToggleFavoriteMutation("u1")
+
+    captured.onError(new Error("boom"), { jobId: "job-1" }, {
+      previous: ["existing"],
+      key: ["gallery", "favorites", "u1"],
+    })
+    expect(setData).toHaveBeenCalledWith(["gallery", "favorites", "u1"], ["existing"])
   })
 })
