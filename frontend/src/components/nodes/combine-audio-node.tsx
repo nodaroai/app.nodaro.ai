@@ -22,7 +22,12 @@ function CombineAudioNodeComponent({ id, data, selected }: NodeProps) {
   const credits = useModelCredits("ffmpeg", 1)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
-  const edges = useWorkflowStore((s) => s.edges)
+  // Narrow subscription: a primitive incoming-edge count instead of the whole
+  // `edges` array, so this node re-renders only when its own incoming-edge
+  // count changes — not on every unrelated mutation that mints a fresh array.
+  const connectedCount = useWorkflowStore((s) =>
+    s.edges.reduce((acc, e) => (e.target === id ? acc + 1 : acc), 0),
+  )
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -30,8 +35,6 @@ function CombineAudioNodeComponent({ id, data, selected }: NodeProps) {
   const activeUrl = activeResult?.url ?? nodeData.generatedAudioUrl
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
-
-  const connectedCount = edges.filter((e) => e.target === id).length
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

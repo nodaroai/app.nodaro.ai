@@ -15,11 +15,21 @@ const TRANSFORMABLE_HOSTS: ReadonlySet<string> = new Set([
   "assets.nodaro.ai",
 ])
 
+type OptimizeOpts = { width?: number; quality?: number }
+
+// Overloads: a `string` in always yields a `string` out (existing callers are
+// unchanged), but an optional URL passes through as `undefined` so call sites
+// with possibly-missing URLs don't each need a `url ? optimizedImageUrl(url) :
+// undefined` guard. An empty string stays `""` (keeps the string overload
+// sound); `null`/`undefined` collapse to `undefined` so React omits the
+// img `src` attribute rather than requesting the current page.
+export function optimizedImageUrl(url: string, opts?: OptimizeOpts): string
+export function optimizedImageUrl(url: string | undefined | null, opts?: OptimizeOpts): string | undefined
 export function optimizedImageUrl(
-  url: string,
-  opts: { width?: number; quality?: number } = {},
-): string {
-  if (!url) return url
+  url: string | undefined | null,
+  opts: OptimizeOpts = {},
+): string | undefined {
+  if (!url) return url ?? undefined
   // Already transformed — don't double-wrap
   if (url.includes(CF_TRANSFORM_PREFIX)) return url
 

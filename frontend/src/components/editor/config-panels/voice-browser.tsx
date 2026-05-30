@@ -141,6 +141,24 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
   // -- Audio --
   const [playingId, setPlayingId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // Stable handlers so the unmount cleanup can removeEventListener the same refs
+  const handleAudioEnded = useCallback(() => setPlayingId(null), [])
+  const handleAudioError = useCallback(() => setPlayingId(null), [])
+
+  // Tear down the lazily-created Audio element on unmount so neither it nor any
+  // in-flight preview stream leaks each time the voice browser closes.
+  useEffect(() => {
+    return () => {
+      const a = audioRef.current
+      if (!a) return
+      a.pause()
+      a.removeEventListener("ended", handleAudioEnded)
+      a.removeEventListener("error", handleAudioError)
+      a.removeAttribute("src")
+      a.load()
+      audioRef.current = null
+    }
+  }, [handleAudioEnded, handleAudioError])
 
   // Debounce library search
   useEffect(() => {
@@ -203,8 +221,8 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
 
     if (!audioRef.current) {
       audioRef.current = new Audio()
-      audioRef.current.addEventListener("ended", () => setPlayingId(null))
-      audioRef.current.addEventListener("error", () => setPlayingId(null))
+      audioRef.current.addEventListener("ended", handleAudioEnded)
+      audioRef.current.addEventListener("error", handleAudioError)
     } else {
       audioRef.current.pause()
     }
@@ -212,7 +230,7 @@ export function VoiceBrowser({ value, valueLabel, onSelect, compact, showCustomV
     audioRef.current.src = previewUrl
     audioRef.current.play().catch(() => setPlayingId(null))
     setPlayingId(id)
-  }, [playingId])
+  }, [playingId, handleAudioEnded, handleAudioError])
 
   const handleSelect = useCallback((voiceId: string, voiceName: string, voiceType?: "premade" | "custom" | "library") => {
     onSelect(voiceId, voiceName, voiceType)

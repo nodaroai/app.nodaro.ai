@@ -89,7 +89,6 @@ function IterationCard({
   const addNode = useWorkflowStore((s) => s.addNode)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const onConnect = useWorkflowStore((s) => s.onConnect)
-  const nodes = useWorkflowStore((s) => s.nodes)
 
   const hasResult = result && result.trim().length > 0
   const resultIsUrl = hasResult && isMediaUrl(result)
@@ -106,8 +105,10 @@ function IterationCard({
 
   const handleContinue = useCallback(() => {
     if (!resultIsUrl) return
-    // Find the source node to position the new node nearby
-    const sourceNode = nodes.find((n) => n.id === nodeId)
+    // Find the source node to position the new node nearby. Read lazily at
+    // click time so the row doesn't reactively subscribe to the whole nodes
+    // array (which churns on every canvas/store update).
+    const sourceNode = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)
     const x = (sourceNode?.position.x ?? 400) + 350
     const y = (sourceNode?.position.y ?? 200) + (index * 120)
 
@@ -122,7 +123,7 @@ function IterationCard({
         updateNodeData(newId, { url: result })
       }
     }
-  }, [resultIsUrl, result, nodes, nodeId, index, mediaType, addNode, updateNodeData])
+  }, [resultIsUrl, result, nodeId, index, mediaType, addNode, updateNodeData])
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1A1A1A] overflow-hidden">

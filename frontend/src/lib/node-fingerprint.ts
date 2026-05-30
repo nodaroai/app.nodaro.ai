@@ -35,10 +35,15 @@ export function incomingSourcesFingerprint(
   id: string,
   mode: "data" | "label" = "data",
 ): string {
+  // Index nodes by id once (O(V)) instead of `nodes.find()` per matching edge
+  // (was O(deg·V)). Output is byte-for-byte identical — only the lookup changes.
+  const nodesById = new Map<string, FpNode>()
+  for (const n of nodes) nodesById.set(n.id, n)
+
   let fp = ""
   for (const e of edges) {
     if (e.target !== id) continue
-    const src = nodes.find((n) => n.id === e.source)
+    const src = nodesById.get(e.source)
     if (!src) continue
     if (mode === "label") {
       const label = ((src.data as Record<string, unknown> | undefined)?.label as string) ?? src.type ?? ""

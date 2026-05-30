@@ -20,12 +20,15 @@ interface RunNodeButtonProps {
 }
 
 export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }: RunNodeButtonProps) {
-  // Narrow subscription: this node object + a primitive fingerprint of the
-  // edges feeding fan-out (incoming targets + outgoing sources for this node).
-  // `updateNodeData` preserves object identity for unrelated nodes, so this
-  // short-circuits re-renders for mutations elsewhere on the graph (the
-  // render-amplification fix — RunNodeButton renders under 90+ node types).
-  const { node, edgeFingerprint } = useWorkflowStore(
+  // Narrow subscription: only PRIMITIVES this button renders/derives from — the
+  // current job id, a primitive fingerprint of the edges feeding fan-out
+  // (incoming targets + outgoing sources for this node), plus this node's type
+  // and a fingerprint of the data fields that drive fan-out/repeat credit math.
+  // The full node object is read live from getState() inside the memo, so a
+  // mutation that touches unrelated node data (or another node entirely) no
+  // longer re-renders this button — it renders under 90+ node types, so this
+  // is the render-amplification fix.
+  const { currentJobId, nodeType, nodeFingerprint, edgeFingerprint } = useWorkflowStore(
     useShallow((s) => {
       let fp = ""
       for (const e of s.edges) {
@@ -33,26 +36,36 @@ export function RunNodeButton({ nodeId, credits, isRunning, onRun, runFromHere }
           fp += `${e.id}\x01${e.source}\x01${e.target}\x01${e.sourceHandle ?? ""}\x01${e.targetHandle ?? ""}\x02`
         }
       }
-      return { node: s.nodes.find((n) => n.id === nodeId), edgeFingerprint: fp }
+      const node = s.nodes.find((n) => n.id === nodeId)
+      const d = node?.data as Record<string, unknown> | undefined
+      return {
+        currentJobId: d?.currentJobId as string | undefined,
+        nodeType: node?.type,
+        // Credit math reads the whole `data` (getEffectiveRepeatCount +
+        // getListInputForNode), so fingerprint it wholesale to guarantee no
+        // missed field; `undefined` (node gone) keeps the memo from running.
+        nodeFingerprint: node ? JSON.stringify(d ?? {}) : undefined,
+        edgeFingerprint: fp,
+      }
     }),
   )
 
-  const currentJobId = (node?.data as Record<string, unknown> | undefined)?.currentJobId as string | undefined
-
   const { fanOutCount, repeatCount } = useMemo(() => {
-    if (!node || !credits || credits <= 0) return { fanOutCount: 1, repeatCount: 1 }
+    if (nodeFingerprint === undefined || !credits || credits <= 0) return { fanOutCount: 1, repeatCount: 1 }
     // Fan-out genuinely needs the full graph (it walks upstream list sources),
     // so read live arrays at compute time. The memo re-runs (via the dep array)
     // when THIS node's data changes (provider/model swaps drive credit display)
     // or its edges change (edgeFingerprint).
     const { nodes, edges } = useWorkflowStore.getState()
+    const node = nodes.find((n) => n.id === nodeId)
+    if (!node) return { fanOutCount: 1, repeatCount: 1 }
     const listItems = getListInputForNode(node as WorkflowNode, nodes as WorkflowNode[], edges as WorkflowEdge[])
     const fanOut = listItems ? listItems.length : 1
-    const repeats = REPEATABLE_NODE_TYPES.has(node.type ?? "")
+    const repeats = REPEATABLE_NODE_TYPES.has(nodeType ?? "")
       ? getEffectiveRepeatCount(node.data as Record<string, unknown>)
       : 1
     return { fanOutCount: fanOut, repeatCount: repeats }
-  }, [node, credits, edgeFingerprint])
+  }, [nodeId, nodeType, nodeFingerprint, credits, edgeFingerprint])
 
   const totalCredits = (credits ?? 0) * fanOutCount * repeatCount
 

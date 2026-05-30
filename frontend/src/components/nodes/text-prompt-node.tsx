@@ -83,23 +83,33 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       for (const r of ups) uKey += `${r.id}\x01${r.label}\x01${r.type}\x02`
 
       // Downstream key — forward BFS topology + each executable downstream
-      // node's type and the data fields estimateNodeCredits reads.
+      // node's type and the data fields estimateNodeCredits reads. Index nodes
+      // by id + edges by source once so the walk is O(V+E), not O(V·(V+E))
+      // from `nodes.find()` + a full `edges` scan per visited node.
       let dKey = ""
       const outEdges0 = s.edges.filter((e) => e.source === id)
       if (outEdges0.length > 0) {
+        const nodesById = new Map<string, (typeof s.nodes)[number]>()
+        for (const n of s.nodes) nodesById.set(n.id, n)
+        const edgesBySource = new Map<string, (typeof s.edges)[number][]>()
+        for (const edge of s.edges) {
+          const bucket = edgesBySource.get(edge.source)
+          if (bucket) bucket.push(edge)
+          else edgesBySource.set(edge.source, [edge])
+        }
         const visited = new Set<string>([id])
         const queue = outEdges0.map((e) => e.target)
         while (queue.length > 0) {
           const current = queue.shift()!
           if (visited.has(current)) continue
           visited.add(current)
-          const dn = s.nodes.find((n) => n.id === current)
+          const dn = nodesById.get(current)
           if (dn) {
             const dd = (dn.data ?? {}) as Record<string, unknown>
             dKey += `${current}\x01${dn.type ?? ""}\x01${String(dd.estimatedCredits ?? "")}\x01${String(dd.provider ?? "")}\x01${String(dd.resolution ?? "")}\x01${String(dd.videoDuration ?? "")}\x01${String(dd.actor ?? "")}\x01${String(dd.mode ?? "")}\x02`
           }
-          for (const edge of s.edges) {
-            if (edge.source === current && !visited.has(edge.target)) queue.push(edge.target)
+          for (const edge of edgesBySource.get(current) ?? []) {
+            if (!visited.has(edge.target)) queue.push(edge.target)
           }
         }
       }
@@ -272,6 +282,17 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
     const outEdges = edges.filter((e) => e.source === id)
     if (outEdges.length === 0) return { hasDownstream: false, downstreamCredits: 0 }
 
+    // Index nodes by id + edges by source once so the forward walk is O(V+E),
+    // not O(V·(V+E)) from `nodes.find()` + a full `edges` scan per visited node.
+    const nodesById = new Map<string, (typeof nodes)[number]>()
+    for (const n of nodes) nodesById.set(n.id, n)
+    const edgesBySource = new Map<string, (typeof edges)[number][]>()
+    for (const edge of edges) {
+      const bucket = edgesBySource.get(edge.source)
+      if (bucket) bucket.push(edge)
+      else edgesBySource.set(edge.source, [edge])
+    }
+
     const visited = new Set<string>([id])
     const queue = outEdges.map((e) => e.target)
     let totalCredits = 0
@@ -281,15 +302,15 @@ function TextPromptNodeComponent({ id, data, selected }: NodeProps) {
       if (visited.has(current)) continue
       visited.add(current)
 
-      const node = nodes.find((n) => n.id === current)
+      const node = nodesById.get(current)
       if (!node) continue
 
       if (EXECUTABLE_TYPES.has(node.type ?? "")) {
         totalCredits += estimateNodeCredits(node as { type?: string; data?: Record<string, unknown> })
       }
 
-      for (const edge of edges) {
-        if (edge.source === current && !visited.has(edge.target)) {
+      for (const edge of edgesBySource.get(current) ?? []) {
+        if (!visited.has(edge.target)) {
           queue.push(edge.target)
         }
       }

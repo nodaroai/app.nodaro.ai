@@ -29,9 +29,22 @@ export function getUpstreamNodes(
   const result: NodeRefItem[] = []
   const queue: string[] = []
 
-  // Start with direct parents
+  // Build lookups once (O(V+E)) so the BFS is O(V+E) overall instead of
+  // O(V·(V+E)) from `nodes.find()` + a full `edges` scan per visited node.
+  // `edgesByTarget` preserves each target's edges in original array order, so
+  // seeding + traversal order — and thus the output — stays identical.
+  const nodesById = new Map<string, WorkflowNode>()
+  for (const n of nodes) nodesById.set(n.id, n)
+  const edgesByTarget = new Map<string, WorkflowEdge[]>()
   for (const edge of edges) {
-    if (edge.target === nodeId && !visited.has(edge.source)) {
+    const bucket = edgesByTarget.get(edge.target)
+    if (bucket) bucket.push(edge)
+    else edgesByTarget.set(edge.target, [edge])
+  }
+
+  // Start with direct parents
+  for (const edge of edgesByTarget.get(nodeId) ?? []) {
+    if (!visited.has(edge.source)) {
       visited.add(edge.source)
       queue.push(edge.source)
     }
@@ -39,7 +52,7 @@ export function getUpstreamNodes(
 
   while (queue.length > 0) {
     const currentId = queue.shift()!
-    const node = nodes.find((n) => n.id === currentId)
+    const node = nodesById.get(currentId)
     if (!node) continue
 
     const data = node.data as Record<string, unknown>
@@ -52,8 +65,8 @@ export function getUpstreamNodes(
     })
 
     // Add parents of current node
-    for (const edge of edges) {
-      if (edge.target === currentId && !visited.has(edge.source)) {
+    for (const edge of edgesByTarget.get(currentId) ?? []) {
+      if (!visited.has(edge.source)) {
         visited.add(edge.source)
         queue.push(edge.source)
       }

@@ -83,7 +83,10 @@ interface ExportedWorkflow {
 export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab = "editor", onTabChange }: EditorToolbarProps) {
   const workflowName = useWorkflowStore((s) => s.workflowName)
   const setWorkflowName = useWorkflowStore((s) => s.setWorkflowName)
-  const edges = useWorkflowStore((s) => s.edges)
+  // Subscribe to a primitive (whether any connections exist) rather than the
+  // whole edges array — this component only needs the boolean for the variable-
+  // display-mode toggle, so it shouldn't re-render on every edge mutation.
+  const hasConnections = useWorkflowStore((s) => s.edges.length > 0)
   const isDirty = useWorkflowStore((s) => s.isDirty)
   const saveStatus = useWorkflowStore((s) => s.saveStatus)
   const saveError = useWorkflowStore((s) => s.saveError)
@@ -597,7 +600,6 @@ export function EditorToolbar({ projectId, onSave, saving, onNavigate, activeTab
         })()}
 
         {(() => {
-          const hasConnections = edges.length > 0
           return hasConnections ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

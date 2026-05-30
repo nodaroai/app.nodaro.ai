@@ -11,6 +11,7 @@ import {
 } from "@nodaro/shared"
 import type { RefImageItem } from "../tag-textarea"
 import { TrainedPill } from "@/components/editor/trained-pill"
+import { optimizedImageUrl } from "@/lib/image"
 
 /**
  * Command payload — the resolved leaf item, plus an optional per-mention
@@ -704,9 +705,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
                 <img
-                  src={item.url}
+                  src={optimizedImageUrl(item.url, { width: 64, quality: 80 })}
                   alt=""
                   className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                  loading="lazy"
                 />
                 <span className="truncate flex-1 min-w-0">
                   {item.label}
@@ -741,9 +743,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
                 <img
-                  src={item.url}
+                  src={optimizedImageUrl(item.url, { width: 64, quality: 80 })}
                   alt=""
                   className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                  loading="lazy"
                 />
                 <span className="truncate flex-1 min-w-0">
                   {item.label}
@@ -787,9 +790,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
                 <img
-                  src={item.url}
+                  src={optimizedImageUrl(item.url, { width: 64, quality: 80 })}
                   alt=""
                   className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                  loading="lazy"
                 />
                 <span className="truncate flex-1 min-w-0">
                   {useFullPath
@@ -886,9 +890,10 @@ export const SuggestionList = forwardRef<SuggestionListHandle, SuggestionListPro
               onMouseEnter={() => setSelectedIndex(idx)}
             >
               <img
-                src={item.url}
+                src={optimizedImageUrl(item.url, { width: 64, quality: 80 })}
                 alt=""
                 className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                loading="lazy"
               />
               <span className="truncate flex-1 min-w-0">
                 {row.kind === "image-ref"
