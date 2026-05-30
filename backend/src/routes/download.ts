@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { Readable } from "node:stream"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { config } from "../lib/config.js"
@@ -78,13 +79,28 @@ export async function downloadRoutes(app: FastifyInstance) {
 
     const contentType = upstream.headers.get("content-type") ?? "application/octet-stream"
     const filename = path.basename(parsedUrl.pathname) || "download"
-    const buffer = Buffer.from(await upstream.arrayBuffer())
 
+    if (!upstream.body) {
+      return reply.status(502).send({
+        error: { code: "proxy_error", message: "Upstream returned no body" },
+      })
+    }
+
+    // Stream the body straight through instead of buffering the whole object
+    // into a single Buffer. This route is PUBLIC + unauthenticated and R2
+    // objects can be up to 500MB (the video upload cap), so the old
+    // `Buffer.from(await upstream.arrayBuffer())` let a handful of concurrent
+    // requests exhaust the single-process heap and OOM-kill the API for every
+    // tenant. Piping keeps per-request memory bounded. Mirrors image-proxy.ts.
+    const contentLength = upstream.headers.get("content-length")
+    reply.raw.writeHead(200, {
+      "Content-Type": contentType,
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "public, max-age=3600",
+      ...(contentLength ? { "Content-Length": contentLength } : {}),
+    })
+    const nodeStream = Readable.fromWeb(upstream.body as import("stream/web").ReadableStream)
+    nodeStream.pipe(reply.raw)
     return reply
-      .header("Content-Type", contentType)
-      .header("Content-Disposition", `attachment; filename="${filename}"`)
-      .header("Content-Length", buffer.length)
-      .header("Cache-Control", "public, max-age=3600")
-      .send(buffer)
   })
 }
