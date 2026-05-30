@@ -5,7 +5,6 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Scissors, Loader2, AlertCircle, X, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -42,7 +41,6 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const playState = nodeData.videoPlayState ?? "loop"
   const shouldPlay = videoAutoplay && playState === "loop"
-  const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const status = nodeData.executionStatus ?? "idle"
   const results = nodeData.generatedResults ?? []
   const activeIndex = nodeData.activeResultIndex ?? 0
@@ -111,7 +109,6 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
     <BaseNode id={id} label={nodeData.label} icon={<Scissors className="h-4 w-4" />} category="processing" credits={credits} selected={selected} isRunning={status === "running"}
       hideHeader
       minWidth={220}
-      topToolbarContent={(<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />)}
       handles={[
         { id: "in",    type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "video", type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
