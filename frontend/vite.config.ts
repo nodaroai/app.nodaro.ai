@@ -67,6 +67,9 @@ export default defineConfig({
           if (id.includes("node_modules/@xyflow/")) return "xyflow";
           if (id.includes("node_modules/@radix-ui/")) return "radix-ui";
           if (id.includes("node_modules/@supabase/")) return "supabase";
+          // @tanstack/* — react-query + react-virtual (list virtualization).
+          // Grouped together so react-virtual rides the shared vendor chunk
+          // instead of bloating the gallery/library route's initial chunk.
           if (id.includes("node_modules/@tanstack/")) return "query-vendor";
           if (id.includes("node_modules/@dnd-kit/")) return "dnd-kit";
           if (id.includes("node_modules/elkjs/")) return "elkjs";

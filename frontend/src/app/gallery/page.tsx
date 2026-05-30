@@ -17,6 +17,7 @@ import {
 import { useGalleryInfinite, useGalleryFavorites, useToggleFavoriteMutation, useReportGalleryItemMutation, useDeleteGalleryItemMutation } from "@/hooks/queries/use-gallery-queries"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useImageAspect } from "@/hooks/use-image-aspect"
+import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
@@ -383,7 +384,6 @@ export default function GalleryPage() {
   })
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-  const sentinelRef = useRef<HTMLDivElement>(null)
 
   const toggleMyItems = useCallback((checked: boolean) => {
     setMyItemsOnly(checked)
@@ -435,21 +435,29 @@ export default function GalleryPage() {
   // Admin delete confirm state
   const [deleteItem, setDeleteItem] = useState<GalleryItem | null>(null)
 
-  // Infinite scroll via IntersectionObserver
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && hasMore && !loading && !loadingMore) {
-          fetchNextPage()
-        }
-      },
-      { rootMargin: "800px" },
-    )
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [hasMore, loading, loadingMore, fetchNextPage])
+  // Row-virtualize the (window-scrolled, unbounded) grid. Replaces the old
+  // IntersectionObserver sentinel — the hook auto-fetches the next page when the
+  // last rendered row nears the end. The flat `items` array stays complete (no
+  // maxPages), so lightbox indexing into items[i] is unaffected.
+  const {
+    gridRef,
+    virtualRows,
+    totalSize,
+    columns,
+    scrollMargin,
+    gridTemplateColumns,
+  } = useVirtualGrid({
+    itemCount: items.length,
+    breakpoints: GRID_BREAKPOINTS.gallery,
+    // aspect-square tiles, no info section below the tile → row height ≈ width.
+    squareTiles: true,
+    estimateRowHeight: 240,
+    gap: 16, // gap-4
+    overscan: 3,
+    fetchNextPage,
+    hasNextPage: hasMore,
+    isFetchingNextPage: loadingMore,
+  })
 
   async function handleReport() {
     if (!reportItem) return
@@ -678,37 +686,45 @@ export default function GalleryPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {items.map((item, index) => (
-                <GalleryGridCard
-                  key={`${item.id}-${index}`}
-                  item={item}
-                  index={index}
-                  isFavorited={favoritesSet.has(item.id)}
-                  showFavorite={!!user}
-                  isAdmin={isAdmin}
-                  onSelect={handleSelectIndex}
-                  onToggleFavorite={handleToggleFavorite}
-                  onReport={openReportDialog}
-                  onDelete={openDeleteDialog}
-                />
+            {/* Windowed grid: only rows in (viewport + overscan) are mounted.
+                Container height = totalSize so the scrollbar reflects the full
+                list; each row is absolutely positioned at its virtual offset. */}
+            <div ref={gridRef} style={{ height: totalSize, position: "relative" }}>
+              {virtualRows.map((virtualRow) => (
+                <div
+                  key={virtualRow.key}
+                  className="absolute top-0 left-0 w-full"
+                  style={{
+                    transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                    display: "grid",
+                    gridTemplateColumns,
+                    gap: 16,
+                  }}
+                >
+                  {rowItems(items, virtualRow.index, columns).map(({ item, index }) => (
+                    <GalleryGridCard
+                      key={`${item.id}-${index}`}
+                      item={item}
+                      index={index}
+                      isFavorited={favoritesSet.has(item.id)}
+                      showFavorite={!!user}
+                      isAdmin={isAdmin}
+                      onSelect={handleSelectIndex}
+                      onToggleFavorite={handleToggleFavorite}
+                      onReport={openReportDialog}
+                      onDelete={openDeleteDialog}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
 
-            {/* Skeleton placeholders while loading next page */}
+            {/* Loading indicator while fetching the next page */}
             {loadingMore && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-4">
-                {Array.from({ length: 20 }).map((_, i) => (
-                  <div
-                    key={`skeleton-${i}`}
-                    className="aspect-square rounded-lg bg-zinc-200 dark:bg-zinc-800 animate-pulse"
-                  />
-                ))}
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             )}
-
-            {/* Infinite scroll sentinel */}
-            <div ref={sentinelRef} className="h-1" />
 
             {!hasMore && items.length > 0 && (
               <p className="text-center text-sm text-muted-foreground py-8">
