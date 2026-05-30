@@ -1229,10 +1229,18 @@ export class CreditsService {
       }
     }
 
-    // Paid tiers: check daily limit from tier_config if configured
+    // Paid tiers: check daily limit from tier_config if configured.
+    // Use getEffectiveDailySpent (same as the free branch) so the counter is
+    // reset on a new UTC day — reading raw daily_spent_credits would compare
+    // today's first request against yesterday's spend and falsely 402-block,
+    // even though the authoritative reserve_credits RPC resets it correctly.
     const tierConfig = await getTierConfig(userTier)
     const dailyLimit = tierConfig.daily_credit_limit ?? undefined
-    const dailySpent = profile.daily_spent_credits ?? 0
+    const dailySpent = await getEffectiveDailySpent(
+      userId,
+      profile.daily_spent_credits ?? 0,
+      profile.last_daily_reset ?? null
+    )
 
     if (dailyLimit !== undefined && dailySpent + pricing.creditCost > dailyLimit) {
       return {
