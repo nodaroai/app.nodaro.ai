@@ -231,9 +231,10 @@ function expandWiredCharacterRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -431,14 +432,15 @@ export function expandWiredLocationRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  const consumer = buildCtx.nodes.find((n) => n.id === consumerNodeId)
+  const consumer = nodeById.get(consumerNodeId)
   const consumerPrompt =
     (consumer?.data?.prompt as string | undefined) ??
     (consumer?.data?.motionPrompt as string | undefined) ??
     undefined
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "location") continue
     const locData = upstream.data
     let sourceUrl = locData.sourceImageUrl as string | undefined
@@ -537,9 +539,10 @@ function buildExtraRefCharacterContextLookup(
 ): (slug: string) => ExtraRefCharacterContext | undefined {
   if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
   const bySlug = new Map<string, ExtraRefCharacterContext>()
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -899,11 +902,12 @@ function applyOrderToReferenceUrls(
   const allNodes = buildCtx.nodes ?? []
   const allEdges = buildCtx.edges ?? []
   const states = buildCtx.nodeStates ?? {}
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const matchedSources: SimpleNode[] = []
   const seenSrcIds = new Set<string>()
   for (const e of allEdges) {
     if (e.target !== consumerNodeId) continue
-    const src = allNodes.find((n) => n.id === e.source)
+    const src = nodeById.get(e.source)
     if (!src) continue
     if (!edgeFilter(e, src)) continue
     if (seenSrcIds.has(src.id)) continue
@@ -1057,16 +1061,23 @@ export function buildNodeRefMap(
   const nodes = ctx.nodes
   const edges = ctx.edges
   const states = ctx.nodeStates
+  // Index nodes by id and edges by target once, so the BFS below is O(N+E)
+  // instead of re-scanning every node/edge on each dequeued node.
+  const nodesById = new Map(nodes.map((n) => [n.id, n] as const))
+  const edgesByTarget = new Map<string, SimpleEdge[]>()
+  for (const edge of edges) {
+    const group = edgesByTarget.get(edge.target)
+    if (group) group.push(edge)
+    else edgesByTarget.set(edge.target, [edge])
+  }
   const visited = new Set<string>()
   const queue: Array<{ id: string; connectingEdges: ReadonlyArray<SimpleEdge> }> = []
 
   // Seed BFS with direct parents, grouping edges by source
   const seedEdges = new Map<string, SimpleEdge[]>()
-  for (const edge of edges) {
-    if (edge.target === nodeId) {
-      if (!seedEdges.has(edge.source)) seedEdges.set(edge.source, [])
-      seedEdges.get(edge.source)!.push(edge)
-    }
+  for (const edge of edgesByTarget.get(nodeId) ?? []) {
+    if (!seedEdges.has(edge.source)) seedEdges.set(edge.source, [])
+    seedEdges.get(edge.source)!.push(edge)
   }
   for (const [sourceId, edgeGroup] of seedEdges) {
     visited.add(sourceId)
@@ -1075,7 +1086,7 @@ export function buildNodeRefMap(
 
   while (queue.length > 0) {
     const { id: currentId, connectingEdges } = queue.shift()!
-    const node = nodes.find((n) => n.id === currentId)
+    const node = nodesById.get(currentId)
     if (!node) continue
 
     const label = (node.data.label as string) || node.type || currentId
@@ -1118,8 +1129,8 @@ export function buildNodeRefMap(
 
     // BFS: traverse to parents of current node
     const nextEdges = new Map<string, SimpleEdge[]>()
-    for (const edge of edges) {
-      if (edge.target === currentId && !visited.has(edge.source)) {
+    for (const edge of edgesByTarget.get(currentId) ?? []) {
+      if (!visited.has(edge.source)) {
         if (!nextEdges.has(edge.source)) nextEdges.set(edge.source, [])
         nextEdges.get(edge.source)!.push(edge)
       }

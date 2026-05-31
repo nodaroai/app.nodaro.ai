@@ -64,6 +64,41 @@ function extractFrontendExecutableTypes(): Set<string> {
 
 const FRONTEND_EXECUTABLE_TYPES = extractFrontendExecutableTypes()
 
+const FRONTEND_NODE_TYPES_PATH = join(
+  REPO_ROOT,
+  "frontend/src/components/nodes/index.ts",
+)
+
+/**
+ * Extract every renderable node-type key from the React Flow `nodeTypes` map —
+ * the authoritative universe of types that can appear as `node.type` in a saved
+ * workflow and therefore reach the backend orchestrator. Read as text for the
+ * same reason as EXECUTABLE_TYPES: it lives in a package the backend can't
+ * import at compile time. Expected shape:
+ *
+ *   export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
+ *     "text-prompt": TextPromptNode,
+ *     list: LoopNode,
+ *     ...
+ *   }
+ */
+function extractFrontendNodeTypes(): Set<string> {
+  const source = readFileSync(FRONTEND_NODE_TYPES_PATH, "utf8")
+  const match = source.match(/export const nodeTypes[^=]*=\s*\{([\s\S]*?)\n\}/)
+  if (!match) {
+    throw new Error(
+      `Couldn't extract nodeTypes from ${FRONTEND_NODE_TYPES_PATH}. Has the declaration syntax changed? Update extractFrontendNodeTypes() in this test file to match.`,
+    )
+  }
+  const body = match[1] ?? ""
+  const keys = [...body.matchAll(/^\s*(?:"([^"]+)"|([A-Za-z_$][\w-]*))\s*:/gm)]
+    .map((m) => m[1] ?? m[2])
+    .filter((k): k is string => !!k)
+  return new Set(keys)
+}
+
+const FRONTEND_NODE_TYPES = extractFrontendNodeTypes()
+
 // ---------------------------------------------------------------------------
 // Sanity check on the regex extraction itself — if this breaks, every other
 // test in this file is meaningless.
@@ -110,6 +145,46 @@ describe("NODE_REGISTRY entries are classified", () => {
   • Source (orchestrator reads raw output from node.data, no execution): add to SOURCE_NODE_TYPES in backend/src/services/workflow-engine/execution-graph.ts
   • Skip (orchestrator intentionally skips): add to SKIP_NODE_TYPES in same file
 `,
+      ).toBeGreaterThan(0)
+    },
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Test 1b — EVERY renderable node type is classified (not just NODE_REGISTRY).
+//
+// NODE_REGISTRY is a curated ~20-entry discovery subset, so Test 1 above cannot
+// catch a renderable-but-unclassified type. This iterates the full React Flow
+// `nodeTypes` map — the real universe of types that can be saved in a workflow
+// and reach the orchestrator. A type in NONE of the four sets makes the
+// orchestrator create a stale "pending" jobs row and `buildPayload` throw
+// "Unknown node type", failing the ENTIRE workflow on any full server-side run
+// (webhook / schedule / MCP / published-app) or the default Run button. This is
+// the sticky-note / provider / rss-feed outage class — invisible to the
+// frontend (which gates on EXECUTABLE_TYPES) and to Test 1 (NODE_REGISTRY only).
+// ---------------------------------------------------------------------------
+
+describe("every renderable node type is classified", () => {
+  it("found a non-trivial number of node types (>= 100)", () => {
+    expect(FRONTEND_NODE_TYPES.size).toBeGreaterThanOrEqual(100)
+  })
+
+  it.each([...FRONTEND_NODE_TYPES].map((t) => [t] as const))(
+    'node type "%s" is in EXECUTABLE_TYPES, PARAMETER_NODE_TYPES, SOURCE_NODE_TYPES, or SKIP_NODE_TYPES',
+    (type) => {
+      const classifications: string[] = []
+      if (FRONTEND_EXECUTABLE_TYPES.has(type)) classifications.push("EXECUTABLE_TYPES")
+      if (PARAMETER_NODE_TYPES.has(type)) classifications.push("PARAMETER_NODE_TYPES")
+      if (isSourceNode(type)) classifications.push("SOURCE_NODE_TYPES")
+      if (isSkipNode(type)) classifications.push("SKIP_NODE_TYPES")
+
+      expect(
+        classifications.length,
+        `Renderable node type "${type}" (in frontend nodeTypes map) is in NONE of the four classification sets. At runtime the orchestrator creates a stale "pending" jobs row and buildPayload throws "Unknown node type", failing the whole workflow on any full server-side run or the default Run button. Classify it:
+  • Executable: add to EXECUTABLE_TYPES (frontend types.ts) + a buildPayload case
+  • Parameter: add to PARAMETER_NODE_TYPES + getParameterValue/getParameterPromptHint
+  • Source (output read from node.data): add to SOURCE_NODE_TYPES in execution-graph.ts
+  • Skip (visual / non-executable, e.g. sticky-note, provider): add to SKIP_NODE_TYPES in execution-graph.ts`,
       ).toBeGreaterThan(0)
     },
   )

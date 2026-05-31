@@ -11,8 +11,10 @@
  * (so `tasks/get` can look up the job's media kind) AND chooses the
  * structuredContent shape the iframe expects.
  */
+import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
 import { registerTask } from "../tasks.js"
+import { config } from "../../config.js"
 import { validateModelInput } from "@nodaro/shared"
 
 interface ParsedJobBody {
@@ -161,6 +163,36 @@ export function jobResultWithWidget(opts: JobResultOpts) {
     content: [text],
     structuredContent: structuredContent as unknown as Record<string, unknown>,
   }
+}
+
+/**
+ * Dispatch a generation job to an internal route and build the standard
+ * verb-tool result. Collapses the repeated `fastify.inject` → statusCode →
+ * parseJobId → parseFailure → jobResultWithWidget tail that every generation
+ * verb handler shares (identical constant headers; only url/payload/label/
+ * widgetKind/widgetData differ). Behavior is identical to the inline form.
+ */
+export async function dispatchJob(
+  fastify: FastifyInstance,
+  session: McpSession,
+  opts: {
+    url: string
+    payload: unknown
+    label: string
+    widgetKind?: WidgetKind
+    widgetData?: Omit<SingleJobStructuredContent, "jobId">
+  },
+) {
+  const res = await fastify.inject({
+    method: "POST",
+    url: opts.url,
+    headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
+    payload: opts.payload as string | object | Buffer | undefined,
+  })
+  if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
+  const jobId = parseJobId(res.body)
+  if (!jobId) return parseFailure(res.body)
+  return jobResultWithWidget({ jobId, label: opts.label, session, widgetKind: opts.widgetKind, widgetData: opts.widgetData })
 }
 
 /**

@@ -1,7 +1,10 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { config } from "../lib/config.js"
+import { supabase } from "../lib/supabase.js"
 import { llmComplete } from "../lib/llm-client.js"
+import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { extractWorkflowId } from "../lib/request-helpers.js"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -15,11 +18,12 @@ import {
  * Generic LLM-helper endpoint backing every ✨ AI-helper button in the studio.
  * Synchronous, single round-trip. Uses Claude Sonnet via llmComplete.
  *
- * TODO (spec Open item #7): deduct 1 CR per call. PR 1 ships without credit
- * deduction because this route is only reachable from the new studio UI
- * (PR 2). Existing studio uses the inline LLM-draft path inside the gen
- * routes (which reserve credits via reserveCreditsForJob); standalone ✨
- * helper is a PR-2 surface.
+ * Metered: every call reserves + commits credits at the shared `prompt-helper`
+ * rate (refunded on failure), mirroring the qa-check / image-to-text sync-LLM
+ * routes. Without this the endpoint was an uncapped free Claude proxy — any
+ * authenticated user could loop it for unlimited completions at Nodaro's cost.
+ * Credits are no-ops in non-cloud editions (reserveCreditsForJob returns no
+ * usageLogId), so this stays correct in Community/Business.
  */
 
 const KIND = z.enum(["seed-prompt", "asset-description", "motion-description"])
@@ -30,6 +34,10 @@ const body = z.object({
 })
 
 type Kind = z.infer<typeof KIND>
+
+// All three kinds are short, standard-tier prompt-drafting completions; bill
+// them at the shared "prompt-helper" rate (model_pricing / STATIC_CREDIT_COSTS).
+const CREDIT_IDENTIFIER = "prompt-helper"
 
 interface PromptSpec {
   system: string
@@ -78,40 +86,93 @@ const PROMPTS: Record<Kind, (ctx: Record<string, unknown>) => PromptSpec> = {
 }
 
 export async function llmSuggestDescriptionRoutes(app: FastifyInstance) {
-  app.post("/v1/llm-suggest-description", async (req, reply) => {
-    if (!req.userId) {
-      return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
-    }
-    const parsed = body.safeParse(req.body)
-    if (!parsed.success) {
-      return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
-    }
-    // llmComplete is called with modelId="claude-sonnet-4.6" which routes
-    // through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM call
-    // 502s mid-request — gate it here with a clean 503 instead.
-    if (!config.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({
-        error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
-      })
-    }
-    const { system, user, options } = PROMPTS[parsed.data.kind](parsed.data.context)
-    try {
-      const result = await llmComplete({
-        modelId: "claude-sonnet-4.6",
-        system,
-        messages: [{ role: "user", content: user }],
-        ...options,
-      })
-      const text = result.text.trim()
-      if (!text) {
-        return reply.status(502).send({
-          error: { code: "llm_empty_response", message: "LLM returned no text — please retry." },
+  app.post(
+    "/v1/llm-suggest-description",
+    { preHandler: creditGuard(() => CREDIT_IDENTIFIER) },
+    async (req, reply) => {
+      if (!req.userId) {
+        return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
+      }
+      const parsed = body.safeParse(req.body)
+      if (!parsed.success) {
+        return reply.status(400).send({ error: { code: "validation_error", ...formatZodError(parsed.error) } })
+      }
+      // llmComplete is called with modelId="claude-sonnet-4.6" which routes
+      // through Anthropic specifically. Without ANTHROPIC_API_KEY the LLM call
+      // 502s mid-request — gate it here with a clean 503 instead. (Checked
+      // before reserving credits so a misconfigured server never charges.)
+      if (!config.ANTHROPIC_API_KEY) {
+        return reply.status(503).send({
+          error: { code: "provider_unavailable", message: "Anthropic API key not configured" },
         })
       }
-      return { text }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "LLM call failed"
-      return reply.status(502).send({ error: { code: "llm_failure", message } })
-    }
-  })
+
+      const userId = req.userId
+
+      // Audit-trail job row (mirrors qa-check / image-to-text). Reserve credits
+      // against it; commit on success, refund on any failure.
+      const { data: job, error: jobError } = await supabase
+        .from("jobs")
+        .insert({
+          workflow_id: extractWorkflowId(req.body),
+          user_id: userId,
+          status: "pending",
+          input_data: { type: "llm-suggest-description", kind: parsed.data.kind },
+        })
+        .select("id")
+        .single()
+      if (jobError || !job) {
+        return reply.status(500).send({
+          error: { code: "internal_error", message: jobError?.message ?? "Failed to create job" },
+        })
+      }
+
+      const reservation = await reserveCreditsForJob(req, reply, job.id, CREDIT_IDENTIFIER)
+      if (reply.sent) return
+      const usageLogId = reservation?.usageLogId
+      // Core stays free of static ee/ imports — load the credit service lazily
+      // (only when a reservation actually happened, i.e. cloud edition).
+      const credits = usageLogId
+        ? (await import("../ee/services/credits.js")).CreditsService
+        : null
+
+      const { system, user, options } = PROMPTS[parsed.data.kind](parsed.data.context)
+      try {
+        const result = await llmComplete({
+          modelId: "claude-sonnet-4.6",
+          system,
+          messages: [{ role: "user", content: user }],
+          ...options,
+        })
+        const text = result.text.trim()
+        if (!text) {
+          await supabase
+            .from("jobs")
+            .update({ status: "failed", output_data: { error: "empty response" } })
+            .eq("id", job.id)
+            .eq("user_id", userId)
+          if (credits && usageLogId) await credits.refundCredits(usageLogId)
+          return reply.status(502).send({
+            error: { code: "llm_empty_response", message: "LLM returned no text — please retry." },
+          })
+        }
+        await supabase
+          .from("jobs")
+          .update({ status: "completed", output_data: { text } })
+          .eq("id", job.id)
+          .eq("user_id", userId)
+        if (credits && usageLogId) await credits.commitCredits(usageLogId)
+        return { text }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "LLM call failed"
+        await supabase
+          .from("jobs")
+          .update({ status: "failed", output_data: { error: message } })
+          .eq("id", job.id)
+          .eq("user_id", userId)
+        if (credits && usageLogId) await credits.refundCredits(usageLogId)
+        return reply.status(502).send({ error: { code: "llm_failure", message } })
+      }
+    },
+  )
 }

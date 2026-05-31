@@ -64,11 +64,35 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { generateImageRoutes } from "../generate-image.js"
+import { generateImageRoutes, generateImageBody } from "../generate-image.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
+
+// ---------------------------------------------------------------------------
+// aspectRatio enum must cover every provider's catalog ratios. Wan 2.7 /
+// Wan 2.7 Pro expose ultra-wide 8:1 and 1:8 in the picker (the per-provider
+// fail-safe useEffect deliberately keeps them because they're valid catalog
+// values); the route Zod enum omitted them, so selecting either 400'd at
+// generate time. Guard the specific gap + the common ratios.
+// ---------------------------------------------------------------------------
+describe("generateImageBody aspectRatio enum", () => {
+  const aspectRatioEnum = new Set(
+    (generateImageBody.shape.aspectRatio.unwrap() as { options: readonly string[] }).options,
+  )
+
+  it("includes Wan 2.7 ultra-wide ratios 8:1 and 1:8", () => {
+    expect(aspectRatioEnum.has("8:1")).toBe(true)
+    expect(aspectRatioEnum.has("1:8")).toBe(true)
+  })
+
+  it("still accepts the common aspect ratios", () => {
+    for (const r of ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9"]) {
+      expect(aspectRatioEnum.has(r), `missing ${r}`).toBe(true)
+    }
+  })
+})
 
 // ---------------------------------------------------------------------------
 // Test app setup

@@ -783,11 +783,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
-              options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-              ]}
+              options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
@@ -1402,6 +1398,22 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
     }
     return () => { video.onloadedmetadata = null; video.src = "" }
   }, [connectedVideoInfo])
+
+  // Fail-safe (Provider Enum Sync step 12b): when the provider changes, snap a
+  // stale resolution to a valid option for the NEW provider. wan-animate
+  // exposes 480p/580p/720p; kling exposes 720p/1080p. Without this, a value set
+  // under one provider (e.g. 1080p on Kling) persists after switching to
+  // wan-animate — the dropdown hides it but the stale value is still forwarded.
+  // The route enum is the union of both sets so it won't 400, but an
+  // unsupported resolution would otherwise reach the model. Mirrors
+  // ImageToVideoConfig / LipSyncConfig.
+  useEffect(() => {
+    const isWanAnimate = provider === "wan-animate-move" || provider === "wan-animate-replace"
+    const valid: readonly string[] = isWanAnimate ? ["480p", "580p", "720p"] : ["720p", "1080p"]
+    if (data.resolution && !valid.includes(data.resolution)) {
+      onUpdate({ resolution: valid[0] as MotionTransferData["resolution"] })
+    }
+  }, [provider]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col gap-3">
@@ -2537,11 +2549,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
-              options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-              ]}
+              options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
