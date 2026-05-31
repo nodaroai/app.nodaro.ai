@@ -34,3 +34,7 @@ supabase/.temp/
 # removed
 # removed
 /gen.txt
+
+# Merge / patch backup artifacts (never commit these)
+*.orig
+*.rej
