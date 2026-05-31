@@ -711,9 +711,9 @@ describe("clearConnectedListRows", () => {
   })
 
   it("only clears cells in connected columns, preserves manual columns", () => {
-    const loopNode = {
+    const listNode = {
       id: "loop-1",
-      type: "loop",
+      type: "list",
       position: { x: 0, y: 0 },
       data: {
         label: "Table",
@@ -728,7 +728,7 @@ describe("clearConnectedListRows", () => {
       },
     } as any
 
-    clearConnectedListRows([loopNode])
+    clearConnectedListRows([listNode])
 
     // Manual column kept, connected column cleared.
     expect(mockUpdateNodeData).toHaveBeenCalledWith("loop-1", {
@@ -798,7 +798,7 @@ describe("clearConnectedListRows", () => {
       },
       {
         id: "list-b",
-        type: "loop",
+        type: "list",
         position: { x: 0, y: 0 },
         data: {
           columns: [{ id: "c1", handleId: "col_c1", connectedSourceId: "up" }],

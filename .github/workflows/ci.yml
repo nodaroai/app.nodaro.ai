@@ -127,6 +127,30 @@ jobs:
       - name: Check admin-client imports
         run: node backend/scripts/check-admin-client-import.mjs
 
+  i18n-completeness:
+    name: i18n Locale Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      # The full i18n catalog×locale completeness matrix test lives in
+      # @nodaro/shared and was previously never run in CI (only the
+      # seasons-scoped .mjs ran), so a missing locale sidecar would silently
+      # fall back to English in prod. NOTE: the rest of the @nodaro/shared
+      # suite has pre-existing stale failures (model/LLM registry drifted while
+      # the suite went un-run in CI) — tracked separately; once those are green,
+      # broaden this to `npm run test --workspace=@nodaro/shared`.
+      - name: i18n locale completeness (full catalog × locale matrix)
+        run: npm run test --workspace=@nodaro/shared -- src/__tests__/i18n-locale-completeness.test.ts
+
   check-locale-completeness:
     name: Check Locale Completeness
     runs-on: ubuntu-latest
@@ -230,7 +254,7 @@ jobs:
     name: Push Database Migrations
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports]
+    needs: [frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, i18n-completeness]
     steps:
       - uses: actions/checkout@v5
       - uses: supabase/setup-cli@v1

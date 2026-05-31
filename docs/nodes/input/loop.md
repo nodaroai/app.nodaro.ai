@@ -1,41 +1,7 @@
-# Table
+# Table (loop) — merged into [List](./list.md)
 
-> Table-based input with columns and rows for structured batch iteration.
+> The `loop` node (UI label "Table") has been folded into the canonical [List](./list.md) node.
 
-## Overview
+The `loop` type is a **deprecated alias**, auto-migrated to `list` on load (editor, presentation, and app runner) plus a one-time database sweep. Old workflows that used a `loop`/"Table" node keep working unchanged.
 
-The Table node provides a spreadsheet-like interface for structured batch data. Define columns (variables) and rows (iterations), and each row is processed through the workflow independently. More powerful than List when you need multiple variables per iteration.
-
-## Configuration
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Columns | Dynamic list | — | Named columns representing different variables |
-| Rows | Dynamic table | — | Each row contains values for all columns |
-
-Displays row x column count. Add/remove columns and rows via buttons. Cell editing inline.
-
-## Inputs & Outputs
-
-**Inputs:** None (this is a source node)
-
-**Outputs:**
-- Per-column outputs — each column value is available as a separate output per iteration
-## Best Practices
-
-- Name columns descriptively (e.g., "character_name", "prompt", "style")
-- Keep the table manageable — very large tables increase total execution time
-- Test with 1-2 rows before running the full batch
-
-## Common Use Cases
-
-- Generate character images with different names and descriptions per row
-- Create videos with varying prompts and style combinations
-- Batch social media posts with different captions per platform
-- Process multiple subjects with different parameter combinations
-
-## Tips
-
-- Each row triggers a full execution of all connected downstream nodes
-- Each row triggers a separate downstream execution — more rows means longer total runtime
-- Use columns to map to different input fields on downstream nodes
+The List node now covers everything Table did: it starts as a single text column and **grows into a multi-column typed table** when you connect producers to its bottom-left "+" handle. See **[List](./list.md)** for the full reference.

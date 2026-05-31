@@ -87,14 +87,14 @@ describe("skill-loaders MCP tools", () => {
     expect(text).toContain("totally-fake-node-type")
     // Error message must enumerate valid types so Claude can self-correct
     expect(text).toContain("generate-image")
-    expect(text).toContain("loop")
+    expect(text).toContain("list")
   })
 
   it("get_node_skill is idempotent across repeated invocations", async () => {
     const server = buildServer()
     registerSkillLoaders(server, emptySession())
-    const r1 = await callTool(server, "get_node_skill", { node_type: "loop" })
-    const r2 = await callTool(server, "get_node_skill", { node_type: "loop" })
+    const r1 = await callTool(server, "get_node_skill", { node_type: "list" })
+    const r2 = await callTool(server, "get_node_skill", { node_type: "list" })
     expect(r1.content[0]?.text).toBe(r2.content[0]?.text)
   })
 

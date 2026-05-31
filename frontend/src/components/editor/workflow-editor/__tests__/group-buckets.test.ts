@@ -37,10 +37,10 @@ describe("computeGroupBuckets", () => {
     expect(buckets.image).toEqual(["https://r2/img.png"]);
   });
 
-  it("skips multi-output children (Loop, returning 'data' from getOutputType)", () => {
+  it("skips multi-output children (List, returning 'data' from getOutputType)", () => {
     const group = { id: "g", type: "group", position: { x: 0, y: 0 }, data: { label: "G" } };
-    const loop = { id: "l", type: "loop", position: { x: 10, y: 20 }, data: { rows: [["a"], ["b"]] }, parentId: "g" };
-    expect(computeGroupBuckets(group as never, [group, loop] as never[]).text).toEqual([]);
+    const list = { id: "l", type: "list", position: { x: 10, y: 20 }, data: { columns: [{ handleId: "col_0" }], rows: [["a"], ["b"]] }, parentId: "g" };
+    expect(computeGroupBuckets(group as never, [group, list] as never[]).text).toEqual([]);
   });
 
   it("skips parameter pickers (tone, framing — they return 'data' from getOutputType)", () => {

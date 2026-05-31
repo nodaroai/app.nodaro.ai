@@ -484,7 +484,7 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 | Worker-queued | 40+ (generate-image, image-to-video, text-to-speech, FFmpeg nodes, etc.) | Create job → reserve credits → enqueue BullMQ → poll jobs table every 3s |
 | Sync HTTP | ai-writer, video-composer, after-effects, lottie-overlay, 3d-title, motion-graphics, image-to-text | Internal `fetch("http://localhost:PORT/v1/...")` with service-role auth |
 | Inline | combine-text, split-text, composite | Pure logic, no external calls |
-| Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, loop, reference-audio | Output read from node data |
+| Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, reference-audio | Output read from node data |
 
 ### API Routes
 
@@ -531,7 +531,7 @@ Unified interface for all LLM calls across 7 models and 3 tiers:
 |------|--------|------------|
 | Economy | `gemini-3-flash`, `claude-haiku-4.5` | chat-completions, messages |
 | Standard | `claude-sonnet-4.6`, `gpt-5.2` | messages, chat-completions |
-| Premium | `gemini-3.1-pro`, `claude-opus-4.6`, `gpt-5.4` | chat-completions, messages, responses |
+| Premium | `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4` | chat-completions, messages, responses |
 
 ### API Formats
 - **chat-completions** — Gemini, GPT-5.2 (`POST /api/v1/chat/completions`)
@@ -544,7 +544,7 @@ Unified interface for all LLM calls across 7 models and 3 tiers:
 - Both try KIE first, fallback to direct Anthropic SDK if `directFallbackModel` is set
 
 ### LLM Features & Credit Routing
-- `LlmFeature` type covers 11 features: ai-writer, prompt-helper, scene-graph-ai, after-effects, motion-graphics, lottie-overlay, 3d-title, image-to-text, qa-check, generate-script, translate
+- `LlmFeature` type covers 13 features: ai-writer, llm-chat, prompt-helper, scene-graph-ai, after-effects, motion-graphics, lottie-overlay, 3d-title, image-to-text, qa-check, generate-script, translate, image-critic
 - `buildLlmCreditIdentifier(feature, model)` → economy: `"feature:economy"`, standard: `"feature"`, premium: `"feature:premium"`
 - `resolveLlmCreditId(feature, body)` — reads `llmModel` from raw request body before Zod strips it (for `creditGuard` preHandler)
 

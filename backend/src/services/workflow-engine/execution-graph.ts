@@ -10,6 +10,13 @@ import {
 } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
+// The per-node legacy-type migration lives in normalize-node-types.ts (single
+// source of truth, shared by the orchestrator, sub-workflow handler, app-input
+// extraction, and api-token routes — now also incl. loop → list). Re-exported
+// here so callers importing it alongside the other engine helpers from this
+// module keep a stable import path.
+export { migrateLegacyNodeType } from "./normalize-node-types.js"
+
 /**
  * Topological sort via Kahn's algorithm.
  * Returns array of levels where nodes in the same level can execute in parallel.
@@ -188,7 +195,6 @@ const SOURCE_NODE_TYPES = new Set([
   "youtube-video",
   "reference-audio",
   "list",
-  "loop",
   "webhook-trigger",
   "schedule-trigger",
   "telegram-trigger",
@@ -328,5 +334,4 @@ export const TEXT_SOURCE_TYPES = new Set([
   "preview",
   "generate-script",
   "list",
-  "loop",
 ])

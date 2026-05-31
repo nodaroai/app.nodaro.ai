@@ -29,7 +29,7 @@ import { buildVariantResults } from "./variant-results";
 
 function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
-    if (n.type !== "loop" && n.type !== "list") return false
+    if (n.type !== "list") return false
     const data = n.data as Record<string, unknown>
     const minRows = (data.minRows as number) ?? 0
     if (minRows === 0) return false
@@ -154,7 +154,7 @@ export function resetNodeAccumulation(
 export function clearConnectedListRows(nodes: WorkflowNode[]): void {
   const { updateNodeData } = useWorkflowStore.getState()
   for (const node of nodes) {
-    if (node.type !== "list" && node.type !== "loop") continue
+    if (node.type !== "list") continue
     const data = node.data as Record<string, unknown>
     const columns = (data.columns as ListLoopColumn[] | undefined) ?? []
     if (columns.length === 0) continue

@@ -12,8 +12,7 @@ import type {
   ProviderResult,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { replicate, extractUrl, extractCost } from "./client.js"
-import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { extractUrl, runReplicatePrediction } from "./client.js"
 import { translateToEnglish } from "../../lib/translate.js"
 
 const DEFAULT_ASPECT_RATIO = "1:1"
@@ -175,7 +174,9 @@ async function runImagePrediction(
   const input = spec.buildInput(englishPrompt, referenceImageUrls, extraParams)
 
   // Resolve dynamic model (flux-lora-character) per-request from extraParams.
-  let prediction
+  // Versioned references contain ":" (owner/name:hash) and use the `version`
+  // field on predictions.create; static specs use the `model` field.
+  let dispatchTarget: { version: string } | { model: string }
   if (spec.model === null) {
     const loraVersion = extraParams?.lora_version as string | undefined
     if (!loraVersion) {
@@ -183,25 +184,20 @@ async function runImagePrediction(
         `[Replicate:image] model=${model} requires extraParams.lora_version`,
       )
     }
-    // Versioned references contain ":" (owner/name:hash). Use the `version`
-    // field on predictions.create rather than `model`.
     const versionHash = loraVersion.includes(":")
       ? loraVersion.split(":").pop()!
       : loraVersion
-    prediction = await replicate.predictions.create({ version: versionHash, input })
+    dispatchTarget = { version: versionHash }
   } else {
-    prediction = await replicate.predictions.create({
-      model: spec.model,
-      input,
-    })
+    dispatchTarget = { model: spec.model }
   }
-  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:image]")
-  const completed = await replicate.wait(prediction)
-  const output = completed.output
 
-  const cost = extractCost(
-    completed.metrics as Record<string, unknown> | undefined,
-  )
+  const { output, cost } = await runReplicatePrediction({
+    ...dispatchTarget,
+    input,
+    label: "[replicate:image]",
+    reconcileOpts,
+  })
 
   const raw =
     typeof output === "string"

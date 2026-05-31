@@ -67,7 +67,7 @@ Per-node data shapes (required fields, defaults, result fields, MCP call shapes,
 - **\`start_workflow_editor\`** — call ONCE at the start of any workflow-building session (Stage 0.0). Returns the canonical workflow JSON shape, edge wiring conventions, the \`update_workflow_json\` contract, the asset-URL result-field contract for every generation node, and the catalog of available node types.
 - **\`get_node_skill(node_type)\`** — call AS NEEDED, before you use a specific node type (Stage 0.1). Returns that node's full schema, MCP call shape, and a worked example. Accepted types come from the catalog returned by \`start_workflow_editor\`.
 
-The 8-node cinematic-flow whitelist is unchanged: \`text-prompt\`, \`loop\` (UI label "Table"), \`generate-image\`, \`image-to-video\`, \`generate-music\`, \`trim-video\`, \`combine-videos\`, \`merge-video-audio\`. For any node type outside this whitelist, STOP and ask the user before using it.
+The 8-node cinematic-flow whitelist is unchanged: \`text-prompt\`, \`list\` (UI label "List"; grows into a multi-column table when you add columns), \`generate-image\`, \`image-to-video\`, \`generate-music\`, \`trim-video\`, \`combine-videos\`, \`merge-video-audio\`. For any node type outside this whitelist, STOP and ask the user before using it.
 
 ## Stage 0 — Initialize the live workspace
 
@@ -88,7 +88,7 @@ When you reach a stage that uses a specific node type, call \`get_node_skill(<ty
 
 The first time you use each of these in the trailer flow, call \`get_node_skill\`:
 - \`text-prompt\` (Stage 1, script display)
-- \`loop\` (Stage 2, shot list)
+- \`list\` (Stage 2, shot list)
 - \`generate-image\` (Stage 5, scene composition)
 - \`image-to-video\` (Stage 6, shot animation)
 - \`generate-music\` (Stage 7, soundtrack)
@@ -142,7 +142,7 @@ Convert the approved screenplay into a shot list. Each row has:
 - **continuity_in (string)** — how this shot continues from the previous: "Hero finishes the stride begun in shot 4 — front-on framing"
 - **continuity_out (string)** — what this shot leaves for the next: "Hero raises rifle, beat ends mid-motion"
 
-Show the shot list as a \`loop\` node (UI label "Table") — this is the multi-column tabular type. Do NOT use \`type: "list"\` (that's the single-column variant). Iterate via Q&A until approved.
+Show the shot list as a \`list\` node (UI label "List"). The List node starts as a single text column and grows into a multi-column table when you add columns — give it one column per shot-list field (Shot, Camera, Action, Duration, Continuity, etc.). Iterate via Q&A until approved.
 
 **Continuity rules:**
 - Two adjacent shots with the same character: explicitly chain action ("running from behind" → "finishing from front")

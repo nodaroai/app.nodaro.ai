@@ -6,6 +6,7 @@ import {
   extractSavedNodeOutput,
   buildNodeOutputFromJobData,
   extractAllGeneratedResults,
+  coerceListItemsOverrideToRows,
 } from "../output-extractor.js"
 import type { SimpleNode, NodeOutput } from "../types.js"
 
@@ -95,13 +96,18 @@ describe("extractSourceNodeOutput", () => {
     expect(result).toEqual({ text: "cat" })
   })
 
-  it("extracts first row value from loop node", () => {
-    const result = extractSourceNodeOutput(node("1", "loop", { rows: [["hello"], ["world"]] }))
+  // Rows-only shape ({ rows } with NO `columns`): `list` must be a TRUE
+  // superset of `loop`. normalizeLegacyNodeTypes renames loop→list WITHOUT
+  // backfilling `columns`, so a rows-only loop becomes a rows-only list — the
+  // `list` branch reads `rows` first (first row's first cell) before falling
+  // back to the legacy `items` path. This is the gap the list⊇loop fix closes.
+  it("extracts first row value from list node (rows only, no columns)", () => {
+    const result = extractSourceNodeOutput(node("1", "list", { rows: [["hello"], ["world"]] }))
     expect(result).toEqual({ text: "hello" })
   })
 
-  it("returns undefined for loop with no rows", () => {
-    expect(extractSourceNodeOutput(node("1", "loop", {}))).toBeUndefined()
+  it("returns undefined for list with no rows and no items", () => {
+    expect(extractSourceNodeOutput(node("1", "list", {}))).toBeUndefined()
   })
 
   it("extracts webhook-trigger with params", () => {
@@ -230,13 +236,16 @@ describe("extractSourceNodeOutputAsList", () => {
     expect(extractSourceNodeOutputAsList(node("1", "list", { items: "" }))).toBeUndefined()
   })
 
-  it("returns loop rows when > 1", () => {
-    const result = extractSourceNodeOutputAsList(node("1", "loop", { rows: [["a"], ["b"]] }))
+  // Rows-only (no `columns`) list⊇loop superset: `extractSourceNodeOutputAsList`
+  // case "list" reads `rows` directly when `columns` is absent (the renamed
+  // loop→list shape) before falling back to the legacy `items` string.
+  it("returns list rows when > 1 (rows-only shape, no columns)", () => {
+    const result = extractSourceNodeOutputAsList(node("1", "list", { rows: [["a"], ["b"]] }))
     expect(result).toEqual(["a", "b"])
   })
 
-  it("returns undefined for single row loop", () => {
-    expect(extractSourceNodeOutputAsList(node("1", "loop", { rows: [["only"]] }))).toBeUndefined()
+  it("returns undefined for single row rows-only list", () => {
+    expect(extractSourceNodeOutputAsList(node("1", "list", { rows: [["only"]] }))).toBeUndefined()
   })
 
   it("returns undefined for non-list types", () => {
@@ -640,6 +649,91 @@ describe("buildNodeOutputFromJobData", () => {
       "reduce",
     )
     expect(result.result).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// coerceListItemsOverrideToRows  (code-review #1)
+//
+// A single-column `list` (incl. a migrated former-`loop`) used as a
+// published-app input: the runtime ListInputCard writes the user's value as an
+// `items: string[]` override. The orchestrator merges that into the node's data
+// alongside the snapshot `columns`+`rows`. Both list extractors check
+// `if (cols)` FIRST and read the STALE snapshot `rows`, ignoring the override.
+// This helper rewrites `rows` from the `items` override so the user's input
+// wins for both the scalar and list extraction paths.
+// ---------------------------------------------------------------------------
+
+describe("coerceListItemsOverrideToRows", () => {
+  it("rewrites rows from an items override on a columns-present list", () => {
+    const data: Record<string, unknown> = {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["old"]],
+      items: ["new1", "new2"],
+    }
+    coerceListItemsOverrideToRows(data)
+    expect(data.rows).toEqual([["new1"], ["new2"]])
+    // Stale `items` is dropped so no downstream reader sees two sources.
+    expect(data.items).toBeUndefined()
+  })
+
+  it("makes the items override authoritative for list-fan-out extraction (NOT stale rows)", () => {
+    // The end-to-end shape: merged node data after the orchestrator applies the
+    // `items` override on top of the snapshot. extractSourceNodeOutputAsList must
+    // return the user's values, not the snapshot `["old"]`.
+    const data: Record<string, unknown> = {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["old"]],
+      items: ["new1", "new2"],
+    }
+    coerceListItemsOverrideToRows(data)
+    const asList = extractSourceNodeOutputAsList(node("1", "list", data))
+    expect(asList).toEqual(["new1", "new2"])
+    // Scalar extractor reads the first row's first cell — also the user's input.
+    expect(extractSourceNodeOutput(node("1", "list", data))).toEqual({ text: "new1" })
+  })
+
+  it("single-item items override yields a single-cell row (scalar list)", () => {
+    const data: Record<string, unknown> = {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["old"]],
+      items: ["only"],
+    }
+    coerceListItemsOverrideToRows(data)
+    expect(data.rows).toEqual([["only"]])
+    // length 1 → not a fan-out
+    expect(extractSourceNodeOutputAsList(node("1", "list", data))).toBeUndefined()
+    expect(extractSourceNodeOutput(node("1", "list", data))).toEqual({ text: "only" })
+  })
+
+  it("no-op when there are no columns (legacy newline-string list keeps items)", () => {
+    const data: Record<string, unknown> = { items: "cat\ndog" }
+    coerceListItemsOverrideToRows(data)
+    expect(data.items).toBe("cat\ndog")
+    expect(data.rows).toBeUndefined()
+  })
+
+  it("no-op when items is not an array (string items on a columns list left intact)", () => {
+    const data: Record<string, unknown> = {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["keep"]],
+      items: "cat\ndog",
+    }
+    coerceListItemsOverrideToRows(data)
+    expect(data.rows).toEqual([["keep"]])
+    expect(data.items).toBe("cat\ndog")
+  })
+
+  it("is idempotent (second call after conversion is a no-op)", () => {
+    const data: Record<string, unknown> = {
+      columns: [{ id: "c1", handleId: "col_c1", type: "text" }],
+      rows: [["old"]],
+      items: ["a", "b"],
+    }
+    coerceListItemsOverrideToRows(data)
+    coerceListItemsOverrideToRows(data)
+    expect(data.rows).toEqual([["a"], ["b"]])
+    expect(data.items).toBeUndefined()
   })
 })
 

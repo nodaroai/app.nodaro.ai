@@ -125,10 +125,19 @@ export async function applyStageEdit(
   // 1. Look up the stage row by stageId; reject if not awaiting_approval.
   const { data: stageRow, error: stageErr } = await supabase
     .from("pipeline_stages")
-    .select("id, status, stage_name, output")
+    .select("id, status, stage_name, output, pipeline_id")
     .eq("id", stageId)
     .single()
   if (stageErr || !stageRow) {
+    return { ok: false, reason: "stage_not_awaiting" }
+  }
+  // Bind the stage to the (ownership-checked) pipelineId. Callers verify they
+  // own `pipelineId`, but pass a separately-supplied `stageId` (derived from a
+  // chat turn id). Without this check a caller who owns pipeline A could pass a
+  // stageId/turn from another user's pipeline B and force-apply/approve B's
+  // awaiting stage (IDOR — shared by the MCP apply_chat_proposal tool and the
+  // REST apply route).
+  if (stageRow.pipeline_id !== pipelineId) {
     return { ok: false, reason: "stage_not_awaiting" }
   }
   if (stageRow.status !== "awaiting_approval") {

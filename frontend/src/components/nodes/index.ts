@@ -164,7 +164,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   // Input
   "text-prompt": TextPromptNode,
   list: LoopNode,
-  loop: LoopNode,
+  loop: LoopNode, // @deprecated legacy alias — migrated to "list" on load (list-loop-migration.ts); kept so a stray un-migrated node still renders
   "upload-image": UploadImageNode,
   "upload-video": UploadVideoNode,
   "upload-audio": UploadAudioNode,

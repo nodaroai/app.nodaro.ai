@@ -30,7 +30,7 @@ export const DATA_TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
 /** Producers of list/array data — data nodes themselves plus AI nodes that
  *  output structured items via `__listResults`. */
 export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
-  "list", "loop",
+  "list",
   "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
@@ -41,7 +41,7 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "web-scrape", "extract-field",
-  "list", "loop", "filter-list",
+  "list", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
   "selector",
   "ai-writer", "generate-script",

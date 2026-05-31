@@ -432,6 +432,25 @@ describe("cleanup-service", () => {
       expect(result.errors).toBe(0)
     })
 
+    it("SKIPS a candidate who still has an active subscription (never reaps a paying customer)", async () => {
+      // Data-loss guard: a reactivated paying customer can be left with a stale
+      // subscription_ended_at, so they match the candidate query (tier != free).
+      // The safety check must skip them — deleting their media is irreversible.
+      mockTableQueue("profiles", [
+        { data: [{ id: "user-reactivated", tier: "pro", subscription_tier: "pro" }], error: null },
+      ])
+      // The new live-subscription re-check finds an active sub for that user.
+      mockTableQueue("subscriptions", [
+        { data: [{ user_id: "user-reactivated" }], error: null },
+      ])
+
+      const result = await cleanupCanceledUserMedia()
+
+      expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
+      expect(result.filesDeleted).toBe(0)
+      expect(result.bytesFreed).toBe(0)
+    })
+
     it("handles already cleaned job outputs (_cleaned flag)", async () => {
       mockTableQueue("profiles", [
         {

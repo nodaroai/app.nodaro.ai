@@ -528,16 +528,20 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
         .is("deleted_at", null)
 
       if (allOldVersions) {
-        for (const old of allOldVersions) {
-          await supabase
-            .from("published_apps")
-            .update({
-              is_active: false,
-              is_listed: false,
-              slug: `${old.slug}-v${old.version}`,
-            })
-            .eq("id", old.id)
-        }
+        // Independent per-row updates — run concurrently instead of awaiting
+        // each network round-trip in sequence.
+        await Promise.all(
+          allOldVersions.map((old) =>
+            supabase
+              .from("published_apps")
+              .update({
+                is_active: false,
+                is_listed: false,
+                slug: `${old.slug}-v${old.version}`,
+              })
+              .eq("id", old.id),
+          ),
+        )
       }
     }
 

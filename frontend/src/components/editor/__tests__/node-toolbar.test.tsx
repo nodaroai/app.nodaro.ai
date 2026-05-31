@@ -85,7 +85,9 @@ describe("NODE_DEFINITIONS essential types", () => {
     const expected = [
       "text-prompt",
       "list",
-      "loop",
+      // "loop" retired as a creatable type — it is now only a load-migrated
+      // alias of "list" (see list-loop-migration.ts) and is intentionally
+      // absent from NODE_DEFINITIONS.
       "upload-image",
       "upload-video",
       "upload-audio",

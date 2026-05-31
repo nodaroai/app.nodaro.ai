@@ -200,12 +200,6 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Data",
   },
   {
-    type: "loop",
-    label: "Table",
-    icon: <Repeat className="h-4 w-4" />,
-    category: "Data",
-  },
-  {
     type: "web-scrape",
     label: "Web Scrape",
     icon: <Globe className="h-4 w-4" />,

@@ -159,7 +159,7 @@ describe("TYPED_HANDLE_IDS contract", () => {
     // Parameter-category pickers.
     const NON_TYPED_POOL_NODE_TYPES = new Set([
       "generate-image", // owns 6 handle ids that aren't typed-pool gates
-      "list", "loop", "web-scrape", "extract-field", "filter-list",
+      "list", "web-scrape", "extract-field", "filter-list",
       "deduplicate", "merge-lists", "sort-list",
     ])
     const registryHandles = new Set<string>()

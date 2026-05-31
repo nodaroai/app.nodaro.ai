@@ -231,7 +231,7 @@ export function expandLoopResults(): void {
   if (chains.length === 0) return;
 
   // List source types should NOT be cloned or removed
-  const LIST_SOURCE_TYPES = new Set(["loop", "split-text", "list"]);
+  const LIST_SOURCE_TYPES = new Set(["split-text", "list"]);
   const cloneableNodeIds = new Set(
     chains
       .flat()

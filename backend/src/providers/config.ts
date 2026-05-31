@@ -75,32 +75,18 @@ export async function buildRoutingDecision(
   }
 
   // ── Cloud / KIE mode ──────────────────────────────────────────
-  // KIE-only capabilities: no fallback
-  if (KIE_ONLY_CAPABILITIES.has(capability)) {
-    return {
-      providerChain: ["kie"],
-      markupPercent: settings.cost_markup_percent,
-      activeProvider: "kie",
-      settings,
-    }
-  }
-
-  // image-generation: KIE first, fall through to Replicate for "Open"
-  // (uncensored) models that only live there (flux-2-klein, kontext-multi).
-  // Walker in router.ts uses each provider's `supportedModels`, so KIE-routed
-  // ids never reach Replicate.
-  if (capability === "image-generation") {
-    return {
-      providerChain: ["kie", "replicate"],
-      markupPercent: settings.cost_markup_percent,
-      activeProvider: "kie",
-      settings,
-    }
-  }
-
-  // Other shared capabilities: KIE only
+  // KIE-only capabilities have no fallback; image-generation falls through to
+  // Replicate for the "Open" (uncensored) models that only live there
+  // (flux-2-klein, kontext-multi) — the router.ts walker uses each provider's
+  // `supportedModels`, so KIE-routed ids never reach Replicate. Everything else
+  // is KIE-only. (All three KIE-mode chains share the same markup/provider.)
+  const providerChain: RoutingDecision["providerChain"] = KIE_ONLY_CAPABILITIES.has(capability)
+    ? ["kie"]
+    : capability === "image-generation"
+      ? ["kie", "replicate"]
+      : ["kie"]
   return {
-    providerChain: ["kie"],
+    providerChain,
     markupPercent: settings.cost_markup_percent,
     activeProvider: "kie",
     settings,

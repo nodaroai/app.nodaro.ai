@@ -64,7 +64,7 @@ Each node needs a unique \`id\`, a registered \`type\`, a \`position\` (x/y in p
 
 ## Per-node schema
 
-Call \`get_node_skill(<type>)\` for the exact required + optional data fields, asset-URL result-field name, and a worked example for any specific node type. Available kebab-case types include: text-prompt, loop, generate-image, image-to-video, generate-music, trim-video, combine-videos, merge-video-audio.
+Call \`get_node_skill(<type>)\` for the exact required + optional data fields, asset-URL result-field name, and a worked example for any specific node type. Available kebab-case types include: text-prompt, list, generate-image, image-to-video, generate-music, trim-video, combine-videos, merge-video-audio.
 `
 
 /**
@@ -163,7 +163,7 @@ export const GET_NODE_SKILL_TOOL_DESCRIPTION =
   "data-shape contract for the node's MCP tool call (if any), when-to-use " +
   "guidance, common gotchas, and a worked example JSON. Pass the exact " +
   "kebab-case node_type from the catalog returned by start_workflow_editor " +
-  "(e.g., generate-image, image-to-video, loop, trim-video). If the " +
+  "(e.g., generate-image, image-to-video, list, trim-video). If the " +
   "node_type doesn't have a skill file the tool returns an error with the " +
   "list of valid types so you can self-correct."
 

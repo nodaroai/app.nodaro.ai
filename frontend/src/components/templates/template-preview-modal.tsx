@@ -15,6 +15,8 @@ import { toast } from "sonner"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
+import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { Button } from "@/components/ui/button"
 import {
@@ -104,18 +106,21 @@ export function TemplatePreviewModal({
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [handleKeyDown])
 
-  // Prepare snapshot nodes/edges. Order parent-first: template JSON is raw
-  // (no editor heal), so a group saved after its children would teleport in
-  // the preview.
-  const snapshotNodes = useMemo(
-    () => orderNodesParentFirst((fullTemplate?.snapshotNodes as Node[] | undefined) ?? []),
-    [fullTemplate],
-  )
-
-  const snapshotEdges = useMemo(
-    () => (fullTemplate?.snapshotEdges as Edge[] | undefined) ?? [],
-    [fullTemplate],
-  )
+  // Prepare snapshot nodes/edges. Migrate legacy `loop` ("Table") nodes to the
+  // canonical `list` type FIRST (mirror the app-runner `migrateAppSnapshot`
+  // path): the raw template JSON gets no editor heal, so an un-swept `loop`
+  // node would hit `NODE_DEF_MAP["loop"]` (now undefined after the loop→list
+  // unification) and break node-def lookups in the preview canvas. Then order
+  // parent-first so a group saved after its children doesn't teleport.
+  const { snapshotNodes, snapshotEdges } = useMemo(() => {
+    const rawNodes = (fullTemplate?.snapshotNodes as WorkflowNode[] | undefined) ?? []
+    const rawEdges = (fullTemplate?.snapshotEdges as WorkflowEdge[] | undefined) ?? []
+    const migrated = migrateListLoopNodes(rawNodes, rawEdges)
+    return {
+      snapshotNodes: orderNodesParentFirst(migrated.nodes as unknown as Node[]),
+      snapshotEdges: migrated.edges as unknown as Edge[],
+    }
+  }, [fullTemplate])
 
   const handleClone = useCallback(async () => {
     if (!template || !selectedProjectId) return

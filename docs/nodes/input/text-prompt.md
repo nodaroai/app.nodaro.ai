@@ -34,5 +34,5 @@ The Text Prompt node is the most common starting point for workflows. It provide
 ## Tips
 
 - Text Prompt outputs can fan out to multiple downstream nodes simultaneously
-- For batch workflows, use a List or Loop node instead, which feeds items one at a time
+- For batch workflows, use a List node instead, which feeds items one at a time
 - Node references allow you to dynamically include output from other nodes in your text

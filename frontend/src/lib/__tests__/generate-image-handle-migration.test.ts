@@ -80,7 +80,7 @@ describe("migrateGenerateImageHandles", () => {
   })
 
   it("leaves non-generate-image targets untouched", () => {
-    const nodes = [srcNode("tp", "text-prompt"), srcNode("li", "loop")]
+    const nodes = [srcNode("tp", "text-prompt"), srcNode("li", "list")]
     const edges = [edge("e1", "tp", "li", "in")]
     const { edges: out } = migrateGenerateImageHandles(nodes, edges)
     expect(out[0].targetHandle).toBe("in")
@@ -94,7 +94,7 @@ describe("migrateGenerateImageHandles", () => {
   })
 
   it("handles workflows with no generate-image nodes (no-op)", () => {
-    const nodes = [srcNode("tp", "text-prompt"), srcNode("li", "loop")]
+    const nodes = [srcNode("tp", "text-prompt"), srcNode("li", "list")]
     const edges = [edge("e1", "tp", "li", "in")]
     const { edges: out, pickerEdgesMigrated } = migrateGenerateImageHandles(nodes, edges)
     expect(out).toEqual(edges)

@@ -279,7 +279,7 @@ export function isExecutableNode(node: WorkflowNode): boolean {
   return EXECUTABLE_TYPES.has(node.type ?? "");
 }
 
-const FAN_OUT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
+export const FAN_OUT_EACH_TYPES = new Set(["list", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
 
 /**
  * Estimate the fan-out multiplier for a node based on upstream list/loop nodes.
@@ -324,7 +324,7 @@ function getBaseFanOut(
       if (n > 0) return n;
     }
 
-    if (sourceNode.type === "loop" || sourceNode.type === "list") {
+    if (sourceNode.type === "list") {
       const rows = (sourceNode.data as Record<string, unknown>).rows as
         | string[][]
         | undefined;
@@ -335,7 +335,7 @@ function getBaseFanOut(
       }
     }
 
-    // Transitive: text-prompt upstream of list/loop
+    // Transitive: text-prompt upstream of list
     if (sourceNode.type === "text-prompt") {
       const srcEdges = edges.filter((e) => e.target === sourceNode.id);
       for (const srcEdge of srcEdges) {
@@ -353,7 +353,7 @@ function getBaseFanOut(
           const n = fanOutCount(items, gpSelector);
           if (n > 0) return n;
         }
-        if (listNode.type === "loop" || listNode.type === "list") {
+        if (listNode.type === "list") {
           const rows = (listNode.data as Record<string, unknown>).rows as
             | string[][]
             | undefined;

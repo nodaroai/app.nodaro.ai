@@ -9,7 +9,6 @@ import {
   isValidMergeListsConnection,
   isValidSortListConnection,
   isValidSelectorConnection,
-  isValidLoopCoarse,
   isDataProducer,
 } from "./data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES, isVisualPickerType } from "./parameter-picker-types"
@@ -460,16 +459,6 @@ export const TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEnt
   "location": [
     { handleId: "in",             label: IDENTITY_HANDLE_LABELS["location"].in,             accepts: (s) => isValidLocationConnection("in",             s, isVisualPickerType) },
     { handleId: "cinematography", label: IDENTITY_HANDLE_LABELS["location"].cinematography, accepts: (s) => isValidLocationConnection("cinematography", s, isVisualPickerType) },
-  ],
-
-  // Loop's per-column input handles have dynamic ids (`col_<uuid>_in`) so
-  // they can't be enumerated statically. Expose the col_add quick-add
-  // handle instead — source-direction popovers will offer loop as a
-  // candidate, and the col_add handler in use-workflow-store auto-detects
-  // the column type from the source. This is the only way to surface loop
-  // in TARGET_HANDLE_ACCEPTS without threading node data through.
-  "loop": [
-    { handleId: "col_add", label: "New column", accepts: (s) => isValidLoopCoarse(s, isVisualPickerType) },
   ],
 }
 

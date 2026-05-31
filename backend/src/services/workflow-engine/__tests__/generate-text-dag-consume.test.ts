@@ -8,7 +8,7 @@ import { splitGeneratedItems } from "@nodaro/shared"
 // Backend Generate Text (llm-chat) `items` consumption — REQ B parity.
 //
 // The frontend single-node executor fans the llm-chat `items` handle out over
-// the ===NEXT===-split list into a downstream Loop AND Generate Image. The
+// the ===NEXT===-split list into a downstream List AND Generate Image. The
 // backend orchestrator (scheduled / webhook / MCP run_workflow /
 // POST /v1/workflows/:id/run) MUST do the same so the SAME workflow yields the
 // SAME number of items server-side and in the browser.
@@ -111,88 +111,88 @@ describe("backend: getListInputForNode — llm-chat items fan-out", () => {
   })
 })
 
-describe("backend: getListInputForNode — llm-chat items → Loop", () => {
-  it("items → loop connected column fans out over the 3 split items", () => {
+describe("backend: getListInputForNode — llm-chat items → List", () => {
+  it("items → list connected column fans out over the 3 split items", () => {
     const llm = node("llm1", "llm-chat", { generatedText: THREE })
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
-    // Loop is the fan-out node itself; its column is fed from the llm items.
-    const allNodes = [llm, loop]
+    // List is the fan-out node itself; its column is fed from the llm items.
+    const allNodes = [llm, list]
     const edges = [
-      edge("llm1", "loop1", "items", "col_a_in", { outputMode: "each" }),
+      edge("llm1", "list1", "items", "col_a_in", { outputMode: "each" }),
     ]
     const states: Record<string, NodeExecutionState> = {}
 
-    const items = getListInputForNode(loop, edges, states, allNodes)
+    const items = getListInputForNode(list, edges, states, allNodes)
     expect(items).toEqual(["p1", "p2", "p3"])
   })
 
-  it("items → loop legacy global 'in' handle fans out over the 3 split items", () => {
+  it("items → list legacy global 'in' handle fans out over the 3 split items", () => {
     const llm = node("llm1", "llm-chat", { generatedText: THREE })
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
-    const allNodes = [llm, loop]
+    const allNodes = [llm, list]
     const edges = [
-      edge("llm1", "loop1", "items", "in", { outputMode: "each" }),
+      edge("llm1", "list1", "items", "in", { outputMode: "each" }),
     ]
     const states: Record<string, NodeExecutionState> = {}
 
-    const items = getListInputForNode(loop, edges, states, allNodes)
+    const items = getListInputForNode(list, edges, states, allNodes)
     expect(items).toEqual(["p1", "p2", "p3"])
   })
 
   it("already-structured guard: items blocks are NOT re-split by the column delimiter", () => {
     // Each ===NEXT=== block may itself contain commas/newlines. The items split
-    // is already structured — the loop column's own delimiter must NOT chop it
+    // is already structured — the list column's own delimiter must NOT chop it
     // further (mirrors the split-text already-structured contract + frontend).
     const llm = node("llm1", "llm-chat", { generatedText: "a, b, c===NEXT===d, e===NEXT===f" })
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text", splitDelimiter: "," }],
       rows: [],
     })
-    const allNodes = [llm, loop]
+    const allNodes = [llm, list]
     const edges = [
-      edge("llm1", "loop1", "items", "col_a_in", { outputMode: "each" }),
+      edge("llm1", "list1", "items", "col_a_in", { outputMode: "each" }),
     ]
     const states: Record<string, NodeExecutionState> = {}
 
-    const items = getListInputForNode(loop, edges, states, allNodes)
+    const items = getListInputForNode(list, edges, states, allNodes)
     expect(items).toEqual(["a, b, c", "d, e", "f"])
   })
 
   it("already-structured guard: newline-containing blocks survive (no newline re-chop)", () => {
     const llm = node("llm1", "llm-chat", { generatedText: "line1\nline2===NEXT===line3\nline4" })
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
-    const allNodes = [llm, loop]
+    const allNodes = [llm, list]
     const edges = [
-      edge("llm1", "loop1", "items", "col_a_in", { outputMode: "each" }),
+      edge("llm1", "list1", "items", "col_a_in", { outputMode: "each" }),
     ]
     const states: Record<string, NodeExecutionState> = {}
 
-    const items = getListInputForNode(loop, edges, states, allNodes)
+    const items = getListInputForNode(list, edges, states, allNodes)
     expect(items).toEqual(["line1\nline2", "line3\nline4"])
   })
 })
 
 describe("backend: resolveNodeInputs — llm-chat items per-iteration value", () => {
-  it("items → loop column per-iteration value picks the i-th split item", () => {
+  it("items → list column per-iteration value picks the i-th split item", () => {
     const llm = node("llm1", "llm-chat", { generatedText: THREE })
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
     const target = node("g1", "generate-image")
-    const allNodes = [llm, loop, target]
+    const allNodes = [llm, list, target]
     const edges = [
-      edge("llm1", "loop1", "items", "col_a_in", { outputMode: "each" }),
-      edge("loop1", "g1", "col_a", "prompt", { outputMode: "each" }),
+      edge("llm1", "list1", "items", "col_a_in", { outputMode: "each" }),
+      edge("list1", "g1", "col_a", "prompt", { outputMode: "each" }),
     ]
     const states: Record<string, NodeExecutionState> = {}
 
@@ -327,17 +327,17 @@ describe("backend: LIVE orchestration shape — buildNodeOutputFromJobData drive
     expect(resolveNodeInputs(target, edges, states, allNodes, undefined, 2).prompt).toBe("p3")
   })
 
-  it("fix #1: items → loop fan-out over a REAL completed llm-chat job (data EMPTY)", () => {
+  it("fix #1: items → list fan-out over a REAL completed llm-chat job (data EMPTY)", () => {
     const llm = node("llm1", "llm-chat")
-    const loop = node("loop1", "loop", {
+    const list = node("list1", "list", {
       columns: [{ id: "c1", handleId: "col_a", type: "text" }],
       rows: [],
     })
-    const allNodes = [llm, loop]
-    const edges = [edge("llm1", "loop1", "items", "col_a_in", { outputMode: "each" })]
+    const allNodes = [llm, list]
+    const edges = [edge("llm1", "list1", "items", "col_a_in", { outputMode: "each" })]
     const states: Record<string, NodeExecutionState> = { llm1: liveLlmState(THREE) }
 
-    const items = getListInputForNode(loop, edges, states, allNodes)
+    const items = getListInputForNode(list, edges, states, allNodes)
     expect(items).toEqual(["p1", "p2", "p3"])
   })
 })

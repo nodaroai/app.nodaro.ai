@@ -13,7 +13,6 @@ describe("per-node skill file snapshots", () => {
     // sections gets caught even though it isn't in NODE_TYPE_TO_TOOL.
     "generate-video",
     "generate-music",
-    "loop",
     "trim-video",
   ]
   for (const type of representativeTypes) {

@@ -207,13 +207,21 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     filesDeleted += batchResult.deleted
     errors += batchResult.errors
 
-    // Batch update all asset DB records at once
+    // Batch update all asset DB records at once. Check the error: if the
+    // null-out fails the same rows would be re-selected next iteration
+    // (WHERE r2_key IS NOT NULL) → infinite loop after the R2 objects are
+    // already gone. Break instead of spinning.
     const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
     if (assetIds.length > 0) {
-      await supabase
+      const { error: updateErr } = await supabase
         .from("assets")
         .update({ r2_key: null, r2_url: null })
         .in("id", assetIds)
+      if (updateErr) {
+        console.error("[cleanup] Failed to null free-user assets after R2 delete:", updateErr.message)
+        errors++
+        break
+      }
     }
 
     // Aggregate storage deltas per user, then update once per user
@@ -364,7 +372,29 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     return { filesDeleted: 0, bytesFreed: 0, errors: 0 }
   }
 
+  // SAFETY (irreversible-data-loss guard): never reap media for a user who
+  // currently has an ACTIVE subscription. `subscription_ended_at` can be left
+  // stale by reactivation paths (handleSubscriptionUpdated / change-plan), and
+  // this reaper's `tier != 'free'` filter then matches a paying customer. Re-
+  // verify against live subscription status; skip + self-heal the stale marker
+  // rather than delete a paying customer's entire media library.
+  const candidateIds = users.map((u) => u.id)
+  const { data: activeSubs } = await supabase
+    .from("subscriptions")
+    .select("user_id")
+    .in("user_id", candidateIds)
+    .in("status", ["active", "trialing", "past_due"])
+  const activeUserIds = new Set((activeSubs ?? []).map((s) => (s as { user_id: string }).user_id))
+  if (activeUserIds.size > 0) {
+    // Clear the stale cancellation marker so they stop matching on the next run.
+    await supabase
+      .from("profiles")
+      .update({ subscription_ended_at: null })
+      .in("id", [...activeUserIds])
+  }
+
   for (const user of users) {
+    if (activeUserIds.has(user.id)) continue // active subscriber — never reap
     let userFilesDeleted = 0
     let userBytesFreed = 0
 
@@ -388,13 +418,19 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
       userFilesDeleted += batchResult.deleted
       errors += batchResult.errors
 
-      // Batch update all asset DB records and sum freed bytes
+      // Batch update all asset DB records and sum freed bytes. Break on error
+      // (same infinite-loop guard as the free-user path above).
       const assetIds = assets.filter(a => a.r2_key).map(a => a.id)
       if (assetIds.length > 0) {
-        await supabase
+        const { error: updateErr } = await supabase
           .from("assets")
           .update({ r2_key: null, r2_url: null })
           .in("id", assetIds)
+        if (updateErr) {
+          console.error("[cleanup] Failed to null canceled-user assets after R2 delete:", updateErr.message)
+          errors++
+          break
+        }
       }
       for (const asset of assets) {
         userBytesFreed += asset.size_bytes ?? 0
@@ -551,12 +587,18 @@ export async function expireSubscriptions(): Promise<ExpiryResult> {
       usersDowngraded = toDowngrade.length
     }
 
-    // Batch: mark all subscriptions as expired
+    // Batch: mark all subscriptions as expired. Check the error — 'expired'
+    // must be permitted by the subscriptions_status_check constraint
+    // (migration 180); a rejected UPDATE here previously failed silently and
+    // left rows re-matching every hour.
     const subIds = subs.map(s => s.id)
-    await supabase
+    const { error: expireErr } = await supabase
       .from("subscriptions")
       .update({ status: "expired", updated_at: now })
       .in("id", subIds)
+    if (expireErr) {
+      console.error("[cleanup] Failed to mark subscriptions expired:", expireErr.message)
+    }
   } catch (err) {
     console.error(`[cleanup] Failed to expire subscriptions batch:`, err)
     errors++

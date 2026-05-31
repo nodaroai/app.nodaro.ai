@@ -141,7 +141,6 @@ function isExtractFieldListMode(node: { type?: string; data: Record<string, unkn
  *  of loop/list (which materialise per-row) and split-text / list-transform
  *  variants (which materialise via __listResults). */
 const STRUCTURED_LIST_TYPES = new Set([
-  "loop",
   "list",
   "split-text",
   "json-process",
@@ -188,7 +187,7 @@ export function resolveEdgeValuesForTableColumn(
   const selector = ed as SelectorFields | undefined;
   const outputMode = (ed?.outputMode as string | undefined) ?? "each";
 
-  const allOutputs = (upstream.type === "loop" || upstream.type === "list")
+  const allOutputs = upstream.type === "list"
     ? resolveLoopColumnValues(upstream, edge.sourceHandle ?? undefined, edges, nodes)
     : (extractNodeOutputAsList(upstream as WorkflowNode, edge.sourceHandle ?? undefined) ?? []);
 
@@ -265,7 +264,7 @@ function resolveUpstreamWithEdgeFilter(
     return single ? [single.trim()] : undefined;
   }
   if (outputMode === "item" || outputMode?.startsWith("item:")) {
-    const raw = upstreamNode.type === "loop" || upstreamNode.type === "list"
+    const raw = upstreamNode.type === "list"
       ? resolveLoopColumnValues(
           { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
           edge.sourceHandle ?? undefined,
@@ -289,7 +288,7 @@ function resolveUpstreamWithEdgeFilter(
   }
 
   let upstreamVals: string[] | undefined;
-  if (upstreamNode.type === "loop" || upstreamNode.type === "list") {
+  if (upstreamNode.type === "list") {
     upstreamVals = resolveLoopColumnValues(
       { id: upstreamNode.id, data: upstreamNode.data as Record<string, unknown> },
       edge.sourceHandle ?? undefined,
@@ -378,7 +377,7 @@ export function resolveLoopColumnValues(
 }
 
 /** Node types whose edges default to "each" output mode (fan-out) */
-const DEFAULT_EACH_TYPES = new Set(["list", "loop", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
+const DEFAULT_EACH_TYPES = new Set(["list", "split-text", "filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]);
 
 /** Node types that accept multiple audio inputs (accumulate to audioUrls array) */
 const MULTI_AUDIO_INPUT_TYPES = new Set(["mix-audio", "combine-audio"]);
@@ -667,6 +666,16 @@ export function extractNodeOutputAsList(
       const values = rows.map((r) => r[0]?.trim()).filter((v) => v && v.length > 0);
       return values.length > 0 ? values : undefined;
     }
+    // Rows-only shape (rows present, columns absent): the loop→list rename does
+    // NOT backfill columns, so a renamed rows-only loop lands here. Mirror the
+    // backend extractors + execution-graph.ts::extractNodeOutput by mapping
+    // column-0 values, BEFORE the legacy `items` fallback — otherwise the FE
+    // returns undefined while the backend reads the rows (FE/BE parity bug).
+    const rows = data.rows as string[][] | undefined;
+    if (rows) {
+      const values = rows.map((r) => r[0]?.trim()).filter((v) => v && v.length > 0);
+      return values.length > 0 ? values : undefined;
+    }
     // Legacy format: items string
     const items = (data.items as string | undefined) || "";
     const lines = items.split("\n").filter((l: string) => l.trim().length > 0).map((l: string) => l.trim());
@@ -750,10 +759,10 @@ export function getListInputForNode(
       continue;
     }
 
-    if (sourceNode.type === "loop" || sourceNode.type === "list") {
+    if (sourceNode.type === "list") {
       const edgeData = edge.data as Record<string, unknown> | undefined;
       const loopEdgeMode = edgeData?.outputMode as string | undefined;
-      // Only fan-out for "each" mode (default for loop) — item/last/all produce single values
+      // Only fan-out for "each" mode (default for list) — item/last/all produce single values
       if (loopEdgeMode === "item" || loopEdgeMode === "last" || loopEdgeMode?.startsWith("item:")) {
         continue;
       }
@@ -1021,7 +1030,7 @@ export function resolveNodeInputs(
         }
       }
     }
-    if (!output && (src.type === "loop" || src.type === "list")) {
+    if (!output && src.type === "list") {
       const raw = resolveLoopColumnValues(src, resolvedSourceHandle ?? undefined, edges, nodes);
       const edgeData = srcEdge.data as Record<string, unknown> | undefined;
       const ranged = selectListItems(raw, edgeData as SelectorFields | undefined);
@@ -1311,14 +1320,15 @@ export function resolveNodeInputs(
         // "each" mode — output first item; fan-out handled separately
         inputs.prompt = output;
       }
-    } else if (src.type === "loop" || src.type === "list") {
-      // output already resolved per-iteration by loop handler above — route by column type
+    } else if (src.type === "list") {
+      // output already resolved per-iteration by the list handler above — route by column type
       const loopCols = ((src.data as LoopNodeData).columns ?? []);
       let loopCol = loopCols.find((c) => c.handleId === (resolvedSourceHandle ?? ""));
-      // List nodes use a fixed "list" output handle (not per-column handles like
-      // loop nodes), so the handleId lookup above won't match any column.  Fall
-      // back to the first column so the user's column-type setting is honoured.
-      if (!loopCol && src.type === "list" && loopCols.length > 0) {
+      // Natively-created list nodes use a fixed "list" output handle (not the
+      // per-column handles that loop-origin migrated nodes keep), so the handleId
+      // lookup above won't match any column. Fall back to the first column so the
+      // user's column-type setting is honoured.
+      if (!loopCol && loopCols.length > 0) {
         loopCol = loopCols[0];
       }
       const colType = loopCol?.type ?? "text";

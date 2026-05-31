@@ -49,14 +49,14 @@ const MODE_OPTIONS = [
 
 // List/loop/split-text produce inherent items with no user-selection concept,
 // so "Selected" doesn't apply — those edges default to "Each" (fan-out).
-const LIST_LIKE_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
+const LIST_LIKE_SOURCE_TYPES = new Set(["list", "split-text"])
 
 // When feeding INTO a list/loop column, Each (fan-out) doesn't apply — the
 // target accumulates items into the column as a bundle. Hide Each, default
 // to All. At runtime, resolveEdgeValuesForTableColumn treats Each and All
 // identically for list-like targets, so pre-existing "each" edges still
 // work while the UI steers new ones to "all".
-const LIST_LIKE_TARGET_TYPES = new Set(["list", "loop"])
+const LIST_LIKE_TARGET_TYPES = new Set(["list"])
 
 // Target node types that accept multiple items in a single invocation
 // (arrays/bundles). Only these can meaningfully receive Bundle mode — the
@@ -74,8 +74,8 @@ const MULTI_INPUT_TARGET_TYPES = new Set([
   "manual-edit", "composite",
   // Text combiners
   "combine-text",
-  // List/loop targets collect into a column
-  "list", "loop",
+  // List targets collect into a column
+  "list",
   // Social posts — carousels/galleries/threads accept multiple media items.
   // The single-post modes collapse to one; users switch via the node's
   // action field, so it's safe to allow Bundle here.

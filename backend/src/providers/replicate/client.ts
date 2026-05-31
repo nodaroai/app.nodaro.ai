@@ -7,6 +7,8 @@
 
 import Replicate from "replicate"
 import { config } from "../../lib/config.js"
+import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import type { ReconcileOpts } from "../provider.interface.js"
 
 // Singleton Replicate client
 export const replicate = new Replicate({
@@ -99,6 +101,43 @@ export function extractCost(
     return predictTime * rate
   }
   return null
+}
+
+/**
+ * Shared dispatch envelope for the single-prediction Replicate providers
+ * (image, video, face-swap, lip-sync): `predictions.create` →
+ * `fireOnTaskCreated(prediction.id)` (BEFORE the wait, so a worker crash
+ * mid-poll still leaves the row recoverable by the reconcile cron) →
+ * `replicate.wait` → cost extraction via `extractCost`.
+ *
+ * Returns the RAW `completed.output` untouched so each caller keeps its own
+ * output-shape handling (some expect a string, some an array, some a
+ * FileOutput object) downstream via `extractUrl`. Pass exactly one of
+ * `version` / `model` (the SDK's create-options is `{version} | {model}`);
+ * `costModelKey` is forwarded to `extractCost` for the per-model GPU rate.
+ */
+export async function runReplicatePrediction(opts: {
+  version?: string
+  model?: string
+  input: Record<string, unknown>
+  label: string
+  reconcileOpts?: ReconcileOpts
+  /** Forwarded to `extractCost` so the correct hardware $/sec is used. */
+  costModelKey?: string
+}): Promise<{ output: unknown; cost: number | null; predictionId: string }> {
+  const createOptions =
+    opts.version !== undefined
+      ? { version: opts.version, input: opts.input }
+      : { model: opts.model as `${string}/${string}`, input: opts.input }
+
+  const prediction = await replicate.predictions.create(createOptions)
+  await fireOnTaskCreated(opts.reconcileOpts, prediction.id, opts.label)
+  const completed = await replicate.wait(prediction)
+  const cost = extractCost(
+    completed.metrics as Record<string, unknown> | undefined,
+    opts.costModelKey,
+  )
+  return { output: completed.output, cost, predictionId: prediction.id }
 }
 
 /**

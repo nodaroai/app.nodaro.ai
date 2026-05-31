@@ -18,6 +18,7 @@ import {
   isSkipNode,
 } from "./execution-graph.js"
 import { resolveNodeInputs } from "./input-resolver.js"
+import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { executeNode } from "./node-executor.js"
 import type {
@@ -29,6 +30,23 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
+
+/**
+ * Prepare a referenced workflow's raw nodes for sub-workflow execution.
+ *
+ * Runs the shared legacy-type migration (`normalizeLegacyNodeTypes` — the single
+ * source of truth, incl. edit-image/image-to-image/old-collect AND loop → list).
+ * The helper preserves every field it doesn't rewrite, `parentId` included, so
+ * group children keep their parent inside the sub-workflow execution graph
+ * without any extra re-threading. Non-mutating (the helper copies on rewrite and
+ * passes untouched nodes through by reference). Exported for direct regression
+ * testing of the per-node normalization.
+ */
+export function prepareSubWorkflowNodes(
+  rawNodes: ReadonlyArray<SimpleNode>,
+): SimpleNode[] {
+  return normalizeLegacyNodeTypes(rawNodes)
+}
 
 /**
  * Execute a sub-workflow node.
@@ -88,28 +106,10 @@ export async function executeSubWorkflow(
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
   }
 
-  // Migrate legacy image node types before processing.
-  // Spread preserves parentId (and any other SimpleNode fields) by design — group
-  // children need parentId to flow into the sub-workflow execution graph.
-  let subNodes: SimpleNode[] = ((workflow.nodes as SimpleNode[]) ?? []).map(node => {
-    const parentId = (node as { parentId?: string }).parentId
-    if (node.type === "edit-image") {
-      const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
-      if (provider === "nano-banana-edit") return { ...node, type: "modify-image", parentId }
-      if (provider === "recraft-remove-bg") return { ...node, type: "remove-background", parentId }
-      return { ...node, type: "upscale-image", parentId }
-    }
-    if (node.type === "image-to-image") return { ...node, type: "modify-image", parentId }
-    // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed to
-    // "reduce" on 2026-05-23 to free the "collect" name for the type-aggregator
-    // shipping in this PR. Remove after all saved workflows are migrated (see migration 151).
-    // NOTE: This only catches the OLD pre-rename "collect" — our NEW "collect"
-    // is a different node (non-executable type-aggregator), not affected by this shim.
-    // Discriminate via the NEW shape: NEW Collect always has `order: string[]`.
-    // Anything else with type === "collect" is the OLD pre-rename fan-in reducer.
-    if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce", parentId }
-    return { ...node, parentId }
-  })
+  // Migrate legacy node types before processing, via the shared helper (single
+  // source of truth). Re-threads parentId so group children flow into the
+  // sub-workflow execution graph — see prepareSubWorkflowNodes.
+  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((workflow.nodes as SimpleNode[]) ?? [])
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)

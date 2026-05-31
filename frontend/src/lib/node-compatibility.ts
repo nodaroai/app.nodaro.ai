@@ -20,7 +20,7 @@ const VOICE_TARGET_TYPES: ReadonlySet<string> = new Set<string>([...VOICE_PERSON
  *  paths in sync prevents the add-node popup from suggesting targets the
  *  drop-time validator then rejects. */
 const TYPED_SOURCE_NODE_TYPES: ReadonlySet<string> = new Set([
-  "list", "loop", "web-scrape", "extract-field", "filter-list",
+  "list", "web-scrape", "extract-field", "filter-list",
   "deduplicate", "merge-lists", "sort-list",
 ])
 
@@ -602,7 +602,7 @@ export function resolveTargetHandle(
   const compatible = HANDLE_COMPATIBILITY[sourceHandleId] ?? [sourceHandleId]
 
   if (direction === "source") {
-    // Loop AND list nodes use "col_add" quick-add. The col_add handler in
+    // List nodes use "col_add" quick-add. The col_add handler in
     // use-workflow-store auto-detects the column type from the source AND
     // sets column[0].connectedSourceId / type / name. Routing to the
     // static "in" pip instead would leave column metadata unset, which
@@ -611,7 +611,7 @@ export function resolveTargetHandle(
     // see col[0] as empty and clobber it). The popover Connect button
     // still wires to "in" directly (via TARGET_HANDLE_ACCEPTS) — that
     // path is the passthrough flow and doesn't need column metadata.
-    if (nodeType === "loop" || nodeType === "list") return "col_add"
+    if (nodeType === "list") return "col_add"
     return def.inputs.find((h) => compatible.includes(h)) ?? "in"
   } else {
     return def.outputs.find((h) => compatible.includes(h)) ?? def.outputs[0] ?? "out"

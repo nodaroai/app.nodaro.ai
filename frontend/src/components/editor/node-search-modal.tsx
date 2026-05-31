@@ -62,7 +62,6 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "face": "Face",
   "scene": "Scene",
   "list": "List",
-  "loop": "Loop",
   "reduce": "Reduce",
   "skip": "Skip",
 }

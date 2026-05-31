@@ -267,6 +267,13 @@ export function extractSourceNodeOutput(
         const first = rows[0]?.[0]?.trim()
         return first ? { text: first } : undefined
       }
+      // Rows-only shape (rows present, columns absent) — the loop→list rename
+      // does NOT backfill columns, so a renamed rows-only loop lands here. Read
+      // the first row's first cell (as the retired `loop` case did), BEFORE the
+      // legacy `items` fallback, so `list` is a true superset of `loop`.
+      const rows = data.rows as string[][] | undefined
+      const firstRowVal = rows?.[0]?.[0]?.trim()
+      if (firstRowVal) return { text: firstRowVal }
       // Legacy format: newline-separated items string
       const items = (data.items as string | undefined) || ""
       const lines = items
@@ -276,12 +283,6 @@ export function extractSourceNodeOutput(
       if (lines.length === 0) return undefined
       // Always return first item; per-edge output mode routing is in input-resolver
       return { text: lines[0] }
-    }
-
-    case "loop": {
-      const rows = data.rows as string[][] | undefined
-      const firstVal = rows?.[0]?.[0]?.trim()
-      return firstVal ? { text: firstVal } : undefined
     }
 
     case "webhook-trigger": {
@@ -414,6 +415,15 @@ export function extractSourceNodeOutputAsList(
         const values = rows.map((r) => r[0]?.trim()).filter((v): v is string => !!v && v.length > 0)
         return values.length > 1 ? values : undefined
       }
+      // Rows-only shape (rows present, columns absent) — the loop→list rename
+      // does NOT backfill columns, so a renamed rows-only loop lands here. Fan
+      // out over the first column (as the retired `loop` case did), BEFORE the
+      // legacy `items` fallback, so `list` is a true superset of `loop`.
+      const rows = data.rows as string[][] | undefined
+      if (rows && rows.length > 1) {
+        const values = rows.map((row) => row[0]?.trim()).filter((v): v is string => !!v && v.length > 0)
+        return values.length > 1 ? values : undefined
+      }
       // Legacy format: newline-separated items string
       const items = (data.items as string | undefined) || ""
       const lines = items
@@ -423,20 +433,43 @@ export function extractSourceNodeOutputAsList(
       return lines.length > 1 ? lines : undefined
     }
 
-    case "loop": {
-      // Loop node without upstream "in" connection: extract from manual rows
-      const rows = data.rows as string[][] | undefined
-      if (rows && rows.length > 1) {
-        // Default to first column; column routing is handled by getListInputForNode
-        const items = rows.map((row) => row[0]?.trim()).filter(Boolean)
-        return items.length > 1 ? items : undefined
-      }
-      return undefined
-    }
-
     default:
       return undefined
   }
+}
+
+/**
+ * Reconcile a published-app `items` input override against a columns-present
+ * list node.
+ *
+ * The app-runtime `ListInputCard` (fullscreen) always writes the user's edited
+ * values as an `items: string[]` override (see
+ * `frontend/src/components/presentation/input-cards/list-input-card.tsx`),
+ * regardless of whether the underlying list is the legacy newline-string shape
+ * or the modern `columns`+`rows` shape. But both list extractors
+ * (`extractSourceNodeOutput` / `extractSourceNodeOutputAsList`) check
+ * `if (cols)` FIRST and read `rows` — so for a columns-present list the `items`
+ * override was silently ignored and the workflow ran on the STALE snapshot
+ * `rows`, not the user's input.
+ *
+ * This helper makes the `items` override authoritative: when the merged node
+ * data carries BOTH `columns` and an array `items` (the override), it rewrites
+ * `rows` to one single-cell row per item (`items.map(v => [v])`) — the exact
+ * shape the modern single-column list reader/fan-out expects — and drops the
+ * now-stale `items` key so no downstream reader is confused by two sources.
+ *
+ * Mutates `data` in place. No-op when there are no `columns`, when `items` is
+ * not an array (legacy newline-string lists keep their `items` semantics), or
+ * for non-list data. Idempotent. Also fixes the pre-existing native
+ * single-column-list-as-app-input case, not just migrated former-`loop` nodes.
+ */
+export function coerceListItemsOverrideToRows(data: Record<string, unknown>): void {
+  const cols = data.columns
+  if (!Array.isArray(cols)) return
+  const items = data.items
+  if (!Array.isArray(items)) return
+  data.rows = items.map((v) => [typeof v === "string" ? v : String(v ?? "")])
+  delete data.items
 }
 
 /**

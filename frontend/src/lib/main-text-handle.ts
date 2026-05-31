@@ -65,7 +65,6 @@ export const TEXT_PRODUCING_SOURCE_TYPES: ReadonlySet<string> = new Set([
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  "loop",
   // Parameter nodes — their extracted output is the prompt hint.
   "tone",
   "style-guide",

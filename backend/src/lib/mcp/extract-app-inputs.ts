@@ -23,6 +23,7 @@
 import type { ComponentMetadata, PresentationItem } from "@nodaro/shared"
 import { migrateToItems } from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
+import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
 export interface NormalizedInputField {
@@ -60,12 +61,48 @@ const NODE_TYPE_INFO: Record<
   "upload-image": { fieldKey: "url", type: "image" },
   "upload-video": { fieldKey: "url", type: "video" },
   "upload-audio": { fieldKey: "url", type: "audio" },
+  // `list` is the static default (single-column shape). The actual write field
+  // depends on the node's COLUMN COUNT — resolved per-node by `resolveListInfo`.
   list: { fieldKey: "items", type: "list" },
   // Locations parameterize as `"<bucket>/<variant>"` (e.g. `"weather/rain"`).
   // The orchestrator looks up the variant and patches `sourceImageUrl`.
   // Typed as text because the valid variants depend on the publisher's
   // assets — not enumerable at schema time.
   location: { fieldKey: "selectedVariant", type: "text" },
+}
+
+/**
+ * Resolve the correct write field + description for a `list` node from its
+ * data shape. The frontend app-runtime is the source of truth here:
+ *  - single-column list → `ListInputCard` writes `items: string[]`
+ *    (the orchestrator's `coerceListItemsOverrideToRows` turns that array into
+ *    `rows` for the columns-present node — see code-review #1).
+ *  - MULTI-column list  → `LoopInputCard` writes `rows: string[][]`
+ *    (the exact shape the backend list extractor + node consumers read).
+ *
+ * Mapping a multi-column list to `items` (the old static behavior) silently
+ * corrupted the grid: the caller's flat value landed in `items`, got coerced
+ * into single-cell rows, and columns 2+ were lost. Writing to `rows` keeps the
+ * caller's 2D value intact. The flat MCP `type` enum can't express "2D table",
+ * so the multi-column shape is conveyed via the field `description`.
+ */
+function resolveListInfo(
+  data: Record<string, unknown> | undefined,
+): { fieldKey: string; type: NormalizedInputField["type"]; description?: string } {
+  const columns = (data?.columns as unknown[] | undefined) ?? []
+  if (columns.length > 1) {
+    const names = columns
+      .map((c) => (c as { name?: unknown } | null)?.name)
+      .filter((n): n is string => typeof n === "string" && n.length > 0)
+    const cols = names.length ? names.join(", ") : `${columns.length} columns`
+    return {
+      fieldKey: "rows",
+      type: "list",
+      description: `Multi-column table. Pass a 2-D array of rows, each row an array of cell values in column order (${cols}). Example: [["row1col1","row1col2"]].`,
+    }
+  }
+  // Single-column (or legacy newline-string) list: one value per row.
+  return { fieldKey: "items", type: "list" }
 }
 
 type InputPresentationItem = Extract<PresentationItem, { type: "node" | "field" }>
@@ -111,8 +148,17 @@ interface ExtractFromAppArgs {
 /** Build a normalized schema for an app from its snapshot. */
 export function extractAppInputSchema({
   snapshotSettings,
-  snapshotNodes,
+  snapshotNodes: rawSnapshotNodes,
 }: ExtractFromAppArgs): NormalizedInputSchema {
+  // Normalize legacy node types on the RAW snapshot before deriving inputs.
+  // loop→list is otherwise a frontend-only / DB-sweep migration, so on editions
+  // where the sweep hasn't run a raw `loop` node has no NODE_TYPE_INFO entry and
+  // would be silently dropped from the derived inputs (code-review #2). Mirrors
+  // the orchestrator's normalize-before-read invariant. Pass-through preserves
+  // each node's `id`.
+  const snapshotNodes = rawSnapshotNodes
+    ? normalizeLegacyNodeTypes(rawSnapshotNodes)
+    : rawSnapshotNodes
   // Apps store presentation in one of two shapes:
   //  - Modern: presentationSettings.inputItems (PresentationItem[])
   //  - Legacy: presentationSettings.inputOrder (string[] of node-ids)
@@ -158,14 +204,28 @@ export function extractAppInputSchema({
   for (const item of flattenInputItems(items)) {
     if (item.type === "node") {
       const node = nodesById.get(item.nodeId)
-      const info = node?.type ? NODE_TYPE_INFO[node.type] : undefined
+      // `list` is data-shape-aware (single-column → items, multi-column → rows);
+      // every other known type uses the static NODE_TYPE_INFO mapping.
+      const info =
+        node?.type === "list"
+          ? resolveListInfo(node.data)
+          : node?.type
+            ? NODE_TYPE_INFO[node.type]
+            : undefined
       // Unknown node types fall back to free-form text on a "value" field.
       const fieldKey = info?.fieldKey ?? "value"
       const type = info?.type ?? "text"
+      const description = (info as { description?: string } | undefined)?.description
       const label =
         (node?.data?.label as string | undefined) ?? node?.type ?? item.nodeId
       const key = uniqueKey(seen, label, item.nodeId)
-      fields.push({ key, label, type, required: type !== "text" })
+      fields.push({
+        key,
+        label,
+        type,
+        required: type !== "text",
+        ...(description ? { description } : {}),
+      })
       keyMap[key] = { nodeId: item.nodeId, fieldKey }
     } else {
       // type === "field"

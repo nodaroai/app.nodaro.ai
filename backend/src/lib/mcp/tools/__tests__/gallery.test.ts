@@ -165,7 +165,10 @@ describe("list_favorites tool", () => {
     }
     const jobsChain = {
       select: vi.fn().mockReturnValue({
-        in: vi.fn().mockResolvedValue({ data: [], error: null }),
+        in: vi.fn().mockReturnValue({
+          // #4: hydration now applies a visibility .or() filter before resolving.
+          or: vi.fn().mockResolvedValue({ data: [], error: null }),
+        }),
       }),
     }
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
@@ -393,9 +396,11 @@ describe("display_asset tool", () => {
 describe("favorite_asset tool", () => {
   it("inserts a favorite when favorited=true", async () => {
     const insertMock = vi.fn().mockResolvedValue({ error: null })
-    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      insert: insertMock,
-    })
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
+      // #4: favorite_asset now first verifies the job is visible to the caller
+      // (own, or public+completed) before inserting.
+      .mockReturnValueOnce(makeChainableSingle({ id: "g1" }))
+      .mockReturnValueOnce({ insert: insertMock })
     const server = buildServer()
     registerGallery({ server, session: writeSession(), fastify: Fastify() })
     const result = await callTool(server, "favorite_asset", {
@@ -407,6 +412,20 @@ describe("favorite_asset tool", () => {
       user_id: "u1",
       job_id: "g1",
     })
+  })
+
+  it("rejects favoriting a job the caller cannot see (cross-tenant guard)", async () => {
+    // Visibility check returns null → the job is neither owned nor public.
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      makeChainableSingle(null),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: writeSession(), fastify: Fastify() })
+    const result = await callTool(server, "favorite_asset", {
+      job_id: "another-users-private-job",
+      favorited: true,
+    })
+    expect(result.isError).toBe(true)
   })
 
   it("deletes a favorite when favorited=false", async () => {
