@@ -12,8 +12,6 @@ import {
   SubGateNameSchema,
   clearImageCriticMetadata,
   clearVideoCriticMetadata,
-  validateDurationForFormat,
-  validateModeActivation,
   type ChatEnabledStage,
   type EntityType,
   type JsonPatch,
@@ -170,158 +168,21 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     }
     const input = parsed.data
 
-    // mode normalization (auto_mode legacy)
-    const mode = input.mode ?? (input.auto_mode ? "auto" : "manual")
-    // When userId is set (JWT or OAuth user), this is an interactive activation.
-    // Pure-programmatic activation (no user) is reserved for future internal
-    // automation paths; routes always have a userId at this point.
-    const activation = "interactive"
-
-    const dv = validateDurationForFormat(input.format, input.target_duration_seconds)
-    if (!dv.ok) {
-      return reply.status(400).send({
-        error: { code: "duration_out_of_bounds", message: dv.reason },
-      })
-    }
-    const mv = validateModeActivation(mode, activation)
-    if (!mv.ok) {
-      return reply.status(400).send({
-        error: { code: "mode_incompatible_with_activation", message: mv.reason },
-      })
+    // Create + reserve + enqueue via the shared service (also used by the MCP
+    // `start_pipeline` tool so both paths share one tier guard + reservation).
+    // Dynamic import keeps the core→ee boundary intact (same pattern the route
+    // already uses for credits.js / queue.js).
+    const { createPipeline } = await import("../ee/pipelines/create-pipeline.js")
+    const result = await createPipeline({ supabase, userId, input })
+    if (!result.ok) {
+      const errBody: Record<string, unknown> = { code: result.code }
+      if (result.message !== undefined) errBody.message = result.message
+      if (result.detail !== undefined) errBody.detail = result.detail
+      if (result.model !== undefined) errBody.model = result.model
+      return reply.status(result.status).send({ error: errBody })
     }
 
-    const { estimateUpfrontCredits, reservePipelineCredits, resolveMaxCostCredits } =
-      await import("../ee/pipelines/credits.js")
-    const { enqueuePipelineRun } = await import("../ee/pipelines/queue.js")
-
-    const { data: profileRow } = await supabase
-      .from("profiles")
-      .select(
-        "tier, subscription_tier, subscription_credits, topup_credits, " +
-          "daily_spent_credits, last_daily_reset, app_credits_allowance",
-      )
-      .eq("id", userId)
-      .single()
-      .then((r) => ({
-        data: r.data as {
-          tier?: string | null
-          subscription_tier?: string | null
-          subscription_credits?: number | null
-          topup_credits?: number | null
-          daily_spent_credits?: number | null
-          last_daily_reset?: string | null
-          app_credits_allowance?: number | null
-        } | null,
-      }))
-    const userTier = profileRow?.tier ?? "free"
-
-    const config = input.config ?? {}
-
-    // Tier-restriction guard for user-pinned model picks. The Zod schema
-    // already constrains values to the pinnable allowlists, but tier-gated
-    // models (e.g. veo3 blocked for free) still need a runtime check. Reject
-    // BEFORE creating the pipeline row so the user gets a fast 403 instead of
-    // a stuck `failed` row + refund cycle. CreditsService internally short-
-    // circuits when `creditsDisabled()` so this is safe for self-hosted.
-    const pinnedRaw: ReadonlyArray<string | undefined> = [
-      config.image_model,
-      config.video_model,
-      config.script_llm,
-      ...(config.stage_models ? Object.values(config.stage_models) : []),
-    ]
-    const pinnedModels = Array.from(
-      new Set(pinnedRaw.filter((m): m is string => typeof m === "string" && m.length > 0)),
-    )
-    if (pinnedModels.length > 0) {
-      const { CreditsService } = await import("../ee/billing/credits.js")
-      // `checkCreditsWithProfile` enforces `pricing.isEnabled`, the model's
-      // `tierRestriction`, and `FREE_TIER_RESTRICTIONS.blockedModels` for the
-      // user's tier — exactly the surface that `reserveCredits` skips. Daily
-      // cap + balance check ride along; that's fine since a user pinning a
-      // model they can't afford should also fail-fast here rather than mid-
-      // pipeline. Pass the full profile row so balance + daily-cap checks
-      // see real numbers (not undefined → 0, which 403'd every pin).
-      const profile = (profileRow ?? { tier: userTier }) as Parameters<
-        typeof CreditsService.checkCreditsWithProfile
-      >[1]
-      for (const modelId of pinnedModels) {
-        const check = await CreditsService.checkCreditsWithProfile(userId, profile, modelId)
-        if (!check.allowed) {
-          return reply.status(403).send({
-            error: {
-              code: "model_pin_forbidden",
-              model: modelId,
-              message:
-                check.error ??
-                `You can't pin '${modelId}' on this plan. Upgrade your subscription or pick a different model.`,
-            },
-          })
-        }
-      }
-    }
-
-    const upfront = estimateUpfrontCredits({
-      targetDurationSeconds: input.target_duration_seconds,
-      format: input.format,
-      mode,
-      musicEnabled: config.music_enabled ?? true,
-      narrationEnabled: config.narration_enabled ?? true,
-      lipsyncEnabled: config.lipsync_enabled ?? true,
-      // Phase 1D.2c-b-ii (G1): per-shot Video Critic budget. Zod default is
-      // "first_last" so this is always present.
-      videoCriticFrameCount: input.video_critic_frame_count,
-    })
-    const maxCost = resolveMaxCostCredits({
-      requested: input.max_cost_credits,
-      tier: userTier,
-    })
-
-    // 1. Insert pipeline row.
-    const { data: pipeline, error: insertErr } = await supabase
-      .from("pipelines")
-      .insert({
-        user_id: userId,
-        workflow_id: input.workflow_id ?? null,
-        root_node_id: input.root_node_id,
-        pipeline_type: input.pipeline_type,
-        activation_mode: activation,
-        mode,
-        input_prompt: input.story_prompt,
-        target_duration_seconds: input.target_duration_seconds,
-        format: input.format,
-        output_resolution: input.output_resolution,
-        language: input.language,
-        style_directives: input.style_directives ?? null,
-        config,
-        upfront_credit_estimate: upfront,
-        reserved_credits: upfront,
-        max_cost_credits: maxCost,
-      })
-      .select("id")
-      .single()
-    if (insertErr || !pipeline) {
-      return reply
-        .status(500)
-        .send({ error: { code: "db_error", detail: insertErr?.message } })
-    }
-
-    // 2. Reserve credits.
-    const reservation = await reservePipelineCredits({
-      supabase,
-      userId,
-      pipelineId: pipeline.id,
-      credits: upfront,
-    })
-    if (!reservation.ok) {
-      // Roll back the pipeline row — cheaper than carrying a dead 'queued' row around.
-      await supabase.from("pipelines").delete().eq("id", pipeline.id)
-      return reply.status(402).send({ error: { code: reservation.reason } })
-    }
-
-    // 3. Enqueue.
-    await enqueuePipelineRun({ pipelineId: pipeline.id, userId, reason: "initial" })
-
-    return reply.status(201).send({ id: pipeline.id })
+    return reply.status(201).send({ id: result.pipelineId })
   })
 
   // ── GET /v1/pipelines/:id ────────────────────────────────────────────────

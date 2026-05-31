@@ -29,6 +29,13 @@ vi.mock("../../../../ee/pipelines/branch-pipeline.js", () => ({
   BranchPipelineError: MockBranchPipelineError,
 }))
 
+// Mock the createPipeline service (Phase 2 start_pipeline tool) so the tool
+// doesn't touch the DB or queue.
+const mockCreatePipeline = vi.fn()
+vi.mock("../../../../ee/pipelines/create-pipeline.js", () => ({
+  createPipeline: (...args: unknown[]) => mockCreatePipeline(...args),
+}))
+
 const { registerPipelineTools } = await import("../pipelines.js")
 
 const PIPELINE_ID = "aaaaaaaa-0000-4000-8000-000000000001"
@@ -163,5 +170,79 @@ describe("branch_pipeline tool — BranchPipelineError handling", () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]?.text).toContain("permission")
+  })
+})
+
+// ── start_pipeline ─────────────────────────────────────────────────────────────
+
+const START_ARGS = {
+  story_prompt: "A lighthouse keeper at dawn",
+  target_duration_seconds: 15,
+  format: "reel",
+  mode: "auto",
+  output_resolution: "720p",
+  music_enabled: true,
+  narration_enabled: false,
+  lipsync_enabled: false,
+}
+
+describe("start_pipeline scope gate", () => {
+  it("does NOT register without pipelines:execute scope", async () => {
+    const server = buildServer()
+    registerPipelineTools({ server, session: pipelineSession([]) })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("start_pipeline")
+  })
+
+  it("registers with pipelines:execute scope", async () => {
+    const server = buildServer()
+    registerPipelineTools({
+      server,
+      session: pipelineSession(["pipelines:execute"] as Scope[]),
+    })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).toContain("start_pipeline")
+  })
+})
+
+describe("start_pipeline tool — success", () => {
+  it("parses input (synthetic root_node_id) + calls createPipeline + returns the new id", async () => {
+    mockCreatePipeline.mockResolvedValueOnce({ ok: true, pipelineId: NEW_PIPELINE_ID })
+    const server = buildServer()
+    registerPipelineTools({
+      server,
+      session: pipelineSession(["pipelines:execute"] as Scope[]),
+    })
+    const result = await callTool(server, "start_pipeline", START_ARGS)
+    expect(result.isError).toBeUndefined()
+    expect(mockCreatePipeline).toHaveBeenCalledOnce()
+    const callArgs = mockCreatePipeline.mock.calls[0][0]
+    expect(callArgs.userId).toBe("u1")
+    expect(callArgs.input.story_prompt).toBe("A lighthouse keeper at dawn")
+    expect(callArgs.input.mode).toBe("auto")
+    expect(callArgs.input.pipeline_type).toBe("story_to_video")
+    expect(typeof callArgs.input.root_node_id).toBe("string")
+    expect(callArgs.input.root_node_id.length).toBeGreaterThan(0)
+    expect(result.content[0]?.text).toContain(NEW_PIPELINE_ID)
+  })
+})
+
+describe("start_pipeline tool — failure", () => {
+  it("returns isError=true with the service error code", async () => {
+    mockCreatePipeline.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      code: "model_pin_forbidden",
+      model: "veo3",
+      message: "You can't pin 'veo3' on this plan.",
+    })
+    const server = buildServer()
+    registerPipelineTools({
+      server,
+      session: pipelineSession(["pipelines:execute"] as Scope[]),
+    })
+    const result = await callTool(server, "start_pipeline", START_ARGS)
+    expect(result.isError).toBe(true)
+    expect(result.content[0]?.text).toContain("model_pin_forbidden")
   })
 })
