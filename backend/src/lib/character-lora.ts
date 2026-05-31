@@ -16,6 +16,7 @@
 import crypto from "node:crypto"
 import archiver from "archiver"
 import { uploadBufferToR2 } from "./storage.js"
+import { safeFetch } from "./safe-fetch.js"
 import { characterMentionSlug } from "@nodaro/shared"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +120,12 @@ export async function zipImagesToR2Buffer(
   // from ~10s sequential to ~1-2s.
   const fetched = await Promise.all(
     images.map(async (src) => {
-      const res = await fetch(src.url)
+      // safeFetch (not global fetch): these URLs originate from user-supplied
+      // character asset fields and the fetched bytes are zipped to an R2 key the
+      // requester can download — a non-blind SSRF read-oracle without DNS-aware
+      // IP validation. safeUrlSchema gates the literal-IP case at the route;
+      // safeFetch closes the DNS-rebinding case at connect time. See safe-fetch.ts.
+      const res = await safeFetch(src.url, { timeoutMs: 30_000 })
       if (!res.ok) throw new Error(`Fetch ${src.url} → ${res.status}`)
       const buf = Buffer.from(await res.arrayBuffer())
       const ct = res.headers.get("content-type") ?? "image/jpeg"

@@ -39,7 +39,7 @@ const referencePhoto = z.object({
   kind: z.enum(REFERENCE_PHOTO_KINDS),
 })
 
-const upsertCharacterBody = z.object({
+export const upsertCharacterBody = z.object({
   id: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
   nodeId: z.string().min(1),
@@ -62,12 +62,12 @@ const upsertCharacterBody = z.object({
   style: z.string().max(50).optional(),
   baseOutfit: z.string().max(1000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  expressions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  poses: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  lightingVariations: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  angles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  bodyAngles: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
-  motions: z.array(z.object({ name: z.string(), url: z.string() })).optional(),
+  expressions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  poses: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  lightingVariations: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  angles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  bodyAngles: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
+  motions: z.array(z.object({ name: z.string(), url: safeUrlSchema })).optional(),
   voice: z.object({ voiceId: z.string(), voiceName: z.string(), traits: z.string() }).nullable().optional(),
   personality: z.object({ mood: z.string(), speechStyle: z.string(), movementStyle: z.string(), behavioralNotes: z.string() }).nullable().optional(),
   // Identity-foundation fields (migration 114). Length caps mirror the DB
