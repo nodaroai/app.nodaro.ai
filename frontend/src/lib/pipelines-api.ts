@@ -171,6 +171,21 @@ export const pipelinesApi = {
   create: (body: PipelineInput) => postJson<{ id: string }>("/v1/pipelines", body),
   get: (id: string) => getJson<PipelineRecord>(`/v1/pipelines/${id}`),
   list: () => getJson<PipelineRecord[]>("/v1/pipelines"),
+  /** Phase 0 studio — entities of a type, for the curate-before-generate gate. */
+  getEntities: (
+    id: string,
+    type: "character" | "object" | "location" | "scene",
+  ) =>
+    getJson<
+      Array<{
+        id: string
+        entity_type: string
+        entity_key: string
+        status: string
+        main_asset_url: string | null
+        metadata?: Record<string, unknown> | null
+      }>
+    >(`/v1/pipelines/${id}/entities?type=${type}`),
   cancel: (id: string) => postJson<{ ok: true }>(`/v1/pipelines/${id}/cancel`),
   pendingApprovals: (id: string) =>
     getJson<{ stage_name: PipelineStageName; output: unknown }[]>(

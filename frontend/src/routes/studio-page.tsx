@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import type { PipelineEvent } from "@nodaro/shared"
+import type { PipelineEvent, PipelineStageName } from "@nodaro/shared"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { buildSceneGraphFromPipeline } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
@@ -8,14 +8,13 @@ import type { SceneGraph } from "@remotion-pkg/scene-graph"
 import { SceneGraphPlayerPreview } from "@/components/editor/scene-graph-player-preview"
 
 /**
- * Phase 0/0.1 — the standalone "studio" tracer.
+ * Phase 0.x — the standalone "studio" tracer with per-stage CONTROL.
  *
- * prompt -> start an Auto Story->Video pipeline -> artifacts appear live as the
- * engine produces them: a STAGE TRACKER (where you are / what's next), the
- * SCRIPT rendered as a readable screenplay (never raw JSON), cast/location/prop
- * portraits, and the scene timeline. Interactive per-stage controls
- * (approve/skip/edit) are the next build. See
- * specs/features/story-to-video-rebuild-north-star.md.
+ * The pipeline runs CHECKPOINTED (manual mode): it pauses at each gate so the
+ * user decides before credits are spent. The studio renders a readable script,
+ * a stage tracker, live artifacts, and a "Your turn" gate panel that drives the
+ * engine's existing approval routes (approve stage / per-entity generate / skip
+ * / approve / reject). Reuse-from-library + skip-script-critic are follow-ups.
  */
 
 type NarrationLine = { type: string; text: string }
@@ -26,6 +25,7 @@ interface EntityCard {
   entityKey: string
   status: string
   mainAssetUrl?: string
+  description?: string
   variants: string[]
 }
 
@@ -34,8 +34,8 @@ const ENTITY_GROUPS: ReadonlyArray<{ type: string; label: string }> = [
   { type: "location", label: "Locations" },
   { type: "object", label: "Props" },
 ]
+const ENTITY_TYPES = ["character", "object", "location"] as const
 
-// Readable stage tracker — the 8-stage engine topology with friendly labels.
 const STAGE_ORDER = [
   "script",
   "characters",
@@ -68,7 +68,6 @@ function describeEvent(evt: PipelineEvent): string | null {
     case "stage:status":
       return `${STAGE_LABELS[v("stageName")] ?? v("stageName")} ${v("status")}`
     case "stage:progress":
-      // Drop the noisy "(2.8 KB so far)" byte counter — keep just the phase.
       return (v("message") || `Working on ${v("stageName")}...`).replace(
         /\s*\([\d.]+\s*[KMG]?B so far\)/i,
         "",
@@ -81,8 +80,6 @@ function describeEvent(evt: PipelineEvent): string | null {
       return `Scene ${v("sceneIndex")} ${v("status")}`
     case "pipeline:warning":
       return `! ${v("message") || v("code")}`
-    case "pipeline:music_ready":
-      return "Music ready"
     case "pipeline:completed":
       return "Film complete"
     default:
@@ -92,6 +89,8 @@ function describeEvent(evt: PipelineEvent): string | null {
 
 function pushLine(prev: NarrationLine[], type: string, text: string): NarrationLine[] {
   const last = prev[prev.length - 1]
+  // Skip exact consecutive duplicates (e.g. repeated "Pipeline awaiting_approval").
+  if (last && last.text === text) return prev
   if (last && last.type === type && type === "stage:progress") {
     return [...prev.slice(0, -1), { type, text }]
   }
@@ -109,8 +108,6 @@ interface Screenplay {
   scenes: ScreenplayScene[]
 }
 
-// Parse the script-stage output (ShowrunnerPlan) into a readable screenplay.
-// Returns null (NOT a JSON dump) when the shape is unrecognised.
 function parseScreenplay(output: unknown): Screenplay | null {
   if (!output || typeof output !== "object") return null
   const o = output as Record<string, unknown>
@@ -118,7 +115,6 @@ function parseScreenplay(output: unknown): Screenplay | null {
     string,
     unknown
   >
-
   const castByKey = new Map<string, string>()
   const cast: Screenplay["cast"] = []
   if (Array.isArray(plan.cast)) {
@@ -135,7 +131,6 @@ function parseScreenplay(output: unknown): Screenplay | null {
       })
     }
   }
-
   const scenes: ScreenplayScene[] = []
   if (Array.isArray(plan.scenes)) {
     plan.scenes.forEach((s, i) => {
@@ -163,7 +158,6 @@ function parseScreenplay(output: unknown): Screenplay | null {
       })
     })
   }
-
   if (cast.length === 0 && scenes.length === 0) return null
   return { cast, scenes }
 }
@@ -198,7 +192,8 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
         format: "reel",
         output_resolution: "720p",
         language: "en",
-        mode: "auto",
+        // Checkpointed: pause at each stage so the user controls before spending.
+        mode: "manual",
         video_critic_frame_count: "first_last",
         config: {
           music_enabled: true,
@@ -220,8 +215,8 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
           Nodaro Cinema — Studio
         </h1>
         <p className="mb-4 text-sm text-muted-foreground">
-          Type a prompt; the director builds a short film and the script, cast,
-          and scenes appear here as they're created.
+          Type a prompt; the director drafts a film and pauses at each step so
+          you decide what gets made — before any credits are spent.
         </p>
         <textarea
           value={prompt}
@@ -269,27 +264,217 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
   )
 }
 
-function StageTracker({ stageStatus }: { stageStatus: Record<string, string> }) {
+function StageTracker({
+  stageStatus,
+  awaiting,
+}: {
+  stageStatus: Record<string, string>
+  awaiting: string[]
+}) {
+  // "You are here" = the first stage that's awaiting or running.
+  const currentIdx = STAGE_ORDER.findIndex(
+    (s) =>
+      awaiting.includes(s) ||
+      stageStatus[s] === "running" ||
+      stageStatus[s] === "awaiting_approval",
+  )
   return (
     <div className="mb-6 flex flex-wrap items-center gap-1.5">
-      {STAGE_ORDER.map((s) => {
-        const st = stageStatus[s]
-        const done = st === "approved"
-        const active = st === "running" || st === "awaiting_approval"
-        const cls = done
-          ? "border-green-500/50 bg-green-500/10 text-green-400"
-          : active
-            ? "border-[#ff0073] bg-[#ff0073]/10 text-[#ff0073]"
+      {STAGE_ORDER.map((s, i) => {
+        const isCurrent = i === currentIdx
+        const done =
+          stageStatus[s] === "approved" || (currentIdx >= 0 && i < currentIdx)
+        const cls = isCurrent
+          ? "border-[#ff0073] bg-[#ff0073] text-white"
+          : done
+            ? "border-green-500/50 bg-green-500/10 text-green-400"
             : "border-[var(--border-primary)] text-muted-foreground"
         return (
           <span
             key={s}
             className={`rounded-full border px-2.5 py-0.5 text-xs ${cls}`}
           >
+            {isCurrent ? "▶ " : ""}
             {STAGE_LABELS[s]}
           </span>
         )
       })}
+    </div>
+  )
+}
+
+interface GateActions {
+  generate: (entityId: string, description?: string) => void
+  skip: (entityId: string) => void
+  approveEntity: (entityId: string) => void
+  rejectEntity: (entityId: string) => void
+  approveStage: (stage: string) => void
+}
+
+function EntityDescGate({
+  card,
+  acting,
+  onGenerate,
+  onSkip,
+}: {
+  card: EntityCard
+  acting: boolean
+  onGenerate: (entityId: string, description?: string) => void
+  onSkip: (entityId: string) => void
+}) {
+  const [desc, setDesc] = useState(card.description ?? "")
+  // The description arrives via getEntities (not SSE) — fill it in once it lands.
+  useEffect(() => {
+    if (card.description && !desc) setDesc(card.description)
+  }, [card.description, desc])
+  const edited = card.description != null && desc !== card.description
+  return (
+    <div className="rounded-md border bg-card p-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-sm text-foreground">
+          {card.entityKey}{" "}
+          <span className="text-xs text-muted-foreground">({card.entityType})</span>
+        </span>
+        <span className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            disabled={acting}
+            onClick={() => onGenerate(card.entityId, edited ? desc : undefined)}
+            className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+          >
+            Generate
+          </button>
+          <button
+            type="button"
+            disabled={acting}
+            onClick={() => onSkip(card.entityId)}
+            className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
+          >
+            Skip
+          </button>
+        </span>
+      </div>
+      <textarea
+        value={desc}
+        onChange={(e) => setDesc(e.target.value)}
+        rows={2}
+        placeholder="Description used to generate this — edit before Generate…"
+        className="w-full rounded-md border bg-background p-2 text-xs text-foreground"
+      />
+    </div>
+  )
+}
+
+function GatePanel({
+  cards,
+  awaiting,
+  acting,
+  scriptReady,
+  actions,
+}: {
+  cards: EntityCard[]
+  awaiting: string[]
+  acting: boolean
+  scriptReady: boolean
+  actions: GateActions
+}) {
+  const pendingDesc = cards.filter((c) => c.status === "pending_description")
+  const awaitingImage = cards.filter((c) => c.status === "awaiting_approval")
+  // Stage-level gates (script, shots, scenes, finish, variant batches).
+  const stageGates = awaiting
+  if (pendingDesc.length === 0 && awaitingImage.length === 0 && stageGates.length === 0) {
+    return null
+  }
+  const btn =
+    "rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
+  return (
+    <div className="mb-6 rounded-md border border-[#ff0073]/40 bg-[#ff0073]/5 p-4">
+      <div className="mb-2 text-sm font-medium text-foreground">Your turn</div>
+
+      {pendingDesc.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-2 text-xs text-muted-foreground">
+            Choose what to create — review/edit the description, then Generate
+            (nothing is made until you pick):
+          </div>
+          <div className="space-y-2">
+            {pendingDesc.map((c) => (
+              <EntityDescGate
+                key={c.entityId}
+                card={c}
+                acting={acting}
+                onGenerate={actions.generate}
+                onSkip={actions.skip}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {awaitingImage.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-1 text-xs text-muted-foreground">Review generated:</div>
+          <div className="space-y-1">
+            {awaitingImage.map((c) => (
+              <div
+                key={c.entityId}
+                className="flex items-center justify-between gap-3 rounded-md border bg-card px-3 py-1.5 text-sm"
+              >
+                <span className="flex items-center gap-2">
+                  {c.mainAssetUrl && (
+                    <img
+                      src={c.mainAssetUrl}
+                      alt=""
+                      className="h-8 w-8 rounded object-cover"
+                    />
+                  )}
+                  <span className="truncate text-foreground">{c.entityKey}</span>
+                </span>
+                <span className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    disabled={acting}
+                    onClick={() => actions.approveEntity(c.entityId)}
+                    className={`${btn} bg-[#ff0073] text-white`}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={acting}
+                    onClick={() => actions.rejectEntity(c.entityId)}
+                    className={`${btn} border text-foreground`}
+                  >
+                    Redo
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {stageGates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {stageGates.map((s) =>
+            s === "script" && !scriptReady ? (
+              <span key={s} className="text-xs text-muted-foreground">
+                Loading script…
+              </span>
+            ) : (
+              <button
+                key={s}
+                type="button"
+                disabled={acting}
+                onClick={() => actions.approveStage(s)}
+                className={`${btn} bg-[#ff0073] text-white`}
+              >
+                Approve {STAGE_LABELS[s] ?? s} & continue
+              </button>
+            ),
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -306,7 +491,13 @@ function EntityImage({ card }: { card: EntityCard }) {
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-            {card.status === "failed" ? "failed" : "generating…"}
+            {card.status === "failed"
+              ? "failed"
+              : card.status === "skipped"
+                ? "skipped"
+                : card.status === "pending_description"
+                  ? "awaiting choice"
+                  : "generating…"}
           </div>
         )}
       </div>
@@ -329,9 +520,113 @@ function EntityImage({ card }: { card: EntityCard }) {
   )
 }
 
-function ScriptView({ screenplay }: { screenplay: Screenplay }) {
+type ScriptPatch = { op: "replace"; path: string; value: string }
+
+function ScriptView({
+  screenplay,
+  acting,
+  onApplyEdits,
+  onRedoScene,
+  onRegenerate,
+}: {
+  screenplay: Screenplay
+  acting: boolean
+  onApplyEdits: (patches: ScriptPatch[]) => void
+  onRedoScene: (index: number, feedback: string) => void
+  onRegenerate: (feedback: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [drafts, setDrafts] = useState<Record<number, string>>({})
+  const [redoFor, setRedoFor] = useState<number | null>(null)
+  const [sceneFeedback, setSceneFeedback] = useState("")
+  const [regenOpen, setRegenOpen] = useState(false)
+  const [regenFeedback, setRegenFeedback] = useState("")
+
+  const startEdit = () => {
+    const d: Record<number, string> = {}
+    screenplay.scenes.forEach((sc, i) => {
+      d[i] = sc.description
+    })
+    setDrafts(d)
+    setEditing(true)
+  }
+  const save = () => {
+    const patches: ScriptPatch[] = screenplay.scenes
+      .map((sc, i) => ({ i, sc }))
+      .filter(({ i, sc }) => drafts[i] !== undefined && drafts[i] !== sc.description)
+      .map(({ i }) => ({
+        op: "replace" as const,
+        path: `/scenes/${i}/description`,
+        value: drafts[i] ?? "",
+      }))
+    if (patches.length > 0) onApplyEdits(patches)
+    setEditing(false)
+  }
+
+  const inputCls =
+    "flex-1 rounded-md border bg-background px-2 py-1 text-xs text-foreground"
+  const pinkBtn =
+    "rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+
   return (
     <div className="max-w-3xl space-y-4 rounded-md border bg-card p-4 text-sm leading-relaxed text-foreground">
+      <div className="flex flex-wrap items-center gap-2">
+        {editing ? (
+          <>
+            <button type="button" onClick={save} disabled={acting} className={pinkBtn}>
+              Save edits
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-md border px-3 py-1 text-xs text-foreground"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={startEdit}
+              className="rounded-md border px-3 py-1 text-xs text-foreground"
+            >
+              Edit manually
+            </button>
+            <button
+              type="button"
+              onClick={() => setRegenOpen((v) => !v)}
+              className="rounded-md border px-3 py-1 text-xs text-foreground"
+            >
+              Regenerate script
+            </button>
+          </>
+        )}
+      </div>
+
+      {regenOpen && !editing && (
+        <div className="flex gap-2">
+          <input
+            value={regenFeedback}
+            onChange={(e) => setRegenFeedback(e.target.value)}
+            placeholder="What to change (e.g. make it funnier, shorter)…"
+            className={inputCls}
+          />
+          <button
+            type="button"
+            disabled={acting}
+            onClick={() => {
+              onRegenerate(regenFeedback)
+              setRegenOpen(false)
+              setRegenFeedback("")
+            }}
+            className={pinkBtn}
+          >
+            Regenerate
+          </button>
+        </div>
+      )}
+
       {screenplay.cast.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -341,9 +636,7 @@ function ScriptView({ screenplay }: { screenplay: Screenplay }) {
             {screenplay.cast.map((c, i) => (
               <li key={i}>
                 <span className="font-medium">{c.name}</span>
-                {c.role && (
-                  <span className="text-muted-foreground"> · {c.role}</span>
-                )}
+                {c.role && <span className="text-muted-foreground"> · {c.role}</span>}
                 {c.description && (
                   <span className="text-muted-foreground"> — {c.description}</span>
                 )}
@@ -352,22 +645,69 @@ function ScriptView({ screenplay }: { screenplay: Screenplay }) {
           </ul>
         </div>
       )}
+
       {screenplay.scenes.map((sc, i) => (
         <div key={i}>
-          <div className="text-xs font-medium uppercase tracking-wide text-[#ff0073]">
-            {sc.heading}
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-medium uppercase tracking-wide text-[#ff0073]">
+              {sc.heading}
+            </div>
+            {!editing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRedoFor(redoFor === i ? null : i)
+                  setSceneFeedback("")
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Redo
+              </button>
+            )}
           </div>
-          {sc.description && <p className="mt-1">{sc.description}</p>}
-          {sc.narration && (
+          {editing ? (
+            <textarea
+              value={drafts[i] ?? sc.description}
+              onChange={(e) => setDrafts((p) => ({ ...p, [i]: e.target.value }))}
+              rows={3}
+              className="mt-1 w-full rounded-md border bg-background p-2 text-sm text-foreground"
+            />
+          ) : (
+            sc.description && <p className="mt-1">{sc.description}</p>
+          )}
+          {!editing && sc.narration && (
             <p className="mt-1 italic text-muted-foreground">
               Narration: {sc.narration}
             </p>
           )}
-          {sc.dialogue.map((d, j) => (
-            <p key={j} className="mt-1">
-              <span className="font-medium uppercase">{d.who}:</span> {d.line}
-            </p>
-          ))}
+          {!editing &&
+            sc.dialogue.map((d, j) => (
+              <p key={j} className="mt-1">
+                <span className="font-medium uppercase">{d.who}:</span> {d.line}
+              </p>
+            ))}
+          {redoFor === i && !editing && (
+            <div className="mt-2 flex gap-2">
+              <input
+                value={sceneFeedback}
+                onChange={(e) => setSceneFeedback(e.target.value)}
+                placeholder="How to change this scene…"
+                className={inputCls}
+              />
+              <button
+                type="button"
+                disabled={acting}
+                onClick={() => {
+                  onRedoScene(i, sceneFeedback)
+                  setRedoFor(null)
+                  setSceneFeedback("")
+                }}
+                className={pinkBtn}
+              >
+                Redo scene
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -380,6 +720,8 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
   const [lines, setLines] = useState<NarrationLine[]>([])
   const [entities, setEntities] = useState<Record<string, EntityCard>>({})
   const [stageStatus, setStageStatus] = useState<Record<string, string>>({})
+  const [awaiting, setAwaiting] = useState<string[]>([])
+  const [acting, setActing] = useState(false)
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null)
   const [sceneGraph, setSceneGraph] = useState<SceneGraph | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -391,7 +733,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       await pipelinesApi.cancel(pipelineId)
       setStatus("cancelled")
     } catch {
-      // ignore
+      /* ignore */
     }
   }, [pipelineId])
 
@@ -402,7 +744,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
         setSceneGraph(buildSceneGraphFromPipeline(timeline))
       }
     } catch {
-      // not assembled yet
+      /* not assembled yet */
     }
   }, [pipelineId])
 
@@ -412,19 +754,93 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       const parsed = parseScreenplay(stage.output)
       if (parsed) setScreenplay(parsed)
     } catch {
-      // not ready yet
+      /* not ready */
     }
   }, [pipelineId])
 
+  // Refresh the gate: which stages await approval + the entity statuses (also
+  // backfills entity cards on reload, since SSE only carries live changes).
+  const refreshGate = useCallback(async () => {
+    // Always (re)load the script — when the script gate opens there's often no
+    // distinct stage:status event, so this is the reliable trigger.
+    void loadScript()
+    try {
+      const pa = await pipelinesApi.pendingApprovals(pipelineId)
+      setAwaiting(pa.map((p) => p.stage_name))
+    } catch {
+      /* ignore */
+    }
+    for (const t of ENTITY_TYPES) {
+      try {
+        const ents = await pipelinesApi.getEntities(pipelineId, t)
+        if (ents.length === 0) continue
+        setEntities((prev) => {
+          const next = { ...prev }
+          for (const e of ents) {
+            next[e.id] = {
+              entityId: e.id,
+              entityType: e.entity_type,
+              entityKey: e.entity_key,
+              status: e.status,
+              mainAssetUrl: e.main_asset_url ?? next[e.id]?.mainAssetUrl,
+              description:
+                (e.metadata?.visual_description as string | undefined) ??
+                next[e.id]?.description,
+              variants: next[e.id]?.variants ?? [],
+            }
+          }
+          return next
+        })
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [pipelineId, loadScript])
+
+  const act = useCallback(
+    (fn: () => Promise<unknown>) => {
+      if (acting) return
+      setActing(true)
+      void fn()
+        .catch(() => {})
+        .finally(() => {
+          setActing(false)
+          void refreshGate()
+        })
+    },
+    [acting, refreshGate],
+  )
+
+  const actions: GateActions = {
+    generate: (eid, description) =>
+      act(() =>
+        pipelinesApi.approveDescription(
+          pipelineId,
+          eid,
+          description != null && description.trim()
+            ? { mode: "user_edited", description }
+            : { mode: "llm" },
+        ),
+      ),
+    skip: (eid) => act(() => pipelinesApi.skipEntity(pipelineId, eid)),
+    approveEntity: (eid) => act(() => pipelinesApi.approveEntity(pipelineId, eid)),
+    rejectEntity: (eid) => act(() => pipelinesApi.rejectEntity(pipelineId, eid, "")),
+    approveStage: (s) =>
+      act(() => pipelinesApi.approveStage(pipelineId, s as PipelineStageName)),
+  }
+
+  // Initial load.
   useEffect(() => {
     void loadScript()
     void loadTimeline()
+    void refreshGate()
     pipelinesApi
       .get(pipelineId)
       .then((p) => setStatus(p.status))
       .catch(() => {})
-  }, [loadScript, loadTimeline, pipelineId])
+  }, [loadScript, loadTimeline, refreshGate, pipelineId])
 
+  // Drive off the live SSE stream.
   useEffect(() => {
     if (!lastEvent) return
     const evt = lastEvent
@@ -437,6 +853,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
         setStageStatus((prev) => ({ ...prev, [e.stageName as string]: e.status as string }))
       }
       if (e.stageName === "script") void loadScript()
+      void refreshGate()
     } else if (evt.type === "entity:status") {
       const e = evt as unknown as {
         entityId: string
@@ -453,6 +870,7 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
           entityKey: e.entityKey,
           status: e.status,
           mainAssetUrl: e.mainAssetUrl ?? prev[e.entityId]?.mainAssetUrl,
+          description: prev[e.entityId]?.description,
           variants: prev[e.entityId]?.variants ?? [],
         },
       }))
@@ -476,16 +894,20 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       if (s) setStatus(s)
       if (s === "completed") void loadTimeline()
       else if (s === "failed" || s === "cancelled") setError(`Pipeline ${s}`)
+      void refreshGate()
     }
-  }, [lastEvent, loadScript, loadTimeline])
+  }, [lastEvent, loadScript, loadTimeline, refreshGate])
 
+  // Poll while a run is active so the gate, script, and timeline self-heal even
+  // if an SSE frame is dropped. Stops once the film is assembled or errored.
   useEffect(() => {
     if (sceneGraph || error) return
     const interval = setInterval(() => {
       void loadTimeline()
+      void refreshGate()
     }, 5000)
     return () => clearInterval(interval)
-  }, [sceneGraph, error, loadTimeline])
+  }, [sceneGraph, error, loadTimeline, refreshGate])
 
   useEffect(() => {
     feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight })
@@ -497,7 +919,6 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Top bar */}
       <div className="flex items-center justify-between border-b px-4 py-2">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-foreground">Nodaro Cinema</span>
@@ -524,24 +945,18 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Narration log */}
         <div className="flex w-[300px] shrink-0 flex-col border-r">
           <div className="flex items-center justify-between border-b px-4 py-2">
             <span className="text-sm font-medium text-foreground">AI Director</span>
             <span
               className={
-                connected
-                  ? "text-xs text-green-400"
-                  : "text-xs text-muted-foreground"
+                connected ? "text-xs text-green-400" : "text-xs text-muted-foreground"
               }
             >
               {connected ? "live" : "connecting…"}
             </span>
           </div>
-          <div
-            ref={feedRef}
-            className="flex-1 space-y-1 overflow-y-auto p-3 text-xs"
-          >
+          <div ref={feedRef} className="flex-1 space-y-1 overflow-y-auto p-3 text-xs">
             {lines.length === 0 ? (
               <p className="text-muted-foreground">Starting your film…</p>
             ) : (
@@ -554,9 +969,18 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
           </div>
         </div>
 
-        {/* Artifacts */}
         <div className="flex-1 overflow-y-auto p-6">
-          <StageTracker stageStatus={stageStatus} />
+          <StageTracker stageStatus={stageStatus} awaiting={awaiting} />
+
+          {!isTerminal && (
+            <GatePanel
+              cards={cards}
+              awaiting={awaiting}
+              acting={acting}
+              scriptReady={!!screenplay}
+              actions={actions}
+            />
+          )}
 
           {error && (
             <div className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">
@@ -582,7 +1006,31 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
           {screenplay && (
             <section className="mb-8">
               <h2 className="mb-2 text-sm font-medium text-foreground">Script</h2>
-              <ScriptView screenplay={screenplay} />
+              <ScriptView
+                screenplay={screenplay}
+                acting={acting}
+                onApplyEdits={(patches) =>
+                  act(() => pipelinesApi.applyEdits(pipelineId, "script", patches))
+                }
+                onRedoScene={(index, fb) =>
+                  act(() =>
+                    pipelinesApi.regenerateScene(
+                      pipelineId,
+                      index,
+                      fb || "Improve this scene",
+                    ),
+                  )
+                }
+                onRegenerate={(fb) =>
+                  act(() =>
+                    pipelinesApi.rejectStage(
+                      pipelineId,
+                      "script",
+                      fb || "Regenerate the script",
+                    ),
+                  )
+                }
+              />
             </section>
           )}
 
