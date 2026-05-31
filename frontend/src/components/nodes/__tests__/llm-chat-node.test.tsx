@@ -17,7 +17,10 @@ vi.mock("@xyflow/react", () => ({
 }))
 
 vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
+  BaseNode: ({
+    children, label, category, credits, id, isRunning, handles,
+    topToolbarContent, bottomToolbarContent, enableZoomHandle, keepTopToolbarVisible,
+  }: any) => (
     <div
       data-testid="base-node"
       data-label={label}
@@ -25,11 +28,14 @@ vi.mock("../base-node", () => ({
       data-credits={credits}
       data-id={id}
       data-is-running={isRunning}
+      data-enable-zoom-handle={String(!!enableZoomHandle)}
+      data-keep-top-toolbar-visible={String(!!keepTopToolbarVisible)}
     >
-      {/* Render only non-external handles (the external ones come via HandleWithPopover mocks) */}
       {(handles ?? []).filter((h: any) => !h.external).map((h: any) => (
         <div key={`${h.type}-${h.id}`} data-testid={`handle-${h.type}-${h.id}`} data-type={h.type} data-position={h.position} />
       ))}
+      {topToolbarContent}
+      {bottomToolbarContent}
       {children}
     </div>
   ),
@@ -53,12 +59,18 @@ vi.mock("lucide-react", () => {
   const I = (p: any) => <span data-testid="mock-icon" {...p} />
   return {
     MessageSquare: I, Type: I, Loader2: I, AlertCircle: I, X: I, FileText: I,
-    Copy: I, Download: I, BookOpen: I, ImageIcon: I, List: I, Layers: I, ListOrdered: I,
+    Copy: I, Download: I, BookOpen: I, ImageIcon: I, List: I,
   }
 })
 
-vi.mock("../run-node-button", () => ({
-  RunNodeButton: () => <div data-testid="run-node-button" />,
+vi.mock("../llm-chat-quick-toolbar", () => ({
+  LlmChatQuickToolbar: () => <div data-testid="llm-chat-quick-toolbar" />,
+}))
+
+vi.mock("../results-thumbnails-panel", () => ({
+  ResultsThumbnailsPanel: (p: any) => (
+    <div data-testid="results-thumbnails-panel" data-count={p.results?.length ?? 0} data-media-type={p.mediaType} />
+  ),
 }))
 
 vi.mock("@/hooks/use-workflow-store", () => ({
@@ -164,5 +176,36 @@ describe("LLMChatNode", () => {
       },
     })
     expect(screen.getByText("Failed")).toBeInTheDocument()
+  })
+
+  it("opts into the bottom-left zoom magnifier", () => {
+    renderNode()
+    expect(screen.getByTestId("base-node")).toHaveAttribute("data-enable-zoom-handle", "true")
+  })
+
+  it("renders the quick toolbar", () => {
+    renderNode()
+    expect(screen.getByTestId("llm-chat-quick-toolbar")).toBeInTheDocument()
+  })
+
+  it("does not render the results browser with a single result", () => {
+    renderNode({
+      data: { label: "Generate Text", templateId: "custom", generatedResults: [{ text: "a" }], activeResultIndex: 0 },
+    })
+    expect(screen.queryByTestId("results-thumbnails-panel")).not.toBeInTheDocument()
+  })
+
+  it("renders the float-above text results browser with multiple results", () => {
+    renderNode({
+      data: {
+        label: "Generate Text",
+        templateId: "custom",
+        generatedResults: [{ text: "a" }, { text: "b" }],
+        activeResultIndex: 0,
+      },
+    })
+    const panel = screen.getByTestId("results-thumbnails-panel")
+    expect(panel).toHaveAttribute("data-count", "2")
+    expect(panel).toHaveAttribute("data-media-type", "text")
   })
 })
