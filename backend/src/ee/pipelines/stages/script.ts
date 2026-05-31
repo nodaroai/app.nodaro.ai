@@ -105,10 +105,12 @@ export type ScriptStageOutcome =
   | {
       status: "approved" | "awaiting_approval"
       plan: ShowrunnerPlan
-      scriptCritic: ScriptCriticVerdict
-      castCoverageCritic: CastCoverageCriticVerdict
-      locationsCoverageCritic: LocationsCoverageCriticVerdict
-      objectsValidation: ObjectsValidationResult
+      // null when the critic was skipped (config.skip_script_critic) — the
+      // engine only stores these in the critic_feedback blob, so null is safe.
+      scriptCritic: ScriptCriticVerdict | null
+      castCoverageCritic: CastCoverageCriticVerdict | null
+      locationsCoverageCritic: LocationsCoverageCriticVerdict | null
+      objectsValidation: ObjectsValidationResult | null
     }
   | {
       status: "failed"
@@ -177,6 +179,21 @@ export async function runScriptStage(args: RunScriptStageArgs): Promise<ScriptSt
       styleDirectives: args.styleDirectives,
       scriptLlmOverride,
     })
+
+    // Phase 0 studio — skip the critic + refine loop and hand the draft straight
+    // to the user (critic off by default; they Edit / Regenerate / Approve at the
+    // gate). The engine only stores critic_feedback, so null verdicts are safe.
+    if (args.config?.skip_script_critic) {
+      clearScriptProgress(args.supabase, args.pipelineId)
+      return {
+        status: args.mode === "auto" ? "approved" : "awaiting_approval",
+        plan,
+        scriptCritic: null,
+        castCoverageCritic: null,
+        locationsCoverageCritic: null,
+        objectsValidation: null,
+      }
+    }
 
     emitScriptProgress(
       args.supabase,

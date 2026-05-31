@@ -199,6 +199,9 @@ function StudioPrompt({ onOpen }: { onOpen: (id: string) => void }) {
           music_enabled: true,
           narration_enabled: false,
           lipsync_enabled: false,
+          // Critic off by default — the script draft is shown immediately at the
+          // gate; the user can Edit / Regenerate / Run-critic there.
+          skip_script_critic: true,
         },
       })
       onOpen(id)

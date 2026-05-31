@@ -116,6 +116,10 @@ export const PipelineConfigSchema = z.object({
   freecut_export_format: z.enum(["json", "fcpxml"]).default("json"),
   shot_generation_mode: z.enum(["parallel", "sequential"]).default("parallel"),
   silent_cut_review: z.boolean().default(true),
+  // Phase 0 studio — when true, the script stage skips the critic + refine loop
+  // and pauses for the user immediately after the first draft ("critic off by
+  // default; you decide" — the user can Edit / Regenerate at the gate).
+  skip_script_critic: z.boolean().default(false),
   // Global model overrides — apply to every stage of the matching kind unless
   // a more-specific entry in `stage_models` overrides it. Constrained to the
   // pinnable allowlists above; the route handler still re-validates against
