@@ -235,6 +235,52 @@ function withWorkflowId<T extends Record<string, unknown>>(body: T): T {
   return result
 }
 
+/**
+ * Shared JSON-fetch envelope for the ~150 same-origin REST calls that POST a
+ * JSON body (or GET with none), attach auth + `Content-Type`, and on `!res.ok`
+ * route the error through `throwApiError`. Collapses the repeated
+ * `fetch → !ok → throwApiError → res.json()` boilerplate into one place.
+ *
+ * - `body` is JSON-stringified; omit it for body-less calls (no `Content-Type`).
+ * - `workflowId: true` wraps the body in `withWorkflowId(...)` (workflowId /
+ *   forcePrivate / userPrompt injection) — opt-in so non-job calls don't get it.
+ * - `idempotencyKey` adds the `Idempotency-Key` header when present.
+ *
+ * Behavior is identical to the inline form (pinned by
+ * `__tests__/api-{error-dispatch,common-contract,context-injection}.test.ts`).
+ * NOT for FormData uploads or SSE/`streamRequest` calls — those stay bespoke.
+ */
+async function apiJson<T>(
+  path: string,
+  opts: {
+    method?: string
+    body?: Record<string, unknown>
+    label: string
+    workflowId?: boolean
+    idempotencyKey?: string
+  },
+): Promise<T> {
+  const { method = "POST", body, label, workflowId, idempotencyKey } = opts
+  const hasBody = body !== undefined
+  const authHeaders = await getAuthHeaders()
+  let headers: Record<string, string> = hasBody
+    ? { "Content-Type": "application/json", ...authHeaders }
+    : authHeaders
+  if (idempotencyKey) headers = withIdempotencyHeader(headers, idempotencyKey)
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    ...(hasBody
+      ? { body: JSON.stringify(workflowId ? withWorkflowId(body) : body) }
+      : {}),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, label)
+  }
+  return res.json() as Promise<T>
+}
+
 
 // --- Generate Image (E2E spike) ---
 
@@ -327,19 +373,12 @@ export async function generateImage(
     body._internalLora = internalLora
     body.provider = FLUX_LORA_CHARACTER_MODEL_ID
   }
-  const res = await fetch(`${API_BASE_URL}/v1/generate-image`, {
-    method: "POST",
-    headers: withIdempotencyHeader(
-      { "Content-Type": "application/json", ...await getAuthHeaders() },
-      idempotencyKey,
-    ),
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/generate-image", {
+    body,
+    workflowId: true,
+    idempotencyKey,
+    label: "Failed to start image generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start image generation")
-  }
-  return res.json()
 }
 
 // --- Edit Image (KIE.ai only) ---
@@ -394,16 +433,11 @@ export async function editImage(
   if (options?.maskUrl) {
     body.maskUrl = options.maskUrl
   }
-  const res = await fetch(`${API_BASE_URL}/v1/edit-image`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/edit-image", {
+    body,
+    workflowId: true,
+    label: "Failed to start image editing",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start image editing")
-  }
-  return res.json()
 }
 
 // --- Image to Image (transform image with prompt) ---
@@ -457,16 +491,11 @@ export async function imageToImage(
   if (options?.attachToColumn) body.attachToColumn = options.attachToColumn
   if (options?.attachName) body.attachName = options.attachName
   if (options?.injectCharacterContext) body.injectCharacterContext = true
-  const res = await fetch(`${API_BASE_URL}/v1/image-to-image`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/image-to-image", {
+    body,
+    workflowId: true,
+    label: "Failed to start image transformation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start image transformation")
-  }
-  return res.json()
 }
 
 // --- Modify Image (delegates to edit-image or image-to-image backend routes) ---
@@ -553,16 +582,11 @@ export async function generateCharacter(data: {
    *  loses to `aspectRatio`. Driven by the character node's 4-pill UI. */
   characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
 }): Promise<{ jobId: string; jobIds: string[] }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-character`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/generate-character", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start character generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start character generation")
-  }
-  return res.json()
 }
 
 export async function generateCharacterAsset(data: {
@@ -601,16 +625,11 @@ export async function generateCharacterAsset(data: {
    *  lighting=3:4, angles=3:4, custom=3:4), loses to `aspectRatio`. */
   characterNodeAspectRatio?: "1:1" | "3:4" | "16:9" | "9:16"
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-character-asset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/generate-character-asset", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start character asset generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start character asset generation")
-  }
-  return res.json()
 }
 
 export async function generateCharacterMotion(params: {
@@ -678,16 +697,11 @@ export async function saveCharacter(data: {
   canonicalDescription?: string
   realLifeRefsByVariant?: Readonly<Record<string, ReadonlyArray<string>>>
 }): Promise<{ id: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/characters`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/characters", {
+    body: data,
+    workflowId: true,
+    label: "Failed to save character",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save character")
-  }
-  return res.json()
 }
 
 /**
@@ -777,16 +791,10 @@ export async function llmSuggestDescription(body: {
   readonly kind: LlmSuggestKind
   readonly context: LlmSuggestContext
 }): Promise<{ readonly text: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/llm-suggest-description`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(body),
+  return apiJson("/v1/llm-suggest-description", {
+    body,
+    label: "Failed to suggest description",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to suggest description")
-  }
-  return res.json()
 }
 
 /**
@@ -925,16 +933,11 @@ export async function saveFace(data: {
   sourceImageUrl?: string
   expressions?: { name: string; url: string }[]
 }): Promise<{ id: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/faces`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/faces", {
+    body: data,
+    workflowId: true,
+    label: "Failed to save face",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save face")
-  }
-  return res.json()
 }
 
 export interface DbFace {
@@ -956,28 +959,17 @@ export async function getFaces(projectId?: string, userId?: string): Promise<{ f
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   const qs = params.toString()
-  const res = await fetch(`${API_BASE_URL}/v1/faces${qs ? `?${qs}` : ""}`, {
+  return apiJson(`/v1/faces${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    label: "Failed to fetch faces",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch faces")
-  }
-  return res.json()
 }
 
 export async function deleteFace(faceId: string): Promise<{ success: boolean }> {
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/faces/${encodeURIComponent(faceId)}`, {
+  return apiJson(`/v1/faces/${encodeURIComponent(faceId)}`, {
     method: "DELETE",
-    headers: authHeaders,
+    label: "Failed to delete face",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to delete face")
-  }
-  return res.json()
 }
 
 export async function generateFace(data: {
@@ -989,16 +981,11 @@ export async function generateFace(data: {
   provider?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-face`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/generate-face", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start face headshot generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start face headshot generation")
-  }
-  return res.json()
 }
 
 /**
@@ -1007,16 +994,10 @@ export async function generateFace(data: {
  * Restore via `restoreCharacter(id)`.
  */
 export async function deleteCharacter(characterId: string): Promise<{ success: boolean; archived?: boolean }> {
-  const authHeaders = await getAuthHeaders()
-  const res = await fetch(`${API_BASE_URL}/v1/characters/${encodeURIComponent(characterId)}`, {
+  return apiJson(`/v1/characters/${encodeURIComponent(characterId)}`, {
     method: "DELETE",
-    headers: authHeaders,
+    label: "Failed to archive character",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to archive character")
-  }
-  return res.json()
 }
 
 export async function restoreCharacter(characterId: string): Promise<{ id: string; name: string }> {
@@ -1138,15 +1119,10 @@ export async function getCharacters(projectId?: string, userId?: string): Promis
   if (projectId) params.set("projectId", projectId)
   if (userId) params.set("userId", userId)
   const qs = params.toString()
-  const res = await fetch(`${API_BASE_URL}/v1/characters${qs ? `?${qs}` : ""}`, {
+  return apiJson(`/v1/characters${qs ? `?${qs}` : ""}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
+    label: "Failed to fetch characters",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch characters")
-  }
-  return res.json()
 }
 
 export async function getCharacterById(characterId: string): Promise<DbCharacter | null> {
@@ -1182,16 +1158,11 @@ export async function generateObject(data: {
   seedPromptHint?: string
   expectedUpdatedAt?: string
 }): Promise<{ jobId: string } | { jobIds: string[] }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-object`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/generate-object", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start object generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start object generation")
-  }
-  return res.json()
 }
 
 export async function generateObjectAsset(data: {
@@ -1552,16 +1523,11 @@ export async function generateLocation(data: {
    *  `approveLocationMainImage`. */
   attachToLocationId?: string
 }): Promise<{ jobId?: string; jobIds?: readonly string[] }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-location`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/generate-location", {
+    body: data,
+    workflowId: true,
+    label: "Failed to start location generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start location generation")
-  }
-  return res.json()
 }
 
 export async function generateLocationAsset(data: {
@@ -1667,16 +1633,11 @@ export async function saveLocation(data: {
    */
   expectedUpdatedAt?: string
 }): Promise<{ id: string; updatedAt?: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/locations`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/locations", {
+    body: data,
+    workflowId: true,
+    label: "Failed to save location",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to save location")
-  }
-  return res.json()
 }
 
 /**
@@ -1698,19 +1659,10 @@ export async function approveLocationMainImage(
 ): Promise<{ readonly sourceImageUrl: string; readonly canonicalDescription: string }> {
   const body: Record<string, unknown> = { candidateJobId }
   if (expectedUpdatedAt) body.expectedUpdatedAt = expectedUpdatedAt
-  const res = await fetch(
-    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-      body: JSON.stringify(body),
-    },
+  return apiJson(
+    `/v1/locations/${encodeURIComponent(locationId)}/approve-main-image`,
+    { body, label: "Failed to approve location main image" },
   )
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to approve location main image")
-  }
-  return res.json()
 }
 
 /**
@@ -1723,18 +1675,10 @@ export async function approveLocationMainImage(
 export async function recaptionLocation(
   locationId: string,
 ): Promise<{ readonly canonicalDescription: string }> {
-  const res = await fetch(
-    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/llm-caption`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    },
+  return apiJson(
+    `/v1/locations/${encodeURIComponent(locationId)}/llm-caption`,
+    { label: "Failed to caption location" },
   )
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to caption location")
-  }
-  return res.json()
 }
 
 /**
@@ -1745,18 +1689,10 @@ export async function recaptionLocation(
 export async function restoreLocation(
   locationId: string,
 ): Promise<{ id: string; name: string }> {
-  const res = await fetch(
-    `${API_BASE_URL}/v1/locations/${encodeURIComponent(locationId)}/restore`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    },
+  return apiJson(
+    `/v1/locations/${encodeURIComponent(locationId)}/restore`,
+    { label: "Failed to restore location" },
   )
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to restore location")
-  }
-  return res.json()
 }
 
 /**
@@ -1775,15 +1711,10 @@ export async function getJobStatusBatch(
 }> {
   if (jobIds.length === 0) return { jobs: [] }
   const ids = encodeURIComponent(jobIds.join(","))
-  const res = await fetch(`${API_BASE_URL}/v1/jobs/status?ids=${ids}`, {
+  return apiJson(`/v1/jobs/status?ids=${ids}`, {
     method: "GET",
-    headers: await getAuthHeaders(),
+    label: "Failed to fetch batch job status",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to fetch batch job status")
-  }
-  return res.json()
 }
 
 export async function deleteLocation(locationId: string): Promise<{ success: boolean; archived?: boolean }> {
@@ -2079,16 +2010,11 @@ export async function videoToVideo(videoUrl: string, prompt?: string, provider?:
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { videoUrl, prompt, provider, ...options }
   if (userId) body.userId = userId
-  const res = await fetch(`${API_BASE_URL}/v1/video-to-video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/video-to-video", {
+    body,
+    workflowId: true,
+    label: "Failed to start video-to-video generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start video-to-video generation")
-  }
-  return res.json()
 }
 
 export async function textToVideo(prompt: string, provider?: string, userId?: string, options?: {
@@ -2120,19 +2046,12 @@ export async function textToVideo(prompt: string, provider?: string, userId?: st
   if (userId) {
     body.userId = userId
   }
-  const res = await fetch(`${API_BASE_URL}/v1/text-to-video`, {
-    method: "POST",
-    headers: withIdempotencyHeader(
-      { "Content-Type": "application/json", ...await getAuthHeaders() },
-      idempotencyKey,
-    ),
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/text-to-video", {
+    body,
+    workflowId: true,
+    idempotencyKey,
+    label: "Failed to start text-to-video generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start text-to-video generation")
-  }
-  return res.json()
 }
 
 export async function textToSpeech(
@@ -2178,16 +2097,11 @@ export async function generateScriptApi(params: {
   llmModel?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-script`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+  return apiJson("/v1/generate-script", {
+    body: params,
+    workflowId: true,
+    label: "Failed to start script generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start script generation")
-  }
-  return res.json()
 }
 
 export async function combineVideos(
@@ -2355,16 +2269,11 @@ export async function extractFrameApi(
   if (extras?.frameIndex != null) body.frameIndex = extras.frameIndex
   if (extras?.framesFromEnd != null) body.framesFromEnd = extras.framesFromEnd
   if (userId) body.userId = userId
-  const res = await fetch(`${API_BASE_URL}/v1/extract-frame`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/extract-frame", {
+    body,
+    workflowId: true,
+    label: "Failed to extract frame",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to extract frame")
-  }
-  return res.json()
 }
 
 export async function transcodeVideoApi(videoUrl: string, codec?: string, crf?: number, resolution?: string, audioBitrate?: string, userId?: string): Promise<{ jobId: string }> {
@@ -2801,16 +2710,11 @@ export async function textToDialogueApi(
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
   if (languageCode) body.languageCode = languageCode
-  const res = await fetch(`${API_BASE_URL}/v1/text-to-dialogue`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/text-to-dialogue", {
+    body,
+    workflowId: true,
+    label: "Failed to start dialogue generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start dialogue generation")
-  }
-  return res.json()
 }
 
 export async function voiceChangerApi(audioUrl: string, voiceId: string, userId?: string, stability?: number, similarityBoost?: number, removeBackgroundNoise?: boolean): Promise<{ jobId: string }> {
@@ -2819,16 +2723,11 @@ export async function voiceChangerApi(audioUrl: string, voiceId: string, userId?
   if (stability != null) body.stability = stability
   if (similarityBoost != null) body.similarityBoost = similarityBoost
   if (removeBackgroundNoise != null) body.removeBackgroundNoise = removeBackgroundNoise
-  const res = await fetch(`${API_BASE_URL}/v1/voice-changer`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/voice-changer", {
+    body,
+    workflowId: true,
+    label: "Failed to start voice changer",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start voice changer")
-  }
-  return res.json()
 }
 
 export async function dubbingApi(audioUrl: string, targetLanguage: string, userId?: string, sourceLanguage?: string, numSpeakers?: number): Promise<{ jobId: string }> {
@@ -2836,16 +2735,11 @@ export async function dubbingApi(audioUrl: string, targetLanguage: string, userI
   if (userId) body.userId = userId
   if (sourceLanguage) body.sourceLanguage = sourceLanguage
   if (numSpeakers) body.numSpeakers = numSpeakers
-  const res = await fetch(`${API_BASE_URL}/v1/dubbing`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/dubbing", {
+    body,
+    workflowId: true,
+    label: "Failed to start dubbing",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start dubbing")
-  }
-  return res.json()
 }
 
 export async function voiceRemixApi(text: string, voiceDescription: string, userId?: string): Promise<{ jobId: string }> {
@@ -2878,44 +2772,29 @@ export async function voiceDesignApi(
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voiceDescription, ...options }
   if (userId) body.userId = userId
-  const res = await fetch(`${API_BASE_URL}/v1/voice-design`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/voice-design", {
+    body,
+    workflowId: true,
+    label: "Failed to start voice design",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start voice design")
-  }
-  return res.json()
 }
 
 export async function forcedAlignmentApi(audioUrl: string, transcript: string, userId?: string): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrl, transcript }
   if (userId) body.userId = userId
-  const res = await fetch(`${API_BASE_URL}/v1/forced-alignment`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/forced-alignment", {
+    body,
+    workflowId: true,
+    label: "Failed to start forced alignment",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start forced alignment")
-  }
-  return res.json()
 }
 
 export async function sendWebhookOutput(data: { url: string; payload: Record<string, unknown> }): Promise<{ jobId: string; success: boolean; statusCode: number; responseBody: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/webhook-output/send`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(data)),
+  return apiJson("/v1/webhook-output/send", {
+    body: data,
+    workflowId: true,
+    label: "Failed to send webhook output",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to send webhook output")
-  }
-  return res.json()
 }
 
 export async function webScrape(params: {
@@ -2929,16 +2808,11 @@ export async function webScrape(params: {
   resultsLimit?: number
   workflowId?: string
 }): Promise<{ jobId: string; json: unknown }> {
-  const res = await fetch(`${API_BASE_URL}/v1/web-scrape`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+  return apiJson("/v1/web-scrape", {
+    body: params,
+    workflowId: true,
+    label: "Web scrape failed",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Web scrape failed")
-  }
-  return res.json()
 }
 
 export async function sunoGenerateApi(params: {
@@ -3122,16 +2996,11 @@ export async function sunoMusicVideoApi(params: {
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { taskId: params.taskId, audioId: params.audioId }
   if (params.userId) body.userId = params.userId
-  const res = await fetch(`${API_BASE_URL}/v1/suno/music-video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/suno/music-video", {
+    body,
+    workflowId: true,
+    label: "Failed to start Suno music video",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start Suno music video")
-  }
-  return res.json()
 }
 
 export async function sunoMashupApi(params: {
@@ -3152,16 +3021,11 @@ export async function sunoMashupApi(params: {
   if (params.negativeStyle) body.negativeStyle = params.negativeStyle
   if (params.vocalGender) body.vocalGender = params.vocalGender
   if (params.userId) body.userId = params.userId
-  const res = await fetch(`${API_BASE_URL}/v1/suno/mashup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/suno/mashup", {
+    body,
+    workflowId: true,
+    label: "Failed to start Suno mashup",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start Suno mashup")
-  }
-  return res.json()
 }
 
 export async function sunoReplaceSectionApi(params: {
@@ -3480,16 +3344,11 @@ export async function speechToVideoApi(opts: {
   if (opts.guidanceScale !== undefined) body.guidanceScale = opts.guidanceScale
   if (opts.shift !== undefined) body.shift = opts.shift
   if (opts.userId) body.userId = opts.userId
-  const res = await fetch(`${API_BASE_URL}/v1/speech-to-video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(body)),
+  return apiJson("/v1/speech-to-video", {
+    body,
+    workflowId: true,
+    label: "Failed to start speech-to-video generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start speech-to-video generation")
-  }
-  return res.json()
 }
 
 export async function lipSyncApi(
@@ -3826,16 +3685,11 @@ export async function extendVideo(params: {
   quality?: string
   userId?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/extend-video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+  return apiJson("/v1/extend-video", {
+    body: params,
+    workflowId: true,
+    label: "Failed to start extend video",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start extend video")
-  }
-  return res.json()
 }
 
 // --- Video Retake (LTX 2.3 Pro) ---
@@ -3869,16 +3723,11 @@ export async function faceSwapApi(params: {
   videoUrl: string
   provider?: string
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/face-swap`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+  return apiJson("/v1/face-swap", {
+    body: params,
+    workflowId: true,
+    label: "Failed to start face swap",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start face swap")
-  }
-  return res.json()
 }
 
 // --- Video SFX (Replicate MMAudio) ---
@@ -3912,16 +3761,11 @@ export async function videoSfx(payload: {
   seed?: number
   versions?: number
 }): Promise<{ jobId: string; jobIds?: string[]; deduped?: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/v1/video-sfx`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(payload)),
+  return apiJson("/v1/video-sfx", {
+    body: payload,
+    workflowId: true,
+    label: "Failed to start video SFX",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start video SFX")
-  }
-  return res.json()
 }
 
 // --- Generate Mask (Grounded SAM segmentation) ---
@@ -3931,16 +3775,11 @@ export async function generateMask(params: {
   prompt: string
   threshold?: number
 }): Promise<{ jobId: string }> {
-  const res = await fetch(`${API_BASE_URL}/v1/generate-mask`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-    body: JSON.stringify(withWorkflowId(params)),
+  return apiJson("/v1/generate-mask", {
+    body: params,
+    workflowId: true,
+    label: "Failed to start mask generation",
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to start mask generation")
-  }
-  return res.json()
 }
 
 // --- Render Video (Remotion) ---
@@ -4428,19 +4267,10 @@ export async function promoteToLibrary(
   assetId: string,
   userId: string,
 ): Promise<{ success: boolean }> {
-  const res = await fetch(
-    `${API_BASE_URL}/v1/library/${assetId}/promote`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...await getAuthHeaders() },
-      body: JSON.stringify({ userId }),
-    },
-  )
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throwApiError(err, "Failed to promote asset")
-  }
-  return res.json()
+  return apiJson(`/v1/library/${assetId}/promote`, {
+    body: { userId },
+    label: "Failed to promote asset",
+  })
 }
 
 export async function demoteFromLibrary(
