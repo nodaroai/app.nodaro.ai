@@ -18,6 +18,7 @@ import {
   getEffectivelySkippedIds,
   getUploadDescendantIds,
   computeRouterGatedIds,
+  migrateLegacyNodeType,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
@@ -378,23 +379,7 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
     // Migrate legacy image node types (edit-image → modify/upscale/remove-background, image-to-image → modify)
     const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const allNodes = rawNodes.map(node => {
-      if (node.type === "edit-image") {
-        const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
-        if (provider === "nano-banana-edit") return { ...node, type: "modify-image" }
-        if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" }
-        return { ...node, type: "upscale-image" }
-      }
-      if (node.type === "image-to-image") return { ...node, type: "modify-image" }
-      // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed
-      // to "reduce" on 2026-05-23 to free the "collect" name for the NEW
-      // type-aggregator landing in #2692. Remove after all saved workflows are
-      // migrated (see migration 151).
-      // Discriminate via the NEW shape: NEW Collect always has `order: string[]`.
-      // Anything else with type === "collect" is the OLD pre-rename fan-in reducer.
-      if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce" }
-      return node
-    })
+    const allNodes = rawNodes.map((node) => migrateLegacyNodeType(node))
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
     const allEdges: SimpleEdge[] = ((workflowData.edges as SimpleEdge[]) ?? []).map(e => ({
@@ -718,25 +703,10 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
 
       // Check cancellation / stopping
       const controlStatus = await checkExecutionControl(executionId)
-      if (controlStatus === "cancelled") {
-        ctx.cancelled = true
-        await updateExecution(executionId, {
-          status: "cancelled",
-          node_states: nodeStates,
-          completed_at: new Date().toISOString(),
-        })
-        emitExecutionEvent({
-          type: "execution:cancelled",
-          executionId,
-          nodeStates: { ...nodeStates },
-          completedNodes: completedCount,
-          failedNodes: failedCount,
-          totalCreditsUsed: totalCredits,
-        })
-        return
-      }
-      if (controlStatus === "stopping") {
-        // "Stop after current" — don't start this level, mark as cancelled
+      // "stopping" = "Stop after current" — don't start this level; same effect
+      // as an explicit cancel (mark cancelled + emit the same event), so the two
+      // control states are handled together.
+      if (controlStatus === "cancelled" || controlStatus === "stopping") {
         ctx.cancelled = true
         await updateExecution(executionId, {
           status: "cancelled",
