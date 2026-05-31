@@ -231,9 +231,10 @@ function expandWiredCharacterRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -431,14 +432,15 @@ export function expandWiredLocationRefs(
 ): ConnectedReference[] {
   if (!buildCtx?.nodes || !buildCtx.edges) return []
   const out: ConnectedReference[] = []
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
-  const consumer = buildCtx.nodes.find((n) => n.id === consumerNodeId)
+  const consumer = nodeById.get(consumerNodeId)
   const consumerPrompt =
     (consumer?.data?.prompt as string | undefined) ??
     (consumer?.data?.motionPrompt as string | undefined) ??
     undefined
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "location") continue
     const locData = upstream.data
     let sourceUrl = locData.sourceImageUrl as string | undefined
@@ -537,9 +539,10 @@ function buildExtraRefCharacterContextLookup(
 ): (slug: string) => ExtraRefCharacterContext | undefined {
   if (!buildCtx?.nodes || !buildCtx.edges) return () => undefined
   const bySlug = new Map<string, ExtraRefCharacterContext>()
+  const nodeById = new Map(buildCtx.nodes.map((n) => [n.id, n] as const))
   const incoming = buildCtx.edges.filter((e) => e.target === consumerNodeId)
   for (const e of incoming) {
-    const upstream = buildCtx.nodes.find((n) => n.id === e.source)
+    const upstream = nodeById.get(e.source)
     if (!upstream || upstream.type !== "character") continue
     const charData = upstream.data
     const charName =
@@ -899,11 +902,12 @@ function applyOrderToReferenceUrls(
   const allNodes = buildCtx.nodes ?? []
   const allEdges = buildCtx.edges ?? []
   const states = buildCtx.nodeStates ?? {}
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const matchedSources: SimpleNode[] = []
   const seenSrcIds = new Set<string>()
   for (const e of allEdges) {
     if (e.target !== consumerNodeId) continue
-    const src = allNodes.find((n) => n.id === e.source)
+    const src = nodeById.get(e.source)
     if (!src) continue
     if (!edgeFilter(e, src)) continue
     if (seenSrcIds.has(src.id)) continue
