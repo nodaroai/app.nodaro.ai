@@ -109,6 +109,7 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/config-panels/image-configs.tsx",
   "frontend/src/components/editor/config-panels/input-configs.tsx",
   "frontend/src/components/editor/config-panels/kling3-studio-config.tsx",
+  "frontend/src/components/editor/config-panels/model-search-select.tsx",
   "frontend/src/components/editor/config-panels/model-select-option.tsx",
   "frontend/src/components/editor/config-panels/prompt-helper-dialog.tsx",
   "frontend/src/components/editor/config-panels/video-configs.tsx",
