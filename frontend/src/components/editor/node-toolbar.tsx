@@ -138,7 +138,7 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "forced-alignment", label: "Forced Alignment", icon: <AlignLeft className="h-4 w-4" />, category: "AI", group: "Audio & Speech" },
   // AI — Suno Music
   { type: "suno-voice", label: "Suno Voice", icon: <Mic className="h-4 w-4" />, category: "AI", group: "Suno Music" },
-  { type: "suno-generate", label: "Suno Generate", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
+  { type: "suno-generate", label: "Suno Create Music", icon: <Music className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-cover", label: "Suno Cover", icon: <Disc3 className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-extend", label: "Suno Extend", icon: <FastForward className="h-4 w-4" />, category: "AI", group: "Suno Music" },
   { type: "suno-lyrics", label: "Suno Lyrics", icon: <FileText className="h-4 w-4" />, category: "AI", group: "Suno Music" },
@@ -238,9 +238,9 @@ const CATEGORY_ICON_HOVER: Record<string, string> = {
 
 function NodeList({ onAdd }: { readonly onAdd: (type: SceneNodeType) => void }) {
   const { isAdmin } = useAuth()
-  // The "Parameter" category is currently hidden from the toolbar. Re-enable
-  // by dropping the `n.category !== "Parameter"` clause below.
-  const visibleNodes = NODE_OPTIONS.filter((n) => (!n.adminOnly || isAdmin) && n.category !== "Parameter")
+  // Show every node type in the sidebar (Parameter pickers included). Only
+  // admin-only nodes stay gated, matching the add-node popup's pool.
+  const visibleNodes = NODE_OPTIONS.filter((n) => !n.adminOnly || isAdmin)
   const categories = Array.from(new Set(visibleNodes.map((n) => n.category)))
     .sort((a, b) => categoryRank(a) - categoryRank(b))
   return (
