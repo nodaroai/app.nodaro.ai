@@ -61,12 +61,16 @@ export function resolveNodeInputs(
   triggerData?: Record<string, unknown>,
   listIterationIndex?: number,
 ): ResolvedInputs {
+  // Build an O(1) node index once (replaces per-edge linear `allNodes.find`
+  // scans, including the teleport-chain walk below).
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+
   const incomingEdges = edges.filter((e) => e.target === targetNode.id)
   const inputs: ResolvedInputs = {}
   const ctx = { nodes: allNodes, edges }
 
   for (const edge of incomingEdges) {
-    let sourceNode = allNodes.find((n) => n.id === edge.source)
+    let sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
 
     // The effective sourceHandle for downstream resolution. Starts as the
@@ -89,7 +93,7 @@ export function resolveNodeInputs(
         visited.add(current.id)
         const inEdge = edges.find((e) => e.target === current.id)
         if (!inEdge) break
-        const upstream = allNodes.find((n) => n.id === inEdge.source)
+        const upstream = nodeById.get(inEdge.source)
         if (!upstream) break
         // Remember the LAST edge whose source is the final non-teleport
         // upstream — its sourceHandle is the handle on the real source
@@ -288,6 +292,8 @@ export function resolveNodeInputs(
           allNodes,
           nodeStates,
           triggerData,
+          new Set(),
+          nodeById,
         )
         if (items && items.length > 0) {
           const filtered = selectListItems(items, edgeData as SelectorFields | undefined)
@@ -374,12 +380,14 @@ function resolveSelectedNodeFallbacks(
   const mappings = SELECTED_NODE_FALLBACKS[targetNode.type]
   if (!mappings) return
 
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+
   for (const { dataField, inputField, guard } of mappings) {
     // Skip if the input is already resolved (custom guard or simple truthy check)
     if (guard ? !guard(inputs) : inputs[inputField]) continue
     const selectedId = targetNode.data[dataField] as string | undefined
     if (!selectedId) continue
-    const node = allNodes.find((n) => n.id === selectedId)
+    const node = nodeById.get(selectedId)
     if (!node) continue
     // Reuse getNodeOutput, with saved-data fallback for previously-executed nodes
     const url = getNodeOutput(node, undefined, nodeStates, triggerData)
@@ -449,6 +457,9 @@ function resolveListLoopColumnItems(
   nodeStates: Record<string, NodeExecutionState>,
   triggerData: Record<string, unknown> | undefined,
   visited: Set<string> = new Set(),
+  // Threaded O(1) node index — built once by the top-level caller and reused
+  // across recursion levels. Falls back to a local build for direct callers.
+  nodeById: Map<string, SimpleNode> = new Map(allNodes.map((n) => [n.id, n] as const)),
 ): string[] | undefined {
   if (visited.has(sourceNode.id)) return undefined
   visited.add(sourceNode.id)
@@ -470,7 +481,7 @@ function resolveListLoopColumnItems(
     (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
   )
   if (colInEdge) {
-    const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+    const upstreamNode = nodeById.get(colInEdge.source)
     if (upstreamNode) {
       const edgeSelector = colInEdge.data as SelectorFields | undefined
       let upstreamVals: string[] | undefined
@@ -495,6 +506,7 @@ function resolveListLoopColumnItems(
           nodeStates,
           triggerData,
           visited,
+          nodeById,
         )
       } else if (upstreamNode.type === "selector") {
         // Selector emits picked/rest channels keyed by sourceHandle. Mirrors
@@ -562,11 +574,20 @@ export function getListInputForNode(
   // per upstream item and lets resolveNodeInputs populate `inputs.inputs` instead.
   if (FAN_IN_NODE_TYPES.has(targetNode.type)) return undefined
 
+  // Build O(1) lookup indexes once (replaces per-edge linear array scans).
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
+  const edgesByTarget = new Map<string, SimpleEdge[]>()
+  for (const e of edges) {
+    const list = edgesByTarget.get(e.target)
+    if (list) list.push(e)
+    else edgesByTarget.set(e.target, [e])
+  }
+
   const ctx = { nodes: allNodes, edges }
-  const incomingEdges = edges.filter((e) => e.target === targetNode.id)
+  const incomingEdges = edgesByTarget.get(targetNode.id) ?? []
 
   for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    const sourceNode = nodeById.get(edge.source)
     if (!sourceNode) continue
 
     // Read range config from the edge
@@ -589,7 +610,7 @@ export function getListInputForNode(
           (e) => e.target === sourceNode.id && e.targetHandle === `${col.handleId}_in`,
         )
         if (colInEdge) {
-          const upstreamNode = allNodes.find((n) => n.id === colInEdge.source)
+          const upstreamNode = nodeById.get(colInEdge.source)
           if (upstreamNode) {
             // Generate Text `items` handle is ALREADY split (===NEXT===) — feed
             // it through whole, NOT re-chopped by the loop column's delimiter.
@@ -610,12 +631,12 @@ export function getListInputForNode(
       }
 
       // Fallback: check global "in" handle (connected mode)
-      const loopInEdges = edges.filter(
-        (e) => e.target === sourceNode.id && e.targetHandle === "in",
+      const loopInEdges = (edgesByTarget.get(sourceNode.id) ?? []).filter(
+        (e) => e.targetHandle === "in",
       )
       if (loopInEdges.length > 0) {
         const upstreamEdge = loopInEdges[0]
-        const upstreamNode = allNodes.find((n) => n.id === upstreamEdge.source)
+        const upstreamNode = nodeById.get(upstreamEdge.source)
         if (upstreamNode) {
           // Generate Text `items` handle is ALREADY split — pass through whole.
           const llmItems = resolveLlmChatItems(upstreamNode, upstreamEdge.sourceHandle, nodeStates)
@@ -690,6 +711,8 @@ export function getListInputForNode(
         allNodes,
         nodeStates,
         triggerData,
+        new Set(),
+        nodeById,
       )
       if (items && items.length > 1) {
         const filtered = selectListItems(items, selectorArg)
@@ -752,12 +775,12 @@ export function getListInputForNode(
   // Transitive fan-out: if a direct parent is a text-prompt whose own upstream
   // is a list-like node with "each" mode, resolve the text template per item.
   for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source)
+    const sourceNode = nodeById.get(edge.source)
     if (!sourceNode || sourceNode.type !== "text-prompt") continue
 
-    const sourceIncoming = edges.filter((e) => e.target === sourceNode.id)
+    const sourceIncoming = edgesByTarget.get(sourceNode.id) ?? []
     for (const srcEdge of sourceIncoming) {
-      const listNode = allNodes.find((n) => n.id === srcEdge.source)
+      const listNode = nodeById.get(srcEdge.source)
       if (!listNode || !DEFAULT_EACH_TYPES.has(listNode.type)) continue
 
       const gpEdgeMode = (srcEdge.data as Record<string, unknown> | undefined)
@@ -1541,8 +1564,9 @@ function routeOutput(
     ].filter(Boolean)
     if (allAssetIds.length > 0) {
       // Look for character definition nodes in the workflow
+      const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
       for (const assetId of allAssetIds) {
-        const assetNode = allNodes.find((n) => n.id === assetId)
+        const assetNode = nodeById.get(assetId)
         if (!assetNode) continue
         const assetState = nodeStates[assetId]
         const refUrl = assetState?.output?.imageUrl ||

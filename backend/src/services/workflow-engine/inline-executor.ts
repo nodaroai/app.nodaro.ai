@@ -43,11 +43,12 @@ function collectUpstreamTexts(
   nodeStates: Record<string, NodeExecutionState>,
   includeListResults: boolean,
 ): string[] {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   const texts: string[] = []
 
   for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
+    const srcNode = nodeById.get(edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (state?.output) {
@@ -288,10 +289,13 @@ function collectItemsForEdge(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
   allEdges: SimpleEdge[],
+  // Threaded O(1) node index — built once by the per-edge callers below.
+  // Falls back to a local build when called directly without one.
+  nodeById: Map<string, SimpleNode> = new Map(allNodes.map((n) => [n.id, n] as const)),
 ): string[] {
   if (edge.targetHandle === VARIABLES_HANDLE_ID) return []
   const resolvedEdge = resolveSourceThroughConnectedList(edge, allNodes, allEdges)
-  const srcNode = allNodes.find((n) => n.id === resolvedEdge.source)
+  const srcNode = nodeById.get(resolvedEdge.source)
   if (!srcNode) return []
 
   let output = nodeStates[srcNode.id]?.output
@@ -364,10 +368,11 @@ function collectUpstreamListItems(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): string[] {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   const items: string[] = []
   for (const edge of incomingEdges) {
-    items.push(...collectItemsForEdge(edge, allNodes, nodeStates, edges))
+    items.push(...collectItemsForEdge(edge, allNodes, nodeStates, edges, nodeById))
   }
   return spreadJsonArrayIfSingleton(items)
 }
@@ -383,9 +388,10 @@ function collectUpstreamListsPerEdge(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): string[][] {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === nodeId)
   return incomingEdges.map((edge) =>
-    spreadJsonArrayIfSingleton(collectItemsForEdge(edge, allNodes, nodeStates, edges)),
+    spreadJsonArrayIfSingleton(collectItemsForEdge(edge, allNodes, nodeStates, edges, nodeById)),
   )
 }
 
@@ -583,11 +589,12 @@ export function executeComposite(
   const height = dims?.height ?? (data.height as number) ?? 1080
 
   // Collect incoming video URLs keyed by targetHandle (matches frontend logic)
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === node.id)
   const handleVideoMap = new Map<string, string>()
 
   for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
+    const srcNode = nodeById.get(edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (!state?.output) continue
@@ -712,6 +719,7 @@ export function executePreview(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): NodeOutput {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === node.id)
   const previewItems: Array<{
     type: "image" | "video" | "audio" | "data" | "text"
@@ -721,7 +729,7 @@ export function executePreview(
   }> = []
 
   for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
+    const srcNode = nodeById.get(edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (!state?.output) continue
@@ -823,9 +831,10 @@ function resolveRouterInputValue(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
 ): string | undefined {
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === nodeId && e.targetHandle !== VARIABLES_HANDLE_ID)
   for (const edge of incomingEdges) {
-    const srcNode = allNodes.find((n) => n.id === edge.source)
+    const srcNode = nodeById.get(edge.source)
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (state?.output) {
@@ -863,6 +872,7 @@ export async function executeWebhookOutput(
   }
 
   const params = (node.data.params as Array<{ id: string; name: string; type: string }>) ?? []
+  const nodeById = new Map(allNodes.map((n) => [n.id, n] as const))
   const incomingEdges = edges.filter((e) => e.target === node.id)
 
   const payload: Record<string, unknown> = {}
@@ -872,7 +882,7 @@ export async function executeWebhookOutput(
     for (const param of params) {
       const edge = incomingEdges.find((e) => e.targetHandle === param.id)
       if (!edge) continue
-      const srcNode = allNodes.find((n) => n.id === edge.source)
+      const srcNode = nodeById.get(edge.source)
       if (!srcNode) continue
 
       let value: string | undefined
@@ -888,7 +898,7 @@ export async function executeWebhookOutput(
   } else {
     // No params — collect all upstream data
     for (const edge of incomingEdges) {
-      const srcNode = allNodes.find((n) => n.id === edge.source)
+      const srcNode = nodeById.get(edge.source)
       if (!srcNode) continue
       const state = nodeStates[srcNode.id]
       if (!state?.output) continue
