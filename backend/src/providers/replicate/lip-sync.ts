@@ -6,8 +6,7 @@
  */
 
 import type { ReconcileOpts } from "../provider.interface.js"
-import { replicate, extractUrl, extractCost } from "./client.js"
-import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { extractUrl, runReplicatePrediction } from "./client.js"
 
 interface LipSyncModelConfig {
   // Community models require version-based predictions (not model-based)
@@ -103,18 +102,17 @@ export async function replicateLipSync(
 
   console.log(`[Replicate:lipSync] Request:`, JSON.stringify({ version: cfg.version.slice(0, 12), input }, null, 2))
 
-  const prediction = await replicate.predictions.create({
+  const { output, cost } = await runReplicatePrediction({
     version: cfg.version,
     input,
+    label: "[replicate:lipSync]",
+    reconcileOpts,
+    costModelKey: provider,
   })
-  await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:lipSync]")
-  const completed = await replicate.wait(prediction)
-  const output = completed.output
 
   const videoUrl = extractUrl(
     typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output,
   )
-  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, provider)
 
   console.log(`[Replicate:lipSync] Output: "${videoUrl}"`)
   console.log(`[Replicate:lipSync] Cost: $${cost?.toFixed(6) ?? "N/A"}`)

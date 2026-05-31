@@ -12,8 +12,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { replicate, extractUrl, extractCost } from "./client.js"
-import { fireOnTaskCreated } from "../../lib/reconcile/fire-on-task-created.js"
+import { extractUrl, runReplicatePrediction } from "./client.js"
 
 interface ReplicateVideoModelConfig {
   model: string
@@ -191,19 +190,15 @@ export class ReplicateVideoProvider
       )
     )
 
-    const prediction = await replicate.predictions.create({
-      model: cfg.model as `${string}/${string}`,
+    const { output, cost } = await runReplicatePrediction({
+      model: cfg.model,
       input: replicateInput,
+      label: "[replicate:imageToVideo]",
+      reconcileOpts,
     })
-    await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:imageToVideo]")
-    const completed = await replicate.wait(prediction)
-    const output = completed.output
 
     const videoUrl = extractUrl(typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output)
     console.log(`[Replicate:imageToVideo] Output: "${videoUrl}"`)
-
-    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
-    console.log(`[Replicate:imageToVideo] Prediction metrics:`, JSON.stringify(completed.metrics))
     console.log(`[Replicate:imageToVideo] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
 
     return { url: videoUrl, cost }
@@ -229,22 +224,18 @@ export class ReplicateVideoProvider
       `[Replicate:textToVideo] Prompt: "${prompt}"`
     )
 
-    const prediction = await replicate.predictions.create({
-      model: replicateModel as `${string}/${string}`,
+    const { output, cost } = await runReplicatePrediction({
+      model: replicateModel,
       input: {
         prompt,
         prompt_optimizer: true,
       },
+      label: "[replicate:textToVideo]",
+      reconcileOpts,
     })
-    await fireOnTaskCreated(reconcileOpts, prediction.id, "[replicate:textToVideo]")
-    const completed = await replicate.wait(prediction)
-    const output = completed.output
 
     const resultUrl = extractUrl(typeof output === "string" ? output : Array.isArray(output) && output.length > 0 ? output[0] : output)
     console.log(`[Replicate:textToVideo] Output: "${resultUrl}"`)
-
-    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
-    console.log(`[Replicate:textToVideo] Prediction metrics:`, JSON.stringify(completed.metrics))
     console.log(`[Replicate:textToVideo] Estimated cost: $${cost?.toFixed(6) ?? "N/A"}`)
 
     return { url: resultUrl, cost }
