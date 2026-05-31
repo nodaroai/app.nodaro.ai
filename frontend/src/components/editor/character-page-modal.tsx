@@ -9,7 +9,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
   generateCharacterAsset,
-  getJobStatus,
+  getJobStatusLean,
   deleteCharacter,
   generateImage,
   saveCharacter,
@@ -298,7 +298,7 @@ centered composition, high quality, single character`
           const imageUrl = await new Promise<string>((resolve, reject) => {
             const interval = setInterval(async () => {
               try {
-                const job = await getJobStatus(jobId)
+                const job = await getJobStatusLean(jobId)
                 if (job.status === "completed") {
                   clearInterval(interval)
                   resolve(job.output_data?.imageUrl ?? "")
@@ -445,7 +445,7 @@ centered composition, high quality, single character`
             const resultUrl = await new Promise<string>((resolve, reject) => {
               const interval = setInterval(async () => {
                 try {
-                  const job = await getJobStatus(jobId)
+                  const job = await getJobStatusLean(jobId)
                   if (job.status === "completed") {
                     clearInterval(interval)
                     resolve(job.output_data?.imageUrl ?? "")
@@ -558,7 +558,7 @@ centered composition, high quality, single character`
       const imageUrl = await new Promise<string>((resolve, reject) => {
         const interval = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId)
+            const job = await getJobStatusLean(jobId)
             if (job.status === "completed") {
               clearInterval(interval)
               resolve(job.output_data?.imageUrl ?? "")

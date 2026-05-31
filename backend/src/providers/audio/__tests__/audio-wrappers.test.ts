@@ -653,6 +653,6 @@ describe("transcribe — cost extraction", () => {
 
     await transcribe("u")
 
-    expect(mocks.extractCost).toHaveBeenCalledWith({ predict_time: 42 })
+    expect(mocks.extractCost).toHaveBeenCalledWith({ predict_time: 42 }, "whisper")
   })
 })

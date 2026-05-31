@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Link as LinkIcon, Maximize2 } from "lucide-react"
 import { PLACEHOLDER_CHARACTER_NAME } from "@nodaro/shared"
-import { approvePortrait, cancelJob, generateCharacter, getJobStatus } from "@/lib/api"
+import { approvePortrait, cancelJob, generateCharacter, getJobStatusLean } from "@/lib/api"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { copyToClipboard } from "@/lib/utils"
+import { optimizedImageUrl } from "@/lib/image"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
 import type { CharacterStudioState } from "./use-character-studio"
 import type { CharacterStudioJobs } from "./use-character-studio-jobs"
@@ -96,7 +97,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       const jobId = c.jobId
       const interval = setInterval(async () => {
         try {
-          const job = await getJobStatus(jobId)
+          const job = await getJobStatusLean(jobId)
           setPortraitCandidates((curr) =>
             curr.map((cur) =>
               cur.jobId === jobId
@@ -175,7 +176,7 @@ export function AppearanceTab({ state, jobs }: { state: CharacterStudioState; jo
       for (const jobId of jobIds) {
         const interval = setInterval(async () => {
           try {
-            const job = await getJobStatus(jobId)
+            const job = await getJobStatusLean(jobId)
             setPortraitCandidates((curr) =>
               curr.map((c) =>
                 c.jobId === jobId
@@ -412,7 +413,7 @@ function ApprovedPortrait({ url, onEnlarge }: { url: string; onEnlarge: () => vo
   return (
     <div className="relative w-40 h-52 group">
       <img
-        src={url}
+        src={optimizedImageUrl(url, { width: 800 })}
         alt="portrait"
         className="w-full h-full object-cover rounded-md border border-[#334155]"
       />

@@ -296,24 +296,32 @@ describe("commitJobCredits", () => {
     await expect(commitJobCredits("usage-log-1", "job-1")).resolves.toBeUndefined()
   })
 
-  it("adds extraNonProviderCredits (loop-trim addon) on top of provider-derived credits", async () => {
-    // Establish the provider-derived baseline (formula-agnostic).
-    await commitJobCredits("u1", "j1", 0.4)
+  it("commits the RESERVED tier (no recompute) when NOT metered — the default", async () => {
+    // Pricing convention A: fixed/composite providers commit reserved. The
+    // provider's result.cost is IGNORED (no computeActualCredits recompute);
+    // commitCredits is called with NO actual so commit_credits keeps the
+    // reserved amount.
+    await commitJobCredits("u1", "j1", 0.4) // metered defaults false
+    expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1")
+  })
+
+  it("adds extraNonProviderCredits (loop-trim addon) on top of provider-derived credits — METERED path", async () => {
+    // The recompute+addon path only runs for genuinely metered providers.
+    await commitJobCredits("u1", "j1", 0.4, 0, true)
     const base = mocks.mockCommitCredits.mock.calls.at(-1)?.[1] as number
     expect(typeof base).toBe("number")
 
-    // Same provider cost + a 3-credit addon → committed actual = base + 3
-    // (previously the addon was refunded by the reserved-vs-actual reconciliation).
+    // Same provider cost + a 3-credit addon → committed actual = base + 3.
     mocks.mockCommitCredits.mockClear()
-    await commitJobCredits("u1", "j1", 0.4, 3)
+    await commitJobCredits("u1", "j1", 0.4, 3, true)
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", base + 3)
   })
 
-  it("ignores a negative extraNonProviderCredits (defensive clamp)", async () => {
-    await commitJobCredits("u1", "j1", 0.4)
+  it("ignores a negative extraNonProviderCredits (defensive clamp) — METERED path", async () => {
+    await commitJobCredits("u1", "j1", 0.4, 0, true)
     const base = mocks.mockCommitCredits.mock.calls.at(-1)?.[1] as number
     mocks.mockCommitCredits.mockClear()
-    await commitJobCredits("u1", "j1", 0.4, -5)
+    await commitJobCredits("u1", "j1", 0.4, -5, true)
     expect(mocks.mockCommitCredits).toHaveBeenCalledWith("u1", base)
   })
 })

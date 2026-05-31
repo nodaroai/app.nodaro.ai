@@ -6,7 +6,7 @@
 // Advanced) is demoted from a section heading to a chip on each card —
 // keeps the page tight when a category has only one or two tutorials.
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, lazy, Suspense } from "react"
 import {
   Play,
   BookOpen,
@@ -28,13 +28,20 @@ import {
   useTemplateFavorites,
   useToggleTemplateFavoriteMutation,
 } from "@/hooks/queries/use-template-marketplace-queries"
-import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
 import {
   type FlowTutorialItem,
   type VideoTutorialItem,
   type TemplateBrowseCard,
 } from "@/lib/api"
 import { COMPLEXITY_CONFIG, type Complexity } from "@/lib/template-utils"
+
+// Lazy: pulls in the React Flow node registry + markdown — keep it out of the
+// initial dashboard chunk so it loads only when a flow preview opens.
+const TemplatePreviewModal = lazy(() =>
+  import("@/components/templates/template-preview-modal").then((m) => ({
+    default: m.TemplatePreviewModal,
+  })),
+)
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -476,13 +483,15 @@ export function TutorialsTab() {
       <VideoPlayerDialog video={openVideo} onClose={() => setOpenVideo(null)} />
 
       {selectedFlow && (
-        <TemplatePreviewModal
-          template={flowToTemplateBrowseCard(selectedFlow)}
-          onClose={() => setSelectedFlow(null)}
-          isFavorited={favSet.has(selectedFlow.templateId)}
-          onToggleFavorite={(id) => toggleFavorite.mutate({ templateId: id })}
-          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
-        />
+        <Suspense fallback={null}>
+          <TemplatePreviewModal
+            template={flowToTemplateBrowseCard(selectedFlow)}
+            onClose={() => setSelectedFlow(null)}
+            isFavorited={favSet.has(selectedFlow.templateId)}
+            onToggleFavorite={(id) => toggleFavorite.mutate({ templateId: id })}
+            projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+          />
+        </Suspense>
       )}
     </div>
   )

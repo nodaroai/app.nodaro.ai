@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-const mockGetJobStatus = vi.fn()
+const mockGetJobStatusLean = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockToastInfo = vi.fn()
 const mockToastError = vi.fn()
@@ -25,7 +25,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 vi.mock("@/lib/api", () => ({
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
   getExecutionEstimate: vi.fn().mockResolvedValue(null),
 }))
 
@@ -79,7 +79,7 @@ describe("pollJobToCompletion", () => {
   })
 
   it("resolves with imageUrl on completed job", async () => {
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { imageUrl: "https://cdn.example.com/img.png" },
     })
@@ -90,11 +90,11 @@ describe("pollJobToCompletion", () => {
     const result = await promise
 
     expect(result).toBe("https://cdn.example.com/img.png")
-    expect(mockGetJobStatus).toHaveBeenCalledWith("job-1")
+    expect(mockGetJobStatusLean).toHaveBeenCalledWith("job-1")
   })
 
   it("resolves with empty string when no imageUrl", async () => {
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: {},
     })
@@ -108,7 +108,7 @@ describe("pollJobToCompletion", () => {
   })
 
   it("rejects on failed job", async () => {
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "failed",
       error_message: "Out of memory",
     })
@@ -131,7 +131,7 @@ describe("pollJobToCompletion", () => {
   })
 
   it("rejects after MAX_CONSECUTIVE_POLL_FAILURES consecutive errors", async () => {
-    mockGetJobStatus.mockRejectedValue(new Error("Network error"))
+    mockGetJobStatusLean.mockRejectedValue(new Error("Network error"))
 
     const ctx = makeCtx()
     const promise = pollJobToCompletion("job-1", ctx)
@@ -147,7 +147,7 @@ describe("pollJobToCompletion", () => {
 
   it("resets failure count on successful poll", async () => {
     let callCount = 0
-    mockGetJobStatus.mockImplementation(async () => {
+    mockGetJobStatusLean.mockImplementation(async () => {
       callCount++
       if (callCount <= 2) throw new Error("Network error")
       return { status: "completed", output_data: { imageUrl: "ok" } }
@@ -178,7 +178,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("sets running status on start", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "https://cdn.example.com/vid.mp4" },
     })
@@ -198,7 +198,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("resolves and sets completed status on success", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { videoUrl: "https://cdn.example.com/vid.mp4" },
     })
@@ -219,7 +219,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("rejects and sets failed status on job failure", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "failed",
       error_message: "Render error",
     })
@@ -254,7 +254,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("rejects when no output URL returned", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: {},
     })
@@ -271,7 +271,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("updates progress on processing status", async () => {
     let callCount = 0
-    mockGetJobStatus.mockImplementation(async () => {
+    mockGetJobStatusLean.mockImplementation(async () => {
       callCount++
       if (callCount === 1) return { status: "processing", progress: 50 }
       return { status: "completed", output_data: { videoUrl: "url" } }
@@ -291,7 +291,7 @@ describe("pollJobWithNodeUpdate", () => {
 
   it("calls extraOutputFields when provided", async () => {
     const apiCall = vi.fn().mockResolvedValue({ jobId: "j1" })
-    mockGetJobStatus.mockResolvedValue({
+    mockGetJobStatusLean.mockResolvedValue({
       status: "completed",
       output_data: { audioUrl: "url", duration: 5.2 },
     })

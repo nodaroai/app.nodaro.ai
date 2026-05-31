@@ -3,12 +3,12 @@ import { act, renderHook } from "@testing-library/react"
 
 // Hoisted mock — must precede the SUT import.
 vi.mock("@/lib/api", () => ({
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
   cancelJob: vi.fn().mockResolvedValue({ success: true }),
 }))
 
 import { useCharacterStudioJobs } from "../use-character-studio-jobs"
-import { getJobStatus } from "@/lib/api"
+import { getJobStatusLean } from "@/lib/api"
 
 describe("useCharacterStudioJobs.trackAndWait", () => {
   beforeEach(() => {
@@ -36,7 +36,7 @@ describe("useCharacterStudioJobs.trackAndWait", () => {
     expect(result.current.pending.has("job-1")).toBe(true)
 
     // Step 1 poll tick: backend says completed with an image URL.
-    vi.mocked(getJobStatus).mockResolvedValueOnce({
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
       id: "job-1",
       status: "completed",
       output_data: { imageUrl: "https://example.com/body-front.png" },
@@ -74,7 +74,7 @@ describe("useCharacterStudioJobs.trackAndWait", () => {
       pendingPromise = result.current.trackAndWait("motion-1", "motions", "wave")
     })
 
-    vi.mocked(getJobStatus).mockResolvedValueOnce({
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
       id: "motion-1",
       status: "completed",
       output_data: { videoUrl: "https://example.com/wave.mp4" },
@@ -108,7 +108,7 @@ describe("useCharacterStudioJobs.trackAndWait", () => {
       )
     })
 
-    vi.mocked(getJobStatus).mockResolvedValueOnce({
+    vi.mocked(getJobStatusLean).mockResolvedValueOnce({
       id: "job-2",
       status: "failed",
       error_message: "provider blew up",

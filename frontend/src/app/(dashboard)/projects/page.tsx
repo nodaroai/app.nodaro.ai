@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback, lazy, Suspense } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { Plus, Search, Loader2, BarChart3, BookOpen, LayoutTemplate, ArrowRight, Sparkles, ChevronLeft, ChevronRight, LayoutGrid, List, ChevronDown, ChevronUp, FolderPlus } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
@@ -28,8 +28,16 @@ import { createClient } from "@/lib/supabase"
 import { browseApps, browseTemplates, type TemplateBrowseCard, type AppBrowseCard } from "@/lib/api"
 import { useTemplateFavorites, useToggleTemplateFavoriteMutation } from "@/hooks/queries/use-template-marketplace-queries"
 import { useAllAdminUsersLite } from "@/ee/hooks/queries/use-admin-queries"
-import { TemplatePreviewModal } from "@/components/templates/template-preview-modal"
+import { PreviewVideo } from "@/components/ui/preview-video"
 import { TutorialsTab } from "@/components/dashboard/tutorials-tab"
+
+// Lazy: pulls in the React Flow node registry + markdown — keep it out of the
+// initial landing chunk so it loads only when a template/app preview opens.
+const TemplatePreviewModal = lazy(() =>
+  import("@/components/templates/template-preview-modal").then((m) => ({
+    default: m.TemplatePreviewModal,
+  })),
+)
 import { useAppSettings } from "@/hooks/queries/use-app-settings-queries"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
@@ -108,13 +116,15 @@ function TemplatesCarousel() {
       </div>
 
       {previewTemplate && (
-        <TemplatePreviewModal
-          template={previewTemplate}
-          onClose={() => setPreviewTemplate(null)}
-          isFavorited={favSet.has(previewTemplate.id)}
-          onToggleFavorite={(id) => favMutation.mutate({ templateId: id })}
-          projects={myProjects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
-        />
+        <Suspense fallback={null}>
+          <TemplatePreviewModal
+            template={previewTemplate}
+            onClose={() => setPreviewTemplate(null)}
+            isFavorited={favSet.has(previewTemplate.id)}
+            onToggleFavorite={(id) => favMutation.mutate({ templateId: id })}
+            projects={myProjects.map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))}
+          />
+        </Suspense>
       )}
     </div>
   )
@@ -569,15 +579,10 @@ export default function ProjectsPage() {
                       <div className="relative aspect-square rounded-lg overflow-hidden bg-muted">
                         {app.previewMediaUrl ? (
                           app.previewMediaType === "video" ? (
-                            <video
+                            <PreviewVideo
                               src={app.previewMediaUrl}
+                              autoplay={videoAutoplay}
                               className="w-full h-full object-cover"
-                              autoPlay={videoAutoplay}
-                              muted
-                              loop
-                              playsInline
-                              onMouseEnter={(e) => e.currentTarget.play()}
-                              onMouseLeave={(e) => { if (!videoAutoplay) { e.currentTarget.pause(); e.currentTarget.currentTime = 0 } }}
                             />
                           ) : (
                             <img src={optimizedImageUrl(app.previewMediaUrl)} alt={app.name} className="w-full h-full object-cover" loading="lazy" />

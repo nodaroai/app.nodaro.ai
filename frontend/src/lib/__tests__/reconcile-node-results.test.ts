@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
 }))
 
 vi.mock("../api", () => ({
-  getJobStatus: mocks.getJobStatus,
+  getJobStatusLean: mocks.getJobStatusLean,
 }))
 
 // `buildVariantResults` is pure logic in @nodaro/shared-adjacent code — no
@@ -37,7 +37,7 @@ describe("computeReconciledNodeResults", () => {
   it("rebuilds generatedResults when output_data.audioUrls has more variants than node knows about", async () => {
     // The user's actual case: Suno returned 2 tracks, backend reconcile wrote
     // both into output_data, but the frontend's stale poll only ever wrote 1.
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: baseJobId,
       status: "completed",
       output_data: {
@@ -74,7 +74,7 @@ describe("computeReconciledNodeResults", () => {
   })
 
   it("falls back to sunoTracks[].audioUrl when audioUrls array is missing", async () => {
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: baseJobId,
       status: "completed",
       output_data: {
@@ -99,7 +99,7 @@ describe("computeReconciledNodeResults", () => {
   })
 
   it("handles image variants (imageUrls)", async () => {
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: "img-base",
       status: "completed",
       output_data: {
@@ -128,7 +128,7 @@ describe("computeReconciledNodeResults", () => {
   it("strips -v<n> suffix when looking up the canonical job", async () => {
     // The node could already have a partial multi-variant result whose first
     // entry has a `-v1` suffix; we still want to look up the BASE job.
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: baseJobId,
       status: "completed",
       output_data: {
@@ -146,11 +146,11 @@ describe("computeReconciledNodeResults", () => {
     })
 
     await computeReconciledNodeResults([node])
-    expect(mocks.getJobStatus).toHaveBeenCalledWith(baseJobId)
+    expect(mocks.getJobStatusLean).toHaveBeenCalledWith(baseJobId)
   })
 
   it("no-op when generatedResults already matches output_data length", async () => {
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: baseJobId,
       status: "completed",
       output_data: {
@@ -181,7 +181,7 @@ describe("computeReconciledNodeResults", () => {
 
     const updates = await computeReconciledNodeResults([node])
     expect(updates).toHaveLength(0)
-    expect(mocks.getJobStatus).not.toHaveBeenCalled()
+    expect(mocks.getJobStatusLean).not.toHaveBeenCalled()
   })
 
   it("skips nodes with no generatedResults to anchor a jobId lookup", async () => {
@@ -192,11 +192,11 @@ describe("computeReconciledNodeResults", () => {
 
     const updates = await computeReconciledNodeResults([node])
     expect(updates).toHaveLength(0)
-    expect(mocks.getJobStatus).not.toHaveBeenCalled()
+    expect(mocks.getJobStatusLean).not.toHaveBeenCalled()
   })
 
-  it("silently swallows getJobStatus failures (best-effort)", async () => {
-    mocks.getJobStatus.mockRejectedValueOnce(new Error("network blip"))
+  it("silently swallows getJobStatusLean failures (best-effort)", async () => {
+    mocks.getJobStatusLean.mockRejectedValueOnce(new Error("network blip"))
 
     const node = makeNode("node_8", "suno-generate", {
       executionStatus: "completed",
@@ -208,7 +208,7 @@ describe("computeReconciledNodeResults", () => {
   })
 
   it("skips jobs that aren't completed yet", async () => {
-    mocks.getJobStatus.mockResolvedValueOnce({
+    mocks.getJobStatusLean.mockResolvedValueOnce({
       id: baseJobId,
       status: "processing",
       output_data: null,

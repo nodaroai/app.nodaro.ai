@@ -1,8 +1,17 @@
-import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import {
+  useInfiniteQuery,
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type InfiniteData,
+} from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
 import { getAuthHeaders } from "@/lib/api"
+import { removeInfiniteItems } from "@/lib/optimistic-cache"
+
+type GalleryPage = { data: GalleryItem[]; nextCursor: string | null; totalCount?: number }
 
 export interface GalleryItem {
   readonly id: string
@@ -54,7 +63,7 @@ export function useGalleryFavorites(userId: string | undefined) {
   })
 }
 
-export function useToggleFavoriteMutation() {
+export function useToggleFavoriteMutation(userId?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ jobId }: { jobId: string }) => {
@@ -66,7 +75,28 @@ export function useToggleFavoriteMutation() {
       if (!res.ok) throw new Error("Failed to toggle favorite")
       return res.json() as Promise<{ favorited: boolean }>
     },
-    onSuccess: () => {
+    // Optimistically flip the favorite state in the favorite-ids set (the
+    // gallery cards render their heart from `favorites.includes(item.id)`), so
+    // the heart toggles instantly. Snapshot for rollback on error.
+    onMutate: async ({ jobId }) => {
+      if (!userId) return { previous: undefined }
+      const key = queryKeys.gallery.favorites(userId)
+      await qc.cancelQueries({ queryKey: key })
+      const previous = qc.getQueryData<string[]>(key)
+      qc.setQueryData<string[]>(key, (ids) => {
+        const current = ids ?? []
+        return current.includes(jobId)
+          ? current.filter((id) => id !== jobId)
+          : [...current, jobId]
+      })
+      return { previous, key }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.key && context.previous !== undefined) {
+        qc.setQueryData(context.key, context.previous)
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
     },
   })
@@ -118,7 +148,29 @@ export function useDeleteGalleryItemMutation() {
       if (!res.ok) throw new Error("Failed to remove item")
       return res.json()
     },
-    onSuccess: () => {
+    // Optimistically drop the item from every cached gallery-list variant.
+    // Items live under `.data` on each infinite-query page. Snapshot all
+    // matching list caches so we can roll back on error.
+    onMutate: async ({ itemId }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.gallery.all })
+      const previous = qc.getQueriesData<InfiniteData<GalleryPage>>({
+        queryKey: queryKeys.gallery.all,
+      })
+      qc.setQueriesData<InfiniteData<GalleryPage>>(
+        { queryKey: ["gallery", "list"] },
+        (data) =>
+          removeInfiniteItems<"data", GalleryItem, GalleryPage>(
+            data,
+            "data",
+            (item) => item.id === itemId,
+          ),
+      )
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.gallery.all })
     },
   })

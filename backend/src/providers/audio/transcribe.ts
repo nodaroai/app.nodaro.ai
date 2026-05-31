@@ -95,7 +95,7 @@ export async function transcribe(
       input,
     })
     const completed = await replicate.wait(prediction)
-    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+    const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "incredibly-fast-whisper")
     const output = completed.output as FastWhisperOutput
 
     const segments = output.chunks?.map((chunk) => ({
@@ -134,7 +134,7 @@ export async function transcribe(
     input,
   })
   const completed = await replicate.wait(prediction)
-  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined)
+  const cost = extractCost(completed.metrics as Record<string, unknown> | undefined, "whisper")
   const output = completed.output as WhisperOutput
 
   const segments = output.segments?.map((seg) => ({

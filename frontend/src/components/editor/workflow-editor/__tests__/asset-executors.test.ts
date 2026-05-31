@@ -11,7 +11,7 @@ const mockSaveObject = vi.fn()
 const mockGenerateLocation = vi.fn()
 const mockGenerateLocationAsset = vi.fn()
 const mockSaveLocation = vi.fn()
-const mockGetJobStatus = vi.fn()
+const mockGetJobStatusLean = vi.fn()
 const mockPollJobToCompletion = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockToastInfo = vi.fn()
@@ -65,7 +65,7 @@ vi.mock("@/lib/api", () => ({
   generateLocation: (...args: unknown[]) => mockGenerateLocation(...args),
   generateLocationAsset: (...args: unknown[]) => mockGenerateLocationAsset(...args),
   saveLocation: (...args: unknown[]) => mockSaveLocation(...args),
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
 }))
 
 vi.mock("../types", () => ({

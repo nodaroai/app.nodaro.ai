@@ -945,15 +945,71 @@ async function executeWorkerNode(
  *  Every 5th cycle = every ~15 seconds. */
 const CANCEL_CHECK_INTERVAL = 5
 
-/** Cancel the underlying job, refund credits, and throw. */
+/** Build the ExecuteNodeResult for a completed job row. Shared by the poll
+ *  success path and the cancel-race adoption path so both extract output and
+ *  credits identically. Throws if the job completed with no usable output. */
+function completedJobResult(
+  jobRecord: { output_data?: unknown; credits_actual?: unknown },
+  nodeType: string,
+  jobId: string,
+  usageLogId: string | undefined,
+  creditsUsed: number | undefined,
+): ExecuteNodeResult {
+  const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
+  const output = buildNodeOutputFromJobData(outputData, nodeType)
+  const hasOutput = Object.values(output).some((v) => v != null)
+  if (!hasOutput) {
+    throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
+  }
+  const effectiveCreditsUsed = creditsUsed
+    ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
+  return { output, jobId, usageLogId, creditsUsed: effectiveCreditsUsed }
+}
+
+/**
+ * Cancel the underlying job and refund, then throw `reason`.
+ *
+ * Race-safe: the UPDATE only flips a NON-terminal job. If the worker completed
+ * + committed the job within the ≤3s poll gap (so the cancel raced a real
+ * completion), we must NOT overwrite completed→cancelled (audit corruption) and
+ * must NOT discard a result the user already paid for (the refund CAS no-ops
+ * against committed credits → charge-without-delivery). In that case we ADOPT
+ * the completion and return its result instead of throwing.
+ */
 async function cancelJobAndThrow(
   jobId: string,
   usageLogId: string | undefined,
   reason: string,
-): Promise<never> {
-  await supabase.from("jobs").update({ status: "cancelled" }).eq("id", jobId)
-  await refundJobCredits(usageLogId, jobId, reason)
-  throw new Error(reason)
+  nodeType: string,
+  creditsUsed: number | undefined,
+): Promise<ExecuteNodeResult> {
+  const { data: flipped } = await supabase
+    .from("jobs")
+    .update({ status: "cancelled" })
+    .eq("id", jobId)
+    .not("status", "in", "(completed,failed,cancelled)")
+    .select("id")
+
+  if (flipped && flipped.length > 0) {
+    // We genuinely cancelled a still-running job → refund + propagate cancel.
+    await refundJobCredits(usageLogId, jobId, reason)
+    throw new Error(reason)
+  }
+
+  // 0 rows flipped → the job reached a terminal state in the poll gap.
+  const { data: jobRecord } = await supabase
+    .from("jobs")
+    .select("status, output_data, error_message, credits_actual")
+    .eq("id", jobId)
+    .single()
+  if (jobRecord?.status === "completed") {
+    // Charge-with-delivery: honor the completion the user already paid for
+    // rather than throwing "cancelled" and discarding the committed output.
+    return completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed)
+  }
+  // Already failed (worker refunds failed jobs) or already cancelled — no
+  // double-refund. Surface the job's own error if present, else the reason.
+  throw new Error((jobRecord?.error_message as string) || reason)
 }
 
 async function pollJobToCompletion(
@@ -970,14 +1026,14 @@ async function pollJobToCompletion(
   while (true) {
     // Check cancellation (fast path — already flagged by orchestrator or sibling node)
     if (ctx.cancelled) {
-      await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
+      return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
     }
 
     // Absolute timeout — prevents infinite polling when job never leaves "pending"
     // (e.g. worker down, queue full). Safety net beyond NODE_TIMEOUT_MS which only
     // starts counting after the worker picks up the job.
     if (Date.now() - pollStartTime > POLL_ABSOLUTE_TIMEOUT_MS) {
-      await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${POLL_ABSOLUTE_TIMEOUT_MS / 1000}s (may still be pending in queue)`)
+      return await cancelJobAndThrow(jobId, usageLogId, `Poll timeout: job did not complete within ${POLL_ABSOLUTE_TIMEOUT_MS / 1000}s (may still be pending in queue)`, nodeType, creditsUsed)
     }
 
     // Periodically re-check execution status from DB so mid-level cancellation
@@ -997,7 +1053,7 @@ async function pollJobToCompletion(
       // trigger immediate job cancellation mid-poll.
       if (execRow?.status === "cancelled") {
         ctx.cancelled = true
-        await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled")
+        return await cancelJobAndThrow(jobId, usageLogId, "Execution cancelled", nodeType, creditsUsed)
       }
     }
 
@@ -1026,24 +1082,7 @@ async function pollJobToCompletion(
 
     // Check terminal statuses BEFORE timeout — avoids cancelling a just-completed job
     if (status === "completed") {
-      const outputData = (jobRecord.output_data as Record<string, unknown>) ?? {}
-      const output = buildNodeOutputFromJobData(outputData, nodeType)
-
-      // Validate that the job actually produced output — a "completed" job
-      // with empty output_data means the provider returned success but no
-      // result (or a race condition lost the data). Treat it as a failure
-      // so downstream nodes don't silently receive empty inputs.
-      const hasOutput = Object.values(output).some((v) => v != null)
-      if (!hasOutput) {
-        throw new Error(`Job ${jobId} completed but produced no output — provider may have returned an empty result`)
-      }
-
-      // Prefer the explicit creditsUsed passed by the worker-queued path;
-      // otherwise fall back to the job's committed credits_actual (sync-HTTP
-      // jobs reserve+commit in their own route and pass no creditsUsed).
-      const effectiveCreditsUsed = creditsUsed
-        ?? (typeof jobRecord.credits_actual === "number" ? jobRecord.credits_actual : undefined)
-      return { output, jobId, usageLogId, creditsUsed: effectiveCreditsUsed }
+      return completedJobResult(jobRecord, nodeType, jobId, usageLogId, creditsUsed)
     }
 
     if (status === "failed" || status === "cancelled") {
@@ -1059,7 +1098,7 @@ async function pollJobToCompletion(
     // Check processing timeout — only starts once the worker picks up the job.
     // Queue wait time is bounded by the workflow-level timeout (WORKFLOW_TIMEOUT_MS).
     if (processingStartTime !== null && Date.now() - processingStartTime > NODE_TIMEOUT_MS) {
-      await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`)
+      return await cancelJobAndThrow(jobId, usageLogId, `Node timeout after ${NODE_TIMEOUT_MS / 1000}s of processing`, nodeType, creditsUsed)
     }
 
     // Wait before next poll

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { ConcurrentModificationError, generateLocation } from "@/lib/api"
+import { optimizedImageUrl } from "@/lib/image"
 import type { LocationReferencePhoto } from "@/types/nodes"
 import { ReferencePhotosSection } from "./reference-photos-section"
 import { useLocationStudioJobs } from "./use-location-studio-jobs"
@@ -139,7 +140,7 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
         <h2 className="text-[12px] font-medium text-slate-300 mb-2">Main image</h2>
         {data.sourceImageUrl ? (
           <img
-            src={data.sourceImageUrl}
+            src={optimizedImageUrl(data.sourceImageUrl, { width: 800 })}
             alt={data.locationName || "Location"}
             loading="lazy"
             className="w-full max-h-[400px] object-cover rounded border border-[#1e293b]"
@@ -221,7 +222,7 @@ export function AppearanceTab({ studio }: AppearanceTabProps) {
             {candidates.map((c) => (
               <div key={c.jobId} className="border border-[#1e293b] rounded p-2 bg-[#0e1117]">
                 <img
-                  src={c.url}
+                  src={optimizedImageUrl(c.url, { width: 512 })}
                   alt="candidate"
                   loading="lazy"
                   className="w-full aspect-square object-cover rounded"

@@ -18,7 +18,7 @@ const mockCollapseExpandedClones = vi.fn()
 const mockExpandLoopResults = vi.fn()
 const mockGetListInputForNode = vi.fn()
 const mockHasCredits = vi.fn()
-const mockGetJobStatus = vi.fn()
+const mockGetJobStatusLean = vi.fn()
 const mockRunWorkflow = vi.fn()
 const mockGetWorkflowExecution = vi.fn()
 let mockNodes: any[] = []
@@ -52,7 +52,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 vi.mock("@/lib/api", () => ({
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatusLean(...args),
   getUserCredits: vi.fn(),
   runWorkflow: (...args: unknown[]) => mockRunWorkflow(...args),
   getWorkflowExecution: (...args: unknown[]) => mockGetWorkflowExecution(...args),

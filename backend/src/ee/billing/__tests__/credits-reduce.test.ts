@@ -3,7 +3,7 @@ import { STATIC_CREDIT_COSTS, CREDIT_COSTS } from "../credits"
 
 describe("reduce credit costs", () => {
   it("has STATIC_CREDIT_COSTS entries for all 6 composite keys", () => {
-    expect(STATIC_CREDIT_COSTS["reduce:pick-best-llm"]).toBe(3)
+    expect(STATIC_CREDIT_COSTS["reduce:pick-best-llm"]).toBe(1) // 0%-base (Sonnet image-rank ~$0.0135)
     expect(STATIC_CREDIT_COSTS["reduce:concat"]).toBe(0)
     expect(STATIC_CREDIT_COSTS["reduce:first-non-empty"]).toBe(0)
     expect(STATIC_CREDIT_COSTS["reduce:count"]).toBe(0)

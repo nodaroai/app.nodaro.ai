@@ -863,6 +863,9 @@ function ThumbnailButton({
   // popover scroll container when the row is near the bottom of the list).
   const [previewAnchor, setPreviewAnchor] = useState<DOMRect | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
+  // Coalesce scroll/resize re-anchoring into one rAF per frame so a fast
+  // scroll doesn't fire getBoundingClientRect + setState on every event.
+  const rafIdRef = useRef<number | null>(null)
 
   // The popover wrapper has its own overflow-y-auto. If the user scrolls
   // within the popover (or the window resizes) while a preview is showing,
@@ -874,14 +877,23 @@ function ThumbnailButton({
   useEffect(() => {
     if (!previewAnchor) return
     const update = () => {
-      const rect = btnRef.current?.getBoundingClientRect()
-      if (rect) setPreviewAnchor(rect)
+      // Skip if a frame is already queued — the latest rect wins at flush.
+      if (rafIdRef.current !== null) return
+      rafIdRef.current = requestAnimationFrame(() => {
+        rafIdRef.current = null
+        const rect = btnRef.current?.getBoundingClientRect()
+        if (rect) setPreviewAnchor(rect)
+      })
     }
     document.addEventListener("scroll", update, true)
     window.addEventListener("resize", update)
     return () => {
       document.removeEventListener("scroll", update, true)
       window.removeEventListener("resize", update)
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+        rafIdRef.current = null
+      }
     }
     // Run once on open / once on close — we don't want to reinstall the
     // listener on every rect mutation, which is why we depend on the

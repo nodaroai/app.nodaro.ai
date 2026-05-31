@@ -39,7 +39,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 vi.mock("@/lib/api", () => ({
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatus(...args),
   getUserCredits: vi.fn(),
 }))
 

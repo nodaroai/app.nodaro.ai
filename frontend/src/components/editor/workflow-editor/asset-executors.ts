@@ -14,7 +14,7 @@ import {
   generateLocation,
   generateLocationAsset,
   saveLocation,
-  getJobStatus,
+  getJobStatusLean,
 } from "@/lib/api";
 import type {
   GeneratedResult,
@@ -70,7 +70,7 @@ export function runCharacterGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
@@ -225,7 +225,7 @@ export function runFaceGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
@@ -391,7 +391,7 @@ export function runObjectGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
@@ -535,7 +535,7 @@ export function runLocationGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);

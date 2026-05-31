@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, memo } from "react"
 import {
   Search,
   Image as ImageIcon,
@@ -29,6 +29,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
+import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 
 // ============================================================
 // Types
@@ -172,7 +173,9 @@ export function LibraryMediaBrowser({
     }
   }, [autoFocusSearch])
 
-  const handleRemove = async (asset: LibraryAsset) => {
+  // Stable handlers so the memoized AssetCard only re-renders when its own
+  // props (selection / delete-confirm state) change, not on every parent render.
+  const handleRemove = useCallback(async (asset: LibraryAsset) => {
     if (!user?.id) return
     setDeletingId(asset.id)
     try {
@@ -183,9 +186,9 @@ export function LibraryMediaBrowser({
     } finally {
       setDeletingId(null)
     }
-  }
+  }, [user?.id, removeMutation])
 
-  const handleDownload = (asset: LibraryAsset) => {
+  const handleDownload = useCallback((asset: LibraryAsset) => {
     const a = document.createElement("a")
     a.href = asset.url
     a.download = asset.filename
@@ -194,9 +197,9 @@ export function LibraryMediaBrowser({
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-  }
+  }, [])
 
-  const handlePromote = async (asset: LibraryAsset) => {
+  const handlePromote = useCallback(async (asset: LibraryAsset) => {
     if (!user?.id) return
     try {
       await promoteToLibrary(asset.id, user.id)
@@ -204,9 +207,9 @@ export function LibraryMediaBrowser({
     } catch {
       toast.error("Failed to save to library")
     }
-  }
+  }, [user?.id, queryClient])
 
-  const handleDemote = async (asset: LibraryAsset) => {
+  const handleDemote = useCallback(async (asset: LibraryAsset) => {
     if (!user?.id) return
     try {
       await demoteFromLibrary(asset.id, user.id)
@@ -214,7 +217,45 @@ export function LibraryMediaBrowser({
     } catch {
       toast.error("Failed to remove from library")
     }
-  }
+  }, [user?.id, queryClient])
+
+  const handleConfirmDelete = useCallback((asset: LibraryAsset) => {
+    setConfirmDeleteId(asset.id)
+  }, [])
+
+  const handleCancelDelete = useCallback(() => {
+    setConfirmDeleteId(null)
+  }, [])
+
+  const handlePreview = useCallback((asset: LibraryAsset) => {
+    setPreviewAsset(asset)
+  }, [])
+
+  // Row-virtualize the modal grid. Unlike gallery/library this scrolls an inner
+  // `overflow-y-auto` container (not the window), so the virtualizer is driven
+  // by `scrollElementRef`. The flat `assets` array stays complete.
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const {
+    gridRef,
+    virtualRows,
+    totalSize,
+    columns,
+    scrollMargin,
+    gridTemplateColumns,
+  } = useVirtualGrid({
+    itemCount: assets.length,
+    breakpoints: GRID_BREAKPOINTS.mediaLibrary,
+    // aspect-square thumbnail + small info section below.
+    squareTiles: true,
+    extraRowHeight: 56,
+    estimateRowHeight: 220,
+    gap: 12, // gap-3
+    overscan: 3,
+    scrollElementRef: scrollRef,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+  })
 
   return (
     <div className={cn("flex flex-col min-h-0 flex-1", className)}>
@@ -253,8 +294,8 @@ export function LibraryMediaBrowser({
       </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5">
+      {/* Content — inner scroll container drives the row virtualizer */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -270,26 +311,42 @@ export function LibraryMediaBrowser({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {assets.map((asset) => (
-                <AssetCard
-                  key={asset.id}
-                  asset={asset}
-                  isAdmin={isAdmin}
-                  isDeleting={deletingId === asset.id}
-                  isConfirmingDelete={confirmDeleteId === asset.id}
-                  onDelete={() => handleRemove(asset)}
-                  onConfirmDelete={() => setConfirmDeleteId(asset.id)}
-                  onCancelDelete={() => setConfirmDeleteId(null)}
-                  onDownload={() => handleDownload(asset)}
-                  onAddToCanvas={onAddToCanvas ? () => onAddToCanvas(asset) : undefined}
-                  onPromote={() => handlePromote(asset)}
-                  onDemote={() => handleDemote(asset)}
-                  onPreview={() => setPreviewAsset(asset)}
-                />
+            {/* Windowed grid: only rows in (viewport + overscan) are mounted. */}
+            <div ref={gridRef} style={{ height: totalSize, position: "relative" }}>
+              {virtualRows.map((virtualRow) => (
+                <div
+                  key={virtualRow.key}
+                  className="absolute top-0 left-0 w-full"
+                  style={{
+                    transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                    display: "grid",
+                    gridTemplateColumns,
+                    gap: 12,
+                  }}
+                >
+                  {rowItems(assets, virtualRow.index, columns).map(({ item: asset }) => (
+                    <AssetCard
+                      key={asset.id}
+                      asset={asset}
+                      isAdmin={isAdmin}
+                      isDeleting={deletingId === asset.id}
+                      isConfirmingDelete={confirmDeleteId === asset.id}
+                      onDelete={handleRemove}
+                      onConfirmDelete={handleConfirmDelete}
+                      onCancelDelete={handleCancelDelete}
+                      onDownload={handleDownload}
+                      onAddToCanvas={onAddToCanvas}
+                      onPromote={handlePromote}
+                      onDemote={handleDemote}
+                      onPreview={handlePreview}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
 
+            {/* Auto-fetch handles loading the next page; the button stays as a
+                manual fallback. */}
             {hasNextPage && (
               <div className="flex justify-center mt-4">
                 <button
@@ -344,17 +401,20 @@ interface AssetCardProps {
   isAdmin: boolean
   isDeleting: boolean
   isConfirmingDelete: boolean
-  onDelete: () => void
-  onConfirmDelete: () => void
+  onDelete: (asset: LibraryAsset) => void
+  onConfirmDelete: (asset: LibraryAsset) => void
   onCancelDelete: () => void
-  onDownload: () => void
-  onAddToCanvas?: () => void
-  onPromote: () => void
-  onDemote: () => void
-  onPreview: () => void
+  onDownload: (asset: LibraryAsset) => void
+  onAddToCanvas?: (asset: LibraryAsset) => void
+  onPromote: (asset: LibraryAsset) => void
+  onDemote: (asset: LibraryAsset) => void
+  onPreview: (asset: LibraryAsset) => void
 }
 
-function AssetCard({
+// Memoized so toggling one card's selection / delete-confirm state re-renders
+// only that card, not every card in the (windowed) grid. Pairs with the stable
+// asset-parameterized callbacks from LibraryMediaBrowser.
+const AssetCard = memo(function AssetCard({
   asset,
   isAdmin,
   isDeleting,
@@ -376,7 +436,7 @@ function AssetCard({
         onClick={(e) => {
           e.stopPropagation()
           if ((asset.type === "image" || asset.type === "video") && asset.url) {
-            onPreview()
+            onPreview(asset)
           }
         }}
       >
@@ -452,7 +512,7 @@ function AssetCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                onAddToCanvas()
+                onAddToCanvas(asset)
               }}
               className="w-8 h-8 rounded-lg bg-[#ff0073]/80 hover:bg-[#ff0073] flex items-center justify-center text-white transition-colors"
               title="Add to canvas"
@@ -464,7 +524,7 @@ function AssetCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onDownload()
+              onDownload(asset)
             }}
             className="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
             title="Download"
@@ -477,7 +537,7 @@ function AssetCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onDelete()
+                  onDelete(asset)
                 }}
                 disabled={isDeleting}
                 className="px-2 py-1 text-[10px] font-medium rounded bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
@@ -500,7 +560,7 @@ function AssetCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                onConfirmDelete()
+                onConfirmDelete(asset)
               }}
               className="w-8 h-8 rounded-lg bg-white/20 hover:bg-red-500/80 flex items-center justify-center text-white transition-colors"
               title="Remove from library"
@@ -533,7 +593,7 @@ function AssetCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onDemote()
+                  onDemote(asset)
                 }}
                 className="w-full px-2 py-1 text-[10px] font-medium rounded bg-muted/50 hover:bg-muted text-muted-foreground flex items-center justify-center gap-1 transition-colors"
               >
@@ -545,7 +605,7 @@ function AssetCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  onPromote()
+                  onPromote(asset)
                 }}
                 className="w-full px-2 py-1 text-[10px] font-medium rounded bg-[#ff0073]/10 hover:bg-[#ff0073]/20 text-[#ff0073] flex items-center justify-center gap-1 transition-colors"
               >
@@ -558,4 +618,4 @@ function AssetCard({
       </div>
     </div>
   )
-}
+})

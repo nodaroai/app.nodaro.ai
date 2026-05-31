@@ -339,44 +339,68 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // so we merge them into node data for accurate cost calculation.
   const inputValues = isFullscreen ? presInputValues : undefined
   const [dynamicEstimatedCost, setDynamicEstimatedCost] = useState(0)
+  // Debounced so plain text-field keystrokes don't trigger the O(N^2·E) fan-out
+  // recompute on every change. We still depend on the whole inputValues object so
+  // ANY cost-affecting input (loop rows, exposed provider/resolution fields, …) is
+  // captured — the displayed estimate just lags by the debounce interval, which is
+  // acceptable for a pre-run estimate. nodes/edges changes recompute on the same
+  // path; the leading-edge first run keeps the initial estimate prompt.
+  const costFirstRunRef = useRef(true)
   useEffect(() => {
     if (!hasCredits()) return
-    // Merge inputValues into node data so getFanOutMultiplier sees current loop rows
-    const effectiveNodes = inputValues
-      ? nodes.map((n) => {
-          const vals = inputValues[n.id]
-          return vals ? { ...n, data: { ...n.data, ...vals } } : n
-        })
-      : nodes
-    const executableNodes = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
 
     const computeEstimate = () => {
-      const total = executableNodes.reduce((sum, node) => {
-        const modelId = getModelIdentifier(node)
-        const cached = getCachedCredits(modelId)
-        const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
-        const multiplier = getFanOutMultiplier(node, effectiveNodes, edges)
-        return sum + cost * multiplier
-      }, 0)
-      setDynamicEstimatedCost(total)
-      // Also update the presentation store so other consumers see the live cost
-      if (isFullscreen) {
-        usePresentationStore.setState({ estimatedCost: total })
+      // Merge inputValues into node data so getFanOutMultiplier sees current loop rows
+      const effectiveNodes = inputValues
+        ? nodes.map((n) => {
+            const vals = inputValues[n.id]
+            return vals ? { ...n, data: { ...n.data, ...vals } } : n
+          })
+        : nodes
+      const executableNodes = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+
+      const finish = () => {
+        const total = executableNodes.reduce((sum, node) => {
+          const modelId = getModelIdentifier(node)
+          const cached = getCachedCredits(modelId)
+          const cost = cached !== undefined ? cached : estimateNodeCredits({ type: node.type, data: node.data as Record<string, unknown> })
+          const multiplier = getFanOutMultiplier(node, effectiveNodes, edges)
+          return sum + cost * multiplier
+        }, 0)
+        setDynamicEstimatedCost(total)
+        // Also update the presentation store so other consumers see the live cost
+        if (isFullscreen) {
+          usePresentationStore.setState({ estimatedCost: total })
+        }
       }
+
+      const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
+      const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined)
+
+      if (uncached.length > 0) {
+        prefetchModelCredits(uncached).then(() => {
+          if (!cancelled) finish()
+        })
+        return
+      }
+
+      finish()
     }
 
-    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n)).filter(Boolean))]
-    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined)
-
-    if (uncached.length > 0) {
-      let cancelled = false
-      prefetchModelCredits(uncached).then(() => {
-        if (!cancelled) computeEstimate()
-      })
+    let cancelled = false
+    // Run the very first estimate immediately so initial render isn't blank;
+    // subsequent input changes are coalesced behind a 300ms debounce.
+    if (costFirstRunRef.current) {
+      costFirstRunRef.current = false
+      computeEstimate()
       return () => { cancelled = true }
     }
 
-    computeEstimate()
+    const timer = setTimeout(computeEstimate, 300)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [nodes, edges, inputValues])
 
   const rawEstimatedCost = dynamicEstimatedCost || (isFullscreen ? presEstimatedCost : 0)
@@ -940,30 +964,55 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     return maps
   }, [orderedInputNodes, nodes, edges])
 
+  // Per-node single-key `inputValues` slice with stable identity. Lets the
+  // memoized InputCard bail out: a keystroke only changes the touched node's
+  // slice identity (updateInputValue copies per-node), so every other card's
+  // slice map stays referentially equal and skips re-render.
+  const inputSliceCache = useRef(new Map<string, { slice: unknown; map: Record<string, Record<string, unknown>> }>())
+  const getInputSliceMap = useCallback((nodeId: string): Record<string, Record<string, unknown>> => {
+    const slice = presInputValues[nodeId]
+    const cached = inputSliceCache.current.get(nodeId)
+    if (cached && cached.slice === slice) return cached.map
+    const map = slice !== undefined ? { [nodeId]: slice } : {}
+    inputSliceCache.current.set(nodeId, { slice, map })
+    return map
+  }, [presInputValues])
+
+  // Per-node merged `display` object with stable identity (memo would otherwise
+  // break on the fresh object literal each render). Recomputed only when the
+  // node-level or card-level display source identities change.
+  const displayCache = useRef(new Map<string, { node: unknown; card: unknown; merged: PresentationDisplay }>())
+  const getMergedDisplay = useCallback((node: WorkflowNode): PresentationDisplay => {
+    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
+    const cardDisplay = settings.cardMeta?.[node.id]?.display
+    const cached = displayCache.current.get(node.id)
+    if (cached && cached.node === nodeDisplay && cached.card === cardDisplay) return cached.merged
+    const merged = { ...nodeDisplay, ...cardDisplay }
+    displayCache.current.set(node.id, { node: nodeDisplay, card: cardDisplay, merged })
+    return merged
+  }, [settings.cardMeta])
+
   // Render helpers for input/output cards
   const renderInputCard = useCallback((node: WorkflowNode) => {
-    const nodeDisplay = (node.data as Record<string, unknown>).presentationDisplay as PresentationDisplay | undefined
     const meta = settings.cardMeta?.[node.id]
-    const cardDisplay = meta?.display
-    const display = { ...nodeDisplay, ...cardDisplay }
     return (
       <InputCard
         node={node}
         nodes={nodes}
         edges={edges}
         isFullscreen={isFullscreen}
-        inputValues={presInputValues}
+        inputValues={getInputSliceMap(node.id)}
         onUpdateInput={presUpdateInput}
         readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
         onOpenMedia={handleOpenMedia}
         onOpenConfig={setConfigNode}
         refMap={inputRefMaps.get(node.id)}
-        display={display}
+        display={getMergedDisplay(node)}
         inputMode={meta?.inputMode}
         minLines={meta?.minLines}
       />
     )
-  }, [nodes, edges, isFullscreen, presInputValues, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
+  }, [nodes, edges, isFullscreen, getInputSliceMap, getMergedDisplay, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
 
   // Extract listResults for a node from either fullscreen nodeStates or tab-mode node data
   const getListResults = useCallback(

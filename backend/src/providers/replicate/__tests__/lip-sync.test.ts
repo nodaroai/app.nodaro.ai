@@ -403,7 +403,7 @@ describe("replicateLipSync — cost passthrough", () => {
 
     await replicateLipSync("latentsync", FACE, AUDIO)
 
-    expect(mocks.mockExtractCost).toHaveBeenCalledWith({ predict_time: 30 })
+    expect(mocks.mockExtractCost).toHaveBeenCalledWith({ predict_time: 30 }, "latentsync")
   })
 
   it("handles undefined metrics", async () => {
@@ -411,7 +411,7 @@ describe("replicateLipSync — cost passthrough", () => {
 
     await replicateLipSync("latentsync", FACE, AUDIO)
 
-    expect(mocks.mockExtractCost).toHaveBeenCalledWith(undefined)
+    expect(mocks.mockExtractCost).toHaveBeenCalledWith(undefined, "latentsync")
   })
 })
 

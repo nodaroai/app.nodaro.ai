@@ -5,6 +5,7 @@ import { AUDIO_TAGS, SSML_BREAK_OPTIONS, isV2Model } from "@/lib/audio-tags"
 import type { NodeRefItem } from "@/lib/node-refs"
 import type { VariableDisplayMode } from "./types"
 import { renderNodeRefs } from "@/lib/render-node-refs"
+import { optimizedImageUrl } from "@/lib/image"
 import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode } from "@nodaro/shared"
 
 /** Regex to match bracket tags like [whispers], [Verse 2], <break time="1s" /> */
@@ -973,7 +974,7 @@ export function TagTextarea(props: TagTextareaProps) {
           >
             {ref?.url && (
               <img
-                src={ref.url}
+                src={optimizedImageUrl(ref.url, { width: 48, quality: 80 })}
                 alt=""
                 className="image-ref-pill__thumb"
                 onMouseEnter={(e) =>
@@ -1142,9 +1143,10 @@ export function TagTextarea(props: TagTextareaProps) {
                 {isRefImage && (
                   <>
                     <img
-                      src={item.thumbnailUrl}
+                      src={optimizedImageUrl(item.thumbnailUrl, { width: 64, quality: 80 })}
                       alt=""
                       className="w-7 h-7 rounded object-cover shrink-0 border border-border/40"
+                      loading="lazy"
                     />
                     <span className="truncate flex-1 min-w-0">
                       {item.label}
@@ -1282,7 +1284,7 @@ export function TagTextarea(props: TagTextareaProps) {
               aria-hidden
             >
               <img
-                src={url}
+                src={optimizedImageUrl(url, { width: 480 })}
                 alt=""
                 className="block rounded object-contain"
                 style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}

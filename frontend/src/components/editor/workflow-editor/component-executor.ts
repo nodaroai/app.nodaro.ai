@@ -1,5 +1,5 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { executeComponent as executeComponentApi, getJobStatus } from "@/lib/api"
+import { executeComponent as executeComponentApi, getJobStatusLean } from "@/lib/api"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired } from "@nodaro/shared"
 import type { ComponentMetadata } from "@nodaro/shared"
 import type { WorkflowNode, ComponentNodeData, GeneratedResult } from "@/types/nodes"
@@ -96,7 +96,7 @@ export async function executeComponent(
     while (Date.now() - startTime < TIMEOUT_MS) {
       if (ctx.isWorkflowStale()) throw new Error("Workflow changed during execution")
 
-      const job = await getJobStatus(jobId)
+      const job = await getJobStatusLean(jobId)
 
       if (job.status === "completed") {
         const outputData = (job.output_data ?? {}) as Record<string, string>

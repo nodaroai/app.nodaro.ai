@@ -25,6 +25,7 @@ import { useStorageProfile } from "@/ee/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
+import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
 import type { LibraryAsset } from "@/lib/api"
 
 function formatBytes(bytes: number): string {
@@ -294,6 +295,29 @@ export default function LibraryPage() {
     setPreviewIndex(index)
   }, [])
 
+  // Row-virtualize the (window-scrolled) "My Files" grid. The hook auto-fetches
+  // the next page when the last rendered row nears the end, so the "Load More"
+  // button below is kept only as a manual fallback. The flat `assets` array
+  // stays complete — preview indexing into assets[i] is unaffected.
+  const {
+    gridRef,
+    virtualRows,
+    totalSize,
+    columns,
+    scrollMargin,
+    gridTemplateColumns,
+  } = useVirtualGrid({
+    itemCount: assets.length,
+    breakpoints: GRID_BREAKPOINTS.library,
+    // Fixed-height cards: h-32 thumbnail + info/actions section.
+    estimateRowHeight: 224,
+    gap: 12, // gap-3
+    overscan: 3,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: loadingMore,
+  })
+
   const usagePercent = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0
 
   return (
@@ -410,17 +434,31 @@ export default function LibraryPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {assets.map((asset, assetIndex) => (
-            <LibraryAssetCard
-              key={asset.id}
-              asset={asset}
-              index={assetIndex}
-              isSelected={selected.has(asset.id)}
-              onOpenPreview={handleOpenPreview}
-              onToggleSelect={toggleSelect}
-              onDelete={handleDelete}
-            />
+        // Windowed grid: only rows in (viewport + overscan) are mounted.
+        <div ref={gridRef} style={{ height: totalSize, position: "relative" }}>
+          {virtualRows.map((virtualRow) => (
+            <div
+              key={virtualRow.key}
+              className="absolute top-0 left-0 w-full"
+              style={{
+                transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                display: "grid",
+                gridTemplateColumns,
+                gap: 12,
+              }}
+            >
+              {rowItems(assets, virtualRow.index, columns).map(({ item: asset, index: assetIndex }) => (
+                <LibraryAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  index={assetIndex}
+                  isSelected={selected.has(asset.id)}
+                  onOpenPreview={handleOpenPreview}
+                  onToggleSelect={toggleSelect}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
           ))}
         </div>
       )}

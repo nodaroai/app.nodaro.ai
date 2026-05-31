@@ -51,6 +51,17 @@ export function ExtractReferencesModal({
 }: ExtractReferencesModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgElRef = useRef<HTMLImageElement>(null)
+  // Cache the canvas bounding rect for the duration of a drag (mousedown →
+  // mouseup) so handleMouseMove avoids a layout read on every event.
+  const canvasRectRef = useRef<DOMRect | null>(null)
+  // Coalesce setState + canvas redraw into a single rAF per frame; null means
+  // no frame is queued. `pendingDrawRef` carries the latest geometry to flush.
+  const rafIdRef = useRef<number | null>(null)
+  const pendingDrawRef = useRef<{ rect: DrawRect | null; lasso: Point[] } | null>(null)
+  // Authoritative in-progress lasso points — accumulated synchronously on each
+  // move so multiple moves between rAF flushes don't drop samples. The
+  // lassoPoints state is updated (from this ref) only inside the rAF.
+  const lassoPointsRef = useRef<Point[]>([])
 
   // Get projectId for saving to database
   const projectId = useWorkflowStore((s) => s.projectId)
@@ -76,6 +87,7 @@ export function ExtractReferencesModal({
       setPending(null)
       setCurrentRect(null)
       setLassoPoints([])
+      lassoPointsRef.current = []
       setError(null)
       setImageLoaded(false)
       setImgSize(null)
@@ -89,6 +101,7 @@ export function ExtractReferencesModal({
         setPending(null)
         setCurrentRect(null)
         setLassoPoints([])
+        lassoPointsRef.current = []
       } else {
         onClose()
       }
@@ -100,6 +113,33 @@ export function ExtractReferencesModal({
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
   }, [isOpen, handleKeyDown])
+
+  // Flush the pending selection geometry (state + canvas redraw) inside a
+  // single rAF; skip scheduling if a frame is already queued so a burst of
+  // mousemoves collapses to one paint per frame. Plain function (not
+  // memoized) so the rAF callback always closes over the CURRENT drawOverlay
+  // — that closure reads `drawing`/`references`, so a stale capture would
+  // change the rendered overlay.
+  function scheduleDraw() {
+    if (rafIdRef.current !== null) return
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null
+      const pending = pendingDrawRef.current
+      if (!pending) return
+      pendingDrawRef.current = null
+      if (pending.rect) setCurrentRect(pending.rect)
+      else setLassoPoints(pending.lasso)
+      drawOverlay(pending.rect, pending.lasso)
+    })
+  }
+
+  // Cancel any queued frame on unmount so it can't fire after teardown.
+  useEffect(() => () => {
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+  }, [])
 
   function handleImageLoad() {
     const img = imgElRef.current
@@ -222,6 +262,9 @@ export function ExtractReferencesModal({
     const canvas = canvasRef.current
     if (!canvas) return
     const r = canvas.getBoundingClientRect()
+    // Cache the rect for the duration of this drag — handleMouseMove reads it
+    // from the ref instead of forcing a layout read every event.
+    canvasRectRef.current = r
     const x = e.clientX - r.left
     const y = e.clientY - r.top
 
@@ -229,9 +272,11 @@ export function ExtractReferencesModal({
       setDrawing(true)
       setCurrentRect({ startX: x, startY: y, endX: x, endY: y })
       setLassoPoints([])
+      lassoPointsRef.current = []
     } else {
       // Lasso mode
       setDrawing(true)
+      lassoPointsRef.current = [{ x, y }]
       setLassoPoints([{ x, y }])
       setCurrentRect(null)
     }
@@ -241,54 +286,78 @@ export function ExtractReferencesModal({
     if (!drawing) return
     const canvas = canvasRef.current
     if (!canvas) return
-    const r = canvas.getBoundingClientRect()
+    // Read the rect from the drag-scoped cache (set on mousedown) instead of
+    // forcing a layout read on every event.
+    const r = canvasRectRef.current ?? canvas.getBoundingClientRect()
     const x = e.clientX - r.left
     const y = e.clientY - r.top
 
     if (selectionMode === "rectangle" && currentRect) {
       const newRect = { ...currentRect, endX: x, endY: y }
-      setCurrentRect(newRect)
-      drawOverlay(newRect, [])
+      // Stash the latest geometry; setState + redraw happen once per rAF.
+      pendingDrawRef.current = { rect: newRect, lasso: [] }
+      scheduleDraw()
     } else if (selectionMode === "lasso") {
-      // Sample points (skip if too close to last point)
-      const last = lassoPoints[lassoPoints.length - 1]
+      // Sample points (skip if too close to last point). Accumulate
+      // synchronously in the ref so samples aren't lost between rAF flushes.
+      const points = lassoPointsRef.current
+      const last = points[points.length - 1]
       if (last) {
         const dist = Math.sqrt((x - last.x) ** 2 + (y - last.y) ** 2)
         if (dist < 4) return
       }
-      const newPoints = [...lassoPoints, { x, y }]
-      setLassoPoints(newPoints)
-      drawOverlay(null, newPoints)
+      const newPoints = [...points, { x, y }]
+      lassoPointsRef.current = newPoints
+      pendingDrawRef.current = { rect: null, lasso: newPoints }
+      scheduleDraw()
     }
   }
 
   function handleMouseUp() {
     if (!drawing) return
     setDrawing(false)
+    // Drag is over — drop the cached rect and cancel any frame queued by the
+    // last mousemove. We flush the pending geometry into state directly so the
+    // final selection isn't a frame behind the latest move.
+    canvasRectRef.current = null
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current)
+      rafIdRef.current = null
+    }
+    const pending = pendingDrawRef.current
+    pendingDrawRef.current = null
+    // Use the authoritative geometry from the in-flight drag (refs/pending),
+    // falling back to committed state when no frame was queued.
+    const finalRect = pending?.rect ?? currentRect
+    const finalLasso = selectionMode === "lasso" ? lassoPointsRef.current : lassoPoints
+    if (finalRect !== currentRect) setCurrentRect(finalRect)
+    if (selectionMode === "lasso" && finalLasso !== lassoPoints) setLassoPoints(finalLasso)
 
-    if (selectionMode === "rectangle" && currentRect) {
-      const w = Math.abs(currentRect.endX - currentRect.startX)
-      const h = Math.abs(currentRect.endY - currentRect.startY)
+    if (selectionMode === "rectangle" && finalRect) {
+      const w = Math.abs(finalRect.endX - finalRect.startX)
+      const h = Math.abs(finalRect.endY - finalRect.startY)
       if (w < 20 || h < 20) {
         setCurrentRect(null)
         drawOverlay(null, [])
         return
       }
-      finishSelection({ mode: "rectangle", rect: currentRect })
-    } else if (selectionMode === "lasso" && lassoPoints.length >= 3) {
+      finishSelection({ mode: "rectangle", rect: finalRect })
+    } else if (selectionMode === "lasso" && finalLasso.length >= 3) {
       // Close the lasso and check size
       const { scaleX, scaleY } = getScale()
-      const naturalPoints = lassoPoints.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY }))
+      const naturalPoints = finalLasso.map((p) => ({ x: p.x * scaleX, y: p.y * scaleY }))
       const bbox = polygonBoundingBox(naturalPoints)
       if (bbox.width < 20 || bbox.height < 20) {
+        lassoPointsRef.current = []
         setLassoPoints([])
         drawOverlay(null, [])
         return
       }
       // Redraw with closed path
-      drawOverlay(null, lassoPoints)
-      finishSelection({ mode: "lasso", lassoPoints })
+      drawOverlay(null, finalLasso)
+      finishSelection({ mode: "lasso", lassoPoints: finalLasso })
     } else {
+      lassoPointsRef.current = []
       setLassoPoints([])
       drawOverlay(null, [])
     }
@@ -417,6 +486,7 @@ export function ExtractReferencesModal({
       setPending(null)
       setCurrentRect(null)
       setLassoPoints([])
+      lassoPointsRef.current = []
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to extract reference")
     } finally {
@@ -437,6 +507,7 @@ export function ExtractReferencesModal({
     setPending(null)
     setCurrentRect(null)
     setLassoPoints([])
+    lassoPointsRef.current = []
     drawOverlay(null, [])
   }
 

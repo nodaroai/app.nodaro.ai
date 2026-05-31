@@ -8,6 +8,7 @@ import {
   locationUsageModeLabel,
   type LocationUsageMode,
 } from "@nodaro/shared"
+import { optimizedImageUrl } from "@/lib/image"
 import type { LocationRefAttrs } from "./location-ref-extension"
 
 /**
@@ -158,7 +159,7 @@ export function LocationRefView(props: NodeViewProps) {
     >
       {ref?.url ? (
         <img
-          src={ref.url}
+          src={optimizedImageUrl(ref.url, { width: 48, quality: 80 })}
           alt=""
           className="location-ref-pill__thumb"
           draggable={false}
@@ -220,7 +221,7 @@ export function LocationRefView(props: NodeViewProps) {
               aria-hidden
             >
               <img
-                src={ref.url}
+                src={optimizedImageUrl(ref.url, { width: 480 })}
                 alt=""
                 className="block rounded object-contain"
                 style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}

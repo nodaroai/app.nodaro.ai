@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2 } from "../lib/storage.js"
 import { safeFetch } from "../lib/safe-fetch.js"
+import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { applyImageWatermark, applyVideoWatermark } from "../utils/watermark.js"
 import { generateThumbnailFromUrl } from "../utils/thumbnail.js"
 import { createWorkDir, cleanupWorkDir, downloadFile, transcodeToBrowserSafe } from "../providers/video/ffmpeg-utils.js"
@@ -48,21 +49,8 @@ export function isFinalJobAttempt(job: Pick<Job, "attemptsMade" | "opts">): bool
   return job.attemptsMade + 1 >= attempts
 }
 
-const SOCIAL_HOSTNAMES = [
-  "youtube.com", "youtu.be",
-  "tiktok.com",
-  "instagram.com",
-  "twitter.com", "x.com",
-  "facebook.com", "fb.watch", "fb.com",
-]
-
 export function isSocialUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return SOCIAL_HOSTNAMES.some((h) => parsed.hostname.includes(h))
-  } catch {
-    return false
-  }
+  return isAllowedSocialVideoUrl(url)
 }
 
 export async function downloadAudioToR2(url: string): Promise<string> {
@@ -253,6 +241,15 @@ export async function commitJobCredits(
    * post-process for free. Added on top of the provider-derived credits.
    */
   extraNonProviderCredits = 0,
+  /**
+   * Pricing convention (decision A): ONLY genuinely metered providers (Replicate
+   * GPU-time: face-swap, legacy lip-sync, whisper transcribe) recompute the
+   * charge from `providerCostUsd` and true-up. Every fixed/composite-priced
+   * provider commits the RESERVED tier (markup already applied once at reserve
+   * over the 0%-base price) — `reserved == committed`, no spurious refund, and
+   * no under-charge from a flat/GPU-time `result.cost`. Default false.
+   */
+  metered = false,
 ): Promise<void> {
   if (!hasCredits() || !usageLogId) return
 
@@ -260,7 +257,7 @@ export async function commitJobCredits(
   const { computeActualCredits, checkAndLogAnomaly } = await import("../ee/billing/credit-anomaly.js")
 
   try {
-    if (providerCostUsd && providerCostUsd > 0) {
+    if (metered && providerCostUsd && providerCostUsd > 0) {
       const [providerCredits, { data: usageLog }] = await Promise.all([
         computeActualCredits(providerCostUsd),
         supabase
@@ -295,8 +292,20 @@ export async function commitJobCredits(
 
       console.log(`[worker] Credits committed for job ${jobId} (actual: ${actualCredits}, reserved: ${usageLog?.credits_used ?? "??"})`)
     } else {
+      // Fixed/composite provider (or cost-less): commit the RESERVED tier.
       await CreditsService.commitCredits(usageLogId)
-      console.log(`[worker] Credits committed for job ${jobId}`)
+      // Mirror the committed (= reserved) amount onto jobs.credits_actual so
+      // admin/display stays accurate on this path too (the metered branch above
+      // already sets it). The reserved amount already includes any add-on.
+      const { data: ul } = await supabase
+        .from("usage_logs")
+        .select("credits_used")
+        .eq("id", usageLogId)
+        .single()
+      if (typeof ul?.credits_used === "number") {
+        await supabase.from("jobs").update({ credits_actual: ul.credits_used }).eq("id", jobId)
+      }
+      console.log(`[worker] Credits committed (reserved tier) for job ${jobId}`)
     }
   } catch (error) {
     console.error(`[worker] Failed to commit credits for job ${jobId}:`, error)

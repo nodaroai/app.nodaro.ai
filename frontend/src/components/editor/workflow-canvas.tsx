@@ -493,6 +493,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const lastMousePositionRef = useRef({ x: 0, y: 0 })
   const arrowGuideClearRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const mobileContextValue = useMemo(() => ({ isMobile }), [isMobile])
+  const zoomContextValue = useMemo(() => ({ zoom }), [zoom])
   // Same positions used on both mobile and desktop — no separate layout
 
   // Focus on a specific node type when navigating via ?focusType= search param
@@ -2041,7 +2042,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       )}
 
       <MobileCanvasContext.Provider value={mobileContextValue}>
-      <CanvasZoomContext.Provider value={{ zoom }}>
+      <CanvasZoomContext.Provider value={zoomContextValue}>
       <div className="w-full h-full" onDragOver={handleDragOver} onDrop={handleDrop} onMouseMove={(e) => { lastMousePositionRef.current = { x: e.clientX, y: e.clientY } }}>
         <ReactFlow
           nodes={orderedNodes}

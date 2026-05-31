@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
+import { optimizedImageUrl } from "@/lib/image"
 
 interface ImageRefAttrs {
   imageIndex: number
@@ -118,7 +119,7 @@ export function ImageRefView(props: NodeViewProps) {
     >
       {url && (
         <img
-          src={url}
+          src={optimizedImageUrl(url, { width: 48, quality: 80 })}
           alt=""
           className="image-ref-pill__thumb"
           draggable={false}
@@ -171,7 +172,7 @@ export function ImageRefView(props: NodeViewProps) {
               aria-hidden
             >
               <img
-                src={url}
+                src={optimizedImageUrl(url, { width: 480 })}
                 alt=""
                 className="block rounded object-contain"
                 style={{ maxWidth: PREVIEW_MAX, maxHeight: PREVIEW_MAX }}

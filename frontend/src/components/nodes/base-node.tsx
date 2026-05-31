@@ -144,9 +144,30 @@ function BaseNodeComponent({
     }
   }, [])
 
-  // Reactive subscription to the node's stored height — used to drive the
-  // auto-fit effect below so it re-runs when Fit Content clears height.
-  const storedHeight = useWorkflowStore((s) => s.nodes.find((n) => n.id === id)?.height)
+  // Inner zoom wrapper bookkeeping + per-node flags + stored height. Combine
+  // into ONE selector with shallow compare so we do a single `nodes.find(...)`
+  // per store update (not one per flag). Resize fires the store at ~60Hz; with
+  // 100+ nodes on canvas, separate selectors meant hundreds of extra O(N) array
+  // iterations per frame. `visualH` doubles as the stored-height subscription
+  // that drives the auto-fit effect below (re-runs when Fit Content clears
+  // height) — keep it as the single source so we don't reintroduce a second
+  // O(N) `nodes.find` scan. `isPending` drives the active "node-running" border
+  // the instant Run is clicked (the optimistic flip writes
+  // data.executionStatus:"pending" before the backend execution even starts).
+  const { zoom, visualW, visualH, isSkipped, isPending } = useWorkflowStore(
+    useShallow((s) => {
+      const node = s.nodes.find((n) => n.id === id)
+      const data = node?.data as Record<string, unknown> | undefined
+      const z = data?.zoom
+      return {
+        zoom: typeof z === "number" ? z : 1.0,
+        visualW: node?.width,
+        visualH: node?.height,
+        isSkipped: !!data?.skipped,
+        isPending: data?.executionStatus === "pending",
+      }
+    }),
+  )
 
   // Unified node-sizing effect. One source of truth — runs whenever the
   // aspect ratio, stored height, handle-derived minHeight, or minWidth
@@ -172,7 +193,7 @@ function BaseNodeComponent({
   //      Catches pre-handle-stack-change workflows where node.height was
   //      persisted below the new handle minimum.
   //
-  // Either case triggers `useUpdateNodeInternals` (via the storedHeight
+  // Either case triggers `useUpdateNodeInternals` (via the visualH
   // dep on the effect below) so React Flow re-measures handle bounds after
   // any size change.
   useEffect(() => {
@@ -223,7 +244,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, storedHeight, effectiveMinHeight, minWidth])
+  }, [imageAspectRatio, id, visualH, effectiveMinHeight, minWidth])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
@@ -232,34 +253,13 @@ function BaseNodeComponent({
   const updateNodeInternals = useUpdateNodeInternals()
   useEffect(() => {
     if (id) updateNodeInternals(id)
-  }, [id, storedHeight, updateNodeInternals])
+  }, [id, visualH, updateNodeInternals])
 
   const { isMobile } = useMobileCanvas()
   const altPressed = useAltKeyStore((s) => s.pressed)
   const newNodeIds = useWorkflowStore((s) => s.newNodeIds)
   const clearNewNode = useWorkflowStore((s) => s.clearNewNode)
   const isEditing = useWorkflowStore((s) => s.selectedNodeId === id)
-  // Inner zoom wrapper bookkeeping + per-node flags. Combine into ONE selector
-  // with shallow compare so we do a single `nodes.find(...)` per store update
-  // (not one per flag). Resize fires the store at ~60Hz; with 100+ nodes on
-  // canvas, separate selectors meant hundreds of extra O(N) array iterations
-  // per frame. `isPending` drives the active "node-running" border the instant
-  // Run is clicked (the optimistic flip writes data.executionStatus:"pending"
-  // before the backend execution even starts).
-  const { zoom, visualW, visualH, isSkipped, isPending } = useWorkflowStore(
-    useShallow((s) => {
-      const node = s.nodes.find((n) => n.id === id)
-      const data = node?.data as Record<string, unknown> | undefined
-      const z = data?.zoom
-      return {
-        zoom: typeof z === "number" ? z : 1.0,
-        visualW: node?.width,
-        visualH: node?.height,
-        isSkipped: !!data?.skipped,
-        isPending: data?.executionStatus === "pending",
-      }
-    }),
-  )
   const logicalW = visualW != null ? visualW / zoom : undefined
   const logicalH = visualH != null ? visualH / zoom : undefined
   const isNew = newNodeIds.has(id)

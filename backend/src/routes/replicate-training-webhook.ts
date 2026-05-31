@@ -189,7 +189,10 @@ export async function replicateTrainingWebhookRoutes(
             .from("jobs")
             .update({
               status: finalStatus,
-              error: body.error ?? null,
+              // Column is `error_message` — `error` does not exist, so the old
+              // key made PostgREST reject the whole UPDATE (PGRST204) and the
+              // job stayed stuck in 'processing'.
+              error_message: body.error ?? null,
             })
             .eq("id", job.id)
             .eq("user_id", character.user_id)

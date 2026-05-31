@@ -227,7 +227,7 @@ export default function AdminGalleryReportsPage() {
                     {outputUrl && outputType === "image" ? (
                       <CachedImage src={outputUrl} alt="" className="w-full h-full object-cover" thumbnail thumbnailWidth={160} />
                     ) : outputUrl && outputType === "video" ? (
-                      <video src={outputUrl} muted className="w-full h-full object-cover" />
+                      <video src={outputUrl} muted preload="none" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
                         {outputType ?? "N/A"}

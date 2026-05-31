@@ -46,7 +46,7 @@ vi.mock("@/lib/api", () => ({
   uploadAudio: vi.fn(),
   fetchYouTubeOEmbed: vi.fn(),
   extractYouTubeAudioApi: vi.fn(),
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
   startVideoDownload: vi.fn(),
   subscribeToDownloadProgress: vi.fn(),
 }))

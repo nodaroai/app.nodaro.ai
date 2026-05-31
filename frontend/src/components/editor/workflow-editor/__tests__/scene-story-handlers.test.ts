@@ -28,7 +28,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 vi.mock("@/lib/api", () => ({
   generateImage: vi.fn(),
-  getJobStatus: vi.fn(),
+  getJobStatusLean: vi.fn(),
 }))
 
 vi.mock("@/lib/prompt-templates", () => ({

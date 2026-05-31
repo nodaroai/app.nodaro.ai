@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { safeUrlSchema } from "../lib/url-validator.js"
+import { safeUrlSchema, isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
@@ -13,24 +13,9 @@ import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
 
-const SUPPORTED_HOSTNAMES = [
-  "youtube.com", "youtu.be",
-  "tiktok.com",
-  "instagram.com",
-  "twitter.com", "x.com",
-  "facebook.com", "fb.watch", "fb.com",
-]
-
 const downloadVideoBody = z.object({
   url: safeUrlSchema.refine(
-    (url) => {
-      try {
-        const parsed = new URL(url)
-        return SUPPORTED_HOSTNAMES.some((h) => parsed.hostname.includes(h))
-      } catch {
-        return false
-      }
-    },
+    (url) => isAllowedSocialVideoUrl(url),
     { message: "Must be a valid video URL (YouTube, Facebook, TikTok, Instagram, or X)" },
   ),
 })

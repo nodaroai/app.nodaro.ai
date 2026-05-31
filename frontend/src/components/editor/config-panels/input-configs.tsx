@@ -36,7 +36,7 @@ import {
 import { CachedImage } from "@/components/ui/cached-image"
 import { toast } from "sonner"
 import { spliceDelimitedRows, NO_SPLIT_DELIMITER } from "@nodaro/shared"
-import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatus, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
+import { uploadAudio, fetchYouTubeOEmbed, extractYouTubeAudioApi, getJobStatusLean, startVideoDownload, subscribeToDownloadProgress } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
 import {
   LOOP_COLUMN_TYPE_META,
@@ -1353,7 +1353,7 @@ export function ReferenceAudioConfig({ data, onUpdate }: ConfigProps<ReferenceAu
     try {
       const { jobId } = await extractYouTubeAudioApi(url)
       const poll = async (): Promise<string> => {
-        const status = await getJobStatus(jobId)
+        const status = await getJobStatusLean(jobId)
         if (status.status === "completed" && status.output_data?.audioUrl) {
           return status.output_data.audioUrl
         }

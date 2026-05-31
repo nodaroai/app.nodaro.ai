@@ -22,6 +22,9 @@ export interface ProviderFinalizeResult {
   url: string
   extraUrls?: readonly string[]
   cost: number | null
+  /** See ProviderResult.meteredCost — true only for genuine GPU-time providers
+   *  (commit trues-up from cost); fixed/composite providers commit reserved. */
+  meteredCost?: boolean
   displayCost?: number | null
   providerUsed?: string | null
   kieTaskId?: string
@@ -279,7 +282,7 @@ export async function finalizeJobWithMedia(
 
   // 5. Commit credits (idempotent: CAS on usage_logs.status='reserved' inside
   //    commitJobCredits; null usageLogId is a graceful no-op).
-  await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits)
+  await commitJobCredits(usageLogId, jobId, result.cost, input.extraNonProviderCredits, result.meteredCost)
 
   // 6. Create asset record so the output appears in /library.
   await createAssetFromJob(jobId, job.user_id ?? undefined)

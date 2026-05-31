@@ -456,8 +456,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     computeEstimate();
   }, [storeNodes, storeEdges]);
 
+  // Only poll /v1/stats while there is local activity worth watching: a
+  // workflow/single-node run in progress, store nodes still running/pending,
+  // or the last server snapshot still reporting active jobs (so we keep
+  // polling until the backend confirms the count has drained to zero).
+  // Otherwise the interval returns `false` and stops — no idle background
+  // polling. The displayed value stays correct because the query still
+  // refetches on the activity transitions that flip this gate.
+  const hasLocalActivity =
+    isRunning ||
+    storeNodes.some((n) => {
+      const s = (n.data as Record<string, unknown>).executionStatus;
+      return s === "running" || s === "pending";
+    });
   const { data: statsData } = useStats("user", user?.id, {
-    refetchInterval: 30_000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const serverActive = (data?.pending ?? 0) + (data?.processing ?? 0);
+      return hasLocalActivity || serverActive > 0 ? 30_000 : false;
+    },
   });
   const activeJobCount =
     (statsData?.pending ?? 0) + (statsData?.processing ?? 0);

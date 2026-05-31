@@ -91,7 +91,7 @@ const VIDEO_MODEL_LABELS: Record<string, string> = {
 const SCRIPT_LLM_LABELS: Record<string, string> = {
   "claude-haiku-4-5": "Claude Haiku 4.5 — fastest",
   "claude-sonnet-4-6": "Claude Sonnet 4.6 — default",
-  "claude-opus-4-6": "Claude Opus 4.6 — deepest",
+  "claude-opus-4-7": "Claude Opus 4.7 — deepest",
 }
 
 // Build dropdown options from the shared allowlist + an "Auto" sentinel.

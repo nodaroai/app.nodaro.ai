@@ -73,7 +73,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 
 vi.mock("@/lib/api", () => ({
   generateImage: vi.fn(),
-  getJobStatus: (...args: unknown[]) => mockGetJobStatus(...args),
+  getJobStatusLean: (...args: unknown[]) => mockGetJobStatus(...args),
   generateAIWriterStream: (...args: unknown[]) =>
     mockGenerateAIWriterStream(...args),
   generateSceneGraph: (...args: unknown[]) =>
@@ -1036,7 +1036,7 @@ describe("transcribe", () => {
     mockTranscribeApi.mockResolvedValue({ jobId: "tr-j1" })
 
     // The transcribe node uses a custom poll loop with setInterval.
-    // We need to make getJobStatus resolve with completed to end the poll.
+    // We need to make getJobStatusLean resolve with completed to end the poll.
     mockGetJobStatus.mockResolvedValue({
       status: "completed",
       output_data: {

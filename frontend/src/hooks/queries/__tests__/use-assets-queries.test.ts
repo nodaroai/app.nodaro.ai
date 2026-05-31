@@ -232,17 +232,75 @@ describe("useDeleteLibraryAssetMutation", () => {
     expect(opts.mutationFn).toBeDefined()
   })
 
-  it("onSuccess invalidates library.all and billing.storage", () => {
+  it("onSettled invalidates library.all and billing.storage", () => {
     mockUseMutation.mockReturnValue({ mutate: vi.fn() })
     useDeleteLibraryAssetMutation()
     const opts = mockUseMutation.mock.calls[0][0]
-    opts.onSuccess(undefined, { assetId: "a1", userId: "user6" })
+    // onSettled signature: (data, error, variables, context)
+    opts.onSettled(undefined, null, { assetId: "a1", userId: "user6" })
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["library"],
     })
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["billing", "storage", "user6"],
     })
+  })
+
+  it("onMutate optimistically removes the asset and snapshots for rollback", async () => {
+    const setMock = vi.fn()
+    const getMock = vi.fn().mockReturnValue([])
+    const cancelMock = vi.fn().mockResolvedValue(undefined)
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      cancelQueries: cancelMock,
+      getQueriesData: getMock,
+      setQueriesData: setMock,
+      setQueryData: vi.fn(),
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useDeleteLibraryAssetMutation()
+    expect(captured.onMutate).toBeDefined()
+
+    await captured.onMutate({ assetId: "a1", userId: "user6" })
+    // Cancels in-flight refetches, snapshots, then writes the optimistic update.
+    expect(cancelMock).toHaveBeenCalled()
+    expect(getMock).toHaveBeenCalled()
+    expect(setMock).toHaveBeenCalledTimes(1)
+    // The setQueriesData updater targets the library list and removes the asset.
+    const updater = setMock.mock.calls[0][1] as (
+      d: { pages: { data: { id: string }[] }[]; pageParams: unknown[] } | undefined,
+    ) => unknown
+    const result = updater({
+      pages: [{ data: [{ id: "a1" }, { id: "b2" }] }],
+      pageParams: [undefined],
+    }) as { pages: { data: { id: string }[] }[] }
+    expect(result.pages[0].data.map((x) => x.id)).toEqual(["b2"])
+  })
+
+  it("onError restores the captured snapshot", () => {
+    const restore = vi.fn()
+    mockUseQueryClient.mockReturnValue({
+      invalidateQueries: mockInvalidateQueries,
+      setQueryData: restore,
+    })
+    let captured: any
+    mockUseMutation.mockImplementation((opts: any) => {
+      captured = opts
+      return { mutate: vi.fn() }
+    })
+    useDeleteLibraryAssetMutation()
+
+    const snap: [readonly unknown[], unknown][] = [
+      [["library", "list", "x"], { pages: [] }],
+    ]
+    captured.onError(new Error("boom"), { assetId: "a1", userId: "user6" }, {
+      previous: snap,
+    })
+    expect(restore).toHaveBeenCalledWith(["library", "list", "x"], { pages: [] })
   })
 })
 
@@ -260,11 +318,11 @@ describe("useRemoveLibraryAssetMutation", () => {
     expect(opts.mutationFn).toBeDefined()
   })
 
-  it("onSuccess invalidates library.all", () => {
+  it("onSettled invalidates library.all", () => {
     mockUseMutation.mockReturnValue({ mutate: vi.fn() })
     useRemoveLibraryAssetMutation()
     const opts = mockUseMutation.mock.calls[0][0]
-    opts.onSuccess(undefined, { assetId: "a1", userId: "user6" })
+    opts.onSettled()
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ["library"],
     })

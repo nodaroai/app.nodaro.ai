@@ -12,7 +12,7 @@ import {
   textToSpeech,
   generateScriptApi,
   combineVideos,
-  getJobStatus,
+  getJobStatusLean,
 } from "@/lib/api";
 import type {
   GeneratedScript,
@@ -467,7 +467,7 @@ export function runScriptGeneration(
               return;
             }
             try {
-              const job = await getJobStatus(jobId);
+              const job = await getJobStatusLean(jobId);
               pollFailures = 0;
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);

@@ -60,7 +60,7 @@ export type {
   UpdateProjectInput,
 } from "./resources/projects.js"
 
-export type { Job, JobStatus, CancelJobResult } from "./resources/jobs.js"
+export type { Job, JobStatus, JobStatusResult, CancelJobResult } from "./resources/jobs.js"
 
 export type {
   WorkflowExecution,

@@ -121,16 +121,20 @@ describe("GET /v1/download", () => {
 
   it("returns file content with attachment header on success", async () => {
     const fileContent = Buffer.from("fake-image-data")
-    const mockArrayBuffer = fileContent.buffer.slice(
-      fileContent.byteOffset,
-      fileContent.byteOffset + fileContent.byteLength,
-    )
+    // download now STREAMS the body (no full-buffer in memory) — mock a web
+    // ReadableStream body rather than arrayBuffer().
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(fileContent))
+        controller.close()
+      },
+    })
 
     vi.mocked(safeFetch).mockResolvedValue({
       ok: true,
       status: 200,
-      headers: new Headers({ "content-type": "image/png" }),
-      arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+      headers: new Headers({ "content-type": "image/png", "content-length": String(fileContent.length) }),
+      body,
     } as unknown as Response)
 
     const res = await app.inject({
@@ -142,6 +146,7 @@ describe("GET /v1/download", () => {
     expect(res.headers["content-type"]).toBe("image/png")
     expect(res.headers["content-disposition"]).toContain("attachment")
     expect(res.headers["content-disposition"]).toContain("test.png")
+    expect(res.body).toContain("fake-image-data")
     expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
       "https://pub-c813076fe3024da78029786e7b9fd59d.r2.dev/images/test.png",
       { timeoutMs: 120_000 },

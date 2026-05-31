@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { memo, useMemo, lazy, Suspense } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, PresentationDisplay, InputMode } from "@/types/nodes"
 import { getNodeLabel } from "@/lib/presentation-utils"
@@ -10,10 +10,17 @@ import { AudioUploadCard } from "./input-cards/audio-upload-card"
 import { ParameterCard } from "./input-cards/parameter-card"
 import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
-import { PickerInputCard } from "./input-cards/picker-input-card"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
+
+// Lazy-load the picker card: it pulls the full parameter-picker registry (~40
+// catalogs, incl. person.ts) which would otherwise bloat the public app-runner
+// chunk even for apps with zero picker nodes. The branch below is gated by
+// isParameterPickerNode(), so the chunk only loads when a picker node renders.
+const PickerInputCard = lazy(() =>
+  import("./input-cards/picker-input-card").then((m) => ({ default: m.PickerInputCard })),
+)
 
 /** System-wide ceiling for fan-out items. Will be fetched from app_settings in future. */
 export const DEFAULT_SYSTEM_MAX_FANOUT = 20
@@ -37,7 +44,7 @@ export interface InputCardProps {
 }
 
 /** Renders the appropriate input card based on node type */
-export function InputCard({
+function InputCardInner({
   node,
   isFullscreen,
   inputValues,
@@ -178,18 +185,20 @@ export function InputCard({
       // restriction set in the editor's cardMeta.
       if (isParameterPickerNode(node.type)) {
         return (
-          <PickerInputCard
-            nodeId={node.id}
-            label={label}
-            nodeType={node.type!}
-            data={data}
-            isFullscreen={isFullscreen}
-            inputValues={inputValues}
-            onUpdateInput={onUpdateInput}
-            readOnly={readOnly}
-            displayMode={cardMeta?.pickerMode ?? "inline"}
-            allowedValues={cardMeta?.pickerAllowedValues}
-          />
+          <Suspense fallback={null}>
+            <PickerInputCard
+              nodeId={node.id}
+              label={label}
+              nodeType={node.type!}
+              data={data}
+              isFullscreen={isFullscreen}
+              inputValues={inputValues}
+              onUpdateInput={onUpdateInput}
+              readOnly={readOnly}
+              displayMode={cardMeta?.pickerMode ?? "inline"}
+              allowedValues={cardMeta?.pickerAllowedValues}
+            />
+          </Suspense>
         )
       }
       return (
@@ -210,3 +219,12 @@ export function InputCard({
     }
   }
 }
+
+/**
+ * Memoized so a keystroke in one input card doesn't re-render every other card.
+ * The parent passes each card a STABLE per-node `inputValues` slice (a single-key
+ * map cached per node id) plus referentially-stable `onUpdateInput`/callbacks, so
+ * untouched cards bail out of reconciliation. Cards that read only `node`/`data`
+ * stay stable across poll-driven re-renders too.
+ */
+export const InputCard = memo(InputCardInner)

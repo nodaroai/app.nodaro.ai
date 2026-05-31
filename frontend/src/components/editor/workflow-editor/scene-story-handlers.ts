@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
-import { generateImage, getJobStatus } from "@/lib/api";
+import { generateImage, getJobStatusLean } from "@/lib/api";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import type {
   WorkflowNode,
@@ -182,7 +182,7 @@ export async function handleGenerateSceneImage(
             return;
           }
           try {
-            const job = await getJobStatus(jobId);
+            const job = await getJobStatusLean(jobId);
             pollFailures = 0;
             if (job.status === "completed") {
               ctx.untrackInterval(poll);
