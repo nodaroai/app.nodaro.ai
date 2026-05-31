@@ -783,11 +783,7 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
-              options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-              ]}
+              options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />
@@ -2537,11 +2533,7 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
         <>
           <MappableField field="aspectRatio" label="Aspect Ratio" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
-              options={[
-                { value: "16:9", label: "16:9 (Landscape)" },
-                { value: "9:16", label: "9:16 (Portrait)" },
-                { value: "1:1", label: "1:1 (Square)" },
-              ]}
+              options={VIDEO_RATIOS}
               value={data.aspectRatio || "16:9"}
               onValueChange={(v) => onUpdate({ aspectRatio: v as ImageToVideoData["aspectRatio"] })}
             />

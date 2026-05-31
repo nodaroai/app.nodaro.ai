@@ -9,6 +9,7 @@ import {
   IMAGE_CRITIC_UNRESOLVABLE,
   PIPELINE_STAGE_NAMES,
   PipelineInputSchema,
+  PipelineStageNameSchema,
   SubGateNameSchema,
   clearImageCriticMetadata,
   clearVideoCriticMetadata,
@@ -26,17 +27,6 @@ import { requireScope, type Scope } from "../lib/scopes.js"
 import { createSSEStream } from "../lib/sse.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
-
-const STAGE_NAMES: PipelineStageName[] = [
-  "script",
-  "characters",
-  "objects",
-  "locations",
-  "shot_list",
-  "scene_images",
-  "animate_audio_edit",
-  "post_merge",
-]
 
 /**
  * Phase 1D.2b E1: body schema for the stage-approve route. `edits` is an
@@ -472,7 +462,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       if (!userId) return
 
       const stageName = req.params.stage_name as PipelineStageName
-      if (!STAGE_NAMES.includes(stageName)) {
+      if (!(PIPELINE_STAGE_NAMES as readonly string[]).includes(stageName)) {
         return reply.status(404).send({ error: { code: "invalid_stage_name" } })
       }
 
@@ -2669,7 +2659,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
       if (!userId) return
 
       const bodyParsed = z
-        .object({ fromStage: z.enum(STAGE_NAMES as [string, ...string[]]) })
+        .object({ fromStage: PipelineStageNameSchema })
         .safeParse(req.body)
       if (!bodyParsed.success) {
         return reply.status(400).send({

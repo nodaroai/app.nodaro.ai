@@ -125,14 +125,6 @@ function updateItemContent(items: PresentationItem[], id: string, content: strin
   })
 }
 
-/** Recursively update a group's title by id */
-function updateGroupTitle(items: PresentationItem[], id: string, title: string): PresentationItem[] {
-  return items.map((item) => {
-    if (item.type === "group" && item.id === id) return { ...item, title }
-    return item
-  })
-}
-
 /** Recursively update a group field by id */
 function updateGroupField(items: PresentationItem[], id: string, field: string, value: unknown): PresentationItem[] {
   return items.map((item) => {
@@ -1384,7 +1376,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.inputItems ?? []
-                const updated = updateGroupTitle(items, item.id, title)
+                const updated = updateGroupField(items, item.id, "title", title)
                 updatePresentationSettings({ inputItems: updated })
               }}
               onShowTitleChange={(v) => {
@@ -1462,7 +1454,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
               showBackground={item.showBackground ?? true}
               onTitleChange={(title) => {
                 const items = settings.outputItems ?? []
-                const updated = updateGroupTitle(items, item.id, title)
+                const updated = updateGroupField(items, item.id, "title", title)
                 updatePresentationSettings({ outputItems: updated })
               }}
               onShowTitleChange={(v) => {
