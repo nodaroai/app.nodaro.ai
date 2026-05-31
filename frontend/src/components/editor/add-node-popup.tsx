@@ -1296,6 +1296,7 @@ export const VIRTUAL_CATEGORY_IDS = {
   recent: "Recent",
   mostUsed: "Most Used",
   common: "Common",
+  commonPickers: "Common Pickers",
 } as const;
 
 const isNodeOption = (n: NodeOption | undefined): n is NodeOption => Boolean(n);
@@ -1322,11 +1323,10 @@ interface CommonSection {
 const COMMON_LEAD: ReadonlyArray<SceneNodeType> = [
   "text-prompt",
   "llm-chat",
+  "combine-text",
   "upload-image",
   "upload-video",
   "list",
-  "selector",
-  "combine-text",
 ];
 const COMMON_SECTIONS: ReadonlyArray<CommonSection> = [
   { title: "Image", types: ["generate-image", "upscale-image", "image-to-text", "image-critic"] },
@@ -1336,16 +1336,25 @@ const COMMON_SECTIONS: ReadonlyArray<CommonSection> = [
 const COMMON_PICKER_SECTIONS: ReadonlyArray<CommonSection> = [
   { title: "Camera", types: ["camera-motion", "transition", "framing"] },
   { title: "Look", types: ["atmosphere", "action-fx", "style", "setting"] },
-  { title: "Subject", types: ["person", "pose", "animal"] },
-  { title: "Object", types: ["held-prop", "vehicle", "weapon", "furniture", "material"] },
+  { title: "Subject", types: ["person", "pose", "styling", "held-prop", "animal"] },
+  { title: "Object", types: ["vehicle", "weapon", "furniture", "material"] },
+  { title: "Sound", types: ["music-genre", "music-mood", "instrumentation"] },
 ];
 const COMMON_ASSETS_SECTION: CommonSection = {
   title: "Assets",
   types: ["character", "object", "location"],
 };
-// Flattened picker types — appended to the COMMON nav list only when the
-// "Common Pickers" submenu is expanded.
-const COMMON_PICKER_TYPES: ReadonlyArray<SceneNodeType> = COMMON_PICKER_SECTIONS.flatMap((s) => s.types);
+/** Nav-list sentinel for the "Common Pickers" row. It has `id` but no `type`,
+ *  so the popup's keyboard nav treats it like a category — Enter/click opens
+ *  the Common Pickers sub-view, and arrows highlight it like any other row. */
+interface CommonPickersNavItem {
+  readonly id: typeof VIRTUAL_CATEGORY_IDS.commonPickers;
+  readonly isCommonPickersNav: true;
+}
+const COMMON_PICKERS_NAV_ITEM: CommonPickersNavItem = {
+  id: VIRTUAL_CATEGORY_IDS.commonPickers,
+  isCommonPickersNav: true,
+};
 
 export const CATEGORIES = [
   {
@@ -1490,8 +1499,6 @@ export function AddNodePopup({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  // Collapsible "Common Pickers" submenu inside the COMMON tab.
-  const [commonPickersOpen, setCommonPickersOpen] = useState(false);
   const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1624,18 +1631,30 @@ export function AddNodePopup({
     );
   }, [searchQuery, effectivePool]);
 
-  const categoryNodes = useMemo<NodeOption[]>(() => {
+  const categoryNodes = useMemo<Array<NodeOption | CommonPickersNavItem>>(() => {
     if (!selectedCategory) return [];
     if (selectedCategory === VIRTUAL_CATEGORY_IDS.common) {
-      // Flat nav order must match the COMMON render below: lead, titled
-      // sections, then (only when expanded) the Common Pickers, then Assets.
-      const flat: SceneNodeType[] = [
-        ...COMMON_LEAD,
-        ...COMMON_SECTIONS.flatMap((s) => s.types),
-        ...(commonPickersOpen ? COMMON_PICKER_TYPES : []),
-        ...COMMON_ASSETS_SECTION.types,
+      // Flat nav order matches the COMMON render below: lead, the Common
+      // Pickers nav row (under List), titled sections, then Assets.
+      const toOpts = (types: ReadonlyArray<SceneNodeType>) =>
+        types.map((t) => optionByType.get(t)).filter(isNodeOption);
+      return [
+        ...toOpts(COMMON_LEAD),
+        COMMON_PICKERS_NAV_ITEM,
+        ...toOpts(COMMON_SECTIONS.flatMap((s) => s.types)),
+        ...toOpts(COMMON_ASSETS_SECTION.types),
       ];
-      return flat.map((t) => optionByType.get(t)).filter(isNodeOption);
+    }
+    if (selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers) {
+      // Common Pickers sub-view: picker nodes grouped by section. Each node's
+      // `group` is overridden to its section title so the generic render below
+      // shows Camera / Look / Subject / Object headers.
+      return COMMON_PICKER_SECTIONS.flatMap((sec) =>
+        sec.types
+          .map((t) => optionByType.get(t))
+          .filter(isNodeOption)
+          .map((o) => ({ ...o, group: sec.title })),
+      );
     }
     if (selectedCategory === VIRTUAL_CATEGORY_IDS.recent) {
       return mapHistoryToOptions(history, (a, b) => b.lastUsedAt - a.lastUsedAt, optionByType);
@@ -1650,7 +1669,7 @@ export function AddNodePopup({
     // Real categories: cluster nodes by group so each section header renders
     // once (the virtual categories above keep their curated/history order).
     return clusterByGroup(effectivePool.filter((node) => node.category === selectedCategory));
-  }, [selectedCategory, effectivePool, optionByType, history, commonPickersOpen]);
+  }, [selectedCategory, effectivePool, optionByType, history]);
 
   // Recent + Most Used are opt-in per-user (Settings → Add Node Menu); hidden by
   // default to keep the popup compact.
@@ -1701,7 +1720,7 @@ export function AddNodePopup({
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (selectedCategory && !searchQuery) {
-          setSelectedCategory(null);
+          setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
           setHighlightedIndex(0);
         } else {
           onClose();
@@ -1730,7 +1749,7 @@ export function AddNodePopup({
           }
         }
       } else if (e.key === "Backspace" && !searchQuery && selectedCategory) {
-        setSelectedCategory(null);
+        setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null);
         setHighlightedIndex(0);
       }
     }
@@ -1750,7 +1769,7 @@ export function AddNodePopup({
   // Reset highlighted index when items change
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [searchQuery, selectedCategory, commonPickersOpen]);
+  }, [searchQuery, selectedCategory]);
 
   // Keep the keyboard-highlighted item scrolled into view (arrow up/down).
   useEffect(() => {
@@ -1798,7 +1817,7 @@ export function AddNodePopup({
         <h3 className="text-sm font-semibold text-[#1E293B] dark:text-white">
           {selectedCategory ? (
             <button
-              onClick={() => setSelectedCategory(null)}
+              onClick={() => setSelectedCategory(selectedCategory === VIRTUAL_CATEGORY_IDS.commonPickers ? VIRTUAL_CATEGORY_IDS.common : null)}
               className="flex items-center gap-2 hover:text-[#ff0073] transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -2019,31 +2038,40 @@ export function AddNodePopup({
                 const o = optionByType.get(t);
                 if (o) pushNode(o, null, false);
               });
+              // Common Pickers sits in the lead block, right under List — a
+              // real nav row: it consumes a nav index so arrows highlight it
+              // and Enter (handled via its categoryNodes sentinel) opens it.
+              {
+                const i = nav++;
+                rows.push(
+                  <button
+                    key="__common_pickers_nav"
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory(VIRTUAL_CATEGORY_IDS.commonPickers);
+                      setHighlightedIndex(0);
+                    }}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    data-active={i === highlightedIndex ? "true" : undefined}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
+                      i === highlightedIndex
+                        ? "bg-[#F1F5F9] dark:bg-[#2D2D2D]"
+                        : "hover:bg-[#F8FAFC] dark:hover:bg-[#252525]",
+                    )}
+                  >
+                    <span className="text-[#818CF8]"><Layers className="h-4 w-4" /></span>
+                    <span className="text-sm text-[#1E293B] dark:text-white">Common Pickers</span>
+                    <ChevronRight className="ml-auto w-4 h-4 text-[#94A3B8]" />
+                  </button>,
+                );
+              }
               COMMON_SECTIONS.forEach((sec) =>
                 sec.types.forEach((t, j) => {
                   const o = optionByType.get(t);
                   if (o) pushNode(o, j === 0 ? sec.title : null, false);
                 }),
               );
-              rows.push(
-                <button
-                  key="__common_pickers_toggle"
-                  type="button"
-                  onClick={() => setCommonPickersOpen((v) => !v)}
-                  className="w-full flex items-center gap-1.5 px-4 pt-3 pb-1 text-left text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold hover:text-muted-foreground transition-colors"
-                >
-                  <ChevronRight className={cn("h-3 w-3 transition-transform", commonPickersOpen && "rotate-90")} />
-                  Common Pickers
-                </button>,
-              );
-              if (commonPickersOpen) {
-                COMMON_PICKER_SECTIONS.forEach((sec) =>
-                  sec.types.forEach((t, j) => {
-                    const o = optionByType.get(t);
-                    if (o) pushNode(o, j === 0 ? sec.title : null, true);
-                  }),
-                );
-              }
               COMMON_ASSETS_SECTION.types.forEach((t, j) => {
                 const o = optionByType.get(t);
                 if (o) pushNode(o, j === 0 ? COMMON_ASSETS_SECTION.title : null, false);
@@ -2052,9 +2080,9 @@ export function AddNodePopup({
             })()
           ) : (
           // Category nodes — with optional group sub-headers
-          categoryNodes.map((node, index) => {
+          (categoryNodes as NodeOption[]).map((node, index, arr) => {
             const prevGroup =
-              index > 0 ? categoryNodes[index - 1].group : undefined;
+              index > 0 ? arr[index - 1].group : undefined;
             const showGroupHeader =
               node.group && node.group !== prevGroup;
             return (
