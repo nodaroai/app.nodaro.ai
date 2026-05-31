@@ -9,6 +9,7 @@ import {
   errorResult,
   parseFailure,
   jobResultWithWidget,
+  dispatchJob,
 } from "./_verb-helpers.js"
 import {
   modelIdsByKindMode,
@@ -150,21 +151,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/text-to-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "generate-video",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: compositePrompt,
@@ -448,21 +438,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/generate-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "generate-video",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt ?? "(animate image)",
@@ -522,21 +501,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/extend-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "video extend",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt,
@@ -629,21 +597,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/combine-videos",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "combine videos",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: `Combine ${videoUrls.length} videos`,
@@ -733,21 +690,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/add-captions",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "add captions",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.text,
@@ -817,21 +763,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/extract-frame",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "extract frame",
-        session,
         widgetKind: "image",
         widgetData: {
           prompt: `Extract frame from ${videoUrl}`,
@@ -1020,21 +955,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/lip-sync",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "lip sync",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt ?? "(lip sync)",
@@ -1146,21 +1070,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/video-to-video",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "video-to-video",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt,
@@ -1608,21 +1521,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/merge-video-audio",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "merge video + audio",
-        session,
         widgetKind: "video",
         widgetData: { prompt: "(merge video + audio)", model: "merge-video-audio" },
       })
@@ -1749,21 +1651,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
+      return dispatchJob(fastify, session, {
         url: "/v1/motion-transfer",
-        headers: {
-          "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
-        },
         payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({
-        jobId,
         label: "motion transfer",
-        session,
         widgetKind: "video",
         widgetData: {
           prompt: args.prompt ?? "(motion transfer)",
@@ -1811,16 +1702,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           : null)
       if (!faceImageUrl) return { content: [{ type: "text" as const, text: "Pass face_image_url or face_image_asset_id (portrait for the replacement face)." }], isError: true }
 
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/face-swap",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload: { videoUrl, faceImageUrl, provider: "roop", mcp_client: session.clientName, userId: session.userId },
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "face swap", session, widgetKind: "video", widgetData: { prompt: "(face swap)", model: "roop" } })
+      return dispatchJob(fastify, session, { url: "/v1/face-swap", payload: { videoUrl, faceImageUrl, provider: "roop", mcp_client: session.clientName, userId: session.userId }, label: "face swap", widgetKind: "video", widgetData: { prompt: "(face swap)", model: "roop" } })
     },
   )
 
@@ -1875,16 +1757,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/video-upscale",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "video upscale", session, widgetKind: "video", widgetData: { prompt: `(upscale ${args.upscale_factor ?? "2"}×)`, model: provider } })
+      return dispatchJob(fastify, session, { url: "/v1/video-upscale", payload, label: "video upscale", widgetKind: "video", widgetData: { prompt: `(upscale ${args.upscale_factor ?? "2"}×)`, model: provider } })
     },
   )
 
@@ -1937,16 +1810,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      const res = await fastify.inject({
-        method: "POST",
-        url: "/v1/speech-to-video",
-        headers: { "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET },
-        payload,
-      })
-      if (res.statusCode >= 400) return errorResult(res.statusCode, res.body)
-      const jobId = parseJobId(res.body)
-      if (!jobId) return parseFailure(res.body)
-      return jobResultWithWidget({ jobId, label: "speech to video", session, widgetKind: "video", widgetData: { prompt: args.prompt.slice(0, 80), model: "wan-s2v", resolution: args.resolution ?? "480p" } })
+      return dispatchJob(fastify, session, { url: "/v1/speech-to-video", payload, label: "speech to video", widgetKind: "video", widgetData: { prompt: args.prompt.slice(0, 80), model: "wan-s2v", resolution: args.resolution ?? "480p" } })
     },
   )
 }
