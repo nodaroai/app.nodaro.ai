@@ -20,10 +20,12 @@ describe("modelsForInputMode", () => {
     expect(models).not.toContain("hailuo-2.3-pro")
   })
 
-  it("returns empty array for an unsupported mode (frame_interpolation has no registered models yet)", () => {
-    // No models registered for frame_interpolation in Phase 1B.2 — those land in
-    // Phase 1C with RIFE/Topaz Apollo.
-    expect(modelsForInputMode("frame_interpolation")).toEqual([])
+  it("returns RIFE + Topaz Apollo for frame_interpolation", () => {
+    // Phase 1C registered RIFE + Topaz Apollo for frame_interpolation
+    // (see VIDEO_MODEL_CAPS in model-constants.ts).
+    const models = modelsForInputMode("frame_interpolation")
+    expect(models).toContain("rife")
+    expect(models).toContain("topaz-apollo")
   })
 })
 
