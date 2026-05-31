@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import type { PipelineEvent, PipelineStageName } from "@nodaro/shared"
 import { pipelinesApi, type PipelineRecord } from "@/lib/pipelines-api"
+import { uploadImage, getCharacters, getLocations, getObjects } from "@/lib/api"
 import { usePipelineEvents } from "@/hooks/use-pipeline-events"
 import { buildSceneGraphFromPipeline } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 import type { SceneGraph } from "@remotion-pkg/scene-graph"
@@ -309,9 +310,29 @@ function StageTracker({
 interface GateActions {
   generate: (entityId: string, description?: string) => void
   skip: (entityId: string) => void
+  upload: (entityId: string, assetUrl: string, file: File) => void
+  reuse: (entityId: string, assetUrl: string) => void
   approveEntity: (entityId: string) => void
   rejectEntity: (entityId: string) => void
   approveStage: (stage: string) => void
+}
+
+type LibraryItem = { id: string; name: string; url: string }
+
+// Reuse-from-library — list the user's saved entities of the matching type so
+// they can pick an existing one instead of generating. Reuses the `upload`
+// backend path with the existing asset's URL (no new backend route).
+async function fetchLibraryByType(type: string): Promise<LibraryItem[]> {
+  const pick = <T extends { id: string; name: string; sourceImageUrl: string | null }>(
+    rows: T[],
+  ): LibraryItem[] =>
+    rows
+      .filter((r) => r.sourceImageUrl)
+      .map((r) => ({ id: r.id, name: r.name, url: r.sourceImageUrl as string }))
+  if (type === "character") return pick((await getCharacters()).characters)
+  if (type === "location") return pick((await getLocations()).locations)
+  if (type === "object") return pick((await getObjects()).objects)
+  return []
 }
 
 function EntityDescGate({
@@ -319,18 +340,62 @@ function EntityDescGate({
   acting,
   onGenerate,
   onSkip,
+  onUpload,
+  onReuse,
 }: {
   card: EntityCard
   acting: boolean
   onGenerate: (entityId: string, description?: string) => void
   onSkip: (entityId: string) => void
+  onUpload: (entityId: string, assetUrl: string, file: File) => void
+  onReuse: (entityId: string, assetUrl: string) => void
 }) {
   const [desc, setDesc] = useState(card.description ?? "")
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [reuseOpen, setReuseOpen] = useState(false)
+  const [library, setLibrary] = useState<LibraryItem[]>([])
+  const [libLoading, setLibLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  const toggleReuse = async () => {
+    const next = !reuseOpen
+    setReuseOpen(next)
+    if (next && library.length === 0) {
+      setLibLoading(true)
+      setErr(null)
+      try {
+        setLibrary(await fetchLibraryByType(card.entityType))
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Couldn't load your library")
+      } finally {
+        setLibLoading(false)
+      }
+    }
+  }
   // The description arrives via getEntities (not SSE) — fill it in once it lands.
   useEffect(() => {
     if (card.description && !desc) setDesc(card.description)
   }, [card.description, desc])
   const edited = card.description != null && desc !== card.description
+  const busy = acting || uploading
+
+  const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (fileRef.current) fileRef.current.value = ""
+    if (!file) return
+    setUploading(true)
+    setErr(null)
+    try {
+      const { url } = await uploadImage(file)
+      onUpload(card.entityId, url, file)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Upload failed")
+    } finally {
+      setUploading(false)
+    }
+  }
+
   return (
     <div className="rounded-md border bg-card p-3">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -341,7 +406,7 @@ function EntityDescGate({
         <span className="flex shrink-0 gap-2">
           <button
             type="button"
-            disabled={acting}
+            disabled={busy}
             onClick={() => onGenerate(card.entityId, edited ? desc : undefined)}
             className="rounded-md bg-[#ff0073] px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           >
@@ -349,7 +414,23 @@ function EntityDescGate({
           </button>
           <button
             type="button"
-            disabled={acting}
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+            className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
+          >
+            {uploading ? "Uploading…" : "Upload"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void toggleReuse()}
+            className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
+          >
+            Reuse
+          </button>
+          <button
+            type="button"
+            disabled={busy}
             onClick={() => onSkip(card.entityId)}
             className="rounded-md border px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
@@ -363,6 +444,50 @@ function EntityDescGate({
         rows={2}
         placeholder="Description used to generate this — edit before Generate…"
         className="w-full rounded-md border bg-background p-2 text-xs text-foreground"
+      />
+      {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
+      {reuseOpen && (
+        <div className="mt-2">
+          {libLoading ? (
+            <p className="text-xs text-muted-foreground">Loading your library…</p>
+          ) : library.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Nothing saved for this type yet — Generate or Upload instead.
+            </p>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto">
+              {library.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    onReuse(card.entityId, item.url)
+                    setReuseOpen(false)
+                  }}
+                  className="w-20 shrink-0 text-left disabled:opacity-50"
+                  title={item.name}
+                >
+                  <img
+                    src={item.url}
+                    alt={item.name}
+                    className="h-20 w-20 rounded border object-cover"
+                  />
+                  <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                    {item.name}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        className="hidden"
       />
     </div>
   )
@@ -408,6 +533,8 @@ function GatePanel({
                 acting={acting}
                 onGenerate={actions.generate}
                 onSkip={actions.skip}
+                onUpload={actions.upload}
+                onReuse={actions.reuse}
               />
             ))}
           </div>
@@ -830,6 +957,23 @@ function StudioSession({ pipelineId }: { pipelineId: string }) {
     rejectEntity: (eid) => act(() => pipelinesApi.rejectEntity(pipelineId, eid, "")),
     approveStage: (s) =>
       act(() => pipelinesApi.approveStage(pipelineId, s as PipelineStageName)),
+    upload: (eid, assetUrl, file) =>
+      act(() =>
+        pipelinesApi.approveDescription(pipelineId, eid, {
+          mode: "upload",
+          asset_url: assetUrl,
+          filename: file.name,
+          mime_type: file.type,
+          size_bytes: file.size,
+        }),
+      ),
+    reuse: (eid, assetUrl) =>
+      act(() =>
+        pipelinesApi.approveDescription(pipelineId, eid, {
+          mode: "upload",
+          asset_url: assetUrl,
+        }),
+      ),
   }
 
   // Initial load.
