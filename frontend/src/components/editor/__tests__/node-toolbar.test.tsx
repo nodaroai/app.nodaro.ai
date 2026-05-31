@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 
 /**
  * Cross-validation test for node toolbar / add-node-popup data integrity.
@@ -248,5 +250,44 @@ describe("NODE_DEFINITIONS category distribution", () => {
         ).toBe(0)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// add-node-popup ↔ node-toolbar parity (the two separate NODE_OPTIONS lists).
+//
+// Per CLAUDE.md New Node Registration steps 8 & 9, the canvas popup and the
+// sidebar toolbar maintain SEPARATE lists; a node missing from either won't
+// appear in that UI. These modules contain JSX icons (can't import without a
+// render context), so extract the `type: "..."` keys from source text and
+// assert the two lists cover the same node types. This caught `styling`
+// (popup-only). Counts confirm `type: "..."` appears only in NODE_OPTIONS, so
+// the regex is precise.
+// ---------------------------------------------------------------------------
+
+function nodeOptionTypes(relPath: string): Set<string> {
+  const abs = fileURLToPath(new URL(relPath, import.meta.url))
+  const src = readFileSync(abs, "utf8")
+  return new Set([...src.matchAll(/type:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!))
+}
+
+describe("add-node-popup ↔ node-toolbar parity", () => {
+  const popup = nodeOptionTypes("../add-node-popup.tsx")
+  const toolbar = nodeOptionTypes("../node-toolbar.tsx")
+
+  it("every node type in the popup is also in the sidebar toolbar", () => {
+    const missingFromToolbar = [...popup].filter((t) => !toolbar.has(t)).sort()
+    expect(
+      missingFromToolbar,
+      `present in add-node-popup but MISSING from node-toolbar (sidebar): ${missingFromToolbar.join(", ")}`,
+    ).toEqual([])
+  })
+
+  it("every node type in the sidebar toolbar is also in the popup", () => {
+    const missingFromPopup = [...toolbar].filter((t) => !popup.has(t)).sort()
+    expect(
+      missingFromPopup,
+      `present in node-toolbar but MISSING from add-node-popup: ${missingFromPopup.join(", ")}`,
+    ).toEqual([])
   })
 })
