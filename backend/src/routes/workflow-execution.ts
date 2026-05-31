@@ -936,13 +936,18 @@ function toExecutionResponse(row: Record<string, unknown>) {
   }
 }
 
-function toExecutionSummary(row: Record<string, unknown>) {
+export function toExecutionSummary(row: Record<string, unknown>) {
   return {
     id: row.id,
     status: row.status,
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
-    nodeStates: row.node_states,
+    // Strip the per-node `inputs` blob (resolved upstream inputs — large,
+    // debug-only) exactly as toExecutionResponse does. The list row + node-info
+    // modal render status/type/timing/error/output, never `inputs`, so this
+    // trims the paginated (and polled) list payload without changing the UI.
+    // Full node_states (incl. inputs) remain on GET /v1/workflow-executions/:id.
+    nodeStates: stripNodeStateInputs(row.node_states),
     totalNodes: row.total_nodes,
     completedNodes: row.completed_nodes,
     failedNodes: row.failed_nodes,

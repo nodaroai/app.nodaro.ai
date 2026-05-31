@@ -95,7 +95,7 @@ vi.mock("@/ee/routes/credits.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { workflowExecutionRoutes } from "../workflow-execution.js"
+import { workflowExecutionRoutes, toExecutionSummary } from "../workflow-execution.js"
 import { supabase } from "../../lib/supabase.js"
 
 // ---------------------------------------------------------------------------
@@ -1277,5 +1277,48 @@ describe("GET /v1/workflow-executions/:id/stream", () => {
     expect(sendEventSpy).toHaveBeenCalledWith(expect.objectContaining({ type: "done" }))
 
     if (originalImpl) vi.mocked(createSSEStream).mockImplementation(originalImpl)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// toExecutionSummary — list-payload trimming (perf)
+//
+// The two paginated list endpoints (GET /v1/executions, GET
+// /v1/workflows/:id/executions) map rows through toExecutionSummary. The
+// per-node `inputs` blob (resolved upstream inputs — large, debug-only) is
+// never rendered by the list UI or its node-info modal (which reads `output`),
+// so it's stripped here exactly as toExecutionResponse does for the detail/
+// poll path. The detail endpoint still returns full node_states.
+// ---------------------------------------------------------------------------
+
+describe("toExecutionSummary — strips debug inputs from list node_states", () => {
+  it("drops per-node `inputs` but preserves output/status/type/timing", () => {
+    const summary = toExecutionSummary({
+      id: "e1",
+      status: "completed",
+      node_states: {
+        n1: {
+          status: "completed",
+          nodeType: "generate-image",
+          jobId: "j1",
+          output: { imageUrl: "https://cdn/x.png" },
+          inputs: { prompt: "a long resolved prompt", referenceImageUrls: ["https://a", "https://b"] },
+          startedAt: "t0",
+          completedAt: "t1",
+        },
+        n2: { status: "running" },
+      },
+    }) as { nodeStates: Record<string, Record<string, unknown>> }
+
+    // inputs stripped from the list payload...
+    expect(summary.nodeStates.n1).not.toHaveProperty("inputs")
+    // ...but everything the list row + node-info modal render is preserved
+    expect(summary.nodeStates.n1.output).toEqual({ imageUrl: "https://cdn/x.png" })
+    expect(summary.nodeStates.n1.status).toBe("completed")
+    expect(summary.nodeStates.n1.nodeType).toBe("generate-image")
+    expect(summary.nodeStates.n1.jobId).toBe("j1")
+    expect(summary.nodeStates.n1.startedAt).toBe("t0")
+    expect(summary.nodeStates.n1.completedAt).toBe("t1")
+    expect(summary.nodeStates.n2).toEqual({ status: "running" })
   })
 })
