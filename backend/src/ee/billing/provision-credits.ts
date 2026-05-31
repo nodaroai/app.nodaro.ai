@@ -298,6 +298,11 @@ export async function handleSubscriptionUpdated(
       tier: newTier,
       storage_limit_bytes: storageLimit,
       current_period_end: data.currentPeriodEnd,
+      // Clear any stale cancellation marker — an updated/active subscription is
+      // NOT "ended". Leaving this set let the canceled-user media reaper
+      // (cleanup-service.ts) match a reactivated paying customer and delete
+      // their entire media library 60 days later.
+      subscription_ended_at: null,
     })
     .eq("id", userId)
 
