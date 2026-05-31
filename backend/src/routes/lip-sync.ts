@@ -40,32 +40,36 @@ const lipSyncBody = z.object({
   userId: z.string().uuid().optional(),
 })
 
+/**
+ * Single source of truth for the lip-sync credit identifier — used by BOTH the
+ * creditGuard preHandler and the in-handler reservation so the reserved price
+ * can never drift from the charged price. Mirrors extend-video.ts's
+ * resolveExtendVideoIdentifier().
+ */
+function resolveLipSyncIdentifier(body: Record<string, unknown> | undefined): string {
+  const provider = (body?.provider as string) ?? "kling-avatar"
+  if (provider === "infinitalk") {
+    return `infinitalk:${(body?.resolution as string) ?? "720p"}`
+  }
+  // Seedance 2 / 2 Fast — billed per-second × resolution × ref. We ALWAYS pass
+  // the audio as a reference, so the identifier always ends in -ref. Default to
+  // the 8s tier for reservation; the worker decides actual duration (≤ audio).
+  if (provider === "seedance-2" || provider === "seedance-2-fast") {
+    return `${provider}:8s:${(body?.resolution as string) ?? "720p"}-ref`
+  }
+  // Kling AI Avatar 2.0 — per-second billing, bucketed by audio length. Missing
+  // audioDurationSec falls back to the 5-min bucket (worst case); the worker
+  // refunds the diff once actual KIE costTime is known.
+  if (provider === "kling-avatar" || provider === "kling-avatar-pro") {
+    const dur = typeof body?.audioDurationSec === "number" ? body.audioDurationSec : undefined
+    return buildLipSyncCreditId(provider, dur)
+  }
+  return provider
+}
+
 export async function lipSyncRoutes(app: FastifyInstance) {
   app.post("/v1/lip-sync", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      const provider = (body?.provider as string) ?? "kling-avatar"
-      if (provider === "infinitalk") {
-        const res = (body?.resolution as string) ?? "720p"
-        return `infinitalk:${res}`
-      }
-      // Seedance 2 / 2 Fast — billed per-second × resolution × ref. We
-      // ALWAYS pass the audio as a reference, so the identifier always
-      // ends in -ref. Default to the 8s tier for credit reservation; the
-      // actual duration is decided by the worker (≤ audio length).
-      if (provider === "seedance-2" || provider === "seedance-2-fast") {
-        const res = (body?.resolution as string) ?? "720p"
-        return `${provider}:8s:${res}-ref`
-      }
-      // Kling AI Avatar 2.0 — per-second billing, bucketed by audio length.
-      // Missing audioDurationSec falls back to the 5-min bucket (worst case);
-      // worker refunds the diff once actual KIE costTime is known.
-      if (provider === "kling-avatar" || provider === "kling-avatar-pro") {
-        const dur = typeof body?.audioDurationSec === "number" ? body.audioDurationSec : undefined
-        return buildLipSyncCreditId(provider, dur)
-      }
-      return provider
-    }),
+    preHandler: creditGuard((req) => resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined)),
   }, async (req, reply) => {
     const parsed = lipSyncBody.safeParse(req.body)
     if (!parsed.success) {
@@ -115,13 +119,7 @@ export async function lipSyncRoutes(app: FastifyInstance) {
     }
 
     const baseProvider = provider ?? "kling-avatar"
-    const modelIdentifier = baseProvider === "infinitalk"
-      ? `infinitalk:${resolution ?? "720p"}`
-      : baseProvider === "seedance-2" || baseProvider === "seedance-2-fast"
-        ? `${baseProvider}:8s:${resolution ?? "720p"}-ref`
-        : baseProvider === "kling-avatar" || baseProvider === "kling-avatar-pro"
-          ? buildLipSyncCreditId(baseProvider, audioDurationSec)
-          : baseProvider
+    const modelIdentifier = resolveLipSyncIdentifier(req.body as Record<string, unknown> | undefined)
     const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
