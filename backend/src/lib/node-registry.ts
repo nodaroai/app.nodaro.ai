@@ -291,6 +291,13 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
     outputType: "text",
   },
   {
+    type: "qa-check",
+    label: "QA Check",
+    category: "ai-text",
+    description: "LLM quality gate — scores upstream text 0.0-1.0 against a check type (content / quality / consistency / safety) and returns score + approved + reason. Flat 1cr across LLM tiers (qa-check / :economy / :premium all = 1).",
+    outputType: "text",
+  },
+  {
     type: "forced-alignment",
     label: "Forced Alignment",
     category: "ai-audio",
@@ -434,6 +441,10 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
       ],
     },
   },
+  // ---- Additional ai-image nodes (creditCost auto-filled from STATIC_CREDIT_COSTS; per-provider variable pricing) ----
+  { type: "modify-image", label: "Modify Image", category: "ai-image", description: "Transform an existing image with a text prompt across 20+ image-to-image / editing providers (Flux, GPT Image, Ideogram, Nano Banana, Qwen, Seedream, + Nano Banana Edit). Migrated successor of edit-image.", outputType: "image", creditCost: "1-18" },
+  { type: "upscale-image", label: "Upscale Image", category: "ai-image", description: "Increase image resolution with Recraft Upscale or Topaz Upscale (2K/4K/8K). No prompt — pure enhancement utility.", outputType: "image", creditCost: "1-10" },
+  { type: "remove-background", label: "Remove Background", category: "ai-image", description: "Remove the background from an image and output a transparent PNG (Recraft).", outputType: "image" },
 
   {
     type: "image-critic",
@@ -469,6 +480,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "manual-edit", label: "Manual Edit", category: "processing", description: "Open video in a browser-based web editor for manual adjustments.", outputType: "video" },
   { type: "trim-audio", label: "Trim Audio", category: "processing", description: "Extract a section of audio or extract audio from video.", outputType: "audio" },
   { type: "mix-audio", label: "Mix Audio", category: "processing", description: "Blend multiple audio tracks with individual volume control.", outputType: "audio" },
+  { type: "combine-audio", label: "Combine Audio", category: "processing", description: "Concatenate audio tracks end-to-end in order, with optional per-segment trim. (Mix Audio layers tracks; this joins them sequentially.)", outputType: "audio" },
 
   { type: "render-video", label: "Render Video", category: "composition", description: "Render a Remotion composition to MP4.", outputType: "video", creditCost: 15 },
   { type: "after-effects", label: "After Effects", category: "composition", description: "AI-generated post-processing layer.", outputType: "video", creditCost: 2 },
@@ -480,6 +492,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
 
   { type: "webhook-trigger", label: "Webhook Trigger", category: "trigger", description: "Trigger the workflow via HTTP POST.", outputType: "data" },
   { type: "schedule-trigger", label: "Schedule Trigger", category: "trigger", description: "Trigger the workflow on a cron/interval.", outputType: "data" },
+  { type: "telegram-trigger", label: "Telegram Trigger", category: "trigger", description: "Trigger the workflow when a connected Telegram bot receives a message. Emits text + chatId + messageId + messageType (+ imageUrl/videoUrl/audioUrl for media). Free — downstream nodes incur their own costs.", outputType: "data" },
 
   { type: "save-to-storage", label: "Save to Storage", category: "output", description: "Persist a node output to user storage.", outputType: "none" },
   { type: "webhook-output", label: "Webhook Output", category: "output", description: "POST a node output to a URL.", outputType: "none" },
@@ -490,10 +503,17 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "linkedin-post", label: "LinkedIn Post", category: "output", description: "Post text, images, and video to LinkedIn.", outputType: "none" },
   { type: "x-post", label: "X Post", category: "output", description: "Post text, images, and video to X (Twitter).", outputType: "none" },
   { type: "facebook-post", label: "Facebook Post", category: "output", description: "Post text, images, video, and stories to Facebook.", outputType: "none" },
+  { type: "telegram-post", label: "Telegram Post", category: "output", description: "Send a message, photo, or video to a Telegram chat, channel, or group via a connected bot (send type auto-detected from connected media).", outputType: "none" },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
   { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
+  // ---- List / JSON utility nodes (inline-executor; outputType data; free — STATIC_CREDIT_COSTS = 0) ----
+  { type: "filter-list", label: "Filter List", category: "utility", description: "Keep only the upstream list items matching one or more field conditions (AND/OR), with 12 operators (equals, contains, regex, in-list, ...).", outputType: "data", creditCost: 0 },
+  { type: "sort-list", label: "Sort List", category: "utility", description: "Sort an upstream list by value or by a dot-path field, with Auto/Text/Number/Date comparison and asc/desc direction (missing values sort last).", outputType: "data", creditCost: 0 },
+  { type: "deduplicate", label: "Deduplicate", category: "utility", description: "Remove duplicate items from an upstream list, keeping the first occurrence. Compares whole items or a dot-path field.", outputType: "data", creditCost: 0 },
+  { type: "merge-lists", label: "Merge Lists", category: "utility", description: "Combine multiple upstream lists into one — concatenate (append in edge order) or zip (element-wise merge with modulo-wrap), with optional dedupe.", outputType: "data", creditCost: 0 },
+  { type: "json-process", label: "JSON Process", category: "utility", description: "Transform upstream JSON — input-path drill, filter conditions, and field projection via a visual builder, or a raw transformation expression in Advanced mode.", outputType: "data", creditCost: 0 },
   { type: "sticky-note", label: "Sticky Note", category: "utility", description: "Place annotated notes on the workflow canvas for documentation and organization.", outputType: "none" },
   { type: "selector", label: "Selector", category: "utility", description: "Pick item(s) from a list — supports item/range/list/random/modulo/predicate/named-key modes. Two outputs: picked + rest.", outputType: "text", creditCost: 0 },
   { type: "combine-text", label: "Combine Text", category: "control", description: "Concatenate text inputs.", outputType: "text" },
@@ -597,6 +617,7 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "vehicle",              label: "Vehicle",              category: "parameter", description: "Pick a vehicle from 107 entries across subcategories (car, truck, motorcycle, boat, aircraft, spaceship, etc.). Emits 'featuring a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
   { type: "weapon",               label: "Weapon",               category: "parameter", description: "Pick a weapon from 85 entries across subcategories (blade, ranged, firearm, fantasy, sci-fi, etc.). Emits 'with a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
   { type: "held-prop",            label: "Held Prop",            category: "parameter", description: "Pick a held prop from 59 entries (smartphone, umbrella, bouquet, briefcase, ...). Emits a held-prop prompt fragment via the cinematography handle.", outputType: "text" },
+  { type: "furniture",            label: "Furniture",            category: "parameter", description: "Pick a furniture piece from 78 entries across 9 categories (seating, tables, beds, storage, lighting, kitchen-dining, outdoor, decorative, bath). Emits an 'including a X' prompt fragment with description via the cinematography handle.", outputType: "text" },
 
   // ---- Multi-dim family (6) — composed pickers with multiple fields ----
   { type: "framing",              label: "Framing",              category: "parameter", description: "Multi-dim picker for shot-size + angle + coverage + composition + vantage (72 catalog options across 5 fields). Emits a framing-descriptor prompt fragment via the cinematography handle.", outputType: "text" },
