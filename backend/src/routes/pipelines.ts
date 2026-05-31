@@ -1712,6 +1712,97 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     },
   )
 
+  // ── GET /v1/pipelines/:id/timeline ───────────────────────────────────────
+  // Phase 0 walking skeleton — assembles the data the studio view turns into a
+  // Remotion SceneGraph: ordered scene composite clips + their durations, plus
+  // the music + narration audio tracks. Reads the same scene metadata the
+  // silent-cut reel uses (`scene_node_data.composite_video_url`) and the audio
+  // URLs Stage 7 wrote onto the `animate_audio_edit` stage output.
+  app.get<{ Params: { id: string } }>(
+    "/v1/pipelines/:id/timeline",
+    async (req, reply) => {
+      if (!gateEdition(reply)) return
+      if (!gateScope(req, reply, "pipelines:read")) return
+      const userId = gateAuth(req, reply)
+      if (!userId) return
+
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("user_id, output_resolution")
+        .eq("id", req.params.id)
+        .maybeSingle()
+      if (!pipeline || pipeline.user_id !== userId) {
+        return reply.status(404).send({ error: { code: "not_found" } })
+      }
+
+      // Scenes in story order (entity_key asc — matches the silent-cut reel).
+      const { data: scenes, error: scenesErr } = await supabase
+        .from("pipeline_entities")
+        .select("metadata")
+        .eq("pipeline_id", req.params.id)
+        .eq("entity_type", "scene")
+        .order("entity_key", { ascending: true })
+      if (scenesErr) {
+        return reply
+          .status(500)
+          .send({ error: { code: "db_error", detail: scenesErr.message } })
+      }
+
+      const sceneClips: Array<{ compositeUrl: string; durationSeconds: number }> = []
+      for (const row of scenes ?? []) {
+        const meta = (row.metadata as Record<string, unknown> | null) ?? {}
+        const sceneNodeData = meta.scene_node_data as
+          | {
+              composite_video_url?: string
+              shots?: Array<{ duration_seconds?: number }>
+            }
+          | undefined
+        const compositeUrl = sceneNodeData?.composite_video_url
+        if (!compositeUrl) continue
+        const durationSeconds = (sceneNodeData?.shots ?? []).reduce(
+          (sum, s) =>
+            sum + (typeof s.duration_seconds === "number" ? s.duration_seconds : 0),
+          0,
+        )
+        sceneClips.push({ compositeUrl, durationSeconds })
+      }
+
+      // Audio URLs from the Stage 7 (animate_audio_edit) stage output.
+      const { data: animateStage } = await supabase
+        .from("pipeline_stages")
+        .select("output")
+        .eq("pipeline_id", req.params.id)
+        .eq("stage_name", "animate_audio_edit")
+        .maybeSingle()
+      const animateOutput =
+        (animateStage?.output as {
+          music_result?: { musicAssetUrl?: string } | null
+          narration_audio_url?: string | null
+        } | null) ?? {}
+      // `musicAssetUrl` is "" when music is disabled or the Suno step failed
+      // (see MusicTimelineResult) — use a truthy check, not ??, so an empty
+      // string never becomes a phantom audio track.
+      const musicUrl = animateOutput.music_result?.musicAssetUrl || undefined
+      const narrationUrl = animateOutput.narration_audio_url || undefined
+
+      const resolution = (pipeline as { output_resolution?: string })
+        .output_resolution
+      const { width, height } =
+        resolution === "1080p"
+          ? { width: 1920, height: 1080 }
+          : { width: 1280, height: 720 }
+
+      return {
+        fps: 30,
+        width,
+        height,
+        scenes: sceneClips,
+        ...(musicUrl ? { musicUrl } : {}),
+        ...(narrationUrl ? { narrationUrl } : {}),
+      }
+    },
+  )
+
   // ── POST /v1/pipelines/:id/entities/:entity_id/approve ───────────────────
   app.post<{ Params: { id: string; entity_id: string } }>(
     "/v1/pipelines/:id/entities/:entity_id/approve",

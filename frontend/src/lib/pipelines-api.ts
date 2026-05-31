@@ -26,6 +26,7 @@ import type {
   ApplyChatProposalResult,
 } from "@nodaro/client"
 import { getAuthHeaders } from "@/lib/api"
+import type { PipelineTimelineInput } from "@remotion-pkg/lib/build-scene-graph-from-pipeline"
 
 // Pipelines API uses the same proxy convention as the rest of the frontend:
 // same-origin relative paths under /v1/* are proxied to the backend by Vite's
@@ -336,6 +337,12 @@ export const pipelinesApi = {
     getJson<{ status: string; output: unknown; critic_feedback: unknown }>(
       `/v1/pipelines/${id}/stages/${stage}`,
     ),
+  /**
+   * Phase 0 — assembled timeline (ordered scene composites + their durations +
+   * music/narration URLs) the studio turns into a Remotion SceneGraph.
+   */
+  getTimeline: (id: string) =>
+    getJson<PipelineTimelineInput>(`/v1/pipelines/${id}/timeline`),
   eventsUrl: (id: string) => `${API_BASE}/v1/pipelines/${id}/events`,
   /**
    * Phase 1B.4 — fork a running pipeline. Backend response matches
