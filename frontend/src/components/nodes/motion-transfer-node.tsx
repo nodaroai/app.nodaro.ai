@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Waypoints, Film, Image as ImageIcon, Type, Minus, Users, Loader2, AlertCircle, X, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidMotionTransferConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
@@ -322,12 +322,12 @@ function MotionTransferNodeComponent({ id, data, selected }: NodeProps) {
     {/* 5 typed input pips + 1 output pip — bottom-up clusters:
         text → image → pickers. Colors mirror generate-video so wires read
         as the source node's brand. */}
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="prompt"   type="target" position={Position.Left}  label="Prompt"    color="#ff0073" icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}   accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="negative" type="target" position={Position.Left}  label="Negative"  color="#ef4444" icon={<Minus />}     side="left"  top={HANDLE_TOP.negative} accepts={ACCEPTS_NEGATIVE} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="image"    type="target" position={Position.Left}  label="Character" color="#22D3EE" icon={<ImageIcon />} side="left"  top={HANDLE_TOP.image}    accepts={ACCEPTS_IMAGE} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="target" position={Position.Left}  label="Motion"    color="#A78BFA" icon={<Film />}      side="left"  top={HANDLE_TOP.video}    accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="assets"   type="target" position={Position.Left}  label="Assets"    color="#F472B6" icon={<Users />}     side="left"  top={HANDLE_TOP.assets}   accepts={ACCEPTS_ASSETS} />
-    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="source" position={Position.Right} label="Video"     color="#A78BFA" icon={<Film />}      side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="prompt"   type="target" position={Position.Left}  label="Prompt"    color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}   accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="negative" type="target" position={Position.Left}  label="Negative"  color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={HANDLE_TOP.negative} accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="image"    type="target" position={Position.Left}  label="Character" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.image}    accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="target" position={Position.Left}  label="Motion"    color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={HANDLE_TOP.video}    accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="assets"   type="target" position={Position.Left}  label="Assets"    color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={HANDLE_TOP.assets}   accepts={ACCEPTS_ASSETS} />
+    <HandleWithPopover nodeId={id} nodeType="motion-transfer" handleId="video"    type="source" position={Position.Right} label="Video"     color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

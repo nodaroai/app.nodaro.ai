@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidVoiceDesignConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -168,10 +168,10 @@ function VoiceDesignNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="prompt"  type="target" position={Position.Left}  label="Prompt"   color="#ff0073" icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color="#F59E0B" icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio"   type="source" position={Position.Right} label="Audio"    color="#F59E0B" icon={<Wand2 />}   side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="voiceId" type="source" position={Position.Right} label="Voice ID" color="#F472B6" icon={<User />}    side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="prompt"  type="target" position={Position.Left}  label="Prompt"   color={TEXT_HANDLE_COLOR} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio-style" type="target" position={Position.Left}  label="Audio style" color={HANDLE_COLORS.audio} icon={<Sparkles />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_AUDIO_STYLE} />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="audio"   type="source" position={Position.Right} label="Audio"    color={HANDLE_COLORS.audio} icon={<Wand2 />}   side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="voice-design" handleId="voiceId" type="source" position={Position.Right} label="Voice ID" color={HANDLE_COLORS.identity} icon={<User />}    side="right" top="56px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

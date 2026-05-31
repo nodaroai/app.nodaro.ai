@@ -4,7 +4,7 @@ import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Users, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Clapperboard, Film, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidLipSyncConnection } from "@/lib/video-producer-handles"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
@@ -638,14 +638,14 @@ function LipSyncNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="audio" type="target" position={Position.Left}  label="Audio"        color="#FCD34D" icon={<Volume2 />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="audio" type="target" position={Position.Left}  label="Audio"        color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
     {(needsVideoInput || needsBothInputs) && (
-      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="target" position={Position.Left}  label="Source video" color="#A78BFA" icon={<Film />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="target" position={Position.Left}  label="Source video" color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_VIDEO} />
     )}
     {(needsImageInput || needsBothInputs) && (
-      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="image" type="target" position={Position.Left}  label="Portrait"     color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_IMAGE} />
+      <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="image" type="target" position={Position.Left}  label="Portrait"     color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_IMAGE} />
     )}
-    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="source" position={Position.Right} label="Video"        color="#A78BFA" icon={<Film />}      side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="lip-sync" handleId="video" type="source" position={Position.Right} label="Video"        color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 
     {/* Preview Modal */}
     {activeUrl && (

@@ -7,7 +7,7 @@ import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidForcedAlignmentConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -128,9 +128,9 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="audio"      type="target" position={Position.Left}  label="Audio"      color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color="#22D3EE" icon={<FileText />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TRANSCRIPT} />
-    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="data"       type="source" position={Position.Right} label="Data"       color="#A78BFA" icon={<AlignLeft />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="audio"      type="target" position={Position.Left}  label="Audio"      color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={HANDLE_COLORS.image} icon={<FileText />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TRANSCRIPT} />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="data"       type="source" position={Position.Right} label="Data"       color={HANDLE_COLORS.video} icon={<AlignLeft />}     side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm}
       onClose={() => setDeleteConfirm(false)}

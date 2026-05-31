@@ -4,7 +4,7 @@ import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
@@ -66,8 +66,8 @@ function GenerativePipelineNodeImpl({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="story_prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="final_video"  type="source" position={Position.Right} label="Video"  color="#A78BFA" icon={<Film />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="story_prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="generative-pipeline" handleId="final_video"  type="source" position={Position.Right} label="Video"  color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
     </div>
   )
 }

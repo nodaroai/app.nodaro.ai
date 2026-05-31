@@ -3,7 +3,7 @@
 import { memo, useState, useRef, useCallback, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ScanFace, Loader2, AlertCircle, X, Image as ImageIcon, Clapperboard, LayoutGrid, Expand, Download, Link, Settings, Scissors } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidFaceSwapConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -252,9 +252,9 @@ function FaceSwapNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="target" position={Position.Left}  label="Video" color="#ff0073" icon={<Clapperboard />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="face"  type="target" position={Position.Left}  label="Face"  color="#FB923C" icon={<ImageIcon />}    side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_FACE} />
-    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="source" position={Position.Right} label="Video" color="#ff0073" icon={<Clapperboard />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Clapperboard />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="face"  type="target" position={Position.Left}  label="Face"  color={HANDLE_COLORS.face} icon={<ImageIcon />}    side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_FACE} />
+    <HandleWithPopover nodeId={id} nodeType="face-swap" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Clapperboard />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

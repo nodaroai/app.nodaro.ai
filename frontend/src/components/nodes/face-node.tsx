@@ -6,7 +6,7 @@ import { SmilePlus, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Downloa
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidFaceConnection } from "@/lib/identity-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -244,8 +244,8 @@ function FaceNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="face" handleId="in"      type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="face" handleId="faceRef" type="source" position={Position.Right} label="Face"   color="#FB923C" icon={<SmilePlus />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="face" handleId="in"      type="target" position={Position.Left}  label="Prompt" color={HANDLE_COLORS.text} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="face" handleId="faceRef" type="source" position={Position.Right} label="Face"   color={HANDLE_COLORS.face} icon={<SmilePlus />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

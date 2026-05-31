@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSplitMediaConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -115,10 +115,10 @@ function SplitMediaNodeComponent({ id, data, selected }: NodeProps) {
           </span>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="target" position={Position.Left}  label="Video" color="#3B82F6" icon={<Video />}          side="left"  top="40%" accepts={ACCEPTS_VIDEO} />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="left"  top="70%" accepts={ACCEPTS_AUDIO} />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="source" position={Position.Right} label="Video" color="#3B82F6" icon={<Video />}          side="right" top="30%" />
-      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="source" position={Position.Right} label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="right" top="70%" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="left"  top="40%" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="70%" accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Video />}          side="right" top="30%" />
+      <HandleWithPopover nodeId={id} nodeType="split-media" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="right" top="70%" />
     </div>
   )
 }

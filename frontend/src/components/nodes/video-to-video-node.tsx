@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clapperboard, Film, Type, Minus, Loader2, AlertCircle, X, Download, LayoutGrid, Expand, Link, Settings, Scissors, Aperture } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidVideoToVideoConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
@@ -284,11 +284,11 @@ function VideoToVideoNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color="#A78BFA" icon={<Film />}     side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_VIDEO} />
-    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />} side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_CINEMATOGRAPHY} />
-    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color="#ff0073" icon={<Type />}     side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="negative"       type="target" position={Position.Left}  label="Negative"       color="#ef4444" icon={<Minus />}    side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_NEGATIVE} />
-    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color={HANDLE_COLORS.video} icon={<Film />}     side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_VIDEO} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color={HANDLE_COLORS.look} icon={<Aperture />} side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color={TEXT_HANDLE_COLOR} icon={<Type />}     side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="negative"       type="target" position={Position.Left}  label="Negative"       color={HANDLE_COLORS.negative} icon={<Minus />}    side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="video-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

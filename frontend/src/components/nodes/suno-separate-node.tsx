@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoSeparateConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -156,9 +156,9 @@ function SunoSeparateNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="audio"        type="target" position={Position.Left}  label="Audio"        color="#F59E0B" icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color="#F59E0B" icon={<Mic />}      side="right" top="30%" />
-    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color="#F59E0B" icon={<Music />}    side="right" top="70%" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="audio"        type="target" position={Position.Left}  label="Audio"        color={HANDLE_COLORS.audio} icon={<Scissors />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="vocals"       type="source" position={Position.Right} label="Vocals"       color={HANDLE_COLORS.audio} icon={<Mic />}      side="right" top="30%" />
+    <HandleWithPopover nodeId={id} nodeType="suno-separate" handleId="instrumental" type="source" position={Position.Right} label="Instrumental" color={HANDLE_COLORS.audio} icon={<Music />}    side="right" top="70%" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

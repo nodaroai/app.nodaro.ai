@@ -5,7 +5,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { LogOut } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 
 const PORT_COLOR: Record<string, string> = {
   text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
@@ -109,7 +109,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
       {handles.filter(h => h.type === "target").map(h => (
         <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color={PORT_COLOR[(h as { mediaType?: string }).mediaType ?? "any"] ?? "#475569"} icon={<LogOut />} side="left" top={(h as { top?: string }).top ?? "calc(100% - 24px)"} />
       ))}
-      <HandleWithPopover nodeId={id} nodeType="sub-workflow-output" handleId="out" type="source" position={Position.Right} label="Parent" color="#475569" icon={<LogOut />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="sub-workflow-output" handleId="out" type="source" position={Position.Right} label="Parent" color={HANDLE_COLORS.control} icon={<LogOut />} side="right" top="24px" />
     </div>
   )
 }

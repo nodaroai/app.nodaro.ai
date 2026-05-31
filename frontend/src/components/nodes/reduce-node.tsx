@@ -6,7 +6,7 @@ import { Funnel, FileText, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import { REDUCE_STRATEGIES } from "@nodaro/shared"
@@ -91,8 +91,8 @@ function ReduceNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="in"  type="target" position={Position.Left}  label="Branches" color="#818CF8" icon={<Braces />}   side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="out" type="source" position={Position.Right} label="Reduced"  color="#475569" icon={<FileText />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="in"  type="target" position={Position.Left}  label="Branches" color={HANDLE_COLORS.look} icon={<Braces />}   side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="reduce" handleId="out" type="source" position={Position.Right} label="Reduced"  color={HANDLE_COLORS.control} icon={<FileText />} side="right" top="24px" />
     </div>
   )
 }

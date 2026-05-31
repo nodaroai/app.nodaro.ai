@@ -4,7 +4,7 @@ import { Shapes, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -96,8 +96,8 @@ function MotionGraphicsNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="video"       type="target" position={Position.Left}  label="Video"       color="#A78BFA" icon={<Film />}   side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Shapes />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="video"       type="target" position={Position.Left}  label="Video"       color={HANDLE_COLORS.video} icon={<Film />}   side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="motion-graphics" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Shapes />} side="right" top="24px" />
     </div>
   )
 }

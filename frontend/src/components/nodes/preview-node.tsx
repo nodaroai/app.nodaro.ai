@@ -7,7 +7,7 @@ import { Eye, FileText, ImageIcon, Film, Music } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isMediaUrl } from "@/lib/media-type"
 import { getPreviewItemKey } from "@/lib/preview-items"
@@ -156,8 +156,8 @@ function PreviewNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         )}
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="preview" handleId="in"  type="target" position={Position.Left}  label="Input"  color="#94A3B8" icon={<Eye />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_ANY} />
-      <HandleWithPopover nodeId={id} nodeType="preview" handleId="out" type="source" position={Position.Right} label="Output" color="#94A3B8" icon={<Eye />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="in"  type="target" position={Position.Left}  label="Input"  color={HANDLE_COLORS.control} icon={<Eye />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_ANY} />
+      <HandleWithPopover nodeId={id} nodeType="preview" handleId="out" type="source" position={Position.Right} label="Output" color={HANDLE_COLORS.control} icon={<Eye />} side="right" top="24px" />
     </div>
   )
 }

@@ -51,7 +51,8 @@ vi.mock("../editable-node-label", () => ({
 // so the dispatch branch is assertable from the DOM. The real component
 // pulls in Radix Popover + a lazy-loaded HandlePopover which we don't
 // need for this test.
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ color, nodeType, label, handleId }: any) => (
     <div
       data-testid="handle-with-popover"

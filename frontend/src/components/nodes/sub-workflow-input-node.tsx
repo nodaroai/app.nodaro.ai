@@ -5,7 +5,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { LogIn } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 
 const PORT_COLOR: Record<string, string> = {
   text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
@@ -98,7 +98,7 @@ function SubWorkflowInputNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="sub-workflow-input" handleId="in" type="target" position={Position.Left} label="Parent" color="#475569" icon={<LogIn />} side="left" top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="sub-workflow-input" handleId="in" type="target" position={Position.Left} label="Parent" color={HANDLE_COLORS.control} icon={<LogIn />} side="left" top="calc(100% - 24px)" />
       {handles.filter(h => h.type === "source").map(h => (
         <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow-input" handleId={h.id} type="source" position={Position.Right} label={(h as { label?: string }).label ?? h.id} color={PORT_COLOR[(h as { mediaType?: string }).mediaType ?? "any"] ?? "#475569"} icon={<LogIn />} side="right" top={(h as { top?: string }).top ?? "24px"} />
       ))}

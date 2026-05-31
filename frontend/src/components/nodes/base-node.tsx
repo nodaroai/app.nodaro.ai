@@ -54,21 +54,27 @@ interface BaseNodeProps {
   readonly imageAspectRatio?: number
 }
 
-// Light mode: white bg with colored top accent line, Dark mode: category-colored borders
+// Card border + background. The CARD BORDER is uniform across every category
+// (light #E2E8F0 / dark #333333) — category identity is carried by the header
+// color (CATEGORY_HEADER) and icon, NOT the border, so all nodes read as one
+// family on the canvas. (Selected/running states still override the border via
+// their own classes below.) Kept as a per-category map so a category can opt
+// into a distinct background later without reintroducing border drift.
+const NEUTRAL_CARD_STYLE = "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#101010]/90 dark:backdrop-blur-sm"
 const CATEGORY_STYLES: Record<string, string> = {
-  input: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  parameter: "bg-white border-[#E2E8F0] dark:border-[#818CF8] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  ai: "bg-white border-[#E2E8F0] dark:border-[#333333] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  processing: "bg-white border-[#E2E8F0] dark:border-[#475569] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  output: "bg-white border-[#E2E8F0] dark:border-green-500 dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  scene: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  character: "bg-white border-[#E2E8F0] dark:border-[#F472B6] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  face: "bg-white border-[#E2E8F0] dark:border-[#FB923C] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  object: "bg-white border-[#E2E8F0] dark:border-[#34D399] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  location: "bg-white border-[#E2E8F0] dark:border-[#22D3EE] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  script: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  i2v: "bg-white border-[#E2E8F0] dark:border-[#ff0073] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
-  component: "bg-white border-[#E2E8F0] dark:border-[#A855F7] dark:bg-[#101010]/90 dark:backdrop-blur-sm",
+  input: NEUTRAL_CARD_STYLE,
+  parameter: NEUTRAL_CARD_STYLE,
+  ai: NEUTRAL_CARD_STYLE,
+  processing: NEUTRAL_CARD_STYLE,
+  output: NEUTRAL_CARD_STYLE,
+  scene: NEUTRAL_CARD_STYLE,
+  character: NEUTRAL_CARD_STYLE,
+  face: NEUTRAL_CARD_STYLE,
+  object: NEUTRAL_CARD_STYLE,
+  location: NEUTRAL_CARD_STYLE,
+  script: NEUTRAL_CARD_STYLE,
+  i2v: NEUTRAL_CARD_STYLE,
+  component: NEUTRAL_CARD_STYLE,
 }
 
 // Light mode: light gray header with colored icon, Dark mode: colored headers

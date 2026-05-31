@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoMusicVideoConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -156,8 +156,8 @@ function SunoMusicVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="video" type="source" position={Position.Right} label="Video" color="#3B82F6" icon={<Film />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+      <HandleWithPopover nodeId={id} nodeType="suno-music-video" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

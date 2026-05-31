@@ -13,7 +13,7 @@ import { useShallow } from "zustand/react/shallow"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useStaleHandleCleanup } from "@/hooks/use-stale-handle-cleanup"
 import { AggregateHandleVisual } from "@/components/nodes/handle-icon"
-import { HandleWithPopover } from "@/components/nodes/handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "@/components/nodes/handle-with-popover"
 import { EditableNodeLabel } from "@/components/nodes/editable-node-label"
 import { BaseNode, type HandleConfig } from "@/components/nodes/base-node"
 import { computeCollectBuckets } from "@/components/editor/workflow-editor/execution-graph"
@@ -105,7 +105,7 @@ function CollectNodeComponent({ id, data, selected }: NodeProps) {
             : `${incomingCount} connection${incomingCount === 1 ? "" : "s"}`}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="collect" handleId={COLLECT_IN_HANDLE} type="target" position={Position.Left} label="Inputs" color="#475569" icon={<Combine />} side="left" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="collect" handleId={COLLECT_IN_HANDLE} type="target" position={Position.Left} label="Inputs" color={HANDLE_COLORS.control} icon={<Combine />} side="left" top="24px" />
       {types.map((t, idx) => (
         <AggregateHandleVisual
           key={groupHandleId(t)}

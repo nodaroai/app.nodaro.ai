@@ -4,7 +4,7 @@ import { Sparkles, Film, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -98,8 +98,8 @@ function VideoComposerNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Assets"      color="#475569" icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Film />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="in"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Sparkles />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="video-composer" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Film />}     side="right" top="24px" />
     </div>
   )
 }

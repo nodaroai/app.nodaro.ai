@@ -25,7 +25,8 @@ vi.mock("../handle-icon", () => ({
   ),
 }))
 
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ handleId, label, type }: { handleId: string; label?: string; type: string }) => (
     <div data-testid={`handle-with-popover-${handleId}`} data-label={label ?? ""} data-type={type}>
       {label && <span data-testid="handle-with-popover-label">{label}</span>}

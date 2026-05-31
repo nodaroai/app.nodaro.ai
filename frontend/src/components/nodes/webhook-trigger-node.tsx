@@ -5,7 +5,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Webhook, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WebhookTriggerData, WebhookParam } from "@/types/nodes"
 
@@ -79,9 +79,9 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="webhook-trigger" handleId="in" type="target" position={Position.Left} label="URL" color="#38BDF8" icon={<Webhook />} side="left" top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="webhook-trigger" handleId="in" type="target" position={Position.Left} label="URL" color={TEXT_HANDLE_COLOR} icon={<Webhook />} side="left" top="calc(100% - 24px)" />
       {handles.filter(h => h.type === "source").map((h) => (
-        <HandleWithPopover key={h.id} nodeId={id} nodeType="webhook-trigger" handleId={h.id} type="source" position={Position.Right} label={(h as { label?: string }).label ?? h.id} color="#38BDF8" icon={<Type />} side="right" top={h.customStyle?.top as string ?? '50%'} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="webhook-trigger" handleId={h.id} type="source" position={Position.Right} label={(h as { label?: string }).label ?? h.id} color={HANDLE_COLORS.control} icon={<Type />} side="right" top={h.customStyle?.top as string ?? '50%'} />
       ))}
     </div>
   )

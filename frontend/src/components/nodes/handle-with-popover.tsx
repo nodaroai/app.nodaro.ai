@@ -7,6 +7,7 @@ import { useHandleConnections } from "@/hooks/use-handle-connections"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { TARGET_HANDLE_ACCEPTS } from "@/lib/target-handle-registry"
+import { HANDLE_COLORS } from "@/lib/handle-colors"
 import { getDragAncestorSet } from "@/lib/connection-validation"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
 
@@ -90,6 +91,14 @@ const CLICK_MS_THRESHOLD = 250
  *  light (~#E2E8F0) and dark (~#2D2D2D) modes — the icon's brand color
  *  carries the type identification. */
 const UNCONNECTED_COLOR = "var(--border)"
+
+/** Re-exported so node files import the canonical color map + the handle
+ *  component from one place: `import { HandleWithPopover, HANDLE_COLORS }`. */
+export { HANDLE_COLORS }
+
+/** Back-compat alias for the text/prompt color. Prefer `HANDLE_COLORS.text`
+ *  in new code. */
+export const TEXT_HANDLE_COLOR = HANDLE_COLORS.text
 
 /**
  * A typed handle with built-in popover for managing connections.

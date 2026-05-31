@@ -6,7 +6,7 @@ import { Filter, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
 import type { JsonProcessNodeData } from "@/types/nodes"
@@ -88,8 +88,8 @@ function JsonProcessNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="json-process" handleId="in"  type="target" position={Position.Left}  label="JSON"   color="#818CF8" icon={<Filter />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="json-process" handleId="out" type="source" position={Position.Right} label="Result" color="#475569" icon={<Braces />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="json-process" handleId="in"  type="target" position={Position.Left}  label="JSON"   color={HANDLE_COLORS.look} icon={<Filter />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="json-process" handleId="out" type="source" position={Position.Right} label="Result" color={HANDLE_COLORS.control} icon={<Braces />} side="right" top="24px" />
     </div>
   )
 }

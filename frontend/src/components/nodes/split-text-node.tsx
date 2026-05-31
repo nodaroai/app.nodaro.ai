@@ -6,7 +6,7 @@ import { Scissors, FileText, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSplitTextConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useAutoExecute } from "@/hooks/use-auto-execute"
@@ -78,8 +78,8 @@ function SplitTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="target" position={Position.Left}  label="Text" color="#22D3EE" icon={<FileText />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_TEXT} />
-      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="source" position={Position.Right} label="Text" color="#22D3EE" icon={<Type />}     side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="target" position={Position.Left}  label="Text" color={TEXT_HANDLE_COLOR} icon={<FileText />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_TEXT} />
+      <HandleWithPopover nodeId={id} nodeType="split-text" handleId="text" type="source" position={Position.Right} label="Text" color={TEXT_HANDLE_COLOR} icon={<Type />}     side="right" top="24px" />
     </div>
   )
 }

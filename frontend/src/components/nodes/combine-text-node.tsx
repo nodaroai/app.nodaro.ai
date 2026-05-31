@@ -8,7 +8,7 @@ import { copyToClipboard } from "@/lib/utils"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidCombineTextConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -151,8 +151,8 @@ function CombineTextNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="target" position={Position.Left}  label="Text" color="#22D3EE" icon={<FileText />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_TEXT} />
-      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="source" position={Position.Right} label="Text" color="#22D3EE" icon={<Type />}     side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="target" position={Position.Left}  label="Text" color={TEXT_HANDLE_COLOR} icon={<FileText />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_TEXT} />
+      <HandleWithPopover nodeId={id} nodeType="combine-text" handleId="text" type="source" position={Position.Right} label="Text" color={TEXT_HANDLE_COLOR} icon={<Type />}     side="right" top="24px" />
       <TextPreviewModal
         isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}

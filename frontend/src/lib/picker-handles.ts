@@ -1,13 +1,16 @@
+import { HANDLE_COLORS } from "./handle-colors"
+
 export type PickerFamily = "look" | "elements" | "asset" | "text" | "audio" | "motion"
 
+// Picker output-pip families derive from the canonical HANDLE_COLORS map
+// (single source of truth) — these are picker-facing aliases of those types.
 export const PICKER_FAMILY_COLORS: Record<PickerFamily, string> = {
-  look: "#818CF8",      // indigo — matches Generate Image `look` handle
-  elements: "#818CF8",  // indigo — matches Generate Image `elements` handle
-  // asset/text reserved for future picker entity types (character, location, etc.)
-  asset: "#F472B6",     // pink — matches Generate Image `assets` handle
-  text: "#22D3EE",      // cyan — matches Generate Image `prompt` handle
-  audio: "#F59E0B",     // amber — Generate Music inputs
-  motion: "#A78BFA",    // violet — camera-motion + transition (video motion handles)
+  look: HANDLE_COLORS.look,
+  elements: HANDLE_COLORS.look,
+  asset: HANDLE_COLORS.identity,
+  text: HANDLE_COLORS.text,
+  audio: HANDLE_COLORS.audio,
+  motion: HANDLE_COLORS.video,
 }
 
 /**
@@ -83,8 +86,8 @@ const REGISTRY: Record<string, PickerOutputMeta> = {
   // can feed camera-motion / transition state handles. The drift-catcher
   // test (`picker-handles.test.ts`) allowlists these because they aren't
   // tile-grid pickers (no entry in `parameter-picker-registry.tsx`).
-  "tone":                  { family: "text", color: "#22D3EE", label: "Tone" },
-  "text-prompt":           { family: "text", color: "#22D3EE", label: "Text prompt" },
+  "tone":                  { family: "text", color: PICKER_FAMILY_COLORS.text, label: "Tone" },
+  "text-prompt":           { family: "text", color: PICKER_FAMILY_COLORS.text, label: "Text prompt" },
 }
 
 export function getPickerOutputMeta(nodeType: string): PickerOutputMeta | null {

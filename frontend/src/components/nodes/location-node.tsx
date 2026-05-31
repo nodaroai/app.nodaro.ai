@@ -6,7 +6,7 @@ import { MapPin, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download, 
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidLocationConnection } from "@/lib/identity-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -317,9 +317,9 @@ function LocationNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="location" handleId="in"             type="target" position={Position.Left}  label="Prompt"         color="#ff0073" icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="location" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
-    <HandleWithPopover nodeId={id} nodeType="location" handleId="locationRef"    type="source" position={Position.Right} label="Location"       color="#22D3EE" icon={<MapPin />}   side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="location" handleId="in"             type="target" position={Position.Left}  label="Prompt"         color={HANDLE_COLORS.text} icon={<Type />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="location" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color={HANDLE_COLORS.look} icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="location" handleId="locationRef"    type="source" position={Position.Right} label="Location"       color={HANDLE_COLORS.image} icon={<MapPin />}   side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}

@@ -8,7 +8,7 @@ import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidTranscribeConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
@@ -232,8 +232,8 @@ function TranscribeNodeComponent({ id, data, selected }: NodeProps) {
 
           </div>
         </BaseNode>
-        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="audio" type="target" position={Position.Left}  label="Audio" color="#F59E0B" icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="text"  type="source" position={Position.Right} label="Text"  color="#22D3EE" icon={<Type />}          side="right" top="24px" />
+        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="audio" type="target" position={Position.Left}  label="Audio" color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
+        <HandleWithPopover nodeId={id} nodeType="transcribe" handleId="text"  type="source" position={Position.Right} label="Text"  color={TEXT_HANDLE_COLOR} icon={<Type />}          side="right" top="24px" />
         <DeleteConfirmationDialog
           isOpen={deleteConfirm !== null}
           onClose={() => setDeleteConfirm(null)}

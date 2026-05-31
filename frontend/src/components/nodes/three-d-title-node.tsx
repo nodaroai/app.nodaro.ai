@@ -4,7 +4,7 @@ import { Box, ImageIcon, Loader2, AlertCircle } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NodeJobProgress } from "./node-job-progress"
@@ -96,8 +96,8 @@ function ThreeDTitleNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="background"  type="target" position={Position.Left}  label="Background"  color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="composition" type="source" position={Position.Right} label="Composition" color="#ff0073" icon={<Box />}       side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="background"  type="target" position={Position.Left}  label="Background"  color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="3d-title" handleId="composition" type="source" position={Position.Right} label="Composition" color={HANDLE_COLORS.control} icon={<Box />}       side="right" top="24px" />
     </div>
   )
 }

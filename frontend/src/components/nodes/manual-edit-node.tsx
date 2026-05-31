@@ -6,7 +6,7 @@ import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { Scissors, Loader2, AlertCircle, X, Film } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { CachedImage } from "@/components/ui/cached-image"
@@ -218,8 +218,8 @@ function ManualEditNodeComponent({ id, data, selected }: NodeProps) {
         </p>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="in"    type="target" position={Position.Left}  label="Assets" color="#475569" icon={<Scissors />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="video" type="source" position={Position.Right} label="Video"  color="#A78BFA" icon={<Film />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="in"    type="target" position={Position.Left}  label="Assets" color={HANDLE_COLORS.identity} icon={<Scissors />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="manual-edit" handleId="video" type="source" position={Position.Right} label="Video"  color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} onVideoStateChange={handleVideoStateChange} initialVideoPlayState={nodeData.videoPlayState} initialPausedAtTime={nodeData.pausedAtTime} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />
     </div>

@@ -6,7 +6,7 @@ import { Package, Loader2, AlertCircle, X, ImageIcon, Maximize2, Type, Download,
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidObjectConnection } from "@/lib/identity-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -321,9 +321,9 @@ function ObjectNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="object" handleId="in"        type="target" position={Position.Left}  label="Prompt"      color="#ff0073" icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="object" handleId="type"      type="target" position={Position.Left}  label="Object type" color="#34D399" icon={<Package />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
-    <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object"      color="#34D399" icon={<Package />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="in"        type="target" position={Position.Left}  label="Prompt"      color={HANDLE_COLORS.text} icon={<Type />}    side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="type"      type="target" position={Position.Left}  label="Object type" color={HANDLE_COLORS.imageRef} icon={<Package />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TYPE} />
+    <HandleWithPopover nodeId={id} nodeType="object" handleId="objectRef" type="source" position={Position.Right} label="Object"      color={HANDLE_COLORS.imageRef} icon={<Package />} side="right" top="24px" />
 
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
