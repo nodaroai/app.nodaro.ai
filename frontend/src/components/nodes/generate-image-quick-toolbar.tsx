@@ -10,7 +10,7 @@ import {
   getAspectRatiosForModel,
   IMAGE_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
+import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -235,16 +235,14 @@ export function GenerateImageQuickToolbar({
                   Multi-provider — open node settings to edit
                 </span>
               ) : (
-                <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
-                  <SelectTrigger className={ghostPopoverTriggerClass}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {IMAGE_GEN_MODELS.map((m) => (
-                      <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-                    ))}
-                  </SelectContent>
-                </Select>
+                <ModelSearchSelect
+                  value={currentProvider}
+                  onChange={handleModelChange}
+                  onOpenChange={handleOpenChange}
+                  options={IMAGE_GEN_MODELS}
+                  triggerClassName={ghostPopoverTriggerClass}
+                  ariaLabel="Model"
+                />
               )}
             </ToolbarSetting>
             {aspectOptions.length > 0 && (
@@ -321,17 +319,16 @@ export function GenerateImageQuickToolbar({
           {modelLabel}
         </span>
       ) : (
-        <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
-          <SelectTrigger className={`${ghostTriggerClass} max-w-[180px]`}>
-            <Sparkles className="opacity-70" />
-            <SelectValue>{modelLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSearchSelect
+          value={currentProvider}
+          onChange={handleModelChange}
+          onOpenChange={handleOpenChange}
+          options={IMAGE_GEN_MODELS}
+          triggerLabel={modelLabel}
+          triggerIcon={<Sparkles className="opacity-70" />}
+          triggerClassName={`${ghostTriggerClass} max-w-[180px]`}
+          ariaLabel="Model"
+        />
       )}
 
       {/* Aspect ratio selector */}

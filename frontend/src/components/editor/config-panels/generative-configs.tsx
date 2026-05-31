@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { pipelinesApi } from "@/lib/pipelines-api"
+import { ModelSearchSelect } from "./model-search-select"
 import type { ConfigProps } from "./types"
 
 const MODE_LABELS: Record<PipelineMode, string> = {
@@ -301,46 +302,24 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
         <div className="space-y-3">
           <div>
             <Label htmlFor="image_model">Image model</Label>
-            <Select
+            <ModelSearchSelect
               value={data.image_model || "auto"}
-              onValueChange={(v) =>
-                onUpdate({ image_model: v === "auto" ? undefined : v })
-              }
-            >
-              <SelectTrigger id="image_model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {IMAGE_MODEL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => onUpdate({ image_model: v === "auto" ? undefined : v })}
+              options={IMAGE_MODEL_OPTIONS}
+              ariaLabel="Image model"
+            />
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Applies to character/location/object portraits + scene keyframes.
             </div>
           </div>
           <div>
             <Label htmlFor="video_model">Video model</Label>
-            <Select
+            <ModelSearchSelect
               value={data.video_model || "auto"}
-              onValueChange={(v) =>
-                onUpdate({ video_model: v === "auto" ? undefined : v })
-              }
-            >
-              <SelectTrigger id="video_model">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {VIDEO_MODEL_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>
-                    {o.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => onUpdate({ video_model: v === "auto" ? undefined : v })}
+              options={VIDEO_MODEL_OPTIONS}
+              ariaLabel="Video model"
+            />
             <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
               Used for every shot. Must be compatible with your shot input mode — incompatible picks silently fall back to Auto.
             </div>

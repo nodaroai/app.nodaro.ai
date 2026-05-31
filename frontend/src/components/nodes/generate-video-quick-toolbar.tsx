@@ -12,7 +12,7 @@ import {
   getDurationsForVideoModel,
   getVideoModelCapabilitiesTooltip,
 } from "@/components/editor/config-panels/model-options"
-import { ModelSelectOption } from "@/components/editor/config-panels/model-select-option"
+import { ModelSearchSelect } from "@/components/editor/config-panels/model-search-select"
 import { RatioIcon } from "@/components/editor/config-panels/aspect-ratio-selector"
 import { RunNodeButton } from "./run-node-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -261,22 +261,15 @@ export function GenerateVideoQuickToolbar({
             onClick={(e) => e.stopPropagation()}
           >
             <ToolbarSetting label="Model" icon={<Sparkles className="w-3 h-3" />}>
-              <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
-                <SelectTrigger className={ghostPopoverTriggerClass}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {VIDEO_GEN_MODELS.map((m) => (
-                    <ModelSelectOption
-                      key={m.value}
-                      value={m.value}
-                      label={m.label}
-                      desc={m.desc}
-                      tooltip={getVideoModelCapabilitiesTooltip(m.value)}
-                    />
-                  ))}
-                </SelectContent>
-              </Select>
+              <ModelSearchSelect
+                value={currentProvider}
+                onChange={handleModelChange}
+                onOpenChange={handleOpenChange}
+                options={VIDEO_GEN_MODELS}
+                getTooltip={getVideoModelCapabilitiesTooltip}
+                triggerClassName={ghostPopoverTriggerClass}
+                ariaLabel="Model"
+              />
             </ToolbarSetting>
             {isSeedance2 && (
               <ToolbarSetting label="Mode" icon={<Layers className="w-3 h-3" />}>
@@ -376,17 +369,17 @@ export function GenerateVideoQuickToolbar({
       onClick={(e) => e.stopPropagation()}
     >
       {/* Model selector */}
-      <Select value={currentProvider} onValueChange={handleModelChange} onOpenChange={handleOpenChange}>
-        <SelectTrigger className={`${ghostTriggerClass} max-w-[180px]`}>
-          <Sparkles className="opacity-70" />
-          <SelectValue>{modelLabel}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {VIDEO_GEN_MODELS.map((m) => (
-            <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-          ))}
-        </SelectContent>
-      </Select>
+      <ModelSearchSelect
+        value={currentProvider}
+        onChange={handleModelChange}
+        onOpenChange={handleOpenChange}
+        options={VIDEO_GEN_MODELS}
+        getTooltip={getVideoModelCapabilitiesTooltip}
+        triggerLabel={modelLabel}
+        triggerIcon={<Sparkles className="opacity-70" />}
+        triggerClassName={`${ghostTriggerClass} max-w-[180px]`}
+        ariaLabel="Model"
+      />
 
       {/* Seedance 2 input mode (Frames vs References) — only when relevant */}
       {isSeedance2 && (

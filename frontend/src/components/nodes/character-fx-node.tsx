@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Sparkles, Users } from "lucide-react"
 import { getCharacterFx, getCharacterFxLabel, pickIds } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { ACCEPTS_CHARACTER_REF } from "@/lib/target-handle-registry"
 import type { HandleConfig } from "./base-node"
 import type { CharacterFxData } from "@/types/nodes"
@@ -48,7 +48,7 @@ function CharacterFxNodeComponent({ id, data, selected }: NodeProps) {
           type="target"
           position={Position.Left}
           label="Target subject"
-          color="#F472B6"
+          color={HANDLE_COLORS.identity}
           icon={<Users className="w-3.5 h-3.5" />}
           accepts={ACCEPTS_CHARACTER_REF}
           side="left"

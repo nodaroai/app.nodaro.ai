@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { NodeJobProgress } from "./node-job-progress"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
@@ -392,11 +392,11 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
             video    → purple       (video family)
           The output pip shares the purple video color since this node
           emits a video (source clip + SFX mixed in). */}
-      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="prompt"   type="target" position={Position.Left}  label="Prompt"   color="#ff0073" icon={<Type />}    side="left"  top={HANDLE_TOP.prompt}   accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="negative" type="target" position={Position.Left}  label="Negative" color="#ef4444" icon={<Minus />}   side="left"  top={HANDLE_TOP.negative} accepts={ACCEPTS_NEGATIVE} />
-      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="video"    type="target" position={Position.Left}  label="Video"    color="#A78BFA" icon={<Film />}    side="left"  top={HANDLE_TOP.video}    accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="prompt"   type="target" position={Position.Left}  label="Prompt"   color={TEXT_HANDLE_COLOR} icon={<Type />}    side="left"  top={HANDLE_TOP.prompt}   accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="negative" type="target" position={Position.Left}  label="Negative" color={HANDLE_COLORS.negative} icon={<Minus />}   side="left"  top={HANDLE_TOP.negative} accepts={ACCEPTS_NEGATIVE} />
+      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="video"    type="target" position={Position.Left}  label="Video"    color={HANDLE_COLORS.video} icon={<Film />}    side="left"  top={HANDLE_TOP.video}    accepts={ACCEPTS_VIDEO} />
       {/* Output pip — video. Shares Film + purple (video category color) for type identification. */}
-      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="video"    type="source" position={Position.Right} label="Video"    color="#A78BFA" icon={<Film />}    side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="video-sfx" handleId="video"    type="source" position={Position.Right} label="Video"    color={HANDLE_COLORS.video} icon={<Film />}    side="right" top="24px" />
 
       {activeUrl && (
         <MediaPreviewModal

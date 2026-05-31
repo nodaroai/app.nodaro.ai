@@ -14,7 +14,7 @@ import {
   Settings,
   LayoutGrid,
 } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidGenerateMaskConnection } from "@/lib/image-producer-handles"
 import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
@@ -330,9 +330,9 @@ function GenerateMaskNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
-      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="mask"  type="source" position={Position.Right} label="Mask"  color="#a855f7" icon={<Layers />}    side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="target" position={Position.Left}  label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="image" type="source" position={Position.Right} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="generate-mask" handleId="mask"  type="source" position={Position.Right} label="Mask"  color={HANDLE_COLORS.mask} icon={<Layers />}    side="right" top="56px" />
 
       <DeleteConfirmationDialog
         isOpen={deleteConfirm !== null}

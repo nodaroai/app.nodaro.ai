@@ -186,6 +186,20 @@ export const V2V_ALEPH_ASPECT_RATIOS = [
 export const MODEL_CREDIT_RANGES: Record<string, { min: number; max: number }> =
   creditRangesAll()
 
+/** Formats the credit badge shown on a model dropdown row. Variable-priced
+ *  models render a "min-max CR" range; fixed-price models render "N CR";
+ *  zero/unknown cost (e.g. community edition where `useModelCredits` returns 0)
+ *  renders no badge. Shared by `ModelSelectOption` (Radix Select rows) and
+ *  `ModelSearchSelect`'s cmdk rows so the rule lives in one place.
+ *  `credits` is the resolved value from the `useModelCredits` hook — passed in
+ *  because this is a plain function, not a component. */
+export function formatCreditBadge(value: string, credits: number): string | undefined {
+  const range = MODEL_CREDIT_RANGES[value]
+  if (range) return `${range.min}-${range.max} CR`
+  if (credits > 0) return `${credits} CR`
+  return undefined
+}
+
 // =============================================================================
 // IMAGE MODEL ASPECT RATIOS — derived from MODEL_CATALOG (single source of
 // truth). When you add a new model, update its `aspectRatios` in

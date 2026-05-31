@@ -4,7 +4,7 @@ import { memo, useState, Suspense } from "react"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
 import { Position, type NodeProps } from "@xyflow/react"
 import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, Settings, LayoutGrid, Expand, Download, Link, Type, Pencil, Aperture, Minus, Users, Sparkles } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 
@@ -315,14 +315,14 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
         accepts split by registry family so the popup mirrors the picker
         structure users already know. Distinct icons: Users (Assets,
         identity entities) vs Sparkles (Elements, atomic descriptors). */}
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="negative"   type="target" position={Position.Left}  label="Negative"   color="#ef4444" icon={<Minus />}     side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_NEGATIVE} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="references" type="target" position={Position.Left}  label="References" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  orderMatters accepts={ACCEPTS_REFERENCES} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color="#F472B6" icon={<Users />}     side="left"  top="calc(100% - 120px)" orderMatters accepts={ACCEPTS_ASSETS} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color="#818CF8" icon={<Sparkles />}  side="left"  top="calc(100% - 152px)" accepts={ACCEPTS_ELEMENTS} />
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color="#818CF8" icon={<Aperture />}  side="left"  top="calc(100% - 184px)" accepts={ACCEPTS_LOOK} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="prompt"     type="target" position={Position.Left}  label="Prompt"     color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="negative"   type="target" position={Position.Left}  label="Negative"   color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_NEGATIVE} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="references" type="target" position={Position.Left}  label="References" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  orderMatters accepts={ACCEPTS_REFERENCES} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="assets"     type="target" position={Position.Left}  label="Assets"     color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top="calc(100% - 120px)" orderMatters accepts={ACCEPTS_ASSETS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="elements"   type="target" position={Position.Left}  label="Elements"   color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top="calc(100% - 152px)" accepts={ACCEPTS_ELEMENTS} />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="look"       type="target" position={Position.Left}  label="Look"       color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top="calc(100% - 184px)" accepts={ACCEPTS_LOOK} />
     {/* Output image shares the References color (#22D3EE) — both are "image" type. */}
-    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="image"      type="source" position={Position.Right} label="Image"      color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="generate-image" handleId="image"      type="source" position={Position.Right} label="Image"      color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
     {activeUrl && (
       <MediaPreviewModal
         isOpen={previewOpen}

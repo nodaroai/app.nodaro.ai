@@ -7,7 +7,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidSunoMashupConnection } from "@/lib/audio-text-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
@@ -144,9 +144,9 @@ function SunoMashupNodeComponent({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio1" type="target" position={Position.Left}  label="Audio 1" color="#F59E0B" icon={<Music />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO1} />
-    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio2" type="target" position={Position.Left}  label="Audio 2" color="#F59E0B" icon={<Music />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_AUDIO2} />
-    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio"  type="source" position={Position.Right} label="Audio"   color="#F59E0B" icon={<Merge />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio1" type="target" position={Position.Left}  label="Audio 1" color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 24px)" orderMatters accepts={ACCEPTS_AUDIO1} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio2" type="target" position={Position.Left}  label="Audio 2" color={HANDLE_COLORS.audio} icon={<Music />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_AUDIO2} />
+    <HandleWithPopover nodeId={id} nodeType="suno-mashup" handleId="audio"  type="source" position={Position.Right} label="Audio"   color={HANDLE_COLORS.audio} icon={<Merge />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

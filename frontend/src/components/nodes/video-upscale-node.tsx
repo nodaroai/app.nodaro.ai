@@ -7,7 +7,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidVideoUpscaleConnection } from "@/lib/video-producer-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -187,8 +187,8 @@ function VideoUpscaleNodeComponent({ id, data, selected }: NodeProps) {
           onDimensionsChange={setVideoDimensions}
         />
       )}
-      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="target" position={Position.Left}  label="Video" color="#A78BFA" icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
-      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="target" position={Position.Left}  label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="video-upscale" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />} side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Music, Volume2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { CachedImage } from "@/components/ui/cached-image"
 import { useFullResolution } from "@/hooks/use-full-resolution"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -65,8 +65,8 @@ function ReferenceAudioNodeComponent({ id, data, selected }: NodeProps) {
           </div>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Music />}   side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="audio" type="source" position={Position.Right} label="Audio" color="#FCD34D" icon={<Volume2 />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="in"    type="target" position={Position.Left}  label="URL"   color={TEXT_HANDLE_COLOR} icon={<Music />}   side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="reference-audio" handleId="audio" type="source" position={Position.Right} label="Audio" color={HANDLE_COLORS.audio} icon={<Volume2 />} side="right" top="24px" />
     </div>
   )
 }

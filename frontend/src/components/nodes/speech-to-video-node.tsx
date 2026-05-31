@@ -4,7 +4,7 @@ import { memo, useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { incomingSourcesFingerprint } from "@/lib/node-fingerprint"
 import { MessageSquare, Loader2, AlertCircle, X, Image as ImageIcon, Volume2, Film, LayoutGrid, Expand, Download, Type, Link, Settings, Scissors, Aperture } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSpeechToVideoConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { BaseNode } from "./base-node"
@@ -369,11 +369,11 @@ function SpeechToVideoNodeComponent({ id, data, selected }: NodeProps) {
       )}
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="audio"          type="target" position={Position.Left}  label="Audio"          color="#FCD34D" icon={<Volume2 />}   side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="image"          type="target" position={Position.Left}  label="Portrait"       color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_IMAGE} />
-    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />}  side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
-    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}      side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)"  accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="audio"          type="target" position={Position.Left}  label="Audio"          color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top="calc(100% - 56px)"  accepts={ACCEPTS_AUDIO} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="image"          type="target" position={Position.Left}  label="Portrait"       color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 88px)"  accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top="calc(100% - 120px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+    <HandleWithPopover nodeId={id} nodeType="speech-to-video" handleId="video"          type="source" position={Position.Right} label="Video"          color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 
     {activeUrl && (
       <MediaPreviewModal

@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Mic, AlertCircle, Settings2, CheckCircle2, Loader2, User } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { Button } from "@/components/ui/button"
 import { SunoVoiceSetupModal } from "./suno-voice-setup-modal"
@@ -96,7 +96,7 @@ function SunoVoiceNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      <HandleWithPopover nodeId={id} nodeType="suno-voice" handleId="voicePersona" type="source" position={Position.Right} label="Voice persona" color="#F472B6" icon={<User />} side="right" top="calc(50% - 4px)" />
+      <HandleWithPopover nodeId={id} nodeType="suno-voice" handleId="voicePersona" type="source" position={Position.Right} label="Voice persona" color={HANDLE_COLORS.identity} icon={<User />} side="right" top="calc(50% - 4px)" />
 
       <SunoVoiceSetupModal
         nodeId={id}

@@ -12,7 +12,8 @@ architecture-graph.html
 node_modules/
 .next/
 .env
-.env.local
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -27,3 +28,13 @@ coverage/
 .DS_Store
 .playwright-mcp/
 supabase/.temp/
+
+# Scraped pages / scratch dumps — never commit (see OSS-readiness audit)
+# removed
+# removed
+# removed
+/gen.txt
+
+# Merge / patch backup artifacts (never commit these)
+*.orig
+*.rej

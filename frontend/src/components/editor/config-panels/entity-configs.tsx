@@ -33,7 +33,7 @@ import {
   LocationAssetGrid,
 } from "./entity-shared"
 import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS } from "./model-options"
-import { ModelSelectOption } from "./model-select-option"
+import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/ee/hooks/use-model-credits"
@@ -379,14 +379,14 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
 
       <div>
         <Label className="text-xs">Image Model</Label>
-        <Select value={data.provider || "nano-banana"} onValueChange={(v) => onUpdate({ provider: v })}>
-          <SelectTrigger className="h-8 text-xs mt-1" aria-label="Image model"><SelectValue /></SelectTrigger>
-          <SelectContent position="popper" className="z-[9999] max-h-72">
-            {IMAGE_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-            ))}
-          </SelectContent>
-        </Select>
+        <ModelSearchSelect
+          value={data.provider || "nano-banana"}
+          onChange={(v) => onUpdate({ provider: v })}
+          options={IMAGE_GEN_MODELS}
+          triggerClassName="h-8 text-xs mt-1"
+          contentClassName="z-[9999]"
+          ariaLabel="Image model"
+        />
       </div>
       <ModelDescriptionHint modelId={data.provider} />
 

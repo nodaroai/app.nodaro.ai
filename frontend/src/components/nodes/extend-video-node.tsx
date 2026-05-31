@@ -3,7 +3,7 @@
 import { memo, useState, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Film, Type, Loader2, AlertCircle, X, Aperture } from "lucide-react"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidExtendVideoConnection } from "@/lib/video-producer-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { NodeJobProgress } from "./node-job-progress"
@@ -202,10 +202,10 @@ function ExtendVideoNodeComponent({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color="#A78BFA" icon={<Film />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
-      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color="#818CF8" icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
-      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color="#ff0073" icon={<Type />}     side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="source" position={Position.Right} label="Video"          color="#A78BFA" icon={<Film />}     side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="target" position={Position.Left}  label="Video"          color={HANDLE_COLORS.video} icon={<Film />}     side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_VIDEO} />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="cinematography" type="target" position={Position.Left}  label="Cinematography" color={HANDLE_COLORS.look} icon={<Aperture />} side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_CINEMATOGRAPHY} />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="prompt"         type="target" position={Position.Left}  label="Prompt"         color={TEXT_HANDLE_COLOR} icon={<Type />}     side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="extend-video" handleId="video"          type="source" position={Position.Right} label="Video"          color={HANDLE_COLORS.video} icon={<Film />}     side="right" top="24px" />
       {activeUrl && (
         <MediaPreviewModal
           isOpen={previewOpen}

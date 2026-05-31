@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Clock, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { ScheduleTriggerData } from "@/types/nodes"
 
@@ -44,8 +44,8 @@ function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
           </p>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="in"      type="target" position={Position.Left}  label="URL"     color="#38BDF8" icon={<Clock />} side="left"  top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="payload" type="source" position={Position.Right} label="Payload" color="#38BDF8" icon={<Type />}  side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="in"      type="target" position={Position.Left}  label="URL"     color={TEXT_HANDLE_COLOR} icon={<Clock />} side="left"  top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="payload" type="source" position={Position.Right} label="Payload" color={HANDLE_COLORS.control} icon={<Type />}  side="right" top="24px" />
     </div>
   )
 }

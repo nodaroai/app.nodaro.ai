@@ -9,15 +9,16 @@
  * for merge-video-audio + adjust-volume). Outputs are video / audio / image
  * depending on what the node produces.
  *
- * Color + icon conventions (matched to Generate Image / Generate Video):
- *   - video     → cyan  (#22D3EE), Film icon
- *   - audio     → amber (#f59e0b), AudioLines icon
- *   - image-out → cyan  (#22D3EE), ImageIcon (extract-frame only)
- *   - media     → steel (#64748b), neutral fallback for handles that
- *                 accept BOTH video AND audio (merge-video-audio's input,
- *                 adjust-volume's input)
+ * Colors derive from the canonical HANDLE_COLORS map (single source of truth)
+ * so ffmpeg handles match the same-typed pips everywhere else:
+ *   - video → HANDLE_COLORS.video (violet), Film icon
+ *   - audio → HANDLE_COLORS.audio (amber), AudioLines icon
+ *   - image → HANDLE_COLORS.image (cyan), ImageIcon (extract-frame only)
+ *   - media → HANDLE_COLORS.control (slate), neutral fallback for handles that
+ *             accept BOTH video AND audio (merge-video-audio / adjust-volume)
  */
 import { VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
+import { HANDLE_COLORS } from "./handle-colors"
 
 /** Accepts any node whose output is a video stream (URL pointing at .mp4
  *  / .mov / etc.). Used by trim-video, combine-videos, extract-frame,
@@ -50,10 +51,10 @@ export const ACCEPTS_MEDIA = (sourceType: string): boolean =>
  *  color), but kept as a distinct key so a future split doesn't silently
  *  re-color the image output. */
 export const FFMPEG_COLORS = {
-  video: "#22D3EE",
-  audio: "#f59e0b",
-  media: "#64748b",
-  image: "#22D3EE",
+  video: HANDLE_COLORS.video,
+  audio: HANDLE_COLORS.audio,
+  media: HANDLE_COLORS.control,
+  image: HANDLE_COLORS.image,
 } as const
 
 /** Node types that this module covers — the canvas connection validator

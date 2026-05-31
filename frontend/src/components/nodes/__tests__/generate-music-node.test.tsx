@@ -42,7 +42,8 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ nodeType, handleId, type, color, label }: any) => (
     <div
       data-testid={`handle-popover-${type}-${handleId}`}
@@ -177,7 +178,7 @@ describe("GenerateMusicNode", () => {
     renderNode()
     const prompt = screen.getByTestId("handle-popover-target-prompt")
     expect(prompt).toHaveAttribute("data-node-type", "generate-music")
-    expect(prompt).toHaveAttribute("data-color", "#ff0073")
+    expect(prompt).toHaveAttribute("data-color", "#3B82F6")
 
     const refAudio = screen.getByTestId("handle-popover-target-ref-audio")
     expect(refAudio).toHaveAttribute("data-color", "#F59E0B")

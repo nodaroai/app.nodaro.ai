@@ -34,10 +34,10 @@ import type {
   GeneratedScriptResult,
   CharacterNodeData,
 } from "@/types/nodes"
-import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
+import { VIDEO_I2V_MODELS, VIDEO_T2V_MODELS, VIDEO_V2V_MODELS, VIDEO_GEN_MODELS, MOTION_TRANSFER_MODELS, KIE_VIDEO_DURATIONS, KIE_T2V_DURATIONS, VIDEO_DURATION_OPTIONS, VIDEO_FPS_OPTIONS, PROVIDERS_WITH_END_FRAME, KLING3_DURATIONS, VIDEO_RATIOS, SEEDANCE_2_VIDEO_RATIOS, PROVIDERS_WITH_REFERENCES, V2V_DURATION_OPTIONS, V2V_RESOLUTION_OPTIONS, V2V_ALEPH_ASPECT_RATIOS, getVideoResolutionOptions, getAspectRatiosForVideoModel, getVideoModelCapabilitiesTooltip } from "./model-options"
 import { isSeedance2Provider, SEEDANCE_2_REF_LIMITS, characterMentionSlug, DEFAULT_LABEL_BY_SOURCE, locationMentionSlug } from "@nodaro/shared"
 import type { ReferenceSource } from "@nodaro/shared"
-import { ModelSelectOption } from "./model-select-option"
+import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { TagTextarea } from "./tag-textarea"
@@ -413,17 +413,13 @@ function ImageToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
       )}
 
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-        <Select
+        <ModelSearchSelect
           value={data.provider || "seedance-2-fast"}
-          onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {VIDEO_I2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+          options={VIDEO_I2V_MODELS}
+          getTooltip={getVideoModelCapabilitiesTooltip}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
@@ -1134,17 +1130,13 @@ function VideoToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
         />
       )}
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-        <Select
+        <ModelSearchSelect
           value={provider}
-          onValueChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {VIDEO_V2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v as VideoToVideoData["provider"] })}
+          options={VIDEO_V2V_MODELS}
+          getTooltip={getVideoModelCapabilitiesTooltip}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <ModelDescriptionHint modelId={data.provider} />
 
@@ -1418,18 +1410,12 @@ function MotionTransferConfigImpl({ data, onUpdate, sources, fieldMappings, onMa
   return (
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
-        <Select
+        <ModelSearchSelect
           value={provider}
-          onValueChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="kling">Kling 2.6</SelectItem>
-            <SelectItem value="kling-3.0">Kling 3.0</SelectItem>
-            <SelectItem value="wan-animate-move">Wan Animate Move</SelectItem>
-            <SelectItem value="wan-animate-replace">Wan Animate Replace</SelectItem>
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v as MotionTransferData["provider"] })}
+          options={MOTION_TRANSFER_MODELS}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <MappableField field="prompt" label="Prompt (Optional)" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="motion-transfer" currentPrompt={data.prompt || ""} provider={data.provider} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <TagTextarea
@@ -1668,17 +1654,13 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     <div className="flex flex-col gap-3">
       <FinalPromptPreview userPrompt={data.prompt} negativePrompt={data.negativePrompt} consumerNodeId={nodeId} nodes={nodes} edges={edges ?? []} />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-        <Select
+        <ModelSearchSelect
           value={currentProvider}
-          onValueChange={(v) => onUpdate({ provider: v })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {VIDEO_T2V_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v })}
+          options={VIDEO_T2V_MODELS}
+          getTooltip={getVideoModelCapabilitiesTooltip}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
       <MappableField field="prompt" label="Prompt" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="text-to-video" currentPrompt={data.prompt || ""} provider={currentProvider} duration={data.duration} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
@@ -2148,17 +2130,13 @@ function GenerateVideoConfigImpl({ data: rawData, onUpdate: rawOnUpdate, sources
       )}
 
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-        <Select
+        <ModelSearchSelect
           value={currentProvider}
-          onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {VIDEO_GEN_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} tooltip={getVideoModelCapabilitiesTooltip(m.value)} />
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+          options={VIDEO_GEN_MODELS}
+          getTooltip={getVideoModelCapabilitiesTooltip}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <ModelDescriptionHint modelId={currentProvider} />
 

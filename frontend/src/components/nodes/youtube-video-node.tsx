@@ -6,7 +6,7 @@ import { Link, X, Play, Video, Film, Music2, Camera, Hash, Download, AlertCircle
 import { createPortal } from "react-dom"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { fetchYouTubeOEmbed, startVideoDownload, subscribeToDownloadProgress, downloadYouTubeAudio } from "@/lib/api"
 import type { DownloadProgressEvent } from "@/lib/api"
@@ -535,8 +535,8 @@ function YouTubeVideoNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         </BaseNode>
-        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<Video />} side="left"  top="calc(100% - 24px)" />
-        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="video" type="source" position={Position.Right} label="Video" color="#A78BFA" icon={<Film />}  side="right" top="24px" />
+        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="in"    type="target" position={Position.Left}  label="URL"   color={TEXT_HANDLE_COLOR} icon={<Video />} side="left"  top="calc(100% - 24px)" />
+        <HandleWithPopover nodeId={id} nodeType="youtube-video" handleId="video" type="source" position={Position.Right} label="Video" color={HANDLE_COLORS.video} icon={<Film />}  side="right" top="24px" />
       </div>
       <VideoPlayerModal
         isOpen={playerOpen}

@@ -8,7 +8,7 @@ import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidSunoStyleBoostConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -113,8 +113,8 @@ function SunoStyleBoostNodeComponent({ id, data, selected }: NodeProps) {
         <span className="text-xs text-muted-foreground">Style Boost</span>
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="text"   type="source" position={Position.Right} label="Text"   color="#22D3EE" icon={<Sparkles />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="suno-style-boost" handleId="text"   type="source" position={Position.Right} label="Text"   color={TEXT_HANDLE_COLOR} icon={<Sparkles />} side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm}
       onClose={() => setDeleteConfirm(false)}

@@ -6,7 +6,7 @@ import { ImageIcon, Expand, Upload, Link, Download, Loader2, AlertCircle, X, Pen
 import { normalizePinterestUrl } from "@nodaro/shared"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -413,8 +413,8 @@ function UploadImageNodeComponent({ id, data, selected }: NodeProps) {
             )}
           </div>
         </BaseNode>
-        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="in"    type="target" position={Position.Left}  label="URL"   color="#38BDF8" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
-        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="image" type="source" position={Position.Right} label="Image" color="#22D3EE" icon={<ImageIcon />} side="right" top="24px" />
+        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="in"    type="target" position={Position.Left}  label="URL"   color={TEXT_HANDLE_COLOR} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" />
+        <HandleWithPopover nodeId={id} nodeType="upload-image" handleId="image" type="source" position={Position.Right} label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="right" top="24px" />
       </div>
 
       {imageUrl && (

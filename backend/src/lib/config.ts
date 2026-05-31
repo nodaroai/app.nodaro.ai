@@ -10,6 +10,14 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().default(""),
   R2_BUCKET_NAME: z.string().default("scenenode-assets"),
   R2_PUBLIC_URL: z.string().default(""),
+  /**
+   * Extra hostname to allow in the /v1/download + /v1/image-proxy origin
+   * allowlist, in addition to the origin derived from R2_PUBLIC_URL. Use when
+   * assets are served from a different host than R2_PUBLIC_URL (e.g. a raw
+   * `pub-<id>.r2.dev` bucket host alongside a custom CDN domain). Empty by
+   * default — self-hosters typically only need R2_PUBLIC_URL.
+   */
+  R2_PUBLIC_FALLBACK_DOMAIN: z.string().default(""),
   REPLICATE_API_TOKEN: z.string().default(""),
   /** Replicate Standard Webhooks signing secret. Required in Cloud edition for character LoRA training callbacks. */
   REPLICATE_WEBHOOK_SECRET: z.string().default(""),
@@ -44,6 +52,8 @@ const envSchema = z.object({
   SOCIAL_ENCRYPTION_KEY: z.string().default(""),
   /** Base URL for OAuth redirects (e.g. https://app.nodaro.ai or http://localhost:8000) */
   PUBLIC_URL: z.string().default(""),
+  /** Email of the platform owner whose super_admin role is protected from changes by other admins. Empty = no protected owner (self-host default). */
+  PLATFORM_OWNER_EMAIL: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */

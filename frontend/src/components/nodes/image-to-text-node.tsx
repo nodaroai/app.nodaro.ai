@@ -4,7 +4,7 @@ import { memo, useState, useRef, useEffect } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Eye, Type, Loader2, AlertCircle, X, ImageIcon, Copy, Download } from "lucide-react"
 import { createPortal } from "react-dom"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidImageToTextConnection } from "@/lib/image-producer-handles"
 import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@/lib/utils"
 import { BaseNode } from "./base-node"
@@ -242,8 +242,8 @@ function ImageToTextNodeComponent({ id, data, selected }: NodeProps) {
         )}
       </div>
     </BaseNode>
-    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="image" type="target" position={Position.Left}  label="Image" color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
-    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="text"  type="source" position={Position.Right} label="Text"  color="#22D3EE" icon={<Type />}      side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="image" type="target" position={Position.Left}  label="Image" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_IMAGE} />
+    <HandleWithPopover nodeId={id} nodeType="image-to-text" handleId="text"  type="source" position={Position.Right} label="Text"  color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

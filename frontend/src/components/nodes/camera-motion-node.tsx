@@ -5,7 +5,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 import { Video, Sparkles, Frame } from "lucide-react"
 import { getCameraMotion, getCameraMotionLabel } from "@nodaro/shared"
 import { ParameterNodeShell } from "./parameter-node-shell"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { CameraMotionPreview } from "@/components/editor/config-panels/camera-motion-preview"
 import { ACCEPTS_PARAMETER_PICKER } from "@/lib/target-handle-registry"
 import type { HandleConfig } from "./base-node"
@@ -51,7 +51,7 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
             // between two scene-state descriptions. "Frame" was misleading
             // (no image is expected here) and inconsistent with transition.
             label="Start state"
-            color="#818CF8"
+            color={HANDLE_COLORS.look}
             icon={<Sparkles className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}
             side="left"
@@ -68,7 +68,7 @@ function CameraMotionNodeComponent({ id, data, selected }: NodeProps) {
             type="target"
             position={Position.Left}
             label="End state"
-            color="#818CF8"
+            color={HANDLE_COLORS.look}
             icon={<Frame className="w-3.5 h-3.5" />}
             accepts={ACCEPTS_PARAMETER_PICKER}
             side="left"

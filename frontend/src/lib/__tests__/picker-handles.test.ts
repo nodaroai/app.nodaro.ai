@@ -7,7 +7,7 @@ describe("picker-handles", () => {
     expect(PICKER_FAMILY_COLORS.look).toBe("#818CF8")     // indigo (Generate Image `look`)
     expect(PICKER_FAMILY_COLORS.elements).toBe("#818CF8") // indigo (Generate Image `elements`)
     expect(PICKER_FAMILY_COLORS.asset).toBe("#F472B6")    // pink (Generate Image `assets`)
-    expect(PICKER_FAMILY_COLORS.text).toBe("#22D3EE")     // cyan (Generate Image `prompt`)
+    expect(PICKER_FAMILY_COLORS.text).toBe("#3B82F6")     // blue-500 — prompt/text type (prompt inputs + text outputs); reserved hue, distinct from the #ff0073 action color and the cyan image family
     expect(PICKER_FAMILY_COLORS.audio).toBe("#F59E0B")    // amber (Generate Music/audio handles)
     expect(PICKER_FAMILY_COLORS.motion).toBe("#A78BFA")   // violet (camera-motion + transition)
   })

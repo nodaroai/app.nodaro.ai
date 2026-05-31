@@ -29,6 +29,7 @@ import { CanvasControls } from "./canvas-controls"
 import { AddNodePopup } from "./add-node-popup"
 import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
 import { pickEdgeAccent } from "@/lib/edge-accent"
+import { getEdgeTypeColor } from "@/lib/edge-type-color"
 import { getHandleConnectionLimit } from "@/lib/handle-limits"
 const SearchModal = lazy(() => import("./search-modal").then(m => ({ default: m.SearchModal })))
 const NodeSearchModal = lazy(() => import("./node-search-modal").then(m => ({ default: m.NodeSearchModal })))
@@ -887,6 +888,11 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
 
       const outputMode = resolveEffectiveOutputMode(edge, sourceNode, targetNode)
 
+      // Idle edges take the source handle's TYPE color (text wires blue, image
+      // cyan, …) so a wire matches the pips it connects. Execution/drag/hover/
+      // selected/disabled states still override (in AnimatedFlowEdge + below).
+      const edgeTypeColor = getEdgeTypeColor(sourceNode?.type, edge.sourceHandle)
+
       // Stable signature of every value that feeds the returned edge's
       // `data`/`style`/`animated`/`type`. Reuse the previously-returned object
       // (and its `data` reference, which is what AnimatedFlowEdge's memo keys
@@ -908,6 +914,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         disabledByProvider,
         shouldHighlight,
         edgeColor,
+        edgeTypeColor,
       ])
 
       const cached = cache.get(edge.id)
@@ -916,16 +923,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return cached.result
       }
 
+      // Highlight (execution/drag) wins over the idle type color, which wins
+      // over the edge's own style.
+      const styleOverride = shouldHighlight
+        ? { stroke: edgeColor, strokeWidth: 2 }
+        : edgeTypeColor
+          ? { stroke: edgeTypeColor }
+          : undefined
       const computed: WorkflowEdge = {
         ...edge,
         type: 'default', // Explicitly set type to use our AnimatedFlowEdge
         animated: hasAnimation, // Only animate for execution, not for dragging
         data: { ...edge.data, isRunning, isInputRunning, edgeLabel, edgeLabelColor, edgeModeLabel, edgeRangeLabel, outputMode, sourceNodeType: sourceNode?.type, targetNodeType: targetNode?.type, disabledByProvider },
-        style: shouldHighlight ? {
-          ...edge.style,
-          stroke: edgeColor,
-          strokeWidth: 2,
-        } : edge.style,
+        style: styleOverride ? { ...edge.style, ...styleOverride } : edge.style,
       }
       nextCache.set(edge.id, { fields, rawEdge: edge, result: computed })
       return computed

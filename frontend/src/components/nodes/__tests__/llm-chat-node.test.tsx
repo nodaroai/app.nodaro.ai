@@ -35,7 +35,8 @@ vi.mock("../base-node", () => ({
   ),
 }))
 
-vi.mock("../handle-with-popover", () => ({
+vi.mock("../handle-with-popover", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   HandleWithPopover: ({ nodeType, handleId, type, color, label }: any) => (
     <div
       data-testid={`handle-popover-${type}-${handleId}`}

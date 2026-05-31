@@ -2,7 +2,7 @@
 
 import { SelectItemWithMeta } from "@/components/ui/select"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { MODEL_CREDIT_RANGES } from "./model-options"
+import { formatCreditBadge } from "./model-options"
 
 export function ModelSelectOption({
   value,
@@ -20,15 +20,7 @@ export function ModelSelectOption({
    *  the same marketing copy in two places. */
   tooltip?: string
 }) {
-  const credits = useModelCredits(value)
-  const range = MODEL_CREDIT_RANGES[value]
-
-  let badge: string | undefined
-  if (range) {
-    badge = `${range.min}-${range.max} CR`
-  } else if (credits > 0) {
-    badge = `${credits} CR`
-  }
+  const badge = formatCreditBadge(value, useModelCredits(value))
 
   return (
     <SelectItemWithMeta

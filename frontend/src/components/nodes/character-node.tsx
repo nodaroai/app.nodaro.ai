@@ -6,7 +6,7 @@ import { UserCircle, Loader2, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { isValidCharacterConnection } from "@/lib/identity-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -346,8 +346,8 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="character" handleId="in"           type="target" position={Position.Left}  label="Prompt"    color="#ff0073" icon={<Type />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-    <HandleWithPopover nodeId={id} nodeType="character" handleId="characterRef" type="source" position={Position.Right} label="Character" color="#F472B6" icon={<UserCircle />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="in"           type="target" position={Position.Left}  label="Prompt"    color={HANDLE_COLORS.text} icon={<Type />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+    <HandleWithPopover nodeId={id} nodeType="character" handleId="characterRef" type="source" position={Position.Right} label="Character" color={HANDLE_COLORS.identity} icon={<UserCircle />} side="right" top="24px" />
     </div>
   )
 }

@@ -8,7 +8,7 @@ import { computeDeleteResultUpdates, copyToClipboard, downloadTextFile } from "@
 import { BaseNode } from "./base-node"
 import { RunNodeButton } from "./run-node-button"
 import { EditableNodeLabel } from "./editable-node-label"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidLlmChatConnection } from "@/lib/audio-text-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -279,11 +279,11 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
             </>
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="prompt"        type="target" position={Position.Left}  label="Prompt"        color="#ff0073" icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color="#22D3EE" icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="System prompt" color="#22D3EE" icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color="#22D3EE" icon={<Type />}      side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color="#A78BFA" icon={<List />}      side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="prompt"        type="target" position={Position.Left}  label="Prompt"        color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="System prompt" color={TEXT_HANDLE_COLOR} icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.list} icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"

@@ -20,7 +20,7 @@ import {
   Frame,
 } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { VideoRetakeQuickToolbar } from "./video-retake-quick-toolbar"
 import { NodeJobProgress } from "./node-job-progress"
@@ -515,10 +515,11 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      {/* Typed input + output pips. Canonical color/icon convention:
-            video   → violet (#8B5CF6, video producer)
-            prompt  → brand pink (#ff0073, text producers + pickers)
-            look    → indigo (#818CF8, Look picker family) */}
+      {/* Typed input + output pips. Colors come from the canonical
+          HANDLE_COLORS map (single source of truth):
+            video   → HANDLE_COLORS.video  (violet, video producer)
+            prompt  → HANDLE_COLORS.text   (blue, text producers + pickers)
+            look    → HANDLE_COLORS.look   (indigo, Look picker family) */}
       <HandleWithPopover
         nodeId={id}
         nodeType="video-retake"
@@ -526,7 +527,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Video"
-        color="#8B5CF6"
+        color={HANDLE_COLORS.video}
         icon={<Video />}
         side="left"
         top={HANDLE_TOP.video}
@@ -540,7 +541,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Prompt"
-        color="#ff0073"
+        color={HANDLE_COLORS.text}
         icon={<Type />}
         side="left"
         top={HANDLE_TOP.prompt}
@@ -554,7 +555,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Left}
         label="Look"
-        color="#818CF8"
+        color={HANDLE_COLORS.look}
         icon={<Aperture />}
         side="left"
         top={HANDLE_TOP.look}
@@ -570,7 +571,7 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
         type="source"
         position={Position.Right}
         label="Video"
-        color="#8B5CF6"
+        color={HANDLE_COLORS.video}
         icon={<Video />}
         side="right"
         top="24px"

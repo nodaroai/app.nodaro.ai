@@ -6,7 +6,7 @@ import { Share2, Loader2, AlertCircle, X, Expand, FileVideo, FileImage, Type, Do
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { RunNodeButton } from "./run-node-button"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, TEXT_HANDLE_COLOR, HANDLE_COLORS } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { PlatformPreview } from "./platform-preview"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -181,10 +181,10 @@ function SocialMediaFormatNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
 
-    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="target" position={Position.Left}  label="Media" color={specIsVideo ? "#A78BFA" : "#22D3EE"} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="left"  top="calc(100% - 56px)" />
-    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="target" position={Position.Left}  label="Caption" color="#22D3EE" icon={<Type />} side="left"  top="calc(100% - 24px)" />
-    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="source" position={Position.Right} label="Media"   color={specIsVideo ? "#A78BFA" : "#22D3EE"} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="right" top="24px" />
-    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="source" position={Position.Right} label="Caption" color="#22D3EE" icon={<Type />} side="right" top="56px" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="target" position={Position.Left}  label="Media" color={specIsVideo ? HANDLE_COLORS.video : HANDLE_COLORS.image} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="left"  top="calc(100% - 56px)" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="target" position={Position.Left}  label="Caption" color={TEXT_HANDLE_COLOR} icon={<Type />} side="left"  top="calc(100% - 24px)" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="media" type="source" position={Position.Right} label="Media"   color={specIsVideo ? HANDLE_COLORS.video : HANDLE_COLORS.image} icon={specIsVideo ? <FileVideo /> : <FileImage />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="social-media-format" handleId="text"  type="source" position={Position.Right} label="Caption" color={TEXT_HANDLE_COLOR} icon={<Type />} side="right" top="56px" />
 
     {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type={urlIsVideo ? "video" : "image"} url={activeUrl} results={results} initialIndex={activeIndex} />}
     <DeleteConfirmationDialog isOpen={deleteConfirm !== null} onClose={() => setDeleteConfirm(null)} onConfirm={() => { if (deleteConfirm !== null) handleDeleteResult(deleteConfirm) }} />

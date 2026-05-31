@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/nodaroai/app.nodaro.ai/security/policy
+    about: Please report vulnerabilities privately — do NOT open a public issue.
+  - name: 💬 Questions & discussion
+    url: https://github.com/nodaroai/app.nodaro.ai/discussions
+    about: Ask questions, share ideas, and get help from the community.
+  - name: 📖 Documentation
+    url: https://github.com/nodaroai/app.nodaro.ai/blob/main/docs/README.md
+    about: Self-hosting, SDK, API, and node reference docs.

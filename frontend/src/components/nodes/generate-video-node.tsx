@@ -25,7 +25,7 @@ import {
   Film,
 } from "lucide-react"
 import { BaseNode } from "./base-node"
-import { HandleWithPopover } from "./handle-with-popover"
+import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { EditableNodeLabel } from "./editable-node-label"
 import { GenerateVideoQuickToolbar } from "./generate-video-quick-toolbar"
 import { NodeJobProgress } from "./node-job-progress"
@@ -449,19 +449,19 @@ function GenerateVideoNodeComponent({ id, data, selected }: NodeProps) {
             audio/audioRefs → yellow (audio family)
             assets   → character pink (identity entities)
             look/elements → indigo (parameter pickers) */}
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color="#ff0073" icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}          accepts={ACCEPTS_PROMPT} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="negative"        type="target" position={Position.Left}  label="Negative"    color="#ef4444" icon={<Minus />}     side="left"  top={HANDLE_TOP.negative}        accepts={ACCEPTS_NEGATIVE} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame" color="#22D3EE" icon={<ImageIcon />} side="left"  top={HANDLE_TOP.startFrame}      accepts={ACCEPTS_STARTFRAME} disabled={disabledHandles.has("startFrame")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"   color="#06B6D4" icon={<ImageIcon />} side="left"  top={HANDLE_TOP.endFrame}        accepts={ACCEPTS_ENDFRAME} disabled={disabledHandles.has("endFrame")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color="#34D399" icon={<Images />}    side="left"  top={HANDLE_TOP.imageReferences} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color="#A78BFA" icon={<Film />}      side="left"  top={HANDLE_TOP.videoReferences} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color="#FCD34D" icon={<Volume2 />}   side="left"  top={HANDLE_TOP.audio}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"  color="#FACC15" icon={<Music />}     side="left"  top={HANDLE_TOP.audioReferences} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color="#F472B6" icon={<Users />}     side="left"  top={HANDLE_TOP.assets}          orderMatters accepts={ACCEPTS_ASSETS} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color="#818CF8" icon={<Aperture />}  side="left"  top={HANDLE_TOP.look}            accepts={ACCEPTS_LOOK} />
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color="#818CF8" icon={<Sparkles />}  side="left"  top={HANDLE_TOP.elements}        accepts={ACCEPTS_ELEMENTS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="prompt"          type="target" position={Position.Left}  label="Prompt"      color={TEXT_HANDLE_COLOR} icon={<Type />}      side="left"  top={HANDLE_TOP.prompt}          accepts={ACCEPTS_PROMPT} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="negative"        type="target" position={Position.Left}  label="Negative"    color={HANDLE_COLORS.negative} icon={<Minus />}     side="left"  top={HANDLE_TOP.negative}        accepts={ACCEPTS_NEGATIVE} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="startFrame"      type="target" position={Position.Left}  label="Start Frame" color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.startFrame}      accepts={ACCEPTS_STARTFRAME} disabled={disabledHandles.has("startFrame")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="endFrame"        type="target" position={Position.Left}  label="End Frame"   color={HANDLE_COLORS.endFrame} icon={<ImageIcon />} side="left"  top={HANDLE_TOP.endFrame}        accepts={ACCEPTS_ENDFRAME} disabled={disabledHandles.has("endFrame")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="imageReferences" type="target" position={Position.Left}  label="Image Refs"  color={HANDLE_COLORS.imageRef} icon={<Images />}    side="left"  top={HANDLE_TOP.imageReferences} orderMatters accepts={ACCEPTS_IMAGE_REFS} disabled={disabledHandles.has("imageReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="videoReferences" type="target" position={Position.Left}  label="Video Refs"  color={HANDLE_COLORS.video} icon={<Film />}      side="left"  top={HANDLE_TOP.videoReferences} orderMatters accepts={ACCEPTS_VIDEO_REFS} disabled={disabledHandles.has("videoReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audio"           type="target" position={Position.Left}  label="Audio"       color={HANDLE_COLORS.audio} icon={<Volume2 />}   side="left"  top={HANDLE_TOP.audio}           accepts={ACCEPTS_AUDIO} disabled={disabledHandles.has("audio")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="audioReferences" type="target" position={Position.Left}  label="Audio Refs"  color={HANDLE_COLORS.audioRef} icon={<Music />}     side="left"  top={HANDLE_TOP.audioReferences} orderMatters accepts={ACCEPTS_AUDIO_REFS} disabled={disabledHandles.has("audioReferences")} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="assets"          type="target" position={Position.Left}  label="Assets"      color={HANDLE_COLORS.identity} icon={<Users />}     side="left"  top={HANDLE_TOP.assets}          orderMatters accepts={ACCEPTS_ASSETS} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="look"            type="target" position={Position.Left}  label="Look"        color={HANDLE_COLORS.look} icon={<Aperture />}  side="left"  top={HANDLE_TOP.look}            accepts={ACCEPTS_LOOK} />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="elements"        type="target" position={Position.Left}  label="Elements"    color={HANDLE_COLORS.look} icon={<Sparkles />}  side="left"  top={HANDLE_TOP.elements}        accepts={ACCEPTS_ELEMENTS} />
       {/* Output pip — video. Shares Film + purple (videoReferences color) for type identification. */}
-      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="video"           type="source" position={Position.Right} label="Video"       color="#A78BFA" icon={<Film />}      side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="generate-video" handleId="video"           type="source" position={Position.Right} label="Video"       color={HANDLE_COLORS.video} icon={<Film />}      side="right" top="24px" />
 
       {activeUrl && (
         <MediaPreviewModal
