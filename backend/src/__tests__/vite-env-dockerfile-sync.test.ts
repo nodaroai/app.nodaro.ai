@@ -8,6 +8,13 @@
  * `undefined` in the production bundle and the feature it gates breaks
  * silently.
  *
+ * References are collected from BOTH `import.meta.env.VITE_*` in
+ * `frontend/src/` AND `%VITE_*%` placeholders in the HTML entry
+ * (`frontend/index.html`) — Vite substitutes both at build time. The
+ * analytics snippet (Clarity/GA) lives ONLY in index.html, so scanning
+ * src/ alone would wrongly report VITE_CLARITY_ID / VITE_GA_ID as orphan
+ * ARGs (and miss the requirement that they have ARG/ENV lines).
+ *
  * Memory-noted bug class: this has bitten before. The error mode is
  * silent — the build succeeds, the bundle ships, the feature just doesn't
  * work in prod.
@@ -20,6 +27,7 @@ import { describe, it, expect } from "vitest"
 // REPO_ROOT: backend/src/__tests__/ → up 3 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..")
 const FRONTEND_SRC = join(REPO_ROOT, "frontend/src")
+const FRONTEND_INDEX_HTML = join(REPO_ROOT, "frontend/index.html")
 const DOCKERFILE_PATH = join(REPO_ROOT, "Dockerfile")
 
 /**
@@ -56,7 +64,29 @@ function walkFrontendForViteRefs(dir: string): Set<string> {
   return refs
 }
 
-const FRONTEND_VITE_REFS = walkFrontendForViteRefs(FRONTEND_SRC)
+/**
+ * Vite also substitutes `%VITE_*%` placeholders in the HTML entry
+ * (frontend/index.html) at build time — e.g. the Clarity/GA analytics
+ * snippet reads %VITE_CLARITY_ID% / %VITE_GA_ID%. These never appear as
+ * `import.meta.env` in src/, so the src walk alone would wrongly flag them
+ * as orphan Dockerfile ARGs. Scan the HTML entry for both forms.
+ */
+function collectHtmlViteRefs(file: string): Set<string> {
+  const refs = new Set<string>()
+  const html = readFileSync(file, "utf8")
+  for (const m of html.matchAll(/import\.meta\.env\.(VITE_[A-Z0-9_]+)/g)) {
+    refs.add(m[1])
+  }
+  for (const m of html.matchAll(/%(VITE_[A-Z0-9_]+)%/g)) {
+    refs.add(m[1])
+  }
+  return refs
+}
+
+const FRONTEND_VITE_REFS = new Set<string>([
+  ...walkFrontendForViteRefs(FRONTEND_SRC),
+  ...collectHtmlViteRefs(FRONTEND_INDEX_HTML),
+])
 
 const DOCKERFILE_CONTENT = readFileSync(DOCKERFILE_PATH, "utf8")
 const DOCKERFILE_ARG_VITE = new Set(
@@ -75,7 +105,7 @@ const DOCKERFILE_ENV_VITE = new Set(
 // ---------------------------------------------------------------------------
 
 describe("VITE_* extraction sanity", () => {
-  it("found at least 3 VITE_* references in frontend/src/", () => {
+  it("found at least 3 VITE_* references in frontend (src + index.html)", () => {
     expect(FRONTEND_VITE_REFS.size).toBeGreaterThanOrEqual(3)
   })
 
@@ -138,7 +168,7 @@ describe("Dockerfile VITE_* ARGs are referenced by frontend (or allowlisted)", (
     )
     expect(
       orphanArgs,
-      `These Dockerfile ARGs are no longer referenced in frontend/src/. Either remove them (likely stale from a removed feature), or add to KNOWN_DOCKERFILE_ONLY_VITE_VARS with a reason: ${orphanArgs.join(", ")}`,
+      `These Dockerfile ARGs are no longer referenced in frontend/src/ or frontend/index.html. Either remove them (likely stale from a removed feature), or add to KNOWN_DOCKERFILE_ONLY_VITE_VARS with a reason: ${orphanArgs.join(", ")}`,
     ).toEqual([])
   })
 })
