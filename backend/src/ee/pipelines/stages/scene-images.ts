@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { MatchCutVerdict, SceneNodeData, ShotSpec, ShowrunnerPlan } from "@nodaro/shared"
+import { getIdentityLockClause } from "@nodaro/shared"
 import { bulkApproveStageEntities, ensureStageRow, failStage } from "../stage-utils.js"
 import { pipelineEvents } from "../events.js"
 import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
@@ -532,12 +533,23 @@ async function generateKeyframesForScene(
         priorLastFrame: null,
       })
       const referenceImageUrls = refs.map((r) => r.url)
+      // Phase 1 identity-lock — when the scene has cast, append the facial-
+      // identity preservation clause so keyframes lock to the character
+      // reference(s) and don't drift across shots. Reuses the same shared helper
+      // the workflow-engine applies via buildImagePrompt; gated on the scene's
+      // cast_keys so location-only scenes don't get facial constraints.
+      const lockClause =
+        sceneNodeData.cast_keys.length > 0 && referenceImageUrls.length > 0
+          ? getIdentityLockClause("strict")
+          : ""
+      const withIdentityLock = (p: string) =>
+        lockClause ? `${p}\n\n${lockClause}` : p
       const result = await pipelineGenerateImage({
         supabase,
         pipelineId,
         pipelineEntityId: scene.id,
         userId,
-        prompt: shot.visual_keyframe_prompt,
+        prompt: withIdentityLock(shot.visual_keyframe_prompt),
         modelIdentifier: sceneNodeData.image_model,
         referenceImageUrls,
       })
@@ -562,7 +574,7 @@ async function generateKeyframesForScene(
               pipelineId,
               pipelineEntityId: scene.id,
               userId,
-              prompt: kf.prompt,
+              prompt: withIdentityLock(kf.prompt),
               modelIdentifier: sceneNodeData.image_model,
               referenceImageUrls,
             })

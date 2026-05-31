@@ -97,7 +97,10 @@ Produce the ShowrunnerPlan as JSON via the emit tool.`
     userId: args.userId,
     role: "showrunner",
     task: "script",
-    modelId: args.scriptLlmOverride ?? "claude-sonnet-4-6",
+    // The Showrunner is the creative core (plan + script). Default to Opus
+    // (premium) for quality, not Sonnet — the prior default was a known
+    // quality regression. Users can still override via scriptLlmOverride.
+    modelId: args.scriptLlmOverride ?? "claude-opus-4-6",
     temperature: 0.4,
     systemPrompt: '[REDACTED]',
     userPrompt,
