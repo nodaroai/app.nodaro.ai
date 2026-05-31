@@ -33,8 +33,9 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, IMAGE_GEN_MODEL_IDS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, IMAGE_STYLE_PRESETS, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, TOPAZ_IMAGE_RESOLUTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
+import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MultiProviderPicker } from "./multi-provider-picker"
 import { intersectModelOptions } from "@/lib/multi-provider/intersect-model-options"
@@ -614,16 +615,8 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <MultiProviderPicker
           providers={providersList}
-          options={IMAGE_GEN_MODEL_IDS}
-          labelOf={(p) => IMAGE_GEN_MODELS.find((m) => m.value === p)?.label ?? p}
+          options={IMAGE_GEN_MODELS}
           onChange={(next) => onUpdate({ providers: next, provider: next[0] })}
-          renderItems={(current) =>
-            IMAGE_GEN_MODELS
-              .filter((m) => m.value === current || !providersList.includes(m.value))
-              .map((m) => (
-                <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-              ))
-          }
           renderHint={(p) => <ModelDescriptionHint modelId={p} />}
         />
         <ReferenceSupportWarning
@@ -1381,17 +1374,16 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         characterDefs={attachedChars}
       />
       <MappableField field="provider" label="Provider" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
-        <Select
+        <ModelSearchSelect
           value={data.provider || "nano-banana"}
-          onValueChange={(v) => onUpdate({ provider: v as ModifyImageData["provider"] })}
-        >
-          <SelectTrigger aria-label="Provider"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {MODIFY_IMAGE_MODELS.map((m) => (
-              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={"desc" in m ? (m as any).desc : (m as any).description ?? ""} />
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(v) => onUpdate({ provider: v as ModifyImageData["provider"] })}
+          options={MODIFY_IMAGE_MODELS.map((m) => ({
+            value: m.value,
+            label: m.label,
+            desc: "desc" in m ? (m as { desc?: string }).desc : (m as { description?: string }).description ?? "",
+          }))}
+          ariaLabel="Provider"
+        />
       </MappableField>
       <MappableField field="prompt" label={isNanoBananaEdit ? "Edit Instructions" : "Transformation Prompt"} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<PromptHelperButton nodeType="image-to-image" currentPrompt={data.prompt || ""} provider={data.provider} aspectRatio={data.aspectRatio} onAccept={(prompt, modelChange) => onUpdate({ prompt, ...(modelChange && { [modelChange.field]: modelChange.value }) })} />}>
         <PromptEditor

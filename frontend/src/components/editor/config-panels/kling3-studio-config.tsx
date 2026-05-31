@@ -21,7 +21,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import type { ImageToVideoData } from "@/types/nodes"
 import { VIDEO_I2V_MODELS, PROVIDERS_WITH_END_FRAME, VIDEO_RATIOS } from "./model-options"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
-import { ModelSelectOption } from "./model-select-option"
+import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
 import { MappableField } from "./mappable-field"
 import { FinalPromptPreview } from "./final-prompt-preview"
@@ -300,17 +300,12 @@ export function Kling3StudioConfig({ data, onUpdate, sources, fieldMappings, onM
             <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">Provider</Label>
             <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
               <MappableField field="provider" label="Model" sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="video">
-                <Select
+                <ModelSearchSelect
                   value={data.provider || "seedance-2-fast"}
-                  onValueChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
-                >
-                  <SelectTrigger aria-label="Model"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {VIDEO_I2V_MODELS.map((m) => (
-                      <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(v) => onUpdate({ provider: v as ImageToVideoData["provider"] })}
+                  options={VIDEO_I2V_MODELS}
+                  ariaLabel="Model"
+                />
               </MappableField>
               <ModelDescriptionHint modelId={data.provider} />
             </div>
