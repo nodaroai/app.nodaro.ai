@@ -6,20 +6,9 @@ import { LogOut } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
-
-const PORT_COLOR: Record<string, string> = {
-  text: "#22D3EE", image: "#22D3EE", video: "#A78BFA", audio: "#FCD34D", any: "#475569",
-}
+import { PORT_COLOR } from "@/lib/sub-workflow-handles"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { SubWorkflowOutputData, SubWorkflowPort } from "@/types/nodes"
-
-const MEDIA_TYPE_COLORS: Record<string, string> = {
-  text: "bg-blue-400",
-  image: "bg-emerald-400",
-  video: "bg-purple-400",
-  audio: "bg-amber-400",
-  any: "bg-gray-400",
-}
 
 const SOURCE_HANDLE = { id: "out", type: "source" as const, position: Position.Right, customStyle: { top: '24px', right: '-29px' }, external: true, mediaType: "any" as const }
 
@@ -90,7 +79,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
             <div className="flex flex-col gap-1">
               {ports.map((port) => (
                 <div key={port.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className={`w-2 h-2 rounded-full ${MEDIA_TYPE_COLORS[port.mediaType] ?? MEDIA_TYPE_COLORS.any}`} />
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PORT_COLOR[port.mediaType] ?? PORT_COLOR.any }} />
                   <span>{port.name}</span>
                   {port.id === nodeData.visibleOutputPortId && (
                     <span className="text-[10px] text-[#ff0073]">(visible)</span>
@@ -107,7 +96,7 @@ function SubWorkflowOutputNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
       {handles.filter(h => h.type === "target").map(h => (
-        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color={PORT_COLOR[(h as { mediaType?: string }).mediaType ?? "any"] ?? "#475569"} icon={<LogOut />} side="left" top={(h as { top?: string }).top ?? "calc(100% - 24px)"} />
+        <HandleWithPopover key={h.id} nodeId={id} nodeType="sub-workflow-output" handleId={h.id} type="target" position={Position.Left} label={(h as { label?: string }).label ?? h.id} color={PORT_COLOR[(h as { mediaType?: string }).mediaType ?? "any"] ?? HANDLE_COLORS.control} icon={<LogOut />} side="left" top={(h as { top?: string }).top ?? "calc(100% - 24px)"} />
       ))}
       <HandleWithPopover nodeId={id} nodeType="sub-workflow-output" handleId="out" type="source" position={Position.Right} label="Parent" color={HANDLE_COLORS.control} icon={<LogOut />} side="right" top="24px" />
     </div>

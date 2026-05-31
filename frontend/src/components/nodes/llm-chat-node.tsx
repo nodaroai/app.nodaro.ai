@@ -283,7 +283,7 @@ function LLMChatNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="references"    type="target" position={Position.Left}  label="References"    color={HANDLE_COLORS.image} icon={<ImageIcon />} side="left"  top="calc(100% - 56px)" orderMatters accepts={ACCEPTS_REFERENCES} />
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="system-prompt" type="target" position={Position.Left}  label="System prompt" color={TEXT_HANDLE_COLOR} icon={<BookOpen />}  side="left"  top="calc(100% - 88px)" accepts={ACCEPTS_SYSTEM_PROMPT} />
       <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="text"          type="source" position={Position.Right} label="Text"          color={TEXT_HANDLE_COLOR} icon={<Type />}      side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.video} icon={<List />}      side="right" top="56px" />
+      <HandleWithPopover nodeId={id} nodeType="llm-chat" handleId="items"         type="source" position={Position.Right} label="Items"         color={HANDLE_COLORS.list} icon={<List />}      side="right" top="56px" />
       {showLog && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"

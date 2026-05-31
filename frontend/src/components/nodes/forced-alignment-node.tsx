@@ -129,8 +129,8 @@ function ForcedAlignmentNodeComponent({ id, data, selected }: NodeProps) {
       </div>
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="audio"      type="target" position={Position.Left}  label="Audio"      color={HANDLE_COLORS.audio} icon={<AudioWaveform />} side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_AUDIO} />
-    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={HANDLE_COLORS.image} icon={<FileText />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TRANSCRIPT} />
-    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="data"       type="source" position={Position.Right} label="Data"       color={HANDLE_COLORS.video} icon={<AlignLeft />}     side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={HANDLE_COLORS.text} icon={<FileText />}      side="left"  top="calc(100% - 56px)" accepts={ACCEPTS_TRANSCRIPT} />
+    <HandleWithPopover nodeId={id} nodeType="forced-alignment" handleId="data"       type="source" position={Position.Right} label="Data"       color={HANDLE_COLORS.look} icon={<AlignLeft />}     side="right" top="24px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm}
       onClose={() => setDeleteConfirm(false)}
