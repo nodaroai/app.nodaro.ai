@@ -76,6 +76,9 @@ export interface PipelineRecord {
   id: string
   status: PipelineStatus
   current_stage: string | null
+  /** Phase 0 studio — present on the list endpoint (recent-films history). */
+  created_at?: string
+  input_prompt?: string | null
   spent_credits: number
   reserved_credits: number
   upfront_credit_estimate: number

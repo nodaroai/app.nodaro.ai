@@ -310,7 +310,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
     const { data, error } = await supabase
       .from("pipelines")
       .select(
-        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,created_at",
+        "id,status,current_stage,spent_credits,reserved_credits,upfront_credit_estimate,created_at,input_prompt",
       )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
