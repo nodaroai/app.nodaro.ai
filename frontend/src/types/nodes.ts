@@ -3511,6 +3511,11 @@ export type LLMChatData = {
   llmModel?: string
   temperature: number
   maxTokens: number
+  /** How many generations to produce per Run click. `llm-chat` is in
+   *  REPEATABLE_NODE_TYPES, so the runtime fans this out into N runs.
+   *  Surfaced by the config panel's "Repeat … times" control (range 1–20)
+   *  and the node's quick toolbar (×1–4). Unset ⇒ 1. */
+  repeatCount?: number
   fieldMappings: FieldMappings
   templateId?: string
   generatedItems?: string[]

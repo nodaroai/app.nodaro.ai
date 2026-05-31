@@ -52,6 +52,10 @@ interface BaseNodeProps {
   readonly keepTopToolbarVisible?: boolean
   readonly className?: string
   readonly imageAspectRatio?: number
+  /** Opt a non-`parameter` node into the bottom-left zoom magnifier
+   *  (`CustomHandle`) instead of a second plain resize dot. Reuses
+   *  BaseNode's existing 2× zoom-drag handlers. */
+  readonly enableZoomHandle?: boolean
 }
 
 // Card border + background. The CARD BORDER is uniform across every category
@@ -134,6 +138,7 @@ function BaseNodeComponent({
   keepTopToolbarVisible,
   className,
   imageAspectRatio,
+  enableZoomHandle,
 }: BaseNodeProps) {
   // Auto-compute minHeight from handle count: handles need 30px each + 20px padding
   const leftCount = handles.filter((h) => h.position === Position.Left).length
@@ -628,12 +633,13 @@ function BaseNodeComponent({
       ))}
 
       </div>
-      {/* Bottom-corner controls. Parameter nodes (cinematography) get the
-          zoom magnifier on one corner + a single resize dot on the other
-          (Alt-swappable). All other categories get plain resize dots on
-          both corners — no per-node zoom. */}
+      {/* Bottom-corner controls. Parameter nodes (cinematography) and any
+          node that opts in via `enableZoomHandle` get the zoom magnifier on
+          one corner + a single resize dot on the other (Alt-swappable). All
+          other categories get plain resize dots on both corners — no
+          per-node zoom. */}
       {!isMobile && (isHovered || !!selected) && (
-        category === "parameter" ? (
+        (category === "parameter" || enableZoomHandle) ? (
           <>
             {/* Hold Alt to swap: resize moves to bottom-left, zoom to bottom-right. */}
             <NodeResizeControl

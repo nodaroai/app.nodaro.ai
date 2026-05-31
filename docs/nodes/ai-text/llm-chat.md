@@ -30,6 +30,7 @@ When the prompt (or a template) produces a single block with no `===NEXT===` mar
 | Model | `string` | `gemini-3-flash` | LLM model picked via the model selector — drives both capability and credit cost (see [Credit pricing](#credit-pricing)) |
 | Temperature | `number` | `0.7` | Creativity control (0 = deterministic, 1 = more creative) |
 | Max Tokens | `number` | `2048` | Maximum output length in tokens |
+| # of runs | `number` | `1` | How many generations to produce per Run click (1–4 in the node's quick toolbar). Each run is charged separately — the Run button shows the multiplied credit cost |
 
 ### Model selector
 
@@ -42,6 +43,19 @@ The model is chosen from the shared LLM model selector and determines the credit
 | Premium | Gemini Pro, Claude Opus, GPT-5.4 | Gemini Pro: image + video + audio. Opus / GPT-5.4: image only |
 
 The default model is Gemini Flash (economy tier). All models accept an image reference; only the **Gemini** models accept video and audio references.
+
+## Canvas controls
+
+Hovering the node on the canvas reveals a quick toolbar beneath it, mirroring the Generate Image node:
+
+- **AI Model** — pick the LLM (same options as the config panel's model selector).
+- **Template** — choose a built-in preset or one of your saved templates.
+- **# of runs** — generate 1–4 results per click; the Run button's credit cost updates to reflect the multiplier.
+- **Run** — execute the node.
+
+A **results browser** floats above the node on hover whenever there is more than one result: numbered tiles with prev/next paging, arrow-key navigation when the node is selected, an active-result ring, and a hover delete affordance. The card shows the currently selected result; the **Log** button on the result's hover toolbar opens the full execution log grouped by run.
+
+Drag the **magnifier handle** at the bottom-left corner to zoom the node up to 2× for easier reading; the bottom-right corner resizes it (hold Alt to swap corners).
 
 ## Inputs & Outputs
 
