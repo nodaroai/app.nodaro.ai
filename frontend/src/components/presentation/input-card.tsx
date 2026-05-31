@@ -13,6 +13,7 @@ import { LoopInputCard } from "./input-cards/loop-input-card"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
+import { isMultiColumnList } from "@/lib/list-loop-migration"
 
 // Lazy-load the picker card: it pulls the full parameter-picker registry (~40
 // catalogs, incl. person.ts) which would otherwise bloat the public app-runner
@@ -152,21 +153,11 @@ function InputCardInner({
         />
       )
 
-    case "list":
-      return (
-        <ListInputCard
-          node={node}
-          isFullscreen={isFullscreen}
-          inputValues={inputValues}
-          onUpdateInput={onUpdateInput}
-          readOnly={readOnly}
-          maxItems={effectiveMaxItems}
-          promptHelper={promptHelperProp}
-        />
-      )
-
-    case "loop":
-      return (
+    // Card chosen by column count (see isMultiColumnList), not node type:
+    // multi-column → LoopInputCard (table), single-column → ListInputCard.
+    // (loop→list is migrated on every load path, so the old `case "loop"` is gone.)
+    case "list": {
+      return isMultiColumnList(data) ? (
         <LoopInputCard
           node={node}
           isFullscreen={isFullscreen}
@@ -177,7 +168,18 @@ function InputCardInner({
           display={display}
           promptHelper={promptHelperProp}
         />
+      ) : (
+        <ListInputCard
+          node={node}
+          isFullscreen={isFullscreen}
+          inputValues={inputValues}
+          onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
+          maxItems={effectiveMaxItems}
+          promptHelper={promptHelperProp}
+        />
       )
+    }
 
     default: {
       // Parameter pickers (setting, mood, animal, etc.) get their own

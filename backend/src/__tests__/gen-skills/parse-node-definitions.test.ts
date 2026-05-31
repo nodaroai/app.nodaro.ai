@@ -24,12 +24,12 @@ describe("parseNodeDefinitions", () => {
     })
   })
 
-  it("extracts the loop (Table) entry", () => {
+  it("extracts the list entry", () => {
     const defs = parseNodeDefinitions(NODES_TS)
-    const loop = defs.find((d) => d.type === "loop")
-    expect(loop).toBeDefined()
-    expect(loop?.label).toBe("Table")
-    expect(loop?.category).toBe("input")
+    const list = defs.find((d) => d.type === "list")
+    expect(list).toBeDefined()
+    expect(list?.label).toBe("List")
+    expect(list?.category).toBe("input")
   })
 
   it("returns a non-empty array", () => {

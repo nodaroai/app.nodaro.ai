@@ -335,11 +335,11 @@ describe("expandLoopResults", () => {
     expect(clone0.data.__expandedFrom).toBe("n1")
   })
 
-  it("does not clone list source types (loop, list, split-text)", () => {
+  it("does not clone list source types (list, split-text)", () => {
     mockNodes = [
       makeNode({
-        id: "loop1",
-        type: "loop",
+        id: "list1",
+        type: "list",
         data: {
           label: "Table",
           __listResults: ["a", "b"],
@@ -349,8 +349,8 @@ describe("expandLoopResults", () => {
     ]
     expandLoopResults()
 
-    // loop type is a multi-result node but LIST_SOURCE_TYPES are excluded from cloning.
-    // setState is still called but the loop node should NOT be hidden and no _iter_ clones created.
+    // list type is a multi-result node but LIST_SOURCE_TYPES are excluded from cloning.
+    // setState is still called but the list node should NOT be hidden and no _iter_ clones created.
     if (mockSetState.mock.calls.length > 0) {
       const state = mockSetState.mock.calls[0][0]
       const cloneNodes = state.nodes.filter((n: any) => n.id.includes("_iter_"))

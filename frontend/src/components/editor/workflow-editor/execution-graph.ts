@@ -168,7 +168,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   const type = node.type;
 
   if (type === "list") {
-    // New format: columns + rows (same as loop)
+    // New format: columns + rows
     const loopData = data as LoopNodeData;
     if (loopData.columns) {
       if (sourceHandle) {
@@ -179,22 +179,19 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       }
       return loopData.rows?.[0]?.[0]?.trim() || "";
     }
+    // Rows-only shape (rows present, columns absent) — the loop→list rename
+    // does NOT backfill columns, so a renamed rows-only loop lands here. With
+    // no columns there are no handle ids to match a sourceHandle against, so
+    // (as the retired `loop` branch's no-column-match fallthrough did) return
+    // the first row's first cell, BEFORE the legacy `items` fallback. This makes
+    // `list` a true superset of `loop`.
+    if (loopData.rows) {
+      return loopData.rows?.[0]?.[0]?.trim() || "";
+    }
     // Legacy format: items string
     const items = (data.items as string | undefined) || "";
     const lines = items.split("\n").filter((l: string) => l.trim().length > 0);
     return lines[0]?.trim();
-  }
-  if (type === "loop") {
-    const loopData = data as LoopNodeData;
-    if (sourceHandle) {
-      const colIndex = (loopData.columns ?? []).findIndex(
-        (c: { handleId: string }) => c.handleId === sourceHandle,
-      );
-      if (colIndex >= 0) {
-        return loopData.rows?.[0]?.[colIndex]?.trim() || "";
-      }
-    }
-    return loopData.rows?.[0]?.[0]?.trim() || "";
   }
   if (type === "text-prompt") {
     return (data.text as string | undefined)?.trim();

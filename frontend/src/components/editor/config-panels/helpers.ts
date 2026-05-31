@@ -32,7 +32,6 @@ export const TEXT_SOURCE_TYPES: ReadonlyArray<string> = [
   "webhook-trigger",
   "schedule-trigger",
   "list",
-  "loop",
   // Parameter nodes — their extractNodeOutput returns the prompt hint.
   "tone",
   "style-guide",

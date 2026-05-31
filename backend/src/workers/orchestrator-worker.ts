@@ -18,13 +18,13 @@ import {
   getEffectivelySkippedIds,
   getUploadDescendantIds,
   computeRouterGatedIds,
-  migrateLegacyNodeType,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
 import { resolveNodeInputs, getListInputForNode } from "../services/workflow-engine/input-resolver.js"
+import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
-import { extractSourceNodeOutput, extractSavedNodeOutput } from "../services/workflow-engine/output-extractor.js"
+import { extractSourceNodeOutput, extractSavedNodeOutput, coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { executeNode, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import type {
   WorkflowExecutionJob,
@@ -377,9 +377,11 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
     }
 
-    // Migrate legacy image node types (edit-image → modify/upscale/remove-background, image-to-image → modify)
+    // Normalize legacy node types (edit-image → modify/upscale/remove-background,
+    // image-to-image → modify, old collect → reduce, loop → list) BEFORE the
+    // engine reads node.type. See normalize-node-types.ts.
     const rawNodes = (workflowData.nodes as (SimpleNode & { hidden?: boolean })[]) ?? []
-    const allNodes = rawNodes.map((node) => migrateLegacyNodeType(node))
+    const allNodes = normalizeLegacyNodeTypes(rawNodes)
 
     // Filter out hidden nodes (from loop expansion) and expanded clones that were persisted
     const allEdges: SimpleEdge[] = ((workflowData.edges as SimpleEdge[]) ?? []).map(e => ({
@@ -436,6 +438,13 @@ async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise
           if (node.type === "location") {
             applyLocationVariantOverride(cleaned)
           }
+          // A columns-present `list` (incl. migrated former-`loop`) used as a
+          // published-app input gets the user's value as an `items: string[]`
+          // override (ListInputCard always writes `items`). Both list extractors
+          // read `rows` first when `columns` exist, so without this the override
+          // is ignored and the run uses the STALE snapshot rows. Rewrite rows
+          // from the items override so the user's input is authoritative.
+          coerceListItemsOverrideToRows(cleaned)
           node.data = cleaned
         }
       }

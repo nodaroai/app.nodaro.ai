@@ -146,9 +146,9 @@ const FIELD_LABELS: Record<string, string> = {
 }
 
 /** Source types whose edges default to "each" (fan-out) when no explicit mode is set. */
-const DEFAULT_EACH_SOURCE_TYPES = new Set(["list", "loop", "split-text"])
+const DEFAULT_EACH_SOURCE_TYPES = new Set(["list", "split-text"])
 /** Target types whose incoming edges default to "all" (Bundle). Mirrors the dropdown in animated-flow-edge. */
-const DEFAULT_ALL_TARGET_TYPES = new Set(["list", "loop"])
+const DEFAULT_ALL_TARGET_TYPES = new Set(["list"])
 
 /** Resolve the effective output mode, mirroring the dropdown defaults so the
  *  edge label agrees with the radio selection. Target-based "all" wins over
@@ -249,8 +249,8 @@ function getEdgeLabel(
     }
   }
 
-  // Loop (table) column outputs — show role-aware label
-  if ((srcType === "loop" || srcType === "list") && srcHandle && sourceNode?.data) {
+  // List (table) column outputs — show role-aware label
+  if (srcType === "list" && srcHandle && sourceNode?.data) {
     const columns = (sourceNode.data as Record<string, unknown>).columns as
       Array<{ handleId: string; name: string; type?: string }> | undefined
     const col = columns?.find((c) => c.handleId === srcHandle)

@@ -979,7 +979,7 @@ function resolvePersona(
 // List-like node helpers for buildNodeRefMap edge-aware output extraction
 // ---------------------------------------------------------------------------
 
-const LIST_LIKE_TYPES = new Set(["list", "loop", "split-text"])
+const LIST_LIKE_TYPES = new Set(["list", "split-text"])
 
 /** Return the outputMode from connecting edges, defaulting to "each" for list-like nodes. */
 function getEdgeOutputMode(
@@ -993,30 +993,34 @@ function getEdgeOutputMode(
   return "each"
 }
 
-/** Parse the list of items from a list/loop/split-text node. */
+/** Parse the list of items from a list/split-text node. */
 function extractListItems(
   node: SimpleNode,
   states: Record<string, NodeExecutionState>,
 ): string[] {
   const data = node.data
   if (node.type === "list") {
-    // Modern format: columns + rows (same as loop). Without this, node refs
-    // like {List Name} resolving to list items only saw the legacy items
-    // string; modern lists returned an empty array.
+    // Modern format: columns + rows. Without this, node refs like {List Name}
+    // resolving to list items only saw the legacy items string; modern lists
+    // returned an empty array.
     const cols = data.columns as Array<{ handleId: string }> | undefined
     if (cols) {
       const rows = data.rows as string[][] | undefined
       return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
+    }
+    // Rows-only shape (rows present, columns absent) — the loop→list rename
+    // does NOT backfill columns, so a renamed rows-only loop lands here. Read
+    // the first column (as the retired `loop` case did), BEFORE the legacy
+    // `items` fallback, so `list` is a true superset of `loop`.
+    const rowsOnly = data.rows as string[][] | undefined
+    if (rowsOnly) {
+      return rowsOnly.map((r) => r[0]?.trim() ?? "").filter(Boolean)
     }
     // Legacy format: newline-separated items string
     return ((data.items as string | undefined) || "")
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
-  }
-  if (node.type === "loop") {
-    const rows = data.rows as string[][] | undefined
-    return (rows ?? []).map((r) => r[0]?.trim() ?? "").filter(Boolean)
   }
   if (node.type === "split-text") {
     const state = states[node.id]

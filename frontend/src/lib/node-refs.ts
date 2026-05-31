@@ -96,7 +96,7 @@ export function getUpstreamNodes(
 // List-like node helpers for buildNodeRefMap edge-aware output extraction
 // ---------------------------------------------------------------------------
 
-const LIST_LIKE_TYPES = new Set(["list", "loop", "split-text"])
+const LIST_LIKE_TYPES = new Set(["list", "split-text"])
 
 /** Return the edge's outputMode + itemIndex, defaulting to "each" for list-like nodes. */
 function getEdgeOutputMode(

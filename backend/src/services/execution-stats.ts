@@ -48,7 +48,6 @@ export const SKIP_CATEGORIES = new Set([
   "youtube-video",
   "reference-audio",
   "list",
-  "loop",
   "webhook-trigger",
   "schedule-trigger",
   "sub-workflow-input",

@@ -17,7 +17,6 @@ const TYPE_CATEGORY: Record<string, string> = {
   "ai-writer": "Text",
   "llm-chat": "Text",
   "list": "Text",
-  "loop": "Text",
   "generate-image": "Image",
   "upload-image": "Image",
   "edit-image": "Image",

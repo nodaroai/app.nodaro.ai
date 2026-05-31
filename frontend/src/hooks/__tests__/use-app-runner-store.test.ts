@@ -97,6 +97,56 @@ describe("useAppRunnerStore", () => {
       expect(getPublishedApp).toHaveBeenCalledTimes(1)
       expect(getPublishedApp).toHaveBeenCalledWith("slug-1")
     })
+
+    it("migrates legacy loop nodes in snapshotNodes to list on load", async () => {
+      // A multi-column loop ("Table") + a single-column loop in the snapshot.
+      const twoColLoop = {
+        id: "loop_multi",
+        type: "loop",
+        position: { x: 0, y: 0 },
+        data: {
+          label: "Cast",
+          columns: [
+            { id: "c1", name: "Name", handleId: "col_c1", type: "text" },
+            { id: "c2", name: "Face", handleId: "col_c2", type: "image-url" },
+          ],
+          rows: [["Ana", "u1"], ["Bo", "u2"]],
+        },
+      }
+      const oneColLoop = {
+        id: "loop_single",
+        type: "loop",
+        position: { x: 0, y: 0 },
+        data: { label: "Shots", columns: [{ id: "c3", name: "Shot", handleId: "col_c3", type: "text" }], rows: [["a"]] },
+      }
+      const mockApp = {
+        id: "app_1",
+        slug: "my-app",
+        name: "My App",
+        snapshotNodes: [twoColLoop, oneColLoop, { id: "tp", type: "text-prompt", position: { x: 0, y: 0 }, data: {} }],
+        snapshotEdges: [{ id: "e1", source: "loop_multi", target: "tp" }],
+      }
+      vi.mocked(getPublishedApp).mockResolvedValue(mockApp as never)
+
+      await useAppRunnerStore.getState().loadApp("my-app")
+
+      const nodes = useAppRunnerStore.getState().app!.snapshotNodes as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      // Both loop nodes are now `list`
+      expect(nodes.find((n) => n.id === "loop_multi")!.type).toBe("list")
+      expect(nodes.find((n) => n.id === "loop_single")!.type).toBe("list")
+      // Multi-column structure (columns 2+) is preserved by the migration
+      expect((nodes.find((n) => n.id === "loop_multi")!.data.columns as unknown[]).length).toBe(2)
+      expect(nodes.find((n) => n.id === "loop_multi")!.data.rows).toEqual([["Ana", "u1"], ["Bo", "u2"]])
+      // Edges untouched
+      expect(useAppRunnerStore.getState().app!.snapshotEdges).toEqual([{ id: "e1", source: "loop_multi", target: "tp" }])
+    })
+
+    it("returns app untouched when snapshotNodes is absent (defensive null-safety)", async () => {
+      const mockApp = { id: "app_1", slug: "my-app", name: "My App" }
+      vi.mocked(getPublishedApp).mockResolvedValue(mockApp as never)
+      await useAppRunnerStore.getState().loadApp("my-app")
+      expect(useAppRunnerStore.getState().app).toEqual(mockApp)
+    })
   })
 
   describe("loadRuns", () => {

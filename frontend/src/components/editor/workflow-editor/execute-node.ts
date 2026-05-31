@@ -2058,10 +2058,10 @@ export function executeNode(
       );
       if (startEdge) {
         const startNode = nodes.find((n) => n.id === startEdge.source);
-        if (startNode && startNode.type !== "loop" && startNode.type !== "list") {
+        if (startNode && startNode.type !== "list") {
           startFrameUrl = extractNodeOutput(startNode, startEdge.sourceHandle ?? undefined);
         }
-        // Loop nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
+        // List nodes: already resolved via resolveNodeInputs → inputs.startFrameUrl
       }
     }
     if (!startFrameUrl && i2vData.selectedStartFrameNodeId) {

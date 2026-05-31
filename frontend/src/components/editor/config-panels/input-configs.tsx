@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useMemo } from "react"
 import { optimizedImageUrl } from "@/lib/image"
+import { isMultiColumnList } from "@/lib/list-loop-migration"
 import { X, Plus, Loader2, Check, Download, AlertCircle, Upload, Film, Music, Link, GripVertical, Scissors } from "lucide-react"
 import {
   DndContext,
@@ -486,16 +487,19 @@ function DelimiterSelect({
   )
 }
 
-export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId, singleColumn }: {
+export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId }: {
   data: LoopNodeData
   onUpdate: (patch: Partial<LoopNodeData>) => void
   onRemoveColumnEdges?: (colHandleId: string) => void
   nodes?: ReadonlyArray<{ id: string; type?: string; data: Record<string, unknown> }>
   nodeId?: string
-  singleColumn?: boolean
 }) {
   const [activeTab, setActiveTab] = useState<"configure" | "data">("configure")
   const columns = data.columns ?? []
+  // Single-column "List" UI by default; becomes the multi-column "Table" UI once
+  // the node grows past one column. Uses the shared predicate (single source of
+  // truth) rather than re-deriving the column-count boundary inline.
+  const singleColumn = !isMultiColumnList(data)
   const rows = data.rows ?? []
   const edges = useWorkflowStore((s) => s.edges)
   const allNodes = useWorkflowStore((s) => s.nodes)
@@ -680,7 +684,12 @@ export function LoopConfig({ data, onUpdate, onRemoveColumnEdges, nodes, nodeId,
         <>
           <div className="flex items-center justify-between">
             <Label>{singleColumn ? "List" : "Table"}</Label>
-            {!singleColumn && (
+            {/* Show Add Column when growing past a single column (Table mode) AND
+                at exactly 0 columns — a degenerate/bootstrap state (e.g. an empty
+                Table migrated to a 0-column list) where the panel would otherwise
+                have no way to add a column. Hidden only at exactly 1 column, the
+                intended simple single-column List experience. */}
+            {columns.length !== 1 && (
               <button
                 type="button"
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"

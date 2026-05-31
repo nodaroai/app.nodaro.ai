@@ -27,7 +27,7 @@ import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { PARAMETER_NODE_TYPES } from "@nodaro/shared"
-import { isSourceNode, isSkipNode } from "@/services/workflow-engine/execution-graph.js"
+import { isSourceNode, isSkipNode, migrateLegacyNodeType } from "@/services/workflow-engine/execution-graph.js"
 
 // REPO_ROOT: backend/src/lib/__tests__/ → up 4 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..")
@@ -162,6 +162,12 @@ describe("NODE_REGISTRY entries are classified", () => {
 // (webhook / schedule / MCP / published-app) or the default Run button. This is
 // the sticky-note / provider / rss-feed outage class — invisible to the
 // frontend (which gates on EXECUTABLE_TYPES) and to Test 1 (NODE_REGISTRY only).
+//
+// Exception: a @deprecated render-only alias (e.g. "loop", kept in the nodeTypes
+// map so a stray un-migrated node still renders) may stay unclassified IFF the
+// shared load-time migration (normalize-node-types.ts) rewrites it to a
+// classified canonical type before execution — verified inline below, so the
+// exemption can't silently rot.
 // ---------------------------------------------------------------------------
 
 describe("every renderable node type is classified", () => {
@@ -178,13 +184,33 @@ describe("every renderable node type is classified", () => {
       if (isSourceNode(type)) classifications.push("SOURCE_NODE_TYPES")
       if (isSkipNode(type)) classifications.push("SKIP_NODE_TYPES")
 
+      // Escape hatch for @deprecated render-only aliases (e.g. "loop"): these
+      // never reach the orchestrator as-is — the shared load-time migration
+      // rewrites them to a canonical type BEFORE buildPayload. Allow an
+      // unclassified type IFF it provably migrates to a *different*, classified
+      // type. Self-verifying: drop the loop→list migration (or unclassify
+      // "list") and this re-trips, so it can't mask a real outage.
+      if (classifications.length === 0) {
+        const migratedType = migrateLegacyNodeType({ type, data: {} }).type
+        if (
+          migratedType !== type &&
+          (FRONTEND_EXECUTABLE_TYPES.has(migratedType) ||
+            PARAMETER_NODE_TYPES.has(migratedType) ||
+            isSourceNode(migratedType) ||
+            isSkipNode(migratedType))
+        ) {
+          classifications.push(`load-migrated alias → "${migratedType}"`)
+        }
+      }
+
       expect(
         classifications.length,
-        `Renderable node type "${type}" (in frontend nodeTypes map) is in NONE of the four classification sets. At runtime the orchestrator creates a stale "pending" jobs row and buildPayload throws "Unknown node type", failing the whole workflow on any full server-side run or the default Run button. Classify it:
+        `Renderable node type "${type}" (in frontend nodeTypes map) is in NONE of the four classification sets and does not migrate to a classified type. At runtime the orchestrator creates a stale "pending" jobs row and buildPayload throws "Unknown node type", failing the whole workflow on any full server-side run or the default Run button. Classify it:
   • Executable: add to EXECUTABLE_TYPES (frontend types.ts) + a buildPayload case
   • Parameter: add to PARAMETER_NODE_TYPES + getParameterValue/getParameterPromptHint
   • Source (output read from node.data): add to SOURCE_NODE_TYPES in execution-graph.ts
-  • Skip (visual / non-executable, e.g. sticky-note, provider): add to SKIP_NODE_TYPES in execution-graph.ts`,
+  • Skip (visual / non-executable, e.g. sticky-note, provider): add to SKIP_NODE_TYPES in execution-graph.ts
+  • Legacy alias: ensure normalize-node-types.ts migrates it to a classified type before execution`,
       ).toBeGreaterThan(0)
     },
   )

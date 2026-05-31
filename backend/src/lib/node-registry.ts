@@ -315,7 +315,6 @@ export const NODE_REGISTRY: NodeDescriptor[] = [
   { type: "webhook-output", label: "Webhook Output", category: "output", description: "POST a node output to a URL.", outputType: "none" },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
-  { type: "loop", label: "Loop", category: "control", description: "Multi-column loop / table.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
   { type: "collect", label: "Collect", category: "utility", description: "Explicit list-builder — multiple inputs converge on a single 'in' handle in connection order and emit as a structured list downstream.", outputType: "data" },
   { type: "selector", label: "Selector", category: "utility", description: "Pick item(s) from a list — supports item/range/list/random/modulo/predicate/named-key modes. Two outputs: picked + rest.", outputType: "text", creditCost: 0 },

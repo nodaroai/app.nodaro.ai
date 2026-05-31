@@ -62,7 +62,7 @@ describe("backend migrateGenerateImageHandles", () => {
   })
   it("leaves non-generate-image targets untouched", () => {
     const out = migrateGenerateImageHandles(
-      [n("tp", "text-prompt"), n("li", "loop")],
+      [n("tp", "text-prompt"), n("li", "list")],
       [e("e1", "tp", "li", "in")],
     )
     expect(out[0].targetHandle).toBe("in")

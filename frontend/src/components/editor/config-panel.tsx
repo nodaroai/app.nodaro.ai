@@ -326,7 +326,6 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "sort-list": "Sort List",
   "selector": "Selector",
   "preview": "Preview",
-  "loop": "Table",
   "save-to-storage": "Save to Storage",
   "webhook-output": "Webhook Output",
   "character": "Character",
@@ -387,7 +386,7 @@ export const RUN_BUTTON_TYPES = new Set([
 /** Nodes that show "Run from here" as primary action instead of "Run". */
 const RUN_FROM_HERE_TYPES: Set<string> = new Set([
   ...NODE_DEFINITIONS.filter((d) => d.autoExecute).map((d) => d.type),
-  "preview", "loop", "list",
+  "preview", "list",
 ])
 
 const KLING3_DIRECTOR_TYPES = new Set(["image-to-video", "text-to-video", "generate-video"])
@@ -431,8 +430,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
 
   switch (nodeType) {
     case "text-prompt": return <TextPromptConfig {...configProps} />
-    case "list": return <LoopConfig {...configProps} nodeId={selectedNodeId} singleColumn />
-    case "loop": return <LoopConfig {...configProps} nodeId={selectedNodeId} />
+    case "list":
+      return <LoopConfig {...configProps} nodeId={selectedNodeId} />
     case "upload-image": return <UploadImageConfig {...configProps} />
     case "upload-video": return <UploadVideoConfig {...configProps} />
     case "upload-audio": return <UploadAudioConfig {...configProps} />
@@ -1219,7 +1218,7 @@ export function ConfigPanel() {
                 display={nodeData.presentationDisplay as PresentationDisplay ?? {}}
                 onChange={(d) => updateNodeData(selectedNodeId!, { presentationDisplay: d })}
                 showElementSize={nodeType !== "text-prompt"}
-                viewModes={nodeType === "loop" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
+                viewModes={nodeType === "list" ? [{ value: "cards", label: "Cards" }, { value: "table", label: "Table" }] : undefined}
               />
             </div>
           )}

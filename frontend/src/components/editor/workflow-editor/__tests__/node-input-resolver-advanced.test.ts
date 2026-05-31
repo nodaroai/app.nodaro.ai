@@ -683,25 +683,25 @@ describe("extractNodeOutputAsList", () => {
 // ---------------------------------------------------------------------------
 
 describe("getListInputForNode", () => {
-  it("returns split text lines from upstream of a loop node", () => {
+  it("returns split text lines from upstream of a list node", () => {
     mockExtractNodeOutput.mockReturnValue("line1\nline2\nline3")
 
     const textNode = makeNode("t1", "text-prompt", { text: "line1\nline2\nline3" })
-    const loopNode = makeNode("loop1", "loop", { columns: [], rows: [] })
+    const listNode = makeNode("list1", "list", { columns: [], rows: [] })
     const target = makeNode("gen1", "generate-image")
     const edges = [
-      makeEdge("t1", "loop1", undefined, "in"),
-      makeEdge("loop1", "gen1"),
+      makeEdge("t1", "list1", undefined, "in"),
+      makeEdge("list1", "gen1"),
     ]
 
-    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    const result = getListInputForNode(target, [textNode, listNode, target], edges)
     expect(result).toEqual(["line1", "line2", "line3"])
   })
 
-  it("reads column data from loop node rows at matching column index", () => {
+  it("reads column data from list node rows at matching column index", () => {
     mockExtractNodeOutput.mockReturnValue(undefined)
 
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [
         { handleId: "col-0", name: "Prompt" },
         { handleId: "col-1", name: "Style" },
@@ -713,16 +713,16 @@ describe("getListInputForNode", () => {
       ],
     })
     const target = makeNode("gen1", "generate-image")
-    const edges = [makeEdge("loop1", "gen1", "col-0")]
+    const edges = [makeEdge("list1", "gen1", "col-0")]
 
-    const result = getListInputForNode(target, [loopNode, target], edges)
+    const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toEqual(["prompt A", "prompt B", "prompt C"])
   })
 
   it("reads second column data when sourceHandle matches col-1", () => {
     mockExtractNodeOutput.mockReturnValue(undefined)
 
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [
         { handleId: "col-0", name: "Prompt" },
         { handleId: "col-1", name: "Style" },
@@ -733,9 +733,9 @@ describe("getListInputForNode", () => {
       ],
     })
     const target = makeNode("gen1", "generate-image")
-    const edges = [makeEdge("loop1", "gen1", "col-1")]
+    const edges = [makeEdge("list1", "gen1", "col-1")]
 
-    const result = getListInputForNode(target, [loopNode, target], edges)
+    const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toEqual(["style X", "style Y"])
   })
 
@@ -762,32 +762,32 @@ describe("getListInputForNode", () => {
     expect(result).toBeUndefined()
   })
 
-  it("returns undefined when loop upstream produces only one line", () => {
+  it("returns undefined when list upstream produces only one line", () => {
     mockExtractNodeOutput.mockReturnValue("only one line")
 
     const textNode = makeNode("t1", "text-prompt", { text: "only one line" })
-    const loopNode = makeNode("loop1", "loop", { columns: [], rows: [] })
+    const listNode = makeNode("list1", "list", { columns: [], rows: [] })
     const target = makeNode("gen1", "generate-image")
     const edges = [
-      makeEdge("t1", "loop1", undefined, "in"),
-      makeEdge("loop1", "gen1"),
+      makeEdge("t1", "list1", undefined, "in"),
+      makeEdge("list1", "gen1"),
     ]
 
-    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    const result = getListInputForNode(target, [textNode, listNode, target], edges)
     expect(result).toBeUndefined()
   })
 
-  it("returns undefined when loop has only one row in column data", () => {
+  it("returns undefined when list has only one row in column data", () => {
     mockExtractNodeOutput.mockReturnValue(undefined)
 
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [{ handleId: "col-0", name: "Prompt" }],
       rows: [["only one row"]],
     })
     const target = makeNode("gen1", "generate-image")
-    const edges = [makeEdge("loop1", "gen1", "col-0")]
+    const edges = [makeEdge("list1", "gen1", "col-0")]
 
-    const result = getListInputForNode(target, [loopNode, target], edges)
+    const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toBeUndefined()
   })
 
@@ -795,17 +795,17 @@ describe("getListInputForNode", () => {
     mockExtractNodeOutput.mockReturnValue("alpha,beta,gamma")
 
     const textNode = makeNode("t1", "text-prompt", { text: "alpha,beta,gamma" })
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [{ handleId: "col-0", name: "Prompt", type: "text", splitDelimiter: "," }],
       rows: [],
     })
     const target = makeNode("gen1", "generate-image")
     const edges = [
-      makeEdge("t1", "loop1", undefined, "in"),
-      makeEdge("loop1", "gen1", "col-0"),
+      makeEdge("t1", "list1", undefined, "in"),
+      makeEdge("list1", "gen1", "col-0"),
     ]
 
-    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    const result = getListInputForNode(target, [textNode, listNode, target], edges)
     expect(result).toEqual(["alpha", "beta", "gamma"])
   })
 
@@ -813,17 +813,17 @@ describe("getListInputForNode", () => {
     mockExtractNodeOutput.mockReturnValue("line1\nline2")
 
     const textNode = makeNode("t1", "text-prompt", { text: "line1\nline2" })
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [{ handleId: "col-0", name: "Prompt", type: "text" }],
       rows: [],
     })
     const target = makeNode("gen1", "generate-image")
     const edges = [
-      makeEdge("t1", "loop1", undefined, "in"),
-      makeEdge("loop1", "gen1", "col-0"),
+      makeEdge("t1", "list1", undefined, "in"),
+      makeEdge("list1", "gen1", "col-0"),
     ]
 
-    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    const result = getListInputForNode(target, [textNode, listNode, target], edges)
     expect(result).toEqual(["line1", "line2"])
   })
 
@@ -831,17 +831,17 @@ describe("getListInputForNode", () => {
     mockExtractNodeOutput.mockReturnValue("one|two|three|four")
 
     const textNode = makeNode("t1", "text-prompt", { text: "one|two|three|four" })
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [{ handleId: "col-0", name: "Items", type: "text", splitDelimiter: "|" }],
       rows: [],
     })
     const target = makeNode("gen1", "generate-image")
     const edges = [
-      makeEdge("t1", "loop1", undefined, "in"),
-      makeEdge("loop1", "gen1", "col-0"),
+      makeEdge("t1", "list1", undefined, "in"),
+      makeEdge("list1", "gen1", "col-0"),
     ]
 
-    const result = getListInputForNode(target, [textNode, loopNode, target], edges)
+    const result = getListInputForNode(target, [textNode, listNode, target], edges)
     expect(result).toEqual(["one", "two", "three", "four"])
   })
 
@@ -1091,12 +1091,12 @@ describe("resolveNodeInputs — list edge output mode routing", () => {
 })
 
 // ---------------------------------------------------------------------------
-// loop per-column connected source
+// list per-column connected source
 // ---------------------------------------------------------------------------
 
-describe("loop per-column connected source", () => {
+describe("list per-column connected source", () => {
   it("resolves connected column data from upstream node via col_*_in edges", () => {
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [
         { id: "c1", name: "Prompt", handleId: "col_c1", type: "text", connectedSourceId: "text1" },
       ],
@@ -1105,16 +1105,16 @@ describe("loop per-column connected source", () => {
     const textNode = makeNode("text1", "text-prompt", { text: "upstream value" })
     const imgNode = makeNode("img1", "generate-image", {})
 
-    const nodes = [textNode, imgNode, loopNode]
+    const nodes = [textNode, imgNode, listNode]
     const edges = [
-      makeEdge("text1", "loop1", undefined, "col_c1_in"),
-      makeEdge("loop1", "img1", "col_c1", undefined),
+      makeEdge("text1", "list1", undefined, "col_c1_in"),
+      makeEdge("list1", "img1", "col_c1", undefined),
     ]
 
     mockExtractNodeOutput.mockImplementation((node: any, sourceHandle?: string) => {
       if (node.id === "text1") return "upstream value"
       // Loop node returns first row for the matched column (real extractNodeOutput behaviour)
-      if (node.id === "loop1" && sourceHandle === "col_c1") return "manual data"
+      if (node.id === "list1" && sourceHandle === "col_c1") return "manual data"
       return undefined
     })
 
@@ -1123,7 +1123,7 @@ describe("loop per-column connected source", () => {
   })
 
   it("falls back to manual rows when no per-column edge exists", () => {
-    const loopNode = makeNode("loop1", "loop", {
+    const listNode = makeNode("list1", "list", {
       columns: [
         { id: "c1", name: "Prompt", handleId: "col_c1", type: "text" },
       ],
@@ -1131,13 +1131,13 @@ describe("loop per-column connected source", () => {
     })
     const imgNode = makeNode("img1", "generate-image", {})
 
-    const nodes = [imgNode, loopNode]
+    const nodes = [imgNode, listNode]
     const edges = [
-      makeEdge("loop1", "img1", "col_c1", undefined),
+      makeEdge("list1", "img1", "col_c1", undefined),
     ]
 
     mockExtractNodeOutput.mockImplementation((node: any, sourceHandle?: string) => {
-      if (node.id === "loop1" && sourceHandle === "col_c1") return "manual value"
+      if (node.id === "list1" && sourceHandle === "col_c1") return "manual value"
       return undefined
     })
 

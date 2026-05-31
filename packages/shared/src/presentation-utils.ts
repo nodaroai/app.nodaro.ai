@@ -50,7 +50,6 @@ const ALWAYS_EXCLUDED_TYPES = new Set([
 const NON_OUTPUT_TYPES = new Set([
   "text-prompt",
   "list",
-  "loop",
   "upload-image",
   "upload-video",
   "upload-audio",

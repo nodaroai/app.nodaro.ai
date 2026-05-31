@@ -329,44 +329,6 @@ exports[`per-node skill file snapshots > image-to-video.md auto-gen blocks match
 }
 `;
 
-exports[`per-node skill file snapshots > loop.md auto-gen blocks match snapshot 1`] = `
-{
-  "examples": "## Worked example
-
-\`\`\`json
-{
-  "id": "loop-1",
-  "type": "loop",
-  "position": {
-    "x": 0,
-    "y": 0
-  },
-  "data": {
-    "label": "Table",
-    "columns": [],
-    "rows": [],
-    "fieldMappings": {}
-  }
-}
-\`\`\`",
-  "node-data-shape": "**Type:** \`loop\`
-**Category:** input
-**Credit cost:** 0
-**Inputs (target handles):** \`in\`
-**Outputs (source handles):** (none)
-
-**Default data:**
-\`\`\`json
-{
-  "label": "Table",
-  "columns": [],
-  "rows": [],
-  "fieldMappings": {}
-}
-\`\`\`",
-}
-`;
-
 exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match snapshot 1`] = `
 {
   "examples": "## Worked example

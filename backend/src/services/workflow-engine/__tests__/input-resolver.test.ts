@@ -722,13 +722,13 @@ describe("getListInputForNode", () => {
     expect(result).toBeUndefined()
   })
 
-  it("resolves loop node manual rows as list", () => {
+  it("resolves list node manual rows as list", () => {
     const target = node("t", "generate-image")
-    const loopNode = node("l", "loop", {
+    const listNode = node("l", "list", {
       rows: [["alpha"], ["beta"], ["gamma"]],
       columns: [{ id: "c1", handleId: "col_0" }],
     })
-    const allNodes = [loopNode, target]
+    const allNodes = [listNode, target]
     const edges = [edge("l", "t", "col_0")]
 
     const result = getListInputForNode(target, edges, {}, allNodes)

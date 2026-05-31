@@ -37,8 +37,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Text Prompt](./input/text-prompt.md) | User-provided text input with variable support | Provide prompts, descriptions, or text data to downstream nodes |
-| [List](./input/list.md) | Create a list of items for iteration | Batch process multiple prompts or subjects |
-| [Loop](./input/loop.md) | Table-based loop with columns and rows | Structured batch workflows with multiple variables per iteration |
+| [List](./input/list.md) | List of items, or a multi-column typed table, for batch iteration | Batch process multiple prompts or subjects; grow into a typed table for multiple variables per iteration |
 | [Upload Image](./input/upload-image.md) | Upload or provide an image URL | Source images for image-to-video, editing, or composition |
 | [Upload Video](./input/upload-video.md) | Upload or provide a video URL | Source video for processing, effects, or transformation |
 | [Upload Audio](./input/upload-audio.md) | Upload or provide an audio URL | Source audio for TTS, lip sync, dubbing, or mixing |
@@ -355,7 +354,7 @@ Helpers for debugging and workflow organization.
 | Node | Description | When to Use |
 |------|-------------|-------------|
 | [Preview](./utility/preview.md) | Display text, image, video, or audio in editor | Debug and inspect intermediate results |
-| [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List/Loop fan-out — pick the best variant, count survivors, or merge JSON |
+| [Reduce](./utility/reduce.md) | Fan-in N upstream values into 1 via a strategy (pick-best-llm / concat / first-non-empty / count / vote / merge-json) | Close a List fan-out — pick the best variant, count survivors, or merge JSON |
 | [Selector](./utility/selector.md) | Pick item(s) from a list — 7 modes (item / range / list / random / modulo / predicate / named-key); two outputs: `picked` + `rest` | Share a single selection across multiple consumers, route rejected items, or reach operators the edge selector doesn't support |
 | [Sticky Note](./utility/sticky-note.md) | Annotated notes on workflow canvas | Document workflow logic and leave notes for collaborators |
 | [Group](./utility/group.md) | Spatial container that aggregates children's outputs by type | Organize related nodes; fan out per-type arrays into list-aware consumers |

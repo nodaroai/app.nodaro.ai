@@ -3,6 +3,7 @@ import type { PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
 import { migrateToItems } from "@nodaro/shared"
+import { isMultiColumnList } from "@/lib/list-loop-migration"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
 export function resolveInputItems(settings: PresentationSettings): PresentationItem[] | null {
@@ -48,8 +49,8 @@ export function getNodeResultWithInputFallback(node: WorkflowNode): { url?: stri
   const result = getNodeResult(data)
   if (result.url || result.text) return result
 
-  // Loop/table node: extract first media URL from rows
-  if (node.type === "loop" || node.type === "list") {
+  // List/table node (loop→list-unified): extract first media URL from rows
+  if (node.type === "list") {
     const loopResult = getLoopFirstMedia(data)
     if (loopResult.url || loopResult.text) return loopResult
   }
@@ -101,29 +102,33 @@ export function areAllInputsFilled(
       const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
       if (!url) return false
     } else if (nodeType === "list") {
-      // Modern format (columns+rows) wins, legacy items string is fallback.
-      // Otherwise modern lists with populated rows were reported as "empty"
-      // and the run button stayed disabled.
-      let items: string[]
-      if (inputVals?.items) {
-        items = inputVals.items as string[]
-      } else if (data.columns) {
-        const rows = (data.rows as string[][] | undefined) ?? []
-        items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
-      } else {
-        items = ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
-      }
-      if (!Array.isArray(items) || items.length === 0 || items.every((s: string) => !String(s).trim())) return false
-    } else if (nodeType === "loop") {
-      const columns = (data.columns as Array<{ type?: string }>) ?? []
-      const rows = (inputVals?.rows as string[][] | undefined) ?? (data.rows as string[][]) ?? []
-      const minRows = (data.minRows as number) ?? 0
-      if (rows.length < minRows) return false
-      if (rows.length === 0) continue
-      for (const row of rows) {
-        for (let i = 0; i < columns.length; i++) {
-          if (!(row[i]?.trim())) return false
+      // "Filled" check by column count (see isMultiColumnList): multi-column
+      // validates the `rows` grid, single-column validates `items`.
+      if (isMultiColumnList(data)) {
+        const columns = (data.columns as Array<{ type?: string }>) ?? []
+        const rows = (inputVals?.rows as string[][] | undefined) ?? (data.rows as string[][]) ?? []
+        const minRows = (data.minRows as number) ?? 0
+        if (rows.length < minRows) return false
+        if (rows.length === 0) continue
+        for (const row of rows) {
+          for (let i = 0; i < columns.length; i++) {
+            if (!(row[i]?.trim())) return false
+          }
         }
+      } else {
+        // Modern format (columns+rows) wins, legacy items string is fallback.
+        // Otherwise modern lists with populated rows were reported as "empty"
+        // and the run button stayed disabled.
+        let items: string[]
+        if (inputVals?.items) {
+          items = inputVals.items as string[]
+        } else if (data.columns) {
+          const rows = (data.rows as string[][] | undefined) ?? []
+          items = rows.map((r) => r[0]?.trim() ?? "").filter(Boolean)
+        } else {
+          items = ((data.items as string) || "").split("\n").map((s: string) => s.trim()).filter(Boolean)
+        }
+        if (!Array.isArray(items) || items.length === 0 || items.every((s: string) => !String(s).trim())) return false
       }
     }
   }

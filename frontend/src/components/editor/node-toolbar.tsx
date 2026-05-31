@@ -47,7 +47,6 @@ const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   { type: "telegram-trigger", label: "Telegram Trigger", icon: <Send className="h-4 w-4" />, category: "Triggers" },
   // Data
   { type: "list", label: "List", icon: <List className="h-4 w-4" />, category: "Data" },
-  { type: "loop", label: "Table", icon: <Repeat className="h-4 w-4" />, category: "Data" },
   { type: "web-scrape", label: "Web Scrape", icon: <Globe className="h-4 w-4" />, category: "Data" },
   // Hidden — uncomment to restore in the Add Node UI:
   // { type: "json-process", label: "JSON Process", icon: <Filter className="h-4 w-4" />, category: "Data" },

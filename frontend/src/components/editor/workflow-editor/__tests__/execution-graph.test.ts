@@ -424,6 +424,23 @@ describe("extractNodeOutput", () => {
     expect(extractNodeOutput(node)).toBe("line one")
   })
 
+  // Rows-only shape ({ rows } with NO `columns`): `list` must be a TRUE
+  // superset of `loop`. normalizeLegacyNodeTypes renames loop→list WITHOUT
+  // backfilling `columns`, so a renamed rows-only loop lands in the list branch
+  // — it reads the row value (column-aware via sourceHandle, else first cell)
+  // before the legacy `items` fallback. Closes the list⊇loop gap.
+  it("returns first row cell from rows-only list node (no columns)", () => {
+    const node = makeNode("1", "list", { rows: [["hello"], ["world"]] })
+    expect(extractNodeOutput(node)).toBe("hello")
+  })
+
+  it("rows-only list falls back to first cell when a sourceHandle is given (no columns to match)", () => {
+    // With no `columns`, there are no handle ids — matching the loop branch's
+    // no-column-match fallthrough, the first row's first cell is returned.
+    const node = makeNode("1", "list", { rows: [["hello"], ["world"]] })
+    expect(extractNodeOutput(node, "col_b")).toBe("hello")
+  })
+
   // sub-workflow tests
   it("returns specific port output via sourceHandle for sub-workflow", () => {
     const node = makeNode("1", "sub-workflow", {

@@ -10,27 +10,12 @@ import {
 } from "@nodaro/shared"
 import type { SimpleNode, SimpleEdge, NodeExecutionState } from "./types.js"
 
-/**
- * Remap legacy persisted node types to their current equivalents. Applied at
- * BOTH top-level execution (orchestrator-worker) and sub-workflow expansion
- * (sub-workflow-handler) so a saved workflow executes identically regardless of
- * nesting. The `{ ...node }` spread preserves every field (parentId, hidden, …).
- */
-export function migrateLegacyNodeType<T extends SimpleNode>(node: T): T {
-  if (node.type === "edit-image") {
-    const provider = (node.data as Record<string, unknown> | undefined)?.provider as string | undefined
-    if (provider === "nano-banana-edit") return { ...node, type: "modify-image" } as T
-    if (provider === "recraft-remove-bg") return { ...node, type: "remove-background" } as T
-    return { ...node, type: "upscale-image" } as T
-  }
-  if (node.type === "image-to-image") return { ...node, type: "modify-image" } as T
-  // Backward-compat shim: dev's old "collect" (fan-in reducer) was renamed to
-  // "reduce" on 2026-05-23 to free the "collect" name for the type-aggregator
-  // (migration 151). NEW Collect always has `order: string[]`; anything else with
-  // type "collect" is the OLD pre-rename fan-in reducer.
-  if (node.type === "collect" && !Array.isArray((node.data as { order?: unknown })?.order)) return { ...node, type: "reduce" } as T
-  return node
-}
+// The per-node legacy-type migration lives in normalize-node-types.ts (single
+// source of truth, shared by the orchestrator, sub-workflow handler, app-input
+// extraction, and api-token routes — now also incl. loop → list). Re-exported
+// here so callers importing it alongside the other engine helpers from this
+// module keep a stable import path.
+export { migrateLegacyNodeType } from "./normalize-node-types.js"
 
 /**
  * Topological sort via Kahn's algorithm.
@@ -210,7 +195,6 @@ const SOURCE_NODE_TYPES = new Set([
   "youtube-video",
   "reference-audio",
   "list",
-  "loop",
   "webhook-trigger",
   "schedule-trigger",
   "telegram-trigger",
@@ -350,5 +334,4 @@ export const TEXT_SOURCE_TYPES = new Set([
   "preview",
   "generate-script",
   "list",
-  "loop",
 ])

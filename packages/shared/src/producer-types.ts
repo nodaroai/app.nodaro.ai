@@ -84,7 +84,6 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *    should wire through an upload node.
  */
 export const DYNAMIC_PRODUCER_TYPES: ReadonlySet<string> = new Set([
-  "loop",
   "list",
   "sub-workflow",
   "adjust-volume",

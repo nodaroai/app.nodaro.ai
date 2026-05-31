@@ -14,11 +14,11 @@ import { supabase } from "../../lib/supabase.js"
 import {
   buildExecutionLevels,
   getEffectivelySkippedIds,
-  migrateLegacyNodeType,
   isSourceNode,
   isSkipNode,
 } from "./execution-graph.js"
 import { resolveNodeInputs } from "./input-resolver.js"
+import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
 import { executeNode } from "./node-executor.js"
 import type {
@@ -30,6 +30,23 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
+
+/**
+ * Prepare a referenced workflow's raw nodes for sub-workflow execution.
+ *
+ * Runs the shared legacy-type migration (`normalizeLegacyNodeTypes` — the single
+ * source of truth, incl. edit-image/image-to-image/old-collect AND loop → list).
+ * The helper preserves every field it doesn't rewrite, `parentId` included, so
+ * group children keep their parent inside the sub-workflow execution graph
+ * without any extra re-threading. Non-mutating (the helper copies on rewrite and
+ * passes untouched nodes through by reference). Exported for direct regression
+ * testing of the per-node normalization.
+ */
+export function prepareSubWorkflowNodes(
+  rawNodes: ReadonlyArray<SimpleNode>,
+): SimpleNode[] {
+  return normalizeLegacyNodeTypes(rawNodes)
+}
 
 /**
  * Execute a sub-workflow node.
@@ -89,10 +106,10 @@ export async function executeSubWorkflow(
     throw new Error(`Referenced workflow ${referencedWorkflowId} not found`)
   }
 
-  // Migrate legacy node types before processing — shared with orchestrator-worker
-  // so a saved workflow executes identically whether run top-level or nested. The
-  // spread preserves parentId (group children need it to flow into the sub-graph).
-  let subNodes: SimpleNode[] = ((workflow.nodes as SimpleNode[]) ?? []).map((node) => migrateLegacyNodeType(node))
+  // Migrate legacy node types before processing, via the shared helper (single
+  // source of truth). Re-threads parentId so group children flow into the
+  // sub-workflow execution graph — see prepareSubWorkflowNodes.
+  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((workflow.nodes as SimpleNode[]) ?? [])
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)

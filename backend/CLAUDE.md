@@ -484,7 +484,7 @@ backend/src/lib/schedule-cron.ts            — Cron/interval scheduler (60s che
 | Worker-queued | 40+ (generate-image, image-to-video, text-to-speech, FFmpeg nodes, etc.) | Create job → reserve credits → enqueue BullMQ → poll jobs table every 3s |
 | Sync HTTP | ai-writer, video-composer, after-effects, lottie-overlay, 3d-title, motion-graphics, image-to-text | Internal `fetch("http://localhost:PORT/v1/...")` with service-role auth |
 | Inline | combine-text, split-text, composite | Pure logic, no external calls |
-| Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, loop, reference-audio | Output read from node data |
+| Source (no execution) | text-prompt, upload-*, webhook-trigger, schedule-trigger, list, reference-audio | Output read from node data |
 
 ### API Routes
 

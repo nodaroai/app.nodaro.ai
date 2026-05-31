@@ -20,15 +20,15 @@ beforeEach(() => {
   useWorkflowStore.getState().loadWorkflow("t", "Test", [], []);
 });
 
-describe("Group + Loop integration", () => {
-  it("3 text-prompt children in a Group feed a 3-item array to a Loop downstream", () => {
+describe("Group + List integration", () => {
+  it("3 text-prompt children in a Group feed a 3-item array to a List downstream", () => {
     useWorkflowStore.getState().loadWorkflow("wf", "Test",
       [
         { id: "g", type: "group", position: { x: 0, y: 0 }, data: { label: "G" }, measured: { width: 400, height: 300 } },
         { id: "t1", type: "text-prompt", position: { x: 10, y: 30 }, data: { text: "alpha" }, parentId: "g" },
         { id: "t2", type: "text-prompt", position: { x: 10, y: 80 }, data: { text: "beta" }, parentId: "g" },
         { id: "t3", type: "text-prompt", position: { x: 10, y: 130 }, data: { text: "gamma" }, parentId: "g" },
-        { id: "lp", type: "loop", position: { x: 500, y: 0 }, data: { rows: [], columns: [{ handleId: "out" }] } },
+        { id: "lp", type: "list", position: { x: 500, y: 0 }, data: { rows: [], columns: [{ handleId: "out" }] } },
       ] as never[],
       [
         { id: "e1", source: "g", sourceHandle: "out-text", target: "lp", targetHandle: "in" } as never,

@@ -115,14 +115,14 @@ describe("renderExampleBlock", () => {
 describe("renderWorkflowEditorCatalog", () => {
   it("renders one line per node type sorted alphabetically", () => {
     const defs: NodeDef[] = [
-      { ...SAMPLE_DEF, type: "loop", label: "Table" },
+      { ...SAMPLE_DEF, type: "list", label: "List" },
       { ...SAMPLE_DEF, type: "generate-image", label: "Generate Image" },
       { ...SAMPLE_DEF, type: "text-prompt", label: "Text Prompt" },
     ]
     const out = renderWorkflowEditorCatalog(defs)
     const lines = out.split("\n").filter((l) => l.startsWith("- `"))
     expect(lines[0]).toContain("generate-image")
-    expect(lines[1]).toContain("loop")
+    expect(lines[1]).toContain("list")
     expect(lines[2]).toContain("text-prompt")
   })
 })

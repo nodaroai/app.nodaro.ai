@@ -28,6 +28,7 @@ import { getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
 import { migrateGenerateImageHandles } from "@/lib/generate-image-handle-migration"
 import { migrateGenerateVideoNodes } from "@/lib/generate-video-handle-migration"
+import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { migratePickerSourceHandle, isTileGridPickerType } from "@/lib/picker-handles"
 
 /**
@@ -128,8 +129,8 @@ function detectLoopColumnType(
   allNodes?: WorkflowNode[],
   allEdges?: WorkflowEdge[],
 ): LoopColumn["type"] {
-  // Upstream loop/list node — inherit the source column's type directly
-  if ((sourceNode.type === "loop" || sourceNode.type === "list") && sourceHandle) {
+  // Upstream list node — inherit the source column's type directly
+  if (sourceNode.type === "list" && sourceHandle) {
     const srcColumns = ((sourceNode.data as Record<string, unknown>).columns ?? []) as Array<{ handleId: string; type?: string }>
     const srcCol = srcColumns.find((c) => c.handleId === sourceHandle)
     if (srcCol?.type) return srcCol.type as LoopColumn["type"]
@@ -189,7 +190,7 @@ function getNodeOutputForPreview(
   const d = node.data as Record<string, unknown>
   const t = node.type ?? ""
 
-  if (t === "list" || t === "loop") {
+  if (t === "list") {
     const columns = d.columns as Array<{ handleId: string; type?: string }> | undefined
     const rows = d.rows as string[][] | undefined
     if (columns && sourceHandle) {
@@ -204,14 +205,17 @@ function getNodeOutputForPreview(
         return { type: "text", value }
       }
     }
-    if (t === "list") {
-      const first = ((d.items as string | undefined) ?? "")
-        .split("\n")
-        .map((line) => line.trim())
-        .find(Boolean)
-      return first ? { type: "text", value: first } : null
-    }
-    const first = rows?.[0]?.[0]?.trim()
+    // Superset of the backend extractNodeOutput ordering: when the typed-column
+    // lookup above misses (no columns, or a stale/legacy sourceHandle like "in"
+    // that matches no column), fall back to the first row's first cell BEFORE
+    // the legacy `items` string. Without this a columns+rows list previewed via
+    // a non-matching handle returned null instead of rows[0][0].
+    const rowValue = rows?.[0]?.[0]?.trim()
+    if (rowValue) return { type: "text", value: rowValue }
+    const first = ((d.items as string | undefined) ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean)
     return first ? { type: "text", value: first } : null
   }
 
@@ -771,9 +775,9 @@ export function buildDuplicatedNodeData(
     }
   }
 
-  // Generate fresh UUIDs for loop column IDs and handleIds; re-point or clear
+  // Generate fresh UUIDs for list column IDs and handleIds; re-point or clear
   // the column's connected-source reference (see idMap note above).
-  if (source.type === "loop" || source.type === "list") {
+  if (source.type === "list") {
     const cols = d.columns as LoopColumn[] | undefined
     if (cols) {
       d.columns = cols.map((c) => {
@@ -949,10 +953,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         state.edges,
       )
 
-      // --- Loop node: quick-add handle or per-column-target handle ---
+      // --- List node: quick-add handle or per-column-target handle ---
       let newNodes = state.nodes
       const targetNode = state.nodes.find((n) => n.id === connection.target)
-      if (targetNode?.type === "loop" || targetNode?.type === "list") {
+      if (targetNode?.type === "list") {
         const loopData = targetNode.data as LoopNodeData
         const sourceNode = state.nodes.find((n) => n.id === connection.source)
 
@@ -1566,9 +1570,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         )
       }
 
-      // Clear connectedSourceId on loop columns that referenced the deleted node
+      // Clear connectedSourceId on list columns that referenced the deleted node
       remainingNodes = remainingNodes.map((n) => {
-        if (n.type !== "loop" && n.type !== "list") return n
+        if (n.type !== "list") return n
         const loopData = n.data as LoopNodeData
         const hasConnected = (loopData.columns ?? []).some((c) => c.connectedSourceId === nodeId)
         if (!hasConnected) return n
@@ -1662,8 +1666,8 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
 
         let mutated: typeof node.data | null = null
 
-        // (1) Loop column cleanup — unconditional when this is an `_in` edge.
-        if ((node.type === "loop" || node.type === "list") && isLoopColumnEdge && removedEdge.targetHandle) {
+        // (1) List column cleanup — unconditional when this is an `_in` edge.
+        if (node.type === "list" && isLoopColumnEdge && removedEdge.targetHandle) {
           const loopData = node.data as LoopNodeData
           const baseHandleId = loopColBaseHandle(removedEdge.targetHandle)
           const updatedColumns = (loopData.columns ?? []).map((col) =>
@@ -1772,7 +1776,9 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     const cleanedNodeIds = new Set(cleanedNodes.map((n) => n.id))
     const cleanedEdges = cleaned.edges.filter((e) => cleanedNodeIds.has(e.source) && cleanedNodeIds.has(e.target))
 
-    // Migrate legacy "in" target handles on loop nodes to per-column handles
+    // Migrate legacy "in" target handles on list nodes (incl. loop-origin
+    // migrated nodes) to per-column handles
+    // pre-migration block: runs BEFORE migrateListLoopNodes, so must still recognize the legacy "loop" type
     const loopNodeMap = new Map(
       cleanedNodes.filter((n) => n.type === "loop" || n.type === "list").map((n) => [n.id, n])
     )
@@ -1967,6 +1973,14 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     // updates compose on top of the image-handle migration result.
     {
       const result = migrateGenerateVideoNodes(migratedNodes, migratedEdges)
+      migratedNodes = result.nodes
+      migratedEdges = result.edges
+    }
+
+    // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
+    // normalize legacy `items` strings. Idempotent; edges unchanged.
+    {
+      const result = migrateListLoopNodes(migratedNodes, migratedEdges)
       migratedNodes = result.nodes
       migratedEdges = result.edges
     }
@@ -2398,14 +2412,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
     }),
 
   reconcileFromRemote: ({ nodes, edges, updatedAt, settings }) => {
-    const orderedNodes = orderNodesParentFirst(nodes)
+    // Unify legacy `loop` ("Table") nodes into the canonical `list` type and
+    // normalize legacy `items` strings, exactly as `loadWorkflow` does — a raw
+    // `loop` node arriving via realtime would otherwise be mishandled by the
+    // now-`list`-only type-sets until a full reload. Idempotent; null/empty-safe.
+    const migrated = migrateListLoopNodes(nodes, edges)
+    const orderedNodes = orderNodesParentFirst(migrated.nodes)
+    const migratedEdges = migrated.edges
     set((state) => {
       // `WorkflowState`'s fields are `readonly` for consumers, but
       // Zustand's `set` accepts a partial-state object — collect the
       // patch in a plain record and cast on return.
       const next: Record<string, unknown> = {
         nodes: orderedNodes,
-        edges,
+        edges: migratedEdges,
         isDirty: false,
         loadedUpdatedAt: updatedAt,
         remoteUpdatedAt: null,
@@ -2576,13 +2596,13 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         return b
       }
       for (const removed of removedEdges) {
-        // Loop column cleanup is handle-specific — schedule even if the
+        // List column cleanup is handle-specific — schedule even if the
         // node pair survives via another (non-column) wire. Gated on the
-        // target being an actual loop/list node so the `_in` suffix
+        // target being an actual list node so the `_in` suffix
         // can't false-positive on other node types.
         if (removed.targetHandle?.endsWith("_in")) {
           const targetType = nodeTypeById.get(removed.target)
-          if (targetType === "loop" || targetType === "list") {
+          if (targetType === "list") {
             bucketFor(removed.target).loopHandles.add(loopColBaseHandle(removed.targetHandle))
           }
         }
@@ -2626,10 +2646,10 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         // when no cleanup applies.
         let mutated: typeof node.data | null = null
 
-        // Loop / list column refs — clear `connectedSourceId` /
+        // List column refs — clear `connectedSourceId` /
         // `connectedSourceHandle` for any column whose handle was in this
         // batch's removed _in edges.
-        if ((node.type === "loop" || node.type === "list") && cleanup.loopHandles.size > 0) {
+        if (node.type === "list" && cleanup.loopHandles.size > 0) {
           const loopData = node.data as LoopNodeData
           const updatedColumns = (loopData.columns ?? []).map((col) =>
             cleanup.loopHandles.has(col.handleId)

@@ -194,17 +194,17 @@ describe("useWorkflowStore advanced", () => {
       expect(state.isDirty).toBe(true)
     })
 
-    it("auto-creates a column via quick-add handle when connecting to a Loop node", () => {
-      const loopNode = {
+    it("auto-creates a column via quick-add handle when connecting to a List node", () => {
+      const listNode = {
         id: "loop_1",
-        type: "loop",
+        type: "list",
         position: { x: 200, y: 0 },
         data: { label: "Table", columns: [], rows: [], fieldMappings: {} },
       }
       useWorkflowStore.setState({
         nodes: [
           { id: "src_1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Text Prompt" } } as any,
-          loopNode as any,
+          listNode as any,
         ],
       })
 
@@ -222,10 +222,10 @@ describe("useWorkflowStore advanced", () => {
       expect(columns[0].name).toBe("Text Prompt")
     })
 
-    it("does NOT auto-create columns on a Loop node that already has columns", () => {
-      const loopNode = {
+    it("does NOT auto-create columns on a List node that already has columns", () => {
+      const listNode = {
         id: "loop_1",
-        type: "loop",
+        type: "list",
         position: { x: 200, y: 0 },
         data: {
           label: "Table",
@@ -237,7 +237,7 @@ describe("useWorkflowStore advanced", () => {
       useWorkflowStore.setState({
         nodes: [
           { id: "src_1", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Text Prompt" } } as any,
-          loopNode as any,
+          listNode as any,
         ],
       })
 
@@ -305,6 +305,47 @@ describe("useWorkflowStore advanced", () => {
       expect(previewItems[1].type).toBe("audio")
       expect(previewItems[1].itemKey).toBe("voice_1:")
       expect(itemOrder).toEqual(["voice_1:voiceId", "voice_1:"])
+    })
+
+    it("auto-populates Preview from a columns+rows list via a non-matching sourceHandle (rows[0][0] fallback)", () => {
+      // FIX #3: a `list` with columns+rows but NO `items`, wired to Preview via
+      // an edge whose sourceHandle ("in") matches no column handleId. The typed-
+      // column lookup misses; the rows[0][0] fallback must still surface "hello".
+      useWorkflowStore.setState({
+        nodes: [
+          {
+            id: "list_1",
+            type: "list",
+            position: { x: 0, y: 0 },
+            data: {
+              label: "List",
+              columns: [{ id: "a", handleId: "col_a", type: "text" }],
+              rows: [["hello"]],
+            },
+          } as any,
+          {
+            id: "preview_1",
+            type: "preview",
+            position: { x: 200, y: 0 },
+            data: { label: "Preview", previewItems: [], itemOrder: [] },
+          } as any,
+        ],
+      })
+
+      useWorkflowStore.getState().onConnect({
+        source: "list_1",
+        target: "preview_1",
+        sourceHandle: "in", // legacy/stale handle — no column match
+        targetHandle: null,
+      })
+
+      const preview = useWorkflowStore.getState().nodes.find((node) => node.id === "preview_1")!
+      const previewData = preview.data as Record<string, unknown>
+      const previewItems = previewData.previewItems as Array<Record<string, unknown>>
+
+      expect(previewItems).toHaveLength(1)
+      expect(previewItems[0].type).toBe("text")
+      expect(previewItems[0].value).toBe("hello")
     })
 
     it("auto-populates Preview from distinct sub-workflow output ports", () => {
@@ -781,7 +822,7 @@ describe("useWorkflowStore advanced", () => {
           { id: "sourceA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
           {
             id: "loopB",
-            type: "loop",
+            type: "list",
             position: { x: 200, y: 0 },
             data: {
               label: "Loop",
@@ -958,7 +999,7 @@ describe("useWorkflowStore advanced", () => {
           { id: "src", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "S" } } as any,
           {
             id: "loop",
-            type: "loop",
+            type: "list",
             position: { x: 200, y: 0 },
             data: {
               label: "Loop",
@@ -998,7 +1039,7 @@ describe("useWorkflowStore advanced", () => {
           { id: "srcA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
           {
             id: "loopB",
-            type: "loop",
+            type: "list",
             position: { x: 200, y: 0 },
             data: {
               label: "Loop",
@@ -1045,7 +1086,7 @@ describe("useWorkflowStore advanced", () => {
           { id: "srcA", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "A" } } as any,
           {
             id: "loopB",
-            type: "loop",
+            type: "list",
             position: { x: 200, y: 0 },
             data: {
               label: "Loop",
