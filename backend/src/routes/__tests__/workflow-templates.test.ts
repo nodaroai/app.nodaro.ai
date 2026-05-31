@@ -58,7 +58,7 @@ vi.mock("@/lib/storage.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { workflowTemplatesRoutes } from "../workflow-templates.js"
+import { workflowTemplatesRoutes, extractNodeTypes } from "../workflow-templates.js"
 import { supabase } from "../../lib/supabase.js"
 import { copyToTemplatePreview } from "../../lib/storage.js"
 
@@ -271,5 +271,57 @@ describe("POST /v1/templates/publish — thumbnail durability", () => {
     expect(captureInsert.value).not.toBeNull()
     expect(captureInsert.value?.preview_media_url).toBe(durableUrl)
     expect(captureInsert.value?.preview_media_type).toBe("image")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Facet-drift guard: the denormalized, GIN-indexed node_types_used column is
+// derived from extractNodeTypes() at publish time. If that derivation ever
+// emits a retired alias (e.g. "loop" after the loop→list unification), the
+// template is mis-faceted and a one-shot sweep migration only fixes the rows
+// that already exist. Routing extractNodeTypes through normalizeLegacyNodeTypes
+// (single source of truth) closes the class; this test keeps it closed.
+// ---------------------------------------------------------------------------
+
+describe("extractNodeTypes — normalizes legacy aliases (facet-drift guard)", () => {
+  it("rewrites loop → list so the facet never carries the retired type", () => {
+    const types = extractNodeTypes([
+      { type: "loop", data: { columns: [], rows: [] } },
+      { type: "generate-image", data: {} },
+    ])
+    expect(types).toContain("list")
+    expect(types).not.toContain("loop")
+    expect(types).toContain("generate-image")
+  })
+
+  it("normalizes the other load-migrated aliases too", () => {
+    const types = extractNodeTypes([
+      { type: "image-to-image", data: {} },
+      { type: "edit-image", data: { provider: "recraft-remove-bg" } },
+      { type: "collect", data: {} }, // OLD collect (no order[]) → reduce
+    ])
+    expect(types).toEqual(
+      expect.arrayContaining(["modify-image", "remove-background", "reduce"]),
+    )
+    expect(types).not.toContain("image-to-image")
+    expect(types).not.toContain("edit-image")
+  })
+
+  it("dedupes when a workflow has both a list and a legacy loop node", () => {
+    expect(
+      extractNodeTypes([
+        { type: "list", data: {} },
+        { type: "loop", data: {} },
+      ]),
+    ).toEqual(["list"])
+  })
+
+  it("leaves NEW collect (with order[]) and unrelated types unchanged", () => {
+    const types = extractNodeTypes([
+      { type: "collect", data: { order: ["a", "b"] } },
+      { type: "image-to-video", data: {} },
+    ])
+    expect(types).toEqual(expect.arrayContaining(["collect", "image-to-video"]))
+    expect(types).not.toContain("reduce")
   })
 })

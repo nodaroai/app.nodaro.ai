@@ -8,6 +8,7 @@ import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/ma
 import { copyToTemplatePreview } from "../lib/storage.js"
 import { requireAdmin } from "../ee/middleware/require-admin.js"
 import { hasAdmin } from "../lib/config.js"
+import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -31,10 +32,18 @@ const TUTORIAL = "tutorial" as const
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Extract unique node types from a workflow's nodes. */
-function extractNodeTypes(nodes: Array<Record<string, unknown>>): string[] {
+/**
+ * Extract unique node types from a workflow's nodes, normalized to their
+ * canonical form. Routing through `normalizeLegacyNodeTypes` (the single source
+ * of truth) keeps the denormalized, GIN-indexed `node_types_used` facet from
+ * ever carrying a retired alias — e.g. `loop` after the loop→list unification,
+ * which would make the template mis-faceted under node-type filtering. Exported
+ * for the facet-drift guard test; existing rows are backfilled by migration 181.
+ */
+export function extractNodeTypes(nodes: Array<Record<string, unknown>>): string[] {
   const types = new Set<string>()
-  for (const node of nodes) {
+  const normalized = normalizeLegacyNodeTypes(nodes as Array<{ type?: string; data?: unknown }>)
+  for (const node of normalized) {
     if (typeof node.type === "string" && node.type) types.add(node.type)
   }
   return Array.from(types)
