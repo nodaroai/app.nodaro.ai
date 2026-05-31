@@ -10,17 +10,20 @@ const downloadQuery = z.object({
   url: safeUrlSchema,
 })
 
-const ALLOWED_DOMAIN = "pub-c813076fe3024da78029786e7b9fd59d.r2.dev"
+// Extra allowed bucket host, configured via R2_PUBLIC_FALLBACK_DOMAIN (empty
+// by default). The primary allowlist is the origin derived from R2_PUBLIC_URL
+// below; this covers deployments that also serve assets from a raw bucket host.
+const ALLOWED_DOMAIN = config.R2_PUBLIC_FALLBACK_DOMAIN
 
 /**
  * Parse R2_PUBLIC_URL once at module load, cache its origin for constant-time
  * comparison. Previously used `url.startsWith(config.R2_PUBLIC_URL)` which is
- * a prefix-substring match: with `R2_PUBLIC_URL=https://assets.nodaro.ai` (no
+ * a prefix-substring match: with `R2_PUBLIC_URL=https://assets.example.com` (no
  * trailing slash, as the env examples ship), an attacker URL
- * `https://assets.nodaro.ai.evil.com/payload` satisfied the check and the
+ * `https://assets.example.com.evil.com/payload` satisfied the check and the
  * public /v1/download route became a forced-attachment download proxy for
- * arbitrary external hosts under app.nodaro.ai — a phishing/malware
- * delivery vector. Origin comparison eliminates that class.
+ * arbitrary external hosts — a phishing/malware delivery vector. Origin
+ * comparison eliminates that class.
  */
 const R2_PUBLIC_ORIGIN: string | null = (() => {
   if (!config.R2_PUBLIC_URL) return null
@@ -42,12 +45,12 @@ export async function downloadRoutes(app: FastifyInstance) {
 
     const { url } = parsed.data
 
-    // Validate URL is from our R2 bucket. Compare parsed origin (not string
-    // prefix) so a look-alike hostname like `assets.nodaro.ai.evil.com`
-    // cannot satisfy the allowlist under app.nodaro.ai.
+    // Validate URL is from our configured asset storage. Compare parsed origin
+    // (not string prefix) so a look-alike hostname like
+    // `assets.example.com.evil.com` cannot satisfy the allowlist.
     const parsedUrl = new URL(url)
     const isAllowed =
-      parsedUrl.hostname === ALLOWED_DOMAIN ||
+      (ALLOWED_DOMAIN !== "" && parsedUrl.hostname === ALLOWED_DOMAIN) ||
       (R2_PUBLIC_ORIGIN !== null && parsedUrl.origin === R2_PUBLIC_ORIGIN)
 
     if (!isAllowed) {
