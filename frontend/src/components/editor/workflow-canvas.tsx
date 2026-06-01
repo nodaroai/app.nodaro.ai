@@ -54,6 +54,7 @@ import type { ComponentSelection } from "./component-marketplace-modal"
 import { SelectionActionBar } from "./selection-action-bar"
 import { FocusModeNav } from "./focus-mode-nav"
 import { EmptyCanvasState } from "./empty-canvas-state"
+import { Loader2 } from "lucide-react"
 import { assetToUploadNode } from "@/lib/asset-to-node"
 import { useWorkflowStore, migrateImageNodes, buildDuplicatedNodeData } from "@/hooks/use-workflow-store"
 import { useProjectsStore } from "@/hooks/use-projects-store"
@@ -2309,6 +2310,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         {!isMobile && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30">
             <ViewModeToggle />
+          </div>
+        )}
+        {/* Workflow-loading surface. Shown for the whole fetch window
+            (`isWorkflowLoading` is set true at the start of load() and
+            cleared in its finally, by which point the store's nodes are
+            populated) so the user sees a loader instead of a blank/flashing
+            canvas until the nodes are ready to render. Mutually exclusive
+            with the empty-canvas state below (gated on `!isWorkflowLoading`).
+            `pointer-events-none` so it never traps clicks; the light scrim
+            masks the bare grid for a clean "loading" read. */}
+        {isWorkflowLoading && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 pointer-events-none bg-background/70 backdrop-blur-[1px]">
+            <Loader2 className="w-8 h-8 text-[#ff0073] animate-spin" />
+            <span className="text-sm text-muted-foreground">Loading workflow…</span>
           </div>
         )}
         {/* First-run empty-canvas surface. Gated on a loaded (not loading) workflow
