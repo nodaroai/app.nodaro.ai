@@ -63,7 +63,7 @@ export function EditableNodeLabel({ label, icon, onSave, onIconClick }: Editable
         />
       ) : (
         <span
-          className="truncate cursor-text hover:text-foreground dark:hover:text-white/90 transition-colors"
+          className="truncate cursor-text hover:text-[#ff0073] transition-colors"
           onClick={(e) => { e.stopPropagation(); setEditing(true) }}
           onMouseDown={(e) => e.stopPropagation()}
           title="Click to rename"

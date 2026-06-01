@@ -412,6 +412,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const onEdgesChange = useWorkflowStore((s) => s.onEdgesChange)
   const onConnect = useWorkflowStore((s) => s.onConnect)
   const selectNode = useWorkflowStore((s) => s.selectNode)
+  const openFullscreenSettings = useWorkflowStore((s) => s.openFullscreenSettings)
   const selectedNodeId = useWorkflowStore((s) => s.selectedNodeId)
   const duplicateNodes = useWorkflowStore((s) => s.duplicateNodes)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
@@ -1677,6 +1678,23 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         return
       }
 
+      // Cmd/Ctrl+I — toggle fullscreen settings for the selected node
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
+        const state = useWorkflowStore.getState()
+        if (state.configPanelFullscreen) {
+          // Already open — close it
+          e.preventDefault()
+          useWorkflowStore.setState({ configPanelFullscreen: false, selectedNodeId: null })
+          return
+        }
+        const nodeId = state.selectedNodeId ?? state.nodes.find((n) => n.selected)?.id
+        if (nodeId) {
+          e.preventDefault()
+          openFullscreenSettings(nodeId)
+        }
+        return
+      }
+
       // Enter — toggle settings panel
       if (e.key === "Enter") {
         e.preventDefault()
@@ -1773,7 +1791,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     // selection jumps to the neighbor.
     document.addEventListener("keydown", handleKeyDown, true)
     return () => document.removeEventListener("keydown", handleKeyDown, true)
-  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode])
+  }, [selectedNodeId, duplicateNodes, deleteNode, handleAddStickyNote, handleTidyUp, handleSelectAll, handleOpenAddNodePopup, onToggleSidebar, undo, redo, handleToggleSnap, handleToggleAlignment, alignmentEnabled, computeGuides, getNode, openFullscreenSettings])
 
   // Listen for pan-to events dispatched from teleporter config panel "Pan to" buttons
   useEffect(() => {
