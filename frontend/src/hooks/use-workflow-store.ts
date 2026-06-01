@@ -1286,11 +1286,20 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
   },
 
   openFullscreenSettings: (nodeId) => {
-    // Set the one-shot flag BEFORE selectNode so the viewport effect reads it
-    // during the same render cycle and skips the zoom-to-fit animation.
+    // One atomic update: selectedNodeId + configPanelFullscreen + node.selected
+    // in a single set() so ConfigPanel never renders with a selected node but a
+    // non-fullscreen flag. Two separate set() calls (even with React 18 batching)
+    // can fire an intermediate Zustand notification where the sidebar starts its
+    // slide-in transition for one frame before fullscreen kicks in.
+    // skipNextViewportAnimation is separate because the viewport effect reads it
+    // synchronously and we need it set before the selectedNodeId change triggers
+    // the effect's dep check.
     set({ skipNextViewportAnimation: true })
-    get().selectNode(nodeId)
-    set({ configPanelFullscreen: true })
+    set((state) => ({
+      selectedNodeId: nodeId,
+      configPanelFullscreen: true,
+      nodes: state.nodes.map((n) => ({ ...n, selected: n.id === nodeId })),
+    }))
   },
 
   updateNode: (nodeId, updates) =>
