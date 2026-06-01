@@ -538,6 +538,20 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   const [focusMode, setFocusMode] = useState(false)
   const focusAnimatingRef = useRef(false)
 
+  // When the fullscreen config panel closes, restore keyboard focus to the
+  // React Flow pane so that arrow-key node nudging works immediately.
+  // Without this, the hidden panel loses DOM focus (browser moves it to body)
+  // and React Flow's onKeyDown container never receives arrow events.
+  const configPanelFullscreen = useWorkflowStore((s) => s.configPanelFullscreen)
+  const prevFullscreenRef = useRef(configPanelFullscreen)
+  useEffect(() => {
+    const wasOpen = prevFullscreenRef.current
+    prevFullscreenRef.current = configPanelFullscreen
+    if (wasOpen && !configPanelFullscreen) {
+      document.querySelector<HTMLElement>(".react-flow__pane")?.focus()
+    }
+  }, [configPanelFullscreen])
+
   // Center viewport on selected node and zoom to fit 60% of visible area
   useEffect(() => {
     if (!selectedNodeId) {
@@ -1436,10 +1450,19 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
         setEdgeContextMenu(null)
         const state = useWorkflowStore.getState()
         if (state.configPanelFullscreen) {
+          // stopPropagation: prevent React Flow's own Escape handler from also
+          // deselecting the node (which would clear node.selected and remove the glow).
+          e.stopPropagation()
           closeFullscreenSettings()
         } else if (state.selectedNodeId) {
+          // Closing the sidebar keeps the node RF-focused (blue glow, no settings).
+          // stopPropagation prevents React Flow from also firing deselection.
+          e.stopPropagation()
           useWorkflowStore.setState({ selectedNodeId: null })
         } else {
+          // Node is RF-selected only: deselect fully. selectNode(null) already
+          // clears node.selected so no need for React Flow's handler either.
+          e.stopPropagation()
           selectNode(null)
         }
         return
